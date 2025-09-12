@@ -2,8 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Phone, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
-// Logo served from public directory
-const logoImage = "/logo.jpg";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -24,12 +22,12 @@ export default function Header() {
       <div className="max-w-6xl mx-auto px-6 py-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div 
-              className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-orange-500 flex items-center justify-center text-white font-bold text-lg shadow-lg"
-              data-testid="logo-circle"
-            >
-              T
-            </div>
+            <img 
+              src="/treemarkables-logo.png" 
+              alt="Treemarkables Logo" 
+              className="h-12 w-12 rounded-full object-cover"
+              data-testid="logo-image"
+            />
             <div className="text-sm text-muted-foreground hidden sm:block">Professional Tree Services</div>
           </div>
 
