@@ -31,10 +31,6 @@ export default function Header() {
             <Link href="/" className="text-foreground hover:text-primary transition-colors font-medium" data-testid="link-home">
               Home
             </Link>
-            <div className="flex items-center space-x-2 text-sm text-white bg-orange-500 px-3 py-2 rounded-lg border-2 border-orange-600">
-              <Phone className="h-4 w-4" />
-              <span className="font-medium">0272166882</span>
-            </div>
           </div>
 
           {/* Desktop Navigation */}
@@ -54,6 +50,10 @@ export default function Header() {
           </nav>
 
           <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 text-sm text-white bg-orange-500 px-3 py-2 rounded-lg border-2 border-orange-600">
+              <Phone className="h-4 w-4" />
+              <span className="font-medium">0272166882</span>
+            </div>
             <Button onClick={handleGetQuote} data-testid="button-get-quote">
               Get Quote
             </Button>
