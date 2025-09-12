@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Shield, Award, Clock } from "lucide-react";
-import heroImage from "@assets/generated_images/Professional_tree_removal_service_81b02e6e.png";
 
 export default function Hero() {
   const handleGetQuote = () => {
@@ -18,8 +17,8 @@ export default function Hero() {
       {/* Background Image with Overlay */}
       <div className="absolute inset-0 z-0">
         <img 
-          src={heroImage} 
-          alt="Professional tree removal service" 
+          src="/team-photo.jpg" 
+          alt="Treemarkables professional team" 
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30"></div>
