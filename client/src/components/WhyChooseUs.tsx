@@ -28,7 +28,7 @@ export default function WhyChooseUs() {
             So why choose Treemarkables?
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            We combine expertise, safety, and reliability to deliver exceptional tree removal services
+            We combine expertise, safety, and care to deliver exceptional tree removal services
           </p>
         </div>
 
