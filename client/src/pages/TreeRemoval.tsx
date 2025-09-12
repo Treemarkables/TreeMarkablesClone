@@ -21,7 +21,7 @@ export default function TreeRemoval() {
             </h1>
             <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto" data-testid="text-hero-description">
               Safe, efficient, and professional tree removal services in New Zealand. 
-              Our certified arborists handle hazardous trees with expertise and care.
+              Our qualified arborists handle hazardous trees with expertise and care.
             </p>
             <Button size="lg" onClick={handleGetQuote} data-testid="button-get-quote">
               Get Free Quote
@@ -56,8 +56,8 @@ export default function TreeRemoval() {
                 <div className="flex items-start space-x-3">
                   <CheckCircle className="h-6 w-6 text-primary mt-1" />
                   <div>
-                    <h3 className="font-semibold text-foreground">Licensed & Insured</h3>
-                    <p className="text-muted-foreground">Fully licensed arborists with comprehensive insurance</p>
+                    <h3 className="font-semibold text-foreground">Insured</h3>
+                    <p className="text-muted-foreground">Fully qualified arborists with comprehensive insurance</p>
                   </div>
                 </div>
               </div>
@@ -89,12 +89,12 @@ export default function TreeRemoval() {
           <div className="grid md:grid-cols-3 gap-8 text-center">
             <div className="flex flex-col items-center">
               <Shield className="h-12 w-12 text-primary mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-2">Licensed & Insured</h3>
-              <p className="text-muted-foreground">Fully certified with comprehensive coverage</p>
+              <h3 className="text-xl font-semibold text-foreground mb-2">Insured</h3>
+              <p className="text-muted-foreground">Fully qualified with comprehensive coverage</p>
             </div>
             <div className="flex flex-col items-center">
               <Award className="h-12 w-12 text-primary mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-2">Certified Arborists</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-2">Qualified Arborists</h3>
               <p className="text-muted-foreground">Professional expertise you can trust</p>
             </div>
             <div className="flex flex-col items-center">

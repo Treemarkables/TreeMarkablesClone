@@ -27,11 +27,11 @@ export default function Footer() {
             <div className="flex flex-wrap gap-6">
               <div className="flex items-center text-sm">
                 <Shield className="h-4 w-4 mr-2 text-primary" />
-                <span className="text-muted-foreground">Licensed & Insured</span>
+                <span className="text-muted-foreground">Insured</span>
               </div>
               <div className="flex items-center text-sm">
                 <Award className="h-4 w-4 mr-2 text-primary" />
-                <span className="text-muted-foreground">Certified Arborists</span>
+                <span className="text-muted-foreground">Qualified Arborists</span>
               </div>
               <div className="flex items-center text-sm">
                 <Clock className="h-4 w-4 mr-2 text-primary" />

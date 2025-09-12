@@ -89,8 +89,8 @@ export default function StumpGrinding() {
           <div className="grid md:grid-cols-3 gap-8 text-center">
             <div className="flex flex-col items-center">
               <Shield className="h-12 w-12 text-primary mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-2">Licensed & Insured</h3>
-              <p className="text-muted-foreground">Fully certified with comprehensive coverage</p>
+              <h3 className="text-xl font-semibold text-foreground mb-2">Insured</h3>
+              <p className="text-muted-foreground">Fully qualified with comprehensive coverage</p>
             </div>
             <div className="flex flex-col items-center">
               <Award className="h-12 w-12 text-primary mb-4" />
