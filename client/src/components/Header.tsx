@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Phone, Menu, X } from "lucide-react";
 import { useState } from "react";
+import { Link } from "wouter";
 // Logo served from public directory
 const logoImage = "/logo.jpg";
 
@@ -33,16 +34,22 @@ export default function Header() {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
-            <a href="#services" className="text-foreground hover:text-primary transition-colors" data-testid="link-services">
-              Services
-            </a>
-            <a href="#process" className="text-foreground hover:text-primary transition-colors" data-testid="link-process">
-              Our Process
-            </a>
-            <a href="#contact" className="text-foreground hover:text-primary transition-colors" data-testid="link-contact">
-              Contact
-            </a>
+          <nav className="hidden md:flex items-center space-x-6">
+            <Link href="/tree-removal" className="text-foreground hover:text-primary transition-colors" data-testid="link-tree-removal">
+              Tree Removal
+            </Link>
+            <Link href="/tree-pruning" className="text-foreground hover:text-primary transition-colors" data-testid="link-tree-pruning">
+              Tree Pruning
+            </Link>
+            <Link href="/stump-grinding" className="text-foreground hover:text-primary transition-colors" data-testid="link-stump-grinding">
+              Stump Grinding
+            </Link>
+            <Link href="/hedge-trimming" className="text-foreground hover:text-primary transition-colors" data-testid="link-hedge-trimming">
+              Hedge Trimming
+            </Link>
+            <Link href="/" className="text-foreground hover:text-primary transition-colors" data-testid="link-home">
+              Home
+            </Link>
           </nav>
 
           <div className="flex items-center space-x-4">
@@ -71,15 +78,21 @@ export default function Header() {
         {isMenuOpen && (
           <nav className="md:hidden mt-4 pb-4 border-t border-border">
             <div className="flex flex-col space-y-4 pt-4">
-              <a href="#services" className="text-foreground hover:text-primary transition-colors" data-testid="link-services-mobile">
-                Services
-              </a>
-              <a href="#process" className="text-foreground hover:text-primary transition-colors" data-testid="link-process-mobile">
-                Our Process
-              </a>
-              <a href="#contact" className="text-foreground hover:text-primary transition-colors" data-testid="link-contact-mobile">
-                Contact
-              </a>
+              <Link href="/tree-removal" className="text-foreground hover:text-primary transition-colors" data-testid="link-tree-removal-mobile">
+                Tree Removal
+              </Link>
+              <Link href="/tree-pruning" className="text-foreground hover:text-primary transition-colors" data-testid="link-tree-pruning-mobile">
+                Tree Pruning
+              </Link>
+              <Link href="/stump-grinding" className="text-foreground hover:text-primary transition-colors" data-testid="link-stump-grinding-mobile">
+                Stump Grinding
+              </Link>
+              <Link href="/hedge-trimming" className="text-foreground hover:text-primary transition-colors" data-testid="link-hedge-trimming-mobile">
+                Hedge Trimming
+              </Link>
+              <Link href="/" className="text-foreground hover:text-primary transition-colors" data-testid="link-home-mobile">
+                Home
+              </Link>
               <div className="flex items-center space-x-2 text-sm text-muted-foreground pt-2 border-t border-border">
                 <Phone className="h-4 w-4" />
                 <span>0272166882</span>
