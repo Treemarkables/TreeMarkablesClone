@@ -14,7 +14,7 @@ const features = [
   },
   {
     icon: TreePine,
-    title: "Licensed and Insured",
+    title: "Insured",
     description: "Fully licensed and insured, giving you peace of mind throughout the tree removal process.",
   },
 ];
@@ -25,7 +25,7 @@ export default function WhyChooseUs() {
       <div className="max-w-6xl mx-auto px-6">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Why Choose Us for Tree Removal?
+            So why choose Treemarkables?
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             We combine expertise, safety, and reliability to deliver exceptional tree removal services
