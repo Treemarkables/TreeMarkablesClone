@@ -31,24 +31,24 @@ export default function Header() {
             <Link href="/" className="text-foreground hover:text-primary transition-colors font-medium" data-testid="link-home">
               Home
             </Link>
-            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <div className="flex items-center space-x-2 text-sm text-white bg-orange-500 px-3 py-2 rounded-lg border-2 border-orange-600">
               <Phone className="h-4 w-4" />
-              <span>0272166882</span>
+              <span className="font-medium">0272166882</span>
             </div>
           </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-4 flex-nowrap">
-            <Link href="/tree-removal" className="text-foreground hover:text-primary transition-colors" data-testid="link-tree-removal">
+            <Link href="/tree-removal" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-tree-removal">
               Tree Removal
             </Link>
-            <Link href="/tree-pruning" className="text-foreground hover:text-primary transition-colors" data-testid="link-tree-pruning">
+            <Link href="/tree-pruning" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-tree-pruning">
               Tree Pruning
             </Link>
-            <Link href="/stump-grinding" className="text-foreground hover:text-primary transition-colors" data-testid="link-stump-grinding">
+            <Link href="/stump-grinding" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-stump-grinding">
               Stump Grinding
             </Link>
-            <Link href="/hedge-trimming" className="text-foreground hover:text-primary transition-colors" data-testid="link-hedge-trimming">
+            <Link href="/hedge-trimming" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-hedge-trimming">
               Hedge Trimming
             </Link>
           </nav>
@@ -75,16 +75,16 @@ export default function Header() {
         {isMenuOpen && (
           <nav className="md:hidden mt-4 pb-4 border-t border-border">
             <div className="flex flex-col space-y-4 pt-4">
-              <Link href="/tree-removal" className="text-foreground hover:text-primary transition-colors" data-testid="link-tree-removal-mobile">
+              <Link href="/tree-removal" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-tree-removal-mobile">
                 Tree Removal
               </Link>
-              <Link href="/tree-pruning" className="text-foreground hover:text-primary transition-colors" data-testid="link-tree-pruning-mobile">
+              <Link href="/tree-pruning" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-tree-pruning-mobile">
                 Tree Pruning
               </Link>
-              <Link href="/stump-grinding" className="text-foreground hover:text-primary transition-colors" data-testid="link-stump-grinding-mobile">
+              <Link href="/stump-grinding" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-stump-grinding-mobile">
                 Stump Grinding
               </Link>
-              <Link href="/hedge-trimming" className="text-foreground hover:text-primary transition-colors" data-testid="link-hedge-trimming-mobile">
+              <Link href="/hedge-trimming" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-hedge-trimming-mobile">
                 Hedge Trimming
               </Link>
             </div>
