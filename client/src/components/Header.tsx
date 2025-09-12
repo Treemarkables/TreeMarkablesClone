@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Phone, Menu, X } from "lucide-react";
 import { useState } from "react";
+// Import logo using relative path
+const logoImage = "/attached_assets/IMG_3219_1757718399678.JPG";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -20,8 +22,13 @@ export default function Header() {
     <header className="bg-background border-b border-border sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="text-2xl font-bold text-primary">Treemarkables</div>
+          <div className="flex items-center space-x-3">
+            <img 
+              src={logoImage} 
+              alt="Treemarkables Logo" 
+              className="h-12 w-auto"
+              data-testid="img-logo"
+            />
             <div className="text-sm text-muted-foreground hidden sm:block">Professional Tree Services</div>
           </div>
 
