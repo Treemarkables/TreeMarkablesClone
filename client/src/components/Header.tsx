@@ -28,23 +28,23 @@ export default function Header() {
               className="h-16 w-16 rounded-full object-cover"
               data-testid="logo-image"
             />
-            <Link href="/" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-home">
+            <Link href="/" className="text-foreground hover:text-blue transition-colors font-bold text-base" data-testid="link-home">
               Home
             </Link>
           </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-4 flex-nowrap">
-            <Link href="/tree-removal" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-tree-removal">
+            <Link href="/tree-removal" className="text-foreground hover:text-blue transition-colors font-bold text-base" data-testid="link-tree-removal">
               Tree Removal
             </Link>
-            <Link href="/tree-pruning" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-tree-pruning">
+            <Link href="/tree-pruning" className="text-foreground hover:text-blue transition-colors font-bold text-base" data-testid="link-tree-pruning">
               Tree Pruning
             </Link>
-            <Link href="/stump-grinding" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-stump-grinding">
+            <Link href="/stump-grinding" className="text-foreground hover:text-blue transition-colors font-bold text-base" data-testid="link-stump-grinding">
               Stump Grinding
             </Link>
-            <Link href="/hedge-trimming" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-hedge-trimming">
+            <Link href="/hedge-trimming" className="text-foreground hover:text-blue transition-colors font-bold text-base" data-testid="link-hedge-trimming">
               Hedge Trimming
             </Link>
           </nav>
@@ -54,7 +54,7 @@ export default function Header() {
               <Phone className="h-4 w-4" />
               <span className="font-medium">0272166882</span>
             </div>
-            <Button onClick={handleGetQuote} data-testid="button-get-quote">
+            <Button onClick={handleGetQuote} className="bg-blue hover:bg-blue/90 text-blue-foreground" data-testid="button-get-quote">
               Get Quote
             </Button>
             
