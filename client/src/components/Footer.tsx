@@ -1,6 +1,4 @@
 import { Shield, Award, Clock } from "lucide-react";
-// Logo served from public directory
-const logoImage = "/logo.jpg";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -12,12 +10,12 @@ export default function Footer() {
           {/* Company Info */}
           <div className="lg:col-span-2">
             <div className="flex items-center mb-4">
-              <div 
-                className="h-40 w-40 rounded-full bg-gradient-to-br from-primary to-orange-500 flex items-center justify-center text-white font-bold text-6xl shadow-lg"
-                data-testid="logo-circle-footer"
-              >
-                T
-              </div>
+              <img 
+                src="/treemarkables-logo.png" 
+                alt="Treemarkables Logo" 
+                className="h-40 w-40 rounded-full object-cover"
+                data-testid="logo-image-footer"
+              />
             </div>
             <p className="text-muted-foreground mb-6 leading-relaxed">
               Professional tree removal services in New Zealand. Our certified arborists 
