@@ -15,7 +15,7 @@ export default function Footer() {
               <img 
                 src={logoImage} 
                 alt="Treemarkables Logo" 
-                className="h-8 w-auto"
+                className="h-40 w-auto"
                 data-testid="img-footer-logo"
               />
             </div>
