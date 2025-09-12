@@ -1,9 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Award, Shield, TreePine } from "lucide-react";
+import { GraduationCap, Shield, TreePine } from "lucide-react";
 
 const features = [
   {
-    icon: Award,
+    icon: GraduationCap,
     title: "Expertise",
     description: "Our skilled arborists are trained in the latest techniques for safe and effective tree removal.",
   },
