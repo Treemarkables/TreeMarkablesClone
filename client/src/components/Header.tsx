@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Phone, Menu, X } from "lucide-react";
 import { useState } from "react";
-// Import logo using relative path
-const logoImage = "/attached_assets/IMG_3219_1757718399678.JPG";
+// Logo served from public directory
+const logoImage = "/logo.jpg";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);

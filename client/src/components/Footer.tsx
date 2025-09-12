@@ -1,6 +1,6 @@
 import { Shield, Award, Clock } from "lucide-react";
-// Import logo using relative path
-const logoImage = "/attached_assets/IMG_3219_1757718399678.JPG";
+// Logo served from public directory
+const logoImage = "/logo.jpg";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
