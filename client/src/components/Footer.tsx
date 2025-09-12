@@ -1,4 +1,5 @@
 import { Shield, Award, Clock } from "lucide-react";
+import logoImage from "@assets/0fe124b7-cd27-4bb5-a914-65ef9de39b28_1757721055730.png";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -11,7 +12,7 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <div className="flex items-center mb-4">
               <img 
-                src="/treemarkables-logo.png" 
+                src={logoImage} 
                 alt="Treemarkables Logo" 
                 className="h-40 w-40 rounded-full object-cover bg-muted/50"
                 data-testid="logo-image-footer"
