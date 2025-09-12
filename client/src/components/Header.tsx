@@ -28,7 +28,7 @@ export default function Header() {
               className="h-16 w-16 rounded-full object-cover"
               data-testid="logo-image"
             />
-            <Link href="/" className="text-foreground hover:text-primary transition-colors font-medium" data-testid="link-home">
+            <Link href="/" className="text-foreground hover:text-primary transition-colors font-bold text-base" data-testid="link-home">
               Home
             </Link>
           </div>
