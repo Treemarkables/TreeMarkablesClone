@@ -20,13 +20,13 @@ export default function Header() {
 
   return (
     <header className="bg-background border-b border-border sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-6 py-4">
+      <div className="max-w-6xl mx-auto px-6 py-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <img 
               src={logoImage} 
               alt="Treemarkables Logo" 
-              className="h-16 w-16 rounded-full object-cover"
+              className="h-12 w-12 rounded-full object-cover"
               data-testid="img-logo"
             />
             <div className="text-sm text-muted-foreground hidden sm:block">Professional Tree Services</div>
