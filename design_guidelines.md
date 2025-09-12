@@ -13,14 +13,14 @@
 
 ### A. Color Palette
 **Primary Colors (Dark Mode)**: 
-- Forest Green: 150 65% 25% (primary brand)
-- Sage Green: 120 30% 45% (secondary)
+- Vibrant Orange: 25 85% 55% (primary brand)
+- Deep Blue: 215 80% 45% (secondary)
 - Charcoal: 210 10% 15% (backgrounds)
 - Warm White: 45 15% 95% (text/contrast)
 
 **Primary Colors (Light Mode)**:
-- Deep Forest: 150 70% 20% (primary brand)
-- Natural Green: 130 40% 35% (secondary)
+- Rich Orange: 20 90% 48% (primary brand)
+- Professional Blue: 215 85% 35% (secondary)
 - Clean White: 0 0% 98% (backgrounds)
 - Rich Charcoal: 210 15% 20% (text)
 
