@@ -52,6 +52,12 @@
 
   --primary-foreground: 45 15% 95%;
 
+  --blue: 215 85% 55%;
+
+  --blue-foreground: 0 0% 98%;
+
+  --blue-border: 215 85% 47%;
+
   --secondary: 0 0% 90%;
 
   --secondary-foreground: 210 15% 20%;
@@ -120,6 +126,10 @@
   /* Fallback for older browsers */
   --destructive-border: hsl(var(--destructive));
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  /* Fallback for older browsers */
+  --blue-border: hsl(var(--blue));
+  --blue-border: hsl(from hsl(var(--blue)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
 .dark {
@@ -169,6 +179,12 @@
   --primary: 25 85% 55%;
 
   --primary-foreground: 45 15% 95%;
+
+  --blue: 215 85% 65%;
+
+  --blue-foreground: 0 0% 98%;
+
+  --blue-border: 215 85% 57%;
 
   --secondary: 210 10% 25%;
 
