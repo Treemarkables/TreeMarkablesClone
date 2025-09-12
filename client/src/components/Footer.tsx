@@ -13,7 +13,7 @@ export default function Footer() {
               <img 
                 src="/treemarkables-logo.png" 
                 alt="Treemarkables Logo" 
-                className="h-40 w-40 rounded-full object-cover"
+                className="h-40 w-40 rounded-full object-cover bg-muted/50"
                 data-testid="logo-image-footer"
               />
             </div>
