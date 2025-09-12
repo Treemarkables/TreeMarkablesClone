@@ -34,7 +34,7 @@ export default function Header() {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-6">
+          <nav className="hidden md:flex items-center space-x-4 flex-nowrap">
             <Link href="/tree-removal" className="text-foreground hover:text-primary transition-colors" data-testid="link-tree-removal">
               Tree Removal
             </Link>
