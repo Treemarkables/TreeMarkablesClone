@@ -32,18 +32,18 @@ export default function Hero() {
           </h1>
           <p className="text-xl md:text-2xl text-white/90 mb-8 leading-relaxed">
             Are you facing the challenge of dealing with a hazardous tree on your property? 
-            Our certified arborists specialize in safe and efficient tree removal services.
+            Our qualified arborists specialize in safe and efficient tree removal services.
           </p>
 
           {/* Key Features */}
           <div className="flex flex-wrap gap-6 mb-8">
             <div className="flex items-center text-white/90">
               <Shield className="h-5 w-5 mr-2 text-primary" />
-              <span className="text-sm font-medium">Licensed & Insured</span>
+              <span className="text-sm font-medium">Insured</span>
             </div>
             <div className="flex items-center text-white/90">
               <Award className="h-5 w-5 mr-2 text-primary" />
-              <span className="text-sm font-medium">Certified Arborists</span>
+              <span className="text-sm font-medium">Qualified Arborists</span>
             </div>
             <div className="flex items-center text-white/90">
               <Clock className="h-5 w-5 mr-2 text-primary" />
