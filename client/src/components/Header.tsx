@@ -25,7 +25,7 @@ export default function Header() {
             <img 
               src="/treemarkables-logo.png" 
               alt="Treemarkables Logo" 
-              className="h-12 w-12 rounded-full object-cover"
+              className="h-16 w-16 rounded-full object-cover"
               data-testid="logo-image"
             />
             <div className="text-sm text-muted-foreground hidden sm:block">Professional Tree Services</div>
