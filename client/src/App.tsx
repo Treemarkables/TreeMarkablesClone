@@ -4,12 +4,20 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/Home";
+import TreeRemoval from "@/pages/TreeRemoval";
+import TreePruning from "@/pages/TreePruning";
+import StumpGrinding from "@/pages/StumpGrinding";
+import HedgeTrimming from "@/pages/HedgeTrimming";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home}/>
+      <Route path="/tree-removal" component={TreeRemoval}/>
+      <Route path="/tree-pruning" component={TreePruning}/>
+      <Route path="/stump-grinding" component={StumpGrinding}/>
+      <Route path="/hedge-trimming" component={HedgeTrimming}/>
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
