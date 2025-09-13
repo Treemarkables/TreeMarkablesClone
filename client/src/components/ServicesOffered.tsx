@@ -24,7 +24,7 @@ const services = [
   {
     title: "Stump Grinding",
     description: "Complete stump removal using professional grinding equipment to eliminate trip hazards and reclaim your space.",
-    image: "/tree-removal-real.png",
+    image: "/stump-grinding.jpg",
   },
   {
     title: "Mulch Deliveries",
