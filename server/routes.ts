@@ -136,6 +136,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper endpoint to discover Google Business Profile Account ID and Location ID
+  app.get('/api/reviews/google/discover', async (req: Request, res: Response) => {
+    try {
+      const apiKey = process.env.GOOGLE_MY_BUSINESS_API_KEY;
+      
+      if (!apiKey) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Google My Business API key not configured' 
+        });
+      }
+
+      // Step 1: Get Account ID
+      const accountsUrl = `https://mybusinessaccountmanagement.googleapis.com/v1/accounts?key=${apiKey}`;
+      
+      const accountsResponse = await fetch(accountsUrl, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!accountsResponse.ok) {
+        const errorText = await accountsResponse.text();
+        console.error('Google Business Profile accounts API error:', accountsResponse.status, errorText);
+        return res.status(400).json({ 
+          success: false, 
+          message: `Failed to fetch accounts: ${accountsResponse.status} ${accountsResponse.statusText}`,
+          details: errorText
+        });
+      }
+
+      const accountsData = await accountsResponse.json();
+      
+      if (!accountsData.accounts || accountsData.accounts.length === 0) {
+        return res.json({ 
+          success: false, 
+          message: 'No Google Business accounts found. Make sure your API key has access to Google Business Profile.',
+          accountsData
+        });
+      }
+
+      // Extract Account ID from the first account
+      const firstAccount = accountsData.accounts[0];
+      const accountId = firstAccount.name.split('/')[1]; // accounts/123456789 -> 123456789
+
+      // Step 2: Get Location IDs for this account
+      const locationsUrl = `https://mybusinessbusinessinformation.googleapis.com/v1/accounts/${accountId}/locations?readMask=name&key=${apiKey}`;
+      
+      const locationsResponse = await fetch(locationsUrl, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!locationsResponse.ok) {
+        const errorText = await locationsResponse.text();
+        console.error('Google Business Profile locations API error:', locationsResponse.status, errorText);
+        return res.json({ 
+          success: true, 
+          accountId,
+          message: `Found Account ID but couldn't fetch locations: ${locationsResponse.status}`,
+          details: errorText
+        });
+      }
+
+      const locationsData = await locationsResponse.json();
+      
+      const locations = locationsData.locations?.map((location: any) => ({
+        name: location.name,
+        locationId: location.name.split('/')[3] // accounts/123/locations/456 -> 456
+      })) || [];
+
+      res.json({ 
+        success: true,
+        accountId,
+        locations,
+        message: `Found Account ID: ${accountId} with ${locations.length} location(s)`,
+        rawData: {
+          accounts: accountsData,
+          locations: locationsData
+        }
+      });
+
+    } catch (error) {
+      console.error('Google Business Profile discovery error:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error discovering Google Business Profile IDs',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
