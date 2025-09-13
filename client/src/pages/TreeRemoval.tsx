@@ -3,7 +3,7 @@ import Footer from "@/components/Footer";
 import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import heroBackground from "@assets/tree_worker_action_shot.jpg";
+import heroVideo from "@assets/copy_77E88CDC-C666-4B3C-B02C-5CE23818F128_1757799940776.mp4";
 
 export default function TreeRemoval() {
   const handleGetQuote = () => {
@@ -18,10 +18,17 @@ export default function TreeRemoval() {
     <div className="min-h-screen bg-background">
       <Header />
       {/* Hero Section */}
-      <section 
-        className="relative min-h-screen bg-gradient-to-br from-primary/10 to-orange-500/10 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(${heroBackground})` }}
-      >
+      <section className="relative min-h-screen overflow-hidden">
+        {/* Video Background */}
+        <video 
+          autoPlay 
+          muted 
+          loop 
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        >
+          <source src={heroVideo} type="video/mp4" />
+        </video>
         <div className="absolute inset-0 bg-black/20"></div>
         <div className="relative max-w-6xl mx-auto px-6 pt-80">
           <div className="text-center">
