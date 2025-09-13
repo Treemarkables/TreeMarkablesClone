@@ -64,6 +64,24 @@ export default function ContactSection() {
                   />
                 </div>
                 <div>
+                  <label htmlFor="hear-about" className="block text-sm font-medium text-foreground mb-2">
+                    How did you hear about us?
+                  </label>
+                  <select
+                    id="hear-about"
+                    className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    data-testid="select-hear-about"
+                  >
+                    <option value="">Please select...</option>
+                    <option value="google">Google Search</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="referral">Word of mouth/Referral</option>
+                    <option value="previous-customer">Previous customer</option>
+                    <option value="local-advertising">Local advertising</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
                   <label htmlFor="message" className="block text-sm font-medium text-foreground mb-2">
                     Message *
                   </label>
