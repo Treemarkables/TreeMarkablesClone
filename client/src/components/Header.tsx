@@ -67,7 +67,27 @@ export default function Header() {
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            {/* Get Quote Button - Desktop only */}
+            {/* Phone Button - Desktop */}
+            <a 
+              href="tel:0272166882" 
+              className="hidden lg:flex items-center space-x-2 text-sm text-white bg-orange-500 px-3 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
+              data-testid="link-phone-header"
+            >
+              <Phone className="h-4 w-4" />
+              <span>027-216-6882</span>
+            </a>
+
+            {/* Email Button - Desktop */}
+            <a 
+              href="mailto:quotes@treemarkables.nz" 
+              className="hidden lg:flex items-center space-x-2 text-sm text-white bg-blue px-3 py-2 rounded-lg border border-blue hover:bg-blue/90 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
+              data-testid="link-email-header"
+            >
+              <Mail className="h-4 w-4" />
+              <span>quotes@treemarkables.nz</span>
+            </a>
+
+            {/* Get Quote Button - Desktop */}
             <Button 
               onClick={handleGetQuote} 
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200 hidden lg:inline-flex" 
