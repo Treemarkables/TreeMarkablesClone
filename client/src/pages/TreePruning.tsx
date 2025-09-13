@@ -82,264 +82,151 @@ export default function TreePruning() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center">
             <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6" data-testid="text-hero-title">
-              Expert Tree Pruning Services in Gisborne
+              Trees Beautiful
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-4xl mx-auto leading-relaxed" data-testid="text-hero-description">
-              Treemarkables delivers professional arboricultural services with unmatched expertise in 
-              Gisborne's unique climate conditions. Our qualified arborists enhance tree health, safety, 
-              and aesthetic appeal through precision pruning techniques tailored to local species and conditions.
+            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed" data-testid="text-hero-description">
+              Professional tree pruning and care in Gisborne. We help your trees stay healthy, 
+              safe, and beautiful through expert pruning techniques.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" onClick={handleGetQuote} className="text-lg px-8" data-testid="button-get-quote">
-                Request Professional Assessment
+              <Button size="lg" onClick={handleGetQuote} className="text-lg px-6" data-testid="button-get-quote">
+                Talk to us today
               </Button>
-              <Button size="lg" variant="outline" onClick={handleCallNow} className="text-lg px-8" data-testid="button-call-now">
-                <Phone className="w-5 h-5 mr-2" />
-                Call 027-216-6882
+              <Button size="lg" variant="outline" onClick={handleCallNow} className="text-lg px-6" data-testid="button-call-now">
+                <Phone className="w-4 h-4 mr-2" />
+                027-216-6882
               </Button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Local Expertise Section */}
+      {/* Services Section */}
       <section className="py-20 bg-background">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-foreground mb-6">
-              Gisborne's Premier Tree Care Specialists
+              Our Services
             </h2>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-              With extensive experience in Gisborne's coastal environment, we understand the unique challenges 
-              facing local tree species, from salt exposure to wind damage and seasonal growth patterns.
-            </p>
           </div>
           <div className="grid lg:grid-cols-3 gap-8">
             <Card className="hover-elevate">
-              <CardContent className="p-8 text-center">
-                <MapPin className="h-12 w-12 text-primary mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-4">Local Climate Expertise</h3>
-                <p className="text-muted-foreground">
-                  Specialised knowledge of Gisborne's coastal climate, prevailing winds, and seasonal 
-                  patterns ensures optimal pruning timing and techniques for lasting results.
+              <CardContent className="p-8">
+                <TreePine className="h-12 w-12 text-primary mb-6" />
+                <h3 className="text-xl font-semibold text-foreground mb-4">Tree Pruning</h3>
+                <p className="text-muted-foreground mb-6">
+                  Professional pruning to improve tree health, safety, and appearance. We understand 
+                  Gisborne's coastal conditions and work with the natural growth of your trees.
                 </p>
+                <Button variant="outline" onClick={handleGetQuote} size="sm">
+                  Find out more
+                </Button>
               </CardContent>
             </Card>
             <Card className="hover-elevate">
-              <CardContent className="p-8 text-center">
-                <TreePine className="h-12 w-12 text-primary mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-4">Native Species Knowledge</h3>
-                <p className="text-muted-foreground">
-                  Comprehensive understanding of New Zealand native species including pohutukawa, 
-                  totara, and kauri, with species-specific pruning protocols.
+              <CardContent className="p-8">
+                <Scissors className="h-12 w-12 text-primary mb-6" />
+                <h3 className="text-xl font-semibold text-foreground mb-4">Crown Management</h3>
+                <p className="text-muted-foreground mb-6">
+                  Expert crown thinning and reduction to manage tree size while maintaining 
+                  natural shape. Perfect for trees near buildings or power lines.
                 </p>
+                <Button variant="outline" onClick={handleGetQuote} size="sm">
+                  Find out more
+                </Button>
               </CardContent>
             </Card>
             <Card className="hover-elevate">
-              <CardContent className="p-8 text-center">
-                <Users className="h-12 w-12 text-primary mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-4">Community Trust</h3>
-                <p className="text-muted-foreground">
-                  Established reputation throughout Gisborne with hundreds of satisfied residential 
-                  and commercial clients who trust us with their valuable tree assets.
+              <CardContent className="p-8">
+                <Shield className="h-12 w-12 text-primary mb-6" />
+                <h3 className="text-xl font-semibold text-foreground mb-4">Safety Pruning</h3>
+                <p className="text-muted-foreground mb-6">
+                  Removal of dead, diseased, or dangerous branches to keep your property safe. 
+                  We spot potential hazards before they become problems.
                 </p>
+                <Button variant="outline" onClick={handleGetQuote} size="sm">
+                  Find out more
+                </Button>
               </CardContent>
             </Card>
           </div>
         </div>
       </section>
 
-      {/* Professional Services Section */}
+      {/* Welcome Section */}
       <section className="py-20 bg-muted/30">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-4xl font-bold text-foreground mb-8" data-testid="text-service-title">
-                Comprehensive Tree Pruning Solutions
-              </h2>
-              <div className="space-y-6">
-                <div className="flex items-start space-x-4">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1 flex-shrink-0" />
-                  <div>
-                    <h3 className="font-semibold text-foreground text-lg mb-2">Structural Integrity Enhancement</h3>
-                    <p className="text-muted-foreground">
-                      Professional assessment and selective removal of structurally compromised branches 
-                      to prevent property damage and ensure public safety.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-4">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1 flex-shrink-0" />
-                  <div>
-                    <h3 className="font-semibold text-foreground text-lg mb-2">Health & Disease Management</h3>
-                    <p className="text-muted-foreground">
-                      Expert identification and removal of diseased, damaged, or pest-affected branches 
-                      to promote optimal tree health and longevity.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-4">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1 flex-shrink-0" />
-                  <div>
-                    <h3 className="font-semibold text-foreground text-lg mb-2">Aesthetic & Landscape Integration</h3>
-                    <p className="text-muted-foreground">
-                      Precision shaping and crown management to enhance visual appeal while maintaining 
-                      natural tree architecture and landscape harmony.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-4">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1 flex-shrink-0" />
-                  <div>
-                    <h3 className="font-semibold text-foreground text-lg mb-2">Growth Optimisation</h3>
-                    <p className="text-muted-foreground">
-                      Strategic pruning to direct growth patterns, improve air circulation, and maximise 
-                      light penetration for enhanced tree vitality.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-card border border-card-border p-8 rounded-xl shadow-sm">
-              <h3 className="text-2xl font-bold text-foreground mb-6">Specialised Pruning Techniques</h3>
-              <div className="space-y-6">
-                <div className="flex items-center space-x-4">
-                  <div className="bg-primary text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg">1</div>
-                  <div>
-                    <h4 className="font-semibold text-foreground">Crown Reduction & Thinning</h4>
-                    <p className="text-sm text-muted-foreground">Professional canopy management</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="bg-primary text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg">2</div>
-                  <div>
-                    <h4 className="font-semibold text-foreground">Deadwood & Hazard Removal</h4>
-                    <p className="text-sm text-muted-foreground">Safety-focused branch elimination</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="bg-primary text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg">3</div>
-                  <div>
-                    <h4 className="font-semibold text-foreground">Formative & Young Tree Pruning</h4>
-                    <p className="text-sm text-muted-foreground">Establishing strong tree structure</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="bg-primary text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg">4</div>
-                  <div>
-                    <h4 className="font-semibold text-foreground">Fruit Tree Specialisation</h4>
-                    <p className="text-sm text-muted-foreground">Maximising yield and tree health</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <h2 className="text-4xl font-bold text-foreground mb-8">
+            A warm welcome from the team
+          </h2>
+          <p className="text-lg text-muted-foreground leading-relaxed mb-8">
+            We're passionate about trees and helping them thrive in Gisborne's unique coastal environment. 
+            Whether it's a quick safety prune or caring for your heritage trees, we bring the same 
+            attention to detail and local knowledge to every job.
+          </p>
+          <p className="text-lg text-muted-foreground leading-relaxed">
+            Our team understands how salt winds, summer heat, and winter storms affect your trees. 
+            We work with nature, not against it, to keep your trees healthy and your property safe.
+          </p>
         </div>
       </section>
 
-      {/* Professional Credentials Section */}
+      {/* Simple Credentials */}
       <section className="py-20 bg-background">
         <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-6">
-              Uncompromising Professional Standards
-            </h2>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-              Our commitment to excellence is reflected in our qualifications, insurance coverage, 
-              and adherence to industry best practices.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            <Card className="hover-elevate text-center">
-              <CardContent className="p-8">
-                <Shield className="h-16 w-16 text-primary mx-auto mb-6" />
-                <h3 className="text-xl font-semibold text-foreground mb-4">Comprehensive Insurance</h3>
-                <p className="text-muted-foreground mb-4">
-                  Full public liability and professional indemnity coverage ensuring complete 
-                  protection for your property and peace of mind.
-                </p>
-                <div className="text-sm text-primary font-medium bg-primary/10 px-3 py-1 rounded-md inline-block">
-                  $2M Coverage
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="hover-elevate text-center">
-              <CardContent className="p-8">
-                <Award className="h-16 w-16 text-primary mx-auto mb-6" />
-                <h3 className="text-xl font-semibold text-foreground mb-4">Qualified Arborists</h3>
-                <p className="text-muted-foreground mb-4">
-                  NZQA certified arborists with ongoing professional development and specialised 
-                  training in modern pruning techniques.
-                </p>
-                <div className="text-sm text-primary font-medium bg-primary/10 px-3 py-1 rounded-md inline-block">
-                  NZQA Certified
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="hover-elevate text-center">
-              <CardContent className="p-8">
-                <Scissors className="h-16 w-16 text-primary mx-auto mb-6" />
-                <h3 className="text-xl font-semibold text-foreground mb-4">Precision Equipment</h3>
-                <p className="text-muted-foreground mb-4">
-                  State-of-the-art pruning equipment and safety gear ensuring precise cuts 
-                  and minimal impact on surrounding landscape.
-                </p>
-                <div className="text-sm text-primary font-medium bg-primary/10 px-3 py-1 rounded-md inline-block">
-                  Professional Grade
-                </div>
-              </CardContent>
-            </Card>
+          <div className="grid md:grid-cols-3 gap-8 text-center">
+            <div>
+              <Shield className="h-12 w-12 text-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">Fully Insured</h3>
+              <p className="text-muted-foreground">Complete coverage for your peace of mind</p>
+            </div>
+            <div>
+              <Award className="h-12 w-12 text-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">Qualified Team</h3>
+              <p className="text-muted-foreground">Certified arborists with local knowledge</p>
+            </div>
+            <div>
+              <MapPin className="h-12 w-12 text-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">Local Experts</h3>
+              <p className="text-muted-foreground">Understanding Gisborne's unique conditions</p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Customer Reviews Section */}
+      {/* Testimonials */}
       <section className="py-20 bg-muted/30">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-foreground mb-6">
-              Client Testimonials
+              Testimonials
             </h2>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-              Discover why Gisborne property owners consistently choose Treemarkables for 
-              their professional tree pruning requirements.
-            </p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8 mb-12">
-            {reviews.map((review) => (
-              <Card key={review.id} className="hover-elevate" data-testid={`review-card-${review.id}`}>
-                <CardContent className="p-8">
-                  <div className="flex justify-between items-start mb-6">
-                    <div>
-                      <h3 className="font-semibold text-foreground text-lg" data-testid={`review-name-${review.id}`}>
-                        {review.name}
-                      </h3>
-                      <p className="text-muted-foreground" data-testid={`review-location-${review.id}`}>
-                        {review.location}
-                      </p>
-                    </div>
-                    <StarRating rating={review.rating} />
+            {reviews.slice(0, 4).map((review) => (
+              <div key={review.id} className="bg-white p-6 rounded-lg shadow-sm" data-testid={`review-card-${review.id}`}>
+                <p className="text-muted-foreground mb-4 italic leading-relaxed" data-testid={`review-comment-${review.id}`}>
+                  {review.comment}
+                </p>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-semibold text-foreground" data-testid={`review-name-${review.id}`}>
+                      {review.name}
+                    </h3>
+                    <p className="text-sm text-muted-foreground" data-testid={`review-location-${review.id}`}>
+                      {review.location}
+                    </p>
                   </div>
-                  
-                  <p className="text-muted-foreground mb-6 italic leading-relaxed" data-testid={`review-comment-${review.id}`}>
-                    "{review.comment}"
-                  </p>
-                  
-                  <div className="text-sm text-primary font-medium bg-primary/10 px-3 py-1 rounded-md inline-block" data-testid={`review-service-${review.id}`}>
-                    {review.service}
-                  </div>
-                </CardContent>
-              </Card>
+                  <StarRating rating={review.rating} />
+                </div>
+              </div>
             ))}
           </div>
 
           <div className="text-center">
-            <p className="text-muted-foreground text-lg mb-6">
-              Join over 200 satisfied customers throughout the Gisborne region
-            </p>
-            <Button size="lg" onClick={handleGetQuote} className="text-lg px-8">
-              Experience Professional Tree Care
+            <Button size="lg" onClick={handleGetQuote}>
+              Talk to us today
             </Button>
           </div>
         </div>
