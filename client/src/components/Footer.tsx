@@ -1,5 +1,4 @@
 import { Shield, Award, Clock } from "lucide-react";
-import logoImage from "@assets/0fe124b7-cd27-4bb5-a914-65ef9de39b28_1757721055730.png";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -10,14 +9,6 @@ export default function Footer() {
         <div className="grid lg:grid-cols-4 gap-8">
           {/* Company Info */}
           <div className="lg:col-span-2">
-            <div className="flex items-center mb-4">
-              <img 
-                src={logoImage} 
-                alt="Treemarkables Logo" 
-                className="h-40 w-40 rounded-full object-cover bg-muted/50"
-                data-testid="logo-image-footer"
-              />
-            </div>
             <p className="text-muted-foreground mb-6 leading-relaxed">
               Professional tree removal services in New Zealand. Our certified arborists 
               are dedicated to ensuring the well-being of your property and the safety 
