@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
+import SEO from "@/components/SEO";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,8 +75,50 @@ export default function TreePruning() {
     window.location.href = 'tel:0272166882';
   };
 
+  // Local business structured data for Tree Pruning SEO
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "@id": "https://www.treemarkables.nz/tree-pruning#business",
+    "name": "Treemarkables Tree Pruning Services",
+    "description": "Professional tree pruning and care services in Gisborne, New Zealand. Expert arborists specializing in structural pruning, crown thinning, deadwooding, and tree health maintenance.",
+    "url": "https://www.treemarkables.nz/tree-pruning",
+    "telephone": "+64272166882",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Gisborne",
+      "addressRegion": "Gisborne Region",
+      "addressCountry": "NZ"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": -38.6623,
+      "longitude": 178.0176
+    },
+    "areaServed": [
+      "Gisborne",
+      "Kaiti",
+      "Te Hapara",
+      "Mangapapa", 
+      "Wainui Beach",
+      "Makaraka",
+      "Elgin"
+    ],
+    "serviceType": "Tree Pruning Service",
+    "priceRange": "$$",
+    "openingHours": "Mo-Su 07:00-18:00"
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <SEO 
+        title="Tree Pruning Gisborne | Professional Arborist Services | Treemarkables NZ"
+        description="Expert tree pruning services in Gisborne, NZ. Certified arborists offering structural pruning, crown thinning, deadwooding, and tree health care. Coastal conditions specialist. Call 027-216-6882."
+        keywords="tree pruning Gisborne, professional arborist, tree trimming Gisborne, structural pruning, crown thinning, deadwooding, tree care Gisborne, certified arborist NZ, coastal tree pruning"
+        ogTitle="Professional Tree Pruning Services in Gisborne, New Zealand"
+        ogDescription="Keep your trees healthy and beautiful with expert pruning services. Specialized in Gisborne's coastal conditions. Free quotes from certified arborists."
+        structuredData={structuredData}
+      />
       <Header />
       {/* Hero Section */}
       <section className="relative min-h-screen overflow-hidden">

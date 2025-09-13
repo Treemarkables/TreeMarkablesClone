@@ -7,38 +7,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Facebook reviews endpoint
   app.get('/api/reviews/facebook', async (req: Request, res: Response) => {
     try {
-      const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
+      // Use long-lived Page Access Token instead of user token
+      const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
+      const pageId = process.env.FACEBOOK_PAGE_ID;
       
-      if (!accessToken) {
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Facebook access token not configured' 
+      if (!pageAccessToken) {
+        return res.status(200).json({ 
+          success: true, 
+          reviews: [],
+          message: 'Facebook Page Access Token not configured. Please set FACEBOOK_PAGE_ACCESS_TOKEN with a long-lived page token.' 
         });
       }
 
-      // Fetch reviews from Facebook API
-      // Note: You'll need your Facebook Page ID
-      const pageId = process.env.FACEBOOK_PAGE_ID || 'YOUR_FACEBOOK_PAGE_ID'; // Replace with your actual page ID
-      
-      if (pageId === 'YOUR_FACEBOOK_PAGE_ID') {
-        // Return error response when Page ID is not configured
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Facebook Page ID not configured',
-          reviews: []
+      if (!pageId) {
+        return res.status(200).json({ 
+          success: true, 
+          reviews: [],
+          message: 'Facebook Page ID not configured' 
         });
       }
 
-      const url = `https://graph.facebook.com/v18.0/${pageId}/ratings?access_token=${accessToken}&fields=reviewer{name},rating,review_text,created_time&limit=10`;
+      // Use ratings endpoint with page access token
+      const url = `https://graph.facebook.com/v18.0/${pageId}/ratings?access_token=${pageAccessToken}&fields=reviewer{name},rating,review_text,created_time&limit=10`;
       
       const response = await fetch(url);
       const data = await response.json();
 
       if (!response.ok) {
+        // Handle authentication errors gracefully instead of throwing 500
+        if (data.error?.code === 190 || data.error?.type === 'OAuthException') {
+          console.error('Facebook authentication error - token may be expired:', data.error?.message);
+          return res.status(200).json({ 
+            success: true, 
+            reviews: [],
+            message: 'Facebook token expired or invalid. Please refresh your long-lived Page Access Token.' 
+          });
+        }
+        
         console.error('Facebook API error:', data);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Failed to fetch Facebook reviews' 
+        return res.status(200).json({ 
+          success: true, 
+          reviews: [],
+          message: 'Unable to fetch Facebook reviews at this time' 
         });
       }
 
@@ -65,69 +75,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Google Business Profile reviews endpoint
+  // Google Places reviews endpoint (replaces Google Business Profile)
   app.get('/api/reviews/google', async (req: Request, res: Response) => {
     try {
-      const apiKey = process.env.GOOGLE_MY_BUSINESS_API_KEY;
+      const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MY_BUSINESS_API_KEY;
+      const placeId = process.env.GOOGLE_PLACE_ID;
       
       if (!apiKey) {
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Google Business Profile API key not configured' 
-        });
-      }
-
-      // You'll need to replace these with your actual account and location IDs
-      // For now, we'll return a success response with empty reviews to avoid errors
-      // To get your account and location IDs, you'll need to use the Google Business Profile API
-      const accountId = process.env.GOOGLE_BUSINESS_ACCOUNT_ID;
-      const locationId = process.env.GOOGLE_BUSINESS_LOCATION_ID;
-      
-      if (!accountId || !locationId) {
         return res.status(200).json({ 
           success: true, 
           reviews: [],
-          message: 'Google Business Profile account/location IDs not configured'
+          message: 'Google Places API key not configured. Please set GOOGLE_PLACES_API_KEY.' 
         });
       }
 
-      // Fetch reviews from Google Business Profile API
-      const url = `https://mybusiness.googleapis.com/v4/accounts/${accountId}/locations/${locationId}/reviews?key=${apiKey}`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
+      if (!placeId) {
+        return res.status(200).json({ 
+          success: true, 
+          reviews: [],
+          message: 'Google Place ID not configured. Use /api/reviews/google/discover to find your Place ID.'
+        });
+      }
+
+      let reviews: any[] = [];
+
+      // Try new Google Places API v1 first
+      try {
+        const v1Url = `https://places.googleapis.com/v1/places/${placeId}`;
+        
+        const v1Response = await fetch(v1Url, {
+          headers: {
+            'X-Goog-Api-Key': apiKey,
+            'X-Goog-FieldMask': 'id,displayName,rating,userRatingCount,reviews.text,reviews.rating,reviews.authorAttribution.displayName,reviews.publishTime'
+          }
+        });
+
+        if (v1Response.ok) {
+          const v1Data = await v1Response.json();
+          
+          if (v1Data.reviews && v1Data.reviews.length > 0) {
+            reviews = v1Data.reviews.map((review: any, index: number) => ({
+              id: `google-v1-${index}`,
+              name: review.authorAttribution?.displayName || 'Google User',
+              location: 'Google Reviews',
+              rating: review.rating || 5,
+              comment: review.text?.text || '',
+              service: 'Tree Services',
+              source: 'google',
+              date: review.publishTime
+            }));
+          }
         }
+      } catch (v1Error) {
+        console.log('Google Places v1 API not available, trying legacy API');
+      }
+
+      // Fallback to legacy Google Places API if v1 failed or returned no reviews
+      if (reviews.length === 0) {
+        try {
+          const legacyUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,rating,user_ratings_total,reviews&key=${apiKey}`;
+          
+          const legacyResponse = await fetch(legacyUrl);
+          
+          if (legacyResponse.ok) {
+            const legacyData = await legacyResponse.json();
+            
+            if (legacyData.result?.reviews && legacyData.result.reviews.length > 0) {
+              reviews = legacyData.result.reviews.map((review: any, index: number) => ({
+                id: `google-legacy-${index}`,
+                name: review.author_name || 'Google User',
+                location: 'Google Reviews',
+                rating: review.rating || 5,
+                comment: review.text || '',
+                service: 'Tree Services',
+                source: 'google',
+                date: new Date(review.time * 1000).toISOString()
+              }));
+            }
+          }
+        } catch (legacyError) {
+          console.log('Google Places legacy API also failed');
+        }
+      }
+
+      res.json({ 
+        success: true, 
+        reviews,
+        message: reviews.length > 0 ? `Retrieved ${reviews.length} Google reviews` : 'No reviews found or API temporarily unavailable'
       });
 
-      if (!response.ok) {
-        console.error('Google Business Profile API error:', response.status, response.statusText);
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Unable to fetch Google reviews at this time'
-        });
-      }
-
-      const data = await response.json();
-
-      // Transform Google data to match our review interface
-      const reviews = data.reviews?.map((review: any, index: number) => ({
-        id: `google-${index}`,
-        name: review.reviewer?.displayName || 'Google User',
-        location: 'Google Reviews',
-        rating: review.starRating || 5,
-        comment: review.comment || '',
-        service: 'Tree Services',
-        source: 'google',
-        date: review.createTime
-      })) || [];
-
-      res.json({ success: true, reviews });
-
     } catch (error) {
-      console.error('Google Business Profile reviews error:', error);
+      console.error('Google Places reviews error:', error);
       res.status(200).json({ 
         success: true, 
         reviews: [],
