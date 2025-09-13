@@ -31,57 +31,52 @@ export default function TreeRemoval() {
         <div className="absolute inset-0 bg-black/20"></div>
         <div className="relative max-w-6xl mx-auto px-6">
           <div className="text-center">
-            <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6" data-testid="text-hero-title">
-              Hazardous Tree Removal in Gisborne
-              <span className="text-primary block">Fast, Safe, Fully Insured</span>
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6" data-testid="text-hero-title">
+              Tree Removal Services
+              <span className="text-primary block text-3xl md:text-4xl font-normal">Gisborne & Surrounding Areas</span>
             </h1>
-            <p className="text-xl md:text-2xl text-foreground mb-6 max-w-4xl mx-auto font-medium" data-testid="text-hero-description">
-              Qualified NZ arborists removing dangerous trees today. Same-day emergency response. 
-              No-mess cleanup guarantee. Council compliant.
+            <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-3xl mx-auto" data-testid="text-hero-description">
+              Professional tree removal and arborist services by qualified specialists. 
+              We handle everything from emergency storm damage to planned removals with full council compliance.
             </p>
             
-            {/* Trust Indicators */}
-            <div className="flex flex-wrap justify-center items-center gap-6 mb-8 text-sm font-medium">
-              <div className="flex items-center gap-2 text-foreground">
-                <Star className="h-5 w-5 text-yellow-500" />
-                <span>4.9★ Google Reviews</span>
-              </div>
-              <div className="flex items-center gap-2 text-foreground">
-                <Shield className="h-5 w-5 text-primary" />
-                <span>Fully Insured</span>
-              </div>
-              <div className="flex items-center gap-2 text-foreground">
-                <Clock className="h-5 w-5 text-primary" />
-                <span>24/7 Emergency Response</span>
-              </div>
-            </div>
-
-            {/* Dual CTAs */}
+            {/* Simple Contact Options */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Button 
                 size="lg" 
                 onClick={handleCallNow}
-                className="bg-red-600 hover:bg-red-700 text-white border-red-600 text-lg px-8 py-4 h-auto"
+                className="text-lg px-6 py-3"
                 data-testid="button-call-now"
               >
-                <Phone className="h-5 w-5 mr-2" />
-                Call Now: 027 216 6882
+                <Phone className="h-4 w-4 mr-2" />
+                027 216 6882
               </Button>
               <Button 
                 size="lg" 
                 variant="outline"
                 onClick={handleGetQuote}
-                className="bg-white/90 hover:bg-white text-primary border-2 border-primary text-lg px-8 py-4 h-auto"
+                className="text-lg px-6 py-3"
                 data-testid="button-get-quote"
               >
-                Get Same-Day Free Quote
+                Request Quote
               </Button>
             </div>
 
-            {/* Guarantee */}
-            <p className="text-base text-muted-foreground mt-6 font-medium">
-              ✅ No-Mess Cleanup Guarantee • ✅ Transparent Fixed Quotes • ✅ Same-Day Assessment Available
-            </p>
+            {/* Simple credentials */}
+            <div className="flex flex-wrap justify-center items-center gap-6 mt-8 text-sm text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Fully Insured
+              </span>
+              <span className="flex items-center gap-2">
+                <Award className="h-4 w-4" />
+                Qualified Arborists
+              </span>
+              <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Emergency Available
+              </span>
+            </div>
           </div>
         </div>
       </section>
