@@ -18,7 +18,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch reviews from Facebook API
       // Note: You'll need your Facebook Page ID
-      const pageId = 'YOUR_FACEBOOK_PAGE_ID'; // Replace with your actual page ID
+      const pageId = process.env.FACEBOOK_PAGE_ID || 'YOUR_FACEBOOK_PAGE_ID'; // Replace with your actual page ID
+      
+      if (pageId === 'YOUR_FACEBOOK_PAGE_ID') {
+        // Return fallback response when Page ID is not configured
+        return res.json({ 
+          success: false, 
+          message: 'Facebook Page ID not configured',
+          reviews: []
+        });
+      }
+
       const url = `https://graph.facebook.com/v18.0/${pageId}/ratings?access_token=${accessToken}&fields=reviewer{name},rating,review_text,created_time&limit=10`;
       
       const response = await fetch(url);
