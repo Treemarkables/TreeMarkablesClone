@@ -67,14 +67,15 @@ export default function Header() {
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            {/* Phone Button - Hidden on small screens */}
+            {/* Phone Button - Always visible */}
             <a 
               href="tel:0272166882" 
-              className="hidden sm:flex items-center space-x-2 text-sm text-white bg-orange-500 px-3 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
+              className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm text-white bg-orange-500 px-2 sm:px-3 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
               data-testid="link-phone-header"
             >
-              <Phone className="h-4 w-4" />
-              <span>027-216-6882</span>
+              <Phone className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">027-216-6882</span>
+              <span className="sm:hidden">Call</span>
             </a>
 
             {/* Get Quote Button */}
