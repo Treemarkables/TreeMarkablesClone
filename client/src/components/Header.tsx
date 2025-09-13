@@ -50,13 +50,13 @@ export default function Header() {
             </div>
           </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center space-x-8">
+          {/* Navigation */}
+          <nav className="hidden md:flex items-center space-x-4 lg:space-x-8 flex-wrap">
             {navigationLinks.map((link) => (
               <Link 
                 key={link.href}
                 href={link.href} 
-                className="text-foreground hover:text-primary transition-colors font-medium text-sm relative group" 
+                className="text-foreground hover:text-primary transition-colors font-medium text-xs lg:text-sm relative group whitespace-nowrap" 
                 data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}`}
               >
                 {link.label}
@@ -96,11 +96,11 @@ export default function Header() {
               Get Quote
             </Button>
             
-            {/* Mobile Menu Button */}
+            {/* Mobile Menu Button - Only show on very small screens */}
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden relative"
+              className="md:hidden relative"
               onClick={toggleMenu}
               data-testid="button-mobile-menu"
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
@@ -115,7 +115,7 @@ export default function Header() {
         </div>
 
         {/* Mobile Navigation */}
-        <div className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${isMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${isMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
           <nav className="border-t border-border/50 py-4">
             <div className="flex flex-col space-y-1">
               {navigationLinks.map((link) => (
