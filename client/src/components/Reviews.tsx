@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Star } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 interface Review {
   id: string;
@@ -8,6 +9,14 @@ interface Review {
   rating: number;
   comment: string;
   service: string;
+  source?: string;
+  date?: string;
+}
+
+interface FacebookApiResponse {
+  success: boolean;
+  reviews?: Review[];
+  message?: string;
 }
 
 const reviews: Review[] = [
@@ -77,6 +86,16 @@ const StarRating = ({ rating }: { rating: number }) => {
 };
 
 export default function Reviews() {
+  // Fetch Facebook reviews
+  const { data: facebookReviews, isLoading, error } = useQuery<FacebookApiResponse>({
+    queryKey: ['/api/reviews/facebook'],
+    retry: 1,
+    staleTime: 1000 * 60 * 10, // 10 minutes
+  });
+
+  // Use real Facebook reviews if available, otherwise fallback to static reviews
+  const displayReviews = facebookReviews?.reviews || reviews;
+
   return (
     <section className="py-16 bg-muted/30">
       <div className="max-w-6xl mx-auto px-6">
@@ -89,8 +108,20 @@ export default function Reviews() {
           </p>
         </div>
 
+        {isLoading && (
+          <div className="text-center text-muted-foreground">
+            Loading customer reviews...
+          </div>
+        )}
+
+        {error && !facebookReviews && (
+          <div className="text-center text-muted-foreground mb-8">
+            <p>Showing local testimonials</p>
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {reviews.map((review) => (
+          {displayReviews.map((review) => (
             <Card key={review.id} className="hover-elevate" data-testid={`review-card-${review.id}`}>
               <CardContent className="p-6">
                 <div className="flex justify-between items-start mb-4">
