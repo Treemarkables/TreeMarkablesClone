@@ -39,28 +39,6 @@ export default function TreeRemoval() {
               Tree Removal Services
               <span className="text-primary block text-3xl md:text-4xl font-normal">Gisborne & Surrounding Areas</span>
             </h1>
-            
-            {/* Simple Contact Options */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button 
-                size="lg" 
-                onClick={handleCallNow}
-                className="text-lg px-6 py-3"
-                data-testid="button-call-now"
-              >
-                <Phone className="h-4 w-4 mr-2" />
-                027 216 6882
-              </Button>
-              <Button 
-                size="lg" 
-                variant="outline"
-                onClick={handleGetQuote}
-                className="text-lg px-6 py-3"
-                data-testid="button-get-quote"
-              >
-                Request Quote
-              </Button>
-            </div>
 
             {/* Simple credentials */}
             <div className="flex flex-wrap justify-center items-center gap-6 mt-8 text-sm text-muted-foreground">
