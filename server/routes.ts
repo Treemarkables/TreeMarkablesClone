@@ -4,6 +4,57 @@ import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Facebook reviews endpoint
+  app.get('/api/reviews/facebook', async (req: Request, res: Response) => {
+    try {
+      const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
+      
+      if (!accessToken) {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Facebook access token not configured' 
+        });
+      }
+
+      // Fetch reviews from Facebook API
+      // Note: You'll need your Facebook Page ID
+      const pageId = 'YOUR_FACEBOOK_PAGE_ID'; // Replace with your actual page ID
+      const url = `https://graph.facebook.com/v18.0/${pageId}/ratings?access_token=${accessToken}&fields=reviewer{name},rating,review_text,created_time&limit=10`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Facebook API error:', data);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Failed to fetch Facebook reviews' 
+        });
+      }
+
+      // Transform Facebook data to match our review interface
+      const reviews = data.data?.map((review: any, index: number) => ({
+        id: `fb-${index}`,
+        name: review.reviewer?.name || 'Facebook User',
+        location: 'Facebook',
+        rating: review.rating || 5,
+        comment: review.review_text || '',
+        service: 'Tree Services',
+        source: 'facebook',
+        date: review.created_time
+      })) || [];
+
+      res.json({ success: true, reviews });
+
+    } catch (error) {
+      console.error('Facebook reviews error:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error fetching Facebook reviews' 
+      });
+    }
+  });
+
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
