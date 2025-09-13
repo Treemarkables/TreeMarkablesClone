@@ -120,7 +120,7 @@ export default function HedgeTrimming() {
         <div className="relative max-w-6xl mx-auto px-6 pt-32">
           <div className="text-center">
             <h1 className="text-5xl md:text-6xl font-bold text-white mb-6" data-testid="text-hero-title">
-              Hedges Neat
+              Hedge Trimming Gisborne
             </h1>
             <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto leading-relaxed" data-testid="text-hero-description">
               Professional hedge trimming in Gisborne. We keep your hedges healthy, 
