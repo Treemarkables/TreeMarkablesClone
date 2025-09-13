@@ -1,12 +1,117 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-// No icons needed for this simplified contact section
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+
+interface ContactFormData {
+  name: string;
+  email: string;
+  phone: string;
+  hearAbout: string;
+  message: string;
+}
 
 export default function ContactSection() {
-  const handleQuoteRequest = () => {
-    console.log('Quote request submitted');
-    // In a real app, this would handle form submission
-    alert('Thank you! We will contact you within 24 hours for your free quote.');
+  const [formData, setFormData] = useState<ContactFormData>({
+    name: '',
+    email: '',
+    phone: '',
+    hearAbout: '',
+    message: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const validateForm = (): string | null => {
+    if (!formData.name.trim()) {
+      return 'Please enter your name';
+    }
+    if (!formData.email.trim()) {
+      return 'Please enter your email address';
+    }
+    if (!formData.message.trim()) {
+      return 'Please enter a message';
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      return 'Please enter a valid email address';
+    }
+
+    return null;
+  };
+
+  const handleQuoteRequest = async () => {
+    // Validate form
+    const validationError = validateForm();
+    if (validationError) {
+      toast({
+        title: "Validation Error",
+        description: validationError,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          hearAbout: formData.hearAbout,
+          message: formData.message.trim()
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        toast({
+          title: "Quote Request Sent!",
+          description: result.message,
+        });
+        
+        // Reset form
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          hearAbout: '',
+          message: ''
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: result.message || 'Failed to send your request. Please try again.',
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Form submission error:', error);
+      toast({
+        title: "Error",
+        description: 'Sorry, there was an error sending your message. Please try again or call us directly.',
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -34,9 +139,13 @@ export default function ContactSection() {
                   <input
                     type="text"
                     id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     placeholder="Your full name"
                     data-testid="input-name"
+                    required
                   />
                 </div>
                 <div>
@@ -46,9 +155,13 @@ export default function ContactSection() {
                   <input
                     type="email"
                     id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     placeholder="your.email@example.com"
                     data-testid="input-email"
+                    required
                   />
                 </div>
                 <div>
@@ -58,27 +171,33 @@ export default function ContactSection() {
                   <input
                     type="tel"
                     id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     placeholder="Your phone number"
                     data-testid="input-phone"
                   />
                 </div>
                 <div>
-                  <label htmlFor="hear-about" className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="hearAbout" className="block text-sm font-medium text-foreground mb-2">
                     How did you hear about us?
                   </label>
                   <select
-                    id="hear-about"
+                    id="hearAbout"
+                    name="hearAbout"
+                    value={formData.hearAbout}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     data-testid="select-hear-about"
                   >
                     <option value="">Please select...</option>
-                    <option value="google">Google Search</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="referral">Word of mouth/Referral</option>
-                    <option value="previous-customer">Previous customer</option>
-                    <option value="local-advertising">Local advertising</option>
-                    <option value="other">Other</option>
+                    <option value="Google Search">Google Search</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="Word of mouth/Referral">Word of mouth/Referral</option>
+                    <option value="Previous customer">Previous customer</option>
+                    <option value="Local advertising">Local advertising</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
                 <div>
@@ -87,19 +206,24 @@ export default function ContactSection() {
                   </label>
                   <textarea
                     id="message"
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
                     rows={4}
                     className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
                     placeholder="Tell us about your tree removal needs..."
                     data-testid="textarea-message"
+                    required
                   />
                 </div>
                 <Button
                   size="lg"
                   className="w-full"
                   onClick={handleQuoteRequest}
+                  disabled={isSubmitting}
                   data-testid="button-submit-quote"
                 >
-                  Get Free Quote
+                  {isSubmitting ? 'Sending...' : 'Get Free Quote'}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
                   We'll respond within 24 hours with your personalized quote
