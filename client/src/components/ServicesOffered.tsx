@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Zap, Scissors, TreePine, Drill } from "lucide-react";
+import { AlertTriangle, Zap, Scissors, TreePine, Drill, Truck } from "lucide-react";
 
 const services = [
   {
@@ -27,6 +27,11 @@ const services = [
     title: "Stump Grinding",
     description: "Complete stump removal using professional grinding equipment to eliminate trip hazards and reclaim your space.",
   },
+  {
+    icon: Truck,
+    title: "Mulch Deliveries",
+    description: "Fresh, quality mulch delivered directly to your property to enhance your garden beds and landscaping projects.",
+  },
 ];
 
 export default function ServicesOffered() {
@@ -44,7 +49,7 @@ export default function ServicesOffered() {
           </h2>
         </div>
 
-        <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-8">
+        <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-8">
           {services.map((service, index) => {
             const Icon = service.icon;
             return (
