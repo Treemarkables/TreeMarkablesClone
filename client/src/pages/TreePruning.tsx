@@ -4,6 +4,7 @@ import ContactSection from "@/components/ContactSection";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import heroBackground from "@assets/tree_pruning_hero.jpg";
 
 interface Review {
   id: string;
@@ -75,24 +76,29 @@ export default function TreePruning() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-      
       {/* Hero Section */}
-      <section className="py-24 bg-gradient-to-br from-primary/10 to-blue-600/10">
-        <div className="max-w-6xl mx-auto px-6">
+      <section 
+        className="relative min-h-screen bg-gradient-to-br from-primary/10 to-blue-600/10 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${heroBackground})` }}
+      >
+        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="relative z-10">
+          <Header />
+        </div>
+        <div className="relative max-w-6xl mx-auto px-6 pt-64">
           <div className="text-center">
-            <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6" data-testid="text-hero-title">
+            <h1 className="text-5xl md:text-6xl font-bold text-white mb-6" data-testid="text-hero-title">
               Trees Beautiful
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed" data-testid="text-hero-description">
+            <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto leading-relaxed" data-testid="text-hero-description">
               Professional tree pruning and care in Gisborne. We help your trees stay healthy, 
               safe, and beautiful through expert pruning techniques.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" onClick={handleGetQuote} className="text-lg px-6" data-testid="button-get-quote">
+              <Button size="lg" onClick={handleGetQuote} className="bg-primary hover:bg-primary/90 text-white text-lg px-6" data-testid="button-get-quote">
                 Talk to us today
               </Button>
-              <Button size="lg" variant="outline" onClick={handleCallNow} className="text-lg px-6" data-testid="button-call-now">
+              <Button size="lg" variant="outline" onClick={handleCallNow} className="border-white/30 text-white hover:bg-white/10 backdrop-blur-sm text-lg px-6" data-testid="button-call-now">
                 <Phone className="w-4 h-4 mr-2" />
                 027-216-6882
               </Button>
