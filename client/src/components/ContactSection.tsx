@@ -24,7 +24,7 @@ export default function ContactSection() {
       <div className="max-w-6xl mx-auto px-6">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Get in Touch for Tree Removal
+            Get in touch for a free quote
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Ready to get started? Contact us today for a free consultation and quote
