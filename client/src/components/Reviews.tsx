@@ -13,7 +13,7 @@ interface Review {
   date?: string;
 }
 
-interface FacebookApiResponse {
+interface ApiResponse {
   success: boolean;
   reviews?: Review[];
   message?: string;
@@ -87,14 +87,40 @@ const StarRating = ({ rating }: { rating: number }) => {
 
 export default function Reviews() {
   // Fetch Facebook reviews
-  const { data: facebookReviews, isLoading, error } = useQuery<FacebookApiResponse>({
+  const { data: facebookReviews, isLoading: fbLoading } = useQuery<ApiResponse>({
     queryKey: ['/api/reviews/facebook'],
     retry: 1,
     staleTime: 1000 * 60 * 10, // 10 minutes
   });
 
-  // Use real Facebook reviews if available, otherwise fallback to static reviews
-  const displayReviews = (facebookReviews?.reviews && facebookReviews.reviews.length > 0) ? facebookReviews.reviews : reviews;
+  // Fetch Google reviews
+  const { data: googleReviews, isLoading: googleLoading } = useQuery<ApiResponse>({
+    queryKey: ['/api/reviews/google'],
+    retry: 1,
+    staleTime: 1000 * 60 * 10, // 10 minutes
+  });
+
+  const isLoading = fbLoading || googleLoading;
+
+  // Combine Facebook and Google reviews, fallback to static reviews
+  let displayReviews = reviews; // Default to local testimonials
+  
+  const allApiReviews: Review[] = [];
+  
+  // Add Facebook reviews if available
+  if (facebookReviews?.reviews && facebookReviews.reviews.length > 0) {
+    allApiReviews.push(...facebookReviews.reviews);
+  }
+  
+  // Add Google reviews if available
+  if (googleReviews?.reviews && googleReviews.reviews.length > 0) {
+    allApiReviews.push(...googleReviews.reviews);
+  }
+  
+  // Use API reviews if any are available, otherwise use local testimonials
+  if (allApiReviews.length > 0) {
+    displayReviews = allApiReviews;
+  }
 
   return (
     <section className="py-16 bg-muted/30">
@@ -114,9 +140,9 @@ export default function Reviews() {
           </div>
         )}
 
-        {error && !facebookReviews && (
+        {allApiReviews.length === 0 && !isLoading && (
           <div className="text-center text-muted-foreground mb-8">
-            <p>Showing local testimonials</p>
+            <p>Showing local Gisborne testimonials</p>
           </div>
         )}
 
