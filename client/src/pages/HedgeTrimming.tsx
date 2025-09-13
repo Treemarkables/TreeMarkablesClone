@@ -4,6 +4,7 @@ import ContactSection from "@/components/ContactSection";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import heroBackground from "@assets/IMG_5648_1757793148389.jpg";
 
 const reviews = [
   {
@@ -68,13 +69,17 @@ export default function HedgeTrimming() {
     <div className="min-h-screen bg-background">
       <Header />
       {/* Hero Section */}
-      <section className="relative min-h-screen bg-gradient-to-br from-primary/10 to-green-600/10">
+      <section 
+        className="relative min-h-screen bg-gradient-to-br from-primary/10 to-green-600/10 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${heroBackground})` }}
+      >
+        <div className="absolute inset-0 bg-black/20"></div>
         <div className="relative max-w-6xl mx-auto px-6 pt-80">
           <div className="text-center">
-            <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6" data-testid="text-hero-title">
+            <h1 className="text-5xl md:text-6xl font-bold text-white mb-6" data-testid="text-hero-title">
               Hedges Neat
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed" data-testid="text-hero-description">
+            <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto leading-relaxed" data-testid="text-hero-description">
               Professional hedge trimming in Gisborne. We keep your hedges healthy, 
               shaped, and looking their absolute best year-round.
             </p>
