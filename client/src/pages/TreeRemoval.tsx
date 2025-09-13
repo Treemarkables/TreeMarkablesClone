@@ -35,21 +35,6 @@ export default function TreeRemoval() {
         <div className="absolute inset-0 bg-black/50"></div>
         <div className="relative max-w-6xl mx-auto px-6">
           <div className="text-center">
-            {/* Simple credentials */}
-            <div className="flex flex-wrap justify-center items-center gap-6 mt-8 text-sm text-muted-foreground">
-              <span className="flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                Fully Insured
-              </span>
-              <span className="flex items-center gap-2">
-                <Award className="h-4 w-4" />
-                Qualified Arborists
-              </span>
-              <span className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Emergency Available
-              </span>
-            </div>
           </div>
         </div>
       </section>
