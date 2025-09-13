@@ -85,7 +85,7 @@ export default function TreePruning() {
           muted 
           loop 
           playsInline
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-contain"
         >
           <source src={heroVideo} type="video/mp4" />
         </video>
