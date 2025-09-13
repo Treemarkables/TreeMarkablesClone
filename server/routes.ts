@@ -65,6 +65,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Google Business Profile reviews endpoint
+  app.get('/api/reviews/google', async (req: Request, res: Response) => {
+    try {
+      const apiKey = process.env.GOOGLE_MY_BUSINESS_API_KEY;
+      
+      if (!apiKey) {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Google Business Profile API key not configured' 
+        });
+      }
+
+      // You'll need to replace these with your actual account and location IDs
+      // For now, we'll return a success response with empty reviews to avoid errors
+      // To get your account and location IDs, you'll need to use the Google Business Profile API
+      const accountId = process.env.GOOGLE_BUSINESS_ACCOUNT_ID;
+      const locationId = process.env.GOOGLE_BUSINESS_LOCATION_ID;
+      
+      if (!accountId || !locationId) {
+        return res.status(200).json({ 
+          success: true, 
+          reviews: [],
+          message: 'Google Business Profile account/location IDs not configured'
+        });
+      }
+
+      // Fetch reviews from Google Business Profile API
+      const url = `https://mybusiness.googleapis.com/v4/accounts/${accountId}/locations/${locationId}/reviews?key=${apiKey}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        console.error('Google Business Profile API error:', response.status, response.statusText);
+        return res.status(200).json({ 
+          success: true, 
+          reviews: [],
+          message: 'Unable to fetch Google reviews at this time'
+        });
+      }
+
+      const data = await response.json();
+
+      // Transform Google data to match our review interface
+      const reviews = data.reviews?.map((review: any, index: number) => ({
+        id: `google-${index}`,
+        name: review.reviewer?.displayName || 'Google User',
+        location: 'Google Reviews',
+        rating: review.starRating || 5,
+        comment: review.comment || '',
+        service: 'Tree Services',
+        source: 'google',
+        date: review.createTime
+      })) || [];
+
+      res.json({ success: true, reviews });
+
+    } catch (error) {
+      console.error('Google Business Profile reviews error:', error);
+      res.status(200).json({ 
+        success: true, 
+        reviews: [],
+        message: 'Unable to fetch Google reviews at this time' 
+      });
+    }
+  });
+
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
