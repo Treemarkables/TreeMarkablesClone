@@ -35,14 +35,10 @@ export default function TreeRemoval() {
         <div className="absolute inset-0 bg-black/50"></div>
         <div className="relative max-w-6xl mx-auto px-6">
           <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6" data-testid="text-hero-title">
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-8" data-testid="text-hero-title">
               Tree Removal Services
               <span className="text-primary block text-3xl md:text-4xl font-normal">Gisborne & Surrounding Areas</span>
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-3xl mx-auto" data-testid="text-hero-description">
-              Professional tree removal and arborist services by qualified specialists. 
-              We handle everything from emergency storm damage to planned removals with full council compliance.
-            </p>
             
             {/* Simple Contact Options */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
