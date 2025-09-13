@@ -70,7 +70,7 @@ export default function StumpGrinding() {
       <Header />
       {/* Hero Section */}
       <section 
-        className="relative min-h-screen bg-gradient-to-br from-primary/10 to-orange-500/10 bg-contain bg-center bg-no-repeat"
+        className="relative min-h-screen bg-gradient-to-br from-primary/10 to-orange-500/10 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url(${heroBackground})` }}
       >
         <div className="absolute inset-0 bg-black/20"></div>
