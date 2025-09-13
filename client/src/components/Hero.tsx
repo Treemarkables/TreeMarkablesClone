@@ -30,10 +30,6 @@ export default function Hero() {
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
             We're just a bunch of Gizzy guys and we climb trees
           </h1>
-          <p className="text-xl md:text-2xl text-white/90 mb-8 leading-relaxed">
-            Are you facing the challenge of dealing with a hazardous tree on your property? 
-            Our qualified arborists specialize in safe and efficient tree removal services.
-          </p>
 
           {/* Key Features */}
           <div className="flex flex-wrap gap-6 mb-8">
