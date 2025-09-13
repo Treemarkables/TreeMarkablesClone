@@ -22,7 +22,9 @@ export default function TreeRemoval() {
         style={{ backgroundImage: `url(${heroBackground})` }}
       >
         <div className="absolute inset-0 bg-black/50"></div>
-        <Header />
+        <div className="relative z-10">
+          <Header />
+        </div>
         <div className="relative max-w-6xl mx-auto px-6 flex items-center justify-center min-h-screen">
           <div className="text-center">
           </div>
