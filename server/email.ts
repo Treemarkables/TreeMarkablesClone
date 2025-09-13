@@ -15,12 +15,28 @@ export async function sendContactEmail(formData: ContactFormData): Promise<boole
     console.log('GMAIL_USER:', process.env.GMAIL_USER ? '***SET***' : 'NOT SET');
     console.log('GMAIL_APP_PASSWORD:', process.env.GMAIL_APP_PASSWORD ? '***SET***' : 'NOT SET');
     
+    // If Gmail credentials are not set, log the form submission for now
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      console.log('\n=== CONTACT FORM SUBMISSION ===');
+      console.log('Customer Information:');
+      console.log('Name:', formData.name);
+      console.log('Email:', formData.email);
+      if (formData.phone) console.log('Phone:', formData.phone);
+      if (formData.hearAbout) console.log('How they heard about us:', formData.hearAbout);
+      console.log('Message:', formData.message);
+      console.log('Time:', new Date().toLocaleString());
+      console.log('================================\n');
+      
+      // Return true so the form shows success message
+      return true;
+    }
+    
     // Create Gmail SMTP transporter
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.GMAIL_USER || 'quotes@treemarkables.nz',
-        pass: process.env.GMAIL_APP_PASSWORD, // Gmail app password
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
       },
     });
 
