@@ -37,18 +37,23 @@ export default function Footer() {
             <h3 className="font-semibold text-white mb-4">Services</h3>
             <ul className="space-y-2">
               <li>
-                <a href="#services" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-hazardous">
-                  Hazardous Tree Removal
+                <a href="/tree-removal" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-tree-removal">
+                  Tree Removal
                 </a>
               </li>
               <li>
-                <a href="#services" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-emergency">
-                  Emergency Services
+                <a href="/tree-pruning" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-tree-pruning">
+                  Tree Pruning
                 </a>
               </li>
               <li>
-                <a href="#services" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-precision">
-                  Precision Removal
+                <a href="/stump-grinding" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-stump-grinding">
+                  Stump Grinding
+                </a>
+              </li>
+              <li>
+                <a href="/hedge-trimming" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-hedge-trimming">
+                  Hedge Trimming
                 </a>
               </li>
             </ul>

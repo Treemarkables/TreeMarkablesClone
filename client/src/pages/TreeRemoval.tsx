@@ -129,7 +129,7 @@ export default function TreeRemoval() {
                   Tree Pruning: Our Preferred Solution
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Professional pruning can solve most tree problems while preserving the tree's health and beauty. 
+                  Professional <a href="/tree-pruning" className="text-primary hover:text-primary/80 underline">tree pruning</a> can solve most tree problems while preserving the tree's health and beauty. 
                   We can address safety concerns, improve tree structure, remove diseased branches, and enhance 
                   your property's appearance without removing the entire tree.
                 </p>

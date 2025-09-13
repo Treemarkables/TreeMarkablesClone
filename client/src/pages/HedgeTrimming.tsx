@@ -154,7 +154,7 @@ export default function HedgeTrimming() {
             <div className="max-w-4xl mx-auto space-y-4 text-lg text-muted-foreground">
               <p>
                 At Treemarkables, we understand that hedges are the backbone of many Gisborne gardens. 
-                <span className="font-semibold text-foreground"> Regular, expert trimming keeps them healthy and beautiful</span>.
+                <span className="font-semibold text-foreground"> Regular, expert trimming keeps them healthy and beautiful</span>. Like our <a href="/tree-pruning" className="text-primary hover:text-primary/80 underline">tree pruning services</a>, we focus on plant health and longevity.
               </p>
               <p>
                 From formal hedges that need precise shaping to informal hedges requiring natural styling, 
