@@ -372,16 +372,6 @@ export default function TreeRemoval() {
                 We prioritize safety threats and offer same-day assessments across Gisborne.
               </p>
             </div>
-            
-            <div className="border-l-4 border-primary pl-6">
-              <h3 className="text-xl font-semibold text-foreground mb-3">
-                What's included in your tree removal cost?
-              </h3>
-              <p className="text-muted-foreground">
-                Everything! Our fixed quotes include: tree felling, branch removal, stump grinding, complete site cleanup, 
-                and debris disposal. No hidden fees, no surprises.
-              </p>
-            </div>
           </div>
         </div>
       </section>
