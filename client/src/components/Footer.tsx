@@ -10,7 +10,7 @@ export default function Footer() {
           {/* Company Info */}
           <div className="lg:col-span-2">
             <p className="text-gray-300 mb-6 leading-relaxed">
-              Professional tree removal services in New Zealand. Our certified arborists 
+              Professional tree removal services in Gisborne. Our certified arborists 
               are dedicated to ensuring the well-being of your property and the safety 
               of its occupants.
             </p>
@@ -69,7 +69,7 @@ export default function Footer() {
                 027-216-6882
               </a>
               <p className="text-gray-300 text-sm" data-testid="text-footer-location">
-                New Zealand Wide Service
+                Gisborne & Surrounding Areas
               </p>
             </div>
           </div>
