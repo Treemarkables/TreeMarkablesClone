@@ -40,7 +40,7 @@ export default function ServicesOffered() {
       <div className="max-w-6xl mx-auto px-6">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Services Offered
+            How can we help you?
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Comprehensive tree removal solutions for every situation
