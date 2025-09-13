@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import WhyChooseUs from "@/components/WhyChooseUs";
 import ServicesOffered from "@/components/ServicesOffered";
+import TreeCarePhilosophy from "@/components/TreeCarePhilosophy";
 import OurProcess from "@/components/OurProcess";
 import Reviews from "@/components/Reviews";
 import ContactSection from "@/components/ContactSection";
@@ -13,6 +14,7 @@ export default function Home() {
       <Header />
       <Hero />
       <ServicesOffered />
+      <TreeCarePhilosophy />
       <WhyChooseUs />
       <OurProcess />
       <Reviews />
