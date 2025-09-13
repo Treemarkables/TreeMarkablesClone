@@ -84,7 +84,7 @@ export default function ContactSection() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-foreground mb-1">Service Area</h3>
-                    <p className="text-muted-foreground" data-testid="text-service-area">New Zealand Wide</p>
+                    <p className="text-muted-foreground" data-testid="text-service-area">Gisborne</p>
                   </div>
                 </div>
               </CardContent>
