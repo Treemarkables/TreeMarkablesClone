@@ -20,7 +20,7 @@ export default function TreeRemoval() {
               Professional Tree Removal Services
             </h1>
             <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto" data-testid="text-hero-description">
-              Safe, efficient, and professional tree removal services in New Zealand. 
+              Safe, efficient, and professional tree removal services in Gisborne. 
               Our qualified arborists handle hazardous trees with expertise and care.
             </p>
             <Button size="lg" onClick={handleGetQuote} data-testid="button-get-quote">
