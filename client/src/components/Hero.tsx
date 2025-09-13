@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Shield, Award, Clock } from "lucide-react";
 
 export default function Hero() {
   const handleGetQuote = () => {
@@ -30,22 +29,6 @@ export default function Hero() {
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
             We're just a bunch of Gizzy guys and we climb trees
           </h1>
-
-          {/* Key Features */}
-          <div className="flex flex-wrap gap-6 mb-8">
-            <div className="flex items-center text-white/90">
-              <Shield className="h-5 w-5 mr-2 text-primary" />
-              <span className="text-sm font-medium">Insured</span>
-            </div>
-            <div className="flex items-center text-white/90">
-              <Award className="h-5 w-5 mr-2 text-primary" />
-              <span className="text-sm font-medium">Qualified Arborists</span>
-            </div>
-            <div className="flex items-center text-white/90">
-              <Clock className="h-5 w-5 mr-2 text-primary" />
-              <span className="text-sm font-medium">24/7 Emergency Service</span>
-            </div>
-          </div>
 
           <div className="flex flex-col sm:flex-row gap-4">
             <Button 
