@@ -3,7 +3,7 @@ import Footer from "@/components/Footer";
 import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import heroBackground from "@assets/a2164f85-6e01-4409-8aa7-f52571a20b77_1757790837429.png";
+import heroBackground from "@assets/tree_worker_action_shot.jpg";
 
 export default function TreeRemoval() {
   const handleGetQuote = () => {
