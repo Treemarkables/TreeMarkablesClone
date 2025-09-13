@@ -94,7 +94,7 @@ export default function Reviews() {
   });
 
   // Use real Facebook reviews if available, otherwise fallback to static reviews
-  const displayReviews = facebookReviews?.reviews || reviews;
+  const displayReviews = (facebookReviews?.reviews && facebookReviews.reviews.length > 0) ? facebookReviews.reviews : reviews;
 
   return (
     <section className="py-16 bg-muted/30">
