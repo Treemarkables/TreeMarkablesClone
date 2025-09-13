@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
+import SEO from "@/components/SEO";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -65,8 +66,50 @@ export default function StumpGrinding() {
     window.location.href = 'tel:0272166882';
   };
 
+  // Local business structured data for Stump Grinding SEO
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "@id": "https://www.treemarkables.nz/stump-grinding#business",
+    "name": "Treemarkables Stump Grinding Services",
+    "description": "Professional stump grinding and removal services in Gisborne, New Zealand. Complete stump removal for residential and commercial properties with advanced grinding equipment.",
+    "url": "https://www.treemarkables.nz/stump-grinding",
+    "telephone": "+64272166882",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Gisborne",
+      "addressRegion": "Gisborne Region",
+      "addressCountry": "NZ"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": -38.6623,
+      "longitude": 178.0176
+    },
+    "areaServed": [
+      "Gisborne",
+      "Kaiti",
+      "Te Hapara",
+      "Mangapapa", 
+      "Wainui Beach",
+      "Makaraka",
+      "Elgin"
+    ],
+    "serviceType": "Stump Grinding Service",
+    "priceRange": "$$",
+    "openingHours": "Mo-Su 07:00-18:00"
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <SEO 
+        title="Stump Grinding Gisborne | Professional Stump Removal | Treemarkables NZ"
+        description="Professional stump grinding services in Gisborne, NZ. Complete stump removal for clean, usable land. Advanced equipment, competitive pricing. Free quotes. Call 027-216-6882."
+        keywords="stump grinding Gisborne, stump removal Gisborne, stump grinder, tree stump removal, land clearing Gisborne, stump grinding service NZ, commercial stump removal"
+        ogTitle="Professional Stump Grinding Services in Gisborne, New Zealand"
+        ogDescription="Complete stump removal with professional grinding equipment. Transform your property with our expert stump grinding services in Gisborne."
+        structuredData={structuredData}
+      />
       <Header />
       {/* Hero Section */}
       <section 
