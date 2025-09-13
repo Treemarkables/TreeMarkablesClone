@@ -3,6 +3,7 @@ import Footer from "@/components/Footer";
 import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import heroBackground from "@assets/a2164f85-6e01-4409-8aa7-f52571a20b77_1757790837429.png";
 
 export default function TreeRemoval() {
   const handleGetQuote = () => {
@@ -27,8 +28,11 @@ export default function TreeRemoval() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative py-24 bg-gradient-to-br from-primary/10 to-orange-500/10">
-        <div className="absolute inset-0 bg-black/20"></div>
+      <section 
+        className="relative py-24 bg-gradient-to-br from-primary/10 to-orange-500/10 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${heroBackground})` }}
+      >
+        <div className="absolute inset-0 bg-black/50"></div>
         <div className="relative max-w-6xl mx-auto px-6">
           <div className="text-center">
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6" data-testid="text-hero-title">
