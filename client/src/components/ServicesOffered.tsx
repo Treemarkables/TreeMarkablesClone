@@ -19,7 +19,7 @@ const services = [
   {
     title: "Hedge Trimming",
     description: "Expert hedge trimming and shaping to keep your hedges looking neat, healthy, and perfectly maintained.",
-    image: "/team-photo-real.jpg",
+    image: "/hedge-trimming.jpg",
   },
   {
     title: "Stump Grinding",
