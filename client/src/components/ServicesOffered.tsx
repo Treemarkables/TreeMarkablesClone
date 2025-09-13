@@ -1,39 +1,32 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Zap, Scissors, TreePine, Drill, Truck } from "lucide-react";
 
 const services = [
   {
-    icon: AlertTriangle,
     title: "Hazardous Tree Removal",
     description: "Identifying and removing trees that pose a danger to your property and its surroundings.",
     image: "/tree-removal-real.png",
   },
   {
-    icon: Zap,
     title: "Emergency Tree Removal", 
     description: "We understand that tree emergencies can happen at any time. Our team is available 24/7 for prompt response and resolution.",
     image: "/emergency-tree-removal.jpg",
   },
   {
-    icon: Scissors,
     title: "Tree Pruning",
     description: "Professional pruning services to maintain tree health, improve structure, and enhance the beauty of your landscape.",
     image: "/team-photo-real.jpg",
   },
   {
-    icon: TreePine,
     title: "Hedge Trimming",
     description: "Expert hedge trimming and shaping to keep your hedges looking neat, healthy, and perfectly maintained.",
     image: "/team-photo-real.jpg",
   },
   {
-    icon: Drill,
     title: "Stump Grinding",
     description: "Complete stump removal using professional grinding equipment to eliminate trip hazards and reclaim your space.",
     image: "/tree-removal-real.png",
   },
   {
-    icon: Truck,
     title: "Mulch Deliveries",
     description: "Fresh, quality mulch delivered directly to your property to enhance your garden beds and landscaping projects.",
     image: "/team-photo-real.jpg",
@@ -57,7 +50,6 @@ export default function ServicesOffered() {
 
         <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-8">
           {services.map((service, index) => {
-            const Icon = service.icon;
             return (
               <Card 
                 key={index} 
@@ -73,11 +65,6 @@ export default function ServicesOffered() {
                     data-testid={`image-service-${index}`}
                   />
                   <div className="absolute inset-0 bg-black/20"></div>
-                  <div className="absolute top-4 left-4">
-                    <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
-                      <Icon className="h-6 w-6 text-primary" data-testid={`icon-service-${index}`} />
-                    </div>
-                  </div>
                 </div>
                 <CardHeader className="text-center pb-4">
                   <CardTitle className="text-xl" data-testid={`title-service-${index}`}>
