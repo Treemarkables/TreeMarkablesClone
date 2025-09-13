@@ -20,6 +20,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Note: You'll need your Facebook Page ID
       const pageId = process.env.FACEBOOK_PAGE_ID || 'YOUR_FACEBOOK_PAGE_ID'; // Replace with your actual page ID
       
+      console.log('Debug - Facebook Page ID:', pageId);
+      console.log('Debug - Access Token (first 20 chars):', accessToken.substring(0, 20));
+      
       if (pageId === 'YOUR_FACEBOOK_PAGE_ID') {
         // Return fallback response when Page ID is not configured
         return res.json({ 
