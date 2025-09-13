@@ -27,6 +27,9 @@ export default function TreeRemoval() {
         </div>
         <div className="relative max-w-6xl mx-auto px-6 flex items-center justify-center min-h-screen">
           <div className="text-center">
+            <h1 className="text-5xl md:text-7xl font-bold text-white mb-6" data-testid="text-hero-title">
+              Gisborne's tree removal experts
+            </h1>
           </div>
         </div>
       </section>
