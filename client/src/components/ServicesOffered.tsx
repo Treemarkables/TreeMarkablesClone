@@ -4,7 +4,7 @@ const services = [
   {
     title: "Hazardous Tree Removal",
     description: "Identifying and removing trees that pose a danger to your property and its surroundings.",
-    image: "/tree-removal-real.png",
+    image: "/hazardous-tree-removal.jpg",
   },
   {
     title: "Emergency Tree Removal", 
