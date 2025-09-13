@@ -61,9 +61,13 @@ export default function Footer() {
               <p className="text-muted-foreground text-sm" data-testid="text-footer-email">
                 quotes@treemarkables.nz
               </p>
-              <p className="text-muted-foreground text-sm" data-testid="text-footer-phone">
-                0272166882
-              </p>
+              <a 
+                href="tel:0272166882" 
+                className="text-muted-foreground text-sm hover:text-primary transition-colors cursor-pointer" 
+                data-testid="link-footer-phone"
+              >
+                027-216-6882
+              </a>
               <p className="text-muted-foreground text-sm" data-testid="text-footer-location">
                 New Zealand Wide Service
               </p>
