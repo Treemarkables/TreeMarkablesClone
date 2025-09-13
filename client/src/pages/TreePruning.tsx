@@ -162,7 +162,7 @@ export default function TreePruning() {
               </p>
               <p>
                 Professional pruning can solve most tree problems while preserving the tree's health and beauty. 
-                We only recommend tree removal when it's absolutely necessary for safety.
+                We only recommend <a href="/tree-removal" className="text-primary hover:text-primary/80 underline">tree removal</a> when it's absolutely necessary for safety.
               </p>
             </div>
           </div>

@@ -154,7 +154,7 @@ export default function StumpGrinding() {
             <div className="max-w-4xl mx-auto space-y-4 text-lg text-muted-foreground">
               <p>
                 At Treemarkables, we believe in leaving your property completely clean and ready for the next chapter. 
-                <span className="font-semibold text-foreground"> Professional stump grinding removes all traces of the old tree</span>.
+                <span className="font-semibold text-foreground"> Professional stump grinding removes all traces of the old tree</span> after <a href="/tree-removal" className="text-primary hover:text-primary/80 underline">tree removal</a>.
               </p>
               <p>
                 Our powerful grinding equipment can handle any size stump, from small garden trees to massive 
