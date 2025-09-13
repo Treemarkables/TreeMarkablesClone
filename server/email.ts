@@ -31,14 +31,25 @@ export async function sendContactEmail(formData: ContactFormData): Promise<boole
       return true;
     }
     
-    // Create Gmail SMTP transporter
+    // Create Gmail SMTP transporter with explicit settings
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: process.env.GMAIL_USER?.trim(),
+        pass: process.env.GMAIL_APP_PASSWORD?.trim(),
       },
     });
+
+    // Verify transporter configuration
+    try {
+      await transporter.verify();
+      console.log('Gmail SMTP connection verified successfully');
+    } catch (verifyError) {
+      console.error('Gmail SMTP verification failed:', verifyError);
+      throw verifyError;
+    }
 
     // Format the email content
     const htmlContent = `
