@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Phone, Menu, X } from "lucide-react";
+import { Phone, Menu, X, Mail } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 import logoImage from "@assets/0fe124b7-cd27-4bb5-a914-65ef9de39b28_1757721055730.png";
@@ -66,16 +66,27 @@ export default function Header() {
           </nav>
 
           {/* Action Buttons */}
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-1 sm:space-x-2">
             {/* Phone Button - Always visible */}
             <a 
               href="tel:0272166882" 
-              className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm text-white bg-orange-500 px-2 sm:px-3 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
+              className="flex items-center space-x-1 text-xs sm:text-sm text-white bg-orange-500 px-2 sm:px-3 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
               data-testid="link-phone-header"
             >
               <Phone className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">027-216-6882</span>
               <span className="sm:hidden">Call</span>
+            </a>
+
+            {/* Email Button - Always visible */}
+            <a 
+              href="mailto:quotes@treemarkables.nz" 
+              className="flex items-center space-x-1 text-xs sm:text-sm text-white bg-blue px-2 sm:px-3 py-2 rounded-lg border border-blue hover:bg-blue/90 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
+              data-testid="link-email-header"
+            >
+              <Mail className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">quotes@treemarkables.nz</span>
+              <span className="sm:hidden">Email</span>
             </a>
 
             {/* Get Quote Button */}
