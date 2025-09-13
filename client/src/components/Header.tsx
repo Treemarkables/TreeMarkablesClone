@@ -44,9 +44,6 @@ export default function Header() {
               <span className="text-base lg:text-lg font-bold text-foreground group-hover:text-primary transition-colors">
                 Treemarkables
               </span>
-              <span className="text-xs text-muted-foreground">
-                Gisborne Tree Experts
-              </span>
             </div>
           </Link>
 
