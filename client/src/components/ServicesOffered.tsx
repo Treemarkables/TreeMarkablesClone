@@ -42,9 +42,6 @@ export default function ServicesOffered() {
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             How can we help you?
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Comprehensive tree removal solutions for every situation
-          </p>
         </div>
 
         <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-8">
