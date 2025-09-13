@@ -4,7 +4,7 @@ import ContactSection from "@/components/ContactSection";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import heroVideo from "@assets/IMG_2817_1757798992314.mp4";
+import heroVideo from "@assets/copy_77E88CDC-C666-4B3C-B02C-5CE23818F128_1757799330629.mp4";
 
 interface Review {
   id: string;
