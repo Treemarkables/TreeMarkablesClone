@@ -35,11 +35,6 @@ export default function TreeRemoval() {
         <div className="absolute inset-0 bg-black/50"></div>
         <div className="relative max-w-6xl mx-auto px-6">
           <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-8" data-testid="text-hero-title">
-              Tree Removal Services
-              <span className="text-primary block text-3xl md:text-4xl font-normal">Gisborne & Surrounding Areas</span>
-            </h1>
-
             {/* Simple credentials */}
             <div className="flex flex-wrap justify-center items-center gap-6 mt-8 text-sm text-muted-foreground">
               <span className="flex items-center gap-2">
