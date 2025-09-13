@@ -29,7 +29,7 @@ export default function TreeRemoval() {
 
       {/* Hero Section */}
       <section 
-        className="relative py-24 bg-gradient-to-br from-primary/10 to-orange-500/10 bg-cover bg-center bg-no-repeat"
+        className="relative min-h-screen bg-gradient-to-br from-primary/10 to-orange-500/10 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url(${heroBackground})` }}
       >
         <div className="absolute inset-0 bg-black/50"></div>
