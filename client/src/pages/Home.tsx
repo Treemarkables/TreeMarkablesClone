@@ -3,6 +3,7 @@ import Hero from "@/components/Hero";
 import WhyChooseUs from "@/components/WhyChooseUs";
 import ServicesOffered from "@/components/ServicesOffered";
 import OurProcess from "@/components/OurProcess";
+import Reviews from "@/components/Reviews";
 import ContactSection from "@/components/ContactSection";
 import Footer from "@/components/Footer";
 
@@ -14,6 +15,7 @@ export default function Home() {
       <WhyChooseUs />
       <ServicesOffered />
       <OurProcess />
+      <Reviews />
       <ContactSection />
       <Footer />
     </div>
