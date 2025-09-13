@@ -17,7 +17,7 @@ export default function Hero() {
       <div className="absolute inset-0 z-0">
         <img 
           src="/team-photo.jpg" 
-          alt="Treemarkables professional team" 
+          alt="Treemarkables arborist team at work in Gisborne" 
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/20 to-black/10"></div>

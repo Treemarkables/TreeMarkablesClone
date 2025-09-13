@@ -7,36 +7,42 @@ const services = [
     description: "Identifying and removing trees that pose a danger to your property and its surroundings.",
     image: "/hazardous-tree-removal.jpg",
     route: "/tree-removal",
+    altText: "Arborist safely removing hazardous tree near house",
   },
   {
     title: "Emergency Tree Removal", 
     description: "We understand that tree emergencies can happen at any time. Our team is available 24/7 for prompt response and resolution.",
     image: "/emergency-tree-removal.jpg",
     route: "/tree-removal",
+    altText: "Emergency tree removal after storm damage",
   },
   {
     title: "Tree Pruning",
     description: "Professional pruning services to maintain tree health, improve structure, and enhance the beauty of your landscape.",
     image: "/tree-pruning.jpg",
     route: "/tree-pruning",
+    altText: "Professional pruning large tree branches",
   },
   {
     title: "Hedge Trimming",
     description: "Expert hedge trimming and shaping to keep your hedges looking neat, healthy, and perfectly maintained.",
     image: "/hedge-trimming.jpg",
     route: "/hedge-trimming",
+    altText: "Neatly trimmed hedge border in residential garden",
   },
   {
     title: "Stump Grinding",
     description: "Complete stump removal using professional grinding equipment to eliminate trip hazards and reclaim your space.",
     image: "/stump-grinding.jpg",
     route: "/stump-grinding",
+    altText: "Stump grinder removing tree stump from yard",
   },
   {
     title: "Mulch Deliveries",
     description: "Fresh, quality mulch delivered directly to your property to enhance your garden beds and landscaping projects.",
     image: "/team-photo-real.jpg",
     route: "#contact",
+    altText: "Fresh mulch delivery for garden landscaping",
   },
 ];
 
@@ -77,8 +83,9 @@ export default function ServicesOffered() {
                   <div className="relative h-48 overflow-hidden">
                     <img 
                       src={service.image} 
-                      alt={service.title}
+                      alt={service.altText}
                       className="w-full h-full object-cover"
+                      loading="lazy"
                       data-testid={`image-service-${index}`}
                     />
                     <div className="absolute inset-0 bg-black/20"></div>

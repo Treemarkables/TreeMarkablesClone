@@ -36,7 +36,7 @@ export default function Header() {
           <Link href="/" className="flex items-center space-x-2 sm:space-x-3 hover-elevate group flex-shrink-0" data-testid="link-home">
             <img 
               src={logoImage} 
-              alt="Treemarkables Logo" 
+              alt="Treemarkables" 
               className="h-10 w-10 sm:h-12 sm:w-12 rounded-full object-cover ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all duration-200"
               data-testid="logo-image"
             />
