@@ -14,7 +14,7 @@ const services = [
   {
     title: "Tree Pruning",
     description: "Professional pruning services to maintain tree health, improve structure, and enhance the beauty of your landscape.",
-    image: "/team-photo-real.jpg",
+    image: "/tree-pruning.jpg",
   },
   {
     title: "Hedge Trimming",
