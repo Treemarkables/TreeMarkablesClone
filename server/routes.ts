@@ -148,76 +148,201 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Step 1: Get Account ID
-      const accountsUrl = `https://mybusinessaccountmanagement.googleapis.com/v1/accounts?key=${apiKey}`;
-      
-      const accountsResponse = await fetch(accountsUrl, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const results: any = {
+        success: false,
+        attempts: [],
+        recommendations: []
+      };
 
-      if (!accountsResponse.ok) {
-        const errorText = await accountsResponse.text();
-        console.error('Google Business Profile accounts API error:', accountsResponse.status, errorText);
-        return res.status(400).json({ 
-          success: false, 
-          message: `Failed to fetch accounts: ${accountsResponse.status} ${accountsResponse.statusText}`,
-          details: errorText
+      // Method 1: Try New Google Places API to find Treemarkables business
+      try {
+        // Try the new Places API (Text Search)
+        const newPlacesUrl = `https://places.googleapis.com/v1/places:searchText`;
+        
+        const placesResponse = await fetch(newPlacesUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': apiKey,
+            'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.reviews'
+          },
+          body: JSON.stringify({
+            textQuery: 'Treemarkables tree removal Gisborne New Zealand',
+            maxResultCount: 5
+          })
+        });
+
+        const placesData = await placesResponse.json();
+        
+        results.attempts.push({
+          method: 'New Google Places API Text Search',
+          status: placesResponse.status,
+          success: placesResponse.ok,
+          data: placesData
+        });
+
+        if (placesData.places && placesData.places.length > 0) {
+          const business = placesData.places[0];
+          results.placesInfo = {
+            placeId: business.id,
+            name: business.displayName?.text || business.displayName,
+            address: business.formattedAddress,
+            rating: business.rating,
+            userRatingsTotal: business.userRatingCount,
+            reviews: business.reviews
+          };
+        }
+      } catch (error) {
+        results.attempts.push({
+          method: 'New Google Places API',
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
 
-      const accountsData = await accountsResponse.json();
-      
-      if (!accountsData.accounts || accountsData.accounts.length === 0) {
-        return res.json({ 
-          success: false, 
-          message: 'No Google Business accounts found. Make sure your API key has access to Google Business Profile.',
-          accountsData
+      // Method 1b: Try Legacy Google Places API as fallback
+      try {
+        const legacyPlacesUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=Treemarkables+Gisborne+tree+removal&key=${apiKey}`;
+        
+        const legacyResponse = await fetch(legacyPlacesUrl);
+        const legacyData = await legacyResponse.json();
+        
+        results.attempts.push({
+          method: 'Legacy Google Places Text Search',
+          status: legacyResponse.status,
+          success: legacyResponse.ok,
+          data: legacyData
+        });
+
+        if (legacyData.results && legacyData.results.length > 0 && !results.placesInfo) {
+          const business = legacyData.results[0];
+          results.placesInfo = {
+            placeId: business.place_id,
+            name: business.name,
+            address: business.formatted_address,
+            rating: business.rating,
+            userRatingsTotal: business.user_ratings_total
+          };
+          
+          // Try to get detailed place info
+          if (business.place_id) {
+            const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${business.place_id}&fields=place_id,name,rating,reviews,formatted_address&key=${apiKey}`;
+            const detailsResponse = await fetch(detailsUrl);
+            const detailsData = await detailsResponse.json();
+            
+            results.attempts.push({
+              method: 'Legacy Google Places Details',
+              status: detailsResponse.status,
+              success: detailsResponse.ok,
+              data: detailsData
+            });
+
+            if (detailsData.result) {
+              results.placeDetails = detailsData.result;
+            }
+          }
+        }
+      } catch (error) {
+        results.attempts.push({
+          method: 'Legacy Google Places API',
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
 
-      // Extract Account ID from the first account
-      const firstAccount = accountsData.accounts[0];
-      const accountId = firstAccount.name.split('/')[1]; // accounts/123456789 -> 123456789
+      // Method 2: Try Google Business Profile API with different approaches
+      try {
+        // Try the newer API endpoint
+        const newApiUrl = `https://mybusinessbusinessinformation.googleapis.com/v1/GoogleLocations:search?key=${apiKey}`;
+        
+        const newApiResponse = await fetch(newApiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            location: {
+              address: {
+                locality: 'Gisborne',
+                countryCode: 'NZ'
+              }
+            },
+            query: 'Treemarkables'
+          })
+        });
 
-      // Step 2: Get Location IDs for this account
-      const locationsUrl = `https://mybusinessbusinessinformation.googleapis.com/v1/accounts/${accountId}/locations?readMask=name&key=${apiKey}`;
-      
-      const locationsResponse = await fetch(locationsUrl, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!locationsResponse.ok) {
-        const errorText = await locationsResponse.text();
-        console.error('Google Business Profile locations API error:', locationsResponse.status, errorText);
-        return res.json({ 
-          success: true, 
-          accountId,
-          message: `Found Account ID but couldn't fetch locations: ${locationsResponse.status}`,
-          details: errorText
+        const newApiData = await newApiResponse.text();
+        
+        results.attempts.push({
+          method: 'Google Business Profile Search',
+          status: newApiResponse.status,
+          success: newApiResponse.ok,
+          data: newApiData
+        });
+      } catch (error) {
+        results.attempts.push({
+          method: 'Google Business Profile Search',
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
 
-      const locationsData = await locationsResponse.json();
-      
-      const locations = locationsData.locations?.map((location: any) => ({
-        name: location.name,
-        locationId: location.name.split('/')[3] // accounts/123/locations/456 -> 456
-      })) || [];
+      // Method 3: Try to find through My Business API without auth (will fail but gives us info)
+      try {
+        const accountsUrl = `https://mybusinessaccountmanagement.googleapis.com/v1/accounts?key=${apiKey}`;
+        const accountsResponse = await fetch(accountsUrl);
+        const accountsText = await accountsResponse.text();
+        
+        results.attempts.push({
+          method: 'Direct Business Profile Accounts',
+          status: accountsResponse.status,
+          success: accountsResponse.ok,
+          data: accountsText
+        });
+      } catch (error) {
+        results.attempts.push({
+          method: 'Direct Business Profile Accounts',
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
 
-      res.json({ 
-        success: true,
-        accountId,
-        locations,
-        message: `Found Account ID: ${accountId} with ${locations.length} location(s)`,
-        rawData: {
-          accounts: accountsData,
-          locations: locationsData
+      // Generate recommendations based on what we found
+      if (results.placesInfo) {
+        results.success = true;
+        results.recommendations.push(
+          `Found your business on Google Places with ID: ${results.placesInfo.placeId}`
+        );
+        results.recommendations.push(
+          `Business name: ${results.placesInfo.name}`
+        );
+        results.recommendations.push(
+          `Address: ${results.placesInfo.address}`
+        );
+        if (results.placesInfo.userRatingsTotal > 0) {
+          results.recommendations.push(
+            `You have ${results.placesInfo.userRatingsTotal} Google reviews with average rating ${results.placesInfo.rating}`
+          );
         }
-      });
+      }
+
+      results.recommendations.push(
+        'Google Business Profile API requires OAuth2 authentication, not API keys'
+      );
+      results.recommendations.push(
+        'To get Account ID and Location ID, you need to either:'
+      );
+      results.recommendations.push(
+        '1. Set up OAuth2 flow (complex)'
+      );
+      results.recommendations.push(
+        '2. Find IDs manually from business.google.com dashboard'
+      );
+      results.recommendations.push(
+        '3. Use Google Places API for reviews (simpler, using Place ID)'
+      );
+
+      res.json(results);
 
     } catch (error) {
       console.error('Google Business Profile discovery error:', error);
