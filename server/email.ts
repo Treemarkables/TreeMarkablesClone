@@ -1,4 +1,4 @@
-import { MailService } from '@sendgrid/mail';
+import nodemailer from 'nodemailer';
 
 interface ContactFormData {
   name: string;
@@ -12,10 +12,11 @@ export async function sendContactEmail(formData: ContactFormData): Promise<boole
   try {
     // Debug environment variables
     console.log('Environment check:');
-    console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? '***SET***' : 'NOT SET');
+    console.log('GMAIL_USER:', process.env.GMAIL_USER ? '***SET***' : 'NOT SET');
+    console.log('GMAIL_APP_PASSWORD:', process.env.GMAIL_APP_PASSWORD ? '***SET***' : 'NOT SET');
     
-    // If SendGrid API key is not set, log the form submission for now
-    if (!process.env.SENDGRID_API_KEY) {
+    // If Gmail credentials are not set, log the form submission for now
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
       console.log('\n=== CONTACT FORM SUBMISSION ===');
       console.log('Customer Information:');
       console.log('Name:', formData.name);
@@ -30,9 +31,14 @@ export async function sendContactEmail(formData: ContactFormData): Promise<boole
       return true;
     }
     
-    // Initialize SendGrid
-    const mailService = new MailService();
-    mailService.setApiKey(process.env.SENDGRID_API_KEY);
+    // Create Gmail SMTP transporter
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    });
 
     // Format the email content
     const htmlContent = `
@@ -72,17 +78,18 @@ ${formData.message}
 This email was sent from the Treemarkables website contact form.
     `;
 
-    // Send email using SendGrid
-    await mailService.send({
+    // Send email
+    const mailOptions = {
+      from: `"Treemarkables Website" <${process.env.GMAIL_USER}>`,
       to: 'quotes@treemarkables.nz',
-      from: 'quotes@treemarkables.nz', // Must be verified in SendGrid
       subject: `New Quote Request from ${formData.name}`,
       text: textContent,
       html: htmlContent,
       replyTo: formData.email, // Allow direct reply to customer
-    });
+    };
 
-    console.log('Contact form email sent successfully via SendGrid');
+    await transporter.sendMail(mailOptions);
+    console.log('Contact form email sent successfully via Gmail');
     return true;
 
   } catch (error) {
