@@ -1,18 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, MapPin, Clock } from "lucide-react";
+// No icons needed for this simplified contact section
 
 export default function ContactSection() {
-  const handleEmailClick = () => {
-    console.log('Email clicked');
-    window.location.href = 'mailto:quotes@treemarkables.nz?subject=Tree Removal Quote Request';
-  };
-
-  const handlePhoneClick = () => {
-    console.log('Phone clicked');
-    window.location.href = 'tel:0272166882';
-  };
-
   const handleQuoteRequest = () => {
     console.log('Quote request submitted');
     // In a real app, this would handle form submission
@@ -31,80 +21,7 @@ export default function ContactSection() {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-12">
-          {/* Contact Information */}
-          <div className="space-y-6">
-            <Card className="hover-elevate">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                    <Mail className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-1">Email Us</h3>
-                    <Button
-                      variant="ghost"
-                      className="p-0 h-auto text-primary hover:underline justify-start"
-                      onClick={handleEmailClick}
-                      data-testid="button-email"
-                    >
-                      quotes@treemarkables.nz
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover-elevate">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                    <Phone className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-1">Call Us</h3>
-                    <Button
-                      variant="ghost"
-                      className="p-0 h-auto text-primary hover:underline justify-start"
-                      onClick={handlePhoneClick}
-                      data-testid="button-phone"
-                    >
-                      0272166882
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover-elevate">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                    <MapPin className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-1">Service Area</h3>
-                    <p className="text-muted-foreground" data-testid="text-service-area">Gisborne</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover-elevate">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                    <Clock className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-1">Emergency Service</h3>
-                    <p className="text-muted-foreground" data-testid="text-hours">24/7 Available</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
+        <div className="max-w-2xl mx-auto">
           {/* Quick Quote Form */}
           <Card>
             <CardContent className="p-8">
