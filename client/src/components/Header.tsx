@@ -30,18 +30,18 @@ export default function Header() {
   return (
     <header className="bg-background/95 backdrop-blur-sm border-b border-border sticky top-0 z-50 shadow-sm">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-20">
+        <div className="flex items-center justify-between h-18 sm:h-20">
           
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center space-x-3 hover-elevate group" data-testid="link-home">
+          <Link href="/" className="flex items-center space-x-2 sm:space-x-3 hover-elevate group flex-shrink-0" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables Logo" 
-              className="h-12 w-12 sm:h-14 sm:w-14 rounded-full object-cover ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all duration-200"
+              className="h-10 w-10 sm:h-12 sm:w-12 rounded-full object-cover ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all duration-200"
               data-testid="logo-image"
             />
             <div className="hidden sm:flex flex-col">
-              <span className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
+              <span className="text-base lg:text-lg font-bold text-foreground group-hover:text-primary transition-colors">
                 Treemarkables
               </span>
               <span className="text-xs text-muted-foreground">
@@ -51,12 +51,12 @@ export default function Header() {
           </Link>
 
           {/* Navigation */}
-          <nav className="hidden md:flex items-center space-x-4 lg:space-x-8 flex-wrap">
+          <nav className="hidden md:flex items-center space-x-3 lg:space-x-6 flex-shrink-0">
             {navigationLinks.map((link) => (
               <Link 
                 key={link.href}
                 href={link.href} 
-                className="text-foreground hover:text-primary transition-colors font-medium text-sm lg:text-base relative group whitespace-nowrap" 
+                className="text-foreground hover:text-primary transition-colors font-medium text-sm relative group whitespace-nowrap" 
                 data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}`}
               >
                 {link.label}
@@ -66,14 +66,14 @@ export default function Header() {
           </nav>
 
           {/* Action Buttons */}
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
             {/* Phone Button - Always visible */}
             <a 
               href="tel:0272166882" 
-              className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm text-white bg-orange-500 px-2 sm:px-3 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
+              className="flex items-center space-x-1 text-xs sm:text-sm text-white bg-orange-500 px-2 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium shadow-sm hover:shadow-md whitespace-nowrap"
               data-testid="link-phone-header"
             >
-              <Phone className="h-3 w-3 sm:h-4 sm:w-4" />
+              <Phone className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
               <span className="hidden sm:inline">027-216-6882</span>
               <span className="sm:hidden">Call</span>
             </a>
@@ -81,18 +81,18 @@ export default function Header() {
             {/* Email Button - Always visible */}
             <a 
               href="mailto:quotes@treemarkables.nz" 
-              className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm text-white bg-blue px-2 sm:px-3 py-2 rounded-lg border border-blue hover:bg-blue/90 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
+              className="flex items-center space-x-1 text-xs sm:text-sm text-white bg-blue px-2 py-2 rounded-lg border border-blue hover:bg-blue/90 transition-all duration-200 font-medium shadow-sm hover:shadow-md whitespace-nowrap"
               data-testid="link-email-header"
             >
-              <Mail className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">quotes@treemarkables.nz</span>
-              <span className="sm:hidden">Email</span>
+              <Mail className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden lg:inline">quotes@treemarkables.nz</span>
+              <span className="lg:hidden">Email</span>
             </a>
 
             {/* Get Quote Button - Desktop */}
             <Button 
               onClick={handleGetQuote} 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200 hidden lg:inline-flex" 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200 hidden xl:inline-flex text-sm px-3 py-2"
               data-testid="button-get-quote"
             >
               Get Quote
