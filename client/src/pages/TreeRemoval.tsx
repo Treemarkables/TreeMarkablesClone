@@ -365,16 +365,6 @@ export default function TreeRemoval() {
             
             <div className="border-l-4 border-primary pl-6">
               <h3 className="text-xl font-semibold text-foreground mb-3">
-                Are you insured for tree work near power lines?
-              </h3>
-              <p className="text-muted-foreground">
-                Yes! We're fully certified for powerline work with $2M public liability insurance. 
-                Our arborists are trained specialists in electrical hazard management and complex access situations.
-              </p>
-            </div>
-            
-            <div className="border-l-4 border-primary pl-6">
-              <h3 className="text-xl font-semibold text-foreground mb-3">
                 How soon can you remove my dangerous tree?
               </h3>
               <p className="text-muted-foreground">
