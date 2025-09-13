@@ -1,7 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
-import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone } from "lucide-react";
+import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -109,7 +109,7 @@ export default function TreePruning() {
               Our Services
             </h2>
           </div>
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid lg:grid-cols-2 xl:grid-cols-4 gap-8">
             <Card className="hover-elevate">
               <CardContent className="p-8">
                 <TreePine className="h-12 w-12 text-primary mb-6" />
@@ -149,6 +149,230 @@ export default function TreePruning() {
                 </Button>
               </CardContent>
             </Card>
+            <Card className="hover-elevate">
+              <CardContent className="p-8">
+                <AlertTriangle className="h-12 w-12 text-primary mb-6" />
+                <h3 className="text-xl font-semibold text-foreground mb-4">Tree Removal</h3>
+                <p className="text-muted-foreground mb-6">
+                  When pruning isn't enough, safe and professional tree removal. We handle 
+                  dangerous trees, storm damage, and complete removals with expert precision.
+                </p>
+                <Button variant="outline" onClick={handleGetQuote} size="sm">
+                  Find out more
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Tree Care Philosophy */}
+      <section className="py-20 bg-background">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <div className="flex justify-center mb-6">
+              <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                <Heart className="h-10 w-10 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
+              Our Tree Care Philosophy
+            </h2>
+            <div className="max-w-4xl mx-auto space-y-4 text-lg text-muted-foreground">
+              <p>
+                At Treemarkables, we believe every tree has value. Our first priority is always 
+                <span className="font-semibold text-foreground"> tree preservation through expert pruning and care</span>.
+              </p>
+              <p>
+                Professional pruning can solve most tree problems while preserving the tree's health and beauty. 
+                We only recommend tree removal when it's absolutely necessary for safety.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* When to Prune */}
+      <section className="py-20 bg-muted/30">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-foreground mb-6">
+              When Your Trees Need Professional Care
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+              Recognizing the signs that your trees need attention can prevent problems 
+              and keep your property safe and beautiful.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
+                  Safety Concerns
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed text-center">
+                  Dead branches, storm damage, or branches hanging over houses, driveways, 
+                  or power lines need immediate attention.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <Leaf className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
+                  Health & Growth
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed text-center">
+                  Diseased branches, poor structure, or overcrowded canopies that affect 
+                  the tree's health and natural growth pattern.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <Scissors className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
+                  Shape & Beauty
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed text-center">
+                  Improving tree structure, enhancing natural shape, or maintaining 
+                  the aesthetic appeal of your landscape.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Tree Pruning Types */}
+      <section className="py-20 bg-background">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-foreground mb-6">
+              Types of Tree Pruning We Specialize In
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+              Different situations call for different pruning techniques. Our qualified arborists 
+              choose the right approach for your trees and Gisborne's coastal conditions.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-8">
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
+                    <Scissors className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-foreground mb-3">
+                    Structural Pruning
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed mb-4">
+                    Early intervention on young trees to develop strong structure and prevent future problems. 
+                    Essential for trees in coastal winds and near buildings.
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-foreground">
+                      Best time: Late winter to early spring
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-8">
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
+                    <TreePine className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-foreground mb-3">
+                    Crown Thinning
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed mb-4">
+                    Selective removal of branches to reduce wind resistance and allow light penetration. 
+                    Perfect for coastal properties exposed to strong winds.
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-foreground">
+                      Reduces storm damage risk
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-8">
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/50 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-foreground mb-3">
+                    Deadwooding
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed mb-4">
+                    Removal of dead, dying, or diseased branches to improve tree health and safety. 
+                    Essential maintenance for all trees, especially after storms.
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                    <span className="text-sm font-medium text-foreground">
+                      Can be done year-round
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-8">
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/50 rounded-full flex items-center justify-center">
+                    <Leaf className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-foreground mb-3">
+                    Crown Reduction
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed mb-4">
+                    Reducing tree height or spread while maintaining natural shape. Ideal for trees 
+                    near power lines or buildings that have outgrown their space.
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    <span className="text-sm font-medium text-foreground">
+                      Preserves tree while managing size
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -161,8 +385,8 @@ export default function TreePruning() {
           </h2>
           <p className="text-lg text-muted-foreground leading-relaxed mb-8">
             We're passionate about trees and helping them thrive in Gisborne's unique coastal environment. 
-            Whether it's a quick safety prune or caring for your heritage trees, we bring the same 
-            attention to detail and local knowledge to every job.
+            Whether it's a quick safety prune, detailed structural work, or complete tree removal when necessary, 
+            we bring the same attention to detail and local knowledge to every job.
           </p>
           <p className="text-lg text-muted-foreground leading-relaxed">
             Our team understands how salt winds, summer heat, and winter storms affect your trees. 
