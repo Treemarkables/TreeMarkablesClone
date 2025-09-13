@@ -10,6 +10,11 @@ interface ContactFormData {
 
 export async function sendContactEmail(formData: ContactFormData): Promise<boolean> {
   try {
+    // Debug environment variables
+    console.log('Environment check:');
+    console.log('GMAIL_USER:', process.env.GMAIL_USER ? '***SET***' : 'NOT SET');
+    console.log('GMAIL_APP_PASSWORD:', process.env.GMAIL_APP_PASSWORD ? '***SET***' : 'NOT SET');
+    
     // Create Gmail SMTP transporter
     const transporter = nodemailer.createTransport({
       service: 'gmail',
