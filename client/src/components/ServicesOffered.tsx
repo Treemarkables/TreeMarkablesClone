@@ -12,7 +12,7 @@ const services = [
     icon: Zap,
     title: "Emergency Tree Removal", 
     description: "We understand that tree emergencies can happen at any time. Our team is available 24/7 for prompt response and resolution.",
-    image: "/tree-removal-real.png",
+    image: "/emergency-tree-removal.jpg",
   },
   {
     icon: Scissors,
