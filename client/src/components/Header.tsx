@@ -66,33 +66,11 @@ export default function Header() {
           </nav>
 
           {/* Action Buttons */}
-          <div className="flex items-center space-x-1 sm:space-x-2">
-            {/* Phone Button - Always visible */}
-            <a 
-              href="tel:0272166882" 
-              className="flex items-center space-x-1 text-xs sm:text-sm text-white bg-orange-500 px-2 sm:px-3 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
-              data-testid="link-phone-header"
-            >
-              <Phone className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">027-216-6882</span>
-              <span className="sm:hidden">Call</span>
-            </a>
-
-            {/* Email Button - Always visible */}
-            <a 
-              href="mailto:quotes@treemarkables.nz" 
-              className="flex items-center space-x-1 text-xs sm:text-sm text-white bg-blue px-2 sm:px-3 py-2 rounded-lg border border-blue hover:bg-blue/90 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
-              data-testid="link-email-header"
-            >
-              <Mail className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">quotes@treemarkables.nz</span>
-              <span className="sm:hidden">Email</span>
-            </a>
-
-            {/* Get Quote Button */}
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Get Quote Button - Desktop only */}
             <Button 
               onClick={handleGetQuote} 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200 hidden sm:inline-flex" 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200 hidden lg:inline-flex" 
               data-testid="button-get-quote"
             >
               Get Quote
@@ -142,6 +120,16 @@ export default function Header() {
                 >
                   <Phone className="h-4 w-4" />
                   <span>Call: 027-216-6882</span>
+                </a>
+                
+                <a 
+                  href="mailto:quotes@treemarkables.nz" 
+                  className="flex items-center justify-center space-x-2 text-sm text-white bg-blue px-4 py-3 rounded-lg border border-blue hover:bg-blue/90 transition-all duration-200 font-medium"
+                  data-testid="link-email-mobile"
+                  onClick={closeMenu}
+                >
+                  <Mail className="h-4 w-4" />
+                  <span>Email: quotes@treemarkables.nz</span>
                 </a>
                 
                 <Button 
