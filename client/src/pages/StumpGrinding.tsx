@@ -4,6 +4,7 @@ import ContactSection from "@/components/ContactSection";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import heroBackground from "@assets/IMG_3531 (1)_1757794172649.jpg";
 
 const reviews = [
   {
@@ -68,13 +69,17 @@ export default function StumpGrinding() {
     <div className="min-h-screen bg-background">
       <Header />
       {/* Hero Section */}
-      <section className="relative min-h-screen bg-gradient-to-br from-primary/10 to-orange-500/10">
-        <div className="relative max-w-6xl mx-auto px-6 pt-80">
+      <section 
+        className="relative min-h-screen bg-gradient-to-br from-primary/10 to-orange-500/10 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${heroBackground})` }}
+      >
+        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="relative max-w-6xl mx-auto px-6 pt-32">
           <div className="text-center">
-            <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6" data-testid="text-hero-title">
+            <h1 className="text-5xl md:text-6xl font-bold text-white mb-6" data-testid="text-hero-title">
               Stumps Gone
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed" data-testid="text-hero-description">
+            <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto leading-relaxed" data-testid="text-hero-description">
               Professional stump grinding in Gisborne. We remove stumps completely, 
               leaving your property clean and ready for new landscaping.
             </p>
