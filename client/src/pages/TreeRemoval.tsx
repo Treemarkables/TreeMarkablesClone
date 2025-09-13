@@ -16,8 +16,19 @@ export default function TreeRemoval() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-      
+      {/* Hero Section */}
+      <section 
+        className="relative min-h-screen bg-gradient-to-br from-primary/10 to-orange-500/10 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${heroBackground})` }}
+      >
+        <div className="absolute inset-0 bg-black/50"></div>
+        <Header />
+        <div className="relative max-w-6xl mx-auto px-6 flex items-center justify-center min-h-screen">
+          <div className="text-center">
+          </div>
+        </div>
+      </section>
+
       {/* Emergency Alert Banner */}
       <div className="bg-red-600 text-white py-3 text-center">
         <div className="max-w-6xl mx-auto px-6">
@@ -26,18 +37,6 @@ export default function TreeRemoval() {
           </p>
         </div>
       </div>
-
-      {/* Hero Section */}
-      <section 
-        className="relative min-h-screen bg-gradient-to-br from-primary/10 to-orange-500/10 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(${heroBackground})` }}
-      >
-        <div className="absolute inset-0 bg-black/50"></div>
-        <div className="relative max-w-6xl mx-auto px-6">
-          <div className="text-center">
-          </div>
-        </div>
-      </section>
 
       {/* Tree Care Philosophy */}
       <section className="py-16 bg-background">
