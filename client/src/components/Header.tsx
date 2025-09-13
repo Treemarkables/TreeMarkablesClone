@@ -51,10 +51,14 @@ export default function Header() {
           </nav>
 
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 text-sm text-white bg-orange-500 px-3 py-2 rounded-lg border-2 border-orange-600">
+            <a 
+              href="tel:0272166882" 
+              className="flex items-center space-x-2 text-sm text-white bg-orange-500 px-3 py-2 rounded-lg border-2 border-orange-600 hover:bg-orange-600 transition-colors cursor-pointer"
+              data-testid="link-phone-header"
+            >
               <Phone className="h-4 w-4" />
-              <span className="font-medium">0272166882</span>
-            </div>
+              <span className="font-medium">027-216-6882</span>
+            </a>
             <Button onClick={handleGetQuote} className="bg-blue hover:bg-blue/90 text-blue-foreground" data-testid="button-get-quote">
               Get Quote
             </Button>
