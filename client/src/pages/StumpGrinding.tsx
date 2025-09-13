@@ -4,7 +4,7 @@ import ContactSection from "@/components/ContactSection";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import heroBackground from "@assets/IMG_3531 (1)_1757794172649.jpg";
+import heroBackground from "@assets/IMG_3531 (1)_1757794406658.jpg";
 
 const reviews = [
   {
