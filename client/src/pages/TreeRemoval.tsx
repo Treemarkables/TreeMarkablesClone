@@ -265,38 +265,6 @@ export default function TreeRemoval() {
                 </div>
               </div>
             </div>
-            <div className="bg-muted/50 p-8 rounded-lg">
-              <h3 className="text-2xl font-bold text-foreground mb-6">Our 3-Step Guarantee Process</h3>
-              <div className="space-y-5">
-                <div className="flex items-start space-x-4">
-                  <div className="bg-primary text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg">1</div>
-                  <div>
-                    <h4 className="font-semibold text-foreground mb-1">FREE Safety Assessment</h4>
-                    <p className="text-muted-foreground text-sm">Same-day site visit, risk evaluation, and transparent fixed quote with no hidden fees</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-4">
-                  <div className="bg-primary text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg">2</div>
-                  <div>
-                    <h4 className="font-semibold text-foreground mb-1">Safe Professional Removal</h4>
-                    <p className="text-muted-foreground text-sm">Certified arborists using advanced rigging techniques and professional equipment</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-4">
-                  <div className="bg-primary text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg">3</div>
-                  <div>
-                    <h4 className="font-semibold text-foreground mb-1">Complete Site Restoration</h4>
-                    <p className="text-muted-foreground text-sm">Total debris removal, stump grinding, and site cleanup - guaranteed spotless</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-6 p-4 bg-primary/10 rounded-lg">
-                <p className="text-sm font-medium text-center text-primary">
-                  ⚡ Emergency Jobs Started Within 2 Hours • Same-Day Assessments Available
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       </section>
