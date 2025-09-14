@@ -1,0 +1,71 @@
+Below is a detailed on‑site SEO action plan tailored for Treemarkables’ website. These steps complement the changes we made to your Google Business Profile and focus on improving organic visibility for Gisborne and surrounding areas.
+
+---
+
+## 1. Optimized Meta Titles & Meta Descriptions
+
+*When editing your web pages, keep titles under \~60 characters and meta descriptions under \~160 characters to avoid truncation in search results.*
+
+| Page                        | Suggested Meta Title                                         | Suggested Meta Description                                                                                                                                                                   |
+| --------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Home**                    | Treemarkables – Qualified Arborists in Gisborne & East Coast | Local arborists specialising in safe tree removal, pruning, stump grinding and hedge trimming across Gisborne, Wairoa and the East Coast. Get a free quote today.                            |
+| **Tree Removal**            | Tree Removal Gisborne – Safe & Efficient Service             | Need a dangerous or unwanted tree removed? Our certified arborists provide safe tree removal for homes and farms in Gisborne and Wairoa. Contact us for competitive prices.                  |
+| **Tree Pruning**            | Tree Pruning Gisborne – Professional Arborists               | Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available. |
+| **Stump Grinding**          | Stump Grinding Gisborne – Fast & Tidy Stump Removal          | Eliminate unsightly stumps with our powerful stump grinding service. Serving Gisborne, Wairoa and rural properties. Book your stump removal today.                                           |
+| **Hedge Trimming**          | Hedge Trimming Gisborne – Neat & Healthy Hedges              | Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote.                                    |
+| **Arborist Services/About** | Gisborne Arborist Services – Treemarkables                   | Learn about our fully qualified team, safety practices and commitment to sustainable tree care. Serving Gisborne, Wairoa and the East Coast for over X years.                                |
+
+---
+
+## 2. Optimized Service Page Structure
+
+For each service page (e.g., tree removal):
+
+* **H1 heading:** Use the primary keyword + location (e.g., “Tree Removal Services in Gisborne”).
+* **Introduction:** A 2–3 sentence paragraph summarising the service and service area.
+* **Benefits & Expertise (H2):** Explain why clients need the service, including safety, property protection and regulatory compliance.
+* **Process & Safety (H2):** Outline your methods, emphasising safety standards, certified arborists and equipment used.
+* **Service Areas (H3):** List the suburbs you serve (e.g., Gisborne, Wairoa, East Coast, Awapuni, Makaraka, Wainui).
+* **Call‑to‑Action (H2/H3):** Invite users to request a free quote or contact you. Include a prominent contact button linking to your enquiry form or phone number.
+* **Internal links:** Link to related services (e.g., from Tree Removal to Stump Grinding), the About/Arborist Services page, and recent blog posts.
+
+Make sure each page uses keyword‑rich headings naturally and includes at least 500–700 words of unique, informative content.
+
+---
+
+## 3. Site Speed & Technical Improvements
+
+* **Image optimisation:** Compress photos using tools such as TinyPNG before uploading. Use modern formats (WebP) where possible and define width/height attributes to prevent layout shifts.
+* **Caching & minification:** Enable a caching plugin (e.g., WP Rocket or W3 Total Cache) to minify CSS, JS and HTML, and leverage browser caching.
+* **Lazy loading:** Implement lazy loading for images and embedded content so they load only when users scroll to them.
+* **HTTPS & security:** Ensure the entire site is served over HTTPS (get a valid SSL certificate if not already). Redirect HTTP traffic to HTTPS.
+* **Mobile responsiveness:** Test pages on multiple devices. Use a responsive layout so text and navigation elements display clearly on phones and tablets.
+* **Sitemap submission:** Create an XML sitemap and submit it to Google Search Console. Update it automatically when new posts/pages are added.
+
+---
+
+## 4. Internal Linking Strategy
+
+* **Cross‑link service pages:** At the end of each service page, include a “Related Services” section linking to at least two other services.
+* **Link to the About/Arborist Services page:** Provide context about qualifications and experience; this helps build trust.
+* **Blog post links:** When writing blog articles, link to relevant services and the Contact page to drive enquiries.
+* **Use descriptive anchor text:** Instead of “click here,” use phrases like “learn more about our stump grinding in Gisborne.”
+
+---
+
+## 5. Structured Data & Schema Markup
+
+* **Local Business schema:** Add JSON‑LD schema to your site’s `<head>` section including business name, address (service areas can be specified with `areaServed`), phone, opening hours, and URL. This can enhance visibility in search features.
+* **Service schema:** For each service page, specify `@type: Service` with `serviceType: Tree Removal`, etc., to help search engines understand the services you offer.
+
+---
+
+## 6. Ongoing Actions
+
+* **Regular audits:** Use tools like Google Search Console and PageSpeed Insights to monitor crawl errors, index coverage, and site speed.
+* **Content updates:** Keep service pages up‑to‑date. Add fresh images of recent projects and testimonials from local clients to build credibility.
+* **Check meta tags:** After implementing updates, verify that each page’s meta title and description appear correctly in search results.
+
+---
+
+With these on‑site changes, your website will be better aligned with the keywords identified during research and will provide clear, localised signals to search engines. Let me know when you’re ready to work on blog content or outreach for backlinks—happy to assist!

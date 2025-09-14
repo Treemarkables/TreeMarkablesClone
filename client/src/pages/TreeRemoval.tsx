@@ -52,13 +52,13 @@ export default function TreeRemoval() {
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title="Tree Removal Gisborne | Emergency Tree Service | Treemarkables NZ"
-        description="Expert tree removal services in Gisborne, NZ. Certified arborists providing 24/7 emergency tree removal, hazardous tree assessment, and professional cutting. Fully insured with same-day response. Call 027-216-6882."
-        keywords="tree removal Gisborne, emergency tree service, arborist Gisborne, hazardous tree removal, tree cutting Gisborne, professional tree service NZ, certified arborist, storm damage tree removal"
-        ogTitle="Professional Tree Removal Services in Gisborne, New Zealand"
-        ogDescription="Fast, safe, and professional tree removal in Gisborne. Certified arborists with 24/7 emergency service. Free quotes and fully insured. Call 027-216-6882 today."
-        ogImage="https://www.treemarkables.nz/hazardous-tree-removal.jpg"
-        canonicalUrl="https://www.treemarkables.nz/tree-removal"
+        title="Tree Removal Gisborne – Safe & Efficient Service"
+        description="Need a dangerous or unwanted tree removed? Our certified arborists provide safe tree removal for homes and farms in Gisborne and Wairoa. Contact us for competitive prices."
+        keywords="tree removal Gisborne, safe tree removal, certified arborists Gisborne, dangerous tree removal, unwanted tree removal, Wairoa tree removal, competitive tree removal prices"
+        ogTitle="Tree Removal Gisborne – Safe & Efficient Service"
+        ogDescription="Need a dangerous or unwanted tree removed? Our certified arborists provide safe tree removal for homes and farms in Gisborne and Wairoa. Contact us for competitive prices."
+        ogImage="https://www.treemarkables.co.nz/hazardous-tree-removal.jpg"
+        canonicalUrl="https://www.treemarkables.co.nz/tree-removal"
         structuredData={structuredData}
       />
       <Header />

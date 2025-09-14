@@ -103,13 +103,13 @@ export default function StumpGrinding() {
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title="Stump Grinding Gisborne | Professional Stump Removal | Treemarkables NZ"
-        description="Professional stump grinding services in Gisborne, NZ. Complete stump removal for clean, usable land. Advanced equipment, competitive pricing. Free quotes. Call 027-216-6882."
-        keywords="stump grinding Gisborne, stump removal Gisborne, stump grinder, tree stump removal, land clearing Gisborne, stump grinding service NZ, commercial stump removal"
-        ogTitle="Professional Stump Grinding Services in Gisborne, New Zealand"
-        ogDescription="Complete stump removal with professional grinding equipment. Transform your property with our expert stump grinding services in Gisborne."
-        ogImage="https://www.treemarkables.nz/stump-grinding.jpg"
-        canonicalUrl="https://www.treemarkables.nz/stump-grinding"
+        title="Stump Grinding Gisborne – Fast & Tidy Stump Removal"
+        description="Eliminate unsightly stumps with our powerful stump grinding service. Serving Gisborne, Wairoa and rural properties. Book your stump removal today."
+        keywords="stump grinding Gisborne, fast stump removal, tidy stump grinding, Wairoa stump removal, rural stump grinding, powerful stump grinder, book stump removal"
+        ogTitle="Stump Grinding Gisborne – Fast & Tidy Stump Removal"
+        ogDescription="Eliminate unsightly stumps with our powerful stump grinding service. Serving Gisborne, Wairoa and rural properties. Book your stump removal today."
+        ogImage="https://www.treemarkables.co.nz/stump-grinding.jpg"
+        canonicalUrl="https://www.treemarkables.co.nz/stump-grinding"
         structuredData={structuredData}
       />
       <Header />
