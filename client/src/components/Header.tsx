@@ -8,7 +8,7 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const toggleMenu = () => {
-    setIsMenuOpen(!isMenuOpen);
+    setIsMenuOpen(prev => !prev);
   };
 
   const closeMenu = () => {
@@ -16,8 +16,14 @@ export default function Header() {
   };
 
   const handleGetQuote = () => {
-    document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
     closeMenu();
+    // Use requestAnimationFrame for better timing with DOM updates
+    requestAnimationFrame(() => {
+      const contactElement = document.getElementById('contact');
+      if (contactElement) {
+        contactElement.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
   };
 
   const navigationLinks = [
@@ -109,7 +115,15 @@ export default function Header() {
         </div>
 
         {/* Mobile Navigation */}
-        <div className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${isMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div 
+          data-testid="mobile-menu"
+          className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${
+            isMenuOpen 
+              ? 'max-h-96 opacity-100' 
+              : 'max-h-0 opacity-0 pointer-events-none hidden'
+          }`}
+          aria-hidden={!isMenuOpen}
+        >
           <nav className="border-t border-border/50 py-4">
             <div className="flex flex-col space-y-1">
               {navigationLinks.map((link) => (
