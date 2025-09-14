@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Phone, Menu, X, Mail } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
-import logoImage from "@assets/0fe124b7-cd27-4bb5-a914-65ef9de39b28_1757721055730.png";
+import logoImage from "@assets/new logo png_1757829817784.png";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -37,14 +37,9 @@ export default function Header() {
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-10 w-10 sm:h-12 sm:w-12 rounded-full object-cover ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all duration-200"
+              className="h-8 w-auto sm:h-10 object-contain transition-all duration-200"
               data-testid="logo-image"
             />
-            <div className="hidden sm:flex flex-col">
-              <span className="text-base lg:text-lg font-bold text-foreground group-hover:text-primary transition-colors">
-                Treemarkables
-              </span>
-            </div>
           </Link>
 
           {/* Navigation */}
