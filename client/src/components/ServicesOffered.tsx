@@ -56,7 +56,7 @@ export default function ServicesOffered() {
           </h2>
         </div>
 
-        <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 md:gap-8">
           {services.map((service, index) => {
             const ServiceCardWrapper = service.route.startsWith('#') 
               ? 'a' 
@@ -80,7 +80,7 @@ export default function ServicesOffered() {
                 data-testid={`link-service-${index}`}
               >
                 <Card className="hover-elevate h-full transition-all duration-200 overflow-hidden" data-testid={`card-service-${index}`}>
-                  <div className="relative h-48 overflow-hidden">
+                  <div className="relative h-40 sm:h-44 md:h-48 overflow-hidden">
                     <img 
                       src={service.image} 
                       alt={service.altText}
