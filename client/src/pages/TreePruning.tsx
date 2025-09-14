@@ -117,6 +117,8 @@ export default function TreePruning() {
         keywords="tree pruning Gisborne, professional arborist, tree trimming Gisborne, structural pruning, crown thinning, deadwooding, tree care Gisborne, certified arborist NZ, coastal tree pruning"
         ogTitle="Professional Tree Pruning Services in Gisborne, New Zealand"
         ogDescription="Keep your trees healthy and beautiful with expert pruning services. Specialized in Gisborne's coastal conditions. Free quotes from certified arborists."
+        ogImage="https://www.treemarkables.nz/tree-pruning.jpg"
+        canonicalUrl="https://www.treemarkables.nz/tree-pruning"
         structuredData={structuredData}
       />
       <Header />

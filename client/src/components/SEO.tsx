@@ -7,6 +7,7 @@ interface SEOProps {
   ogTitle?: string;
   ogDescription?: string;
   ogImage?: string;
+  canonicalUrl?: string;
   structuredData?: object;
 }
 
@@ -17,6 +18,7 @@ export default function SEO({
   ogTitle, 
   ogDescription, 
   ogImage,
+  canonicalUrl,
   structuredData 
 }: SEOProps) {
   useEffect(() => {
@@ -41,14 +43,29 @@ export default function SEO({
     updateMetaTag('description', description);
     if (keywords) updateMetaTag('keywords', keywords);
 
+    // Add canonical URL
+    if (canonicalUrl) {
+      let canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
+      if (!canonicalLink) {
+        canonicalLink = document.createElement('link');
+        canonicalLink.rel = 'canonical';
+        document.head.appendChild(canonicalLink);
+      }
+      canonicalLink.href = canonicalUrl;
+    }
+
     // Update Open Graph tags
     updateMetaTag('og:title', ogTitle || title, true);
     updateMetaTag('og:description', ogDescription || description, true);
     updateMetaTag('og:type', 'website', true);
     updateMetaTag('og:site_name', 'Treemarkables', true);
+    updateMetaTag('og:url', canonicalUrl || window.location.href, true);
     
     if (ogImage) {
       updateMetaTag('og:image', ogImage, true);
+      updateMetaTag('og:image:width', '1200', true);
+      updateMetaTag('og:image:height', '630', true);
+      updateMetaTag('og:image:alt', ogTitle || title, true);
     }
 
     // Twitter Card tags
@@ -78,7 +95,7 @@ export default function SEO({
       script.textContent = JSON.stringify(structuredData);
     }
 
-  }, [title, description, keywords, ogTitle, ogDescription, ogImage, structuredData]);
+  }, [title, description, keywords, ogTitle, ogDescription, ogImage, canonicalUrl, structuredData]);
 
   return null;
 }
