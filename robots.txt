@@ -1,0 +1,24 @@
+# Robots.txt for Treemarkables - Professional Tree Removal Services Gisborne
+# Website: https://www.treemarkables.co.nz
+
+User-agent: *
+Allow: /
+
+# Allow access to all pages and resources
+Allow: /tree-removal
+Allow: /tree-pruning  
+Allow: /stump-grinding
+Allow: /hedge-trimming
+Allow: /blog
+Allow: /blog/*
+
+# Block access to admin/private areas (if any in future)
+Disallow: /admin/
+Disallow: /api/
+Disallow: /private/
+
+# XML Sitemap location for search engines
+Sitemap: https://www.treemarkables.co.nz/sitemap.xml
+
+# Crawl delay (optional - be respectful to search engines)
+Crawl-delay: 1

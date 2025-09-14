@@ -2,8 +2,53 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { sendContactEmail } from "./email";
+import path from "path";
+import fs from "fs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // SEO routes - serve sitemap.xml and robots.txt
+  app.get('/sitemap.xml', (req: Request, res: Response) => {
+    try {
+      const sitemapPath = path.join(process.cwd(), 'sitemap.xml');
+      
+      if (fs.existsSync(sitemapPath)) {
+        res.set('Content-Type', 'application/xml');
+        res.sendFile(sitemapPath);
+      } else {
+        res.status(404).json({ 
+          success: false, 
+          message: 'Sitemap not found. Please generate sitemap using the included Python script.' 
+        });
+      }
+    } catch (error) {
+      console.error('Error serving sitemap:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error serving sitemap' 
+      });
+    }
+  });
+
+  app.get('/robots.txt', (req: Request, res: Response) => {
+    try {
+      const robotsPath = path.join(process.cwd(), 'robots.txt');
+      
+      if (fs.existsSync(robotsPath)) {
+        res.set('Content-Type', 'text/plain');
+        res.sendFile(robotsPath);
+      } else {
+        // Serve a basic robots.txt if file doesn't exist
+        res.set('Content-Type', 'text/plain');
+        res.send(`User-agent: *
+Allow: /
+
+Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
+      }
+    } catch (error) {
+      console.error('Error serving robots.txt:', error);
+      res.status(500).send('# Error serving robots.txt');
+    }
+  });
   // Facebook reviews endpoint
   app.get('/api/reviews/facebook', async (req: Request, res: Response) => {
     try {
