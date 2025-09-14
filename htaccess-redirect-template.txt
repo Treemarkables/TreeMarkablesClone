@@ -1,0 +1,27 @@
+# .htaccess Redirect Template for Treemarkables Domain Migration
+# Use this template to redirect from treemarkables.nz to www.treemarkables.co.nz
+# This should be placed in the root directory of your OLD domain (treemarkables.nz)
+
+# Enable URL rewriting
+RewriteEngine On
+
+# Force HTTPS redirect first (recommended for SEO)
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Redirect all traffic from treemarkables.nz to www.treemarkables.co.nz
+# This maintains URL structure and passes link equity
+RewriteCond %{HTTP_HOST} ^(www\.)?treemarkables\.nz$ [NC]
+RewriteRule ^(.*)$ https://www.treemarkables.co.nz/$1 [L,R=301]
+
+# Alternative method - if the above doesn't work, try this:
+# RewriteCond %{HTTP_HOST} ^treemarkables\.nz$ [NC]
+# RewriteRule ^(.*)$ https://www.treemarkables.co.nz/$1 [L,R=301]
+# RewriteCond %{HTTP_HOST} ^www\.treemarkables\.nz$ [NC]  
+# RewriteRule ^(.*)$ https://www.treemarkables.co.nz/$1 [L,R=301]
+
+# Instructions:
+# 1. Save this file as ".htaccess" (including the dot)
+# 2. Upload it to the root directory of your OLD domain (treemarkables.nz)
+# 3. Test the redirect by visiting http://treemarkables.nz and http://www.treemarkables.nz
+# 4. Verify both redirect to https://www.treemarkables.co.nz
