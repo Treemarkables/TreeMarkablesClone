@@ -63,9 +63,13 @@ export default function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-4">Contact</h3>
             <div className="space-y-2">
-              <p className="text-gray-300 text-sm" data-testid="text-footer-email">
+              <a 
+                href="mailto:quotes@treemarkables.nz" 
+                className="text-gray-300 text-sm hover:text-orange-400 transition-colors cursor-pointer" 
+                data-testid="link-footer-email"
+              >
                 quotes@treemarkables.nz
-              </p>
+              </a>
               <a 
                 href="tel:0272166882" 
                 className="text-gray-300 text-sm hover:text-orange-400 transition-colors cursor-pointer" 
