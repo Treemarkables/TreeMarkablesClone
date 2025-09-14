@@ -1,4 +1,5 @@
 import { Shield, Award, Clock } from "lucide-react";
+import { Link } from "wouter";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -37,24 +38,29 @@ export default function Footer() {
             <h3 className="font-semibold text-white mb-4">Services</h3>
             <ul className="space-y-2">
               <li>
-                <a href="/tree-removal" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-tree-removal">
+                <Link href="/tree-removal" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-tree-removal">
                   Tree Removal
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/tree-pruning" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-tree-pruning">
+                <Link href="/tree-pruning" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-tree-pruning">
                   Tree Pruning
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/stump-grinding" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-stump-grinding">
+                <Link href="/stump-grinding" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-stump-grinding">
                   Stump Grinding
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/hedge-trimming" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-hedge-trimming">
+                <Link href="/hedge-trimming" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-hedge-trimming">
                   Hedge Trimming
-                </a>
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-blog">
+                  Tree Care Blog
+                </Link>
               </li>
             </ul>
           </div>
