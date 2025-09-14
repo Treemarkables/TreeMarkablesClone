@@ -258,16 +258,16 @@ export default function StumpGrinding() {
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold text-foreground mb-3">
-                    Site Assessment
+                    Same-Day Service
                   </h3>
                   <p className="text-muted-foreground leading-relaxed mb-4">
-                    We assess access routes, underground services, and surrounding landscaping 
-                    to plan the safest, most efficient approach.
+                    Get your stump removed quickly with our efficient service. 
+                    Most stumps can be ground and cleared within a few hours.
                   </p>
                   <div className="flex items-center space-x-2">
                     <CheckCircle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
                     <span className="text-sm font-medium text-foreground">
-                      Free site visit and quote
+                      Fast turnaround available
                     </span>
                   </div>
                 </div>
