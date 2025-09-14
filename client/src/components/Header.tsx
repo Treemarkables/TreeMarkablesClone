@@ -84,7 +84,7 @@ export default function Header() {
             {/* Get Quote Button - Desktop */}
             <Button 
               onClick={handleGetQuote} 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200 hidden xl:inline-flex text-sm px-3 py-2"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200 hidden lg:inline-flex text-sm px-3 py-2"
               data-testid="button-get-quote"
             >
               Get Quote
