@@ -37,7 +37,7 @@ export default function Header() {
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-8 w-auto sm:h-10 object-contain transition-all duration-200"
+              className="h-14 w-auto sm:h-16 object-contain transition-all duration-200"
               data-testid="logo-image"
             />
           </Link>
