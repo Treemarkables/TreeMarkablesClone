@@ -30,7 +30,7 @@ export default function Header() {
   return (
     <header className="bg-background/95 backdrop-blur-sm border-b border-border sticky top-0 z-50 shadow-sm">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-9 sm:h-20">
+        <div className="flex items-center justify-between h-11 sm:h-20">
           
           {/* Logo and Brand */}
           <Link href="/" className="flex items-center space-x-2 sm:space-x-3 hover-elevate group flex-shrink-0" data-testid="link-home">
