@@ -103,11 +103,11 @@ export default function HedgeTrimming() {
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title="Hedge Trimming Gisborne | Professional Hedge Care | Treemarkables NZ"
-        description="Expert hedge trimming services in Gisborne, NZ. Professional shaping, pruning, and maintenance for healthy, beautiful hedges. Regular maintenance plans available. Call 027-216-6882."
-        keywords="hedge trimming Gisborne, hedge cutting Gisborne, hedge maintenance, hedge shaping, professional hedge care NZ, ornamental hedge trimming, boundary hedge maintenance"
-        ogTitle="Professional Hedge Trimming Services in Gisborne, New Zealand"
-        ogDescription="Keep your hedges perfectly shaped and healthy with our expert trimming services. Professional hedge care in Gisborne with competitive pricing."
+        title="Hedge Trimming Gisborne – Neat & Healthy Hedges"
+        description="Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote."
+        keywords="hedge trimming Gisborne, neat hedges, year-round hedge care, coastal hedge trimming, hedge shaping, hedge maintenance, surrounding areas hedge care"
+        ogTitle="Hedge Trimming Gisborne – Neat & Healthy Hedges"
+        ogDescription="Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote."
         structuredData={structuredData}
       />
       <Header />

@@ -112,13 +112,13 @@ export default function TreePruning() {
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title="Tree Pruning Gisborne | Professional Arborist Services | Treemarkables NZ"
-        description="Expert tree pruning services in Gisborne, NZ. Certified arborists offering structural pruning, crown thinning, deadwooding, and tree health care. Coastal conditions specialist. Call 027-216-6882."
-        keywords="tree pruning Gisborne, professional arborist, tree trimming Gisborne, structural pruning, crown thinning, deadwooding, tree care Gisborne, certified arborist NZ, coastal tree pruning"
-        ogTitle="Professional Tree Pruning Services in Gisborne, New Zealand"
-        ogDescription="Keep your trees healthy and beautiful with expert pruning services. Specialized in Gisborne's coastal conditions. Free quotes from certified arborists."
-        ogImage="https://www.treemarkables.nz/tree-pruning.jpg"
-        canonicalUrl="https://www.treemarkables.nz/tree-pruning"
+        title="Tree Pruning Gisborne – Professional Arborists"
+        description="Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available."
+        keywords="tree pruning Gisborne, professional arborists, tree health, crown reduction, tree shaping, East Coast tree pruning, free tree assessments, Gisborne tree care"
+        ogTitle="Tree Pruning Gisborne – Professional Arborists"
+        ogDescription="Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available."
+        ogImage="https://www.treemarkables.co.nz/tree-pruning.jpg"
+        canonicalUrl="https://www.treemarkables.co.nz/tree-pruning"
         structuredData={structuredData}
       />
       <Header />
