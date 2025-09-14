@@ -252,22 +252,8 @@ export default function TreeRemoval() {
                 <div className="flex items-start space-x-3">
                   <CheckCircle className="h-6 w-6 text-primary mt-1" />
                   <div>
-                    <h3 className="font-semibold text-foreground">Powerline & Confined Access Specialists</h3>
-                    <p className="text-muted-foreground">Expert handling of complex removals near power lines, buildings, and tight spaces</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1" />
-                  <div>
                     <h3 className="font-semibold text-foreground">No-Mess Cleanup Guarantee</h3>
                     <p className="text-muted-foreground">Complete debris removal, stump grinding, and site restoration - your property left spotless</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-foreground">Council Consent Assistance</h3>
-                    <p className="text-muted-foreground">We handle all permits and council requirements for protected trees in Gisborne</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
@@ -403,15 +389,6 @@ export default function TreeRemoval() {
           </h2>
           
           <div className="space-y-8">
-            <div className="border-l-4 border-primary pl-6">
-              <h3 className="text-xl font-semibold text-foreground mb-3">
-                Do I need council consent to remove my tree?
-              </h3>
-              <p className="text-muted-foreground">
-                For protected trees in Gisborne, yes. We handle all council applications and permits for you at no extra charge. 
-                Our team knows the local regulations and will ensure full compliance.
-              </p>
-            </div>
             
             <div className="border-l-4 border-primary pl-6">
               <h3 className="text-xl font-semibold text-foreground mb-3">
