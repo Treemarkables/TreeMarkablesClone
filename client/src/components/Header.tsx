@@ -30,7 +30,8 @@ export default function Header() {
     { href: "/tree-removal", label: "Tree Removal" },
     { href: "/tree-pruning", label: "Tree Pruning" },
     { href: "/stump-grinding", label: "Stump Grinding" },
-    { href: "/hedge-trimming", label: "Hedge Trimming" }
+    { href: "/hedge-trimming", label: "Hedge Trimming" },
+    { href: "/blog", label: "Blog" }
   ];
 
   return (

@@ -8,6 +8,8 @@ import TreeRemoval from "@/pages/TreeRemoval";
 import TreePruning from "@/pages/TreePruning";
 import StumpGrinding from "@/pages/StumpGrinding";
 import HedgeTrimming from "@/pages/HedgeTrimming";
+import Blog from "@/pages/Blog";
+import BlogPost from "@/pages/BlogPost";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +20,8 @@ function Router() {
       <Route path="/tree-pruning" component={TreePruning}/>
       <Route path="/stump-grinding" component={StumpGrinding}/>
       <Route path="/hedge-trimming" component={HedgeTrimming}/>
+      <Route path="/blog" component={Blog}/>
+      <Route path="/blog/:slug" component={BlogPost}/>
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
