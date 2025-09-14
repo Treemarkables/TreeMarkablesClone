@@ -57,6 +57,8 @@ export default function TreeRemoval() {
         keywords="tree removal Gisborne, emergency tree service, arborist Gisborne, hazardous tree removal, tree cutting Gisborne, professional tree service NZ, certified arborist, storm damage tree removal"
         ogTitle="Professional Tree Removal Services in Gisborne, New Zealand"
         ogDescription="Fast, safe, and professional tree removal in Gisborne. Certified arborists with 24/7 emergency service. Free quotes and fully insured. Call 027-216-6882 today."
+        ogImage="https://www.treemarkables.nz/hazardous-tree-removal.jpg"
+        canonicalUrl="https://www.treemarkables.nz/tree-removal"
         structuredData={structuredData}
       />
       <Header />

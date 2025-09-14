@@ -108,6 +108,8 @@ export default function StumpGrinding() {
         keywords="stump grinding Gisborne, stump removal Gisborne, stump grinder, tree stump removal, land clearing Gisborne, stump grinding service NZ, commercial stump removal"
         ogTitle="Professional Stump Grinding Services in Gisborne, New Zealand"
         ogDescription="Complete stump removal with professional grinding equipment. Transform your property with our expert stump grinding services in Gisborne."
+        ogImage="https://www.treemarkables.nz/stump-grinding.jpg"
+        canonicalUrl="https://www.treemarkables.nz/stump-grinding"
         structuredData={structuredData}
       />
       <Header />
