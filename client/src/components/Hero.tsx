@@ -30,25 +30,6 @@ export default function Hero() {
             We're just a bunch of Gizzy guys and we climb trees
           </h1>
 
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button 
-              size="lg" 
-              className="bg-primary hover:bg-primary/90 text-white"
-              onClick={handleGetQuote}
-              data-testid="button-hero-get-quote"
-            >
-              Get Free Quote
-            </Button>
-            <Button 
-              variant="outline" 
-              size="lg"
-              className="border-white/30 text-white hover:bg-white/10 backdrop-blur-sm"
-              onClick={handleLearnMore}
-              data-testid="button-hero-learn-more"
-            >
-              Learn More
-            </Button>
-          </div>
         </div>
       </div>
     </section>
