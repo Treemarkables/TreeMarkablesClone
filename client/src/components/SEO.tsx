@@ -83,6 +83,21 @@ export default function SEO({
     updateMetaTag('geo.position', '-38.6623, 178.0176');
     updateMetaTag('ICBM', '-38.6623, 178.0176');
 
+    // Add viewport meta tag
+    let viewportTag = document.querySelector('meta[name="viewport"]');
+    if (!viewportTag) {
+      viewportTag = document.createElement('meta');
+      viewportTag.setAttribute('name', 'viewport');
+      viewportTag.setAttribute('content', 'width=device-width, initial-scale=1.0');
+      document.head.appendChild(viewportTag);
+    }
+
+    // Add robots meta tag
+    updateMetaTag('robots', 'index, follow');
+
+    // Add author meta tag
+    updateMetaTag('author', 'Treemarkables');
+
     // Add structured data
     if (structuredData) {
       let script = document.querySelector('#structured-data') as HTMLScriptElement;

@@ -4,6 +4,7 @@ import ContactSection from "@/components/ContactSection";
 import SEO from "@/components/SEO";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import heroBackground from "@assets/IMG_5648_1757793148389.jpg";
 
@@ -70,10 +71,10 @@ export default function HedgeTrimming() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "@id": "https://www.treemarkables.nz/hedge-trimming#business",
+    "@id": "https://www.treemarkables.co.nz/hedge-trimming#business",
     "name": "Treemarkables Hedge Trimming Services",
     "description": "Professional hedge trimming and maintenance services in Gisborne, New Zealand. Expert shaping, pruning, and regular maintenance for residential and commercial hedges.",
-    "url": "https://www.treemarkables.nz/hedge-trimming",
+    "url": "https://www.treemarkables.co.nz/hedge-trimming",
     "telephone": "+64272166882",
     "address": {
       "@type": "PostalAddress",
@@ -108,6 +109,8 @@ export default function HedgeTrimming() {
         keywords="hedge trimming Gisborne, neat hedges, year-round hedge care, coastal hedge trimming, hedge shaping, hedge maintenance, surrounding areas hedge care"
         ogTitle="Hedge Trimming Gisborne – Neat & Healthy Hedges"
         ogDescription="Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote."
+        ogImage="https://www.treemarkables.co.nz/hedge-trimming.jpg"
+        canonicalUrl="https://www.treemarkables.co.nz/hedge-trimming"
         structuredData={structuredData}
       />
       <Header />
@@ -425,6 +428,134 @@ export default function HedgeTrimming() {
             <Button size="lg" onClick={handleGetQuote}>
               Talk to us today
             </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Service Areas Section */}
+      <section className="py-16 bg-muted/30">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h3 className="text-2xl font-bold text-foreground mb-6">
+              Hedge Trimming Service Areas
+            </h3>
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto mb-8">
+              Professional hedge trimming for homes and coastal properties throughout Gisborne and surrounding areas.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6 text-center">
+            <div className="bg-background rounded-lg p-4 hover-elevate">
+              <h4 className="font-semibold text-foreground mb-2">Gisborne Central</h4>
+              <p className="text-sm text-muted-foreground">Urban hedge maintenance</p>
+            </div>
+            <div className="bg-background rounded-lg p-4 hover-elevate">
+              <h4 className="font-semibold text-foreground mb-2">Kaiti</h4>
+              <p className="text-sm text-muted-foreground">Coastal hedge care</p>
+            </div>
+            <div className="bg-background rounded-lg p-4 hover-elevate">
+              <h4 className="font-semibold text-foreground mb-2">Te Hapara</h4>
+              <p className="text-sm text-muted-foreground">Residential hedge trimming</p>
+            </div>
+            <div className="bg-background rounded-lg p-4 hover-elevate">
+              <h4 className="font-semibold text-foreground mb-2">Mangapapa</h4>
+              <p className="text-sm text-muted-foreground">Rural property hedges</p>
+            </div>
+            <div className="bg-background rounded-lg p-4 hover-elevate">
+              <h4 className="font-semibold text-foreground mb-2">Wainui Beach</h4>
+              <p className="text-sm text-muted-foreground">Coastal property hedges</p>
+            </div>
+            <div className="bg-background rounded-lg p-4 hover-elevate">
+              <h4 className="font-semibold text-foreground mb-2">Makaraka</h4>
+              <p className="text-sm text-muted-foreground">Semi-rural hedge care</p>
+            </div>
+            <div className="bg-background rounded-lg p-4 hover-elevate">
+              <h4 className="font-semibold text-foreground mb-2">Elgin</h4>
+              <p className="text-sm text-muted-foreground">Farm boundary hedges</p>
+            </div>
+            <div className="bg-background rounded-lg p-4 hover-elevate">
+              <h4 className="font-semibold text-foreground mb-2">East Coast</h4>
+              <p className="text-sm text-muted-foreground">Extended coastal regions</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Related Services Section */}
+      <section className="py-16 bg-background">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h3 className="text-2xl font-bold text-foreground mb-6">
+              Complete Property Care Services
+            </h3>
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+              Hedge trimming works perfectly with our other professional tree and landscape services.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <TreePine className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3">
+                  <Link href="/tree-pruning" className="hover:text-primary transition-colors">
+                    Tree Pruning
+                  </Link>
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
+                  Complete your garden maintenance with professional tree pruning and health care services.
+                </p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/tree-pruning">Learn More</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3">
+                  <Link href="/tree-removal" className="hover:text-primary transition-colors">
+                    Tree Removal
+                  </Link>
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
+                  When hedges or trees become overgrown beyond trimming, professional removal may be required.
+                </p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/tree-removal">Learn More</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Scissors className="h-6 w-6 text-primary" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3">
+                  <Link href="/stump-grinding" className="hover:text-primary transition-colors">
+                    Stump Grinding
+                  </Link>
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
+                  Remove old hedge stumps and roots for a clean finish when replanting or redesigning gardens.
+                </p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/stump-grinding">Learn More</Link>
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
