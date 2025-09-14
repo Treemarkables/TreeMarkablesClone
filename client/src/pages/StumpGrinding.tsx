@@ -299,30 +299,6 @@ export default function StumpGrinding() {
               </div>
             </div>
 
-            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-8">
-              <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0">
-                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
-                    <Leaf className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-foreground mb-3">
-                    Cleanup & Restoration
-                  </h3>
-                  <p className="text-muted-foreground leading-relaxed mb-4">
-                    We remove all wood chips (or leave them as mulch if preferred) 
-                    and level the area, ready for your next landscaping project.
-                  </p>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                    <span className="text-sm font-medium text-foreground">
-                      Site left clean and level
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-8">
               <div className="flex items-start space-x-4">
