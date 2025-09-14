@@ -2,7 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
 import SEO from "@/components/SEO";
-import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
+import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Calendar, Target, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -104,7 +104,7 @@ export default function HedgeTrimming() {
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title="Hedge Trimming Gisborne – Neat & Healthy Hedges"
+        title="Hedge Trimming Gisborne – Keep Your Hedges Healthy, Dense & Beautiful"
         description="Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote."
         keywords="hedge trimming Gisborne, neat hedges, year-round hedge care, coastal hedge trimming, hedge shaping, hedge maintenance, surrounding areas hedge care"
         ogTitle="Hedge Trimming Gisborne – Neat & Healthy Hedges"
@@ -126,8 +126,8 @@ export default function HedgeTrimming() {
               Hedge Trimming Gisborne
             </h1>
             <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto leading-relaxed" data-testid="text-hero-description">
-              Professional hedge trimming in Gisborne. We keep your hedges healthy, 
-              shaped, and looking their absolute best year-round.
+              Well-maintained hedges provide privacy, windbreaks and structure to your landscape, 
+              but Gisborne's coastal winds and fast-growing plants mean they can quickly become unruly.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" onClick={handleGetQuote} className="text-lg px-6" data-testid="button-get-quote">
@@ -156,12 +156,11 @@ export default function HedgeTrimming() {
             </h2>
             <div className="max-w-4xl mx-auto space-y-4 text-lg text-muted-foreground">
               <p>
-                At Treemarkables, we understand that hedges are the backbone of many Gisborne gardens. 
-                <span className="font-semibold text-foreground"> Regular, expert trimming keeps them healthy and beautiful</span>. Like our <a href="/tree-pruning" className="text-primary hover:text-primary/80 underline">tree pruning services</a>, we focus on plant health and longevity.
+                <span className="font-semibold text-foreground">Regular hedge trimming isn't just about aesthetics—it encourages healthy growth, prevents disease and helps define spaces</span> within your garden. Our team at Treemarkables specialises in shaping hedges for residential and rural properties across Gisborne, Wairoa and the East Coast.
               </p>
               <p>
-                From formal hedges that need precise shaping to informal hedges requiring natural styling, 
-                we tailor our approach to suit each hedge's variety and your property's needs.
+                From formal hedges that need precise shaping to natural windbreaks on coastal properties, 
+                we understand how <Link href="/tree-pruning" className="text-primary hover:text-primary/80 underline">expert pruning techniques</Link> create healthier, more resilient hedges.
               </p>
             </div>
           </div>
@@ -173,28 +172,28 @@ export default function HedgeTrimming() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-foreground mb-6">
-              When Your Hedges Need Professional Trimming
+              Why Regular Hedge Trimming Matters
             </h2>
             <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-              Regular maintenance keeps hedges healthy and attractive, but timing 
-              and technique make all the difference.
+              Professional hedge trimming provides multiple benefits for your property's 
+              privacy, protection, and aesthetic appeal in Gisborne's coastal environment.
             </p>
           </div>
           
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             <Card className="hover-elevate">
               <CardContent className="pt-6 pb-6">
                 <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
-                    <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <TreePine className="h-6 w-6 text-green-600 dark:text-green-400" />
                   </div>
                 </div>
                 <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
-                  Overgrown Hedges
+                  Dense, Healthy Growth
                 </h4>
                 <p className="text-muted-foreground text-sm leading-relaxed text-center">
-                  When hedges grow beyond their intended size, blocking views, 
-                  paths, or encroaching on neighboring properties.
+                  Trimming stimulates new shoots and results in thicker, more robust foliage. 
+                  Especially important for privacy hedges or windbreaks on exposed coastal properties.
                 </p>
               </CardContent>
             </Card>
@@ -202,16 +201,16 @@ export default function HedgeTrimming() {
             <Card className="hover-elevate">
               <CardContent className="pt-6 pb-6">
                 <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                    <Leaf className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                    <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
                   </div>
                 </div>
                 <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
-                  Health & Density
+                  Prevent Disease & Pests
                 </h4>
                 <p className="text-muted-foreground text-sm leading-relaxed text-center">
-                  Regular trimming promotes dense, healthy growth and prevents 
-                  hedges from becoming thin and straggly.
+                  Removing dead or diseased branches reduces infection risks and makes hedges less attractive to pests. 
+                  Healthy hedges resist Gisborne's humid summers and coastal salt spray.
                 </p>
               </CardContent>
             </Card>
@@ -220,18 +219,212 @@ export default function HedgeTrimming() {
               <CardContent className="pt-6 pb-6">
                 <div className="flex justify-center mb-4">
                   <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                    <Scissors className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    <Star className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                   </div>
                 </div>
                 <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
-                  Shape & Style
+                  Enhanced Aesthetic Appeal
                 </h4>
                 <p className="text-muted-foreground text-sm leading-relaxed text-center">
-                  Maintaining formal shapes, restoring hedge lines, or creating 
-                  new shapes to enhance your property's design.
+                  Well-defined, neatly trimmed hedges elevate your garden's appearance and boost curb appeal. 
+                  Makes your property more inviting and can increase its value.
                 </p>
               </CardContent>
             </Card>
+
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                    <MapPin className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
+                  Create Defined Spaces
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed text-center">
+                  Professionally trimmed hedges act as natural barriers, guiding garden flow and separating zones. 
+                  Ideal for large rural properties or formal landscapes.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center">
+                    <Heart className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
+                  Better Air & Light Flow
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed text-center">
+                  Trimming allows light and air to reach surrounding plants, promoting overall garden health. 
+                  Prevents overgrown hedges from blocking circulation.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
+                    <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
+                  Reduced Long-term Maintenance
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed text-center">
+                  Consistent trimming keeps hedges manageable and avoids the need for drastic cutting later. 
+                  Regular care prevents costly restoration work.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Our Approach to Hedge Trimming */}
+      <section className="py-20 bg-background">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-foreground mb-6">
+              Our Approach to Hedge Trimming
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+              We follow a systematic, species-specific approach to ensure your hedges 
+              receive the right care at the right time for optimal health and appearance.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Calendar className="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
+                  Tailored Pruning Schedule
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed text-center">
+                  We assess the species and growth rate of your hedges to determine trimming frequency. 
+                  Fast-growing pittosporums and griselinia may need trimming twice a year, while slower-growing evergreens need less frequent attention.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Target className="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
+                  Privacy & Wind Protection
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed text-center">
+                  Coastal properties benefit from dense hedges to buffer strong winds. 
+                  We trim to maintain thickness and height while ensuring a natural look that provides maximum protection.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Wrench className="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
+                  Complete Cleanup Service
+                </h4>
+                <p className="text-muted-foreground text-sm leading-relaxed text-center">
+                  Our team leaves your property tidy. We remove all clippings and can mulch them for use in your garden if desired. 
+                  No mess, no fuss – just beautifully maintained hedges.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* When to Trim */}
+      <section className="py-20 bg-muted/30">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-foreground mb-6">
+              When to Trim Your Hedges
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+              Proper timing is crucial for hedge health and ensures the best results from your trimming investment.
+            </p>
+          </div>
+          
+          <div className="bg-background rounded-lg p-8 shadow-sm">
+            <div className="space-y-8">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                  <Calendar className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground mb-2">Optimal Timing Schedule</h4>
+                  <p className="text-muted-foreground leading-relaxed mb-4">
+                    Most hedges can be trimmed in late spring and again in early autumn to maintain shape without stressing the plant. 
+                    This timing works perfectly with Gisborne's growing seasons and weather patterns.
+                  </p>
+                  <div className="bg-muted/50 rounded-lg p-4">
+                    <div className="grid md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-foreground">Spring Trim:</span>
+                        <p className="text-muted-foreground">September-November - Encourages dense new growth</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-foreground">Autumn Trim:</span>
+                        <p className="text-muted-foreground">March-May - Maintains shape before winter</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-pink-100 dark:bg-pink-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                  <Heart className="h-6 w-6 text-pink-600 dark:text-pink-400" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground mb-2">Flowering Hedges - Special Care</h4>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Flowering hedges should be trimmed after they bloom to avoid cutting off buds. 
+                    This preserves next season's flowers while maintaining hedge health and structure.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center mt-12">
+            <h3 className="text-xl font-semibold text-foreground mb-4">
+              Ready for Professional Hedge Care?
+            </h3>
+            <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
+              Whether your hedge needs a light tidy-up or a major reshape, Treemarkables has the tools and expertise 
+              to keep it looking its best. Contact us today for a free quote on hedge trimming in Gisborne and surrounding regions.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button size="lg" onClick={handleGetQuote} className="text-lg px-6" data-testid="button-quote-hedge-care">
+                Get Free Quote
+              </Button>
+              <Button size="lg" variant="outline" onClick={handleCallNow} className="text-lg px-6" data-testid="button-call-hedge-care">
+                <Phone className="w-4 w-4 mr-2" />
+                Call Today
+              </Button>
+            </div>
           </div>
         </div>
       </section>
