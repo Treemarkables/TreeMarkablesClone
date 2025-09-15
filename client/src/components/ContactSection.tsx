@@ -3,6 +3,13 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
+// Declare gtag for TypeScript
+declare global {
+  interface Window {
+    gtag?: (...args: any[]) => void;
+  }
+}
+
 interface ContactFormData {
   name: string;
   email: string;
@@ -82,6 +89,24 @@ export default function ContactSection() {
       const result = await response.json();
 
       if (response.ok && result.success) {
+        // Track successful form submission in Google Analytics
+        if (window.gtag) {
+          window.gtag('event', 'form_submit', {
+            'event_category': 'Lead Generation',
+            'event_label': 'Contact Form',
+            'value': 1
+          });
+          
+          // Track as conversion
+          window.gtag('event', 'conversion', {
+            'send_to': 'G-V7RHX2EL6B',
+            'event_category': 'Lead Generation',
+            'event_label': 'Quote Request'
+          });
+          
+          console.log('Google Analytics: Form submission tracked');
+        }
+        
         toast({
           title: "Quote Request Sent!",
           description: result.message,
