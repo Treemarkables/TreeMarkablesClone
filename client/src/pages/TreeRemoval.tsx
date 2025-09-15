@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import heroVideo from "@assets/copy_77E88CDC-C666-4B3C-B02C-5CE23818F128_1757799940776.mp4";
-import { useEffect } from "react";
 
 export default function TreeRemoval() {
   const handleGetQuote = () => {
@@ -17,30 +16,6 @@ export default function TreeRemoval() {
     window.location.href = 'tel:0272166882';
   };
 
-  // Google Analytics setup
-  useEffect(() => {
-    // Add Google Analytics script
-    const script1 = document.createElement('script');
-    script1.src = 'https://www.googletagmanager.com/gtag/js?id=G-V7RHX2EL6B';
-    script1.async = true;
-    document.head.appendChild(script1);
-
-    // Add gtag configuration
-    const script2 = document.createElement('script');
-    script2.innerHTML = `
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-V7RHX2EL6B');
-    `;
-    document.head.appendChild(script2);
-
-    return () => {
-      // Cleanup scripts on component unmount
-      document.head.removeChild(script1);
-      document.head.removeChild(script2);
-    };
-  }, []);
 
   // Local business structured data for SEO
   const structuredData = {
