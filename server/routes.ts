@@ -440,7 +440,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
-      const { name, email, phone, hearAbout, message } = req.body;
+      const { name, email, phone, hearAbout, message, captchaToken } = req.body;
 
       // Basic validation
       if (!name || !email || !message) {
@@ -449,6 +449,36 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           message: 'Name, email, and message are required.' 
         });
       }
+
+      // CAPTCHA validation
+      if (!captchaToken) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Please complete the CAPTCHA verification.' 
+        });
+      }
+
+      // Verify CAPTCHA with Google
+      const captchaVerifyUrl = `https://www.google.com/recaptcha/api/siteverify`;
+      const captchaResponse = await fetch(captchaVerifyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`
+      });
+
+      const captchaData = await captchaResponse.json();
+      
+      if (!captchaData.success) {
+        console.log('CAPTCHA verification failed:', captchaData);
+        return res.status(400).json({ 
+          success: false, 
+          message: 'CAPTCHA verification failed. Please try again.' 
+        });
+      }
+
+      console.log('CAPTCHA verification successful for contact form submission');
 
       // Email validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

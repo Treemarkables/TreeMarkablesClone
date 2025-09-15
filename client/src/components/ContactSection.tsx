@@ -1,7 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import ReCAPTCHA from "react-google-recaptcha";
 
 // Declare gtag for TypeScript
 declare global {
@@ -27,6 +28,8 @@ export default function ContactSection() {
     message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
   const { toast } = useToast();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -57,6 +60,10 @@ export default function ContactSection() {
     return null;
   };
 
+  const handleCaptchaChange = (token: string | null) => {
+    setCaptchaToken(token);
+  };
+
   const handleQuoteRequest = async () => {
     // Validate form
     const validationError = validateForm();
@@ -64,6 +71,16 @@ export default function ContactSection() {
       toast({
         title: "Validation Error",
         description: validationError,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate CAPTCHA
+    if (!captchaToken) {
+      toast({
+        title: "CAPTCHA Required",
+        description: "Please complete the CAPTCHA verification to prevent spam.",
         variant: "destructive",
       });
       return;
@@ -82,7 +99,8 @@ export default function ContactSection() {
           email: formData.email.trim(),
           phone: formData.phone.trim(),
           hearAbout: formData.hearAbout,
-          message: formData.message.trim()
+          message: formData.message.trim(),
+          captchaToken: captchaToken
         }),
       });
 
@@ -112,7 +130,7 @@ export default function ContactSection() {
           description: result.message,
         });
         
-        // Reset form
+        // Reset form and CAPTCHA
         setFormData({
           name: '',
           email: '',
@@ -120,6 +138,8 @@ export default function ContactSection() {
           hearAbout: '',
           message: ''
         });
+        setCaptchaToken(null);
+        recaptchaRef.current?.reset();
       } else {
         toast({
           title: "Error",
@@ -241,11 +261,23 @@ export default function ContactSection() {
                     required
                   />
                 </div>
+                
+                {/* reCAPTCHA */}
+                <div className="flex justify-center">
+                  <ReCAPTCHA
+                    ref={recaptchaRef}
+                    sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                    onChange={handleCaptchaChange}
+                    onExpired={() => setCaptchaToken(null)}
+                    data-testid="recaptcha-widget"
+                  />
+                </div>
+                
                 <Button
                   size="lg"
                   className="w-full"
                   onClick={handleQuoteRequest}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !captchaToken}
                   data-testid="button-submit-quote"
                 >
                   {isSubmitting ? 'Sending...' : 'Get Free Quote'}
