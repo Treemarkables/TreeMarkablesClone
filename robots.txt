@@ -17,6 +17,9 @@ Disallow: /admin/
 Disallow: /api/
 Disallow: /private/
 
+# Explicitly allow sitemap access (2025 Google Search Console fix)
+Allow: /sitemap.xml
+
 # XML Sitemap location for search engines
 Sitemap: https://www.treemarkables.co.nz/sitemap.xml
 
