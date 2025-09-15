@@ -4,6 +4,13 @@ import { useState } from "react";
 import { Link } from "wouter";
 import logoImage from "@assets/new logo png_1757829817784.png";
 
+// Declare gtag for TypeScript
+declare global {
+  interface Window {
+    gtag?: (...args: any[]) => void;
+  }
+}
+
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -17,6 +24,16 @@ export default function Header() {
 
   const handleGetQuote = () => {
     closeMenu();
+    
+    // Track quote button click
+    if (window.gtag) {
+      window.gtag('event', 'click', {
+        'event_category': 'Lead Generation',
+        'event_label': 'Get Quote Button - Header',
+        'value': 1
+      });
+    }
+    
     // Use requestAnimationFrame for better timing with DOM updates
     requestAnimationFrame(() => {
       const contactElement = document.getElementById('contact');
@@ -24,6 +41,36 @@ export default function Header() {
         contactElement.scrollIntoView({ behavior: 'smooth' });
       }
     });
+  };
+  
+  const handlePhoneClick = () => {
+    if (window.gtag) {
+      window.gtag('event', 'click', {
+        'event_category': 'Lead Generation',
+        'event_label': 'Phone Click - Header',
+        'value': 1
+      });
+    }
+  };
+  
+  const handleEmailClick = (e: React.MouseEvent) => {
+    // Prevent immediate navigation
+    e.preventDefault();
+    
+    if (window.gtag) {
+      window.gtag('event', 'click', {
+        'event_category': 'Lead Generation', 
+        'event_label': 'Email Click - Header',
+        'value': 1
+      });
+      
+      console.log('Google Analytics: Header email click tracked');
+    }
+    
+    // Small delay to allow analytics event to fire, then navigate
+    setTimeout(() => {
+      window.location.href = 'mailto:quotes@treemarkables.nz';
+    }, 100);
   };
 
   const navigationLinks = [
@@ -69,6 +116,7 @@ export default function Header() {
             {/* Phone Button - Always visible */}
             <a 
               href="tel:0272166882" 
+              onClick={handlePhoneClick}
               className="flex items-center space-x-1 text-xs sm:text-sm text-white bg-orange-500 px-2 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium shadow-sm hover:shadow-md whitespace-nowrap"
               data-testid="link-phone-header"
             >
@@ -80,6 +128,7 @@ export default function Header() {
             {/* Email Button - Always visible */}
             <a 
               href="mailto:quotes@treemarkables.nz" 
+              onClick={handleEmailClick}
               className="flex items-center space-x-1 text-xs sm:text-sm text-white bg-blue px-2 py-2 rounded-lg border border-blue hover:bg-blue/90 transition-all duration-200 font-medium shadow-sm hover:shadow-md whitespace-nowrap"
               data-testid="link-email-header"
             >

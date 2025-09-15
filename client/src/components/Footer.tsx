@@ -1,8 +1,45 @@
 import { Shield, Award, Clock } from "lucide-react";
 import { Link } from "wouter";
 
+// Declare gtag for TypeScript
+declare global {
+  interface Window {
+    gtag?: (...args: any[]) => void;
+  }
+}
+
 export default function Footer() {
   const currentYear = new Date().getFullYear();
+  
+  const handleFooterPhoneClick = () => {
+    if (window.gtag) {
+      window.gtag('event', 'click', {
+        'event_category': 'Lead Generation',
+        'event_label': 'Phone Click - Footer',
+        'value': 1
+      });
+    }
+  };
+  
+  const handleFooterEmailClick = (e: React.MouseEvent) => {
+    // Prevent immediate navigation
+    e.preventDefault();
+    
+    if (window.gtag) {
+      window.gtag('event', 'click', {
+        'event_category': 'Lead Generation',
+        'event_label': 'Email Click - Footer',
+        'value': 1
+      });
+      
+      console.log('Google Analytics: Footer email click tracked');
+    }
+    
+    // Small delay to allow analytics event to fire, then navigate
+    setTimeout(() => {
+      window.location.href = 'mailto:quotes@treemarkables.nz';
+    }, 100);
+  };
 
   return (
     <footer className="bg-black border-t border-gray-800 py-12">
@@ -71,6 +108,7 @@ export default function Footer() {
             <div className="space-y-2">
               <a 
                 href="mailto:quotes@treemarkables.nz" 
+                onClick={handleFooterEmailClick}
                 className="text-gray-300 text-sm hover:text-orange-400 transition-colors cursor-pointer" 
                 data-testid="link-footer-email"
               >
@@ -78,6 +116,7 @@ export default function Footer() {
               </a>
               <a 
                 href="tel:0272166882" 
+                onClick={handleFooterPhoneClick}
                 className="text-gray-300 text-sm hover:text-orange-400 transition-colors cursor-pointer" 
                 data-testid="link-footer-phone"
               >
