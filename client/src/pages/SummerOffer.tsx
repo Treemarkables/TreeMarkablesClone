@@ -93,8 +93,8 @@ export default function SummerOffer() {
             backgroundImage: `url(${heroBackground})`
           }}
         />
-        {/* Dark overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/50 to-black/60" />
+        {/* Light overlay for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/30 to-black/40" />
         
         <div className="max-w-6xl mx-auto px-6 text-center relative z-10">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium mb-6" data-testid="badge-offer-alert">
