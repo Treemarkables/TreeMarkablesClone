@@ -285,7 +285,7 @@ export default function ContactSection() {
                   size="lg"
                   className="w-full"
                   onClick={handleQuoteRequest}
-                  disabled={isSubmitting || !captchaToken}
+                  disabled={isSubmitting || (!captchaToken && !import.meta.env.DEV)}
                   data-testid="button-submit-quote"
                 >
                   {isSubmitting ? 'Sending...' : 'Get Free Quote'}
