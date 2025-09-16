@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import ContactSection from "@/components/ContactSection";
 import SEO from "@/components/SEO";
 import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors, Heart, TreePine, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -500,6 +501,9 @@ export default function TreeRemoval() {
           </div>
         </div>
       </section>
+
+      {/* Contact Section */}
+      <ContactSection />
 
       <Footer />
     </div>
