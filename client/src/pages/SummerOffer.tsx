@@ -90,7 +90,13 @@ export default function SummerOffer() {
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: `url(${heroBackground})`
+            backgroundImage: `url(${heroBackground})`,
+            imageRendering: 'crisp-edges' as any, // Cross-browser crisp rendering
+            transform: 'translateZ(0)', // Hardware acceleration
+            willChange: 'transform', // GPU optimization
+            backgroundSize: 'cover',
+            backgroundPosition: 'center center',
+            backgroundRepeat: 'no-repeat'
           }}
         />
         {/* Light overlay for text readability */}
