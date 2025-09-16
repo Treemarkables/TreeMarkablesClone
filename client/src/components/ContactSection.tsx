@@ -264,22 +264,31 @@ export default function ContactSection() {
                   />
                 </div>
                 
-                {/* reCAPTCHA */}
-                <div className="flex justify-center">
-                  {import.meta.env.VITE_RECAPTCHA_SITE_KEY ? (
-                    <ReCAPTCHA
-                      ref={recaptchaRef}
-                      sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-                      onChange={handleCaptchaChange}
-                      onExpired={() => setCaptchaToken(null)}
-                      data-testid="recaptcha-widget"
-                    />
-                  ) : (
-                    <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800" data-testid="captcha-error">
-                      ⚠️ CAPTCHA configuration missing. Please check environment variables.
-                    </div>
-                  )}
-                </div>
+                {/* reCAPTCHA - Hidden in development mode */}
+                {!import.meta.env.DEV && (
+                  <div className="flex justify-center">
+                    {import.meta.env.VITE_RECAPTCHA_SITE_KEY ? (
+                      <ReCAPTCHA
+                        ref={recaptchaRef}
+                        sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                        onChange={handleCaptchaChange}
+                        onExpired={() => setCaptchaToken(null)}
+                        data-testid="recaptcha-widget"
+                      />
+                    ) : (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800" data-testid="captcha-error">
+                        ⚠️ CAPTCHA configuration missing. Please check environment variables.
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Development mode notice */}
+                {import.meta.env.DEV && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-blue-800 text-sm text-center" data-testid="dev-notice">
+                    🔧 Development mode: CAPTCHA disabled for testing
+                  </div>
+                )}
                 
                 <Button
                   size="lg"
