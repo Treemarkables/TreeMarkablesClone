@@ -8,6 +8,7 @@ import { Check, Star, Users, Clock, Shield, Award, Phone, Mail, Target, Plus, Mi
 import { Link } from "wouter";
 import { useState } from "react";
 import heroBackground from "@assets/p-4dcb7482-d484-e155-ba2d0fc3232ca844-2544003-v3__FitWzkwMCw0NTBd_1758052397900.jpg";
+import teamPhoto from "@assets/team-photo.jpg";
 
 export default function SummerOffer() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
@@ -218,6 +219,115 @@ export default function SummerOffer() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Meet the Team Section */}
+      <section className="py-20 bg-background">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4" data-testid="text-team-title">
+              Meet Your Local Gisborne Team
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              The skilled arborists behind Treemarkables - born and raised in Gisborne, 
+              passionate about keeping our community's trees healthy and properties safe.
+            </p>
+          </div>
+          
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="order-2 lg:order-1">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-2xl font-bold text-foreground mb-4">Your Trusted Local Experts</h3>
+                  <p className="text-muted-foreground text-lg leading-relaxed mb-6">
+                    Every member of our team calls Gisborne home. We understand the unique challenges 
+                    of coastal weather, local tree species, and the specific needs of East Coast properties. 
+                    When you choose Treemarkables, you're not just hiring arborists - you're partnering 
+                    with neighbors who genuinely care about your property and our community.
+                  </p>
+                </div>
+                
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Shield className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-foreground mb-1">Fully Certified</h4>
+                      <p className="text-sm text-muted-foreground">Licensed arborists with comprehensive safety training and insurance</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Users className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-foreground mb-1">Community Focused</h4>
+                      <p className="text-sm text-muted-foreground">Local knowledge and genuine commitment to Gisborne properties</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Award className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-foreground mb-1">Proven Track Record</h4>
+                      <p className="text-sm text-muted-foreground">50% business growth this year through quality workmanship</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Clock className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-foreground mb-1">Reliable Service</h4>
+                      <p className="text-sm text-muted-foreground">On-time, professional service with complete cleanup included</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="order-1 lg:order-2">
+              <div className="relative">
+                <img 
+                  src={teamPhoto} 
+                  alt="Treemarkables team - local Gisborne arborists"
+                  className="w-full h-auto rounded-lg shadow-lg object-cover"
+                  data-testid="img-team-photo"
+                />
+                <div className="absolute inset-0 rounded-lg bg-gradient-to-t from-black/20 to-transparent"></div>
+                <div className="absolute bottom-4 left-4 right-4 text-white">
+                  <p className="text-sm font-medium bg-black/50 backdrop-blur-sm rounded px-3 py-2">
+                    The Treemarkables team ready to serve Gisborne and surrounding areas
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="text-center mt-12">
+            <p className="text-muted-foreground mb-6">
+              Ready to work with Gisborne's most trusted tree care professionals?
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button size="lg" className="text-lg px-8 py-6" asChild data-testid="button-team-cta">
+                <a href="#contact-form">
+                  Get Your Free Quote
+                </a>
+              </Button>
+              <Button variant="outline" size="lg" className="text-lg px-8 py-6" asChild data-testid="button-team-call">
+                <a href="tel:0272166882">
+                  <Phone className="w-5 h-5 mr-2" />
+                  Call the Team
+                </a>
+              </Button>
             </div>
           </div>
         </div>
