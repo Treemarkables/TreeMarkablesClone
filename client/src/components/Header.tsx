@@ -75,6 +75,7 @@ export default function Header() {
 
   const navigationLinks = [
     { href: "/tree-removal", label: "Tree Removal" },
+    { href: "/summer-offer", label: "Offer" },
     { href: "/tree-pruning", label: "Tree Pruning" },
     { href: "/stump-grinding", label: "Stump Grinding" },
     { href: "/hedge-trimming", label: "Hedge Trimming" },
