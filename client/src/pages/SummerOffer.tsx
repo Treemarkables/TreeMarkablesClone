@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Check, Star, Users, Clock, Shield, Award, Phone, Mail, Target, Plus, Minus } from "lucide-react";
 import { Link } from "wouter";
 import { useState } from "react";
+import heroBackground from "@assets/p-4dcb7482-d484-e155-ba2d0fc3232ca844-2544003-v3__FitWzkwMCw0NTBd_1758052397900.jpg";
 
 export default function SummerOffer() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
@@ -89,7 +90,7 @@ export default function SummerOffer() {
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: `url('/attached_assets/p-4dcb7482-d484-e155-ba2d0fc3232ca844-2544003-v3__FitWzkwMCw0NTBd_1758052397900.jpg')`
+            backgroundImage: `url(${heroBackground})`
           }}
         />
         {/* Dark overlay for text readability */}
