@@ -128,56 +128,6 @@ export default function SummerOffer() {
         </div>
       </section>
 
-      {/* Services Section */}
-      <section className="py-20 bg-background">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4" data-testid="text-services-title">
-              All Services Included in This Offer
-            </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              From emergency removals to routine maintenance - every tree care service qualifies for your chance to win!
-            </p>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8 mb-12">
-            {services.map((service, index) => (
-              <Card key={index} className="hover-elevate text-center">
-                <CardContent className="p-8">
-                  <div className="mb-4 flex justify-center">
-                    {service.icon}
-                  </div>
-                  <h3 className="text-xl font-semibold text-foreground mb-3" data-testid={`text-service-title-${index}`}>
-                    {service.title}
-                  </h3>
-                  <p className="text-muted-foreground" data-testid={`text-service-description-${index}`}>
-                    {service.description}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <div className="grid md:grid-cols-4 gap-6 text-center">
-            <div className="bg-primary/5 rounded-lg p-6" data-testid="card-stat-1">
-              <div className="text-2xl font-bold text-primary mb-2">7+</div>
-              <div className="text-sm text-muted-foreground">Years Experience</div>
-            </div>
-            <div className="bg-primary/5 rounded-lg p-6" data-testid="card-stat-2">
-              <div className="text-2xl font-bold text-primary mb-2">500+</div>
-              <div className="text-sm text-muted-foreground">Trees Removed</div>
-            </div>
-            <div className="bg-primary/5 rounded-lg p-6" data-testid="card-stat-3">
-              <div className="text-2xl font-bold text-primary mb-2">50%</div>
-              <div className="text-sm text-muted-foreground">Growth This Year</div>
-            </div>
-            <div className="bg-primary/5 rounded-lg p-6" data-testid="card-stat-4">
-              <div className="text-2xl font-bold text-primary mb-2">1:90</div>
-              <div className="text-sm text-muted-foreground">Winning Odds</div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Why Choose Us */}
       <section className="py-20 bg-muted/30">
