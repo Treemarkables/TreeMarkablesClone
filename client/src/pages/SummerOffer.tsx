@@ -104,9 +104,9 @@ export default function SummerOffer() {
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <Button size="lg" className="text-lg px-8 py-6" asChild data-testid="button-primary-cta">
-              <Link href="#contact-form">
+              <a href="#contact-form">
                 Book Now & Enter to Win
-              </Link>
+              </a>
             </Button>
             <Button variant="outline" size="lg" className="text-lg px-8 py-6" asChild data-testid="button-secondary-cta">
               <a href="tel:0272166882">
@@ -269,9 +269,9 @@ export default function SummerOffer() {
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
             <Button size="lg" className="text-lg px-8 py-6" asChild data-testid="button-final-cta">
-              <Link href="#contact-form">
+              <a href="#contact-form">
                 Get Your Free Quote Now
-              </Link>
+              </a>
             </Button>
             <Button variant="outline" size="lg" className="text-lg px-8 py-6" asChild data-testid="button-final-call">
               <a href="tel:0272166882">
