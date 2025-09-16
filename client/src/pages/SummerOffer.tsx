@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import ContactSection from "@/components/ContactSection";
 import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -103,7 +104,7 @@ export default function SummerOffer() {
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <Button size="lg" className="text-lg px-8 py-6" asChild data-testid="button-primary-cta">
-              <Link href="/#contact">
+              <Link href="#contact-form">
                 Book Now & Enter to Win
               </Link>
             </Button>
@@ -301,6 +302,11 @@ export default function SummerOffer() {
         </div>
       </section>
 
+      {/* Contact Form Section */}
+      <section id="contact-form" className="py-20 bg-background">
+        <ContactSection />
+      </section>
+
       {/* Final CTA Section */}
       <section className="py-20 bg-gradient-to-br from-primary/10 to-green-600/10">
         <div className="max-w-4xl mx-auto px-6 text-center">
@@ -313,7 +319,7 @@ export default function SummerOffer() {
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
             <Button size="lg" className="text-lg px-8 py-6" asChild data-testid="button-final-cta">
-              <Link href="/#contact">
+              <Link href="#contact-form">
                 Get Your Free Quote Now
               </Link>
             </Button>
