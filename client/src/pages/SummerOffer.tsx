@@ -26,7 +26,7 @@ export default function SummerOffer() {
     },
     {
       question: "What services are included?",
-      answer: "All our tree care services qualify: tree removal, pruning, stump grinding, emergency tree services, and property clearance. Any job over $200 automatically enters."
+      answer: "All our tree care services qualify: tree removal, pruning, stump grinding, emergency tree services, and property clearance. Every job automatically enters."
     },
     {
       question: "When will the winner be announced?",
@@ -34,7 +34,7 @@ export default function SummerOffer() {
     },
     {
       question: "Is there a minimum job value?",
-      answer: "Yes, jobs must be at least $200 to qualify for the draw. This ensures fairness and covers our standard service threshold."
+      answer: "No minimum job value required. All tree care services automatically qualify for the draw."
     }
   ];
 
@@ -121,7 +121,7 @@ export default function SummerOffer() {
               <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">How It Works:</h3>
             </div>
             <p className="text-green-700 dark:text-green-400">
-              Any job over $200 booked between now and December 31st automatically enters you. 
+              Any job booked between now and December 31st automatically enters you. 
               Winner drawn January 5th, 2026. No hidden terms - just our way of celebrating summer with you!
             </p>
           </div>
@@ -343,7 +343,7 @@ export default function SummerOffer() {
           </div>
           
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl mx-auto">
-            Terms: Minimum job value $200. One entry per customer. Winner drawn January 5th, 2026. 
+            Terms: One entry per customer. Winner drawn January 5th, 2026. 
             $1000 rebate applied to winning customer's invoice. Local Gisborne area only.
           </p>
         </div>
