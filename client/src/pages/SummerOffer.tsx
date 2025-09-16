@@ -284,7 +284,7 @@ export default function SummerOffer() {
           <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4" />
-              <span>info@treemarkables.co.nz</span>
+              <span>quotes@treemarkables.nz</span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
