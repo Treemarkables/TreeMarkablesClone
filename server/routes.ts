@@ -450,9 +450,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      // CAPTCHA validation (bypass in development or if disabled)
-      const isDevelopment = process.env.NODE_ENV !== 'production';
-      const requireCaptcha = process.env.REQUIRE_CAPTCHA !== '0' && !isDevelopment;
+      // CAPTCHA validation (always required now)
+      const requireCaptcha = process.env.REQUIRE_CAPTCHA !== '0';
       
       if (requireCaptcha) {
         if (!captchaToken) {
@@ -484,7 +483,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         
         console.log('CAPTCHA verification successful for contact form submission');
       } else {
-        console.log(`CAPTCHA bypassed - ${isDevelopment ? 'development mode' : 'manually disabled'}`);
+        console.log('CAPTCHA bypassed - manually disabled via REQUIRE_CAPTCHA=0');
       }
 
       // Email validation
