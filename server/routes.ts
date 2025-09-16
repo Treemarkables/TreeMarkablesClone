@@ -450,35 +450,42 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      // CAPTCHA validation
-      if (!captchaToken) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Please complete the CAPTCHA verification.' 
-        });
-      }
-
-      // Verify CAPTCHA with Google
-      const captchaVerifyUrl = `https://www.google.com/recaptcha/api/siteverify`;
-      const captchaResponse = await fetch(captchaVerifyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`
-      });
-
-      const captchaData = await captchaResponse.json();
+      // CAPTCHA validation (bypass in development or if disabled)
+      const isDevelopment = process.env.NODE_ENV !== 'production';
+      const requireCaptcha = process.env.REQUIRE_CAPTCHA !== '0' && !isDevelopment;
       
-      if (!captchaData.success) {
-        console.log('CAPTCHA verification failed:', captchaData);
-        return res.status(400).json({ 
-          success: false, 
-          message: 'CAPTCHA verification failed. Please try again.' 
-        });
-      }
+      if (requireCaptcha) {
+        if (!captchaToken) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Please complete the CAPTCHA verification.' 
+          });
+        }
 
-      console.log('CAPTCHA verification successful for contact form submission');
+        // Verify CAPTCHA with Google
+        const captchaVerifyUrl = `https://www.google.com/recaptcha/api/siteverify`;
+        const captchaResponse = await fetch(captchaVerifyUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`
+        });
+
+        const captchaData = await captchaResponse.json();
+        
+        if (!captchaData.success) {
+          console.log('CAPTCHA verification failed:', captchaData);
+          return res.status(400).json({ 
+            success: false, 
+            message: 'CAPTCHA verification failed. Please try again.' 
+          });
+        }
+        
+        console.log('CAPTCHA verification successful for contact form submission');
+      } else {
+        console.log(`CAPTCHA bypassed - ${isDevelopment ? 'development mode' : 'manually disabled'}`);
+      }
 
       // Email validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

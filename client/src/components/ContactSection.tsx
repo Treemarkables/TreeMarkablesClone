@@ -76,8 +76,10 @@ export default function ContactSection() {
       return;
     }
 
-    // Validate CAPTCHA
-    if (!captchaToken) {
+    // Validate CAPTCHA (bypass in development or if explicitly bypassed)
+    const isDevelopment = import.meta.env.DEV;
+    const bypassCaptcha = import.meta.env.VITE_BYPASS_RECAPTCHA === '1' || isDevelopment;
+    if (!captchaToken && !bypassCaptcha) {
       toast({
         title: "CAPTCHA Required",
         description: "Please complete the CAPTCHA verification to prevent spam.",
