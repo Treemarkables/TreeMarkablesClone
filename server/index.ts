@@ -1,10 +1,107 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, log } from "./vite";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from 'url';
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Runtime static file serving with path resolution
+function resolveAndServeStatic(app: express.Express) {
+  log("Starting runtime static file path resolution...", "static");
+  
+  // Node-safe dirname resolution  
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  
+  // Check for explicit override via environment variable
+  const staticDirOverride = process.env.STATIC_DIR;
+  if (staticDirOverride) {
+    log(`Using STATIC_DIR override: ${staticDirOverride}`, "static");
+    const indexPath = path.join(staticDirOverride, "index.html");
+    if (fs.existsSync(indexPath)) {
+      log(`Verified index.html exists at override path: ${indexPath}`, "static");
+      setupStaticServing(app, staticDirOverride);
+      return;
+    } else {
+      log(`STATIC_DIR override path missing index.html: ${indexPath}`, "error");
+      throw new Error(`STATIC_DIR override path is invalid: missing index.html at ${indexPath}`);
+    }
+  }
+
+  // Try candidate paths in order of preference - BUILD OUTPUT FIRST
+  const candidates = [
+    path.resolve(process.cwd(), "dist/public"), // Build output directory (PRIORITY)
+    path.resolve(__dirname, "..", "public"), // Project root/public  
+    path.resolve(process.cwd(), "public"), // Fallback root public
+    path.resolve(process.cwd(), "server/public"), // Alternative server location
+    path.resolve(__dirname, "public"), // Current server/public (legacy fallback)
+  ];
+
+  log(`Testing ${candidates.length} candidate paths for static files:`, "static");
+  
+  for (let i = 0; i < candidates.length; i++) {
+    const candidatePath = candidates[i];
+    const indexPath = path.join(candidatePath, "index.html");
+    const exists = fs.existsSync(indexPath);
+    
+    log(`  ${i + 1}. ${candidatePath} - ${exists ? 'FOUND' : 'NOT FOUND'}`, "static");
+    
+    if (exists) {
+      log(`Selected static directory: ${candidatePath}`, "static");
+      log(`Verified index.html at: ${indexPath}`, "static");
+      setupStaticServing(app, candidatePath);
+      return;
+    }
+  }
+
+  // If no candidates worked, provide detailed error information
+  log(`Failed to find static files in any candidate path`, "error");
+  log(`Current working directory: ${process.cwd()}`, "error");
+  log(`Server dirname: ${__dirname}`, "error");
+  
+  const allPaths = candidates.map((p, i) => `  ${i + 1}. ${p}`).join('\n');
+  throw new Error(
+    `Could not find static files with index.html in any of these locations:\n${allPaths}\n\nMake sure to build the client first with 'npm run build'`
+  );
+}
+
+function setupStaticServing(app: express.Express, staticPath: string) {
+  log(`Setting up Express static serving for: ${staticPath}`, "static");
+  
+  // Serve static files with proper options
+  app.use(express.static(staticPath, {
+    fallthrough: true,
+    redirect: false,
+    index: false, // We handle index.html separately for better error handling
+  }));
+
+  // Handle SPA routing - serve index.html for all non-API routes
+  app.use("*", (req, res, next) => {
+    // Skip API routes - let them return 404 naturally
+    if (req.originalUrl.startsWith('/api')) {
+      return next();
+    }
+    
+    const indexPath = path.join(staticPath, "index.html");
+    
+    log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
+    
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        log(`Error serving index.html: ${err.message}`, "error");
+        res.status(500).json({ 
+          error: "Failed to serve application", 
+          details: err.message 
+        });
+      }
+    });
+  });
+  
+  log(`Static file serving setup completed successfully`, "static");
+}
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -94,7 +191,7 @@ process.on('unhandledRejection', (reason, promise) => {
     } else {
       try {
         log("Setting up static file serving for production...", "startup");
-        serveStatic(app);
+        resolveAndServeStatic(app);
         log("Static file serving setup complete", "startup");
       } catch (error) {
         const err = error as Error;
