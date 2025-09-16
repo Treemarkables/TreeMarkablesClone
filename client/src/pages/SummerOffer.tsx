@@ -108,8 +108,8 @@ export default function SummerOffer() {
               </Link>
             </Button>
             <Button variant="outline" size="lg" className="text-lg px-8 py-6" asChild data-testid="button-secondary-cta">
-              <a href="tel:027-123-4567">
-                Call (027) 123-4567
+              <a href="tel:0272166882">
+                Call (027) 216-6882
               </a>
             </Button>
           </div>
@@ -318,9 +318,9 @@ export default function SummerOffer() {
               </Link>
             </Button>
             <Button variant="outline" size="lg" className="text-lg px-8 py-6" asChild data-testid="button-final-call">
-              <a href="tel:027-123-4567">
+              <a href="tel:0272166882">
                 <Phone className="w-5 h-5 mr-2" />
-                Call (027) 123-4567
+                Call (027) 216-6882
               </a>
             </Button>
           </div>
