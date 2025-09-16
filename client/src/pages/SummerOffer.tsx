@@ -126,7 +126,7 @@ export default function SummerOffer() {
                 Book Now & Enter to Win
               </a>
             </Button>
-            <Button variant="outline" size="lg" className="text-lg px-8 py-6" asChild data-testid="button-secondary-cta">
+            <Button size="lg" className="text-lg px-8 py-6 bg-white text-black border-2 border-white hover:bg-gray-100" asChild data-testid="button-secondary-cta">
               <a href="tel:0272166882">
                 Call (027) 216-6882
               </a>
