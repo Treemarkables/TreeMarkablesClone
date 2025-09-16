@@ -92,7 +92,7 @@ export default function SummerOffer() {
           </div>
           
           <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6" data-testid="text-hero-title">
-            Kickstart Your Summer:<br />
+            Road to Summer:<br />
             <span className="text-primary">Win Up to $1000 Back</span><br />
             on Your Tree Care!
           </h1>
