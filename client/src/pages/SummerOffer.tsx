@@ -84,20 +84,30 @@ export default function SummerOffer() {
       <Header />
       
       {/* Hero Section */}
-      <section className="pt-32 pb-20 bg-gradient-to-br from-primary/20 to-green-600/20 relative overflow-hidden">
+      <section className="pt-32 pb-20 relative overflow-hidden">
+        {/* Background Image */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: `url('/attached_assets/p-4dcb7482-d484-e155-ba2d0fc3232ca844-2544003-v3__FitWzkwMCw0NTBd_1758052397900.jpg')`
+          }}
+        />
+        {/* Dark overlay for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/50 to-black/60" />
+        
         <div className="max-w-6xl mx-auto px-6 text-center relative z-10">
-          <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6" data-testid="badge-offer-alert">
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium mb-6" data-testid="badge-offer-alert">
             <Star className="w-4 h-4" />
             Limited Time Summer Offer
           </div>
           
-          <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6" data-testid="text-hero-title">
+          <h1 className="text-4xl md:text-6xl font-bold text-white mb-6" data-testid="text-hero-title">
             Road to Summer:<br />
-            <span className="text-primary">Win Up to $1000 Back</span><br />
+            <span className="text-yellow-400">Win Up to $1000 Back</span><br />
             on Your Tree Care!
           </h1>
           
-          <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto" data-testid="text-hero-subtitle">
+          <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto" data-testid="text-hero-subtitle">
             Book any tree care service before November 30th and stand a <strong>1-in-90 chance</strong> to win up to $1000 off your job. 
             Our way of saying thanks to our amazing Gisborne community!
           </p>
@@ -115,12 +125,12 @@ export default function SummerOffer() {
             </Button>
           </div>
           
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6 max-w-2xl mx-auto" data-testid="card-offer-details">
+          <div className="bg-white/15 backdrop-blur-sm border border-white/20 rounded-lg p-6 max-w-2xl mx-auto" data-testid="card-offer-details">
             <div className="flex items-center gap-2 mb-2">
-              <Target className="w-5 h-5 text-green-800 dark:text-green-300" />
-              <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">How It Works:</h3>
+              <Target className="w-5 h-5 text-yellow-400" />
+              <h3 className="text-lg font-semibold text-white">How It Works:</h3>
             </div>
-            <p className="text-green-700 dark:text-green-400">
+            <p className="text-white/90">
               Any job booked between September 1st and November 30th automatically enters you. 
               Winner drawn December 5th, 2025. No hidden terms - just our way of celebrating summer with you!
             </p>
