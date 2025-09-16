@@ -3,7 +3,7 @@ import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Check, Star, Users, Clock, Shield, Award, Phone, Mail } from "lucide-react";
+import { Check, Star, Users, Clock, Shield, Award, Phone, Mail, Target, Plus, Minus } from "lucide-react";
 import { Link } from "wouter";
 import { useState } from "react";
 
@@ -115,7 +115,10 @@ export default function SummerOffer() {
           </div>
           
           <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6 max-w-2xl mx-auto" data-testid="card-offer-details">
-            <h3 className="text-lg font-semibold text-green-800 dark:text-green-300 mb-2">🎯 How It Works:</h3>
+            <div className="flex items-center gap-2 mb-2">
+              <Target className="w-5 h-5 text-green-800 dark:text-green-300" />
+              <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">How It Works:</h3>
+            </div>
             <p className="text-green-700 dark:text-green-400">
               Any job over $200 booked between now and December 31st automatically enters you. 
               Winner drawn January 5th, 2026. No hidden terms - just our way of celebrating summer with you!
@@ -276,8 +279,12 @@ export default function SummerOffer() {
                     <h3 className="text-lg font-semibold text-foreground pr-4">
                       {faq.question}
                     </h3>
-                    <div className={`transform transition-transform ${expandedFaq === index ? 'rotate-45' : ''}`}>
-                      ✕
+                    <div className={`transform transition-transform ${expandedFaq === index ? 'rotate-180' : ''}`}>
+                      {expandedFaq === index ? (
+                        <Minus className="w-5 h-5" />
+                      ) : (
+                        <Plus className="w-5 h-5" />
+                      )}
                     </div>
                   </button>
                   {expandedFaq === index && (
