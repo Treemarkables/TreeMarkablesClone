@@ -65,13 +65,6 @@ export default function ContactSection() {
   };
 
   const handleQuoteRequest = async () => {
-    // Debug logging
-    console.log('Form submission attempt:', {
-      captchaToken: captchaToken,
-      siteKey: import.meta.env.VITE_RECAPTCHA_SITE_KEY,
-      formData: formData
-    });
-
     // Validate form
     const validationError = validateForm();
     if (validationError) {
@@ -83,14 +76,13 @@ export default function ContactSection() {
       return;
     }
 
-    // CRITICAL: Always require CAPTCHA
-    if (!captchaToken || !import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+    // Validate CAPTCHA
+    if (!captchaToken) {
       toast({
         title: "CAPTCHA Required",
         description: "Please complete the CAPTCHA verification to prevent spam.",
         variant: "destructive",
       });
-      console.error('CAPTCHA validation failed:', { captchaToken, siteKey: import.meta.env.VITE_RECAPTCHA_SITE_KEY });
       return;
     }
 
