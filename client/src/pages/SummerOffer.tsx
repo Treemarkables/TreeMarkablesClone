@@ -18,7 +18,7 @@ export default function SummerOffer() {
   const faqs = [
     {
       question: "How does the $1000 offer work?",
-      answer: "Any job booked between October 1st and December 31st, 2025 automatically enters you to win. We'll draw one lucky winner on January 5th, 2026 for a $1000 rebate on their tree care service."
+      answer: "Any job booked between September 1st and November 30th, 2025 automatically enters you to win. We'll draw one lucky winner on December 5th, 2025 for a $1000 rebate on their tree care service."
     },
     {
       question: "What are the odds of winning?",
@@ -30,7 +30,7 @@ export default function SummerOffer() {
     },
     {
       question: "When will the winner be announced?",
-      answer: "The winner will be drawn and announced on January 5th, 2026. We'll contact the winner directly and announce it on our Facebook page and website."
+      answer: "The winner will be drawn and announced on December 5th, 2025. We'll contact the winner directly and announce it on our Facebook page and website."
     },
     {
       question: "Is there a minimum job value?",
@@ -98,7 +98,7 @@ export default function SummerOffer() {
           </h1>
           
           <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto" data-testid="text-hero-subtitle">
-            Book any tree care service before December 31st and stand a <strong>1-in-90 chance</strong> to win $1000 off your job. 
+            Book any tree care service before November 30th and stand a <strong>1-in-90 chance</strong> to win $1000 off your job. 
             Our way of saying thanks to our amazing Gisborne community!
           </p>
           
@@ -121,8 +121,8 @@ export default function SummerOffer() {
               <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">How It Works:</h3>
             </div>
             <p className="text-green-700 dark:text-green-400">
-              Any job booked between now and December 31st automatically enters you. 
-              Winner drawn January 5th, 2026. No hidden terms - just our way of celebrating summer with you!
+              Any job booked between September 1st and November 30th automatically enters you. 
+              Winner drawn December 5th, 2025. No hidden terms - just our way of celebrating summer with you!
             </p>
           </div>
         </div>
@@ -314,7 +314,7 @@ export default function SummerOffer() {
             Ready to Win $1000 Back?
           </h2>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Don't wait - this offer ends December 31st! Book your tree care service today and automatically enter to win.
+            Don't wait - this offer ends November 30th! Book your tree care service today and automatically enter to win.
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
@@ -338,12 +338,12 @@ export default function SummerOffer() {
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
-              <span>Offer ends Dec 31st</span>
+              <span>Offer ends Nov 30th</span>
             </div>
           </div>
           
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl mx-auto">
-            Terms: One entry per customer. Winner drawn January 5th, 2026. 
+            Terms: One entry per customer. Winner drawn December 5th, 2025. 
             $1000 rebate applied to winning customer's invoice. Local Gisborne area only.
           </p>
         </div>
