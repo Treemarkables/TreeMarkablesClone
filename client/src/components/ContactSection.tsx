@@ -264,13 +264,19 @@ export default function ContactSection() {
                 
                 {/* reCAPTCHA */}
                 <div className="flex justify-center">
-                  <ReCAPTCHA
-                    ref={recaptchaRef}
-                    sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-                    onChange={handleCaptchaChange}
-                    onExpired={() => setCaptchaToken(null)}
-                    data-testid="recaptcha-widget"
-                  />
+                  {import.meta.env.VITE_RECAPTCHA_SITE_KEY ? (
+                    <ReCAPTCHA
+                      ref={recaptchaRef}
+                      sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                      onChange={handleCaptchaChange}
+                      onExpired={() => setCaptchaToken(null)}
+                      data-testid="recaptcha-widget"
+                    />
+                  ) : (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800" data-testid="captcha-error">
+                      ⚠️ CAPTCHA configuration missing. Please check environment variables.
+                    </div>
+                  )}
                 </div>
                 
                 <Button
