@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
@@ -6,11 +7,31 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Check, Star, Users, Clock, Shield, Award, Phone, Mail, Target, Plus, Minus } from "lucide-react";
 import { Link } from "wouter";
-import { useState } from "react";
 import heroBackground from "@assets/p-4dcb7482-d484-e155-ba2d0fc3232ca844-2544003-v3__FitWzkwMCw0NTBd_1758052397900.jpg";
 import teamPhoto from "@assets/team-photo.jpg";
 
 export default function SummerOffer() {
+  // Add Google tag event script for form submission tracking
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.innerHTML = `
+      gtag('event', 'Formsubmission', {
+        // <event_parameters>
+      });
+    `;
+    document.head.appendChild(script);
+    
+    return () => {
+      // Cleanup on unmount
+      const scripts = document.head.querySelectorAll('script');
+      scripts.forEach(s => {
+        if (s.innerHTML.includes('Formsubmission')) {
+          document.head.removeChild(s);
+        }
+      });
+    };
+  }, []);
+
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
