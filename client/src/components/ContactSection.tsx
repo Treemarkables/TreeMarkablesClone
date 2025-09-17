@@ -1,8 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import ReCAPTCHA from "react-google-recaptcha";
+import { type LeadSource } from "@shared/schema";
 
 // Declare gtag for TypeScript
 declare global {
@@ -29,8 +30,84 @@ export default function ContactSection() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [leadSource, setLeadSource] = useState<LeadSource | null>(null);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const { toast } = useToast();
+
+  // Capture lead source data on component mount
+  useEffect(() => {
+    const captureLeadSource = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      
+      const currentSource: LeadSource = {
+        pagePath: window.location.pathname,
+        pageUrl: window.location.href,
+        referrer: document.referrer || undefined,
+        utmSource: urlParams.get('utm_source') || undefined,
+        utmMedium: urlParams.get('utm_medium') || undefined,
+        utmCampaign: urlParams.get('utm_campaign') || undefined,
+        utmTerm: urlParams.get('utm_term') || undefined,
+        utmContent: urlParams.get('utm_content') || undefined,
+        gclid: urlParams.get('gclid') || undefined,
+      };
+
+      // Try to get GA client ID if available
+      if (window.gtag) {
+        try {
+          window.gtag('get', 'G-V7RHX2EL6B', 'client_id', (clientId: string) => {
+            if (clientId) {
+              currentSource.gaClientId = clientId;
+            }
+          });
+        } catch (error) {
+          console.log('Could not capture GA client ID:', error);
+        }
+      }
+
+      // Handle first-touch attribution
+      const firstTouchKey = 'tm_first_touch';
+      const existingFirstTouch = localStorage.getItem(firstTouchKey);
+      
+      if (!existingFirstTouch) {
+        // This is the first visit - store first-touch data
+        const firstTouchData = {
+          pagePath: currentSource.pagePath,
+          pageUrl: currentSource.pageUrl,
+          referrer: currentSource.referrer,
+          utmSource: currentSource.utmSource,
+          utmMedium: currentSource.utmMedium,
+          utmCampaign: currentSource.utmCampaign,
+          timestamp: new Date().toISOString()
+        };
+        localStorage.setItem(firstTouchKey, JSON.stringify(firstTouchData));
+        
+        // Set first-touch fields to current values
+        currentSource.firstTouchPagePath = currentSource.pagePath;
+        currentSource.firstTouchPageUrl = currentSource.pageUrl;
+        currentSource.firstTouchReferrer = currentSource.referrer;
+        currentSource.firstTouchUtmSource = currentSource.utmSource;
+        currentSource.firstTouchUtmMedium = currentSource.utmMedium;
+        currentSource.firstTouchUtmCampaign = currentSource.utmCampaign;
+      } else {
+        // Parse existing first-touch data
+        try {
+          const firstTouchData = JSON.parse(existingFirstTouch);
+          currentSource.firstTouchPagePath = firstTouchData.pagePath;
+          currentSource.firstTouchPageUrl = firstTouchData.pageUrl;
+          currentSource.firstTouchReferrer = firstTouchData.referrer;
+          currentSource.firstTouchUtmSource = firstTouchData.utmSource;
+          currentSource.firstTouchUtmMedium = firstTouchData.utmMedium;
+          currentSource.firstTouchUtmCampaign = firstTouchData.utmCampaign;
+        } catch (error) {
+          console.log('Error parsing first-touch data:', error);
+        }
+      }
+
+      setLeadSource(currentSource);
+    };
+
+    captureLeadSource();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -92,7 +169,8 @@ export default function ContactSection() {
           phone: formData.phone.trim(),
           hearAbout: formData.hearAbout,
           message: formData.message.trim(),
-          captchaToken: captchaToken
+          captchaToken: captchaToken,
+          leadSource: leadSource
         }),
       });
 
@@ -100,21 +178,32 @@ export default function ContactSection() {
 
       if (response.ok && result.success) {
         // Track successful form submission in Google Analytics
-        if (window.gtag) {
-          window.gtag('event', 'form_submit', {
+        if (window.gtag && leadSource) {
+          const gaEventParams = {
             'event_category': 'Lead Generation',
             'event_label': 'Contact Form',
-            'value': 1
-          });
+            'value': 1,
+            'page_location': leadSource.pageUrl,
+            'page_path': leadSource.pagePath,
+            'page_referrer': leadSource.referrer,
+            'utm_source': leadSource.utmSource,
+            'utm_medium': leadSource.utmMedium,
+            'utm_campaign': leadSource.utmCampaign,
+            'utm_term': leadSource.utmTerm,
+            'utm_content': leadSource.utmContent,
+            'gclid': leadSource.gclid
+          };
+
+          window.gtag('event', 'form_submit', gaEventParams);
           
-          // Track as conversion
+          // Track as conversion with enhanced data
           window.gtag('event', 'conversion', {
             'send_to': 'G-V7RHX2EL6B',
-            'event_category': 'Lead Generation',
+            ...gaEventParams,
             'event_label': 'Quote Request'
           });
           
-          console.log('Google Analytics: Form submission tracked');
+          console.log('Google Analytics: Enhanced form submission tracked with lead source:', leadSource.pagePath);
         }
         
         toast({

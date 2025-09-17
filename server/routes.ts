@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { sendContactEmail } from "./email";
+import { leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource } from "@shared/schema";
 import path from "path";
 import fs from "fs";
 
@@ -440,15 +441,34 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
-      const { name, email, phone, hearAbout, message, captchaToken } = req.body;
+      const { name, email, phone, hearAbout, message, captchaToken, leadSource } = req.body;
 
-      // Basic validation
-      if (!name || !email || !message) {
+      // Validate contact form data
+      const contactValidation = contactFormSchema.safeParse({
+        name, email, phone, hearAbout, message
+      });
+
+      if (!contactValidation.success) {
         return res.status(400).json({ 
           success: false, 
-          message: 'Name, email, and message are required.' 
+          message: 'Please provide valid contact information.' 
         });
       }
+
+      // Validate lead source data if provided
+      let validatedLeadSource: LeadSource | undefined = undefined;
+      if (leadSource) {
+        const leadSourceValidation = leadSourceSchema.safeParse(leadSource);
+        if (leadSourceValidation.success) {
+          validatedLeadSource = leadSourceValidation.data;
+        } else {
+          console.log('Invalid lead source data received:', leadSourceValidation.error);
+        }
+      }
+
+      // Capture server-side data
+      const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+      const userAgent = req.get('User-Agent') || 'unknown';
 
       // CAPTCHA validation (always required now)
       const requireCaptcha = process.env.REQUIRE_CAPTCHA !== '0';
@@ -495,14 +515,32 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      // Send email
-      const emailSent = await sendContactEmail({
+      // Prepare lead submission data
+      const leadSubmissionData: InsertLeadSubmission = {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone: phone?.trim(),
         hearAbout,
-        message: message.trim()
-      });
+        message: message.trim(),
+        leadSource: validatedLeadSource,
+        ip: clientIp,
+        userAgent
+      };
+
+      // Save lead information (even if email fails)
+      try {
+        await storage.saveLead(leadSubmissionData);
+        console.log('Lead information saved successfully');
+      } catch (error) {
+        console.error('Error saving lead information:', error);
+        // Continue with email sending even if lead saving fails
+      }
+
+      // Send email with lead source information
+      const emailSent = await sendContactEmail(
+        contactValidation.data,
+        validatedLeadSource
+      );
 
       if (emailSent) {
         res.json({ 
@@ -521,6 +559,80 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({ 
         success: false, 
         message: 'Sorry, there was an error processing your request. Please try again.' 
+      });
+    }
+  });
+
+  // Lead reporting endpoints
+  app.get('/api/leads/by-page', async (req: Request, res: Response) => {
+    try {
+      const leadsByPage = await storage.getLeadsByPagePath();
+      res.json({
+        success: true,
+        data: leadsByPage,
+        message: `Retrieved ${leadsByPage.length} page sources`
+      });
+    } catch (error) {
+      console.error('Error retrieving leads by page:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving lead statistics'
+      });
+    }
+  });
+
+  app.get('/api/leads', async (req: Request, res: Response) => {
+    try {
+      const { from, to } = req.query;
+      
+      let fromDate: Date | undefined;
+      let toDate: Date | undefined;
+      
+      if (from && typeof from === 'string') {
+        fromDate = new Date(from);
+        if (isNaN(fromDate.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid from date format'
+          });
+        }
+      }
+      
+      if (to && typeof to === 'string') {
+        toDate = new Date(to);
+        if (isNaN(toDate.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid to date format'
+          });
+        }
+      }
+      
+      const leads = await storage.getLeads(fromDate, toDate);
+      
+      // Return minimal fields for privacy
+      const minimalLeads = leads.map(lead => ({
+        id: lead.id,
+        createdAt: lead.createdAt,
+        name: lead.name,
+        email: lead.email,
+        pagePath: lead.leadSource?.pagePath,
+        utmSource: lead.leadSource?.utmSource,
+        utmMedium: lead.leadSource?.utmMedium,
+        utmCampaign: lead.leadSource?.utmCampaign
+      }));
+      
+      res.json({
+        success: true,
+        data: minimalLeads,
+        count: minimalLeads.length,
+        message: `Retrieved ${minimalLeads.length} leads`
+      });
+    } catch (error) {
+      console.error('Error retrieving leads:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving leads'
       });
     }
   });
