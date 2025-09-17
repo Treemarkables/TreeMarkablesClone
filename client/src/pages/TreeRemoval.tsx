@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
@@ -9,6 +10,27 @@ import { Card, CardContent } from "@/components/ui/card";
 import heroVideo from "@assets/copy_77E88CDC-C666-4B3C-B02C-5CE23818F128_1757799940776.mp4";
 
 export default function TreeRemoval() {
+  // Add Google tag event script for form submission tracking
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.innerHTML = `
+      gtag('event', 'Formsubmission', {
+        // <event_parameters>
+      });
+    `;
+    document.head.appendChild(script);
+    
+    return () => {
+      // Cleanup on unmount
+      const scripts = document.head.querySelectorAll('script');
+      scripts.forEach(s => {
+        if (s.innerHTML.includes('Formsubmission')) {
+          document.head.removeChild(s);
+        }
+      });
+    };
+  }, []);
+
   const handleGetQuote = () => {
     document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
   };

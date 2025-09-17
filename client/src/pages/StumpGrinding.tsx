@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
@@ -59,6 +60,27 @@ const StarRating = ({ rating }: { rating: number }) => {
 };
 
 export default function StumpGrinding() {
+  // Add Google tag event script for form submission tracking
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.innerHTML = `
+      gtag('event', 'Formsubmission', {
+        // <event_parameters>
+      });
+    `;
+    document.head.appendChild(script);
+    
+    return () => {
+      // Cleanup on unmount
+      const scripts = document.head.querySelectorAll('script');
+      scripts.forEach(s => {
+        if (s.innerHTML.includes('Formsubmission')) {
+          document.head.removeChild(s);
+        }
+      });
+    };
+  }, []);
+
   const handleGetQuote = () => {
     document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
   };

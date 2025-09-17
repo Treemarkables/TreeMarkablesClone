@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import WhyChooseUs from "@/components/WhyChooseUs";
@@ -9,6 +10,27 @@ import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 
 export default function Home() {
+  // Add Google tag event script for form submission tracking
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.innerHTML = `
+      gtag('event', 'Formsubmission', {
+        // <event_parameters>
+      });
+    `;
+    document.head.appendChild(script);
+    
+    return () => {
+      // Cleanup on unmount
+      const scripts = document.head.querySelectorAll('script');
+      scripts.forEach(s => {
+        if (s.innerHTML.includes('Formsubmission')) {
+          document.head.removeChild(s);
+        }
+      });
+    };
+  }, []);
+
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
