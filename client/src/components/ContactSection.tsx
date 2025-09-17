@@ -54,7 +54,7 @@ export default function ContactSection() {
       // Try to get GA client ID if available
       if (window.gtag) {
         try {
-          window.gtag('get', 'G-V7RHX2EL6B', 'client_id', (clientId: string) => {
+          window.gtag('get', 'G-VK3PPB6SFW', 'client_id', (clientId: string) => {
             if (clientId) {
               currentSource.gaClientId = clientId;
             }
