@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { type LeadSource } from "@shared/schema";
 
 interface ContactFormData {
   name: string;
@@ -8,7 +9,19 @@ interface ContactFormData {
   message: string;
 }
 
-export async function sendContactEmail(formData: ContactFormData): Promise<boolean> {
+// HTML escape function for security
+function escapeHtml(text: string): string {
+  const map: { [key: string]: string } = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, (match) => map[match]);
+}
+
+export async function sendContactEmail(formData: ContactFormData, leadSource?: LeadSource): Promise<boolean> {
   try {
     // Debug environment variables
     console.log('Environment check:');
@@ -24,6 +37,20 @@ export async function sendContactEmail(formData: ContactFormData): Promise<boole
       if (formData.phone) console.log('Phone:', formData.phone);
       if (formData.hearAbout) console.log('How they heard about us:', formData.hearAbout);
       console.log('Message:', formData.message);
+      
+      if (leadSource) {
+        console.log('\nLead Source Information:');
+        if (leadSource.pagePath) console.log('Page:', leadSource.pagePath);
+        if (leadSource.pageUrl) console.log('Full URL:', leadSource.pageUrl);
+        if (leadSource.referrer) console.log('Referrer:', leadSource.referrer);
+        if (leadSource.utmSource) console.log('UTM Source:', leadSource.utmSource);
+        if (leadSource.utmMedium) console.log('UTM Medium:', leadSource.utmMedium);
+        if (leadSource.utmCampaign) console.log('UTM Campaign:', leadSource.utmCampaign);
+        if (leadSource.firstTouchPagePath && leadSource.firstTouchPagePath !== leadSource.pagePath) {
+          console.log('First Visit Page:', leadSource.firstTouchPagePath);
+        }
+      }
+      
       console.log('Time:', new Date().toLocaleString());
       console.log('================================\n');
       
@@ -51,20 +78,36 @@ export async function sendContactEmail(formData: ContactFormData): Promise<boole
       throw verifyError;
     }
 
-    // Format the email content
+    // Format the email content with proper HTML escaping for security
     const htmlContent = `
       <h2>New Quote Request from Treemarkables Website</h2>
       <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; font-family: Arial, sans-serif;">
         <h3 style="color: #e97516; margin-bottom: 15px;">Customer Information</h3>
-        <p><strong>Name:</strong> ${formData.name}</p>
-        <p><strong>Email:</strong> ${formData.email}</p>
-        ${formData.phone ? `<p><strong>Phone:</strong> ${formData.phone}</p>` : ''}
-        ${formData.hearAbout ? `<p><strong>How they heard about us:</strong> ${formData.hearAbout}</p>` : ''}
+        <p><strong>Name:</strong> ${escapeHtml(formData.name)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(formData.email)}</p>
+        ${formData.phone ? `<p><strong>Phone:</strong> ${escapeHtml(formData.phone)}</p>` : ''}
+        ${formData.hearAbout ? `<p><strong>How they heard about us:</strong> ${escapeHtml(formData.hearAbout)}</p>` : ''}
         
         <h3 style="color: #e97516; margin-top: 25px; margin-bottom: 15px;">Message</h3>
         <div style="background-color: white; padding: 15px; border-radius: 4px; border-left: 4px solid #e97516;">
-          ${formData.message.replace(/\n/g, '<br>')}
+          ${escapeHtml(formData.message).replace(/\n/g, '<br>')}
         </div>
+        
+        ${leadSource ? `
+        <h3 style="color: #e97516; margin-top: 25px; margin-bottom: 15px;">Lead Source</h3>
+        <div style="background-color: white; padding: 15px; border-radius: 4px; border-left: 4px solid #0066cc;">
+          ${leadSource.pagePath ? `<p><strong>Page:</strong> ${escapeHtml(leadSource.pagePath)}</p>` : ''}
+          ${leadSource.pageUrl ? `<p><strong>Full URL:</strong> ${escapeHtml(leadSource.pageUrl)}</p>` : ''}
+          ${leadSource.referrer ? `<p><strong>Referrer:</strong> ${escapeHtml(leadSource.referrer)}</p>` : ''}
+          ${leadSource.utmSource ? `<p><strong>UTM Source:</strong> ${escapeHtml(leadSource.utmSource)}</p>` : ''}
+          ${leadSource.utmMedium ? `<p><strong>UTM Medium:</strong> ${escapeHtml(leadSource.utmMedium)}</p>` : ''}
+          ${leadSource.utmCampaign ? `<p><strong>UTM Campaign:</strong> ${escapeHtml(leadSource.utmCampaign)}</p>` : ''}
+          ${leadSource.utmTerm ? `<p><strong>UTM Term:</strong> ${escapeHtml(leadSource.utmTerm)}</p>` : ''}
+          ${leadSource.utmContent ? `<p><strong>UTM Content:</strong> ${escapeHtml(leadSource.utmContent)}</p>` : ''}
+          ${leadSource.gclid ? `<p><strong>Google Click ID:</strong> ${escapeHtml(leadSource.gclid)}</p>` : ''}
+          ${leadSource.firstTouchPagePath && leadSource.firstTouchPagePath !== leadSource.pagePath ? `<p><strong>First Visit Page:</strong> ${escapeHtml(leadSource.firstTouchPagePath)}</p>` : ''}
+        </div>
+        ` : ''}
         
         <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
         <p style="color: #666; font-size: 12px;">
