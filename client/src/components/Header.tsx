@@ -4,10 +4,11 @@ import { useState } from "react";
 import { Link } from "wouter";
 import logoImage from "@assets/new logo png_1757829817784.png";
 
-// Declare gtag for TypeScript
+// Declare gtag and gtag_report_conversion for TypeScript
 declare global {
   interface Window {
     gtag?: (...args: any[]) => void;
+    gtag_report_conversion?: (url?: string) => boolean;
   }
 }
 
@@ -43,13 +44,13 @@ export default function Header() {
     });
   };
   
-  const handlePhoneClick = () => {
-    if (window.gtag) {
-      window.gtag('event', 'click', {
-        'event_category': 'Lead Generation',
-        'event_label': 'Phone Click - Header',
-        'value': 1
-      });
+  const handlePhoneClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (window.gtag_report_conversion) {
+      window.gtag_report_conversion('tel:0272166882');
+    } else {
+      // Fallback if conversion tracking not available
+      window.location.href = 'tel:0272166882';
     }
   };
   
@@ -195,7 +196,15 @@ export default function Header() {
                   href="tel:0272166882" 
                   className="flex items-center justify-center space-x-2 text-sm text-white bg-orange-500 px-4 py-3 rounded-lg border border-orange-600 hover:bg-orange-600 transition-all duration-200 font-medium"
                   data-testid="link-phone-mobile"
-                  onClick={closeMenu}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    closeMenu();
+                    if (window.gtag_report_conversion) {
+                      window.gtag_report_conversion('tel:0272166882');
+                    } else {
+                      window.location.href = 'tel:0272166882';
+                    }
+                  }}
                 >
                   <Phone className="h-4 w-4" />
                   <span>Call: 027-216-6882</span>

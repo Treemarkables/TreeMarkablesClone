@@ -147,10 +147,15 @@ export default function SummerOffer() {
                 Book Now & Enter to Win
               </a>
             </Button>
-            <Button size="lg" className="text-lg px-8 py-6 bg-white text-black border-2 border-white hover:bg-gray-100" asChild data-testid="button-secondary-cta">
-              <a href="tel:0272166882">
-                Call (027) 216-6882
-              </a>
+            <Button size="lg" className="text-lg px-8 py-6 bg-white text-black border-2 border-white hover:bg-gray-100" data-testid="button-secondary-cta" onClick={(e) => {
+              e.preventDefault();
+              if ((window as any).gtag_report_conversion) {
+                (window as any).gtag_report_conversion('tel:0272166882');
+              } else {
+                window.location.href = 'tel:0272166882';
+              }
+            }}>
+              Call (027) 216-6882
             </Button>
           </div>
           
@@ -343,11 +348,16 @@ export default function SummerOffer() {
                   Get Your Free Quote
                 </a>
               </Button>
-              <Button variant="outline" size="lg" className="text-lg px-8 py-6" asChild data-testid="button-team-call">
-                <a href="tel:0272166882">
-                  <Phone className="w-5 h-5 mr-2" />
-                  Call the Team
-                </a>
+              <Button variant="outline" size="lg" className="text-lg px-8 py-6" data-testid="button-team-call" onClick={(e) => {
+                e.preventDefault();
+                if ((window as any).gtag_report_conversion) {
+                  (window as any).gtag_report_conversion('tel:0272166882');
+                } else {
+                  window.location.href = 'tel:0272166882';
+                }
+              }}>
+                <Phone className="w-5 h-5 mr-2" />
+                Call the Team
               </Button>
             </div>
           </div>
@@ -421,11 +431,16 @@ export default function SummerOffer() {
                 Get Your Free Quote Now
               </a>
             </Button>
-            <Button variant="outline" size="lg" className="text-lg px-8 py-6" asChild data-testid="button-final-call">
-              <a href="tel:0272166882">
-                <Phone className="w-5 h-5 mr-2" />
-                Call (027) 216-6882
-              </a>
+            <Button variant="outline" size="lg" className="text-lg px-8 py-6" data-testid="button-final-call" onClick={(e) => {
+              e.preventDefault();
+              if ((window as any).gtag_report_conversion) {
+                (window as any).gtag_report_conversion('tel:0272166882');
+              } else {
+                window.location.href = 'tel:0272166882';
+              }
+            }}>
+              <Phone className="w-5 h-5 mr-2" />
+              Call (027) 216-6882
             </Button>
           </div>
           

@@ -36,7 +36,11 @@ export default function TreeRemoval() {
   };
 
   const handleCallNow = () => {
-    window.location.href = 'tel:0272166882';
+    if ((window as any).gtag_report_conversion) {
+      (window as any).gtag_report_conversion('tel:0272166882');
+    } else {
+      window.location.href = 'tel:0272166882';
+    }
   };
 
 
