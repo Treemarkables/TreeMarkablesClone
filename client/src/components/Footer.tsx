@@ -1,23 +1,24 @@
 import { Shield, Award, Clock } from "lucide-react";
 import { Link } from "wouter";
 
-// Declare gtag for TypeScript
+// Declare gtag and gtag_report_conversion for TypeScript
 declare global {
   interface Window {
     gtag?: (...args: any[]) => void;
+    gtag_report_conversion?: (url?: string) => boolean;
   }
 }
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
   
-  const handleFooterPhoneClick = () => {
-    if (window.gtag) {
-      window.gtag('event', 'click', {
-        'event_category': 'Lead Generation',
-        'event_label': 'Phone Click - Footer',
-        'value': 1
-      });
+  const handleFooterPhoneClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (window.gtag_report_conversion) {
+      window.gtag_report_conversion('tel:0272166882');
+    } else {
+      // Fallback if conversion tracking not available
+      window.location.href = 'tel:0272166882';
     }
   };
   

@@ -17,6 +17,24 @@
 
       gtag('config', 'G-VK3PPB6SFW');
     </script>
+    
+    <!-- Event snippet for Click to call conversion page -->
+    <script>
+    function gtag_report_conversion(url) {
+      var callback = function () {
+        if (typeof(url) != 'undefined') {
+          window.location = url;
+        }
+      };
+      gtag('event', 'conversion', {
+          'send_to': 'AW-607851664/ohyNCIf4spwbEJCp7KEC',
+          'value': 1.0,
+          'currency': 'NZD',
+          'event_callback': callback
+      });
+      return false;
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
