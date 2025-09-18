@@ -1,5 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { Phone, Menu, X, Mail } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Phone, Mail, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 import logoImage from "@assets/new logo png_1757829817784.png";
@@ -23,26 +29,6 @@ export default function Header() {
     setIsMenuOpen(false);
   };
 
-  const handleGetQuote = () => {
-    closeMenu();
-    
-    // Track quote button click
-    if (window.gtag) {
-      window.gtag('event', 'click', {
-        'event_category': 'Lead Generation',
-        'event_label': 'Get Quote Button - Header',
-        'value': 1
-      });
-    }
-    
-    // Use requestAnimationFrame for better timing with DOM updates
-    requestAnimationFrame(() => {
-      const contactElement = document.getElementById('contact');
-      if (contactElement) {
-        contactElement.scrollIntoView({ behavior: 'smooth' });
-      }
-    });
-  };
   
   const handlePhoneClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -84,7 +70,7 @@ export default function Header() {
   ];
 
   return (
-    <header className="bg-gray-900 sticky top-0 z-50">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16 lg:h-20">
           
@@ -98,19 +84,33 @@ export default function Header() {
             />
           </Link>
 
-          {/* Navigation - Centered */}
+          {/* Navigation - Centered with Services Dropdown */}
           <nav className="hidden md:flex items-center space-x-8 lg:space-x-12 absolute left-1/2 transform -translate-x-1/2">
-            {navigationLinks.map((link) => (
-              <Link 
-                key={link.href}
-                href={link.href} 
-                className="text-white hover:text-orange-400 transition-colors font-medium text-sm lg:text-base relative group whitespace-nowrap tracking-wide uppercase" 
-                data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}`}
-              >
-                {link.label}
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-orange-400 transition-all duration-200 group-hover:w-full"></span>
-              </Link>
-            ))}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost"
+                  className="text-gray-700 hover:text-primary transition-colors font-medium text-sm lg:text-base whitespace-nowrap tracking-wide uppercase flex items-center space-x-1 px-0" 
+                  data-testid="button-services-dropdown"
+                >
+                  <span>Services</span>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56">
+                {navigationLinks.map((link) => (
+                  <DropdownMenuItem key={link.href} asChild>
+                    <Link 
+                      href={link.href} 
+                      className="w-full" 
+                      data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}`}
+                    >
+                      {link.label}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
 
           {/* Action Buttons - Rounded Orange */}
@@ -140,7 +140,7 @@ export default function Header() {
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden relative text-white hover:text-orange-400"
+              className="md:hidden relative text-gray-700 hover:text-primary"
               onClick={toggleMenu}
               data-testid="button-mobile-menu"
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
@@ -164,13 +164,14 @@ export default function Header() {
           }`}
           aria-hidden={!isMenuOpen}
         >
-          <nav className="border-t border-gray-700 py-4 bg-gray-900">
+          <nav className="border-t border-gray-200 py-4 bg-white">
             <div className="flex flex-col space-y-1">
+              <div className="px-4 py-2 text-sm font-semibold text-gray-500 uppercase tracking-wide">Services</div>
               {navigationLinks.map((link) => (
                 <Link 
                   key={`mobile-${link.href}`}
                   href={link.href} 
-                  className="text-white hover:text-orange-400 hover:bg-gray-800/50 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md uppercase tracking-wide" 
+                  className="text-gray-700 hover:text-primary hover:bg-gray-50 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md" 
                   data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}-mobile`}
                   onClick={closeMenu}
                 >
@@ -179,10 +180,10 @@ export default function Header() {
               ))}
               
               {/* Mobile Actions */}
-              <div className="flex flex-col space-y-3 pt-4 px-4 border-t border-gray-700 mt-4">
+              <div className="flex flex-col space-y-3 pt-4 px-4 border-t border-gray-200 mt-4">
                 <a 
                   href="tel:0272166882" 
-                  className="flex items-center justify-center space-x-3 text-base text-white bg-orange-500 px-4 py-4 rounded-sm border-2 border-orange-600 hover:bg-orange-600 hover:border-orange-700 transition-all duration-200 font-bold shadow-md tracking-tight"
+                  className="flex items-center justify-center space-x-3 text-base text-white bg-orange-500 px-4 py-4 rounded-full border-2 border-orange-600 hover:bg-orange-600 hover:border-orange-700 transition-all duration-200 font-bold shadow-md tracking-tight"
                   data-testid="link-phone-mobile"
                   onClick={(e) => {
                     e.preventDefault();
