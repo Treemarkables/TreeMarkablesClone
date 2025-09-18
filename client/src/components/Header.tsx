@@ -77,10 +77,20 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center min-h-16 md:min-h-20 lg:min-h-24 py-1">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center min-h-16 md:min-h-20 lg:min-h-24 py-2">
           
-          {/* Navigation - Left Side */}
-          <nav className="hidden md:flex justify-start items-center gap-6 lg:gap-8 col-start-1">
+          {/* Logo and Brand */}
+          <Link href="/" className="flex items-center hover-elevate group col-start-1" data-testid="link-home">
+            <img 
+              src={logoImage} 
+              alt="Treemarkables" 
+              className="max-h-12 md:max-h-16 lg:max-h-20 w-auto max-w-[50vw] md:max-w-[40vw] object-contain transition-all duration-200"
+              data-testid="logo-image"
+            />
+          </Link>
+
+          {/* Navigation - Centered */}
+          <nav className="hidden md:flex justify-center items-center gap-8 lg:gap-12 col-start-2">
             {mainNavLinks.map((link) => (
               <Link 
                 key={link.href}
@@ -119,16 +129,6 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           </nav>
-
-          {/* Logo and Brand - Centered */}
-          <Link href="/" className="flex items-center hover-elevate group col-start-2 justify-center" data-testid="link-home">
-            <img 
-              src={logoImage} 
-              alt="Treemarkables" 
-              className="max-h-14 md:max-h-18 lg:max-h-22 w-auto max-w-[60vw] md:max-w-[50vw] object-contain transition-all duration-200"
-              data-testid="logo-image"
-            />
-          </Link>
 
           {/* Action Buttons - Rounded Orange */}
           <div className="flex items-center space-x-2 md:space-x-3 col-start-3">
