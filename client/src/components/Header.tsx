@@ -62,7 +62,6 @@ export default function Header() {
 
   const mainNavLinks = [
     { href: "/", label: "Home" },
-    { href: "/about", label: "About" },
     { href: "/blog", label: "Blog" }
   ];
 
