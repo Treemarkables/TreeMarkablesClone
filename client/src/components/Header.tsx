@@ -77,20 +77,20 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-16 lg:h-20">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center min-h-32 md:min-h-40 lg:min-h-56 py-4">
           
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center hover-elevate group flex-shrink-0" data-testid="link-home">
+          <Link href="/" className="flex items-center hover-elevate group col-start-1" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-12 w-auto lg:h-16 object-contain transition-all duration-200"
+              className="max-h-[clamp(3.5rem,10vw,8rem)] md:max-h-[clamp(4.5rem,8vw,10rem)] lg:max-h-[clamp(6rem,7vw,14rem)] w-auto max-w-[35vw] md:max-w-[25vw] object-contain transition-all duration-200"
               data-testid="logo-image"
             />
           </Link>
 
           {/* Navigation - Centered */}
-          <nav className="hidden md:flex items-center space-x-8 lg:space-x-12 absolute left-1/2 transform -translate-x-1/2">
+          <nav className="hidden md:flex justify-center items-center gap-8 lg:gap-12 col-start-2">
             {mainNavLinks.map((link) => (
               <Link 
                 key={link.href}
@@ -131,7 +131,7 @@ export default function Header() {
           </nav>
 
           {/* Action Buttons - Rounded Orange */}
-          <div className="flex items-center space-x-3 flex-shrink-0">
+          <div className="flex items-center space-x-3 col-start-3">
             {/* Phone Button - Rounded Orange */}
             <a 
               href="tel:0272166882" 
