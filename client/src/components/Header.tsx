@@ -60,13 +60,18 @@ export default function Header() {
     }, 100);
   };
 
-  const navigationLinks = [
+  const mainNavLinks = [
+    { href: "/", label: "Home" },
+    { href: "/about", label: "About" },
+    { href: "/blog", label: "Blog" }
+  ];
+
+  const serviceLinks = [
     { href: "/tree-removal", label: "Tree Removal" },
-    { href: "/summer-offer", label: "Offer" },
+    { href: "/summer-offer", label: "Summer Offer" },
     { href: "/tree-pruning", label: "Tree Pruning" },
     { href: "/stump-grinding", label: "Stump Grinding" },
-    { href: "/hedge-trimming", label: "Hedge Trimming" },
-    { href: "/blog", label: "Blog" }
+    { href: "/hedge-trimming", label: "Hedge Trimming" }
   ];
 
   return (
@@ -84,8 +89,20 @@ export default function Header() {
             />
           </Link>
 
-          {/* Navigation - Centered with Services Dropdown */}
+          {/* Navigation - Centered */}
           <nav className="hidden md:flex items-center space-x-8 lg:space-x-12 absolute left-1/2 transform -translate-x-1/2">
+            {mainNavLinks.map((link) => (
+              <Link 
+                key={link.href}
+                href={link.href} 
+                className="text-gray-700 hover:text-primary transition-colors font-medium text-sm lg:text-base relative group whitespace-nowrap tracking-wide uppercase" 
+                data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}`}
+              >
+                {link.label}
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-200 group-hover:w-full"></span>
+              </Link>
+            ))}
+            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -98,7 +115,7 @@ export default function Header() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56">
-                {navigationLinks.map((link) => (
+                {serviceLinks.map((link) => (
                   <DropdownMenuItem key={link.href} asChild>
                     <Link 
                       href={link.href} 
@@ -166,12 +183,24 @@ export default function Header() {
         >
           <nav className="border-t border-gray-200 py-4 bg-white">
             <div className="flex flex-col space-y-1">
-              <div className="px-4 py-2 text-sm font-semibold text-gray-500 uppercase tracking-wide">Services</div>
-              {navigationLinks.map((link) => (
+              {mainNavLinks.map((link) => (
                 <Link 
                   key={`mobile-${link.href}`}
                   href={link.href} 
                   className="text-gray-700 hover:text-primary hover:bg-gray-50 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md" 
+                  data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}-mobile`}
+                  onClick={closeMenu}
+                >
+                  {link.label}
+                </Link>
+              ))}
+              
+              <div className="px-4 py-2 text-sm font-semibold text-gray-500 uppercase tracking-wide">Services</div>
+              {serviceLinks.map((link) => (
+                <Link 
+                  key={`mobile-${link.href}`}
+                  href={link.href} 
+                  className="text-gray-700 hover:text-primary hover:bg-gray-50 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md ml-4" 
                   data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}-mobile`}
                   onClick={closeMenu}
                 >
