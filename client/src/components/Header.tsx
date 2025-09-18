@@ -84,7 +84,7 @@ export default function Header() {
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="max-h-48 md:max-h-64 lg:max-h-80 w-auto max-w-[50vw] md:max-w-[40vw] object-contain transition-all duration-200"
+              className="max-h-12 md:max-h-16 lg:max-h-20 w-auto max-w-[50vw] md:max-w-[40vw] object-contain transition-all duration-200"
               data-testid="logo-image"
             />
           </Link>
