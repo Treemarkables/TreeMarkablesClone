@@ -84,75 +84,63 @@ export default function Header() {
   ];
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <header className="bg-gray-900 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-16 sm:h-24">
+        <div className="flex items-center justify-between h-16 lg:h-20">
           
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center space-x-2 sm:space-x-3 hover-elevate group flex-shrink-0" data-testid="link-home">
+          <Link href="/" className="flex items-center hover-elevate group flex-shrink-0" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-[192px] w-auto sm:h-[216px] object-contain transition-all duration-200 mt-12"
+              className="h-12 w-auto lg:h-16 object-contain transition-all duration-200"
               data-testid="logo-image"
             />
           </Link>
 
-          {/* Navigation */}
-          <nav className="hidden md:flex items-center space-x-4 lg:space-x-8 flex-shrink-0">
+          {/* Navigation - Centered */}
+          <nav className="hidden md:flex items-center space-x-8 lg:space-x-12 absolute left-1/2 transform -translate-x-1/2">
             {navigationLinks.map((link) => (
               <Link 
                 key={link.href}
                 href={link.href} 
-                className="text-gray-700 hover:text-primary transition-colors font-semibold text-sm lg:text-base relative group whitespace-nowrap tracking-tight" 
+                className="text-white hover:text-orange-400 transition-colors font-medium text-sm lg:text-base relative group whitespace-nowrap tracking-wide uppercase" 
                 data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}`}
               >
                 {link.label}
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-200 group-hover:w-full"></span>
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-orange-400 transition-all duration-200 group-hover:w-full"></span>
               </Link>
             ))}
           </nav>
 
-          {/* Action Buttons */}
-          <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0 ml-4 lg:ml-8">
-            {/* Phone Button - Rectangle box */}
+          {/* Action Buttons - Rounded Orange */}
+          <div className="flex items-center space-x-3 flex-shrink-0">
+            {/* Phone Button - Rounded Orange */}
             <a 
               href="tel:0272166882" 
               onClick={handlePhoneClick}
-              className="flex items-center space-x-2 text-xs sm:text-sm lg:text-base text-white bg-orange-500 px-3 py-2.5 sm:px-4 sm:py-3 rounded-sm border-2 border-orange-600 hover:bg-orange-600 hover:border-orange-700 transition-all duration-200 font-bold shadow-md hover:shadow-lg whitespace-nowrap tracking-tight"
+              className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-phone-header"
             >
-              <Phone className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-              <span className="hidden sm:inline font-mono">027-216-6882</span>
-              <span className="sm:hidden font-bold">Call</span>
+              <Phone className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
             </a>
 
-            {/* Email Button - Rectangle box */}
+            {/* Email Button - Rounded Orange */}
             <a 
               href="mailto:quotes@treemarkables.nz" 
               onClick={handleEmailClick}
-              className="flex items-center space-x-2 text-xs sm:text-sm lg:text-base text-white bg-blue-600 px-3 py-2.5 sm:px-4 sm:py-3 rounded-sm border-2 border-blue-700 hover:bg-blue-700 hover:border-blue-800 transition-all duration-200 font-bold shadow-md hover:shadow-lg whitespace-nowrap tracking-tight"
+              className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-email-header"
             >
-              <Mail className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-              <span className="hidden lg:inline font-mono text-xs">quotes@treemarkables.nz</span>
-              <span className="lg:hidden font-bold">Email</span>
+              <Mail className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
             </a>
 
-            {/* Get Quote Button - Desktop */}
-            <Button 
-              onClick={handleGetQuote} 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md hover:shadow-lg transition-all duration-200 hidden lg:inline-flex text-base px-5 py-3 tracking-tight"
-              data-testid="button-get-quote"
-            >
-              Get Quote
-            </Button>
             
             {/* Mobile Menu Button - Only show on very small screens */}
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden relative"
+              className="md:hidden relative text-white hover:text-orange-400"
               onClick={toggleMenu}
               data-testid="button-mobile-menu"
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
@@ -176,13 +164,13 @@ export default function Header() {
           }`}
           aria-hidden={!isMenuOpen}
         >
-          <nav className="border-t border-border/50 py-4">
+          <nav className="border-t border-gray-700 py-4 bg-gray-900">
             <div className="flex flex-col space-y-1">
               {navigationLinks.map((link) => (
                 <Link 
                   key={`mobile-${link.href}`}
                   href={link.href} 
-                  className="text-foreground hover:text-primary hover:bg-muted/50 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md" 
+                  className="text-white hover:text-orange-400 hover:bg-gray-800/50 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md uppercase tracking-wide" 
                   data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}-mobile`}
                   onClick={closeMenu}
                 >
@@ -191,7 +179,7 @@ export default function Header() {
               ))}
               
               {/* Mobile Actions */}
-              <div className="flex flex-col space-y-3 pt-4 px-4 border-t border-gray-200 mt-4">
+              <div className="flex flex-col space-y-3 pt-4 px-4 border-t border-gray-700 mt-4">
                 <a 
                   href="tel:0272166882" 
                   className="flex items-center justify-center space-x-3 text-base text-white bg-orange-500 px-4 py-4 rounded-sm border-2 border-orange-600 hover:bg-orange-600 hover:border-orange-700 transition-all duration-200 font-bold shadow-md tracking-tight"
@@ -212,21 +200,13 @@ export default function Header() {
                 
                 <a 
                   href="mailto:quotes@treemarkables.nz" 
-                  className="flex items-center justify-center space-x-3 text-base text-white bg-blue-600 px-4 py-4 rounded-sm border-2 border-blue-700 hover:bg-blue-700 hover:border-blue-800 transition-all duration-200 font-bold shadow-md tracking-tight"
+                  className="flex items-center justify-center space-x-3 text-base text-white bg-orange-500 px-4 py-4 rounded-full border-2 border-orange-600 hover:bg-orange-600 hover:border-orange-700 transition-all duration-200 font-bold shadow-md tracking-tight"
                   data-testid="link-email-mobile"
                   onClick={closeMenu}
                 >
                   <Mail className="h-5 w-5" />
                   <span className="font-mono text-sm">quotes@treemarkables.nz</span>
                 </a>
-                
-                <Button 
-                  onClick={handleGetQuote} 
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold w-full py-4 text-base shadow-md tracking-tight" 
-                  data-testid="button-get-quote-mobile"
-                >
-                  Get Free Quote
-                </Button>
               </div>
             </div>
           </nav>
