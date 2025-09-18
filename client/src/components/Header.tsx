@@ -77,14 +77,14 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center h-9 md:h-14 lg:h-16 py-0">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center min-h-9 md:min-h-14 lg:min-h-16 py-0 md:py-1">
           
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center justify-center hover-elevate group col-start-1 h-full" data-testid="link-home">
+          <Link href="/" className="flex items-center hover-elevate group col-start-1" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-full w-auto object-contain transition-all duration-200"
+              className="max-h-9 md:max-h-12 lg:max-h-14 w-auto max-w-[35vw] md:max-w-[25vw] object-contain transition-all duration-200"
               data-testid="logo-image"
             />
           </Link>
