@@ -76,30 +76,30 @@ export default function Header() {
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-      <div className="max-w-7xl mx-auto px-16 sm:px-24">
-        <div className="flex items-center justify-between h-64 lg:h-80">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between h-16 lg:h-20">
           
           {/* Logo and Brand */}
           <Link href="/" className="flex items-center hover-elevate group flex-shrink-0" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-48 w-auto lg:h-64 object-contain transition-all duration-200"
+              className="h-12 w-auto lg:h-16 object-contain transition-all duration-200"
               data-testid="logo-image"
             />
           </Link>
 
           {/* Navigation - Centered */}
-          <nav className="hidden md:flex items-center space-x-32 lg:space-x-48 absolute left-1/2 transform -translate-x-1/2">
+          <nav className="hidden md:flex items-center space-x-8 lg:space-x-12 absolute left-1/2 transform -translate-x-1/2">
             {mainNavLinks.map((link) => (
               <Link 
                 key={link.href}
                 href={link.href} 
-                className="text-gray-700 hover:text-primary transition-colors font-medium text-4xl lg:text-5xl relative group whitespace-nowrap tracking-wide uppercase" 
+                className="text-gray-700 hover:text-primary transition-colors font-medium text-sm lg:text-base relative group whitespace-nowrap tracking-wide uppercase" 
                 data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}`}
               >
                 {link.label}
-                <span className="absolute -bottom-4 left-0 w-0 h-2 bg-primary transition-all duration-200 group-hover:w-full"></span>
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-200 group-hover:w-full"></span>
               </Link>
             ))}
             
@@ -107,14 +107,14 @@ export default function Header() {
               <DropdownMenuTrigger asChild>
                 <Button 
                   variant="ghost"
-                  className="text-gray-700 hover:text-primary transition-colors font-medium text-4xl lg:text-5xl whitespace-nowrap tracking-wide uppercase flex items-center space-x-4 px-0" 
+                  className="text-gray-700 hover:text-primary transition-colors font-medium text-sm lg:text-base whitespace-nowrap tracking-wide uppercase flex items-center space-x-1 px-0" 
                   data-testid="button-services-dropdown"
                 >
                   <span>Services</span>
-                  <ChevronDown className="w-16 h-16" />
+                  <ChevronDown className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-96">
+              <DropdownMenuContent className="w-56">
                 {serviceLinks.map((link) => (
                   <DropdownMenuItem key={link.href} asChild>
                     <Link 
@@ -131,25 +131,25 @@ export default function Header() {
           </nav>
 
           {/* Action Buttons - Rounded Orange */}
-          <div className="flex items-center space-x-12 flex-shrink-0">
+          <div className="flex items-center space-x-3 flex-shrink-0">
             {/* Phone Button - Rounded Orange */}
             <a 
               href="tel:0272166882" 
               onClick={handlePhoneClick}
-              className="flex items-center justify-center w-48 h-48 lg:w-56 lg:h-56 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-phone-header"
             >
-              <Phone className="h-20 w-20 lg:h-24 lg:w-24 text-white" />
+              <Phone className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
             </a>
 
             {/* Email Button - Rounded Orange */}
             <a 
               href="mailto:quotes@treemarkables.nz" 
               onClick={handleEmailClick}
-              className="flex items-center justify-center w-48 h-48 lg:w-56 lg:h-56 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-email-header"
             >
-              <Mail className="h-20 w-20 lg:h-24 lg:w-24 text-white" />
+              <Mail className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
             </a>
 
             
@@ -162,10 +162,10 @@ export default function Header() {
               data-testid="button-mobile-menu"
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             >
-              <div className="relative w-20 h-20">
-                <span className={`absolute top-0 left-0 w-20 h-2 bg-current transition-all duration-200 ${isMenuOpen ? 'rotate-45 translate-y-8' : ''}`}></span>
-                <span className={`absolute top-8 left-0 w-20 h-2 bg-current transition-all duration-200 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
-                <span className={`absolute top-16 left-0 w-20 h-2 bg-current transition-all duration-200 ${isMenuOpen ? '-rotate-45 -translate-y-8' : ''}`}></span>
+              <div className="relative w-5 h-5">
+                <span className={`absolute top-0 left-0 w-5 h-0.5 bg-current transition-all duration-200 ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
+                <span className={`absolute top-2 left-0 w-5 h-0.5 bg-current transition-all duration-200 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
+                <span className={`absolute top-4 left-0 w-5 h-0.5 bg-current transition-all duration-200 ${isMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
               </div>
             </Button>
           </div>
@@ -182,7 +182,7 @@ export default function Header() {
           aria-hidden={!isMenuOpen}
         >
           <nav className="border-t border-gray-200 py-4 bg-white">
-            <div className="flex flex-col space-y-4">
+            <div className="flex flex-col space-y-1">
               {mainNavLinks.map((link) => (
                 <Link 
                   key={`mobile-${link.href}`}
