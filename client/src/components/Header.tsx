@@ -77,14 +77,14 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center min-h-11 md:min-h-14 lg:min-h-16 py-1">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center min-h-9 md:min-h-14 lg:min-h-16 py-0 md:py-1">
           
           {/* Logo and Brand */}
           <Link href="/" className="flex items-center hover-elevate group col-start-1" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="max-h-8 md:max-h-10 lg:max-h-12 w-auto max-w-[35vw] md:max-w-[25vw] object-contain transition-all duration-200"
+              className="max-h-9 md:max-h-12 lg:max-h-14 w-auto max-w-[35vw] md:max-w-[25vw] object-contain transition-all duration-200"
               data-testid="logo-image"
             />
           </Link>
@@ -131,12 +131,12 @@ export default function Header() {
           </nav>
 
           {/* Action Buttons - Rounded Orange */}
-          <div className="flex items-center space-x-3 col-start-3">
+          <div className="flex items-center space-x-2 md:space-x-3 col-start-3">
             {/* Phone Button - Rounded Orange */}
             <a 
               href="tel:0272166882" 
               onClick={handlePhoneClick}
-              className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="flex items-center justify-center w-9 h-9 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-phone-header"
             >
               <Phone className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
@@ -146,7 +146,7 @@ export default function Header() {
             <a 
               href="mailto:quotes@treemarkables.nz" 
               onClick={handleEmailClick}
-              className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="flex items-center justify-center w-9 h-9 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-email-header"
             >
               <Mail className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
