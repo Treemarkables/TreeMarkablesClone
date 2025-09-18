@@ -8,7 +8,7 @@ import {
 import { Phone, Mail, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
-import logoImage from "@assets/new logo png_1757829817784.png";
+import logoImage from "@assets/treelogo_1758218149788.webp";
 
 // Declare gtag and gtag_report_conversion for TypeScript
 declare global {
