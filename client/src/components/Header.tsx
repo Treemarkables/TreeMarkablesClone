@@ -136,7 +136,7 @@ export default function Header() {
             <a 
               href="tel:0272166882" 
               onClick={handlePhoneClick}
-              className="flex items-center justify-center w-9 h-9 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-phone-header"
             >
               <Phone className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
@@ -146,7 +146,7 @@ export default function Header() {
             <a 
               href="mailto:quotes@treemarkables.nz" 
               onClick={handleEmailClick}
-              className="flex items-center justify-center w-9 h-9 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-orange-500 hover:bg-orange-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-email-header"
             >
               <Mail className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
@@ -157,7 +157,7 @@ export default function Header() {
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden relative text-gray-700 hover:text-primary"
+              className="md:hidden relative text-gray-700 hover:text-primary w-11 h-11"
               onClick={toggleMenu}
               data-testid="button-mobile-menu"
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
