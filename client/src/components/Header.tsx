@@ -114,7 +114,7 @@ export default function Header() {
           </nav>
 
           {/* Action Buttons */}
-          <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
+          <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0 ml-4 lg:ml-8">
             {/* Phone Button - Rectangle box */}
             <a 
               href="tel:0272166882" 
