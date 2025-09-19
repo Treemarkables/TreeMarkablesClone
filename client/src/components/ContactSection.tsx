@@ -29,6 +29,7 @@ export default function ContactSection() {
     message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [leadSource, setLeadSource] = useState<LeadSource | null>(null);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
@@ -211,6 +212,9 @@ export default function ContactSection() {
           description: result.message,
         });
         
+        // Show success state
+        setIsSubmitted(true);
+        
         // Reset form and CAPTCHA
         setFormData({
           name: '',
@@ -221,6 +225,11 @@ export default function ContactSection() {
         });
         setCaptchaToken(null);
         recaptchaRef.current?.reset();
+        
+        // Hide success message after 10 seconds
+        setTimeout(() => {
+          setIsSubmitted(false);
+        }, 10000);
       } else {
         toast({
           title: "Error",
@@ -343,10 +352,20 @@ export default function ContactSection() {
                   />
                 </div>
                 
+                {/* Success message */}
+                {isSubmitted && (
+                  <div className="p-4 bg-green-100 border border-green-300 rounded-md text-green-800 text-center" data-testid="success-message" role="status">
+                    <div className="text-lg font-semibold mb-1">✅ Quote Request Sent!</div>
+                    <div className="text-sm">Thank you! We'll respond within 24 hours with your personalized quote.</div>
+                  </div>
+                )}
+                
                 {/* CAPTCHA disabled for now */}
-                <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm text-center" data-testid="captcha-disabled">
-                  ✅ Contact form ready - submit your quote request
-                </div>
+                {!isSubmitted && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm text-center" data-testid="captcha-disabled">
+                    ✅ Contact form ready - submit your quote request
+                  </div>
+                )}
                 
                 <Button
                   size="lg"
