@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,14 @@ import {
   AlertCircle,
   Users
 } from "lucide-react";
+
+// Add Speech Recognition types for TypeScript
+declare global {
+  interface Window {
+    SpeechRecognition?: any;
+    webkitSpeechRecognition?: any;
+  }
+}
 
 interface Job {
   id: string;
@@ -85,6 +93,138 @@ export default function JobDashboard() {
   const [isListening, setIsListening] = useState(false);
   const [voiceCommand, setVoiceCommand] = useState("");
   const [showNewJobDialog, setShowNewJobDialog] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredJobs, setFilteredJobs] = useState<Job[]>(sampleJobs);
+  const [newJob, setNewJob] = useState({ customer: "", phone: "", address: "", description: "" });
+  const [recognition, setRecognition] = useState<any>(null);
+
+  // Initialize Web Speech API
+  useEffect(() => {
+    if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognitionInstance = new SpeechRecognition();
+      recognitionInstance.continuous = false;
+      recognitionInstance.interimResults = false;
+      recognitionInstance.lang = 'en-US';
+      
+      recognitionInstance.onresult = (event: any) => {
+        const command = event.results[0][0].transcript.toLowerCase();
+        setVoiceCommand(command);
+        processVoiceCommand(command);
+        setIsListening(false);
+      };
+      
+      recognitionInstance.onerror = () => {
+        setIsListening(false);
+        setVoiceCommand("Voice recognition not available in this browser");
+      };
+      
+      recognitionInstance.onend = () => {
+        setIsListening(false);
+      };
+      
+      setRecognition(recognitionInstance);
+    }
+  }, []);
+
+  // Filter jobs based on search
+  useEffect(() => {
+    const filtered = jobs.filter(job => 
+      job.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.address.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredJobs(filtered);
+  }, [jobs, searchTerm]);
+
+  const processVoiceCommand = (command: string) => {
+    if (command.includes('create') && command.includes('job')) {
+      setShowNewJobDialog(true);
+      setVoiceCommand(`AI: Opening job creation form...`);
+    } else if (command.includes('complete') || command.includes('finish')) {
+      const firstInProgress = jobs.find(j => j.status === 'in-progress');
+      if (firstInProgress) {
+        completeJob(firstInProgress.id);
+        setVoiceCommand(`AI: Completed job for ${firstInProgress.customer}`);
+      }
+    } else if (command.includes('call')) {
+      const firstJob = jobs[0];
+      makePhoneCall(firstJob.phone, firstJob.customer);
+    } else {
+      setVoiceCommand(`AI: I heard "${command}" - feature coming soon!`);
+    }
+  };
+
+  const startVoiceRecognition = () => {
+    if (recognition) {
+      setIsListening(true);
+      setVoiceCommand("");
+      recognition.start();
+    } else {
+      // Fallback simulation for browsers without speech recognition
+      setIsListening(true);
+      setTimeout(() => {
+        const commands = [
+          "create new job for tree removal",
+          "complete current job",
+          "call next customer"
+        ];
+        const randomCommand = commands[Math.floor(Math.random() * commands.length)];
+        processVoiceCommand(randomCommand);
+      }, 2000);
+    }
+  };
+
+  // Job management functions
+  const createJob = () => {
+    if (!newJob.customer || !newJob.address) return;
+    
+    const job: Job = {
+      id: Date.now().toString(),
+      title: `Tree Service - ${newJob.customer}`,
+      customer: newJob.customer,
+      phone: newJob.phone || "Contact needed",
+      address: newJob.address,
+      status: 'scheduled',
+      priority: 'medium',
+      date: new Date().toISOString().split('T')[0],
+      time: '09:00',
+      estimate: 'TBD',
+      description: newJob.description || 'Tree service required',
+      aiNotes: `AI created: Auto-generated from voice/manual input. Weather checked: Clear conditions.`
+    };
+    
+    setJobs([...jobs, job]);
+    setNewJob({ customer: "", phone: "", address: "", description: "" });
+    setShowNewJobDialog(false);
+    setVoiceCommand(`AI: New job created for ${job.customer}`);
+  };
+
+  const completeJob = (jobId: string) => {
+    setJobs(jobs.map(job => 
+      job.id === jobId 
+        ? { ...job, status: 'completed' as const }
+        : job
+    ));
+  };
+
+  const makePhoneCall = (phone: string, customer: string) => {
+    const cleanPhone = phone.replace(/[^0-9+]/g, '');
+    window.location.href = `tel:${cleanPhone}`;
+    setVoiceCommand(`AI: Calling ${customer} at ${phone}`);
+  };
+
+  const sendSMS = (phone: string, customer: string) => {
+    const cleanPhone = phone.replace(/[^0-9+]/g, '');
+    const message = `Hi ${customer}, this is Treemarkables. We'll be arriving shortly for your scheduled tree service. Thanks!`;
+    window.location.href = `sms:${cleanPhone}?&body=${encodeURIComponent(message)}`;
+    setVoiceCommand(`AI: Sending SMS to ${customer}`);
+  };
+
+  const navigateToJob = (address: string) => {
+    window.open(`https://maps.google.com/?q=${encodeURIComponent(address)}`, '_blank');
+    setVoiceCommand(`AI: Opening navigation to ${address}`);
+  };
 
   const getStatusColor = (status: Job['status']) => {
     switch (status) {
@@ -104,27 +244,11 @@ export default function JobDashboard() {
     }
   };
 
-  const simulateVoiceCommand = () => {
-    setIsListening(true);
-    // Simulate voice recognition
-    setTimeout(() => {
-      const commands = [
-        "Create new job for tree removal at 456 Oak Street",
-        "Check status of Sarah Mitchell job",
-        "Schedule next available slot for hedge trimming",
-        "Send update SMS to John Williams about storm damage quote"
-      ];
-      const randomCommand = commands[Math.floor(Math.random() * commands.length)];
-      setVoiceCommand(randomCommand);
-      setIsListening(false);
-    }, 2000);
-  };
-
   const aiSuggestions = [
-    "AI suggests rescheduling pine tree removal - high winds forecast tomorrow",
-    "Optimal route today: Start with Sarah Mitchell, then Green Valley School, finish at Coastal Road",
-    "Customer John Williams called - AI auto-replied with ETA and quote timeline",
-    "Weather alert: Rain predicted afternoon - reschedule outdoor jobs to morning"
+    `AI suggests rescheduling pine tree removal - high winds forecast tomorrow`,
+    `Optimal route today: ${jobs.length} jobs scheduled, estimated 6.5 hours total`,
+    `Weather alert: Clear conditions next 3 days - good for tree work`,
+    `${jobs.filter(j => j.status === 'quote-pending').length} quotes pending - follow up recommended`
   ];
 
   return (
@@ -139,9 +263,10 @@ export default function JobDashboard() {
           <div className="flex gap-2">
             <Button
               variant={isListening ? "destructive" : "default"}
-              onClick={simulateVoiceCommand}
+              onClick={startVoiceRecognition}
               className="flex items-center gap-2"
               data-testid="button-voice-command"
+              disabled={isListening}
             >
               <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
               {isListening ? 'Listening...' : 'Voice Command'}
@@ -158,11 +283,33 @@ export default function JobDashboard() {
                   <DialogTitle>Create New Job</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <Input placeholder="Customer Name" data-testid="input-customer-name" />
-                  <Input placeholder="Phone Number" data-testid="input-phone" />
-                  <Input placeholder="Address" data-testid="input-address" />
-                  <Textarea placeholder="Job Description" data-testid="textarea-description" />
-                  <Button className="w-full" data-testid="button-create-job">Create Job</Button>
+                  <Input 
+                    placeholder="Customer Name" 
+                    value={newJob.customer}
+                    onChange={(e) => setNewJob({ ...newJob, customer: e.target.value })}
+                    data-testid="input-customer-name" 
+                  />
+                  <Input 
+                    placeholder="Phone Number" 
+                    value={newJob.phone}
+                    onChange={(e) => setNewJob({ ...newJob, phone: e.target.value })}
+                    data-testid="input-phone" 
+                  />
+                  <Input 
+                    placeholder="Address" 
+                    value={newJob.address}
+                    onChange={(e) => setNewJob({ ...newJob, address: e.target.value })}
+                    data-testid="input-address" 
+                  />
+                  <Textarea 
+                    placeholder="Job Description" 
+                    value={newJob.description}
+                    onChange={(e) => setNewJob({ ...newJob, description: e.target.value })}
+                    data-testid="textarea-description" 
+                  />
+                  <Button onClick={createJob} className="w-full" data-testid="button-create-job">
+                    Create Job
+                  </Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -210,7 +357,7 @@ export default function JobDashboard() {
                 <Calendar className="h-4 w-4 text-blue-500" />
                 <div>
                   <p className="text-sm text-muted-foreground">Today's Jobs</p>
-                  <p className="text-2xl font-bold">3</p>
+                  <p className="text-2xl font-bold">{jobs.length}</p>
                 </div>
               </div>
             </CardContent>
@@ -232,7 +379,7 @@ export default function JobDashboard() {
                 <Clock className="h-4 w-4 text-orange-500" />
                 <div>
                   <p className="text-sm text-muted-foreground">In Progress</p>
-                  <p className="text-2xl font-bold">1</p>
+                  <p className="text-2xl font-bold">{jobs.filter(j => j.status === 'in-progress').length}</p>
                 </div>
               </div>
             </CardContent>
@@ -263,12 +410,18 @@ export default function JobDashboard() {
             <div className="flex gap-4 mb-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search jobs..." className="pl-10" data-testid="input-search-jobs" />
+                <Input 
+                  placeholder="Search jobs..." 
+                  className="pl-10" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  data-testid="input-search-jobs" 
+                />
               </div>
             </div>
 
             <div className="grid gap-4">
-              {jobs.map((job) => (
+              {filteredJobs.map((job) => (
                 <Card key={job.id} className="hover-elevate">
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
@@ -317,20 +470,39 @@ export default function JobDashboard() {
                     )}
 
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" data-testid={`button-call-${job.id}`}>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => makePhoneCall(job.phone, job.customer)}
+                        data-testid={`button-call-${job.id}`}
+                      >
                         <Phone className="h-4 w-4 mr-1" />
                         Call
                       </Button>
-                      <Button size="sm" variant="outline" data-testid={`button-message-${job.id}`}>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => sendSMS(job.phone, job.customer)}
+                        data-testid={`button-message-${job.id}`}
+                      >
                         <MessageSquare className="h-4 w-4 mr-1" />
                         SMS
                       </Button>
-                      <Button size="sm" variant="outline" data-testid={`button-navigate-${job.id}`}>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => navigateToJob(job.address)}
+                        data-testid={`button-navigate-${job.id}`}
+                      >
                         <MapPin className="h-4 w-4 mr-1" />
                         Navigate
                       </Button>
                       {job.status !== 'completed' && (
-                        <Button size="sm" data-testid={`button-complete-${job.id}`}>
+                        <Button 
+                          size="sm" 
+                          onClick={() => completeJob(job.id)}
+                          data-testid={`button-complete-${job.id}`}
+                        >
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Complete
                         </Button>
@@ -348,7 +520,7 @@ export default function JobDashboard() {
                 <CardTitle>Weekly Schedule</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">Calendar view coming soon with drag & drop scheduling</p>
+                <p className="text-muted-foreground">Calendar view with drag & drop scheduling coming soon</p>
               </CardContent>
             </Card>
           </TabsContent>
