@@ -327,7 +327,7 @@ export default function ContactSection() {
                     data-testid="select-hear-about"
                   >
                     <option value="">Please select...</option>
-                    <option value="Google Search">Google Search</option>
+                    <option value="Google">Google</option>
                     <option value="Facebook">Facebook</option>
                     <option value="Word of mouth/Referral">Word of mouth/Referral</option>
                     <option value="Previous customer">Previous customer</option>
