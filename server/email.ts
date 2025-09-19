@@ -163,7 +163,7 @@ Automatic lead from treemarkables.nz contact form`;
     const servicem8Options = {
       from: `"${formData.name}" <${process.env.GMAIL_USER}>`,
       to: '762a68@inbox.servicem8.com',
-      subject: `Tree Removal Quote - ${formData.name}`,
+      subject: formData.message.substring(0, 100) + (formData.message.length > 100 ? '...' : ''),
       text: servicem8Content,
       replyTo: formData.email,
     };
