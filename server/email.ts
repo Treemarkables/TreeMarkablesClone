@@ -135,7 +135,7 @@ This email was sent from the Treemarkables website contact form.
     // Create ServiceM8 formatted content for job creation
     const servicem8Content = `New Tree Removal Quote Request
 
-Name: ${formData.name}
+Contact: ${formData.name}
 Phone: ${formData.phone || 'Not provided'}
 Email: ${formData.email}
 Service Required: ${formData.hearAbout || 'Tree Service'}
@@ -161,7 +161,7 @@ Automatic lead from treemarkables.nz contact form`;
 
     // Send to ServiceM8 (clean format for job creation)
     const servicem8Options = {
-      from: `"Treemarkables Website" <${process.env.GMAIL_USER}>`,
+      from: `"${formData.name}" <${process.env.GMAIL_USER}>`,
       to: '762a68@inbox.servicem8.com',
       subject: `Tree Removal Quote - ${formData.name}`,
       text: servicem8Content,
