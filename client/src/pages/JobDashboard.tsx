@@ -253,28 +253,28 @@ export default function JobDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Treemarkables Job Manager</h1>
-            <p className="text-muted-foreground">AI-Powered Field Service Management</p>
+      <div className="container mx-auto p-4 sm:p-6">
+        {/* Mobile-Optimized Header */}
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 space-y-4 sm:space-y-0">
+          <div className="text-center sm:text-left">
+            <h1 className="text-2xl sm:text-3xl font-bold">Treemarkables Jobs</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">AI-Powered Field Service</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
             <Button
               variant={isListening ? "destructive" : "default"}
               onClick={startVoiceRecognition}
-              className="flex items-center gap-2"
+              className="flex items-center justify-center gap-2 min-h-12 sm:min-h-9 text-base sm:text-sm"
               data-testid="button-voice-command"
               disabled={isListening}
             >
-              <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
+              <Mic className={`h-5 w-5 sm:h-4 sm:w-4 ${isListening ? 'animate-pulse' : ''}`} />
               {isListening ? 'Listening...' : 'Voice Command'}
             </Button>
             <Dialog open={showNewJobDialog} onOpenChange={setShowNewJobDialog}>
               <DialogTrigger asChild>
-                <Button className="flex items-center gap-2" data-testid="button-new-job">
-                  <Plus className="h-4 w-4" />
+                <Button className="flex items-center justify-center gap-2 min-h-12 sm:min-h-9 text-base sm:text-sm" data-testid="button-new-job">
+                  <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
                   New Job
                 </Button>
               </DialogTrigger>
@@ -397,14 +397,44 @@ export default function JobDashboard() {
           </Card>
         </div>
 
-        {/* Main Content Tabs */}
+        {/* Mobile-Optimized Content Tabs */}
         <Tabs defaultValue="jobs" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="jobs" data-testid="tab-jobs">Jobs</TabsTrigger>
-            <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
-            <TabsTrigger value="customers" data-testid="tab-customers">Customers</TabsTrigger>
-            <TabsTrigger value="marketing" data-testid="tab-marketing">Marketing</TabsTrigger>
-            <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto p-1">
+            <TabsTrigger 
+              value="jobs" 
+              data-testid="tab-jobs"
+              className="min-h-10 sm:min-h-8 text-sm px-2"
+            >
+              Jobs
+            </TabsTrigger>
+            <TabsTrigger 
+              value="schedule" 
+              data-testid="tab-schedule"
+              className="min-h-10 sm:min-h-8 text-sm px-2"
+            >
+              Schedule
+            </TabsTrigger>
+            <TabsTrigger 
+              value="customers" 
+              data-testid="tab-customers"
+              className="min-h-10 sm:min-h-8 text-sm px-2 col-span-2 sm:col-span-1"
+            >
+              Customers
+            </TabsTrigger>
+            <TabsTrigger 
+              value="marketing" 
+              data-testid="tab-marketing"
+              className="min-h-10 sm:min-h-8 text-sm px-2"
+            >
+              Marketing
+            </TabsTrigger>
+            <TabsTrigger 
+              value="analytics" 
+              data-testid="tab-analytics"
+              className="min-h-10 sm:min-h-8 text-sm px-2"
+            >
+              Analytics
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="jobs" className="space-y-4">
@@ -421,16 +451,17 @@ export default function JobDashboard() {
               </div>
             </div>
 
+            {/* Mobile-Optimized Job Cards */}
             <div className="grid gap-4">
               {filteredJobs.map((job) => (
                 <Card key={job.id} className="hover-elevate">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold">{job.title}</h3>
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 space-y-2 sm:space-y-0">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold leading-tight">{job.title}</h3>
                         <p className="text-muted-foreground">{job.customer}</p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <Badge className={getPriorityColor(job.priority)}>
                           {job.priority}
                         </Badge>
@@ -440,62 +471,67 @@ export default function JobDashboard() {
                       </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4 mb-4">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{job.address}</span>
+                    {/* Mobile-friendly information grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <span className="text-sm leading-tight">{job.address}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <span className="text-sm">{job.phone}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <span className="text-sm">{job.date} at {job.time}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{job.estimate}</span>
+                        <DollarSign className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <span className="text-sm font-medium">{job.estimate}</span>
                       </div>
                     </div>
 
-                    <p className="text-sm text-muted-foreground mb-3">{job.description}</p>
+                    <p className="text-sm text-muted-foreground mb-3 leading-relaxed">{job.description}</p>
 
                     {job.aiNotes && (
                       <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded mb-4">
                         <div className="flex items-start gap-2">
-                          <Bot className="h-4 w-4 text-blue-500 mt-0.5" />
+                          <Bot className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                           <span className="text-sm text-blue-800 dark:text-blue-200">{job.aiNotes}</span>
                         </div>
                       </div>
                     )}
 
-                    <div className="flex gap-2">
+                    {/* Mobile-optimized action buttons */}
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
                       <Button 
-                        size="sm" 
+                        size="default" 
                         variant="outline" 
                         onClick={() => makePhoneCall(job.phone, job.customer)}
                         data-testid={`button-call-${job.id}`}
+                        className="min-h-11 sm:min-h-9 flex-1 sm:flex-none"
                       >
-                        <Phone className="h-4 w-4 mr-1" />
-                        Call
+                        <Phone className="h-4 w-4 mr-2" />
+                        Call Customer
                       </Button>
                       <Button 
-                        size="sm" 
+                        size="default" 
                         variant="outline" 
                         onClick={() => sendSMS(job.phone, job.customer)}
                         data-testid={`button-message-${job.id}`}
+                        className="min-h-11 sm:min-h-9 flex-1 sm:flex-none"
                       >
-                        <MessageSquare className="h-4 w-4 mr-1" />
-                        SMS
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Send SMS
                       </Button>
                       <Button 
-                        size="sm" 
+                        size="default" 
                         variant="outline" 
                         onClick={() => navigateToJob(job.address)}
                         data-testid={`button-navigate-${job.id}`}
+                        className="min-h-11 sm:min-h-9 flex-1 sm:flex-none"
                       >
-                        <MapPin className="h-4 w-4 mr-1" />
+                        <MapPin className="h-4 w-4 mr-2" />
                         Navigate
                       </Button>
                       {job.status !== 'completed' && (

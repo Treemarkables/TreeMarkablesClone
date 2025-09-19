@@ -1,0 +1,42 @@
+{
+  "name": "Treemarkables Job Manager",
+  "short_name": "TreeJobs",
+  "description": "Professional tree removal job management system",
+  "start_url": "/job-dashboard",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#ea8c3e",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/tree-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/tree-icon-512.png", 
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "New Job",
+      "short_name": "New Job",
+      "description": "Create a new job quickly",
+      "url": "/job-dashboard?action=new",
+      "icons": [{"src": "/tree-icon-192.png", "sizes": "192x192"}]
+    },
+    {
+      "name": "Today's Jobs",
+      "short_name": "Today",
+      "description": "View today's scheduled jobs",
+      "url": "/job-dashboard?filter=today",
+      "icons": [{"src": "/tree-icon-192.png", "sizes": "192x192"}]
+    }
+  ]
+}
