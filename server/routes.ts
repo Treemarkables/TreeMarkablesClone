@@ -438,55 +438,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Webhook endpoint for form submissions to Zapier
-  app.post('/api/webhook/form-submission', async (req: Request, res: Response) => {
-    try {
-      const formData = req.body;
-      
-      // Log the form submission for debugging
-      console.log('[webhook] Form submission received:', {
-        timestamp: new Date().toISOString(),
-        data: formData
-      });
-      
-      // Get Zapier webhook URL from environment variable
-      const zapierWebhookUrl = process.env.ZAPIER_WEBHOOK_URL;
-      
-      if (!zapierWebhookUrl) {
-        console.warn('[webhook] No Zapier webhook URL configured');
-        return res.status(200).json({ 
-          success: true, 
-          message: 'Form received but no external integration configured' 
-        });
-      }
-      
-      // Forward to Zapier webhook
-      const response = await fetch(zapierWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          source: 'treemarkables-website',
-          timestamp: new Date().toISOString(),
-          ip: req.ip,
-          userAgent: req.get('User-Agent')
-        })
-      });
-      
-      if (response.ok) {
-        console.log('[webhook] Successfully forwarded to Zapier');
-        res.status(200).json({ success: true, message: 'Form submitted successfully' });
-      } else {
-        console.error('[webhook] Failed to forward to Zapier:', response.status, response.statusText);
-        res.status(200).json({ success: true, message: 'Form received' });
-      }
-    } catch (error) {
-      console.error('[webhook] Error processing form submission:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
-    }
-  });
 
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
