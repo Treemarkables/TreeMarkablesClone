@@ -11,6 +11,7 @@ import HedgeTrimming from "@/pages/HedgeTrimming";
 import Blog from "@/pages/Blog";
 import BlogPost from "@/pages/BlogPost";
 import SummerOffer from "@/pages/SummerOffer";
+import JobDashboard from "@/pages/JobDashboard";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/blog" component={Blog}/>
       <Route path="/blog/:slug" component={BlogPost}/>
       <Route path="/summer-offer" component={SummerOffer}/>
+      <Route path="/job-dashboard" component={JobDashboard}/>
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
