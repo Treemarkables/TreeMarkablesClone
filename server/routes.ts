@@ -520,7 +520,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const leadSubmissionData: InsertLeadSubmission = {
         name: name.trim(),
         email: email.trim().toLowerCase(),
-        phone: phone?.trim(),
+        phone: phone?.trim().replace(/-/g, ''),
         hearAbout,
         message: message.trim(),
         leadSource: validatedLeadSource,
