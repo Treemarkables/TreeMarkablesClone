@@ -133,19 +133,19 @@ This email was sent from the Treemarkables website contact form.
     `;
 
     // Create ServiceM8 formatted content for job creation
-    const leadSourceText = `Website${leadSource?.pagePath ? ` ${leadSource.pagePath}` : ''}`;
     const servicem8Content = `New Tree Removal Quote Request
 
 Contact: ${formData.name}
 Phone: ${formData.phone || 'Not provided'}
 Mobile: ${formData.phone || 'Not provided'}
 Email: ${formData.email}
-PO Number: ${leadSourceText}
-Service Required: ${formData.hearAbout || 'Tree Service'}
+PO Number: ${formData.hearAbout || 'Website'}
+Service Required: Tree Service
 
 Job Details:
 ${formData.message}
 
+Lead Source: Website${leadSource?.pagePath ? ` ${leadSource.pagePath}` : ''}
 Submitted: ${new Date().toLocaleString()}
 
 ---
