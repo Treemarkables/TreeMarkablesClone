@@ -403,6 +403,7 @@ export default function JobDashboard() {
             <TabsTrigger value="jobs" data-testid="tab-jobs">Jobs</TabsTrigger>
             <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
             <TabsTrigger value="customers" data-testid="tab-customers">Customers</TabsTrigger>
+            <TabsTrigger value="marketing" data-testid="tab-marketing">Marketing</TabsTrigger>
             <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
           </TabsList>
 
@@ -532,6 +533,283 @@ export default function JobDashboard() {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">Customer database with AI insights and communication history</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="marketing" className="space-y-6">
+            {/* Marketing Overview */}
+            <div className="grid md:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Posts This Month</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">12</div>
+                  <p className="text-xs text-muted-foreground">+3 from last month</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Engagement Rate</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">4.8%</div>
+                  <p className="text-xs text-muted-foreground">Above industry avg</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">New Reviews</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-purple-600">8</div>
+                  <p className="text-xs text-muted-foreground">This month</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Leads Generated</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-600">15</div>
+                  <p className="text-xs text-muted-foreground">From social media</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Content Calendar */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Content Calendar - September 2024
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-7 gap-2 text-center">
+                  <div className="font-semibold p-2">Sun</div>
+                  <div className="font-semibold p-2">Mon</div>
+                  <div className="font-semibold p-2">Tue</div>
+                  <div className="font-semibold p-2">Wed</div>
+                  <div className="font-semibold p-2">Thu</div>
+                  <div className="font-semibold p-2">Fri</div>
+                  <div className="font-semibold p-2">Sat</div>
+                  
+                  {/* Sample calendar content */}
+                  <div className="p-2 rounded border">15</div>
+                  <div className="p-2 rounded border">16</div>
+                  <div className="p-2 rounded border">17</div>
+                  <div className="p-2 rounded border bg-blue-50 dark:bg-blue-950">
+                    <div className="text-xs">18</div>
+                    <div className="text-xs text-blue-600 mt-1">Storm prep tips</div>
+                  </div>
+                  <div className="p-2 rounded border bg-green-50 dark:bg-green-950">
+                    <div className="text-xs">19</div>
+                    <div className="text-xs text-green-600 mt-1">Before/after post</div>
+                  </div>
+                  <div className="p-2 rounded border">20</div>
+                  <div className="p-2 rounded border">21</div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Content Ideas */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bot className="h-5 w-5 text-blue-500" />
+                    AI Content Suggestions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-950">
+                      <div className="font-medium text-blue-800 dark:text-blue-200">Seasonal Content</div>
+                      <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                        "Spring is the perfect time for tree health assessments. Book your consultation now!"
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="secondary">Facebook</Badge>
+                        <Badge variant="secondary">Instagram</Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-950">
+                      <div className="font-medium text-green-800 dark:text-green-200">Safety Education</div>
+                      <div className="text-sm text-green-700 dark:text-green-300 mt-1">
+                        "Did you know? Trees near power lines should only be handled by certified arborists"
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="secondary">LinkedIn</Badge>
+                        <Badge variant="secondary">Blog</Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 rounded-lg border bg-orange-50 dark:bg-orange-950">
+                      <div className="font-medium text-orange-800 dark:text-orange-200">Customer Success</div>
+                      <div className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                        "Amazing transformation! Sarah's overgrown pine is now safe and beautiful"
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="secondary">Before/After</Badge>
+                        <Badge variant="secondary">Testimonial</Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Marketing Campaigns</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-lg border">
+                      <div>
+                        <div className="font-medium">Storm Season Prep</div>
+                        <div className="text-sm text-muted-foreground">March - May campaign</div>
+                      </div>
+                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                        Active
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 rounded-lg border">
+                      <div>
+                        <div className="font-medium">Winter Safety Checks</div>
+                        <div className="text-sm text-muted-foreground">June - August campaign</div>
+                      </div>
+                      <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                        Scheduled
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 rounded-lg border">
+                      <div>
+                        <div className="font-medium">Spring Growth Management</div>
+                        <div className="text-sm text-muted-foreground">September - November</div>
+                      </div>
+                      <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300">
+                        Planning
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Social Media Templates */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Social Media Templates</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg border bg-card">
+                    <div className="font-medium mb-2">Before/After Showcase</div>
+                    <div className="text-sm text-muted-foreground mb-3">
+                      "🌳 Transformation Tuesday! From hazardous overgrowth to safe, beautiful landscaping. [PHOTOS] Professional tree services make all the difference! #TreeCare #Gisborne"
+                    </div>
+                    <Button size="sm" variant="outline" className="w-full">Use Template</Button>
+                  </div>
+                  
+                  <div className="p-4 rounded-lg border bg-card">
+                    <div className="font-medium mb-2">Safety Education</div>
+                    <div className="text-sm text-muted-foreground mb-3">
+                      "⚠️ Safety First! Here's why you should never attempt DIY tree removal near power lines. Trust the professionals at Treemarkables! #TreeSafety #ProfessionalService"
+                    </div>
+                    <Button size="sm" variant="outline" className="w-full">Use Template</Button>
+                  </div>
+                  
+                  <div className="p-4 rounded-lg border bg-card">
+                    <div className="font-medium mb-2">Customer Testimonial</div>
+                    <div className="text-sm text-muted-foreground mb-3">
+                      "⭐⭐⭐⭐⭐ 'Exceptional service from the Treemarkables team!' - [CUSTOMER NAME]. We're proud to serve Gisborne with professional tree care! #HappyCustomers #TreeCare"
+                    </div>
+                    <Button size="sm" variant="outline" className="w-full">Use Template</Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Review Management */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Review & Testimonial Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-green-50 dark:bg-green-950">
+                    <div>
+                      <div className="font-medium">Sarah Mitchell</div>
+                      <div className="text-sm text-muted-foreground">"Amazing job removing our large pine tree. Professional and tidy!"</div>
+                      <div className="text-xs text-green-600 mt-1">⭐⭐⭐⭐⭐ Google Review - 2 days ago</div>
+                    </div>
+                    <Button size="sm" variant="outline">Share</Button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-blue-50 dark:bg-blue-950">
+                    <div>
+                      <div className="font-medium">Green Valley School</div>
+                      <div className="text-sm text-muted-foreground">"Reliable service for our ongoing tree maintenance. Highly recommend!"</div>
+                      <div className="text-xs text-blue-600 mt-1">⭐⭐⭐⭐⭐ Facebook Review - 1 week ago</div>
+                    </div>
+                    <Button size="sm" variant="outline">Share</Button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-orange-50 dark:bg-orange-950">
+                    <div>
+                      <div className="font-medium">John Williams - Follow Up</div>
+                      <div className="text-sm text-muted-foreground">Completed job 3 days ago - perfect time to request review</div>
+                      <div className="text-xs text-orange-600 mt-1">Storm damage cleanup - $2,200 job</div>
+                    </div>
+                    <Button size="sm">Request Review</Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Photo Content Library */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Content Photo Library</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-sm font-medium">Pine Removal</div>
+                      <div className="text-xs text-muted-foreground">Before/After Set</div>
+                    </div>
+                  </div>
+                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-sm font-medium">Team Action</div>
+                      <div className="text-xs text-muted-foreground">Professional at work</div>
+                    </div>
+                  </div>
+                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-sm font-medium">Equipment</div>
+                      <div className="text-xs text-muted-foreground">Crane operation</div>
+                    </div>
+                  </div>
+                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center hover-elevate cursor-pointer">
+                    <div className="text-center">
+                      <Plus className="h-8 w-8 mx-auto mb-1" />
+                      <div className="text-xs">Add Photo</div>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
