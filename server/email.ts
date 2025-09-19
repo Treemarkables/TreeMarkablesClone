@@ -132,18 +132,66 @@ ${formData.message}
 This email was sent from the Treemarkables website contact form.
     `;
 
-    // Send email
-    const mailOptions = {
+    // Create ServiceM8 formatted content for job creation
+    const servicem8Content = `New Tree Removal Quote Request
+
+Name: ${formData.name}
+Phone: ${formData.phone || 'Not provided'}
+Email: ${formData.email}
+Service Required: ${formData.hearAbout || 'Tree Service'}
+
+Job Details:
+${formData.message}
+
+Lead Source: Treemarkables Website${leadSource?.pagePath ? ` (${leadSource.pagePath})` : ''}
+Submitted: ${new Date().toLocaleString()}
+
+---
+Automatic lead from treemarkables.nz contact form`;
+
+    // Send to Gmail (detailed format)
+    const gmailOptions = {
       from: `"Treemarkables Website" <${process.env.GMAIL_USER}>`,
       to: 'quotes@treemarkables.nz',
       subject: `New Quote Request from ${formData.name}`,
       text: textContent,
       html: htmlContent,
-      replyTo: formData.email, // Allow direct reply to customer
+      replyTo: formData.email,
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log('Contact form email sent successfully via Gmail');
+    // Send to ServiceM8 (clean format for job creation)
+    const servicem8Options = {
+      from: `"Treemarkables Website" <${process.env.GMAIL_USER}>`,
+      to: '762a68@inbox.servicem8.com',
+      subject: `Tree Removal Quote - ${formData.name}`,
+      text: servicem8Content,
+      replyTo: formData.email,
+    };
+
+    // Send both emails with error tolerance
+    const emailResults = await Promise.allSettled([
+      transporter.sendMail(gmailOptions),
+      transporter.sendMail(servicem8Options)
+    ]);
+    
+    const gmailSuccess = emailResults[0].status === 'fulfilled';
+    const servicem8Success = emailResults[1].status === 'fulfilled';
+    
+    if (gmailSuccess && servicem8Success) {
+      console.log('Contact form emails sent successfully to both Gmail and ServiceM8');
+    } else if (gmailSuccess) {
+      console.log('Contact form email sent to Gmail successfully. ServiceM8 delivery failed:', 
+                  emailResults[1].status === 'rejected' ? emailResults[1].reason : 'Unknown error');
+    } else if (servicem8Success) {
+      console.log('Contact form email sent to ServiceM8 successfully. Gmail delivery failed:', 
+                  emailResults[0].status === 'rejected' ? emailResults[0].reason : 'Unknown error');
+    } else {
+      console.error('Both email deliveries failed:', 
+                    emailResults[0].status === 'rejected' ? emailResults[0].reason : 'Unknown Gmail error',
+                    emailResults[1].status === 'rejected' ? emailResults[1].reason : 'Unknown ServiceM8 error');
+      return false;
+    }
+    
     return true;
 
   } catch (error) {
