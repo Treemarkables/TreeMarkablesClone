@@ -84,9 +84,24 @@ export async function sendContactEmail(formData: ContactFormData, leadSource?: L
       throw verifyError;
     }
 
+    // Create ServiceM8 parsing block for easy forwarding
+    const servicem8ParseBlock = `Contact: ${formData.name}
+Phone: ${cleanPhone || 'Not provided'}
+Mobile: ${cleanPhone || 'Not provided'}
+Email: ${formData.email}
+PO Number: ${formData.hearAbout || 'Website'}
+Job Description:
+${formData.message}`;
+
     // Format the email content with proper HTML escaping for security
     const htmlContent = `
       <h2>New Quote Request from Treemarkables Website</h2>
+      
+      <div style="background-color: #ffffcc; padding: 15px; border-radius: 4px; border: 1px solid #ffcc00; margin-bottom: 20px;">
+        <h3 style="color: #cc6600; margin-top: 0; margin-bottom: 10px;">📧 To Forward to ServiceM8: Copy the block below</h3>
+        <div style="font-family: 'Courier New', monospace; white-space: pre-line; background-color: white; padding: 10px; border-radius: 4px; border: 1px solid #ddd;">${escapeHtml(servicem8ParseBlock)}</div>
+      </div>
+      
       <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; font-family: Arial, sans-serif;">
         <h3 style="color: #e97516; margin-bottom: 15px;">Customer Information</h3>
         <p><strong>Name:</strong> ${escapeHtml(formData.name)}</p>
@@ -125,6 +140,10 @@ export async function sendContactEmail(formData: ContactFormData, leadSource?: L
     const textContent = `
 New Quote Request from Treemarkables Website
 
+=== TO FORWARD TO SERVICEM8: COPY THE BLOCK BELOW ===
+${servicem8ParseBlock}
+=== END SERVICEM8 BLOCK ===
+
 Customer Information:
 Name: ${formData.name}
 Email: ${formData.email}
@@ -148,7 +167,7 @@ Email: ${formData.email}
 PO Number: ${formData.hearAbout || 'Website'}
 Service Required: Tree Service
 
-Job Details:
+Job Description:
 ${formData.message}
 
 Lead Source: Website${leadSource?.pagePath ? ` ${leadSource.pagePath}` : ''}
