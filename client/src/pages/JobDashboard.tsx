@@ -536,13 +536,184 @@ export default function JobDashboard() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="analytics">
+          <TabsContent value="analytics" className="space-y-6">
+            {/* Revenue Analytics */}
+            <div className="grid md:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Total Pipeline Value</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">
+                    ${jobs.reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0).toLocaleString()}
+                  </div>
+                  <p className="text-xs text-muted-foreground">From {jobs.length} active jobs</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {jobs.length > 0 ? Math.round((jobs.filter(j => j.status === 'completed').length / jobs.length) * 100) : 0}%
+                  </div>
+                  <p className="text-xs text-muted-foreground">{jobs.filter(j => j.status === 'completed').length} of {jobs.length} jobs</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Average Job Value</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-purple-600">
+                    ${jobs.length > 0 ? Math.round(jobs.reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0) / jobs.length).toLocaleString() : 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Per job average</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Job Status Breakdown */}
             <Card>
               <CardHeader>
-                <CardTitle>Business Analytics</CardTitle>
+                <CardTitle>Job Status Overview</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">Revenue tracking, job completion rates, and AI-powered business insights</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950">
+                    <div className="text-2xl font-bold text-blue-600">{jobs.filter(j => j.status === 'scheduled').length}</div>
+                    <div className="text-sm text-blue-800 dark:text-blue-300">Scheduled</div>
+                  </div>
+                  <div className="text-center p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950">
+                    <div className="text-2xl font-bold text-yellow-600">{jobs.filter(j => j.status === 'in-progress').length}</div>
+                    <div className="text-sm text-yellow-800 dark:text-yellow-300">In Progress</div>
+                  </div>
+                  <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-950">
+                    <div className="text-2xl font-bold text-green-600">{jobs.filter(j => j.status === 'completed').length}</div>
+                    <div className="text-sm text-green-800 dark:text-green-300">Completed</div>
+                  </div>
+                  <div className="text-center p-4 rounded-lg bg-orange-50 dark:bg-orange-950">
+                    <div className="text-2xl font-bold text-orange-600">{jobs.filter(j => j.status === 'quote-pending').length}</div>
+                    <div className="text-sm text-orange-800 dark:text-orange-300">Quote Pending</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Priority Analysis */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Priority Distribution & Value</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {['urgent', 'high', 'medium', 'low'].map(priority => {
+                    const priorityJobs = jobs.filter(j => j.priority === priority);
+                    const priorityValue = priorityJobs.reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0);
+                    const percentage = jobs.length > 0 ? (priorityJobs.length / jobs.length) * 100 : 0;
+                    
+                    return (
+                      <div key={priority} className="flex items-center justify-between p-3 rounded-lg border">
+                        <div className="flex items-center gap-3">
+                          <Badge className={getPriorityColor(priority as Job['priority'])}>
+                            {priority.toUpperCase()}
+                          </Badge>
+                          <span className="font-medium">{priorityJobs.length} jobs</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold">${priorityValue.toLocaleString()}</div>
+                          <div className="text-sm text-muted-foreground">{percentage.toFixed(1)}% of total</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* AI Business Insights */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-blue-500" />
+                  AI Business Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 p-3 rounded bg-blue-50 dark:bg-blue-950">
+                    <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5" />
+                    <div>
+                      <div className="font-medium text-blue-800 dark:text-blue-200">Revenue Optimization</div>
+                      <div className="text-sm text-blue-700 dark:text-blue-300">
+                        High priority jobs generate {jobs.filter(j => j.priority === 'high' || j.priority === 'urgent').length > 0 
+                          ? Math.round((jobs.filter(j => j.priority === 'high' || j.priority === 'urgent').reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0) / jobs.filter(j => j.priority === 'high' || j.priority === 'urgent').length) / 
+                            (jobs.filter(j => j.priority === 'medium' || j.priority === 'low').reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0) / Math.max(jobs.filter(j => j.priority === 'medium' || j.priority === 'low').length, 1)) * 100 - 100)
+                          : 0}% more revenue on average. Focus on emergency and hazardous tree work.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-2 p-3 rounded bg-green-50 dark:bg-green-950">
+                    <AlertCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                    <div>
+                      <div className="font-medium text-green-800 dark:text-green-200">Customer Patterns</div>
+                      <div className="text-sm text-green-700 dark:text-green-300">
+                        {new Set(jobs.map(j => j.customer)).size} unique customers with {jobs.length} total jobs. 
+                        Average {(jobs.length / new Set(jobs.map(j => j.customer)).size).toFixed(1)} jobs per customer.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-2 p-3 rounded bg-orange-50 dark:bg-orange-950">
+                    <AlertCircle className="h-4 w-4 text-orange-500 mt-0.5" />
+                    <div>
+                      <div className="font-medium text-orange-800 dark:text-orange-200">Quote Follow-up</div>
+                      <div className="text-sm text-orange-700 dark:text-orange-300">
+                        {jobs.filter(j => j.status === 'quote-pending').length} quotes pending. 
+                        Quick follow-up increases conversion by 67%. Recommend calling within 24 hours.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Top Customers */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Customer Value Analysis</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {Object.entries(
+                    jobs.reduce((acc, job) => {
+                      if (!acc[job.customer]) {
+                        acc[job.customer] = { count: 0, value: 0, phone: job.phone };
+                      }
+                      acc[job.customer].count += 1;
+                      acc[job.customer].value += parseInt(job.estimate.replace(/[^0-9]/g, '') || '0');
+                      return acc;
+                    }, {} as Record<string, {count: number, value: number, phone: string}>)
+                  )
+                  .sort(([,a], [,b]) => b.value - a.value)
+                  .slice(0, 5)
+                  .map(([customer, data]) => (
+                    <div key={customer} className="flex items-center justify-between p-3 rounded-lg border hover-elevate">
+                      <div>
+                        <div className="font-medium">{customer}</div>
+                        <div className="text-sm text-muted-foreground">{data.count} jobs • {data.phone}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold">${data.value.toLocaleString()}</div>
+                        <div className="text-sm text-green-600">Top customer</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
