@@ -537,35 +537,35 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Continue with email sending even if lead saving fails
       }
 
-      // Send webhook notification to Zapier (non-blocking)
-      try {
-        const zapierWebhookUrl = process.env.ZAPIER_WEBHOOK_URL;
-        if (zapierWebhookUrl) {
-          fetch(zapierWebhookUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              name: contactValidation.data.name,
-              email: contactValidation.data.email,
-              phone: contactValidation.data.phone,
-              hearAbout: contactValidation.data.hearAbout,
-              message: contactValidation.data.message,
-              leadSource: validatedLeadSource,
-              source: 'treemarkables-contact-form',
-              timestamp: new Date().toISOString(),
-              ip: clientIp,
-              userAgent
-            })
-          }).catch(error => {
-            console.error('[webhook] Failed to send to Zapier:', error);
-          });
-          console.log('[webhook] Contact form data sent to Zapier');
-        }
-      } catch (error) {
-        console.error('[webhook] Error sending to Zapier:', error);
-      }
+      // Send webhook notification to Zapier (non-blocking) - TEMPORARILY DISABLED
+      // try {
+      //   const zapierWebhookUrl = process.env.ZAPIER_WEBHOOK_URL;
+      //   if (zapierWebhookUrl) {
+      //     fetch(zapierWebhookUrl, {
+      //       method: 'POST',
+      //       headers: {
+      //         'Content-Type': 'application/json',
+      //       },
+      //       body: JSON.stringify({
+      //         name: contactValidation.data.name,
+      //         email: contactValidation.data.email,
+      //         phone: contactValidation.data.phone,
+      //         hearAbout: contactValidation.data.hearAbout,
+      //         message: contactValidation.data.message,
+      //         leadSource: validatedLeadSource,
+      //         source: 'treemarkables-contact-form',
+      //         timestamp: new Date().toISOString(),
+      //         ip: clientIp,
+      //         userAgent
+      //       })
+      //     }).catch(error => {
+      //       console.error('[webhook] Failed to send to Zapier:', error);
+      //     });
+      //     console.log('[webhook] Contact form data sent to Zapier');
+      //   }
+      // } catch (error) {
+      //   console.error('[webhook] Error sending to Zapier:', error);
+      // }
 
       // Send email with lead source information
       const emailSent = await sendContactEmail(
