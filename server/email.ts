@@ -21,8 +21,14 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (match) => map[match]);
 }
 
+function removeDashesFromPhone(phone: string): string {
+  return phone.replace(/-/g, '');
+}
+
 export async function sendContactEmail(formData: ContactFormData, leadSource?: LeadSource): Promise<boolean> {
   try {
+    // Clean up phone number by removing dashes
+    const cleanPhone = formData.phone ? removeDashesFromPhone(formData.phone) : undefined;
     // Debug environment variables
     console.log('Environment check:');
     console.log('GMAIL_USER:', process.env.GMAIL_USER ? '***SET***' : 'NOT SET');
@@ -34,7 +40,7 @@ export async function sendContactEmail(formData: ContactFormData, leadSource?: L
       console.log('Customer Information:');
       console.log('Name:', formData.name);
       console.log('Email:', formData.email);
-      if (formData.phone) console.log('Phone:', formData.phone);
+      if (cleanPhone) console.log('Phone:', cleanPhone);
       if (formData.hearAbout) console.log('How they heard about us:', formData.hearAbout);
       console.log('Message:', formData.message);
       
@@ -85,7 +91,7 @@ export async function sendContactEmail(formData: ContactFormData, leadSource?: L
         <h3 style="color: #e97516; margin-bottom: 15px;">Customer Information</h3>
         <p><strong>Name:</strong> ${escapeHtml(formData.name)}</p>
         <p><strong>Email:</strong> ${escapeHtml(formData.email)}</p>
-        ${formData.phone ? `<p><strong>Phone:</strong> ${escapeHtml(formData.phone)}</p>` : ''}
+        ${cleanPhone ? `<p><strong>Phone:</strong> ${escapeHtml(cleanPhone)}</p>` : ''}
         ${formData.hearAbout ? `<p><strong>How they heard about us:</strong> ${escapeHtml(formData.hearAbout)}</p>` : ''}
         
         <h3 style="color: #e97516; margin-top: 25px; margin-bottom: 15px;">Message</h3>
@@ -122,7 +128,7 @@ New Quote Request from Treemarkables Website
 Customer Information:
 Name: ${formData.name}
 Email: ${formData.email}
-${formData.phone ? `Phone: ${formData.phone}` : ''}
+${cleanPhone ? `Phone: ${cleanPhone}` : ''}
 ${formData.hearAbout ? `How they heard about us: ${formData.hearAbout}` : ''}
 
 Message:
@@ -136,8 +142,8 @@ This email was sent from the Treemarkables website contact form.
     const servicem8Content = `New Tree Removal Quote Request
 
 Contact: ${formData.name}
-Phone: ${formData.phone || 'Not provided'}
-Mobile: ${formData.phone || 'Not provided'}
+Phone: ${cleanPhone || 'Not provided'}
+Mobile: ${cleanPhone || 'Not provided'}
 Email: ${formData.email}
 PO Number: ${formData.hearAbout || 'Website'}
 Service Required: Tree Service
