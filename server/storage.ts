@@ -11,6 +11,11 @@ import {
   type Notification, type InsertNotification, type UpdateNotification, type NotificationSummary, type NotificationWithDetails,
   type BusinessSettings, type InsertBusinessSettings, type UpdateBusinessSettings,
   type Communication, type InsertCommunication, type UpdateCommunication,
+  type Equipment, type InsertEquipment, type UpdateEquipment,
+  type EquipmentMaintenance, type InsertEquipmentMaintenance,
+  type Inventory, type InsertInventory,
+  type EquipmentCheckout, type InsertEquipmentCheckout,
+  type InventoryTransaction, type InsertInventoryTransaction,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -249,6 +254,32 @@ export interface IStorage {
   getEquipmentByType(type: string): Promise<Equipment[]>;
   getEquipmentByStatus(status: string): Promise<Equipment[]>;
   deleteEquipment(id: string): Promise<void>;
+  
+  // Equipment Maintenance Management
+  createEquipmentMaintenance(maintenance: InsertEquipmentMaintenance): Promise<EquipmentMaintenance>;
+  getEquipmentMaintenance(id: string): Promise<EquipmentMaintenance | undefined>;
+  getMaintenanceByEquipment(equipmentId: string): Promise<EquipmentMaintenance[]>;
+  getAllMaintenanceRecords(): Promise<EquipmentMaintenance[]>;
+  
+  // Inventory Management
+  createInventoryItem(item: InsertInventory): Promise<Inventory>;
+  getInventoryItem(id: string): Promise<Inventory | undefined>;
+  updateInventoryItem(id: string, updates: Partial<InsertInventory>): Promise<Inventory>;
+  getAllInventory(): Promise<Inventory[]>;
+  getLowStockItems(): Promise<Inventory[]>;
+  getInventoryByCategory(category: string): Promise<Inventory[]>;
+  
+  // Equipment Checkout System
+  checkoutEquipment(checkout: InsertEquipmentCheckout): Promise<EquipmentCheckout>;
+  checkinEquipment(checkoutId: string, returnData: { returnCondition?: string; hoursUsed?: number; mileageEnd?: number; fuelLevelEnd?: number; notes?: string; damageReport?: string }): Promise<EquipmentCheckout>;
+  getActiveCheckouts(): Promise<EquipmentCheckout[]>;
+  getOverdueCheckouts(): Promise<EquipmentCheckout[]>;
+  getCheckoutHistory(equipmentId?: string): Promise<EquipmentCheckout[]>;
+  
+  // Inventory Transactions
+  createInventoryTransaction(transaction: InsertInventoryTransaction): Promise<InventoryTransaction>;
+  getInventoryTransactions(inventoryId: string): Promise<InventoryTransaction[]>;
+  getTransactionsByType(type: string): Promise<InventoryTransaction[]>;
 
   // Business Settings Management
   getBusinessSettings(): Promise<BusinessSettings>;
@@ -304,6 +335,10 @@ export class MemStorage implements IStorage {
   private scheduleEvents: Map<string, ScheduleEvent>;
   private jobTemplates: Map<string, JobTemplate>;
   private equipment: Map<string, Equipment>;
+  private inventory: Map<string, Inventory>;
+  private equipmentCheckouts: Map<string, EquipmentCheckout>;
+  private equipmentMaintenance: Map<string, EquipmentMaintenance>;
+  private inventoryTransactions: Map<string, InventoryTransaction>;
   private businessSettings: BusinessSettings;
   private communications: Communication[];
 
@@ -327,6 +362,10 @@ export class MemStorage implements IStorage {
     this.scheduleEvents = new Map();
     this.jobTemplates = new Map();
     this.equipment = new Map();
+    this.inventory = new Map();
+    this.equipmentCheckouts = new Map();
+    this.equipmentMaintenance = new Map();
+    this.inventoryTransactions = new Map();
     
     // Initialize business settings with defaults
     this.businessSettings = {
@@ -376,6 +415,9 @@ export class MemStorage implements IStorage {
     
     // Initialize communications
     this.communications = [];
+    
+    // Initialize with sample inventory and equipment data
+    this.initializeSampleInventoryData();
     
     // Add sample data for demo purposes
     this.initializeSampleData();
@@ -3040,6 +3082,226 @@ export class MemStorage implements IStorage {
 
   async deleteEquipment(id: string): Promise<void> {
     this.equipment.delete(id);
+  }
+
+  private initializeSampleInventoryData() {
+    // Sample inventory items
+    const sampleInventory: Inventory[] = [
+      {
+        id: '1',
+        name: 'Safety Helmet',
+        category: 'Safety Equipment',
+        sku: 'SAFE-001',
+        currentStock: 15,
+        reorderPoint: 5,
+        unitPrice: '45.00',
+        supplier: 'Safety First Co.',
+        location: 'Warehouse A',
+        createdAt: new Date('2024-01-15'),
+        updatedAt: new Date('2024-01-15'),
+      },
+      {
+        id: '2', 
+        name: 'Chainsaw Oil',
+        category: 'Consumables',
+        sku: 'OIL-002',
+        currentStock: 3,
+        reorderPoint: 10,
+        unitPrice: '24.99',
+        supplier: 'Equipment Plus',
+        location: 'Storage Room',
+        createdAt: new Date('2024-02-01'),
+        updatedAt: new Date('2024-02-01'),
+      },
+      {
+        id: '3',
+        name: 'Work Gloves',
+        category: 'Safety Equipment', 
+        sku: 'SAFE-003',
+        currentStock: 25,
+        reorderPoint: 8,
+        unitPrice: '12.50',
+        supplier: 'Safety First Co.',
+        location: 'Warehouse A',
+        createdAt: new Date('2024-02-10'),
+        updatedAt: new Date('2024-02-10'),
+      }
+    ];
+
+    sampleInventory.forEach(item => this.inventory.set(item.id, item));
+
+    // Sample equipment checkout
+    const sampleCheckout: EquipmentCheckout = {
+      id: '1',
+      equipmentId: '1',
+      checkedOutBy: 'John Smith',
+      checkedOutAt: new Date('2024-12-18T08:00:00.000Z'),
+      expectedReturnDate: new Date('2024-12-20T17:00:00.000Z'),
+      checkedInAt: null,
+      initialCondition: 'Good',
+      actualReturnCondition: null,
+      notes: 'Regular job site checkout',
+    };
+
+    this.equipmentCheckouts.set(sampleCheckout.id, sampleCheckout);
+
+    // Sample maintenance record
+    const sampleMaintenance: EquipmentMaintenance = {
+      id: '1',
+      equipmentId: '1', 
+      type: 'Scheduled',
+      description: 'Oil change and blade sharpening',
+      scheduledDate: new Date('2024-12-25T09:00:00.000Z'),
+      completedDate: null,
+      cost: '75.00',
+      technician: 'Mike Wilson',
+      status: 'Scheduled',
+      notes: 'Annual maintenance check',
+      createdAt: new Date('2024-12-15'),
+      updatedAt: new Date('2024-12-15'),
+    };
+
+    this.equipmentMaintenance.set(sampleMaintenance.id, sampleMaintenance);
+  }
+
+  // ========================================
+  // INVENTORY MANAGEMENT METHODS
+  // ========================================
+
+  async getAllInventory(): Promise<Inventory[]> {
+    return Array.from(this.inventory.values());
+  }
+
+  async getInventoryByCategory(category: string): Promise<Inventory[]> {
+    return Array.from(this.inventory.values()).filter(item => item.category === category);
+  }
+
+  async getLowStockItems(): Promise<Inventory[]> {
+    return Array.from(this.inventory.values()).filter(item => item.currentStock <= item.reorderPoint);
+  }
+
+  async createInventoryItem(data: InsertInventory): Promise<Inventory> {
+    const id = (this.inventory.size + 1).toString();
+    const item: Inventory = {
+      ...data,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.inventory.set(id, item);
+    return item;
+  }
+
+  async updateInventoryItem(id: string, updates: Partial<Inventory>): Promise<Inventory> {
+    const item = this.inventory.get(id);
+    if (!item) {
+      throw new Error(`Inventory item with id ${id} not found`);
+    }
+    const updatedItem = { ...item, ...updates, updatedAt: new Date() };
+    this.inventory.set(id, updatedItem);
+    return updatedItem;
+  }
+
+  // ========================================
+  // EQUIPMENT CHECKOUT METHODS
+  // ========================================
+
+  async checkoutEquipment(data: InsertEquipmentCheckout): Promise<EquipmentCheckout> {
+    const id = (this.equipmentCheckouts.size + 1).toString();
+    const checkout: EquipmentCheckout = {
+      ...data,
+      id,
+      checkedOutAt: new Date(),
+      checkedInAt: null,
+      actualReturnCondition: null,
+      notes: data.notes || null,
+    };
+    this.equipmentCheckouts.set(id, checkout);
+    return checkout;
+  }
+
+  async checkinEquipment(checkoutId: string, data: { actualReturnCondition?: string; notes?: string }): Promise<EquipmentCheckout> {
+    const checkout = this.equipmentCheckouts.get(checkoutId);
+    if (!checkout) {
+      throw new Error(`Checkout record with id ${checkoutId} not found`);
+    }
+    const updatedCheckout = {
+      ...checkout,
+      checkedInAt: new Date(),
+      actualReturnCondition: data.actualReturnCondition || null,
+      notes: data.notes || checkout.notes,
+    };
+    this.equipmentCheckouts.set(checkoutId, updatedCheckout);
+    return updatedCheckout;
+  }
+
+  async getActiveCheckouts(): Promise<EquipmentCheckout[]> {
+    return Array.from(this.equipmentCheckouts.values()).filter(checkout => !checkout.checkedInAt);
+  }
+
+  async getOverdueCheckouts(): Promise<EquipmentCheckout[]> {
+    const now = new Date();
+    return Array.from(this.equipmentCheckouts.values()).filter(checkout => {
+      if (checkout.checkedInAt || !checkout.expectedReturnDate) return false;
+      return new Date(checkout.expectedReturnDate) < now;
+    });
+  }
+
+  async getCheckoutHistory(equipmentId?: string): Promise<EquipmentCheckout[]> {
+    let checkouts = Array.from(this.equipmentCheckouts.values());
+    if (equipmentId) {
+      checkouts = checkouts.filter(checkout => checkout.equipmentId === equipmentId);
+    }
+    return checkouts.sort((a, b) => new Date(b.checkedOutAt).getTime() - new Date(a.checkedOutAt).getTime());
+  }
+
+  // ========================================
+  // EQUIPMENT MAINTENANCE METHODS
+  // ========================================
+
+  async createEquipmentMaintenance(data: InsertEquipmentMaintenance): Promise<EquipmentMaintenance> {
+    const id = (this.equipmentMaintenance.size + 1).toString();
+    const maintenance: EquipmentMaintenance = {
+      ...data,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.equipmentMaintenance.set(id, maintenance);
+    return maintenance;
+  }
+
+  async getMaintenanceByEquipment(equipmentId: string): Promise<EquipmentMaintenance[]> {
+    return Array.from(this.equipmentMaintenance.values())
+      .filter(maintenance => maintenance.equipmentId === equipmentId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  // ========================================
+  // INVENTORY TRANSACTION METHODS
+  // ========================================
+
+  async createInventoryTransaction(data: InsertInventoryTransaction): Promise<InventoryTransaction> {
+    const id = (this.inventoryTransactions.size + 1).toString();
+    const transaction: InventoryTransaction = {
+      ...data,
+      id,
+      createdAt: new Date(),
+    };
+    this.inventoryTransactions.set(id, transaction);
+    return transaction;
+  }
+
+  async getInventoryTransactions(inventoryId: string): Promise<InventoryTransaction[]> {
+    return Array.from(this.inventoryTransactions.values())
+      .filter(transaction => transaction.inventoryId === inventoryId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getTransactionsByType(type: string): Promise<InventoryTransaction[]> {
+    return Array.from(this.inventoryTransactions.values())
+      .filter(transaction => transaction.type === type)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   // ========================================

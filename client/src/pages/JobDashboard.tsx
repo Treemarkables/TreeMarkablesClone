@@ -15,6 +15,7 @@ import logoUrl from '@assets/treelogo_1758218149788.webp';
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { CrewManagement } from "@/components/CrewManagement";
 import { EquipmentTracker } from "@/components/EquipmentTracker";
+import { InventoryManager } from "@/components/InventoryManager";
 import { InvoiceManager } from "@/components/InvoiceManager";
 import { PhotoDocumentation } from "@/components/PhotoDocumentation";
 import { SafetyReporting } from "@/components/SafetyReporting";
@@ -1356,7 +1357,7 @@ export default function JobDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <WeatherWidget compact={true} showForecast={false} />
               <CrewManagement showDetailed={false} />
-              <EquipmentTracker compact={true} />
+              <InventoryManager compact={true} />
             </div>
 
             {/* Business Operations Row */}
@@ -2638,6 +2639,11 @@ export default function JobDashboard() {
           {/* Routes Tab */}
           <TabsContent value="routes" className="space-y-6">
             <RouteOptimizer />
+          </TabsContent>
+
+          {/* Equipment & Inventory Tab */}
+          <TabsContent value="equipment" className="space-y-6">
+            <InventoryManager />
           </TabsContent>
 
           {/* Performance Tab */}
