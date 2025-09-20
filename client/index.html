@@ -69,12 +69,17 @@
       window.addEventListener('load', () => {
         console.log("Page loaded, importing React modules...");
         setTimeout(() => {
-          import('/src/main.tsx').catch(error => {
+          console.log("About to import main.tsx...");
+          import('/src/main.tsx?t=' + Date.now()).then(() => {
+            console.log("Successfully imported main.tsx");
+          }).catch(error => {
             console.error('Failed to load React app:', error);
+            console.error('Error details:', error.message, error.stack);
             document.getElementById('root').innerHTML = `
               <div style="padding: 40px; text-align: center; font-family: Arial, sans-serif;">
                 <h1 style="color: #dc2626;">⚠️ Loading Error</h1>
                 <p>Failed to load the dashboard application.</p>
+                <p style="color: #666; font-size: 14px;">Error: ${error.message}</p>
                 <button onclick="window.location.reload()" style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer;">
                   Refresh Page
                 </button>
