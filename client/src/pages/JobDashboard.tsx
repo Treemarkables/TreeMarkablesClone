@@ -82,6 +82,7 @@ import {
 import PhotoUpload from "@/components/PhotoUpload";
 import { NotificationBell } from "@/components/NotificationBell";
 import { CalendarView } from "@/components/CalendarView";
+import { Link } from "wouter";
 
 // Add Speech Recognition types for TypeScript
 declare global {
@@ -149,7 +150,6 @@ export default function JobDashboard() {
   
   // Mobile optimization states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [kpiCollapsed, setKpiCollapsed] = useState(false);
   
   // Photo management states
   const [selectedJobForPhotos, setSelectedJobForPhotos] = useState<string | null>(null);
@@ -584,6 +584,18 @@ export default function JobDashboard() {
                 <span className="lg:hidden">Import</span>
               </Button>
               
+              <Link href="/metrics">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                  data-testid="button-metrics-dashboard"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  <span className="hidden lg:inline">Metrics</span>
+                </Button>
+              </Link>
+              
               <Button
                 onClick={startListening}
                 variant={isListening ? "destructive" : "outline"}
@@ -632,6 +644,19 @@ export default function JobDashboard() {
                       Import ServiceM8
                     </Button>
                     
+                    <Link href="/metrics">
+                      <Button
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2 justify-center w-full"
+                        data-testid="button-metrics-dashboard-mobile"
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                        Metrics Dashboard
+                      </Button>
+                    </Link>
+                    
                     <Button
                       onClick={() => {
                         startListening();
@@ -664,133 +689,6 @@ export default function JobDashboard() {
           </Card>
         )}
 
-        {/* Collapsible Key Performance Indicators */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between md:hidden">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Key Metrics
-            </h2>
-            <Button
-              onClick={() => setKpiCollapsed(!kpiCollapsed)}
-              variant="ghost"
-              size="sm"
-              className="p-1"
-            >
-              {kpiCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-            </Button>
-          </div>
-          
-          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 ${kpiCollapsed ? 'hidden md:grid' : ''}`}>
-            <Card className="hover-elevate card-colorful" data-testid="card-total-revenue">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(dashboardStats?.totalRevenue || 0)}</div>
-              <p className="text-xs text-muted-foreground">
-                {dashboardStats?.totalJobs || 0} jobs completed
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover-elevate" data-testid="card-active-leads">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Leads</CardTitle>
-              <Target className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{dashboardStats?.totalLeads || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {dashboardStats?.conversionRate?.toFixed(1) || 0}% conversion rate
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover-elevate" data-testid="card-avg-quote">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Quote Value</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(dashboardStats?.averageQuoteValue || 0)}</div>
-              <p className="text-xs text-muted-foreground">
-                {quoteAnalytics?.totalQuotes || 0} quotes sent
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover-elevate" data-testid="card-missed-calls">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Missed Calls</CardTitle>
-              <PhoneCall className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{dashboardStats?.missedCalls || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                Potential leads lost
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover-elevate" data-testid="card-response-time">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Response Time</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">2.4 hrs</div>
-              <p className="text-xs text-muted-foreground">
-                Lead to first contact
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover-elevate" data-testid="card-quote-acceptance">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Quote Acceptance</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {quoteAnalytics?.totalQuotes ? 
-                  ((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(1) 
-                  : 0}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Quotes accepted
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover-elevate" data-testid="card-customer-retention">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Customer Retention</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">85%</div>
-              <p className="text-xs text-muted-foreground">
-                Repeat customers
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover-elevate" data-testid="card-first-time-fix">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">First Time Fix</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">92%</div>
-              <p className="text-xs text-muted-foreground">
-                Jobs completed first visit
-              </p>
-            </CardContent>
-          </Card>
-          </div>
-        </div>
 
         {/* Main Dashboard Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
