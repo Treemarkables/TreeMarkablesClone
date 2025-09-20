@@ -17,6 +17,8 @@ import { EquipmentTracker } from "@/components/EquipmentTracker";
 import { InvoiceManager } from "@/components/InvoiceManager";
 import { PhotoDocumentation } from "@/components/PhotoDocumentation";
 import { SafetyReporting } from "@/components/SafetyReporting";
+import { RouteOptimizer } from "@/components/RouteOptimizer";
+import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
 import {
   BarChart,
   Bar,
@@ -730,7 +732,7 @@ export default function JobDashboard() {
 
         {/* Main Dashboard Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-11 h-auto p-1 bg-card border border-border shadow-lg rounded-xl">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-13 h-auto p-1 bg-card border border-border shadow-lg rounded-xl">
             <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               🌟 Overview
             </TabsTrigger>
@@ -761,6 +763,12 @@ export default function JobDashboard() {
             <TabsTrigger value="safety" data-testid="tab-safety" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               🛡️ Safety
             </TabsTrigger>
+            <TabsTrigger value="routes" data-testid="tab-routes" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
+              🗺️ Routes
+            </TabsTrigger>
+            <TabsTrigger value="performance" data-testid="tab-performance" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
+              📈 Performance
+            </TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               ⚙️ Settings
             </TabsTrigger>
@@ -780,6 +788,12 @@ export default function JobDashboard() {
               <InvoiceManager compact={true} />
               <PhotoDocumentation compact={true} />
               <SafetyReporting compact={true} />
+            </div>
+
+            {/* Operations & Analytics Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <RouteOptimizer compact={true} />
+              <PerformanceAnalytics compact={true} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1970,6 +1984,16 @@ export default function JobDashboard() {
           {/* Safety Tab */}
           <TabsContent value="safety" className="space-y-6">
             <SafetyReporting />
+          </TabsContent>
+
+          {/* Routes Tab */}
+          <TabsContent value="routes" className="space-y-6">
+            <RouteOptimizer />
+          </TabsContent>
+
+          {/* Performance Tab */}
+          <TabsContent value="performance" className="space-y-6">
+            <PerformanceAnalytics />
           </TabsContent>
 
           {/* Settings Tab */}
