@@ -207,6 +207,130 @@ export class MemStorage implements IStorage {
     this.socialPlans = new Map();
     this.competitorSignals = new Map();
     this.priceRules = new Map();
+    
+    // Add sample data for demo purposes
+    this.initializeSampleData();
+  }
+  
+  private initializeSampleData() {
+    // Sample customers
+    const customer1 = { 
+      id: '1', name: 'Sarah Johnson', email: 'sarah.johnson@email.com', phone: '(555) 123-4567', 
+      address: '123 Maple Street, Auckland, NZ', city: 'Auckland', region: 'Auckland', 
+      notes: 'Has large oak tree requiring removal. Previous customer.', source: 'Google Ads', 
+      leadId: null, isActive: true, totalSpent: null, lastContactDate: null, preferredContactMethod: 'phone',
+      createdAt: new Date('2024-12-15'), updatedAt: new Date('2024-12-15') 
+    };
+    const customer2 = { 
+      id: '2', name: 'Mike Chen', email: 'mike.chen@email.com', phone: '(555) 987-6543',
+      address: '456 Pine Avenue, Wellington, NZ', city: 'Wellington', region: 'Wellington',
+      notes: 'Storm damaged tree removal needed urgently.', source: 'Facebook', 
+      leadId: null, isActive: true, totalSpent: null, lastContactDate: null, preferredContactMethod: 'email',
+      createdAt: new Date('2024-12-10'), updatedAt: new Date('2024-12-10') 
+    };
+    const customer3 = { 
+      id: '3', name: 'Emma Wilson', email: 'emma.wilson@email.com', phone: '(555) 456-7890',
+      address: '789 Cedar Lane, Christchurch, NZ', city: 'Christchurch', region: 'Canterbury',
+      notes: 'Regular maintenance customer. Quarterly pruning.', source: 'Website',
+      leadId: null, isActive: true, totalSpent: null, lastContactDate: null, preferredContactMethod: 'phone',
+      createdAt: new Date('2024-12-08'), updatedAt: new Date('2024-12-08') 
+    };
+    
+    this.customers.set('1', customer1);
+    this.customers.set('2', customer2); 
+    this.customers.set('3', customer3);
+    
+    // Sample pipeline leads
+    const lead1 = {
+      id: '1', name: 'David Thompson', email: 'david.thompson@email.com', phone: '(555) 222-3333',
+      source: 'Google Ads', status: 'new', priority: 'medium', leadSource: null, address: null,
+      notes: 'Interested in tree pruning services for commercial property', serviceRequested: 'Tree Pruning',
+      budget: null, urgency: null, followUpDate: new Date('2024-12-22'), lastContactDate: null,
+      customerId: null, assignedTo: null, leadScore: null,
+      createdAt: new Date('2024-12-19'), updatedAt: new Date('2024-12-19')
+    };
+    const lead2 = {
+      id: '2', name: 'Lisa Rodriguez', email: 'lisa.rodriguez@email.com', phone: '(555) 444-5555', 
+      source: 'Facebook', status: 'contacted', priority: 'high', leadSource: null, address: null,
+      notes: 'Urgent tree removal needed. Has budget approved.', serviceRequested: 'Tree Removal',
+      budget: null, urgency: null, followUpDate: new Date('2024-12-21'), lastContactDate: null,
+      customerId: null, assignedTo: null, leadScore: null,
+      createdAt: new Date('2024-12-18'), updatedAt: new Date('2024-12-20')
+    };
+    const lead3 = {
+      id: '3', name: 'Robert Kim', email: 'robert.kim@email.com', phone: '(555) 777-8888',
+      source: 'Website', status: 'qualified', priority: 'low', leadSource: null, address: null,
+      notes: 'Looking for regular maintenance contract', serviceRequested: 'Maintenance',
+      budget: null, urgency: null, followUpDate: new Date('2024-12-23'), lastContactDate: null,
+      customerId: null, assignedTo: null, leadScore: null,
+      createdAt: new Date('2024-12-16'), updatedAt: new Date('2024-12-19')
+    };
+    
+    this.pipelineLeads.set('1', lead1);
+    this.pipelineLeads.set('2', lead2);
+    this.pipelineLeads.set('3', lead3);
+    
+    // Sample jobs
+    const job1 = {
+      id: '1', customerId: '1', title: 'Large Oak Tree Removal', description: 'Remove dangerous oak tree leaning toward house',
+      status: 'completed', priority: 'high', scheduledDate: new Date('2024-12-18'), completedDate: new Date('2024-12-18'),
+      estimatedHours: 8, actualHours: 9, totalAmount: '2500.00', address: '123 Maple Street, Auckland, NZ',
+      notes: 'Required additional safety equipment due to power lines', beforePhotos: ['/api/photos/oak_before_1.jpg', '/api/photos/oak_before_2.jpg'],
+      afterPhotos: ['/api/photos/oak_after_1.jpg', '/api/photos/oak_after_2.jpg'], jobNumber: 'JOB-001',
+      quoteId: '1', leadId: null, assignedCrew: null, equipmentRequired: null, specialInstructions: null,
+      weatherDependent: null, permitRequired: null, safetyNotes: null, rescheduledFrom: null, rescheduledReason: null,
+      createdAt: new Date('2024-12-15'), updatedAt: new Date('2024-12-18')
+    };
+    const job2 = {
+      id: '2', customerId: '2', title: 'Storm Damage Tree Removal', description: 'Emergency removal of storm-damaged pine tree',
+      status: 'in_progress', priority: 'high', scheduledDate: new Date('2024-12-21'), completedDate: null,
+      estimatedHours: 6, actualHours: null, totalAmount: '1200.00', address: '456 Pine Avenue, Wellington, NZ',
+      notes: 'Waiting for city permits before proceeding', beforePhotos: ['/api/photos/storm_before_1.jpg'],
+      afterPhotos: [], jobNumber: 'JOB-002', quoteId: '2', leadId: null, assignedCrew: null, equipmentRequired: null,
+      specialInstructions: null, weatherDependent: null, permitRequired: null, safetyNotes: null, rescheduledFrom: null,
+      rescheduledReason: null, createdAt: new Date('2024-12-10'), updatedAt: new Date('2024-12-20')
+    };
+    
+    this.jobs.set('1', job1);
+    this.jobs.set('2', job2);
+    
+    // Sample quotes
+    const quote1 = {
+      id: '1', customerId: '1', jobTitle: 'Large Oak Tree Removal', description: 'Complete removal of 25ft oak tree with stump grinding',
+      status: 'accepted', amount: '2500.00', validUntil: new Date('2025-01-15'), quoteNumber: 'Q-001',
+      leadId: null, items: [
+        { description: 'Tree removal', quantity: 1, unitPrice: 1800.00, total: 1800.00 },
+        { description: 'Stump grinding', quantity: 1, unitPrice: 500.00, total: 500.00 },
+        { description: 'Debris cleanup', quantity: 1, unitPrice: 200.00, total: 200.00 }
+      ], terms: null, taxAmount: null, discountAmount: null, acceptanceDate: null, rejectionReason: null, 
+      followUpDate: null, sentDate: null, viewedDate: null, createdBy: null,
+      createdAt: new Date('2024-12-12'), updatedAt: new Date('2024-12-15')
+    };
+    const quote2 = {
+      id: '2', customerId: '2', jobTitle: 'Emergency Storm Damage Removal', description: 'Emergency removal of fallen pine tree',
+      status: 'pending', amount: '1200.00', validUntil: new Date('2024-12-30'), quoteNumber: 'Q-002',
+      leadId: null, items: [
+        { description: 'Emergency tree removal', quantity: 1, unitPrice: 1000.00, total: 1000.00 },
+        { description: 'Site cleanup', quantity: 1, unitPrice: 200.00, total: 200.00 }
+      ], terms: null, taxAmount: null, discountAmount: null, acceptanceDate: null, rejectionReason: null,
+      followUpDate: null, sentDate: null, viewedDate: null, createdBy: null,
+      createdAt: new Date('2024-12-10'), updatedAt: new Date('2024-12-10')
+    };
+    
+    this.quotes.set('1', quote1);
+    this.quotes.set('2', quote2);
+    
+    // Sample activities
+    const activity1 = {
+      id: '1', type: 'call', customerId: '1', leadId: null, direction: 'outbound', subject: 'Initial consultation call',
+      description: 'Discussed oak tree removal requirements and scheduled site visit', outcome: 'positive',
+      duration: 15, jobId: '1', createdBy: null, metadata: null, automationId: null,
+      createdAt: new Date('2024-12-15')
+    };
+    
+    this.activities.set('1', activity1);
+    
+    console.log('Sample data initialized successfully');
   }
 
   async getUser(id: string): Promise<User | undefined> {
