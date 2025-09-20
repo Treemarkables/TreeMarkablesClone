@@ -434,3 +434,97 @@ export type ServiceM8CustomerCsv = z.infer<typeof servicem8CustomerCsvSchema>;
 export type ServiceM8JobCsv = z.infer<typeof servicem8JobCsvSchema>;  
 export type ServiceM8QuoteCsv = z.infer<typeof servicem8QuoteCsvSchema>;
 export type CsvImportResult = z.infer<typeof csvImportResultSchema>;
+
+// ========================================
+// NOTIFICATION SYSTEM SCHEMAS
+// ========================================
+
+// Notification Types Enum
+export const notificationTypes = [
+  'new_lead',           // New lead received
+  'lead_status_change', // Lead status updated
+  'job_status_change',  // Job status updated  
+  'quote_sent',         // Quote sent to customer
+  'quote_accepted',     // Quote accepted by customer
+  'quote_expired',      // Quote expired
+  'follow_up_due',      // Follow-up is due
+  'follow_up_overdue',  // Follow-up is overdue
+  'job_scheduled',      // Job scheduled
+  'job_completed',      // Job completed
+  'payment_received',   // Payment received
+  'system_alert',       // System alert/message
+] as const;
+
+export type NotificationType = typeof notificationTypes[number];
+
+// Notification Priority Levels
+export const notificationPriorities = [
+  'low',
+  'medium', 
+  'high',
+  'urgent'
+] as const;
+
+export type NotificationPriority = typeof notificationPriorities[number];
+
+// Notifications Table
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").notNull(), // NotificationType
+  priority: text("priority").notNull().default('medium'), // NotificationPriority
+  isRead: boolean("is_read").default(false).notNull(),
+  userId: varchar("user_id"), // Optional - for user-specific notifications
+  // Related entity references
+  leadId: varchar("lead_id"), // Reference to lead if notification is lead-related
+  jobId: varchar("job_id"), // Reference to job if notification is job-related
+  customerId: varchar("customer_id"), // Reference to customer if notification is customer-related
+  quoteId: varchar("quote_id"), // Reference to quote if notification is quote-related
+  // Metadata
+  metadata: jsonb("metadata"), // Additional data for the notification
+  actionUrl: text("action_url"), // URL to navigate when notification is clicked
+  expiresAt: timestamp("expires_at"), // Optional expiration date
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  readAt: timestamp("read_at"), // When notification was read
+});
+
+// Notification Insert Schema
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+  readAt: true,
+});
+
+// Notification Update Schema (for marking as read, etc.)
+export const updateNotificationSchema = insertNotificationSchema.partial();
+
+// Notification Types
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type UpdateNotification = z.infer<typeof updateNotificationSchema>;
+
+// Notification with related data type (for API responses)
+export type NotificationWithDetails = Notification & {
+  leadName?: string;
+  customerName?: string;
+  jobTitle?: string;
+  quoteNumber?: string;
+};
+
+// Notification Summary Schema (for dashboard/counter)
+export const notificationSummarySchema = z.object({
+  total: z.number(),
+  unread: z.number(),
+  byType: z.record(z.string(), z.number()),
+  byPriority: z.record(z.string(), z.number()),
+  recent: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    type: z.string(),
+    priority: z.string(),
+    createdAt: z.string(),
+  })),
+});
+
+export type NotificationSummary = z.infer<typeof notificationSummarySchema>;
