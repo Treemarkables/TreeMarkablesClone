@@ -2,7 +2,12 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { sendContactEmail } from "./email";
-import { leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource } from "@shared/schema";
+import { 
+  leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
+  insertCustomerSchema, insertLeadSchema, insertCallSchema, insertQuoteSchema,
+  insertJobSchema, insertActivitySchema, insertReviewSchema, insertCampaignSchema,
+  insertSocialPlanSchema, insertCompetitorSignalSchema, insertPriceRuleSchema
+} from "@shared/schema";
 import path from "path";
 import fs from "fs";
 
