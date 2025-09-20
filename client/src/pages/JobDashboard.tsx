@@ -1090,16 +1090,47 @@ export default function JobDashboard() {
                     Collected: {Object.entries(leadFormData).filter(([_, value]) => value.trim() !== "").length} fields
                   </div>
                   
-                  {/* Cancel conversation button */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-2 text-orange-600 border-orange-300 hover:bg-orange-100"
-                    onClick={cancelConversation}
-                    data-testid="button-cancel-conversation"
-                  >
-                    Cancel Lead Creation
-                  </Button>
+                  {/* Manual listening controls */}
+                  <div className="mt-3 flex gap-2">
+                    {!isListening && conversationStep < conversationSteps.length - 1 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-green-600 border-green-300 hover:bg-green-50"
+                        onClick={startListening}
+                        data-testid="button-continue-listening"
+                      >
+                        🎙️ Continue Listening
+                      </Button>
+                    )}
+                    
+                    {/* Cancel conversation button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-orange-600 border-orange-300 hover:bg-orange-100"
+                      onClick={cancelConversation}
+                      data-testid="button-cancel-conversation"
+                    >
+                      Cancel Lead Creation
+                    </Button>
+                  </div>
+                  
+                  {/* Listening status */}
+                  <div className="mt-2 text-xs text-orange-600">
+                    {isListening ? (
+                      <span className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                        Listening for your answer...
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">
+                        {conversationStep < conversationSteps.length - 1 ? 
+                          'Click "Continue Listening" to speak your answer' : 
+                          'Waiting for confirmation...'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
               
