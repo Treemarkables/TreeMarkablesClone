@@ -66,6 +66,17 @@ export interface IStorage {
   getJobsByStatus(status: string): Promise<Job[]>;
   getAllJobs(): Promise<Job[]>;
   
+  // Gross Margin Management
+  updateJobGrossMargin(jobId: string, grossMarginData: {
+    laborCosts?: number;
+    materialsCosts?: number;
+    otherCosts?: number;
+    laborHours?: number;
+    hourlyRate?: number;
+  }): Promise<Job>;
+  calculateAndUpdateGrossMargin(jobId: string): Promise<Job>;
+  validateGrossMarginComplete(jobId: string): Promise<boolean>;
+  
   // Job Diary Management
   createJobDiaryEntry(entry: InsertJobDiaryEntry): Promise<JobDiaryEntry>;
   getJobDiaryEntry(id: string): Promise<JobDiaryEntry | undefined>;
@@ -1123,6 +1134,97 @@ export class MemStorage implements IStorage {
   async getAllJobs(): Promise<Job[]> {
     return Array.from(this.jobs.values())
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  // ========================================
+  // GROSS MARGIN MANAGEMENT IMPLEMENTATIONS
+  // ========================================
+
+  async updateJobGrossMargin(jobId: string, grossMarginData: {
+    laborCosts?: number;
+    materialsCosts?: number;
+    otherCosts?: number;
+    laborHours?: number;
+    hourlyRate?: number;
+  }): Promise<Job> {
+    const existing = this.jobs.get(jobId);
+    if (!existing) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    // Calculate labor costs if hours and rate provided
+    let calculatedLaborCosts = grossMarginData.laborCosts;
+    if (grossMarginData.laborHours && grossMarginData.hourlyRate) {
+      calculatedLaborCosts = grossMarginData.laborHours * grossMarginData.hourlyRate;
+    }
+
+    const updates = {
+      ...grossMarginData,
+      laborCosts: calculatedLaborCosts?.toString(),
+      updatedAt: new Date()
+    };
+
+    const updated = { ...existing, ...updates };
+    this.jobs.set(jobId, updated);
+
+    // Automatically calculate gross margin after updating costs
+    return await this.calculateAndUpdateGrossMargin(jobId);
+  }
+
+  async calculateAndUpdateGrossMargin(jobId: string): Promise<Job> {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    const totalAmount = job.totalAmount ? parseFloat(job.totalAmount) : 0;
+    const laborCosts = job.laborCosts ? parseFloat(job.laborCosts) : 0;
+    const materialsCosts = job.materialsCosts ? parseFloat(job.materialsCosts) : 0;
+    const otherCosts = job.otherCosts ? parseFloat(job.otherCosts) : 0;
+    const costOfGoods = job.costOfGoods ? parseFloat(job.costOfGoods) : 0;
+
+    // Total costs = labor + materials + other + cost of goods
+    const totalCosts = laborCosts + materialsCosts + otherCosts + costOfGoods;
+    
+    // Gross margin calculation: (Revenue - COGS) / Revenue * 100
+    const grossMargin = totalAmount > 0 ? ((totalAmount - totalCosts) / totalAmount) * 100 : 0;
+    
+    // Check if gross margin calculation is complete
+    const grossMarginCalculated = totalAmount > 0 && (laborCosts > 0 || materialsCosts > 0 || otherCosts > 0);
+
+    const updated: Job = {
+      ...job,
+      grossMargin: grossMargin.toFixed(2),
+      grossMarginCalculated,
+      updatedAt: new Date()
+    };
+
+    this.jobs.set(jobId, updated);
+
+    console.log('GROSS_MARGIN_CALCULATED', JSON.stringify({
+      jobId,
+      totalAmount,
+      totalCosts,
+      grossMargin: grossMargin.toFixed(2),
+      grossMarginCalculated
+    }));
+
+    return updated;
+  }
+
+  async validateGrossMarginComplete(jobId: string): Promise<boolean> {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      return false;
+    }
+
+    // Check if gross margin has been calculated and job has revenue
+    const hasRevenue = job.totalAmount && parseFloat(job.totalAmount) > 0;
+    const hasCosts = (job.laborCosts && parseFloat(job.laborCosts) > 0) ||
+                     (job.materialsCosts && parseFloat(job.materialsCosts) > 0) ||
+                     (job.otherCosts && parseFloat(job.otherCosts) > 0);
+    
+    return hasRevenue && hasCosts && job.grossMarginCalculated === true;
   }
 
   // Job Diary Management
