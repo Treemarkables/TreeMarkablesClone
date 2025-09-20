@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -60,8 +60,11 @@ import {
   Menu,
   X,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Camera,
+  Image
 } from "lucide-react";
+import PhotoUpload from "@/components/PhotoUpload";
 
 // Add Speech Recognition types for TypeScript
 declare global {
@@ -121,6 +124,10 @@ export default function JobDashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
+  
+  // Photo management states
+  const [selectedJobForPhotos, setSelectedJobForPhotos] = useState<string | null>(null);
+  const [showPhotosDialog, setShowPhotosDialog] = useState(false);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1149,6 +1156,45 @@ export default function JobDashboard() {
                           {job.priority} priority
                         </Badge>
                       )}
+                      
+                      {/* Photo indicators */}
+                      <div className="flex items-center gap-4 pt-2 border-t">
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                          <Camera className="h-3 w-3" />
+                          Before: {job.beforePhotos?.length || 0}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                          <Image className="h-3 w-3" />
+                          After: {job.afterPhotos?.length || 0}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Action buttons */}
+                    <div className="flex gap-2 mt-4">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedJobForPhotos(job.id);
+                          setShowPhotosDialog(true);
+                        }}
+                        data-testid={`button-manage-photos-${job.id}`}
+                      >
+                        <Camera className="h-3 w-3 mr-1" />
+                        Photos
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs"
+                        data-testid={`button-view-job-${job.id}`}
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        Details
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -1537,6 +1583,61 @@ export default function JobDashboard() {
                 </div>
               )}
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Job Photo Management Dialog */}
+        <Dialog open={showPhotosDialog} onOpenChange={setShowPhotosDialog}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Camera className="h-5 w-5" />
+                Job Photo Documentation
+              </DialogTitle>
+              <DialogDescription>
+                Upload before and after photos to document the work progress
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedJobForPhotos && (
+              <div className="space-y-6">
+                {/* Before Photos Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <Camera className="h-5 w-5 text-blue-600" />
+                    Before Photos
+                  </h3>
+                  <PhotoUpload
+                    jobId={selectedJobForPhotos}
+                    type="before"
+                    existingPhotos={jobs?.find((j: any) => j.id === selectedJobForPhotos)?.beforePhotos || []}
+                    maxPhotos={8}
+                  />
+                </div>
+
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <Image className="h-5 w-5 text-green-600" />
+                    After Photos  
+                  </h3>
+                  <PhotoUpload
+                    jobId={selectedJobForPhotos}
+                    type="after"
+                    existingPhotos={jobs?.find((j: any) => j.id === selectedJobForPhotos)?.afterPhotos || []}
+                    maxPhotos={8}
+                  />
+                </div>
+
+                <div className="flex justify-end pt-4 border-t">
+                  <Button
+                    onClick={() => setShowPhotosDialog(false)}
+                    data-testid="button-close-photos-dialog"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>

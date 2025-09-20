@@ -1,5 +1,7 @@
 import type { Express, Request, Response } from "express";
+import express from "express";
 import { createServer, type Server } from "http";
+import { fileURLToPath } from 'url';
 import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import { 
@@ -15,7 +17,8 @@ import path from "path";
 import fs from "fs";
 
 // Configure multer for file uploads
-const upload = multer({ 
+// CSV file upload configuration
+const csvUpload = multer({ 
   dest: 'uploads/',
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
@@ -28,6 +31,32 @@ const upload = multer({
     }
   }
 });
+
+// Image upload configuration for job photos
+const imageUpload = multer({
+  dest: 'uploads/photos/',
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit per image
+    files: 10 // Maximum 10 files at once
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  }
+});
+
+// Get the directory path for ES module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Create photos directory if it doesn't exist
+const photosDir = path.join(__dirname, '..', 'uploads', 'photos');
+if (!fs.existsSync(photosDir)) {
+  fs.mkdirSync(photosDir, { recursive: true });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // SEO routes - serve sitemap.xml and robots.txt
@@ -1507,7 +1536,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // ========================================
 
   // Import customers from ServiceM8 CSV export
-  app.post('/api/import/customers', upload.single('csvFile'), async (req: Request, res: Response) => {
+  app.post('/api/import/customers', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No CSV file provided' });
@@ -1555,7 +1584,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   });
 
   // Import jobs from ServiceM8 CSV export
-  app.post('/api/import/jobs', upload.single('csvFile'), async (req: Request, res: Response) => {
+  app.post('/api/import/jobs', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No CSV file provided' });
@@ -1603,7 +1632,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   });
 
   // Import quotes from ServiceM8 CSV export
-  app.post('/api/import/quotes', upload.single('csvFile'), async (req: Request, res: Response) => {
+  app.post('/api/import/quotes', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No CSV file provided' });
@@ -1646,6 +1675,215 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Error importing quotes',
+      });
+    }
+  });
+
+  // ========================================
+  // PHOTO UPLOAD ENDPOINTS FOR JOB DOCUMENTATION
+  // ========================================
+
+  // Serve uploaded photos as static files
+  app.use('/api/photos', (req, res, next) => {
+    // Add basic security headers for image serving
+    res.set('Cache-Control', 'public, max-age=86400'); // 24 hours cache
+    next();
+  }, express.static(path.join(__dirname, '..', 'uploads', 'photos')));
+
+  // Upload photos for a job (before/after documentation)
+  app.post('/api/jobs/:jobId/photos', imageUpload.array('photos', 10), async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const { type } = req.body; // 'before' or 'after'
+
+      // Validate job ID format
+      if (!jobId || typeof jobId !== 'string' || jobId.length < 1) {
+        return res.status(400).json({ success: false, message: 'Invalid job ID' });
+      }
+
+      if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+        return res.status(400).json({ success: false, message: 'No photos provided' });
+      }
+
+      if (!type || (type !== 'before' && type !== 'after')) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Photo type must be either "before" or "after"' 
+        });
+      }
+
+      // Check if job exists
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        // Clean up uploaded files if job doesn't exist
+        req.files.forEach((file: any) => {
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        });
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Generate photo URLs
+      const photoUrls: string[] = [];
+      const timestamp = Date.now();
+      
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i] as Express.Multer.File;
+        const fileExtension = path.extname(file.originalname);
+        const newFileName = `${jobId}_${type}_${timestamp}_${i}${fileExtension}`;
+        const newPath = path.join(photosDir, newFileName);
+        
+        // Move file to permanent location with descriptive name
+        fs.renameSync(file.path, newPath);
+        
+        // Store relative URL for database
+        photoUrls.push(`/api/photos/${newFileName}`);
+      }
+
+      // Update job with new photos
+      const currentPhotos = type === 'before' ? job.beforePhotos || [] : job.afterPhotos || [];
+      const updatedPhotos = [...currentPhotos, ...photoUrls];
+      
+      const updateData = type === 'before' 
+        ? { beforePhotos: updatedPhotos }
+        : { afterPhotos: updatedPhotos };
+
+      await storage.updateJob(jobId, updateData);
+
+      res.json({
+        success: true,
+        message: `Successfully uploaded ${photoUrls.length} ${type} photos`,
+        photos: photoUrls,
+        jobId
+      });
+    } catch (error) {
+      // Clean up uploaded files on error
+      if (req.files && Array.isArray(req.files)) {
+        req.files.forEach((file: any) => {
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        });
+      }
+      
+      console.error('Error uploading job photos:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error uploading photos',
+      });
+    }
+  });
+
+  // Get photos for a job
+  app.get('/api/jobs/:jobId/photos', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      res.json({
+        success: true,
+        jobId,
+        beforePhotos: job.beforePhotos || [],
+        afterPhotos: job.afterPhotos || []
+      });
+    } catch (error) {
+      console.error('Error getting job photos:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving photos',
+      });
+    }
+  });
+
+  // Delete a specific photo from a job
+  app.delete('/api/jobs/:jobId/photos', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const { photoUrl, type } = req.body;
+
+      // Validate job ID format
+      if (!jobId || typeof jobId !== 'string' || jobId.length < 1) {
+        return res.status(400).json({ success: false, message: 'Invalid job ID' });
+      }
+
+      if (!photoUrl || !type) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Photo URL and type are required' 
+        });
+      }
+
+      if (type !== 'before' && type !== 'after') {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Photo type must be either "before" or "after"' 
+        });
+      }
+
+      // Security: Only allow deletion of files with expected naming pattern and extension
+      const fileName = path.basename(photoUrl);
+      const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      const fileExtension = path.extname(fileName).toLowerCase();
+      
+      if (!allowedExtensions.includes(fileExtension)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid file type' 
+        });
+      }
+
+      // Ensure the filename follows expected pattern: jobId_type_timestamp_index.ext
+      const expectedPattern = new RegExp(`^${jobId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_${type}_\\d+_\\d+\\${fileExtension}$`);
+      if (!expectedPattern.test(fileName)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid photo reference' 
+        });
+      }
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Remove photo URL from database
+      const currentPhotos = type === 'before' ? job.beforePhotos || [] : job.afterPhotos || [];
+      const updatedPhotos = currentPhotos.filter(url => url !== photoUrl);
+      
+      const updateData = type === 'before' 
+        ? { beforePhotos: updatedPhotos }
+        : { afterPhotos: updatedPhotos };
+
+      await storage.updateJob(jobId, updateData);
+
+      // Delete physical file
+      try {
+        const fileName = path.basename(photoUrl);
+        const filePath = path.join(photosDir, fileName);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (fileError) {
+        console.warn('Could not delete physical file:', fileError);
+        // Continue anyway - database is updated
+      }
+
+      res.json({
+        success: true,
+        message: 'Photo deleted successfully',
+        jobId,
+        deletedPhoto: photoUrl
+      });
+    } catch (error) {
+      console.error('Error deleting job photo:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting photo',
       });
     }
   });
