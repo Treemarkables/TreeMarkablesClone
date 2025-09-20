@@ -10,6 +10,7 @@ import {
   type ServiceM8CustomerCsv, type ServiceM8JobCsv, type ServiceM8QuoteCsv,
   type Notification, type InsertNotification, type UpdateNotification, type NotificationSummary, type NotificationWithDetails,
   type BusinessSettings, type InsertBusinessSettings, type UpdateBusinessSettings,
+  type Communication, type InsertCommunication, type UpdateCommunication,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -253,6 +254,34 @@ export interface IStorage {
   getBusinessSettings(): Promise<BusinessSettings>;
   updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings>;
   resetBusinessSettings(): Promise<BusinessSettings>;
+  
+  // Communication Management
+  createCommunication(communication: InsertCommunication): Promise<Communication>;
+  getCommunication(id: string): Promise<Communication | undefined>;
+  updateCommunication(id: string, updates: UpdateCommunication): Promise<Communication>;
+  getAllCommunications(filters?: {
+    platform?: string;
+    priority?: string;
+    isRead?: boolean;
+    isArchived?: boolean;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Communication[]>;
+  getCommunicationsByCustomer(customerId: string): Promise<Communication[]>;
+  getCommunicationsByLead(leadId: string): Promise<Communication[]>;
+  getCommunicationsByJob(jobId: string): Promise<Communication[]>;
+  markCommunicationAsRead(id: string): Promise<Communication>;
+  starCommunication(id: string, starred: boolean): Promise<Communication>;
+  archiveCommunication(id: string): Promise<Communication>;
+  getCommunicationStats(): Promise<{
+    total: number;
+    unread: number;
+    starred: number;
+    archived: number;
+    byPlatform: { platform: string; count: number }[];
+    byPriority: { priority: string; count: number }[];
+  }>;
 }
 
 export class MemStorage implements IStorage {
@@ -276,6 +305,7 @@ export class MemStorage implements IStorage {
   private jobTemplates: Map<string, JobTemplate>;
   private equipment: Map<string, Equipment>;
   private businessSettings: BusinessSettings;
+  private communications: Communication[];
 
   constructor() {
     this.users = new Map();
@@ -343,6 +373,9 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
+    
+    // Initialize communications
+    this.communications = [];
     
     // Add sample data for demo purposes
     this.initializeSampleData();
@@ -752,6 +785,227 @@ export class MemStorage implements IStorage {
       this.createScheduleEvent(eventData);
     });
     
+    // Sample communications
+    const communications = [
+      {
+        id: '1',
+        platform: 'email',
+        type: 'message',
+        threadId: null,
+        externalId: 'email-001',
+        from: 'Sarah Johnson',
+        fromEmail: 'sarah.j@email.com',
+        fromPhone: null,
+        fromHandle: null,
+        subject: 'Tree removal quote request',
+        content: 'Hi, I need a quote for removing two large oak trees from my backyard. They are approximately 30 feet tall and located near my house. Can you provide an estimate?',
+        contentType: 'text',
+        to: ['info@treemarkables.co.nz'],
+        cc: [],
+        bcc: [],
+        attachments: [],
+        mediaUrls: [],
+        isRead: false,
+        isStarred: false,
+        isArchived: false,
+        priority: 'high',
+        status: 'new',
+        direction: 'inbound',
+        category: 'sales',
+        tags: ['quote', 'tree-removal'],
+        leadId: '1',
+        customerId: '1',
+        jobId: null,
+        assignedTo: null,
+        handledBy: null,
+        responseRequired: true,
+        responseDeadline: new Date('2024-12-23T17:00:00Z'),
+        lastResponseAt: null,
+        followUpDate: new Date('2024-12-21T10:00:00Z'),
+        platformData: {},
+        sentAt: new Date('2024-12-20T09:30:00Z'),
+        receivedAt: new Date('2024-12-20T09:30:00Z'),
+        processedAt: null,
+        isActive: true,
+        createdAt: new Date('2024-12-20T09:30:00Z'),
+        updatedAt: new Date('2024-12-20T09:30:00Z')
+      },
+      {
+        id: '2',
+        platform: 'facebook',
+        type: 'message',
+        threadId: 'fb-thread-001',
+        externalId: 'fb-msg-002',
+        from: 'Mike Chen',
+        fromEmail: null,
+        fromPhone: null,
+        fromHandle: '@mike.chen.nz',
+        subject: 'Hedge trimming inquiry',
+        content: 'Saw your Facebook page. Do you do hedge trimming? I have a large hedge that needs professional attention.',
+        contentType: 'text',
+        to: ['@treemarkables'],
+        cc: [],
+        bcc: [],
+        attachments: [],
+        mediaUrls: [],
+        isRead: true,
+        isStarred: true,
+        isArchived: false,
+        priority: 'medium',
+        status: 'replied',
+        direction: 'inbound',
+        category: 'inquiry',
+        tags: ['hedge-trimming', 'facebook'],
+        leadId: '2',
+        customerId: '2',
+        jobId: null,
+        assignedTo: 'emp-001',
+        handledBy: 'emp-001',
+        responseRequired: false,
+        responseDeadline: null,
+        lastResponseAt: new Date('2024-12-20T10:15:00Z'),
+        followUpDate: null,
+        platformData: { messageId: 'fb-msg-002', threadId: 'fb-thread-001' },
+        sentAt: new Date('2024-12-20T08:15:00Z'),
+        receivedAt: new Date('2024-12-20T08:15:00Z'),
+        processedAt: new Date('2024-12-20T10:15:00Z'),
+        isActive: true,
+        createdAt: new Date('2024-12-20T08:15:00Z'),
+        updatedAt: new Date('2024-12-20T10:15:00Z')
+      },
+      {
+        id: '3',
+        platform: 'sms',
+        type: 'message',
+        threadId: null,
+        externalId: 'sms-003',
+        from: 'Lisa Rodriguez',
+        fromEmail: null,
+        fromPhone: '+64 21 444 5555',
+        fromHandle: null,
+        subject: null,
+        content: 'Emergency! Large tree fell on my driveway after the storm. Need immediate assistance.',
+        contentType: 'text',
+        to: ['+64 9 123 4567'],
+        cc: [],
+        bcc: [],
+        attachments: [],
+        mediaUrls: [],
+        isRead: false,
+        isStarred: false,
+        isArchived: false,
+        priority: 'urgent',
+        status: 'new',
+        direction: 'inbound',
+        category: 'emergency',
+        tags: ['emergency', 'storm-damage'],
+        leadId: '3',
+        customerId: null,
+        jobId: null,
+        assignedTo: null,
+        handledBy: null,
+        responseRequired: true,
+        responseDeadline: new Date('2024-12-20T12:00:00Z'),
+        lastResponseAt: null,
+        followUpDate: new Date('2024-12-20T11:00:00Z'),
+        platformData: {},
+        sentAt: new Date('2024-12-20T07:45:00Z'),
+        receivedAt: new Date('2024-12-20T07:45:00Z'),
+        processedAt: null,
+        isActive: true,
+        createdAt: new Date('2024-12-20T07:45:00Z'),
+        updatedAt: new Date('2024-12-20T07:45:00Z')
+      },
+      {
+        id: '4',
+        platform: 'instagram',
+        type: 'dm',
+        threadId: 'ig-thread-001',
+        externalId: 'ig-dm-004',
+        from: 'garden_lover_2024',
+        fromEmail: null,
+        fromPhone: null,
+        fromHandle: '@garden_lover_2024',
+        subject: null,
+        content: 'Love your recent tree work! Can you help with stump grinding?',
+        contentType: 'text',
+        to: ['@treemarkables_nz'],
+        cc: [],
+        bcc: [],
+        attachments: [],
+        mediaUrls: [],
+        isRead: true,
+        isStarred: false,
+        isArchived: false,
+        priority: 'low',
+        status: 'new',
+        direction: 'inbound',
+        category: 'inquiry',
+        tags: ['stump-grinding', 'instagram'],
+        leadId: null,
+        customerId: null,
+        jobId: null,
+        assignedTo: null,
+        handledBy: null,
+        responseRequired: true,
+        responseDeadline: new Date('2024-12-22T17:00:00Z'),
+        lastResponseAt: null,
+        followUpDate: new Date('2024-12-21T14:00:00Z'),
+        platformData: { userId: 'garden_lover_2024', threadId: 'ig-thread-001' },
+        sentAt: new Date('2024-12-19T16:20:00Z'),
+        receivedAt: new Date('2024-12-19T16:20:00Z'),
+        processedAt: null,
+        isActive: true,
+        createdAt: new Date('2024-12-19T16:20:00Z'),
+        updatedAt: new Date('2024-12-19T16:20:00Z')
+      },
+      {
+        id: '5',
+        platform: 'phone',
+        type: 'call',
+        threadId: null,
+        externalId: 'call-005',
+        from: 'David Thompson',
+        fromEmail: null,
+        fromPhone: '+64 21 222 3333',
+        fromHandle: null,
+        subject: null,
+        content: 'Missed call - voicemail: Interested in tree pruning services for commercial property',
+        contentType: 'text',
+        to: ['+64 9 123 4567'],
+        cc: [],
+        bcc: [],
+        attachments: [],
+        mediaUrls: [],
+        isRead: false,
+        isStarred: false,
+        isArchived: false,
+        priority: 'medium',
+        status: 'new',
+        direction: 'inbound',
+        category: 'sales',
+        tags: ['commercial', 'tree-pruning'],
+        leadId: '4',
+        customerId: null,
+        jobId: null,
+        assignedTo: null,
+        handledBy: null,
+        responseRequired: true,
+        responseDeadline: new Date('2024-12-21T17:00:00Z'),
+        lastResponseAt: null,
+        followUpDate: new Date('2024-12-20T15:00:00Z'),
+        platformData: { callDuration: 0, voicemailDuration: 35 },
+        sentAt: new Date('2024-12-19T14:30:00Z'),
+        receivedAt: new Date('2024-12-19T14:30:00Z'),
+        processedAt: null,
+        isActive: true,
+        createdAt: new Date('2024-12-19T14:30:00Z'),
+        updatedAt: new Date('2024-12-19T14:30:00Z')
+      }
+    ];
+    
+    this.communications = communications;
+
     console.log('Sample data initialized successfully');
   }
 
@@ -2851,6 +3105,159 @@ export class MemStorage implements IStorage {
       updatedAt: new Date(),
     };
     return this.businessSettings;
+  }
+
+  // Communication Management Methods
+  async createCommunication(communication: InsertCommunication): Promise<Communication> {
+    const id = randomUUID();
+    const now = new Date();
+    const newCommunication: Communication = {
+      id,
+      ...communication,
+      receivedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.communications.push(newCommunication);
+    return newCommunication;
+  }
+
+  async getCommunication(id: string): Promise<Communication | undefined> {
+    return this.communications.find(c => c.id === id && c.isActive);
+  }
+
+  async updateCommunication(id: string, updates: UpdateCommunication): Promise<Communication> {
+    const index = this.communications.findIndex(c => c.id === id && c.isActive);
+    if (index === -1) {
+      throw new Error(`Communication with id ${id} not found`);
+    }
+    
+    this.communications[index] = {
+      ...this.communications[index],
+      ...updates,
+      updatedAt: new Date(),
+    };
+    return this.communications[index];
+  }
+
+  async getAllCommunications(filters?: {
+    platform?: string;
+    priority?: string;
+    isRead?: boolean;
+    isArchived?: boolean;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Communication[]> {
+    let filtered = this.communications.filter(c => c.isActive);
+
+    if (filters) {
+      if (filters.platform && filters.platform !== 'all') {
+        filtered = filtered.filter(c => c.platform === filters.platform);
+      }
+      if (filters.priority && filters.priority !== 'all') {
+        filtered = filtered.filter(c => c.priority === filters.priority);
+      }
+      if (filters.isRead !== undefined) {
+        filtered = filtered.filter(c => c.isRead === filters.isRead);
+      }
+      if (filters.isArchived !== undefined) {
+        filtered = filtered.filter(c => c.isArchived === filters.isArchived);
+      }
+      if (filters.search) {
+        const searchTerm = filters.search.toLowerCase();
+        filtered = filtered.filter(c => 
+          c.from.toLowerCase().includes(searchTerm) ||
+          c.content.toLowerCase().includes(searchTerm) ||
+          (c.subject && c.subject.toLowerCase().includes(searchTerm))
+        );
+      }
+    }
+
+    // Sort by receivedAt descending (newest first)
+    filtered.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+
+    // Apply pagination
+    if (filters?.offset) {
+      filtered = filtered.slice(filters.offset);
+    }
+    if (filters?.limit) {
+      filtered = filtered.slice(0, filters.limit);
+    }
+
+    return filtered;
+  }
+
+  async getCommunicationsByCustomer(customerId: string): Promise<Communication[]> {
+    return this.communications.filter(c => c.customerId === customerId && c.isActive);
+  }
+
+  async getCommunicationsByLead(leadId: string): Promise<Communication[]> {
+    return this.communications.filter(c => c.leadId === leadId && c.isActive);
+  }
+
+  async getCommunicationsByJob(jobId: string): Promise<Communication[]> {
+    return this.communications.filter(c => c.jobId === jobId && c.isActive);
+  }
+
+  async markCommunicationAsRead(id: string): Promise<Communication> {
+    return this.updateCommunication(id, { isRead: true });
+  }
+
+  async starCommunication(id: string, starred: boolean): Promise<Communication> {
+    return this.updateCommunication(id, { isStarred: starred });
+  }
+
+  async archiveCommunication(id: string): Promise<Communication> {
+    return this.updateCommunication(id, { isArchived: true });
+  }
+
+  async getCommunicationStats(): Promise<{
+    total: number;
+    unread: number;
+    starred: number;
+    archived: number;
+    byPlatform: { platform: string; count: number }[];
+    byPriority: { priority: string; count: number }[];
+  }> {
+    const activeCommunications = this.communications.filter(c => c.isActive);
+    
+    const unreadCommunications = activeCommunications.filter(c => !c.isRead && !c.isArchived);
+    const starredCommunications = activeCommunications.filter(c => c.isStarred && !c.isArchived);
+    const archivedCommunications = activeCommunications.filter(c => c.isArchived);
+
+    // Platform statistics
+    const platformCounts = new Map<string, number>();
+    activeCommunications.forEach(c => {
+      if (!c.isArchived) {
+        platformCounts.set(c.platform, (platformCounts.get(c.platform) || 0) + 1);
+      }
+    });
+    const byPlatform = Array.from(platformCounts.entries()).map(([platform, count]) => ({
+      platform,
+      count
+    }));
+
+    // Priority statistics
+    const priorityCounts = new Map<string, number>();
+    activeCommunications.forEach(c => {
+      if (!c.isArchived) {
+        priorityCounts.set(c.priority, (priorityCounts.get(c.priority) || 0) + 1);
+      }
+    });
+    const byPriority = Array.from(priorityCounts.entries()).map(([priority, count]) => ({
+      priority,
+      count
+    }));
+
+    return {
+      total: activeCommunications.filter(c => !c.isArchived).length,
+      unread: unreadCommunications.length,
+      starred: starredCommunications.length,
+      archived: archivedCommunications.length,
+      byPlatform,
+      byPriority
+    };
   }
 }
 

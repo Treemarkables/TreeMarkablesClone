@@ -15,6 +15,7 @@ import {
   insertJobTemplateSchema, updateJobTemplateSchema,
   insertEquipmentSchema, updateEquipmentSchema,
   insertBusinessSettingsSchema, updateBusinessSettingsSchema,
+  insertCommunicationSchema, updateCommunicationSchema,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import multer from "multer";
@@ -2983,6 +2984,131 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         success: false,
         message: 'Error resetting business settings'
       });
+    }
+  });
+
+  // ========================================
+  // COMMUNICATIONS API ENDPOINTS
+  // ========================================
+
+  // Get all communications with filtering
+  app.get('/api/communications', async (req: Request, res: Response) => {
+    try {
+      const { platform, priority, isRead, isArchived, search, limit, offset } = req.query;
+      
+      const filters: any = {};
+      if (platform) filters.platform = platform as string;
+      if (priority) filters.priority = priority as string;
+      if (isRead !== undefined) filters.isRead = isRead === 'true';
+      if (isArchived !== undefined) filters.isArchived = isArchived === 'true';
+      if (search) filters.search = search as string;
+      if (limit) filters.limit = parseInt(limit as string);
+      if (offset) filters.offset = parseInt(offset as string);
+
+      const communications = await storage.getAllCommunications(filters);
+      res.json({ success: true, data: communications });
+    } catch (error) {
+      console.error('Error fetching communications:', error);
+      res.status(500).json({ success: false, message: 'Error fetching communications' });
+    }
+  });
+
+  // Get communication stats
+  app.get('/api/communications/stats', async (req: Request, res: Response) => {
+    try {
+      const stats = await storage.getCommunicationStats();
+      res.json({ success: true, data: stats });
+    } catch (error) {
+      console.error('Error fetching communication stats:', error);
+      res.status(500).json({ success: false, message: 'Error fetching stats' });
+    }
+  });
+
+  // Get specific communication
+  app.get('/api/communications/:id', async (req: Request, res: Response) => {
+    try {
+      const communication = await storage.getCommunication(req.params.id);
+      if (!communication) {
+        return res.status(404).json({ success: false, message: 'Communication not found' });
+      }
+      res.json({ success: true, data: communication });
+    } catch (error) {
+      console.error('Error fetching communication:', error);
+      res.status(500).json({ success: false, message: 'Error fetching communication' });
+    }
+  });
+
+  // Create new communication
+  app.post('/api/communications', async (req: Request, res: Response) => {
+    try {
+      const validation = insertCommunicationSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid communication data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const communication = await storage.createCommunication(validation.data);
+      res.json({ success: true, data: communication });
+    } catch (error) {
+      console.error('Error creating communication:', error);
+      res.status(500).json({ success: false, message: 'Error creating communication' });
+    }
+  });
+
+  // Update communication
+  app.patch('/api/communications/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = updateCommunicationSchema.safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const communication = await storage.updateCommunication(req.params.id, updates.data);
+      res.json({ success: true, data: communication });
+    } catch (error) {
+      console.error('Error updating communication:', error);
+      res.status(500).json({ success: false, message: 'Error updating communication' });
+    }
+  });
+
+  // Mark communication as read
+  app.patch('/api/communications/:id/read', async (req: Request, res: Response) => {
+    try {
+      const communication = await storage.markCommunicationAsRead(req.params.id);
+      res.json({ success: true, data: communication });
+    } catch (error) {
+      console.error('Error marking communication as read:', error);
+      res.status(500).json({ success: false, message: 'Error updating communication' });
+    }
+  });
+
+  // Star/unstar communication
+  app.patch('/api/communications/:id/star', async (req: Request, res: Response) => {
+    try {
+      const { starred } = req.body;
+      const communication = await storage.starCommunication(req.params.id, starred === true);
+      res.json({ success: true, data: communication });
+    } catch (error) {
+      console.error('Error starring communication:', error);
+      res.status(500).json({ success: false, message: 'Error updating communication' });
+    }
+  });
+
+  // Archive communication
+  app.patch('/api/communications/:id/archive', async (req: Request, res: Response) => {
+    try {
+      const communication = await storage.archiveCommunication(req.params.id);
+      res.json({ success: true, data: communication });
+    } catch (error) {
+      console.error('Error archiving communication:', error);
+      res.status(500).json({ success: false, message: 'Error archiving communication' });
     }
   });
 
