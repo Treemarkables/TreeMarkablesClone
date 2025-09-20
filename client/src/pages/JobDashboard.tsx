@@ -214,14 +214,25 @@ export default function JobDashboard() {
           if (recognition) {
             setTimeout(() => {
               try {
-                setIsListening(true);
-                recognition.start();
-                console.log('Restarted listening after TTS');
+                // Stop any existing recognition first to prevent conflicts
+                if (isListening) {
+                  recognition.stop();
+                  setIsListening(false);
+                }
+                
+                // Wait a bit more, then start fresh
+                setTimeout(() => {
+                  if (recognition && !isListening && isConversationMode) {
+                    setIsListening(true);
+                    recognition.start();
+                    console.log('Restarted listening after TTS');
+                  }
+                }, 800);
               } catch (error) {
                 console.log('Failed to restart recognition after TTS:', error);
                 setIsListening(false);
               }
-            }, 1000); // Longer delay for better reliability
+            }, 1500); // Even longer delay for better reliability
           }
         }
       };
@@ -318,20 +329,26 @@ export default function JobDashboard() {
         } else if (event.error === 'network') {
           setVoiceCommand("Network error. Please check your internet connection.");
         } else if (event.error === 'aborted') {
-          // Auto-retry aborted recognition after a short delay
-          setVoiceCommand("Voice recognition restarting...");
-          setTimeout(() => {
-            if (recognitionInstance && !isListening) {
-              try {
-                setIsListening(true);
-                recognitionInstance.start();
-                setVoiceCommand("Listening... Try saying 'create lead' again.");
-              } catch (retryError) {
-                console.log('Failed to restart after abort:', retryError);
-                setVoiceCommand("Click Voice Command to try again.");
+          // Don't auto-retry if we're in conversation mode - let the TTS restart handle it
+          if (isConversationMode) {
+            console.log('Speech aborted during conversation, waiting for TTS restart');
+            setVoiceCommand("Listening interrupted, restarting...");
+          } else {
+            // Auto-retry aborted recognition after a short delay only for initial commands
+            setVoiceCommand("Voice recognition restarting...");
+            setTimeout(() => {
+              if (recognitionInstance && !isListening && !isConversationMode) {
+                try {
+                  setIsListening(true);
+                  recognitionInstance.start();
+                  setVoiceCommand("Listening... Try saying 'create lead' again.");
+                } catch (retryError) {
+                  console.log('Failed to restart after abort:', retryError);
+                  setVoiceCommand("Click Voice Command to try again.");
+                }
               }
-            }
-          }, 1000);
+            }, 1000);
+          }
         } else if (event.error === 'audio-capture') {
           setVoiceCommand("Microphone connection lost. Click Voice Command again to reconnect.");
           setAiResponse("Microphone connection lost. Please click Voice Command again to restart.");
