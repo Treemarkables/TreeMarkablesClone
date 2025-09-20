@@ -744,12 +744,12 @@ export default function JobDashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-red-700">
                     <AlertTriangle className="h-5 w-5" />
-                    Overdue Follow-ups ({Array.isArray(followUpQueue?.overdue) ? followUpQueue.overdue.length : 0})
+                    Overdue Follow-ups ({Array.isArray((followUpQueue as any)?.overdue) ? (followUpQueue as any).overdue.length : 0})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {Array.isArray(followUpQueue?.overdue) ? followUpQueue.overdue.map((lead: any) => (
+                    {Array.isArray((followUpQueue as any)?.overdue) ? (followUpQueue as any).overdue.map((lead: any) => (
                       <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
                         <div className="font-medium text-sm">{lead.name}</div>
                         <div className="text-xs text-gray-600">{lead.phone}</div>
@@ -764,12 +764,12 @@ export default function JobDashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-yellow-700">
                     <Clock className="h-5 w-5" />
-                    Today ({Array.isArray(followUpQueue?.today) ? followUpQueue.today.length : 0})
+                    Today ({Array.isArray((followUpQueue as any)?.today) ? (followUpQueue as any).today.length : 0})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {Array.isArray(followUpQueue?.today) ? followUpQueue.today.map((lead: any) => (
+                    {Array.isArray((followUpQueue as any)?.today) ? (followUpQueue as any).today.map((lead: any) => (
                       <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
                         <div className="font-medium text-sm">{lead.name}</div>
                         <div className="text-xs text-gray-600">{lead.phone}</div>
@@ -784,12 +784,12 @@ export default function JobDashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-blue-700">
                     <Calendar className="h-5 w-5" />
-                    This Week ({Array.isArray(followUpQueue?.thisWeek) ? followUpQueue.thisWeek.length : 0})
+                    This Week ({Array.isArray((followUpQueue as any)?.thisWeek) ? (followUpQueue as any).thisWeek.length : 0})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {Array.isArray(followUpQueue?.thisWeek) ? followUpQueue.thisWeek.map((lead: any) => (
+                    {Array.isArray((followUpQueue as any)?.thisWeek) ? (followUpQueue as any).thisWeek.map((lead: any) => (
                       <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
                         <div className="font-medium text-sm">{lead.name}</div>
                         <div className="text-xs text-gray-600">{lead.phone}</div>
