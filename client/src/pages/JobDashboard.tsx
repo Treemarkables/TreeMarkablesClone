@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import logoUrl from '@assets/treelogo_1758218149788.webp';
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { CrewManagement } from "@/components/CrewManagement";
 import { EquipmentTracker } from "@/components/EquipmentTracker";
@@ -534,7 +535,7 @@ export default function JobDashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <img 
-                src="/attached_assets/treelogo_1758357598519.webp" 
+                src={logoUrl} 
                 alt="Treemarkables Logo" 
                 className="h-8 sm:h-10 lg:h-12 w-auto"
                 data-testid="logo-treemarkables"
