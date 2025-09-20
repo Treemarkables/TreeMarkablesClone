@@ -1,6 +1,11 @@
+console.log("Starting React app...");
+import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+
+console.log("React:", React);
+console.log("createRoot:", createRoot);
 
 // Register Service Worker for PWA functionality
 if ('serviceWorker' in navigator) {
@@ -15,4 +20,14 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+const rootElement = document.getElementById("root");
+console.log("Root element:", rootElement);
+
+try {
+  const root = createRoot(rootElement!);
+  console.log("Root created:", root);
+  root.render(<App />);
+  console.log("App rendered successfully");
+} catch (error) {
+  console.error("Error creating/rendering app:", error);
+}
