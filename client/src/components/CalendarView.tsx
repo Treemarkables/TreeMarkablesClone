@@ -1,11 +1,20 @@
 import { useState, useMemo } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Plus, Clock, Users, MapPin, Wrench } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Plus, Clock, Users, MapPin, Wrench, Cloud, Sun, CloudRain, AlertTriangle, Wind, Thermometer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isSameDay, parseISO, isToday, startOfDay } from 'date-fns';
 import { ScheduleEventModal } from './ScheduleEventModal';
+
+interface WeatherData {
+  temperature: number;
+  condition: string;
+  humidity: number;
+  windSpeed: number;
+  precipitation: number;
+  alerts: string[];
+}
 
 interface CalendarEvent {
   id: string;
@@ -20,6 +29,8 @@ interface CalendarEvent {
   customer?: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   color?: string;
+  weatherDependent?: boolean;
+  weather?: WeatherData;
 }
 
 interface CalendarViewProps {
