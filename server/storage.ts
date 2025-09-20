@@ -8,6 +8,7 @@ import {
   type PriceRule, type InsertPriceRule, type CsvImportResult,
   type ServiceM8CustomerCsv, type ServiceM8JobCsv, type ServiceM8QuoteCsv,
   type Notification, type InsertNotification, type UpdateNotification, type NotificationSummary, type NotificationWithDetails,
+  type BusinessSettings, type InsertBusinessSettings, type UpdateBusinessSettings,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -226,6 +227,11 @@ export interface IStorage {
   getEquipmentByType(type: string): Promise<Equipment[]>;
   getEquipmentByStatus(status: string): Promise<Equipment[]>;
   deleteEquipment(id: string): Promise<void>;
+
+  // Business Settings Management
+  getBusinessSettings(): Promise<BusinessSettings>;
+  updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings>;
+  resetBusinessSettings(): Promise<BusinessSettings>;
 }
 
 export class MemStorage implements IStorage {
@@ -247,6 +253,7 @@ export class MemStorage implements IStorage {
   private scheduleEvents: Map<string, ScheduleEvent>;
   private jobTemplates: Map<string, JobTemplate>;
   private equipment: Map<string, Equipment>;
+  private businessSettings: BusinessSettings;
 
   constructor() {
     this.users = new Map();
@@ -267,6 +274,52 @@ export class MemStorage implements IStorage {
     this.scheduleEvents = new Map();
     this.jobTemplates = new Map();
     this.equipment = new Map();
+    
+    // Initialize business settings with defaults
+    this.businessSettings = {
+      id: '1',
+      businessName: 'Treemarkables',
+      businessAddress: '123 Arborist Lane, Auckland, New Zealand',
+      businessPhone: '+64 9 123 4567',
+      businessEmail: 'info@treemarkables.co.nz',
+      businessWebsite: 'https://treemarkables.co.nz',
+      businessLogo: '',
+      leadAssignmentMethod: 'round_robin',
+      autoFollowUpDays: 3,
+      quotePricingModel: 'standard',
+      quoteValidityDays: 30,
+      autoQuoteApproval: false,
+      jobAutoScheduling: false,
+      jobBufferTime: 30,
+      cloudSyncEnabled: true,
+      backupFrequency: 'daily',
+      dataRetentionDays: 365,
+      autoBackupTime: '02:00',
+      exportFormat: 'csv',
+      servicem8Enabled: false,
+      servicem8ApiKey: '',
+      googleCalendarEnabled: false,
+      emailIntegrationEnabled: false,
+      paymentGatewayEnabled: false,
+      paymentProvider: 'stripe',
+      cacheDuration: 300,
+      imageQuality: 80,
+      realTimeUpdatesInterval: 30,
+      autoRefreshEnabled: true,
+      maxConcurrentJobs: 50,
+      offlineModeEnabled: true,
+      gpsTrackingEnabled: true,
+      locationAccuracy: 'high',
+      mobileDataSync: true,
+      fieldPhotoQuality: 85,
+      twoFactorRequired: false,
+      sessionTimeout: 480,
+      passwordExpiration: 90,
+      auditLogging: true,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
     
     // Add sample data for demo purposes
     this.initializeSampleData();
@@ -2556,6 +2609,71 @@ export class MemStorage implements IStorage {
 
   async deleteEquipment(id: string): Promise<void> {
     this.equipment.delete(id);
+  }
+
+  // ========================================
+  // BUSINESS SETTINGS MANAGEMENT METHODS
+  // ========================================
+
+  async getBusinessSettings(): Promise<BusinessSettings> {
+    return this.businessSettings;
+  }
+
+  async updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings> {
+    this.businessSettings = {
+      ...this.businessSettings,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    return this.businessSettings;
+  }
+
+  async resetBusinessSettings(): Promise<BusinessSettings> {
+    this.businessSettings = {
+      id: '1',
+      businessName: 'Treemarkables',
+      businessAddress: '123 Arborist Lane, Auckland, New Zealand',
+      businessPhone: '+64 9 123 4567',
+      businessEmail: 'info@treemarkables.co.nz',
+      businessWebsite: 'https://treemarkables.co.nz',
+      businessLogo: '',
+      leadAssignmentMethod: 'round_robin',
+      autoFollowUpDays: 3,
+      quotePricingModel: 'standard',
+      quoteValidityDays: 30,
+      autoQuoteApproval: false,
+      jobAutoScheduling: false,
+      jobBufferTime: 30,
+      cloudSyncEnabled: true,
+      backupFrequency: 'daily',
+      dataRetentionDays: 365,
+      autoBackupTime: '02:00',
+      exportFormat: 'csv',
+      servicem8Enabled: false,
+      servicem8ApiKey: '',
+      googleCalendarEnabled: false,
+      emailIntegrationEnabled: false,
+      paymentGatewayEnabled: false,
+      paymentProvider: 'stripe',
+      cacheDuration: 300,
+      imageQuality: 80,
+      realTimeUpdatesInterval: 30,
+      autoRefreshEnabled: true,
+      maxConcurrentJobs: 50,
+      offlineModeEnabled: true,
+      gpsTrackingEnabled: true,
+      locationAccuracy: 'high',
+      mobileDataSync: true,
+      fieldPhotoQuality: 85,
+      twoFactorRequired: false,
+      sessionTimeout: 480,
+      passwordExpiration: 90,
+      auditLogging: true,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    return this.businessSettings;
   }
 }
 
