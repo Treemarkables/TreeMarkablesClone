@@ -11,6 +11,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { WeatherWidget } from "@/components/WeatherWidget";
+import { CrewManagement } from "@/components/CrewManagement";
+import { EquipmentTracker } from "@/components/EquipmentTracker";
 import {
   BarChart,
   Bar,
@@ -753,6 +756,13 @@ export default function JobDashboard() {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
+            {/* Weather, Crew & Equipment Status Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <WeatherWidget compact={true} showForecast={false} />
+              <CrewManagement showDetailed={false} />
+              <EquipmentTracker compact={true} />
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* Revenue Trend Chart */}
