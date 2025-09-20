@@ -318,7 +318,20 @@ export default function JobDashboard() {
         } else if (event.error === 'network') {
           setVoiceCommand("Network error. Please check your internet connection.");
         } else if (event.error === 'aborted') {
-          setVoiceCommand("Voice recognition was cancelled.");
+          // Auto-retry aborted recognition after a short delay
+          setVoiceCommand("Voice recognition restarting...");
+          setTimeout(() => {
+            if (recognitionInstance && !isListening) {
+              try {
+                setIsListening(true);
+                recognitionInstance.start();
+                setVoiceCommand("Listening... Try saying 'create lead' again.");
+              } catch (retryError) {
+                console.log('Failed to restart after abort:', retryError);
+                setVoiceCommand("Click Voice Command to try again.");
+              }
+            }
+          }, 1000);
         } else if (event.error === 'audio-capture') {
           setVoiceCommand("Microphone connection lost. Click Voice Command again to reconnect.");
           setAiResponse("Microphone connection lost. Please click Voice Command again to restart.");
@@ -712,6 +725,12 @@ export default function JobDashboard() {
   const startListening = () => {
     if (recognition) {
       try {
+        // Stop any existing recognition first to avoid conflicts
+        if (isListening) {
+          recognition.stop();
+        }
+        
+        setVoiceCommand("Starting voice recognition...");
         setIsListening(true);
         recognition.start();
       } catch (error) {
