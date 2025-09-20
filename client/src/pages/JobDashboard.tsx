@@ -21,6 +21,7 @@ import { SafetyReporting } from "@/components/SafetyReporting";
 import { RouteOptimizer } from "@/components/RouteOptimizer";
 import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
 import { DispatchBoard } from "@/components/DispatchBoard";
+import { JobDiary } from "@/components/JobDiary";
 import {
   BarChart,
   Bar,
@@ -167,6 +168,10 @@ export default function JobDashboard() {
   // Photo management states
   const [selectedJobForPhotos, setSelectedJobForPhotos] = useState<string | null>(null);
   const [showPhotosDialog, setShowPhotosDialog] = useState(false);
+  
+  // Job diary management states
+  const [selectedJobForDiary, setSelectedJobForDiary] = useState<{ id: string; title: string } | null>(null);
+  const [showJobDiaryDialog, setShowJobDiaryDialog] = useState(false);
   
   // Export states
   const [isExporting, setIsExporting] = useState(false);
@@ -1569,7 +1574,7 @@ export default function JobDashboard() {
                     </div>
                     
                     {/* Action buttons */}
-                    <div className="flex gap-2 mt-4">
+                    <div className="flex gap-1 mt-4">
                       <Button
                         size="sm"
                         variant="outline"
@@ -1583,6 +1588,20 @@ export default function JobDashboard() {
                       >
                         <Camera className="h-3 w-3 mr-1" />
                         Photos
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedJobForDiary({ id: job.id, title: job.title });
+                          setShowJobDiaryDialog(true);
+                        }}
+                        data-testid={`button-job-diary-${job.id}`}
+                      >
+                        <FileText className="h-3 w-3 mr-1" />
+                        Diary
                       </Button>
                       <Button
                         size="sm"
@@ -3313,6 +3332,30 @@ export default function JobDashboard() {
                     Close
                   </Button>
                 </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Job Diary Dialog */}
+        <Dialog open={showJobDiaryDialog} onOpenChange={setShowJobDiaryDialog}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Job Diary
+              </DialogTitle>
+              <DialogDescription>
+                Document progress, notes, and important events for this job
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedJobForDiary && (
+              <div className="mt-4">
+                <JobDiary 
+                  jobId={selectedJobForDiary.id}
+                  jobTitle={selectedJobForDiary.title}
+                />
               </div>
             )}
           </DialogContent>

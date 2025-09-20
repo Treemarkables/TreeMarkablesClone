@@ -2,7 +2,8 @@ import {
   type User, type InsertUser, type LeadSubmission, type InsertLeadSubmission,
   type Customer, type InsertCustomer, type Lead, type InsertLead,
   type Call, type InsertCall, type Quote, type InsertQuote,
-  type Job, type InsertJob, type Activity, type InsertActivity,
+  type Job, type InsertJob, type JobDiaryEntry, type InsertJobDiaryEntry,
+  type Activity, type InsertActivity,
   type Review, type InsertReview, type Campaign, type InsertCampaign,
   type SocialPlan, type InsertSocialPlan, type CompetitorSignal, type InsertCompetitorSignal,
   type PriceRule, type InsertPriceRule, type CsvImportResult,
@@ -64,6 +65,15 @@ export interface IStorage {
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
   getAllJobs(): Promise<Job[]>;
+  
+  // Job Diary Management
+  createJobDiaryEntry(entry: InsertJobDiaryEntry): Promise<JobDiaryEntry>;
+  getJobDiaryEntry(id: string): Promise<JobDiaryEntry | undefined>;
+  updateJobDiaryEntry(id: string, updates: Partial<InsertJobDiaryEntry>): Promise<JobDiaryEntry>;
+  deleteJobDiaryEntry(id: string): Promise<boolean>;
+  getJobDiaryEntriesByJob(jobId: string): Promise<JobDiaryEntry[]>;
+  getJobDiaryEntriesByType(jobId: string, entryType: string): Promise<JobDiaryEntry[]>;
+  getAllJobDiaryEntries(): Promise<JobDiaryEntry[]>;
   
   // Activity Tracking
   createActivity(activity: InsertActivity): Promise<Activity>;
@@ -242,6 +252,7 @@ export class MemStorage implements IStorage {
   private calls: Map<string, Call>;
   private quotes: Map<string, Quote>;
   private jobs: Map<string, Job>;
+  private jobDiaryEntries: Map<string, JobDiaryEntry>;
   private activities: Map<string, Activity>;
   private reviews: Map<string, Review>;
   private campaigns: Map<string, Campaign>;
@@ -263,6 +274,7 @@ export class MemStorage implements IStorage {
     this.calls = new Map();
     this.quotes = new Map();
     this.jobs = new Map();
+    this.jobDiaryEntries = new Map();
     this.activities = new Map();
     this.reviews = new Map();
     this.campaigns = new Map();
@@ -1110,6 +1122,69 @@ export class MemStorage implements IStorage {
 
   async getAllJobs(): Promise<Job[]> {
     return Array.from(this.jobs.values())
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  // Job Diary Management
+  async createJobDiaryEntry(entryData: InsertJobDiaryEntry): Promise<JobDiaryEntry> {
+    const id = randomUUID();
+    const now = new Date();
+    const entry: JobDiaryEntry = {
+      ...entryData,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.jobDiaryEntries.set(id, entry);
+    
+    console.log('JOB_DIARY_ENTRY_CREATED', JSON.stringify({
+      id,
+      jobId: entry.jobId,
+      entryType: entry.entryType,
+      title: entry.title,
+      authorName: entry.authorName
+    }));
+    
+    return entry;
+  }
+
+  async getJobDiaryEntry(id: string): Promise<JobDiaryEntry | undefined> {
+    return this.jobDiaryEntries.get(id);
+  }
+
+  async updateJobDiaryEntry(id: string, updates: Partial<InsertJobDiaryEntry>): Promise<JobDiaryEntry> {
+    const existing = this.jobDiaryEntries.get(id);
+    if (!existing) {
+      throw new Error(`Job diary entry with id ${id} not found`);
+    }
+    
+    const updated: JobDiaryEntry = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date()
+    };
+    this.jobDiaryEntries.set(id, updated);
+    return updated;
+  }
+
+  async deleteJobDiaryEntry(id: string): Promise<boolean> {
+    return this.jobDiaryEntries.delete(id);
+  }
+
+  async getJobDiaryEntriesByJob(jobId: string): Promise<JobDiaryEntry[]> {
+    return Array.from(this.jobDiaryEntries.values())
+      .filter(entry => entry.jobId === jobId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getJobDiaryEntriesByType(jobId: string, entryType: string): Promise<JobDiaryEntry[]> {
+    return Array.from(this.jobDiaryEntries.values())
+      .filter(entry => entry.jobId === jobId && entry.entryType === entryType)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getAllJobDiaryEntries(): Promise<JobDiaryEntry[]> {
+    return Array.from(this.jobDiaryEntries.values())
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 

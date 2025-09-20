@@ -206,6 +206,27 @@ export const jobs = pgTable("jobs", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Job Diary Entries
+export const jobDiaryEntries = pgTable("job_diary_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id).notNull(),
+  entryType: text("entry_type").notNull(), // note, progress, issue, milestone, weather, equipment, safety, completion
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  authorName: text("author_name").notNull(), // Name of person making entry
+  authorRole: text("author_role"), // foreman, technician, supervisor, manager
+  photos: text("photos").array(), // URLs/paths to related photos
+  weatherConditions: text("weather_conditions"), // sunny, rainy, windy, etc
+  equipmentUsed: text("equipment_used").array(), // Equipment used during this activity
+  timeSpent: integer("time_spent"), // Minutes spent on this activity
+  progress: integer("progress"), // Percentage completion (0-100)
+  tags: text("tags").array(), // safety, urgent, customer-request, etc
+  location: text("location"), // Specific location within job site
+  isPrivate: boolean("is_private").default(false), // Internal notes only
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Activity Log & Communication Tracking
 export const activities = pgTable("activities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -343,6 +364,7 @@ export const insertCampaignSchema = createInsertSchema(campaigns).omit({ id: tru
 export const insertSocialPlanSchema = createInsertSchema(socialPlans).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCompetitorSignalSchema = createInsertSchema(competitorSignals).omit({ id: true, detectedAt: true, createdAt: true });
 export const insertPriceRuleSchema = createInsertSchema(priceRules).omit({ id: true, validFrom: true, createdAt: true, updatedAt: true });
+export const insertJobDiaryEntrySchema = createInsertSchema(jobDiaryEntries).omit({ id: true, createdAt: true, updatedAt: true });
 
 // Select Types
 export type Team = typeof teams.$inferSelect;
@@ -351,6 +373,7 @@ export type Lead = typeof leads.$inferSelect;
 export type Call = typeof calls.$inferSelect;
 export type Quote = typeof quotes.$inferSelect;
 export type Job = typeof jobs.$inferSelect;
+export type JobDiaryEntry = typeof jobDiaryEntries.$inferSelect;
 export type Activity = typeof activities.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type Campaign = typeof campaigns.$inferSelect;
@@ -365,6 +388,7 @@ export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type InsertCall = z.infer<typeof insertCallSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertJob = z.infer<typeof insertJobSchema>;
+export type InsertJobDiaryEntry = z.infer<typeof insertJobDiaryEntrySchema>;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type InsertReview = z.infer<typeof insertReviewSchema>;
 export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
