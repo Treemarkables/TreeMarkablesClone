@@ -32,7 +32,7 @@
 
   --sidebar-border: 210 12% 87%;
 
-  --sidebar-primary: 25 90% 55%;
+  --sidebar-primary: 28 87% 55%;
 
   --sidebar-primary-foreground: 0 0% 98%;
 
@@ -40,7 +40,7 @@
 
   --sidebar-accent-foreground: 210 95% 25%;
 
-  --sidebar-ring: 25 90% 55%;
+  --sidebar-ring: 28 87% 55%;
 
   --popover: 0 0% 92%;
 
@@ -48,15 +48,15 @@
 
   --popover-border: 210 12% 85%;
 
-  --primary: 22 93% 55%;
+  --primary: 28 87% 55%;
 
   --primary-foreground: 0 0% 98%;
 
-  --blue: 217 91% 60%;
+  --blue: 28 87% 55%;
 
   --blue-foreground: 0 0% 98%;
 
-  --blue-border: 217 91% 50%;
+  --blue-border: 28 87% 45%;
 
   --secondary: 220 14% 96%;
 
@@ -75,12 +75,12 @@
   --destructive-foreground: 0 0% 98%;
 
   --input: 210 15% 75%;
-  --ring: 25 90% 55%;
-  --chart-1: 25 90% 55%;
-  --chart-2: 210 95% 58%;
-  --chart-3: 35 85% 55%;
-  --chart-4: 200 70% 55%;
-  --chart-5: 280 60% 50%;
+  --ring: 28 87% 55%;
+  --chart-1: 28 87% 55%;
+  --chart-2: 28 87% 45%;
+  --chart-3: 28 87% 35%;
+  --chart-4: 28 87% 65%;
+  --chart-5: 28 87% 75%;
 
   --font-sans: Open Sans, sans-serif;
   --font-serif: Georgia, serif;
@@ -160,7 +160,7 @@
 
   --sidebar-border: 210 8% 24%;
 
-  --sidebar-primary: 25 85% 60%;
+  --sidebar-primary: 28 85% 60%;
 
   --sidebar-primary-foreground: 0 0% 98%;
 
@@ -168,7 +168,7 @@
 
   --sidebar-accent-foreground: 0 0% 98%;
 
-  --sidebar-ring: 25 85% 60%;
+  --sidebar-ring: 28 85% 60%;
 
   --popover: 210 10% 21%;
 
@@ -176,15 +176,15 @@
 
   --popover-border: 210 8% 26%;
 
-  --primary: 25 85% 60%;
+  --primary: 28 85% 60%;
 
   --primary-foreground: 0 0% 98%;
 
-  --blue: 210 90% 65%;
+  --blue: 28 85% 60%;
 
   --blue-foreground: 0 0% 98%;
 
-  --blue-border: 210 90% 55%;
+  --blue-border: 28 85% 50%;
 
   --secondary: 210 10% 25%;
 
@@ -203,12 +203,12 @@
   --destructive-foreground: 0 0% 98%;
 
   --input: 210 15% 35%;
-  --ring: 25 85% 60%;
-  --chart-1: 25 85% 60%;
-  --chart-2: 210 90% 65%;
-  --chart-3: 35 80% 65%;
-  --chart-4: 200 70% 65%;
-  --chart-5: 280 60% 70%;
+  --ring: 28 85% 60%;
+  --chart-1: 28 85% 60%;
+  --chart-2: 28 85% 50%;
+  --chart-3: 28 85% 40%;
+  --chart-4: 28 85% 70%;
+  --chart-5: 28 85% 80%;
 
   --shadow-2xs: 0px 2px 0px 0px hsl(210 10% 5% / 0.2);
   --shadow-xs: 0px 2px 0px 0px hsl(210 10% 5% / 0.3);
@@ -252,59 +252,35 @@
  */
 @layer utilities {
   
-  /* Professional tree service themed utility classes */
-  .bg-gradient-tree-primary {
-    background: linear-gradient(135deg, hsl(var(--blue)) 0%, hsl(var(--primary)) 100%);
+  /* Single brand color utilities */
+  .text-brand {
+    color: hsl(var(--primary));
   }
   
-  .bg-gradient-tree-soft {
-    background: linear-gradient(135deg, hsl(var(--blue) / 0.08) 0%, hsl(var(--primary) / 0.08) 100%);
+  .bg-brand {
+    background-color: hsl(var(--primary));
   }
   
-  .text-gradient-tree {
-    background: linear-gradient(135deg, hsl(var(--blue)), hsl(var(--primary)));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-weight: 600;
+  .bg-brand-soft {
+    background-color: hsl(var(--primary) / 0.08);
   }
   
-  .border-gradient-tree {
-    border-image: linear-gradient(135deg, hsl(var(--blue)), hsl(var(--primary))) 1;
+  .border-brand {
+    border-color: hsl(var(--primary));
   }
   
-  .shadow-tree {
-    box-shadow: 0 4px 6px -1px hsl(var(--blue) / 0.08), 0 2px 4px -1px hsl(var(--primary) / 0.05);
+  .border-l-brand {
+    border-left-color: hsl(var(--primary));
   }
   
-  .text-rainbow {
-    background: linear-gradient(45deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0, #e91e63);
-    background-size: 400% 400%;
-    animation: rainbow-shift 3s ease infinite;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-weight: bold;
+  .ring-brand {
+    --tw-ring-color: hsl(var(--primary));
   }
   
-  .bg-rainbow {
-    background: linear-gradient(45deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0);
-    background-size: 400% 400%;
-    animation: rainbow-shift 2s ease infinite;
+  .shadow-brand {
+    box-shadow: 0 1px 3px 0 hsl(var(--primary) / 0.1), 0 1px 2px 0 hsl(var(--primary) / 0.06);
   }
   
-  .border-rainbow {
-    border: 4px solid;
-    border-image: linear-gradient(45deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0) 1;
-  }
-  
-  .bg-vibrant-blue {
-    background: linear-gradient(135deg, hsl(var(--blue)) 0%, hsl(var(--blue) / 0.8) 100%);
-  }
-  
-  .bg-vibrant-orange {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.8) 100%);
-  }
   
   .card-professional {
     background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / 0.95));
@@ -319,20 +295,6 @@
     box-shadow: 0 8px 30px hsl(var(--blue) / 0.08), 0 4px 12px hsl(var(--primary) / 0.06);
   }
   
-  .btn-tree-service {
-    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--blue)));
-    color: white;
-    border: 1px solid hsl(var(--primary-border));
-    box-shadow: 0 2px 8px hsl(var(--primary) / 0.2), 0 1px 4px hsl(var(--blue) / 0.15);
-    transition: all 0.2s ease;
-    font-weight: 500;
-  }
-  
-  .btn-tree-service:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px hsl(var(--primary) / 0.25), 0 2px 6px hsl(var(--blue) / 0.2);
-    background: linear-gradient(135deg, hsl(var(--primary) / 0.9), hsl(var(--blue) / 0.9));
-  }
   
   @keyframes rainbow-shift {
     0% { background-position: 0% 50%; }
@@ -340,15 +302,6 @@
     100% { background-position: 0% 50%; }
   }
   
-  .icon-colorful {
-    background: linear-gradient(45deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0);
-    background-size: 400% 400%;
-    animation: rainbow-shift 4s ease infinite;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
   /* Hide ugly search cancel button in Chrome until we can style it properly */
   input[type="search"]::-webkit-search-cancel-button {
     @apply hidden;
