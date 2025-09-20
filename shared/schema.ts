@@ -879,3 +879,142 @@ export const updateEquipmentSchema = insertEquipmentSchema.partial();
 export type Equipment = typeof equipment.$inferSelect;
 export type InsertEquipment = z.infer<typeof insertEquipmentSchema>;
 export type UpdateEquipment = z.infer<typeof updateEquipmentSchema>;
+
+// ========================================
+// COMMUNICATIONS SYSTEM SCHEMAS
+// ========================================
+
+// Communications & Message Management
+export const communications = pgTable("communications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Platform and source information
+  platform: text("platform").notNull(), // email, sms, facebook, instagram, twitter, linkedin, whatsapp, phone
+  type: text("type").notNull(), // message, comment, mention, dm, call, review
+  threadId: varchar("thread_id"), // For grouping related messages
+  externalId: text("external_id"), // ID from the source platform
+  
+  // Sender information
+  from: text("from").notNull(),
+  fromEmail: text("from_email"),
+  fromPhone: text("from_phone"),
+  fromHandle: text("from_handle"), // Social media handle
+  
+  // Message content
+  subject: text("subject"),
+  content: text("content").notNull(),
+  contentType: text("content_type").default("text"), // text, html, json
+  
+  // Recipients and targeting
+  to: text("to").array().default([]),
+  cc: text("cc").array().default([]),
+  bcc: text("bcc").array().default([]),
+  
+  // Attachments and media
+  attachments: jsonb("attachments").default([]), // Array of {name, type, url, size}
+  mediaUrls: text("media_urls").array().default([]),
+  
+  // Status and metadata
+  isRead: boolean("is_read").notNull().default(false),
+  isStarred: boolean("is_starred").notNull().default(false),
+  isArchived: boolean("is_archived").notNull().default(false),
+  priority: text("priority").notNull().default("medium"), // low, medium, high, urgent
+  status: text("status").notNull().default("new"), // new, replied, forwarded, closed
+  
+  // Direction and categorization
+  direction: text("direction").notNull().default("inbound"), // inbound, outbound
+  category: text("category"), // inquiry, complaint, support, sales, followup
+  tags: text("tags").array().default([]),
+  
+  // Business relationships
+  leadId: varchar("lead_id").references(() => leads.id),
+  customerId: varchar("customer_id").references(() => customers.id),
+  jobId: varchar("job_id").references(() => jobs.id),
+  
+  // Assignment and handling
+  assignedTo: varchar("assigned_to"), // Employee ID
+  handledBy: varchar("handled_by"), // Employee ID who processed
+  
+  // Response and follow-up
+  responseRequired: boolean("response_required").default(false),
+  responseDeadline: timestamp("response_deadline"),
+  lastResponseAt: timestamp("last_response_at"),
+  followUpDate: timestamp("follow_up_date"),
+  
+  // Platform-specific metadata
+  platformData: jsonb("platform_data").default({}), // Platform-specific fields
+  
+  // Timestamps
+  sentAt: timestamp("sent_at").notNull(),
+  receivedAt: timestamp("received_at").notNull().defaultNow(),
+  processedAt: timestamp("processed_at"),
+  
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Communication templates for responses
+export const communicationTemplates = pgTable("communication_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  platform: text("platform").notNull(), // email, sms, facebook, etc.
+  type: text("type").notNull(), // welcome, quote_response, follow_up, etc.
+  subject: text("subject"), // For email templates
+  content: text("content").notNull(),
+  variables: text("variables").array().default([]), // Available template variables
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Communication rules and automation
+export const communicationRules = pgTable("communication_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  platform: text("platform"), // null = all platforms
+  
+  // Trigger conditions
+  triggerConditions: jsonb("trigger_conditions").notNull(), // JSON rules for when to trigger
+  
+  // Actions to take
+  actions: jsonb("actions").notNull(), // Auto-assign, tag, categorize, respond, etc.
+  
+  // Priority and ordering
+  priority: integer("priority").default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertCommunicationSchema = createInsertSchema(communications).omit({ 
+  id: true, 
+  receivedAt: true,
+  createdAt: true, 
+  updatedAt: true 
+});
+
+export const updateCommunicationSchema = insertCommunicationSchema.partial();
+
+export const insertCommunicationTemplateSchema = createInsertSchema(communicationTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertCommunicationRuleSchema = createInsertSchema(communicationRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type Communication = typeof communications.$inferSelect;
+export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
+export type UpdateCommunication = z.infer<typeof updateCommunicationSchema>;
+
+export type CommunicationTemplate = typeof communicationTemplates.$inferSelect;
+export type InsertCommunicationTemplate = z.infer<typeof insertCommunicationTemplateSchema>;
+
+export type CommunicationRule = typeof communicationRules.$inferSelect;
+export type InsertCommunicationRule = z.infer<typeof insertCommunicationRuleSchema>;
