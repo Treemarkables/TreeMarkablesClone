@@ -158,7 +158,8 @@ export function InvoiceManager({ compact = false }: InvoiceManagerProps) {
     const overdueCount = mockInvoiceData.filter(inv => isOverdue(inv)).length;
     const paidThisMonth = mockInvoiceData
       .filter(inv => inv.status === 'paid' && inv.paidDate && 
-        new Date(inv.paidDate).getMonth() === new Date().getMonth())
+        new Date(inv.paidDate).getMonth() === new Date().getMonth() &&
+        new Date(inv.paidDate).getFullYear() === new Date().getFullYear())
       .reduce((sum, inv) => sum + inv.amount, 0);
 
     return (
