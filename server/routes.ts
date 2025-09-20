@@ -18,6 +18,7 @@ import {
   insertBusinessSettingsSchema, updateBusinessSettingsSchema,
   insertCommunicationSchema, updateCommunicationSchema,
   insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, gpsLocationSchema,
+  insertInvoiceSchema, insertServiceRequestSchema, insertCustomerAuthSchema,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import multer from "multer";
@@ -3552,6 +3553,152 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error archiving communication:', error);
       res.status(500).json({ success: false, message: 'Error archiving communication' });
+    }
+  });
+
+  // ========================================
+  // CUSTOMER PORTAL API ROUTES  
+  // ========================================
+
+  // Customer authentication
+  app.post('/api/customer-auth', async (req: Request, res: Response) => {
+    try {
+      console.log('Customer auth request received:', req.body);
+      const { email, phone } = req.body;
+      
+      if (!email) {
+        console.log('Authentication failed: Email is required');
+        res.status(400).json({ success: false, message: 'Email is required' });
+        return;
+      }
+
+      console.log(`Attempting authentication for email: ${email}, phone: ${phone}`);
+
+      // Try to authenticate existing customer
+      let customerAuth = await storage.authenticateCustomer(email, phone);
+      console.log('Customer auth result:', customerAuth);
+      
+      if (!customerAuth) {
+        console.log('No existing customer auth found, searching for customer by email');
+        // Create new customer auth if doesn't exist
+        // Find customer by email
+        const customers = await storage.getAllCustomers();
+        console.log('All customers:', customers.map(c => ({ id: c.id, email: c.email, phone: c.phone })));
+        const customer = customers.find(c => c.email === email);
+        console.log('Found customer:', customer);
+        
+        if (customer) {
+          console.log('Creating new customer auth for existing customer');
+          customerAuth = await storage.createCustomerAuth({
+            customerId: customer.id,
+            email: email,
+            phone: phone || customer.phone || undefined
+          });
+        } else {
+          console.log('Customer not found in database');
+          res.status(404).json({ success: false, message: 'Customer not found' });
+          return;
+        }
+      }
+
+      // Get customer details
+      const customer = await storage.getCustomer(customerAuth.customerId);
+      console.log('Authentication successful for customer:', customer?.name);
+      
+      res.json({
+        success: true,
+        data: {
+          customerAuth,
+          customer
+        }
+      });
+    } catch (error) {
+      console.error('Error authenticating customer:', error);
+      res.status(500).json({ success: false, message: 'Authentication failed' });
+    }
+  });
+
+  // Get customer jobs
+  app.get('/api/customer/:id/jobs', async (req: Request, res: Response) => {
+    try {
+      const jobs = await storage.getCustomerJobs(req.params.id);
+      
+      // Get photos for each job
+      const jobsWithPhotos = await Promise.all(jobs.map(async (job) => {
+        const photos = await storage.getCustomerPhotos(req.params.id, job.id);
+        return { ...job, photos: photos.map(p => p.filename) };
+      }));
+      
+      res.json({ success: true, data: jobsWithPhotos });
+    } catch (error) {
+      console.error('Error fetching customer jobs:', error);
+      res.status(500).json({ success: false, message: 'Error fetching jobs' });
+    }
+  });
+
+  // Get customer invoices  
+  app.get('/api/customer/:id/invoices', async (req: Request, res: Response) => {
+    try {
+      const invoices = await storage.getCustomerInvoices(req.params.id);
+      res.json({ success: true, data: invoices });
+    } catch (error) {
+      console.error('Error fetching customer invoices:', error);
+      res.status(500).json({ success: false, message: 'Error fetching invoices' });
+    }
+  });
+
+  // Get customer photos
+  app.get('/api/customer/:id/photos', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.query;
+      const photos = await storage.getCustomerPhotos(req.params.id, jobId as string);
+      res.json({ success: true, data: photos });
+    } catch (error) {
+      console.error('Error fetching customer photos:', error);
+      res.status(500).json({ success: false, message: 'Error fetching photos' });
+    }
+  });
+
+  // Create service request
+  app.post('/api/customer/:id/service-requests', async (req: Request, res: Response) => {
+    try {
+      console.log(`Creating service request for customer ${req.params.id}:`, req.body);
+      
+      const validationResult = insertServiceRequestSchema.safeParse({
+        ...req.body,
+        customerId: req.params.id
+      });
+      
+      if (!validationResult.success) {
+        console.log('Service request validation failed:', validationResult.error.issues);
+        res.status(400).json({
+          success: false,
+          message: 'Invalid service request data',
+          errors: validationResult.error.issues
+        });
+        return;
+      }
+
+      console.log('Creating service request with data:', validationResult.data);
+      const serviceRequest = await storage.createServiceRequest(validationResult.data);
+      console.log('Service request created successfully:', serviceRequest.id);
+      res.json({ success: true, data: serviceRequest });
+    } catch (error) {
+      console.error('Error creating service request:', error);
+      res.status(500).json({ success: false, message: 'Error creating service request' });
+    }
+  });
+
+  // Get customer service requests
+  app.get('/api/customer/:id/service-requests', async (req: Request, res: Response) => {
+    try {
+      console.log(`Getting service requests for customer ${req.params.id}`);
+      const serviceRequests = await storage.getServiceRequestsByCustomer(req.params.id);
+      console.log(`Found ${serviceRequests.length} service requests for customer ${req.params.id}`);
+      res.json({ success: true, data: serviceRequests });
+    } catch (error) {
+      console.error('Error fetching service requests:', error);
+      res.status(500).json({ success: false, message: 'Error fetching service requests' });
     }
   });
 

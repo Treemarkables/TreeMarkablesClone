@@ -154,22 +154,37 @@ export function CustomerPortal() {
     postalCode: '1010'
   };
 
-  // Customer login
+  // Customer login with real API
   const loginMutation = useMutation({
     mutationFn: async ({ email, phone }: { email: string; phone: string }) => {
-      // In real app, this would authenticate with backend
-      // For demo, we'll simulate successful login
-      return { customer: mockCustomer };
+      const response = await apiRequest('POST', '/api/customer-auth', { email, phone });
+      const data = await response.json();
+      return data;
     },
     onSuccess: (data) => {
-      setCustomer(data.customer);
+      console.log('Login mutation success, received data:', data);
+      if (!data.success || !data.data?.customer) {
+        throw new Error('Invalid response structure');
+      }
+      const customerData = data.data.customer;
+      setCustomer({
+        id: customerData.id,
+        firstName: customerData.name.split(' ')[0],
+        lastName: customerData.name.split(' ').slice(1).join(' '),
+        email: customerData.email,
+        phone: customerData.phone,
+        address: customerData.address,
+        city: customerData.city,
+        postalCode: '' // Not in API yet
+      });
       setIsLoggedIn(true);
       toast({
         title: "Welcome back!",
-        description: "You've been successfully logged in.",
+        description: `Signed in as ${customerData.name}`,
       });
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Login mutation error:', error);
       toast({
         title: "Login Failed",
         description: "Invalid email or phone number. Please check your details.",
@@ -178,8 +193,63 @@ export function CustomerPortal() {
     },
   });
 
-  // Mock data for demonstration
-  const customerJobs: CustomerJob[] = [
+  // Real data fetching with React Query
+  const { data: customerJobs = [], isLoading: jobsLoading } = useQuery({
+    queryKey: ['customer-jobs', customer?.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/customer/${customer?.id}/jobs`);
+      const result = await response.json();
+      return result.data || [];
+    },
+    enabled: !!customer?.id
+  });
+
+  const { data: customerInvoices = [], isLoading: invoicesLoading } = useQuery({
+    queryKey: ['customer-invoices', customer?.id], 
+    queryFn: async () => {
+      const response = await fetch(`/api/customer/${customer?.id}/invoices`);
+      const result = await response.json();
+      return result.data || [];
+    },
+    enabled: !!customer?.id
+  });
+
+  const { data: customerServiceRequests = [], isLoading: serviceRequestsLoading } = useQuery({
+    queryKey: ['customer-service-requests', customer?.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/customer/${customer?.id}/service-requests`);
+      const result = await response.json();
+      return result.data || [];
+    },
+    enabled: !!customer?.id
+  });
+
+  // Service request submission
+  const serviceRequestMutation = useMutation({
+    mutationFn: async (data: ServiceRequestData) => {
+      const response = await apiRequest('POST', `/api/customer/${customer?.id}/service-requests`, data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Service Request Submitted",
+        description: "We'll contact you within 24 hours to schedule your service.",
+      });
+      form.reset();
+      // Invalidate and refetch service requests
+      queryClient.invalidateQueries({ queryKey: ['customer-service-requests', customer?.id] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to submit service request. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Mock data for demonstration - TO BE REMOVED
+  const _oldCustomerJobs: CustomerJob[] = [
     {
       id: 'job-001',
       jobNumber: 'TRM-2024-001',
@@ -217,7 +287,8 @@ export function CustomerPortal() {
     }
   ];
 
-  const customerInvoices: CustomerInvoice[] = [
+  // Old mock data - removing duplicate declaration
+  const _oldCustomerInvoices: CustomerInvoice[] = [
     {
       id: 'inv-001',
       invoiceNumber: 'INV-2024-001',
@@ -477,6 +548,67 @@ export function CustomerPortal() {
                   </CardContent>
                 </Card>
               ))}
+
+              {/* Service Requests Section */}
+              {customerServiceRequests.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 mt-8 mb-4">
+                    <h3 className="text-lg font-semibold">Service Requests</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {customerServiceRequests.length} pending
+                    </Badge>
+                  </div>
+                  
+                  {customerServiceRequests.map((request) => (
+                    <Card key={request.id} className="hover:shadow-md transition-shadow border-l-4 border-l-orange-500">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="flex items-center gap-2">
+                              {request.serviceType.replace(/[-_]/g, ' ').split(' ').map(word => 
+                                word.charAt(0).toUpperCase() + word.slice(1)
+                              ).join(' ')}
+                              <Badge className="bg-orange-500">
+                                {request.status}
+                              </Badge>
+                            </CardTitle>
+                            <CardDescription className="flex items-center gap-4 mt-2">
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                {request.address}
+                              </span>
+                              {request.preferredDate && (
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  Requested: {format(new Date(request.preferredDate), 'MMM dd, yyyy')}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                Submitted: {format(new Date(request.createdAt), 'MMM dd, yyyy')}
+                              </span>
+                            </CardDescription>
+                          </div>
+                          <Badge className={getPriorityColor(request.urgency)}>
+                            {request.urgency} priority
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <p className="text-sm">{request.description}</p>
+                        
+                        <div className="flex items-center justify-between pt-4 border-t">
+                          <div className="flex items-center gap-1 text-sm text-orange-600">
+                            <AlertCircle className="w-4 h-4" />
+                            We'll contact you within 24 hours
+                          </div>
+                          <span className="text-sm text-muted-foreground">#{request.id.slice(-6)}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </>
+              )}
             </div>
           </TabsContent>
 
@@ -552,11 +684,16 @@ export function CustomerPortal() {
               <CardContent className="p-6">
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit((data) => {
+                    if (!customer?.id) {
+                      toast({
+                        title: "Authentication Required",
+                        description: "Please login to submit a service request.",
+                        variant: "destructive"
+                      });
+                      return;
+                    }
                     console.log('Service request data:', data);
-                    toast({
-                      title: "Service Request Submitted",
-                      description: "We'll contact you within 24 hours to schedule your service.",
-                    });
+                    serviceRequestMutation.mutate(data);
                     form.reset();
                   })} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -670,10 +807,10 @@ export function CustomerPortal() {
                     <Button 
                       type="submit" 
                       className="w-full"
-                      disabled={form.formState.isSubmitting}
+                      disabled={serviceRequestMutation.isPending}
                       data-testid="button-submit-service-request"
                     >
-                      {form.formState.isSubmitting ? (
+                      {serviceRequestMutation.isPending ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           Submitting...
