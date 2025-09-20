@@ -351,7 +351,7 @@ export default function JobDashboard() {
     queryKey: ['/api/jobs']
   });
 
-  const jobs = Array.isArray(jobsData?.data) ? jobsData.data : (Array.isArray(jobsData) ? jobsData : []);
+  const jobs = Array.isArray((jobsData as any)?.data) ? (jobsData as any).data : (Array.isArray(jobsData) ? jobsData : []);
 
   const { data: calls, isLoading: callsLoading } = useQuery({
     queryKey: ['/api/calls', '50'],
@@ -551,7 +551,7 @@ export default function JobDashboard() {
     const fieldName = currentStep.field as keyof typeof leadFormData;
     
     // Handle confirmation step
-    if (fieldName === "confirmation") {
+    if (currentStep.field === "confirmation") {
       if (lowerInput.includes("yes") || lowerInput.includes("correct") || lowerInput.includes("confirm")) {
         finalizeLead();
       } else {
@@ -1388,7 +1388,7 @@ export default function JobDashboard() {
 
             {/* Global Search and Filters */}
             <GlobalSearch
-              data={Array.isArray(pipelineLeads?.data) ? pipelineLeads.data : (Array.isArray(pipelineLeads) ? pipelineLeads : [])}
+              data={Array.isArray((pipelineLeads as any)?.data) ? (pipelineLeads as any).data : (Array.isArray(pipelineLeads) ? pipelineLeads : [])}
               searchFields={['name', 'email', 'phone', 'serviceRequested', 'notes', 'source']}
               onFilteredResults={setFilteredLeads}
               placeholder="Search leads by name, email, phone, service..."
@@ -1633,7 +1633,7 @@ export default function JobDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {(() => {
                     console.log('Pipeline leads data:', pipelineLeads);
-                    const leadsArray = Array.isArray(pipelineLeads?.data) ? pipelineLeads.data : (Array.isArray(pipelineLeads) ? pipelineLeads : []);
+                    const leadsArray = Array.isArray((pipelineLeads as any)?.data) ? (pipelineLeads as any).data : (Array.isArray(pipelineLeads) ? pipelineLeads : []);
                     console.log('Processed leads array:', leadsArray);
                     
                     if (leadsLoading) {
