@@ -134,7 +134,6 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     <Sidebar>
       <SidebarHeader className="border-b border-orange-200">
         <div className="flex flex-col gap-2 p-4">
-          <span className="text-xs text-orange-600">Dashboard</span>
         </div>
       </SidebarHeader>
 
