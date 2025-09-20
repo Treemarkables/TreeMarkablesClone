@@ -473,8 +473,8 @@ export default function JobDashboard() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'urgent': return 'bg-red-500';
-      case 'high': return 'bg-gradient-to-r from-orange-500 to-red-500 shadow-lg';
+      case 'urgent': return 'bg-orange-600';
+      case 'high': return 'bg-gradient-to-r from-orange-500 to-orange-600 shadow-lg';
       case 'medium': return 'bg-gradient-to-r from-yellow-500 to-orange-400 shadow-lg';
       case 'low': return 'bg-gradient-to-r from-green-500 to-emerald-500 shadow-lg';
       default: return 'bg-gray-500';
@@ -486,9 +486,9 @@ export default function JobDashboard() {
       case 'completed': return 'bg-green-500';
       case 'in_progress': return 'bg-blue-500';
       case 'scheduled': return 'bg-purple-500';
-      case 'cancelled': return 'bg-red-500';
+      case 'cancelled': return 'bg-orange-600';
       case 'accepted': return 'bg-green-500';
-      case 'rejected': return 'bg-red-500';
+      case 'rejected': return 'bg-orange-600';
       case 'sent': return 'bg-yellow-500';
       case 'draft': return 'bg-gray-500';
       default: return 'bg-gray-500';
@@ -514,7 +514,7 @@ export default function JobDashboard() {
 
   if (statsLoading || revenueLoading || quotesLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-300 via-purple-300 via-blue-300 via-cyan-300 via-green-300 via-yellow-300 to-orange-300 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-orange-100 via-orange-200 via-orange-300 to-orange-400 p-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
@@ -525,7 +525,7 @@ export default function JobDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-300 via-purple-300 via-blue-300 via-cyan-300 via-green-300 via-yellow-300 to-orange-300 p-4" data-testid="job-dashboard">
+    <div className="min-h-screen bg-gradient-to-br from-orange-100 via-orange-200 via-orange-300 to-orange-400 p-4" data-testid="job-dashboard">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Mobile-Optimized Header */}
@@ -533,7 +533,7 @@ export default function JobDashboard() {
           {/* Top Header Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-pink-600" />
+              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-orange-600" />
               <div>
                 <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-brand">
                   Treemarkables
@@ -721,10 +721,10 @@ export default function JobDashboard() {
           <Card className="hover-elevate" data-testid="card-missed-calls">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Missed Calls</CardTitle>
-              <PhoneCall className="h-4 w-4 text-red-500" />
+              <PhoneCall className="h-4 w-4 text-orange-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{dashboardStats?.missedCalls || 0}</div>
+              <div className="text-2xl font-bold text-orange-600">{dashboardStats?.missedCalls || 0}</div>
               <p className="text-xs text-muted-foreground">
                 Potential leads lost
               </p>
@@ -992,9 +992,9 @@ export default function JobDashboard() {
 
             {/* Follow-Up Queue - Critical Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <Card className="bg-red-50 border-red-200">
+              <Card className="bg-orange-50 border-orange-200">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-red-700">
+                  <CardTitle className="flex items-center gap-2 text-orange-700">
                     <AlertTriangle className="h-5 w-5" />
                     Overdue Follow-ups ({Array.isArray((followUpQueue as any)?.overdue) ? (followUpQueue as any).overdue.length : 0})
                   </CardTitle>
@@ -1005,7 +1005,7 @@ export default function JobDashboard() {
                       <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
                         <div className="font-medium text-sm">{lead.name}</div>
                         <div className="text-xs text-gray-600">{lead.phone}</div>
-                        <div className="text-xs text-red-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
+                        <div className="text-xs text-orange-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
                       </div>
                     )) : <div className="text-sm text-gray-500">No overdue follow-ups</div>}
                   </div>
@@ -1150,7 +1150,7 @@ export default function JobDashboard() {
                           <span className="text-sm">{(conversionFunnel as any).won || 0} ({((conversionFunnel as any).conversionRates?.quoteToWin || 0).toFixed(1)}%)</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-red-600 h-2 rounded-full" style={{ width: `${(conversionFunnel as any).conversionRates?.quoteToWin || 0}%` }}></div>
+                          <div className="bg-orange-600 h-2 rounded-full" style={{ width: `${(conversionFunnel as any).conversionRates?.quoteToWin || 0}%` }}></div>
                         </div>
                       </div>
 
@@ -1235,7 +1235,7 @@ export default function JobDashboard() {
                             </div>
                             {lead.followUpDate && (
                               <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-red-500" />
+                                <Calendar className="h-4 w-4 text-orange-500" />
                                 <span>Follow-up: {format(new Date(lead.followUpDate), 'PP')}</span>
                               </div>
                             )}
@@ -1281,7 +1281,7 @@ export default function JobDashboard() {
                           <td className="p-2 text-right">{source.count}</td>
                           <td className="p-2 text-right">{source.conversionRate.toFixed(1)}%</td>
                           <td className="p-2 text-right">{formatCurrency(source.averageValue)}</td>
-                          <td className={`p-2 text-right font-medium ${source.roi > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          <td className={`p-2 text-right font-medium ${source.roi > 0 ? 'text-green-600' : 'text-orange-600'}`}>
                             {source.roi.toFixed(0)}%
                           </td>
                         </tr>
@@ -1673,7 +1673,7 @@ export default function JobDashboard() {
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-orange-500 to-red-600 text-white shadow-xl border-0">
+                <Card className="bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-xl border-0">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1871,7 +1871,7 @@ export default function JobDashboard() {
               
 
               {/* Customer Lifetime Value Analysis */}
-              <Card className="border-2 border-gradient-to-r from-yellow-200 via-orange-200 to-red-200">
+              <Card className="border-2 border-gradient-to-r from-yellow-200 via-orange-200 to-orange-300">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5 text-yellow-500" />
@@ -1907,7 +1907,7 @@ export default function JobDashboard() {
               </Card>
 
               {/* Advanced Conversion Funnel */}
-              <Card className="border-2 border-gradient-to-r from-purple-200 via-pink-200 to-red-200">
+              <Card className="border-2 border-gradient-to-r from-orange-200 via-orange-300 to-orange-400">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Activity className="h-5 w-5 text-purple-500" />
@@ -2219,10 +2219,10 @@ export default function JobDashboard() {
               </Card>
 
               {/* Security & Access */}
-              <Card className="border-2 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+              <Card className="border-2 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-red-500" />
+                    <Shield className="h-5 w-5 text-orange-500" />
                     Security & Access Control
                   </CardTitle>
                   <CardDescription>User permissions and data security</CardDescription>
