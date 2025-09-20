@@ -154,6 +154,7 @@ export default function JobDashboard() {
   const [isConversationMode, setIsConversationMode] = useState(false);
   const [conversationStep, setConversationStep] = useState(0);
   const [aiResponse, setAiResponse] = useState("");
+  const [showModeSelection, setShowModeSelection] = useState(false);
   const [leadFormData, setLeadFormData] = useState({
     name: "",
     phone: "",
@@ -520,23 +521,10 @@ export default function JobDashboard() {
       } else if (command.includes('quick') || command.includes('fast')) {
         setShowNewLeadDialog(true);
       } else {
-        // Default: Ask which mode they prefer
-        setAiResponse("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.");
-        speakText("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.", false);
-        
-        // Manual restart listening after a delay to avoid conflicts
-        setTimeout(() => {
-          if (recognition) {
-            try {
-              setIsListening(true);
-              recognition.start();
-              console.log('Manually restarted listening for mode selection');
-            } catch (error) {
-              console.log('Failed to manually restart listening:', error);
-              setIsListening(false);
-            }
-          }
-        }, 2000); // Longer delay to ensure TTS finishes
+        // Default: Ask which mode they prefer with buttons
+        setAiResponse("Choose how you'd like to create a lead:");
+        speakText("Choose how you'd like to create a lead: Click Conversation for step-by-step voice guidance, or Click Quick for the standard form.", false);
+        setShowModeSelection(true);
       }
     } else if (command.includes('conversation') && aiResponse.includes('conversation mode or quick mode')) {
       console.log('Starting conversation mode...');
@@ -1076,13 +1064,35 @@ export default function JobDashboard() {
                 </div>
               )}
               
-              {/* Mode selection helper */}
-              {!isConversationMode && aiResponse.includes('conversation mode or quick mode') && (
-                <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                  <p className="text-sm text-orange-800 mb-2">💡 <strong>Choose Your Mode:</strong></p>
-                  <div className="text-xs text-orange-700 space-y-1">
-                    <div>• Say <strong>"conversation"</strong> for step-by-step voice guidance</div>
-                    <div>• Say <strong>"quick"</strong> to open the standard form</div>
+              {/* Mode selection buttons */}
+              {showModeSelection && (
+                <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-blue-50 rounded-lg border border-orange-200">
+                  <p className="text-sm text-gray-800 mb-3 font-medium">Choose how you'd like to create a lead:</p>
+                  <div className="flex gap-3">
+                    <Button 
+                      onClick={() => {
+                        setShowModeSelection(false);
+                        startLeadConversation();
+                      }}
+                      className="flex-1"
+                      data-testid="button-conversation-mode"
+                    >
+                      🎙️ Conversation Mode
+                      <span className="block text-xs opacity-80">Step-by-step voice guidance</span>
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        setShowModeSelection(false);
+                        setShowNewLeadDialog(true);
+                        setAiResponse("Opening quick lead creation form.");
+                      }}
+                      variant="outline" 
+                      className="flex-1"
+                      data-testid="button-quick-mode"
+                    >
+                      ⚡ Quick Mode
+                      <span className="block text-xs opacity-80">Standard form</span>
+                    </Button>
                   </div>
                 </div>
               )}
