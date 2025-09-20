@@ -14,17 +14,17 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 220 50% 95%;
+  --background: 210 40% 98%;
 
-  --foreground: 210 25% 15%;
+  --foreground: 220 20% 14%;
 
-  --border: 280 60% 70%;
+  --border: 220 13% 91%;
 
   --card: 0 0% 100%;
 
-  --card-foreground: 210 25% 15%;
+  --card-foreground: 220 20% 14%;
 
-  --card-border: 260 80% 60%;
+  --card-border: 220 13% 91%;
 
   --sidebar: 0 0% 94%;
 
@@ -48,27 +48,27 @@
 
   --popover-border: 210 12% 85%;
 
-  --primary: 15 100% 58%;
+  --primary: 22 93% 55%;
 
   --primary-foreground: 0 0% 98%;
 
-  --blue: 220 100% 55%;
+  --blue: 217 91% 60%;
 
   --blue-foreground: 0 0% 98%;
 
-  --blue-border: 220 100% 45%;
+  --blue-border: 217 91% 50%;
 
-  --secondary: 260 40% 88%;
+  --secondary: 220 14% 96%;
 
-  --secondary-foreground: 260 40% 25%;
+  --secondary-foreground: 220 15% 25%;
 
-  --muted: 200 30% 85%;
+  --muted: 220 14% 96%;
 
-  --muted-foreground: 210 25% 40%;
+  --muted-foreground: 220 9% 46%;
 
-  --accent: 210 85% 92%;
+  --accent: 220 14% 96%;
 
-  --accent-foreground: 210 95% 25%;
+  --accent-foreground: 220 15% 25%;
 
   --destructive: 0 85% 45%;
 
@@ -252,28 +252,29 @@
  */
 @layer utilities {
   
-  /* Blue and Orange themed utility classes */
-  .bg-gradient-blue-orange {
+  /* Professional tree service themed utility classes */
+  .bg-gradient-tree-primary {
     background: linear-gradient(135deg, hsl(var(--blue)) 0%, hsl(var(--primary)) 100%);
   }
   
-  .bg-gradient-blue-orange-soft {
-    background: linear-gradient(135deg, hsl(var(--blue) / 0.1) 0%, hsl(var(--primary) / 0.1) 100%);
+  .bg-gradient-tree-soft {
+    background: linear-gradient(135deg, hsl(var(--blue) / 0.08) 0%, hsl(var(--primary) / 0.08) 100%);
   }
   
-  .text-gradient-blue-orange {
+  .text-gradient-tree {
     background: linear-gradient(135deg, hsl(var(--blue)), hsl(var(--primary)));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    font-weight: 600;
   }
   
-  .border-gradient-blue-orange {
+  .border-gradient-tree {
     border-image: linear-gradient(135deg, hsl(var(--blue)), hsl(var(--primary))) 1;
   }
   
-  .shadow-blue-orange {
-    box-shadow: 0 4px 6px -1px hsl(var(--blue) / 0.1), 0 2px 4px -1px hsl(var(--primary) / 0.06);
+  .shadow-tree {
+    box-shadow: 0 4px 6px -1px hsl(var(--blue) / 0.08), 0 2px 4px -1px hsl(var(--primary) / 0.05);
   }
   
   .text-rainbow {
@@ -305,28 +306,32 @@
     background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.8) 100%);
   }
   
-  .card-colorful {
-    background: linear-gradient(145deg, rgba(255, 50, 150, 0.1) 0%, rgba(50, 150, 255, 0.1) 25%, rgba(255, 150, 50, 0.1) 50%, rgba(150, 255, 50, 0.1) 75%, rgba(255, 255, 255, 0.9) 100%);
-    backdrop-filter: blur(10px);
-    border: 3px solid;
-    border-image: linear-gradient(45deg, #ff3366, #3366ff, #ff9933, #33ff66) 1;
-    box-shadow: 0 12px 40px rgba(255, 51, 102, 0.3), 0 8px 25px rgba(51, 102, 255, 0.2), 0 4px 15px rgba(255, 153, 51, 0.15);
+  .card-professional {
+    background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / 0.95));
+    backdrop-filter: blur(8px);
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 4px 20px hsl(var(--blue) / 0.05), 0 2px 8px hsl(var(--primary) / 0.04);
+    transition: all 0.2s ease;
   }
   
-  .btn-colorful {
-    background: linear-gradient(145deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0);
-    background-size: 400% 400%;
-    animation: rainbow-shift 3s ease infinite;
+  .card-professional:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 30px hsl(var(--blue) / 0.08), 0 4px 12px hsl(var(--primary) / 0.06);
+  }
+  
+  .btn-tree-service {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--blue)));
     color: white;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 6px 20px rgba(255, 23, 68, 0.4), 0 4px 15px rgba(156, 39, 176, 0.3);
-    transition: all 0.3s ease;
+    border: 1px solid hsl(var(--primary-border));
+    box-shadow: 0 2px 8px hsl(var(--primary) / 0.2), 0 1px 4px hsl(var(--blue) / 0.15);
+    transition: all 0.2s ease;
+    font-weight: 500;
   }
   
-  .btn-colorful:hover {
-    transform: translateY(-3px) scale(1.05);
-    box-shadow: 0 10px 30px rgba(255, 23, 68, 0.5), 0 8px 25px rgba(156, 39, 176, 0.4);
-    animation-duration: 1s;
+  .btn-tree-service:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px hsl(var(--primary) / 0.25), 0 2px 6px hsl(var(--blue) / 0.2);
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.9), hsl(var(--blue) / 0.9));
   }
   
   @keyframes rainbow-shift {
