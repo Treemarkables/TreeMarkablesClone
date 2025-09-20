@@ -78,7 +78,16 @@ import {
   Bell,
   Globe,
   Palette,
-  Briefcase
+  Briefcase,
+  Save,
+  RotateCcw,
+  HardDrive,
+  Wifi,
+  Archive,
+  Link as LinkIcon,
+  Server,
+  Cloud,
+  CreditCard
 } from "lucide-react";
 import PhotoUpload from "@/components/PhotoUpload";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -704,14 +713,17 @@ export default function JobDashboard() {
         {/* Compact Navigation Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 xl:grid-cols-14 gap-1 h-auto p-2 bg-white/90 backdrop-blur-sm border border-orange-200 shadow-sm rounded-lg">
-            <TabsTrigger value="overview" data-testid="tab-overview" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              🌟 Overview
+            <TabsTrigger value="overview" data-testid="tab-overview" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
+              <Star className="h-3 w-3" />
+              Overview
             </TabsTrigger>
-            <TabsTrigger value="leads" data-testid="tab-leads" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              🎯 Leads
+            <TabsTrigger value="leads" data-testid="tab-leads" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
+              <Target className="h-3 w-3" />
+              Leads
             </TabsTrigger>
-            <TabsTrigger value="jobs" data-testid="tab-jobs" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              🌳 Jobs
+            <TabsTrigger value="jobs" data-testid="tab-jobs" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
+              <Briefcase className="h-3 w-3" />
+              Jobs
             </TabsTrigger>
             <TabsTrigger value="quotes" data-testid="tab-quotes" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
               📋 Quotes
@@ -719,11 +731,13 @@ export default function JobDashboard() {
             <TabsTrigger value="customers" data-testid="tab-customers" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
               👥 Customers
             </TabsTrigger>
-            <TabsTrigger value="schedule" data-testid="tab-schedule" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              📅 Schedule
+            <TabsTrigger value="schedule" data-testid="tab-schedule" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              Schedule
             </TabsTrigger>
-            <TabsTrigger value="analytics" data-testid="tab-analytics" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              📊 Analytics
+            <TabsTrigger value="analytics" data-testid="tab-analytics" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
+              <BarChart3 className="h-3 w-3" />
+              Analytics
             </TabsTrigger>
             <TabsTrigger value="invoices" data-testid="tab-invoices" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
               💰 Invoices
@@ -740,11 +754,13 @@ export default function JobDashboard() {
             <TabsTrigger value="performance" data-testid="tab-performance" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
               📈 Performance
             </TabsTrigger>
-            <TabsTrigger value="dispatch" data-testid="tab-dispatch" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              📅 Dispatch
+            <TabsTrigger value="dispatch" data-testid="tab-dispatch" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              Dispatch
             </TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              ⚙️ Settings
+            <TabsTrigger value="settings" data-testid="tab-settings" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
+              <Settings className="h-3 w-3" />
+              Settings
             </TabsTrigger>
           </TabsList>
 
@@ -1913,7 +1929,8 @@ export default function JobDashboard() {
                   disabled={isExporting}
                   data-testid="button-generate-report"
                 >
-                  📊 {isExporting ? 'Generating...' : 'Generate Report'}
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  {isExporting ? 'Generating...' : 'Generate Report'}
                 </Button>
               </div>
             </div>
@@ -2507,11 +2524,13 @@ export default function JobDashboard() {
                 Business Settings & Configuration
               </h2>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
-                  💾 Save Changes
+                <Button variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-save-settings">
+                  <Save className="h-4 w-4" />
+                  Save Changes
                 </Button>
-                <Button variant="outline" size="sm">
-                  🔄 Reset to Default
+                <Button variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-reset-settings">
+                  <RotateCcw className="h-4 w-4" />
+                  Reset to Default
                 </Button>
               </div>
             </div>
@@ -2671,10 +2690,10 @@ export default function JobDashboard() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="overview">🌟 Overview Dashboard</SelectItem>
-                        <SelectItem value="leads">🎯 Leads Pipeline</SelectItem>
-                        <SelectItem value="jobs">🌳 Job Management</SelectItem>
-                        <SelectItem value="analytics">📊 Analytics</SelectItem>
+                        <SelectItem value="overview">Overview Dashboard</SelectItem>
+                        <SelectItem value="leads">Leads Pipeline</SelectItem>
+                        <SelectItem value="jobs">Job Management</SelectItem>
+                        <SelectItem value="analytics">Analytics</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -2742,19 +2761,327 @@ export default function JobDashboard() {
                     </div>
                   </div>
                   <div className="pt-2 border-t">
-                    <Button variant="outline" size="sm" className="w-full">
-                      🔐 Change Password
+                    <Button variant="outline" size="sm" className="w-full flex items-center gap-2" data-testid="button-change-password">
+                      <Shield className="h-4 w-4" />
+                      Change Password
                     </Button>
                   </div>
                   <div>
-                    <Button variant="outline" size="sm" className="w-full">
-                      🗃️ Export All Data
+                    <Button variant="outline" size="sm" className="w-full flex items-center gap-2" data-testid="button-export-data">
+                      <Archive className="h-4 w-4" />
+                      Export All Data
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Data Management & Backup */}
+              <Card className="border-2 bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <HardDrive className="h-5 w-5 text-indigo-500" />
+                    Data Management & Backup
+                  </CardTitle>
+                  <CardDescription>Storage, backup, and data handling preferences</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Cloud Sync</p>
+                        <p className="text-xs text-gray-600">Automatic data synchronization</p>
+                      </div>
+                      <Badge variant="default" className="bg-green-500">Enabled</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Backup Frequency</p>
+                        <p className="text-xs text-gray-600">How often to backup data</p>
+                      </div>
+                      <Select defaultValue="daily">
+                        <SelectTrigger className="w-32" data-testid="select-backup-frequency">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="real-time">Real-time</SelectItem>
+                          <SelectItem value="hourly">Hourly</SelectItem>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Data Retention</p>
+                        <p className="text-xs text-gray-600">Keep completed jobs for</p>
+                      </div>
+                      <Select defaultValue="2-years">
+                        <SelectTrigger className="w-32" data-testid="select-data-retention">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1-year">1 Year</SelectItem>
+                          <SelectItem value="2-years">2 Years</SelectItem>
+                          <SelectItem value="5-years">5 Years</SelectItem>
+                          <SelectItem value="forever">Forever</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1 flex items-center gap-2" data-testid="button-backup-now">
+                      <Cloud className="h-4 w-4" />
+                      Backup Now
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1 flex items-center gap-2" data-testid="button-restore-data">
+                      <Download className="h-4 w-4" />
+                      Restore Data
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Integration Management */}
+              <Card className="border-2 bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Wifi className="h-5 w-5 text-teal-500" />
+                    Integration Management
+                  </CardTitle>
+                  <CardDescription>External service connections and API settings</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">ServiceM8 Integration</p>
+                        <p className="text-xs text-gray-600">Sync with existing ServiceM8 data</p>
+                      </div>
+                      <Badge variant="default" className="bg-blue-500">Connected</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Google Calendar</p>
+                        <p className="text-xs text-gray-600">Job scheduling integration</p>
+                      </div>
+                      <Badge variant="outline">Setup Required</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Email Integration</p>
+                        <p className="text-xs text-gray-600">SendGrid email service</p>
+                      </div>
+                      <Badge variant="default" className="bg-green-500">Active</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Payment Gateway</p>
+                        <p className="text-xs text-gray-600">Online payment processing</p>
+                      </div>
+                      <Badge variant="outline">Not Configured</Badge>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t">
+                    <Button variant="outline" size="sm" className="w-full flex items-center gap-2" data-testid="button-manage-integrations">
+                      <Server className="h-4 w-4" />
+                      Manage API Keys
                     </Button>
                   </div>
                 </CardContent>
               </Card>
 
             </div>
+
+            {/* Performance & Optimization Settings */}
+            <Card className="border-2 bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-cyan-500" />
+                  Performance & Optimization
+                </CardTitle>
+                <CardDescription>System performance and resource optimization settings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  
+                  {/* Loading & Caching */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-800">Loading & Caching</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Cache Duration</label>
+                        <Select defaultValue="30min">
+                          <SelectTrigger data-testid="select-cache-duration">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5min">5 minutes</SelectItem>
+                            <SelectItem value="15min">15 minutes</SelectItem>
+                            <SelectItem value="30min">30 minutes</SelectItem>
+                            <SelectItem value="1hour">1 hour</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Image Quality</label>
+                        <Select defaultValue="high">
+                          <SelectTrigger data-testid="select-image-quality">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="high">High Quality</SelectItem>
+                            <SelectItem value="medium">Medium Quality</SelectItem>
+                            <SelectItem value="low">Low (Fast)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Real-time Updates */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-800">Real-time Updates</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Update Frequency</label>
+                        <Select defaultValue="30s">
+                          <SelectTrigger data-testid="select-update-frequency">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="10s">10 seconds</SelectItem>
+                            <SelectItem value="30s">30 seconds</SelectItem>
+                            <SelectItem value="1min">1 minute</SelectItem>
+                            <SelectItem value="5min">5 minutes</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Auto-refresh</label>
+                        <Select defaultValue="enabled">
+                          <SelectTrigger data-testid="select-auto-refresh">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="enabled">Enabled</SelectItem>
+                            <SelectItem value="manual">Manual Only</SelectItem>
+                            <SelectItem value="disabled">Disabled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resource Usage */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-800">Resource Usage</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Max Photos per Job</label>
+                        <Input type="number" defaultValue="20" data-testid="input-max-photos" />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Data Usage Mode</label>
+                        <Select defaultValue="standard">
+                          <SelectTrigger data-testid="select-data-usage">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="high">High Performance</SelectItem>
+                            <SelectItem value="standard">Standard</SelectItem>
+                            <SelectItem value="low">Data Saver</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Mobile & Field Operations */}
+            <Card className="border-2 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="h-5 w-5 text-emerald-500" />
+                  Mobile & Field Operations
+                </CardTitle>
+                <CardDescription>Settings for mobile devices and field crew operations</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Offline Mode */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-800">Offline Mode</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Enable Offline Access</p>
+                          <p className="text-xs text-gray-600">Work without internet connection</p>
+                        </div>
+                        <Badge variant="default" className="bg-green-500">Enabled</Badge>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Sync when online</label>
+                        <Select defaultValue="auto">
+                          <SelectTrigger data-testid="select-offline-sync">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">Automatic</SelectItem>
+                            <SelectItem value="manual">Manual</SelectItem>
+                            <SelectItem value="wifi-only">WiFi Only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* GPS & Location */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-800">GPS & Location</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Track Crew Location</p>
+                          <p className="text-xs text-gray-600">Real-time crew tracking</p>
+                        </div>
+                        <Badge variant="default" className="bg-blue-500">Active</Badge>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Location Accuracy</label>
+                        <Select defaultValue="high">
+                          <SelectTrigger data-testid="select-location-accuracy">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="high">High (5m)</SelectItem>
+                            <SelectItem value="medium">Medium (20m)</SelectItem>
+                            <SelectItem value="low">Low (100m)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="pt-4 border-t mt-6">
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1 flex items-center gap-2" data-testid="button-mobile-setup">
+                      <Phone className="h-4 w-4" />
+                      Mobile App Setup
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1 flex items-center gap-2" data-testid="button-field-guide">
+                      <FileText className="h-4 w-4" />
+                      Field Operations Guide
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Business Rules & Workflow */}
             <Card className="border-2 bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
