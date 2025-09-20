@@ -10,6 +10,10 @@ import {
   insertJobSchema, insertActivitySchema, insertReviewSchema, insertCampaignSchema,
   insertSocialPlanSchema, insertCompetitorSignalSchema, insertPriceRuleSchema,
   insertNotificationSchema, updateNotificationSchema,
+  insertEmployeeSchema, updateEmployeeSchema,
+  insertScheduleEventSchema, updateScheduleEventSchema,
+  insertJobTemplateSchema, updateJobTemplateSchema,
+  insertEquipmentSchema, updateEquipmentSchema,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import multer from "multer";
@@ -2217,6 +2221,454 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error deleting photo',
+      });
+    }
+  });
+
+  // ========================================
+  // EMPLOYEE MANAGEMENT ROUTES
+  // ========================================
+
+  // Get all employees
+  app.get('/api/employees', async (req: Request, res: Response) => {
+    try {
+      const employees = await storage.getAllEmployees();
+      res.json({
+        success: true,
+        data: employees
+      });
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching employees'
+      });
+    }
+  });
+
+  // Get active employees only
+  app.get('/api/employees/active', async (req: Request, res: Response) => {
+    try {
+      const employees = await storage.getActiveEmployees();
+      res.json({
+        success: true,
+        data: employees
+      });
+    } catch (error) {
+      console.error('Error fetching active employees:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching active employees'
+      });
+    }
+  });
+
+  // Get single employee
+  app.get('/api/employees/:id', async (req: Request, res: Response) => {
+    try {
+      const employee = await storage.getEmployee(req.params.id);
+      if (!employee) {
+        return res.status(404).json({
+          success: false,
+          message: 'Employee not found'
+        });
+      }
+      res.json({
+        success: true,
+        data: employee
+      });
+    } catch (error) {
+      console.error('Error fetching employee:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching employee'
+      });
+    }
+  });
+
+  // Create new employee
+  app.post('/api/employees', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertEmployeeSchema.parse(req.body);
+      const employee = await storage.createEmployee(validatedData);
+      res.json({
+        success: true,
+        data: employee,
+        message: 'Employee created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating employee:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating employee'
+      });
+    }
+  });
+
+  // Update employee
+  app.put('/api/employees/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateEmployeeSchema.parse(req.body);
+      const employee = await storage.updateEmployee(req.params.id, validatedData);
+      res.json({
+        success: true,
+        data: employee,
+        message: 'Employee updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating employee'
+      });
+    }
+  });
+
+  // Delete employee
+  app.delete('/api/employees/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteEmployee(req.params.id);
+      res.json({
+        success: true,
+        message: 'Employee deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting employee'
+      });
+    }
+  });
+
+  // ========================================
+  // SCHEDULE EVENT MANAGEMENT ROUTES
+  // ========================================
+
+  // Get schedule events with optional date range
+  app.get('/api/schedule-events', async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate, employeeId } = req.query;
+      
+      let events;
+      if (employeeId) {
+        events = await storage.getScheduleEventsByEmployee(
+          employeeId as string,
+          startDate ? new Date(startDate as string) : undefined,
+          endDate ? new Date(endDate as string) : undefined
+        );
+      } else {
+        events = await storage.getAllScheduleEvents(
+          startDate ? new Date(startDate as string) : undefined,
+          endDate ? new Date(endDate as string) : undefined
+        );
+      }
+
+      res.json({
+        success: true,
+        data: events
+      });
+    } catch (error) {
+      console.error('Error fetching schedule events:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching schedule events'
+      });
+    }
+  });
+
+  // Get single schedule event
+  app.get('/api/schedule-events/:id', async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getScheduleEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({
+          success: false,
+          message: 'Schedule event not found'
+        });
+      }
+      res.json({
+        success: true,
+        data: event
+      });
+    } catch (error) {
+      console.error('Error fetching schedule event:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching schedule event'
+      });
+    }
+  });
+
+  // Create new schedule event
+  app.post('/api/schedule-events', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertScheduleEventSchema.parse(req.body);
+      const event = await storage.createScheduleEvent(validatedData);
+      res.json({
+        success: true,
+        data: event,
+        message: 'Schedule event created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating schedule event:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating schedule event'
+      });
+    }
+  });
+
+  // Update schedule event
+  app.put('/api/schedule-events/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateScheduleEventSchema.parse(req.body);
+      const event = await storage.updateScheduleEvent(req.params.id, validatedData);
+      res.json({
+        success: true,
+        data: event,
+        message: 'Schedule event updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating schedule event:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating schedule event'
+      });
+    }
+  });
+
+  // Delete schedule event
+  app.delete('/api/schedule-events/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteScheduleEvent(req.params.id);
+      res.json({
+        success: true,
+        message: 'Schedule event deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting schedule event:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting schedule event'
+      });
+    }
+  });
+
+  // ========================================
+  // JOB TEMPLATE MANAGEMENT ROUTES
+  // ========================================
+
+  // Get all job templates
+  app.get('/api/job-templates', async (req: Request, res: Response) => {
+    try {
+      const { category } = req.query;
+      
+      let templates;
+      if (category) {
+        templates = await storage.getJobTemplatesByCategory(category as string);
+      } else {
+        templates = await storage.getAllJobTemplates();
+      }
+
+      res.json({
+        success: true,
+        data: templates
+      });
+    } catch (error) {
+      console.error('Error fetching job templates:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching job templates'
+      });
+    }
+  });
+
+  // Get single job template
+  app.get('/api/job-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const template = await storage.getJobTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: 'Job template not found'
+        });
+      }
+      res.json({
+        success: true,
+        data: template
+      });
+    } catch (error) {
+      console.error('Error fetching job template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching job template'
+      });
+    }
+  });
+
+  // Create new job template
+  app.post('/api/job-templates', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertJobTemplateSchema.parse(req.body);
+      const template = await storage.createJobTemplate(validatedData);
+      res.json({
+        success: true,
+        data: template,
+        message: 'Job template created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating job template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating job template'
+      });
+    }
+  });
+
+  // Update job template
+  app.put('/api/job-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateJobTemplateSchema.parse(req.body);
+      const template = await storage.updateJobTemplate(req.params.id, validatedData);
+      res.json({
+        success: true,
+        data: template,
+        message: 'Job template updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating job template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating job template'
+      });
+    }
+  });
+
+  // Delete job template
+  app.delete('/api/job-templates/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteJobTemplate(req.params.id);
+      res.json({
+        success: true,
+        message: 'Job template deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting job template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting job template'
+      });
+    }
+  });
+
+  // ========================================
+  // EQUIPMENT MANAGEMENT ROUTES
+  // ========================================
+
+  // Get all equipment
+  app.get('/api/equipment', async (req: Request, res: Response) => {
+    try {
+      const { type, status, available } = req.query;
+      
+      let equipment;
+      if (available === 'true') {
+        equipment = await storage.getAvailableEquipment();
+      } else if (type) {
+        equipment = await storage.getEquipmentByType(type as string);
+      } else if (status) {
+        equipment = await storage.getEquipmentByStatus(status as string);
+      } else {
+        equipment = await storage.getAllEquipment();
+      }
+
+      res.json({
+        success: true,
+        data: equipment
+      });
+    } catch (error) {
+      console.error('Error fetching equipment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching equipment'
+      });
+    }
+  });
+
+  // Get single equipment item
+  app.get('/api/equipment/:id', async (req: Request, res: Response) => {
+    try {
+      const equipment = await storage.getEquipment(req.params.id);
+      if (!equipment) {
+        return res.status(404).json({
+          success: false,
+          message: 'Equipment not found'
+        });
+      }
+      res.json({
+        success: true,
+        data: equipment
+      });
+    } catch (error) {
+      console.error('Error fetching equipment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching equipment'
+      });
+    }
+  });
+
+  // Create new equipment
+  app.post('/api/equipment', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertEquipmentSchema.parse(req.body);
+      const equipment = await storage.createEquipment(validatedData);
+      res.json({
+        success: true,
+        data: equipment,
+        message: 'Equipment created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating equipment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating equipment'
+      });
+    }
+  });
+
+  // Update equipment
+  app.put('/api/equipment/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateEquipmentSchema.parse(req.body);
+      const equipment = await storage.updateEquipment(req.params.id, validatedData);
+      res.json({
+        success: true,
+        data: equipment,
+        message: 'Equipment updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating equipment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating equipment'
+      });
+    }
+  });
+
+  // Delete equipment
+  app.delete('/api/equipment/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteEquipment(req.params.id);
+      res.json({
+        success: true,
+        message: 'Equipment deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting equipment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting equipment'
       });
     }
   });

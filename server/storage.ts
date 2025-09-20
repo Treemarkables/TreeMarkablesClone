@@ -189,6 +189,43 @@ export interface IStorage {
   deleteNotification(id: string): Promise<void>;
   getNotificationSummary(userId?: string): Promise<NotificationSummary>;
   deleteExpiredNotifications(): Promise<void>;
+
+  // Employee Management
+  createEmployee(employee: InsertEmployee): Promise<Employee>;
+  getEmployee(id: string): Promise<Employee | undefined>;
+  updateEmployee(id: string, updates: UpdateEmployee): Promise<Employee>;
+  getAllEmployees(): Promise<Employee[]>;
+  getActiveEmployees(): Promise<Employee[]>;
+  getEmployeesByPosition(position: string): Promise<Employee[]>;
+  getEmployeesBySkill(skill: string): Promise<Employee[]>;
+  deleteEmployee(id: string): Promise<void>;
+
+  // Schedule Management
+  createScheduleEvent(event: InsertScheduleEvent): Promise<ScheduleEvent>;
+  getScheduleEvent(id: string): Promise<ScheduleEvent | undefined>;
+  updateScheduleEvent(id: string, updates: UpdateScheduleEvent): Promise<ScheduleEvent>;
+  getAllScheduleEvents(startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]>;
+  getScheduleEventsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]>;
+  getScheduleEventsByJob(jobId: string): Promise<ScheduleEvent[]>;
+  deleteScheduleEvent(id: string): Promise<void>;
+
+  // Job Template Management
+  createJobTemplate(template: InsertJobTemplate): Promise<JobTemplate>;
+  getJobTemplate(id: string): Promise<JobTemplate | undefined>;
+  updateJobTemplate(id: string, updates: UpdateJobTemplate): Promise<JobTemplate>;
+  getAllJobTemplates(): Promise<JobTemplate[]>;
+  getJobTemplatesByCategory(category: string): Promise<JobTemplate[]>;
+  deleteJobTemplate(id: string): Promise<void>;
+
+  // Equipment Management
+  createEquipment(equipment: InsertEquipment): Promise<Equipment>;
+  getEquipment(id: string): Promise<Equipment | undefined>;
+  updateEquipment(id: string, updates: UpdateEquipment): Promise<Equipment>;
+  getAllEquipment(): Promise<Equipment[]>;
+  getAvailableEquipment(): Promise<Equipment[]>;
+  getEquipmentByType(type: string): Promise<Equipment[]>;
+  getEquipmentByStatus(status: string): Promise<Equipment[]>;
+  deleteEquipment(id: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -206,6 +243,10 @@ export class MemStorage implements IStorage {
   private competitorSignals: Map<string, CompetitorSignal>;
   private priceRules: Map<string, PriceRule>;
   private notifications: Map<string, Notification>;
+  private employees: Map<string, Employee>;
+  private scheduleEvents: Map<string, ScheduleEvent>;
+  private jobTemplates: Map<string, JobTemplate>;
+  private equipment: Map<string, Equipment>;
 
   constructor() {
     this.users = new Map();
@@ -222,6 +263,10 @@ export class MemStorage implements IStorage {
     this.competitorSignals = new Map();
     this.priceRules = new Map();
     this.notifications = new Map();
+    this.employees = new Map();
+    this.scheduleEvents = new Map();
+    this.jobTemplates = new Map();
+    this.equipment = new Map();
     
     // Add sample data for demo purposes
     this.initializeSampleData();
@@ -407,6 +452,228 @@ export class MemStorage implements IStorage {
     // Add notifications to storage
     sampleNotifications.forEach((notificationData) => {
       this.createNotification(notificationData);
+    });
+
+    // Sample employees  
+    const sampleEmployees = [
+      {
+        firstName: 'Jake',
+        lastName: 'Morrison',
+        email: 'jake.morrison@treemarkables.co.nz',
+        phone: '(555) 111-2222',
+        position: 'foreman',
+        skillLevel: 'expert',
+        skills: ['chainsaw', 'climbing', 'bucket_truck', 'safety_management'],
+        certifications: ['ISA Certified Arborist', 'CTSP'],
+        hourlyRate: '45.00',
+        availableHours: '{"mon": "7-17", "tue": "7-17", "wed": "7-17", "thu": "7-17", "fri": "7-17"}',
+        hireDate: new Date('2020-03-15'),
+      },
+      {
+        firstName: 'Maria',
+        lastName: 'Silva',
+        email: 'maria.silva@treemarkables.co.nz',
+        phone: '(555) 333-4444',
+        position: 'arborist',
+        skillLevel: 'intermediate',
+        skills: ['chainsaw', 'climbing', 'pruning'],
+        certifications: ['ISA Certified Arborist'],
+        hourlyRate: '38.00',
+        availableHours: '{"mon": "8-17", "tue": "8-17", "wed": "8-17", "thu": "8-17", "fri": "8-17"}',
+        hireDate: new Date('2021-06-01'),
+      },
+      {
+        firstName: 'Tom',
+        lastName: 'Bradley',
+        email: 'tom.bradley@treemarkables.co.nz',
+        phone: '(555) 555-6666',
+        position: 'ground_crew',
+        skillLevel: 'beginner',
+        skills: ['chipper_operation', 'cleanup'],
+        certifications: [],
+        hourlyRate: '22.00',
+        availableHours: '{"mon": "8-17", "tue": "8-17", "wed": "8-17", "thu": "8-17", "fri": "8-17"}',
+        hireDate: new Date('2023-01-10'),
+      },
+    ];
+
+    // Add employees to storage
+    sampleEmployees.forEach((employeeData) => {
+      this.createEmployee(employeeData);
+    });
+
+    // Sample job templates
+    const sampleJobTemplates = [
+      {
+        name: 'Large Tree Removal',
+        category: 'tree_removal',
+        description: 'Complete removal of large trees (>50cm diameter) including stump grinding',
+        basePrice: '2500.00',
+        pricePerHour: '120.00',
+        materialCosts: '200.00',
+        estimatedDuration: 480, // 8 hours
+        requiredSkills: ['chainsaw', 'climbing', 'bucket_truck'],
+        requiredEquipment: ['chainsaw', 'bucket_truck', 'chipper', 'safety_gear'],
+        crewSize: 3,
+        safetyRequirements: ['Traffic management', 'Power line clearance', 'Property protection'],
+        riskLevel: 'high',
+        preJobChecklist: ['Site inspection', 'Hazard assessment', 'Equipment check', 'Permits verified'],
+        postJobChecklist: ['Site cleanup', 'Equipment maintenance', 'Customer walkthrough'],
+      },
+      {
+        name: 'Tree Pruning - Standard',
+        category: 'pruning',
+        description: 'Standard tree pruning for health and aesthetics',
+        basePrice: '450.00',
+        pricePerHour: '85.00',
+        materialCosts: '50.00',
+        estimatedDuration: 240, // 4 hours
+        requiredSkills: ['climbing', 'pruning'],
+        requiredEquipment: ['chainsaw', 'pruning_tools', 'safety_gear'],
+        crewSize: 2,
+        safetyRequirements: ['Property protection', 'Ladder safety'],
+        riskLevel: 'medium',
+        preJobChecklist: ['Tree health assessment', 'Equipment check'],
+        postJobChecklist: ['Debris cleanup', 'Customer consultation'],
+      },
+      {
+        name: 'Emergency Tree Removal',
+        category: 'emergency',
+        description: 'Emergency removal of hazardous or storm-damaged trees',
+        basePrice: '1800.00',
+        pricePerHour: '150.00',
+        materialCosts: '150.00',
+        estimatedDuration: 360, // 6 hours
+        requiredSkills: ['chainsaw', 'climbing', 'emergency_response'],
+        requiredEquipment: ['chainsaw', 'bucket_truck', 'safety_gear', 'generator'],
+        crewSize: 3,
+        safetyRequirements: ['Emergency protocols', 'Power line assessment', 'Traffic control'],
+        riskLevel: 'extreme',
+        preJobChecklist: ['Emergency assessment', 'Safety perimeter', 'Authority notification'],
+        postJobChecklist: ['Area secured', 'Damage documentation', 'Follow-up inspection'],
+      },
+    ];
+
+    // Add job templates to storage
+    sampleJobTemplates.forEach((templateData) => {
+      this.createJobTemplate(templateData);
+    });
+
+    // Sample equipment
+    const sampleEquipment = [
+      {
+        name: 'Bucket Truck #1',
+        type: 'bucket_truck',
+        brand: 'Altec',
+        model: 'AT37G',
+        year: 2019,
+        status: 'available',
+        condition: 'good',
+        currentLocation: 'Main Depot',
+        purchasePrice: '125000.00',
+        currentValue: '95000.00',
+        lastMaintenanceDate: new Date('2024-11-15'),
+        nextMaintenanceDate: new Date('2025-02-15'),
+        maintenanceIntervalDays: 90,
+        serialNumber: 'AT37G-2019-001',
+        registrationNumber: 'TM-BT-001',
+      },
+      {
+        name: 'Chainsaw - Stihl MS461',
+        type: 'chainsaw',
+        brand: 'Stihl',
+        model: 'MS461',
+        year: 2022,
+        status: 'available',
+        condition: 'excellent',
+        currentLocation: 'Shop',
+        purchasePrice: '1200.00',
+        currentValue: '950.00',
+        lastMaintenanceDate: new Date('2024-12-01'),
+        nextMaintenanceDate: new Date('2025-01-01'),
+        maintenanceIntervalDays: 30,
+        serialNumber: 'ST461-2022-003',
+      },
+      {
+        name: 'Wood Chipper - Vermeer BC1000XL',
+        type: 'chipper',
+        brand: 'Vermeer',
+        model: 'BC1000XL',
+        year: 2020,
+        status: 'in_use',
+        condition: 'good',
+        currentLocation: 'Job Site - Auckland',
+        assignedTo: 'emp-1', // Jake Morrison
+        purchasePrice: '85000.00',
+        currentValue: '65000.00',
+        lastMaintenanceDate: new Date('2024-10-20'),
+        nextMaintenanceDate: new Date('2025-01-20'),
+        maintenanceIntervalDays: 90,
+        serialNumber: 'VER-BC1000-2020-002',
+      },
+    ];
+
+    // Add equipment to storage
+    sampleEquipment.forEach((equipmentData) => {
+      this.createEquipment(equipmentData);
+    });
+
+    // Sample schedule events
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    const sampleScheduleEvents = [
+      {
+        title: 'Oak Tree Removal - Sarah Johnson',
+        description: 'Large oak tree removal at residential property',
+        type: 'job',
+        startDate: tomorrow.toISOString(),
+        endDate: new Date(tomorrow.getTime() + 8 * 60 * 60 * 1000).toISOString(), // 8 hours later
+        jobId: '1',
+        customerId: '1',
+        assignedEmployees: ['emp-1', 'emp-2'],
+        requiredSkills: ['chainsaw', 'climbing', 'bucket_truck'],
+        equipment: ['eq-1', 'eq-2'], // Bucket truck and chainsaw
+        location: 'Auckland',
+        address: '123 Maple Street, Auckland, NZ',
+        estimatedDuration: 480,
+        priority: 'high',
+        weatherDependent: true,
+        color: '#EF4444', // Red for tree removal
+      },
+      {
+        title: 'Team Safety Meeting',
+        description: 'Monthly safety training and equipment review',
+        type: 'meeting',
+        startDate: nextWeek.toISOString(),
+        endDate: new Date(nextWeek.getTime() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours later
+        assignedEmployees: ['emp-1', 'emp-2', 'emp-3'],
+        location: 'Main Office',
+        estimatedDuration: 120,
+        priority: 'medium',
+        weatherDependent: false,
+        color: '#3B82F6', // Blue for meetings
+      },
+      {
+        title: 'Equipment Maintenance',
+        description: 'Scheduled maintenance for Bucket Truck #1',
+        type: 'maintenance',
+        startDate: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
+        endDate: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000).toISOString(), // 4 hours later
+        assignedEmployees: ['emp-1'],
+        equipment: ['eq-1'],
+        location: 'Service Center',
+        estimatedDuration: 240,
+        priority: 'medium',
+        weatherDependent: false,
+        color: '#F59E0B', // Orange for maintenance
+      },
+    ];
+
+    // Add schedule events to storage
+    sampleScheduleEvents.forEach((eventData) => {
+      this.createScheduleEvent(eventData);
     });
     
     console.log('Sample data initialized successfully');
@@ -2047,6 +2314,248 @@ export class MemStorage implements IStorage {
       'quote': 'quotes',
     };
     return tabs[entityType] || 'overview';
+  }
+
+  // ========================================
+  // EMPLOYEE MANAGEMENT METHODS
+  // ========================================
+
+  async createEmployee(employeeData: InsertEmployee): Promise<Employee> {
+    const employee: Employee = {
+      id: randomUUID(),
+      ...employeeData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.employees.set(employee.id, employee);
+    return employee;
+  }
+
+  async getEmployee(id: string): Promise<Employee | undefined> {
+    return this.employees.get(id);
+  }
+
+  async updateEmployee(id: string, updates: UpdateEmployee): Promise<Employee> {
+    const existing = this.employees.get(id);
+    if (!existing) {
+      throw new Error('Employee not found');
+    }
+
+    const updated: Employee = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.employees.set(id, updated);
+    return updated;
+  }
+
+  async getAllEmployees(): Promise<Employee[]> {
+    return Array.from(this.employees.values());
+  }
+
+  async getActiveEmployees(): Promise<Employee[]> {
+    return Array.from(this.employees.values()).filter(emp => emp.isActive);
+  }
+
+  async getEmployeesByPosition(position: string): Promise<Employee[]> {
+    return Array.from(this.employees.values()).filter(emp => emp.position === position);
+  }
+
+  async getEmployeesBySkill(skill: string): Promise<Employee[]> {
+    return Array.from(this.employees.values()).filter(emp => 
+      emp.skills && emp.skills.includes(skill)
+    );
+  }
+
+  async deleteEmployee(id: string): Promise<void> {
+    this.employees.delete(id);
+  }
+
+  // ========================================
+  // SCHEDULE MANAGEMENT METHODS
+  // ========================================
+
+  async createScheduleEvent(eventData: InsertScheduleEvent): Promise<ScheduleEvent> {
+    const event: ScheduleEvent = {
+      id: randomUUID(),
+      ...eventData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.scheduleEvents.set(event.id, event);
+    return event;
+  }
+
+  async getScheduleEvent(id: string): Promise<ScheduleEvent | undefined> {
+    return this.scheduleEvents.get(id);
+  }
+
+  async updateScheduleEvent(id: string, updates: UpdateScheduleEvent): Promise<ScheduleEvent> {
+    const existing = this.scheduleEvents.get(id);
+    if (!existing) {
+      throw new Error('Schedule event not found');
+    }
+
+    const updated: ScheduleEvent = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.scheduleEvents.set(id, updated);
+    return updated;
+  }
+
+  async getAllScheduleEvents(startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]> {
+    let events = Array.from(this.scheduleEvents.values());
+    
+    if (startDate) {
+      events = events.filter(event => new Date(event.startDate) >= startDate);
+    }
+    
+    if (endDate) {
+      events = events.filter(event => new Date(event.endDate) <= endDate);
+    }
+    
+    return events.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  }
+
+  async getScheduleEventsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]> {
+    let events = Array.from(this.scheduleEvents.values()).filter(event =>
+      event.assignedEmployees && event.assignedEmployees.includes(employeeId)
+    );
+    
+    if (startDate) {
+      events = events.filter(event => new Date(event.startDate) >= startDate);
+    }
+    
+    if (endDate) {
+      events = events.filter(event => new Date(event.endDate) <= endDate);
+    }
+    
+    return events.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  }
+
+  async getScheduleEventsByJob(jobId: string): Promise<ScheduleEvent[]> {
+    return Array.from(this.scheduleEvents.values()).filter(event => event.jobId === jobId);
+  }
+
+  async deleteScheduleEvent(id: string): Promise<void> {
+    this.scheduleEvents.delete(id);
+  }
+
+  // ========================================
+  // JOB TEMPLATE MANAGEMENT METHODS
+  // ========================================
+
+  async createJobTemplate(templateData: InsertJobTemplate): Promise<JobTemplate> {
+    const template: JobTemplate = {
+      id: randomUUID(),
+      ...templateData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.jobTemplates.set(template.id, template);
+    return template;
+  }
+
+  async getJobTemplate(id: string): Promise<JobTemplate | undefined> {
+    return this.jobTemplates.get(id);
+  }
+
+  async updateJobTemplate(id: string, updates: UpdateJobTemplate): Promise<JobTemplate> {
+    const existing = this.jobTemplates.get(id);
+    if (!existing) {
+      throw new Error('Job template not found');
+    }
+
+    const updated: JobTemplate = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.jobTemplates.set(id, updated);
+    return updated;
+  }
+
+  async getAllJobTemplates(): Promise<JobTemplate[]> {
+    return Array.from(this.jobTemplates.values()).filter(template => template.isActive);
+  }
+
+  async getJobTemplatesByCategory(category: string): Promise<JobTemplate[]> {
+    return Array.from(this.jobTemplates.values()).filter(template => 
+      template.category === category && template.isActive
+    );
+  }
+
+  async deleteJobTemplate(id: string): Promise<void> {
+    this.jobTemplates.delete(id);
+  }
+
+  // ========================================
+  // EQUIPMENT MANAGEMENT METHODS
+  // ========================================
+
+  async createEquipment(equipmentData: InsertEquipment): Promise<Equipment> {
+    const equipment: Equipment = {
+      id: randomUUID(),
+      ...equipmentData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.equipment.set(equipment.id, equipment);
+    return equipment;
+  }
+
+  async getEquipment(id: string): Promise<Equipment | undefined> {
+    return this.equipment.get(id);
+  }
+
+  async updateEquipment(id: string, updates: UpdateEquipment): Promise<Equipment> {
+    const existing = this.equipment.get(id);
+    if (!existing) {
+      throw new Error('Equipment not found');
+    }
+
+    const updated: Equipment = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.equipment.set(id, updated);
+    return updated;
+  }
+
+  async getAllEquipment(): Promise<Equipment[]> {
+    return Array.from(this.equipment.values()).filter(item => item.isActive);
+  }
+
+  async getAvailableEquipment(): Promise<Equipment[]> {
+    return Array.from(this.equipment.values()).filter(item => 
+      item.status === 'available' && item.isActive
+    );
+  }
+
+  async getEquipmentByType(type: string): Promise<Equipment[]> {
+    return Array.from(this.equipment.values()).filter(item => 
+      item.type === type && item.isActive
+    );
+  }
+
+  async getEquipmentByStatus(status: string): Promise<Equipment[]> {
+    return Array.from(this.equipment.values()).filter(item => item.status === status);
+  }
+
+  async deleteEquipment(id: string): Promise<void> {
+    this.equipment.delete(id);
   }
 }
 
