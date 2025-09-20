@@ -345,6 +345,70 @@ export class MemStorage implements IStorage {
     
     this.activities.set('1', activity1);
     
+    // Sample notifications
+    const sampleNotifications = [
+      {
+        type: 'new_lead',
+        priority: 'high',
+        title: 'New Lead Received',
+        message: 'David Thompson submitted a new lead for tree pruning services',
+        isRead: false,
+        actionUrl: '/job-dashboard?tab=leads',
+        leadId: '1',
+      },
+      {
+        type: 'follow_up_overdue',
+        priority: 'urgent',
+        title: 'Follow-up Overdue',
+        message: 'Lisa Rodriguez follow-up is 2 days overdue',
+        isRead: false,
+        actionUrl: '/job-dashboard?tab=leads',
+        leadId: '2',
+      },
+      {
+        type: 'job_completed',
+        priority: 'medium',
+        title: 'Job Completed',
+        message: 'Oak tree removal job has been completed successfully',
+        isRead: true,
+        actionUrl: '/job-dashboard?tab=jobs',
+        jobId: '1',
+        customerId: '1',
+      },
+      {
+        type: 'quote_sent',
+        priority: 'medium',
+        title: 'Quote Sent',
+        message: 'Quote #Q-2024-001 has been sent to customer',
+        isRead: false,
+        actionUrl: '/job-dashboard?tab=quotes',
+        quoteId: '1',
+        customerId: '1',
+      },
+      {
+        type: 'payment_received',
+        priority: 'low',
+        title: 'Payment Received',
+        message: 'Payment of $3,500 received from Sarah Johnson',
+        isRead: true,
+        actionUrl: '/job-dashboard?tab=jobs',
+        customerId: '1',
+      },
+      {
+        type: 'system_alert',
+        priority: 'medium',
+        title: 'System Alert',
+        message: 'Your monthly revenue has increased by 25% compared to last month',
+        isRead: false,
+        actionUrl: '/job-dashboard?tab=analytics',
+      }
+    ];
+
+    // Add notifications to storage
+    sampleNotifications.forEach((notificationData) => {
+      this.createNotification(notificationData);
+    });
+    
     console.log('Sample data initialized successfully');
   }
 
