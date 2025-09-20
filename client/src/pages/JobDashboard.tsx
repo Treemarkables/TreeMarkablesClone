@@ -577,7 +577,7 @@ export default function JobDashboard() {
                 <img 
                   src={logoUrl} 
                   alt="Treemarkables Logo" 
-                  className="h-8 w-auto"
+                  className="h-16 w-auto"
                   data-testid="logo-treemarkables"
                 />
               </div>
