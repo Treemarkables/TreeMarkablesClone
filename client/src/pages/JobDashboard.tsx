@@ -200,35 +200,39 @@ export default function JobDashboard() {
   const { toast } = useToast();
 
   // Text-to-Speech function with conversation continuity
-  const speakText = (text: string, restartListening = false) => {
+  const speakText = (text: string, restartListening = false, forceRestart = false) => {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.9;
       utterance.pitch = 1;
       utterance.volume = 0.8;
       
-      // Restart listening after speaking during conversation
+      // Restart listening after speaking during conversation or when forced
       utterance.onend = () => {
-        if (restartListening && isConversationMode && recognition) {
-          setTimeout(() => {
-            try {
-              setIsListening(true);
-              recognition.start();
-            } catch (error) {
-              console.log('Failed to restart recognition after TTS:', error);
-              setIsListening(false);
-            }
-          }, 1000); // Longer delay for better reliability
+        if ((restartListening && isConversationMode) || forceRestart) {
+          if (recognition) {
+            setTimeout(() => {
+              try {
+                setIsListening(true);
+                recognition.start();
+                console.log('Restarted listening after TTS');
+              } catch (error) {
+                console.log('Failed to restart recognition after TTS:', error);
+                setIsListening(false);
+              }
+            }, 1000); // Longer delay for better reliability
+          }
         }
       };
       
       speechSynthesis.speak(utterance);
-    } else if (restartListening && isConversationMode && recognition) {
+    } else if (((restartListening && isConversationMode) || forceRestart) && recognition) {
       // No TTS available, go straight to listening
       setTimeout(() => {
         try {
           setIsListening(true);
           recognition.start();
+          console.log('Restarted listening (no TTS)');
         } catch (error) {
           console.log('Failed to restart recognition (no TTS):', error);
           setIsListening(false);
@@ -515,7 +519,7 @@ export default function JobDashboard() {
       } else {
         // Default: Ask which mode they prefer
         setAiResponse("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.");
-        speakText("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.", true);
+        speakText("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.", true, true); // Force restart listening
       }
     } else if (command.includes('conversation') && aiResponse.includes('conversation mode or quick mode')) {
       console.log('Starting conversation mode...');
