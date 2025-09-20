@@ -295,6 +295,18 @@
     box-shadow: 0 8px 30px hsl(var(--blue) / 0.08), 0 4px 12px hsl(var(--primary) / 0.06);
   }
   
+  .card-clean {
+    background: white;
+    border: 1px solid hsl(220 13% 91%);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    transition: all 0.2s ease;
+  }
+  
+  .card-clean:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  }
+  
   
   @keyframes rainbow-shift {
     0% { background-position: 0% 50%; }
