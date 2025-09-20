@@ -343,7 +343,7 @@ export class MemStorage implements IStorage {
     };
     const job2 = {
       id: '2', customerId: '2', title: 'Storm Damage Tree Removal', description: 'Emergency removal of storm-damaged pine tree',
-      status: 'in_progress', priority: 'high', scheduledDate: new Date('2024-12-21'), completedDate: null,
+      status: 'in_progress', priority: 'high', scheduledDate: new Date('2024-12-20'), completedDate: null,
       estimatedHours: 6, actualHours: null, totalAmount: '1200.00', address: '456 Pine Avenue, Wellington, NZ',
       notes: 'Waiting for city permits before proceeding', beforePhotos: ['/api/photos/storm_before_1.jpg'],
       afterPhotos: [], jobNumber: 'JOB-002', quoteId: '2', leadId: null, assignedCrew: null, equipmentRequired: null,

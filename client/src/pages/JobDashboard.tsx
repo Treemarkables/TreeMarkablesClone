@@ -255,9 +255,11 @@ export default function JobDashboard() {
     queryKey: ['/api/pipeline-leads']
   });
 
-  const { data: jobs, isLoading: jobsLoading } = useQuery({
+  const { data: jobsData, isLoading: jobsLoading } = useQuery({
     queryKey: ['/api/jobs']
   });
+
+  const jobs = jobsData?.data || [];
 
   const { data: calls, isLoading: callsLoading } = useQuery({
     queryKey: ['/api/calls', { limit: 50 }]
@@ -1325,6 +1327,7 @@ export default function JobDashboard() {
                   <form onSubmit={(e) => {
                     e.preventDefault();
                     const formData = new FormData(e.currentTarget);
+                    const scheduledDateString = formData.get('scheduledDate') as string;
                     createJobMutation.mutate({
                       jobNumber: `JOB-${Date.now()}`,
                       title: formData.get('title'),
@@ -1332,7 +1335,7 @@ export default function JobDashboard() {
                       address: formData.get('address'),
                       status: 'scheduled',
                       priority: formData.get('priority'),
-                      scheduledDate: formData.get('scheduledDate'),
+                      scheduledDate: scheduledDateString ? new Date(scheduledDateString) : null,
                       totalAmount: formData.get('amount')
                     });
                   }} className="space-y-4">
