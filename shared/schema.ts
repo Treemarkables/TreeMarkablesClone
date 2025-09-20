@@ -1245,6 +1245,80 @@ export type GpsLocation = z.infer<typeof gpsLocationSchema>;
 export type BeforeAfterPair = z.infer<typeof beforeAfterPairSchema>;
 export type PhotoSearch = z.infer<typeof photoSearchSchema>;
 
+// ========================================
+// CUSTOMER PORTAL SPECIFIC SCHEMAS  
+// ========================================
+
+// Invoice Management for Customer Portal
+export const invoices = pgTable("invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").references(() => customers.id).notNull(),
+  jobId: varchar("job_id").references(() => jobs.id),
+  invoiceNumber: text("invoice_number").notNull().unique(),
+  jobTitle: text("job_title").notNull(),
+  issueDate: timestamp("issue_date").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  status: text("status").notNull(), // pending, paid, overdue, cancelled
+  items: jsonb("items").notNull(), // Array of {description, quantity, rate, amount}
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Service Requests from Customer Portal
+export const serviceRequests = pgTable("service_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").references(() => customers.id).notNull(),
+  serviceType: text("service_type").notNull(),
+  description: text("description").notNull(),
+  address: text("address").notNull(),
+  preferredDate: timestamp("preferred_date"),
+  urgency: text("urgency").notNull(), // low, medium, high, urgent
+  status: text("status").notNull().default("pending"), // pending, contacted, quoted, scheduled, completed
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Customer Authentication for Portal
+export const customerAuth = pgTable("customer_auth", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").references(() => customers.id).notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  lastLoginAt: timestamp("last_login_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Insert schemas for Customer Portal
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertServiceRequestSchema = createInsertSchema(serviceRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  status: true,
+}).extend({
+  preferredDate: z.string().optional().transform(val => val ? new Date(val) : undefined),
+});
+
+export const insertCustomerAuthSchema = createInsertSchema(customerAuth).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types for Customer Portal
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type ServiceRequest = typeof serviceRequests.$inferSelect;
+export type InsertServiceRequest = z.infer<typeof insertServiceRequestSchema>;
+export type CustomerAuth = typeof customerAuth.$inferSelect;
+export type InsertCustomerAuth = z.infer<typeof insertCustomerAuthSchema>;
+
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
 export type UpdateCommunication = z.infer<typeof updateCommunicationSchema>;

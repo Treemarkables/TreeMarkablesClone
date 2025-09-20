@@ -17,6 +17,8 @@ import {
   type EquipmentCheckout, type InsertEquipmentCheckout,
   type InventoryTransaction, type InsertInventoryTransaction,
   type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
+  type Invoice, type InsertInvoice, type ServiceRequest, type InsertServiceRequest,
+  type CustomerAuth, type InsertCustomerAuth,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -327,6 +329,18 @@ export interface IStorage {
   getPhotosByType(type: string, jobId?: string): Promise<Photo[]>;
   getBeforeAfterPairs(jobId: string): Promise<Photo[][]>;
   searchPhotos(filters: PhotoSearch): Promise<Photo[]>;
+
+  // Customer Portal Management
+  authenticateCustomer(email: string, phone?: string): Promise<CustomerAuth | undefined>;
+  createCustomerAuth(auth: InsertCustomerAuth): Promise<CustomerAuth>;
+  getCustomerJobs(customerId: string): Promise<Job[]>;
+  getCustomerInvoices(customerId: string): Promise<Invoice[]>;
+  getCustomerPhotos(customerId: string, jobId?: string): Promise<Photo[]>;
+  createInvoice(invoice: InsertInvoice): Promise<Invoice>;
+  getInvoice(id: string): Promise<Invoice | undefined>;
+  createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest>;
+  getServiceRequest(id: string): Promise<ServiceRequest | undefined>;
+  getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -356,6 +370,11 @@ export class MemStorage implements IStorage {
   private photos: Map<string, Photo>;
   private businessSettings: BusinessSettings;
   private communications: Communication[];
+  
+  // Customer Portal Storage
+  private invoices: Map<string, Invoice>;
+  private serviceRequests: Map<string, ServiceRequest>;
+  private customerAuth: Map<string, CustomerAuth>;
 
   constructor() {
     this.users = new Map();
@@ -382,6 +401,11 @@ export class MemStorage implements IStorage {
     this.equipmentMaintenance = new Map();
     this.inventoryTransactions = new Map();
     this.photos = new Map();
+    
+    // Initialize Customer Portal storage
+    this.invoices = new Map();
+    this.serviceRequests = new Map();
+    this.customerAuth = new Map();
     
     // Initialize business settings with defaults
     this.businessSettings = {
@@ -520,6 +544,80 @@ export class MemStorage implements IStorage {
     
     this.jobs.set('1', job1);
     this.jobs.set('2', job2);
+
+    // Sample invoices for Customer Portal
+    const invoice1 = {
+      id: 'inv-1',
+      customerId: '1',
+      jobId: '1',
+      invoiceNumber: 'INV-2024-001',
+      jobTitle: 'Large Oak Tree Removal',
+      issueDate: new Date('2024-12-18'),
+      dueDate: new Date('2025-01-18'),
+      amount: '2500.00',
+      status: 'pending',
+      items: [
+        { description: 'Tree removal', quantity: 1, rate: 1800, amount: 1800 },
+        { description: 'Stump grinding', quantity: 1, rate: 500, amount: 500 },
+        { description: 'Debris cleanup', quantity: 1, rate: 200, amount: 200 }
+      ],
+      notes: 'Payment due within 30 days. Thank you for choosing Treemarkables.',
+      createdAt: new Date('2024-12-18'),
+      updatedAt: new Date('2024-12-18')
+    };
+
+    const invoice2 = {
+      id: 'inv-2',
+      customerId: '2',
+      jobId: '2',
+      invoiceNumber: 'INV-2024-002',
+      jobTitle: 'Storm Damage Tree Removal',
+      issueDate: new Date('2024-12-20'),
+      dueDate: new Date('2025-01-20'),
+      amount: '1200.00',
+      status: 'pending',
+      items: [
+        { description: 'Emergency tree removal', quantity: 1, rate: 900, amount: 900 },
+        { description: 'Safety assessment', quantity: 1, rate: 200, amount: 200 },
+        { description: 'Debris removal', quantity: 1, rate: 100, amount: 100 }
+      ],
+      notes: 'Emergency service - payment due within 15 days.',
+      createdAt: new Date('2024-12-20'),
+      updatedAt: new Date('2024-12-20')
+    };
+
+    const invoice3 = {
+      id: 'inv-3',
+      customerId: '1',
+      jobId: null,
+      invoiceNumber: 'INV-2024-003',
+      jobTitle: 'Hedge Trimming & Garden Maintenance',
+      issueDate: new Date('2024-12-19'),
+      dueDate: new Date('2025-01-19'),
+      amount: '450.00',
+      status: 'paid',
+      items: [
+        { description: 'Hedge trimming', quantity: 3, rate: 120, amount: 360 },
+        { description: 'Garden cleanup', quantity: 1, rate: 90, amount: 90 }
+      ],
+      notes: 'Quarterly maintenance service completed. Next service due March 2025.',
+      createdAt: new Date('2024-12-19'),
+      updatedAt: new Date('2024-12-19')
+    };
+
+    this.invoices.set('inv-1', invoice1);
+    this.invoices.set('inv-2', invoice2);
+    this.invoices.set('inv-3', invoice3);
+
+    // Sample customer auth for demo access
+    this.customerAuth.set('auth-1', {
+      id: 'auth-1',
+      customerId: '1',
+      email: 'sarah.johnson@email.com',
+      phone: '021 555 0123',
+      createdAt: new Date('2024-12-15'),
+      lastLoginAt: null
+    });
     
     // Sample quotes
     const quote1 = {
@@ -3706,6 +3804,97 @@ export class MemStorage implements IStorage {
       byPlatform,
       byPriority
     };
+  }
+
+  // ========================================
+  // CUSTOMER PORTAL METHODS
+  // ========================================
+
+  async authenticateCustomer(email: string, phone?: string): Promise<CustomerAuth | undefined> {
+    // Find customer auth by email and optionally phone
+    for (const auth of this.customerAuth.values()) {
+      if (auth.email === email && (!phone || auth.phone === phone)) {
+        // Update last login
+        const updatedAuth = { ...auth, lastLoginAt: new Date() };
+        this.customerAuth.set(auth.id, updatedAuth);
+        return updatedAuth;
+      }
+    }
+    return undefined;
+  }
+
+  async createCustomerAuth(auth: InsertCustomerAuth): Promise<CustomerAuth> {
+    const newAuth: CustomerAuth = {
+      id: randomUUID(),
+      ...auth,
+      createdAt: new Date(),
+      lastLoginAt: null,
+    };
+    
+    this.customerAuth.set(newAuth.id, newAuth);
+    return newAuth;
+  }
+
+  async getCustomerJobs(customerId: string): Promise<Job[]> {
+    return Array.from(this.jobs.values())
+      .filter(job => job.customerId === customerId)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  async getCustomerInvoices(customerId: string): Promise<Invoice[]> {
+    return Array.from(this.invoices.values())
+      .filter(invoice => invoice.customerId === customerId)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  async getCustomerPhotos(customerId: string, jobId?: string): Promise<Photo[]> {
+    let photos = Array.from(this.photos.values())
+      .filter(photo => photo.customerId === customerId && photo.showToCustomer);
+    
+    if (jobId) {
+      photos = photos.filter(photo => photo.jobId === jobId);
+    }
+    
+    return photos.sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
+  }
+
+  async createInvoice(invoice: InsertInvoice): Promise<Invoice> {
+    const newInvoice: Invoice = {
+      id: randomUUID(),
+      ...invoice,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.invoices.set(newInvoice.id, newInvoice);
+    return newInvoice;
+  }
+
+  async getInvoice(id: string): Promise<Invoice | undefined> {
+    return this.invoices.get(id);
+  }
+
+  async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> {
+    const newRequest: ServiceRequest = {
+      id: randomUUID(),
+      ...request,
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.serviceRequests.set(newRequest.id, newRequest);
+    return newRequest;
+  }
+
+  async getServiceRequest(id: string): Promise<ServiceRequest | undefined> {
+    return this.serviceRequests.get(id);
+  }
+
+  async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> {
+    return Array.from(this.serviceRequests.values())
+      .filter(request => request.customerId === customerId)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
   }
 }
 
