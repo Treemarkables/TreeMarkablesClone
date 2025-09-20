@@ -149,6 +149,20 @@ const COLORS = [
 export default function JobDashboard() {
   const [isListening, setIsListening] = useState(false);
   const [voiceCommand, setVoiceCommand] = useState("");
+  
+  // Conversational Voice AI states
+  const [isConversationMode, setIsConversationMode] = useState(false);
+  const [conversationStep, setConversationStep] = useState(0);
+  const [aiResponse, setAiResponse] = useState("");
+  const [leadFormData, setLeadFormData] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+    serviceRequested: "",
+    urgency: "",
+    notes: ""
+  });
   const [showNewJobDialog, setShowNewJobDialog] = useState(false);
   const [showNewLeadDialog, setShowNewLeadDialog] = useState(false);
   const [showNewQuoteDialog, setShowNewQuoteDialog] = useState(false);
@@ -184,6 +198,46 @@ export default function JobDashboard() {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Text-to-Speech function with conversation continuity
+  const speakText = (text: string, restartListening = false) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 0.8;
+      
+      // Restart listening after speaking during conversation
+      utterance.onend = () => {
+        if (restartListening && isConversationMode && recognition) {
+          setTimeout(() => {
+            setIsListening(true);
+            recognition.start();
+          }, 500); // Small delay for better UX
+        }
+      };
+      
+      speechSynthesis.speak(utterance);
+    } else if (restartListening && isConversationMode && recognition) {
+      // No TTS available, go straight to listening
+      setTimeout(() => {
+        setIsListening(true);
+        recognition.start();
+      }, 1000);
+    }
+  };
+
+  // Conversation steps for lead creation
+  const conversationSteps = [
+    { question: "What's the customer's name?", field: "name", required: true },
+    { question: "What's their phone number?", field: "phone", required: true },
+    { question: "What's their email address? You can say 'skip' if you don't have it.", field: "email", required: false },
+    { question: "What's the property address?", field: "address", required: true },
+    { question: "What tree service do they need?", field: "serviceRequested", required: true },
+    { question: "How urgent is this? Say low, medium, high, or emergency.", field: "urgency", required: true },
+    { question: "Any additional notes about this lead?", field: "notes", required: false },
+    { question: "Let me confirm the details. Is this information correct?", field: "confirmation", required: true }
+  ];
 
   // CSV Import Mutation
   const csvImportMutation = useMutation({
@@ -287,7 +341,7 @@ export default function JobDashboard() {
     queryKey: ['/api/jobs']
   });
 
-  const jobs = jobsData?.data || [];
+  const jobs = Array.isArray(jobsData?.data) ? jobsData.data : (Array.isArray(jobsData) ? jobsData : []);
 
   const { data: calls, isLoading: callsLoading } = useQuery({
     queryKey: ['/api/calls', '50'],
@@ -421,20 +475,188 @@ export default function JobDashboard() {
   };
 
   const processVoiceCommand = (command: string) => {
-    if (command.includes('create job') || command.includes('new job')) {
+    // Handle conversational flow
+    if (isConversationMode) {
+      handleConversationalInput(command);
+      return;
+    }
+
+    // Regular voice commands
+    if (command.includes('create lead') || command.includes('new lead')) {
+      startLeadConversation();
+    } else if (command.includes('create job') || command.includes('new job')) {
       setShowNewJobDialog(true);
-    } else if (command.includes('create lead') || command.includes('new lead')) {
-      setShowNewLeadDialog(true);
     } else if (command.includes('create quote') || command.includes('new quote')) {
       setShowNewQuoteDialog(true);
     } else if (command.includes('show jobs') || command.includes('view jobs')) {
-      // Switch to jobs tab
       const jobsTab = document.querySelector('[data-testid="tab-jobs"]') as HTMLButtonElement;
       jobsTab?.click();
     } else if (command.includes('show analytics') || command.includes('view analytics')) {
       const analyticsTab = document.querySelector('[data-testid="tab-analytics"]') as HTMLButtonElement;
       analyticsTab?.click();
     }
+  };
+
+  const startLeadConversation = () => {
+    // Check if speech recognition is available
+    if (!recognition) {
+      setAiResponse("Voice recognition is not available in this browser. Please use the New Lead button to create leads manually.");
+      speakText("Voice recognition is not available in this browser. Please use the New Lead button to create leads manually.");
+      return;
+    }
+
+    setIsConversationMode(true);
+    setConversationStep(0);
+    setLeadFormData({
+      name: "",
+      phone: "",
+      email: "",
+      address: "",
+      serviceRequested: "",
+      urgency: "",
+      notes: ""
+    });
+    const firstQuestion = conversationSteps[0].question;
+    setAiResponse(firstQuestion);
+    speakText(`I'll help you create a new lead. ${firstQuestion}`, true);
+  };
+
+  const handleConversationalInput = (input: string) => {
+    const lowerInput = input.toLowerCase().trim();
+    
+    // Handle global commands
+    if (lowerInput.includes("cancel") || lowerInput.includes("stop")) {
+      cancelConversation();
+      return;
+    }
+    
+    if (lowerInput.includes("repeat") || lowerInput.includes("say again")) {
+      const currentQuestion = conversationSteps[conversationStep].question;
+      setAiResponse(currentQuestion);
+      speakText(currentQuestion, true);
+      return;
+    }
+
+    const currentStep = conversationSteps[conversationStep];
+    const fieldName = currentStep.field as keyof typeof leadFormData;
+    
+    // Handle confirmation step
+    if (fieldName === "confirmation") {
+      if (lowerInput.includes("yes") || lowerInput.includes("correct") || lowerInput.includes("confirm")) {
+        finalizeLead();
+      } else {
+        setAiResponse("Let's start over. What's the customer's name?");
+        setConversationStep(0);
+        setLeadFormData({
+          name: "",
+          phone: "",
+          email: "",
+          address: "",
+          serviceRequested: "",
+          urgency: "",
+          notes: ""
+        });
+        speakText("Let's start over. What's the customer's name?", true);
+      }
+      return;
+    }
+    
+    // Handle skip options
+    if (!currentStep.required && (lowerInput.includes("skip") || lowerInput.includes("none"))) {
+      moveToNextStep("");
+      return;
+    }
+    
+    // Validate and normalize input
+    let processedInput = input.trim();
+    
+    if (fieldName === "urgency") {
+      if (lowerInput.includes("low")) processedInput = "low";
+      else if (lowerInput.includes("medium") || lowerInput.includes("normal")) processedInput = "medium";
+      else if (lowerInput.includes("high")) processedInput = "high";
+      else if (lowerInput.includes("emergency") || lowerInput.includes("urgent")) processedInput = "emergency";
+      else {
+        setAiResponse("Please say low, medium, high, or emergency for urgency level.");
+        speakText("Please say low, medium, high, or emergency for urgency level.", true);
+        return;
+      }
+    }
+    
+    // Check required fields
+    if (currentStep.required && processedInput.length < 2) {
+      setAiResponse(`This field is required. Please provide ${currentStep.question.toLowerCase()}`);
+      speakText(`This field is required. Please provide ${currentStep.question.toLowerCase()}`, true);
+      return;
+    }
+
+    // Update form data
+    setLeadFormData(prev => ({
+      ...prev,
+      [fieldName]: processedInput
+    }));
+
+    moveToNextStep(processedInput);
+  };
+
+  const cancelConversation = () => {
+    setIsConversationMode(false);
+    setConversationStep(0);
+    setAiResponse("Lead creation cancelled.");
+    setLeadFormData({
+      name: "",
+      phone: "",
+      email: "",
+      address: "",
+      serviceRequested: "",
+      urgency: "",
+      notes: ""
+    });
+    speakText("Lead creation cancelled.");
+  };
+
+  const moveToNextStep = (currentInput: string) => {
+    const nextStep = conversationStep + 1;
+    
+    if (nextStep >= conversationSteps.length) {
+      // Show confirmation step
+      showConfirmation();
+      return;
+    }
+
+    setConversationStep(nextStep);
+    const nextQuestion = conversationSteps[nextStep].question;
+    setAiResponse(nextQuestion);
+    speakText(nextQuestion, true);
+  };
+
+  const showConfirmation = () => {
+    const summary = `Here's what I have: Customer name is ${leadFormData.name}, phone number ${leadFormData.phone}${leadFormData.email ? `, email ${leadFormData.email}` : ""}, address ${leadFormData.address}, service needed is ${leadFormData.serviceRequested}, urgency level ${leadFormData.urgency}${leadFormData.notes ? `, and notes: ${leadFormData.notes}` : ""}. Is this information correct? Say yes to create the lead or no to start over.`;
+    
+    setConversationStep(conversationSteps.length - 1); // Confirmation step
+    setAiResponse(summary);
+    speakText(summary, true);
+  };
+
+  const finalizeLead = () => {
+    // Create the lead
+    createLeadMutation.mutate({
+      name: leadFormData.name,
+      phone: leadFormData.phone,
+      email: leadFormData.email || undefined,
+      address: leadFormData.address,
+      serviceRequested: leadFormData.serviceRequested,
+      urgency: leadFormData.urgency,
+      status: 'new',
+      source: 'voice_assistant',
+      notes: leadFormData.notes || undefined
+    });
+
+    // End conversation
+    setIsConversationMode(false);
+    setConversationStep(0);
+    const confirmationMessage = `Perfect! I've created a new lead for ${leadFormData.name}. The lead has been added to your pipeline.`;
+    setAiResponse(confirmationMessage);
+    speakText(confirmationMessage);
   };
 
   const startListening = () => {
@@ -718,14 +940,69 @@ export default function JobDashboard() {
         {/* Compact Navigation Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
 
-        {/* Voice Command Feedback */}
-        {voiceCommand && (
+        {/* Voice Command Feedback & Conversational AI */}
+        {(voiceCommand || aiResponse || isConversationMode) && (
           <Card className="border border-brand shadow-brand">
             <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <Bot className="h-5 w-5 icon-colorful" />
-                <span className="text-sm text-gray-700">Command: "{voiceCommand}"</span>
-              </div>
+              {/* Show user's last command */}
+              {voiceCommand && (
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-blue-600 text-sm font-medium">You</span>
+                  </div>
+                  <span className="text-sm text-gray-700">"{voiceCommand}"</span>
+                </div>
+              )}
+              
+              {/* Show AI response */}
+              {aiResponse && (
+                <div className="flex items-center gap-2 mb-3">
+                  <Bot className="h-8 w-8 text-orange-600" />
+                  <div className="flex-1">
+                    <span className="text-sm text-gray-700">{aiResponse}</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Conversation Progress */}
+              {isConversationMode && (
+                <div className="mt-4 p-3 bg-orange-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-orange-800">Creating New Lead</span>
+                    <span className="text-xs text-orange-600">
+                      Step {conversationStep + 1} of {conversationSteps.length}
+                    </span>
+                  </div>
+                  <div className="w-full bg-orange-200 rounded-full h-2">
+                    <div 
+                      className="bg-orange-600 h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${((conversationStep + 1) / conversationSteps.length) * 100}%` }}
+                    ></div>
+                  </div>
+                  <div className="mt-2 text-xs text-orange-700">
+                    Collected: {Object.entries(leadFormData).filter(([_, value]) => value.trim() !== "").length} fields
+                  </div>
+                  
+                  {/* Cancel conversation button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 text-orange-600 border-orange-300 hover:bg-orange-100"
+                    onClick={cancelConversation}
+                    data-testid="button-cancel-conversation"
+                  >
+                    Cancel Lead Creation
+                  </Button>
+                </div>
+              )}
+              
+              {/* Voice listening indicator */}
+              {isListening && (
+                <div className="mt-3 p-2 bg-blue-50 rounded-lg flex items-center gap-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm text-blue-700">Listening for your response...</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1093,7 +1370,7 @@ export default function JobDashboard() {
 
             {/* Global Search and Filters */}
             <GlobalSearch
-              data={Array.isArray(pipelineLeads?.data) ? pipelineLeads.data : []}
+              data={Array.isArray(pipelineLeads?.data) ? pipelineLeads.data : (Array.isArray(pipelineLeads) ? pipelineLeads : [])}
               searchFields={['name', 'email', 'phone', 'serviceRequested', 'notes', 'source']}
               onFilteredResults={setFilteredLeads}
               placeholder="Search leads by name, email, phone, service..."
@@ -1338,7 +1615,7 @@ export default function JobDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {(() => {
                     console.log('Pipeline leads data:', pipelineLeads);
-                    const leadsArray = Array.isArray(pipelineLeads) ? pipelineLeads : (pipelineLeads?.data || []);
+                    const leadsArray = Array.isArray(pipelineLeads?.data) ? pipelineLeads.data : (Array.isArray(pipelineLeads) ? pipelineLeads : []);
                     console.log('Processed leads array:', leadsArray);
                     
                     if (leadsLoading) {
