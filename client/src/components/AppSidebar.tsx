@@ -13,7 +13,8 @@ import {
   Target,
   Briefcase,
   GitBranch,
-  MessageSquare
+  MessageSquare,
+  Star
 } from "lucide-react";
 import {
   Sidebar,
@@ -232,6 +233,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   <Link href="/opportunities" data-testid="link-opportunities">
                     <MessageSquare className="h-4 w-4" />
                     <span>Opportunities</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/reputation" data-testid="link-reputation">
+                    <Star className="h-4 w-4" />
+                    <span>Reputation</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
