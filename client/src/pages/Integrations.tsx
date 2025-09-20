@@ -63,16 +63,15 @@ const availableIntegrations: Integration[] = [
     setupRequired: true
   },
   {
-    id: 'sendgrid',
-    name: 'SendGrid',
-    description: 'Professional email delivery and marketing automation',
-    category: 'email',
+    id: 'mailchimp',
+    name: 'Mailchimp',
+    description: 'Email marketing automation and audience management platform',
+    category: 'marketing',
     icon: Zap,
-    status: 'connected',
-    isEnabled: true,
-    lastSync: '2024-12-20T10:30:00.000Z',
-    features: ['Email delivery', 'Marketing campaigns', 'Analytics', 'Templates'],
-    setupRequired: false
+    status: 'available',
+    isEnabled: false,
+    features: ['Email campaigns', 'Audience segmentation', 'Automation workflows', 'Analytics & reporting', 'Landing pages'],
+    setupRequired: true
   },
   {
     id: 'twilio',
@@ -252,8 +251,8 @@ export default function Integrations() {
             <TabsTrigger value="email" data-testid="tab-email">Email</TabsTrigger>
             <TabsTrigger value="messaging" data-testid="tab-messaging">Messaging</TabsTrigger>
             <TabsTrigger value="calendar" data-testid="tab-calendar">Calendar</TabsTrigger>
-            <TabsTrigger value="crm" data-testid="tab-crm">CRM</TabsTrigger>
             <TabsTrigger value="marketing" data-testid="tab-marketing">Marketing</TabsTrigger>
+            <TabsTrigger value="crm" data-testid="tab-crm">CRM</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -400,14 +399,15 @@ export default function Integrations() {
               </div>
               
               <div>
-                <h4 className="font-medium mb-2">Messaging Services</h4>
+                <h4 className="font-medium mb-2">Marketing Automation</h4>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  Enable SMS and social media messaging to reach customers on their preferred platforms.
+                  Connect Mailchimp to manage email campaigns, audience segmentation, and marketing automation.
                 </p>
                 <Button variant="ghost" className="p-0 h-auto text-orange-600 hover:text-orange-700">
-                  View Messaging Setup Guide <ExternalLink className="h-3 w-3 ml-1" />
+                  View Mailchimp Setup Guide <ExternalLink className="h-3 w-3 ml-1" />
                 </Button>
               </div>
+              
             </div>
           </CardContent>
         </Card>
