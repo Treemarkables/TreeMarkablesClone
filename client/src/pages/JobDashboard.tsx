@@ -550,7 +550,7 @@ export default function JobDashboard() {
   }
 
   const style = {
-    "--sidebar-width": "20rem",
+    "--sidebar-width": "8rem",
     "--sidebar-width-icon": "4rem",
   };
 
