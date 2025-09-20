@@ -1029,7 +1029,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   app.post('/api/jobs', async (req: Request, res: Response) => {
     try {
-      const validation = insertJobSchema.safeParse(req.body);
+      // Preprocess date fields - convert strings to Date objects
+      const processedBody = { ...req.body };
+      if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
+        processedBody.scheduledDate = new Date(processedBody.scheduledDate);
+      }
+      if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
+        processedBody.completedDate = new Date(processedBody.completedDate);
+      }
+
+      const validation = insertJobSchema.safeParse(processedBody);
       if (!validation.success) {
         return res.status(400).json({ 
           success: false, 
@@ -1076,6 +1085,37 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error fetching job:', error);
       res.status(500).json({ success: false, message: 'Error fetching job' });
+    }
+  });
+
+  app.put('/api/jobs/:id', async (req: Request, res: Response) => {
+    try {
+      // Preprocess date fields - convert strings to Date objects
+      const processedBody = { ...req.body };
+      if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
+        processedBody.scheduledDate = new Date(processedBody.scheduledDate);
+      }
+      if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
+        processedBody.completedDate = new Date(processedBody.completedDate);
+      }
+
+      const validation = insertJobSchema.partial().safeParse(processedBody);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid job data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const job = await storage.updateJob(req.params.id, validation.data);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      res.json({ success: true, data: job });
+    } catch (error) {
+      console.error('Error updating job:', error);
+      res.status(500).json({ success: false, message: 'Error updating job' });
     }
   });
 

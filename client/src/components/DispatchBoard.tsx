@@ -19,10 +19,20 @@ import {
   ChevronRight,
   Grid3X3,
   List,
-  Settings
+  Settings,
+  Edit,
+  Check,
+  RotateCcw,
+  MessageSquare,
+  X,
+  ExternalLink
 } from 'lucide-react';
 import { useState } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
+import { apiRequest } from '@/lib/queryClient';
 
 interface StaffMember {
   id: string;
@@ -243,10 +253,53 @@ const timeSlots = [
 ];
 
 export function DispatchBoard({ compact = false }: DispatchBoardProps) {
+  const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(new Date('2024-12-20'));
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('teams');
+  const [showJobCreationModal, setShowJobCreationModal] = useState(false);
+  const [newJobFormData, setNewJobFormData] = useState({
+    customerName: '',
+    customerPhone: '',
+    address: '',
+    serviceType: '',
+    startTime: '',
+    endTime: '',
+    priority: 'medium' as JobAssignment['priority'],
+    notes: '',
+    assignedTo: '' // Will hold teamId or staffId based on mode
+  });
+
+  // Fetch jobs from backend API
+  const { data: jobsData } = useQuery({
+    queryKey: ['/api/jobs']
+  });
+
+  // Convert API jobs to DispatchBoard format
+  const jobs: JobAssignment[] = (jobsData?.data || []).map((apiJob: any) => {
+    // For now, assign jobs to first team if no assignment data exists
+    // In a real system, this would be stored in the database
+    const defaultAssignment = assignmentMode === 'teams' 
+      ? { teamId: 'team1', staffId: undefined, assignedTeam: ['1', '2'] }
+      : { teamId: undefined, staffId: '1', assignedTeam: [] };
+
+    return {
+      id: apiJob.id,
+      jobId: apiJob.jobNumber,
+      customerId: apiJob.customerId,
+      customerName: apiJob.title, // API uses 'title', we use 'customerName'
+      customerPhone: '', // Not available in API response
+      address: apiJob.address,
+      serviceType: apiJob.description,
+      status: apiJob.status,
+      priority: apiJob.priority,
+      startTime: apiJob.scheduledDate,
+      endTime: apiJob.scheduledDate, // API doesn't have separate endTime
+      notes: apiJob.notes,
+      ...defaultAssignment
+    };
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -268,14 +321,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   const getJobsForTeam = (teamId: string) => {
-    return mockJobAssignments.filter(job => {
+    return jobs.filter(job => {
       if (job.teamId !== teamId) return false;
       return isSameDay(new Date(job.startTime), selectedDate);
     });
   };
 
   const getJobsForStaff = (staffId: string) => {
-    return mockJobAssignments.filter(job => {
+    return jobs.filter(job => {
       if (job.staffId !== staffId) return false;
       return isSameDay(new Date(job.startTime), selectedDate);
     });
@@ -288,7 +341,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   const getTodaysJobs = () => {
-    return mockJobAssignments
+    return jobs
       .filter(job => {
         const isToday = isSameDay(new Date(job.startTime), selectedDate);
         if (assignmentMode === 'teams') {
@@ -298,6 +351,125 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         }
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  };
+
+  // Job Mutations
+  const createJobMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('POST', '/api/jobs', data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      setShowJobCreationModal(false);
+      setNewJobFormData({
+        customerName: '',
+        customerPhone: '',
+        address: '',
+        serviceType: '',
+        startTime: '',
+        endTime: '',
+        priority: 'medium',
+        notes: '',
+        assignedTo: ''
+      });
+      toast({
+        title: "Job Created Successfully",
+        description: "Job has been scheduled successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to create job: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  });
+
+  const updateJobMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string, updates: any }) => {
+      const response = await apiRequest('PUT', `/api/jobs/${id}`, updates);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to update job: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Job Management Functions
+  const createNewJob = () => {
+    if (!newJobFormData.customerName || !newJobFormData.customerPhone || !newJobFormData.address || !newJobFormData.serviceType || !newJobFormData.startTime || !newJobFormData.endTime || !newJobFormData.assignedTo) {
+      toast({
+        title: "Missing Information", 
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Transform form data to API format
+    createJobMutation.mutate({
+      jobNumber: `JOB-${Date.now()}`,
+      title: newJobFormData.customerName,
+      description: `${newJobFormData.serviceType} - ${newJobFormData.notes}`,
+      address: newJobFormData.address,
+      status: 'scheduled',
+      priority: newJobFormData.priority,
+      scheduledDate: `${format(selectedDate, 'yyyy-MM-dd')}T${newJobFormData.startTime}:00`,
+      totalAmount: "0.00"
+    });
+  };
+
+  const markJobComplete = (jobId: string) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      updateJobMutation.mutate({
+        id: jobId,
+        updates: { status: 'completed', completedDate: new Date() }
+      });
+      toast({
+        title: "Job Completed",
+        description: `Job marked as complete`,
+      });
+    }
+  };
+
+  const cancelJob = (jobId: string) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      updateJobMutation.mutate({
+        id: jobId,
+        updates: { status: 'cancelled' }
+      });
+      toast({
+        title: "Job Cancelled",
+        description: `Job has been cancelled`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const addJobNotes = (jobId: string, notes: string) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      const updatedNotes = job.notes ? `${job.notes}\n${notes}` : notes;
+      updateJobMutation.mutate({
+        id: jobId,
+        updates: { notes: updatedNotes }
+      });
+      toast({
+        title: "Notes Added",
+        description: `Notes added to job`,
+      });
+    }
   };
 
   if (compact) {
@@ -692,7 +864,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             <div className="w-80 border-l pl-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-sm text-muted-foreground">JOBS</h3>
-                <Button size="sm" data-testid="add-job-btn">
+                <Button 
+                  size="sm" 
+                  onClick={() => setShowJobCreationModal(true)}
+                  data-testid="add-job-btn"
+                >
                   <Plus className="h-4 w-4 mr-1" />
                   Add
                 </Button>
@@ -707,11 +883,39 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     return (
                       <Card
                         key={job.id}
-                        className="hover-elevate cursor-pointer"
+                        className="hover-elevate cursor-pointer relative group"
                         onClick={() => setSelectedJob(job)}
                         data-testid={`job-card-${job.id}`}
                       >
                         <CardContent className="p-3">
+                          {/* Quick Action Buttons - Show on Hover */}
+                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1 z-10">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-6 w-6 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markJobComplete(job.id);
+                              }}
+                              data-testid={`quick-complete-${job.id}`}
+                            >
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-6 w-6 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`tel:${job.customerPhone}`);
+                              }}
+                              data-testid={`quick-call-${job.id}`}
+                            >
+                              <Phone className="h-3 w-3" />
+                            </Button>
+                          </div>
+
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <div className={`w-2 h-2 rounded-full ${getPriorityColor(job.priority)}`} />
@@ -927,12 +1131,316 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 </div>
               )}
 
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" data-testid="edit-job">
-                  Edit Job
+              {/* Quick Actions */}
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" data-testid="edit-job">
+                    <Edit className="h-4 w-4 mr-1" />
+                    Edit Job
+                  </Button>
+                  <Button 
+                    className="flex-1" 
+                    onClick={() => selectedJob && markJobComplete(selectedJob.id)}
+                    data-testid="complete-job"
+                  >
+                    <Check className="h-4 w-4 mr-1" />
+                    Mark Complete
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="outline" size="sm" data-testid="reschedule-job">
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                    Reschedule
+                  </Button>
+                  <Button variant="outline" size="sm" data-testid="add-notes-job">
+                    <MessageSquare className="h-4 w-4 mr-1" />
+                    Add Notes
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => window.open(`tel:${selectedJob.customerPhone}`)}
+                    data-testid="call-customer"
+                  >
+                    <Phone className="h-4 w-4 mr-1" />
+                    Call
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(selectedJob.address)}`, '_blank')}
+                    data-testid="view-location"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-1" />
+                    Location
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={() => selectedJob && cancelJob(selectedJob.id)}
+                    data-testid="cancel-job"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Job Creation Modal */}
+      {showJobCreationModal && (
+        <Dialog open={showJobCreationModal} onOpenChange={setShowJobCreationModal}>
+          <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5 text-primary" />
+                Create New Job
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Customer Information */}
+              <div>
+                <h4 className="font-semibold text-sm mb-3">Customer Information</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Customer Name *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border rounded-md text-sm"
+                      placeholder="Enter customer name"
+                      value={newJobFormData.customerName}
+                      onChange={(e) => setNewJobFormData(prev => ({ ...prev, customerName: e.target.value }))}
+                      data-testid="input-customer-name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Phone Number *
+                    </label>
+                    <input
+                      type="tel"
+                      className="w-full px-3 py-2 border rounded-md text-sm"
+                      placeholder="(555) 123-4567"
+                      value={newJobFormData.customerPhone}
+                      onChange={(e) => setNewJobFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
+                      data-testid="input-customer-phone"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Service Address *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border rounded-md text-sm"
+                      placeholder="123 Main St, City"
+                      value={newJobFormData.address}
+                      onChange={(e) => setNewJobFormData(prev => ({ ...prev, address: e.target.value }))}
+                      data-testid="input-address"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Job Details */}
+              <div>
+                <h4 className="font-semibold text-sm mb-3">Job Details</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Service Type *
+                    </label>
+                    <Select 
+                      value={newJobFormData.serviceType} 
+                      onValueChange={(value) => setNewJobFormData(prev => ({ ...prev, serviceType: value }))}
+                    >
+                      <SelectTrigger data-testid="select-service-type">
+                        <SelectValue placeholder="Select service type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Tree Removal">Tree Removal</SelectItem>
+                        <SelectItem value="Tree Pruning">Tree Pruning</SelectItem>
+                        <SelectItem value="Emergency Removal">Emergency Removal</SelectItem>
+                        <SelectItem value="Stump Grinding">Stump Grinding</SelectItem>
+                        <SelectItem value="Equipment Setup">Equipment Setup</SelectItem>
+                        <SelectItem value="Quote">Site Quote</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Start Time *
+                      </label>
+                      <input
+                        type="time"
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        value={newJobFormData.startTime}
+                        onChange={(e) => setNewJobFormData(prev => ({ ...prev, startTime: e.target.value }))}
+                        data-testid="input-start-time"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        End Time *
+                      </label>
+                      <input
+                        type="time"
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        value={newJobFormData.endTime}
+                        onChange={(e) => setNewJobFormData(prev => ({ ...prev, endTime: e.target.value }))}
+                        data-testid="input-end-time"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Priority
+                    </label>
+                    <Select 
+                      value={newJobFormData.priority} 
+                      onValueChange={(value: JobAssignment['priority']) => setNewJobFormData(prev => ({ ...prev, priority: value }))}
+                    >
+                      <SelectTrigger data-testid="select-priority">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500" />
+                            Low
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="medium">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                            Medium
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="high">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-orange-500" />
+                            High
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="urgent">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-red-500" />
+                            Urgent
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Assignment */}
+              <div>
+                <h4 className="font-semibold text-sm mb-3">
+                  {assignmentMode === 'teams' ? 'Team Assignment' : 'Staff Assignment'}
+                </h4>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    {assignmentMode === 'teams' ? 'Assign to Team' : 'Assign to Staff'}
+                  </label>
+                  <Select 
+                    value={newJobFormData.assignedTo} 
+                    onValueChange={(value) => setNewJobFormData(prev => ({ ...prev, assignedTo: value }))}
+                  >
+                    <SelectTrigger data-testid="select-assignment">
+                      <SelectValue placeholder={`Select ${assignmentMode === 'teams' ? 'team' : 'staff member'}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignmentMode === 'teams' ? (
+                        mockTeams.map(team => (
+                          <SelectItem key={team.id} value={team.id}>
+                            <div className="flex items-center gap-2">
+                              <div className={`w-3 h-3 rounded-full ${team.color}`} />
+                              {team.name}
+                              <Badge variant="outline" className="text-xs ml-2">
+                                {getTeamMembers(team.id).length} members
+                              </Badge>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        mockStaffMembers.map(staff => (
+                          <SelectItem key={staff.id} value={staff.id}>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-5 w-5">
+                                <AvatarFallback className={`${staff.color} text-white text-xs`}>
+                                  {staff.name.split(' ').map(n => n[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              {staff.name}
+                              <span className="text-xs text-muted-foreground ml-2">
+                                {staff.role}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border rounded-md text-sm resize-none"
+                  rows={3}
+                  placeholder="Add any special instructions or notes..."
+                  value={newJobFormData.notes}
+                  onChange={(e) => setNewJobFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  data-testid="textarea-notes"
+                />
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => {
+                    setShowJobCreationModal(false);
+                    setNewJobFormData({
+                      customerName: '',
+                      customerPhone: '',
+                      address: '',
+                      serviceType: '',
+                      startTime: '',
+                      endTime: '',
+                      priority: 'medium',
+                      notes: '',
+                      assignedTo: ''
+                    });
+                  }}
+                  data-testid="btn-cancel-job"
+                >
+                  Cancel
                 </Button>
-                <Button className="flex-1" data-testid="complete-job">
-                  Mark Complete
+                <Button 
+                  className="flex-1"
+                  onClick={createNewJob}
+                  disabled={!newJobFormData.customerName || !newJobFormData.customerPhone || !newJobFormData.address || !newJobFormData.serviceType || !newJobFormData.startTime || !newJobFormData.endTime || !newJobFormData.assignedTo}
+                  data-testid="btn-create-job"
+                >
+                  Create Job
                 </Button>
               </div>
             </div>
