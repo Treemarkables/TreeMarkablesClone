@@ -1,0 +1,428 @@
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { 
+  Calculator, 
+  DollarSign, 
+  Clock, 
+  Package, 
+  Wrench, 
+  CheckCircle, 
+  AlertCircle,
+  Save,
+  TrendingUp
+} from "lucide-react";
+
+interface GrossMarginData {
+  laborCosts?: number;
+  materialsCosts?: number;
+  otherCosts?: number;
+  laborHours?: number;
+  hourlyRate?: number;
+  grossMargin?: string;
+  grossMarginCalculated?: boolean;
+  totalAmount?: string;
+}
+
+interface GrossMarginCalculatorProps {
+  jobId: string;
+  jobData?: any;
+  compact?: boolean;
+}
+
+export function GrossMarginCalculator({ jobId, jobData, compact = false }: GrossMarginCalculatorProps) {
+  const [formData, setFormData] = useState<GrossMarginData>({});
+  const [calculationMode, setCalculationMode] = useState<'manual' | 'hourly'>('manual');
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch job data to get current gross margin information
+  const { data: job, isLoading } = useQuery({
+    queryKey: ['job', jobId],
+    queryFn: async () => {
+      const response = await fetch(`/api/jobs/${jobId}`);
+      if (!response.ok) throw new Error('Failed to fetch job data');
+      const result = await response.json();
+      return result.data;
+    },
+    enabled: !!jobId
+  });
+
+  // Update form data when job data changes
+  useEffect(() => {
+    if (job) {
+      setFormData({
+        laborCosts: job.laborCosts ? parseFloat(job.laborCosts) : undefined,
+        materialsCosts: job.materialsCosts ? parseFloat(job.materialsCosts) : undefined,
+        otherCosts: job.otherCosts ? parseFloat(job.otherCosts) : undefined,
+        laborHours: job.laborHours ? parseFloat(job.laborHours) : undefined,
+        hourlyRate: job.hourlyRate ? parseFloat(job.hourlyRate) : undefined,
+        grossMargin: job.grossMargin,
+        grossMarginCalculated: job.grossMarginCalculated,
+        totalAmount: job.totalAmount
+      });
+    }
+  }, [job]);
+
+  // Update gross margin mutation
+  const updateGrossMarginMutation = useMutation({
+    mutationFn: async (data: GrossMarginData) => {
+      return await apiRequest('PUT', `/api/jobs/${jobId}/gross-margin`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      toast({
+        title: "Success",
+        description: "Gross margin updated successfully"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update gross margin",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Calculate derived values
+  const totalAmount = job?.totalAmount ? parseFloat(job.totalAmount) : 0;
+  const laborCosts = formData.laborCosts || 0;
+  const materialsCosts = formData.materialsCosts || 0;
+  const otherCosts = formData.otherCosts || 0;
+  const costOfGoods = job?.costOfGoods ? parseFloat(job.costOfGoods) : 0;
+  const totalCosts = laborCosts + materialsCosts + otherCosts + costOfGoods;
+  const calculatedLaborCosts = (formData.laborHours || 0) * (formData.hourlyRate || 0);
+  
+  // Calculate gross margin in real-time
+  const grossMarginPercent = totalAmount > 0 ? ((totalAmount - totalCosts) / totalAmount) * 100 : 0;
+  const grossMarginAmount = totalAmount - totalCosts;
+
+  const handleInputChange = (field: keyof GrossMarginData, value: string) => {
+    const numericValue = value === '' ? undefined : parseFloat(value);
+    setFormData(prev => ({
+      ...prev,
+      [field]: numericValue
+    }));
+  };
+
+  const handleSave = () => {
+    const dataToSave = { ...formData };
+    
+    // If using hourly calculation mode, use calculated labor costs
+    if (calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate) {
+      dataToSave.laborCosts = calculatedLaborCosts;
+    }
+
+    updateGrossMarginMutation.mutate(dataToSave);
+  };
+
+  const getMarginColor = (margin: number) => {
+    if (margin >= 30) return "text-green-600 bg-green-50";
+    if (margin >= 20) return "text-yellow-600 bg-yellow-50";
+    if (margin >= 10) return "text-orange-600 bg-orange-50";
+    return "text-red-600 bg-red-50";
+  };
+
+  const getMarginStatus = (margin: number) => {
+    if (margin >= 30) return { text: "Excellent", icon: CheckCircle };
+    if (margin >= 20) return { text: "Good", icon: TrendingUp };
+    if (margin >= 10) return { text: "Fair", icon: AlertCircle };
+    return { text: "Poor", icon: AlertCircle };
+  };
+
+  if (compact) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between text-lg">
+            <div className="flex items-center gap-2">
+              <Calculator className="h-5 w-5" />
+              Gross Margin
+            </div>
+            {job?.grossMarginCalculated ? (
+              <Badge className="bg-green-100 text-green-800">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Complete
+              </Badge>
+            ) : (
+              <Badge className="bg-orange-100 text-orange-800">
+                <AlertCircle className="h-3 w-3 mr-1" />
+                Required
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {job?.grossMarginCalculated ? (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>Gross Margin:</span>
+                <span className={`font-bold ${getMarginColor(parseFloat(job.grossMargin || '0'))}`}>
+                  {job.grossMargin}%
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Margin Amount:</span>
+                <span className="font-medium">
+                  ${((totalAmount || 0) - (totalCosts || 0)).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">
+              Complete cost calculation to generate invoice
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading gross margin data...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calculator className="h-6 w-6" />
+            Gross Margin Calculator
+          </div>
+          {job?.grossMarginCalculated ? (
+            <Badge className="bg-green-100 text-green-800">
+              <CheckCircle className="h-4 w-4 mr-1" />
+              Complete
+            </Badge>
+          ) : (
+            <Badge className="bg-orange-100 text-orange-800">
+              <AlertCircle className="h-4 w-4 mr-1" />
+              Required for Invoice
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Revenue Information */}
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+            <DollarSign className="h-5 w-5" />
+            Job Revenue
+          </h3>
+          <div className="text-2xl font-bold text-blue-800">
+            ${totalAmount.toFixed(2)}
+          </div>
+        </div>
+
+        {/* Labor Costs Section */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="h-5 w-5" />
+            <h3 className="font-semibold">Labor Costs</h3>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="calculation-mode">Calculation Method</Label>
+              <div className="flex gap-2 mt-1">
+                <Button
+                  type="button"
+                  variant={calculationMode === 'manual' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setCalculationMode('manual')}
+                  data-testid="button-manual-calculation"
+                >
+                  Manual Entry
+                </Button>
+                <Button
+                  type="button"
+                  variant={calculationMode === 'hourly' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setCalculationMode('hourly')}
+                  data-testid="button-hourly-calculation"
+                >
+                  Hours × Rate
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {calculationMode === 'manual' ? (
+            <div>
+              <Label htmlFor="laborCosts">Labor Costs ($)</Label>
+              <Input
+                id="laborCosts"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.laborCosts || ''}
+                onChange={(e) => handleInputChange('laborCosts', e.target.value)}
+                placeholder="Enter total labor costs"
+                data-testid="input-labor-costs"
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="laborHours">Labor Hours</Label>
+                <Input
+                  id="laborHours"
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={formData.laborHours || ''}
+                  onChange={(e) => handleInputChange('laborHours', e.target.value)}
+                  placeholder="Hours worked"
+                  data-testid="input-labor-hours"
+                />
+              </div>
+              <div>
+                <Label htmlFor="hourlyRate">Hourly Rate ($)</Label>
+                <Input
+                  id="hourlyRate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.hourlyRate || ''}
+                  onChange={(e) => handleInputChange('hourlyRate', e.target.value)}
+                  placeholder="Rate per hour"
+                  data-testid="input-hourly-rate"
+                />
+              </div>
+            </div>
+          )}
+
+          {calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate && (
+            <div className="bg-gray-50 p-3 rounded">
+              <span className="text-sm text-gray-600">Calculated Labor Cost: </span>
+              <span className="font-semibold">${calculatedLaborCosts.toFixed(2)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Materials and Other Costs */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="materialsCosts" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Materials Costs ($)
+            </Label>
+            <Input
+              id="materialsCosts"
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.materialsCosts || ''}
+              onChange={(e) => handleInputChange('materialsCosts', e.target.value)}
+              placeholder="Materials & supplies"
+              data-testid="input-materials-costs"
+            />
+          </div>
+          <div>
+            <Label htmlFor="otherCosts" className="flex items-center gap-2">
+              <Wrench className="h-4 w-4" />
+              Other Costs ($)
+            </Label>
+            <Input
+              id="otherCosts"
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.otherCosts || ''}
+              onChange={(e) => handleInputChange('otherCosts', e.target.value)}
+              placeholder="Equipment, permits, etc."
+              data-testid="input-other-costs"
+            />
+          </div>
+        </div>
+
+        {/* Cost Summary */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-semibold mb-3">Cost Breakdown</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Labor Costs:</span>
+              <span>${(calculationMode === 'hourly' ? calculatedLaborCosts : laborCosts).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Materials Costs:</span>
+              <span>${materialsCosts.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Other Costs:</span>
+              <span>${otherCosts.toFixed(2)}</span>
+            </div>
+            {costOfGoods > 0 && (
+              <div className="flex justify-between">
+                <span>Cost of Goods:</span>
+                <span>${costOfGoods.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="border-t pt-2 font-semibold">
+              <div className="flex justify-between">
+                <span>Total Costs:</span>
+                <span>${totalCosts.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Gross Margin Results */}
+        <div className={`p-4 rounded-lg ${getMarginColor(grossMarginPercent)}`}>
+          <h3 className="font-semibold mb-3 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Gross Margin Analysis
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm opacity-75">Gross Margin %</div>
+              <div className="text-2xl font-bold">{grossMarginPercent.toFixed(1)}%</div>
+              <div className="text-sm flex items-center gap-1 mt-1">
+                {React.createElement(getMarginStatus(grossMarginPercent).icon, { className: "h-4 w-4" })}
+                {getMarginStatus(grossMarginPercent).text}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm opacity-75">Gross Margin $</div>
+              <div className="text-2xl font-bold">${grossMarginAmount.toFixed(2)}</div>
+              <div className="text-sm mt-1">
+                Revenue - Total Costs
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <div className="flex justify-end pt-4 border-t">
+          <Button
+            onClick={handleSave}
+            disabled={updateGrossMarginMutation.isPending}
+            data-testid="button-save-gross-margin"
+            className="flex items-center gap-2"
+          >
+            <Save className="h-4 w-4" />
+            {updateGrossMarginMutation.isPending ? 'Saving...' : 'Save Gross Margin'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
