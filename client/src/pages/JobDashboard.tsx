@@ -6,6 +6,28 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  AreaChart,
+  Area
+} from "recharts";
 import { 
   Calendar, 
   MapPin, 
@@ -19,7 +41,18 @@ import {
   MessageSquare,
   CheckCircle,
   AlertCircle,
-  Users
+  Users,
+  TrendingUp,
+  TrendingDown,
+  Target,
+  PhoneCall,
+  Mail,
+  Star,
+  FileText,
+  BarChart3,
+  Activity,
+  Zap,
+  Eye
 } from "lucide-react";
 
 // Add Speech Recognition types for TypeScript
@@ -30,73 +63,49 @@ declare global {
   }
 }
 
-interface Job {
-  id: string;
-  title: string;
-  customer: string;
-  phone: string;
-  address: string;
-  status: 'scheduled' | 'in-progress' | 'completed' | 'quote-pending';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  date: string;
-  time: string;
-  estimate: string;
-  description: string;
-  aiNotes?: string;
+interface DashboardStats {
+  totalLeads: number;
+  totalCustomers: number;
+  totalJobs: number;
+  totalRevenue: number;
+  conversionRate: number;
+  averageQuoteValue: number;
+  missedCalls: number;
+  recentCalls: any[];
+  recentLeads: any[];
 }
 
-const sampleJobs: Job[] = [
-  {
-    id: "1",
-    title: "Large Pine Tree Removal",
-    customer: "Sarah Mitchell",
-    phone: "021 456 789",
-    address: "123 Hillside Road, Gisborne",
-    status: "scheduled",
-    priority: "high",
-    date: "2024-09-20",
-    time: "09:00",
-    estimate: "$1,200",
-    description: "20m pine tree overhanging house, urgent removal needed",
-    aiNotes: "AI detected: High priority due to safety risk. Weather clear for 3 days. Recommend crane access."
-  },
-  {
-    id: "2", 
-    title: "Hedge Trimming - Commercial",
-    customer: "Green Valley School",
-    phone: "06 867 5555",
-    address: "45 Education Drive, Gisborne",
-    status: "in-progress",
-    priority: "medium",
-    date: "2024-09-19",
-    time: "14:00",
-    estimate: "$450",
-    description: "Quarterly hedge maintenance around school perimeter"
-  },
-  {
-    id: "3",
-    title: "Storm Damage Assessment",
-    customer: "John Williams",
-    phone: "027 123 456",
-    address: "78 Coastal Road, Gisborne",
-    status: "quote-pending",
-    priority: "urgent",
-    date: "2024-09-19",
-    time: "16:30",
-    estimate: "TBD",
-    description: "Multiple trees down from recent storm, insurance claim"
-  }
-];
+interface RevenueStats {
+  totalRevenue: number;
+  jobsCompleted: number;
+  averageJobValue: number;
+  monthlyTrend: { month: string; revenue: number; jobs: number }[];
+}
+
+interface QuoteAnalytics {
+  totalQuotes: number;
+  acceptedQuotes: number;
+  rejectedQuotes: number;
+  pendingQuotes: number;
+  averageResponseTime: number;
+  rejectionReasons: { reason: string; count: number }[];
+  competitorAnalysis: { competitor: string; averagePrice: number; winRate: number }[];
+}
+
+const COLORS = ['#FF8042', '#0088FE', '#00C49F', '#FFBB28', '#8884D8', '#82CA9D'];
 
 export default function JobDashboard() {
-  const [jobs, setJobs] = useState<Job[]>(sampleJobs);
   const [isListening, setIsListening] = useState(false);
   const [voiceCommand, setVoiceCommand] = useState("");
   const [showNewJobDialog, setShowNewJobDialog] = useState(false);
+  const [showNewLeadDialog, setShowNewLeadDialog] = useState(false);
+  const [showNewQuoteDialog, setShowNewQuoteDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredJobs, setFilteredJobs] = useState<Job[]>(sampleJobs);
-  const [newJob, setNewJob] = useState({ customer: "", phone: "", address: "", description: "" });
   const [recognition, setRecognition] = useState<any>(null);
+  const [dateRange, setDateRange] = useState("30d");
+  
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Initialize Web Speech API
   useEffect(() => {
@@ -127,423 +136,622 @@ export default function JobDashboard() {
     }
   }, []);
 
-  // Filter jobs based on search
-  useEffect(() => {
-    const filtered = jobs.filter(job => 
-      job.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.address.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredJobs(filtered);
-  }, [jobs, searchTerm]);
+  // Data fetching queries
+  const { data: dashboardStats, isLoading: statsLoading } = useQuery<DashboardStats>({
+    queryKey: ['/api/dashboard-stats']
+  });
+
+  // Calculate from date for revenue stats
+  const revenueFromDate = (() => {
+    const days = parseInt(dateRange.replace('d', ''));
+    return format(subDays(new Date(), days), 'yyyy-MM-dd');
+  })();
+
+  const { data: revenueStats, isLoading: revenueLoading } = useQuery<RevenueStats>({
+    queryKey: ['/api/revenue-stats', { from: revenueFromDate }]
+  });
+
+  const { data: quoteAnalytics, isLoading: quotesLoading } = useQuery<QuoteAnalytics>({
+    queryKey: ['/api/quote-analytics']
+  });
+
+  const { data: customers, isLoading: customersLoading } = useQuery({
+    queryKey: ['/api/customers']
+  });
+
+  const { data: pipelineLeads, isLoading: leadsLoading } = useQuery({
+    queryKey: ['/api/pipeline-leads']
+  });
+
+  const { data: jobs, isLoading: jobsLoading } = useQuery({
+    queryKey: ['/api/jobs']
+  });
+
+  const { data: calls, isLoading: callsLoading } = useQuery({
+    queryKey: ['/api/calls', { limit: 50 }]
+  });
+
+  const { data: quotes, isLoading: quotesDataLoading } = useQuery({
+    queryKey: ['/api/quotes']
+  });
+
+  const { data: activities, isLoading: activitiesLoading } = useQuery({
+    queryKey: ['/api/activities', { limit: 100 }]
+  });
+
+  // Mutations for creating new records
+  const createLeadMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('POST', '/api/pipeline-leads', data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/pipeline-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard-stats'] });
+      setShowNewLeadDialog(false);
+      toast({
+        title: "Success",
+        description: "Lead created successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to create lead: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  });
+
+  const createJobMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('POST', '/api/jobs', data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard-stats'] });
+      setShowNewJobDialog(false);
+      toast({
+        title: "Success",
+        description: "Job created successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to create job: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  });
+
+  const createQuoteMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('POST', '/api/quotes', data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quote-analytics'] });
+      setShowNewQuoteDialog(false);
+      toast({
+        title: "Success",
+        description: "Quote created successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to create quote: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  });
 
   const processVoiceCommand = (command: string) => {
-    if (command.includes('create') && command.includes('job')) {
+    if (command.includes('create job') || command.includes('new job')) {
       setShowNewJobDialog(true);
-      setVoiceCommand(`AI: Opening job creation form...`);
-    } else if (command.includes('complete') || command.includes('finish')) {
-      const firstInProgress = jobs.find(j => j.status === 'in-progress');
-      if (firstInProgress) {
-        completeJob(firstInProgress.id);
-        setVoiceCommand(`AI: Completed job for ${firstInProgress.customer}`);
-      }
-    } else if (command.includes('call')) {
-      const firstJob = jobs[0];
-      makePhoneCall(firstJob.phone, firstJob.customer);
-    } else {
-      setVoiceCommand(`AI: I heard "${command}" - feature coming soon!`);
+    } else if (command.includes('create lead') || command.includes('new lead')) {
+      setShowNewLeadDialog(true);
+    } else if (command.includes('create quote') || command.includes('new quote')) {
+      setShowNewQuoteDialog(true);
+    } else if (command.includes('show jobs') || command.includes('view jobs')) {
+      // Switch to jobs tab
+      const jobsTab = document.querySelector('[data-testid="tab-jobs"]') as HTMLButtonElement;
+      jobsTab?.click();
+    } else if (command.includes('show analytics') || command.includes('view analytics')) {
+      const analyticsTab = document.querySelector('[data-testid="tab-analytics"]') as HTMLButtonElement;
+      analyticsTab?.click();
     }
   };
 
-  const startVoiceRecognition = () => {
+  const startListening = () => {
     if (recognition) {
       setIsListening(true);
-      setVoiceCommand("");
       recognition.start();
-    } else {
-      // Fallback simulation for browsers without speech recognition
-      setIsListening(true);
-      setTimeout(() => {
-        const commands = [
-          "create new job for tree removal",
-          "complete current job",
-          "call next customer"
-        ];
-        const randomCommand = commands[Math.floor(Math.random() * commands.length)];
-        processVoiceCommand(randomCommand);
-      }, 2000);
     }
   };
 
-  // Job management functions
-  const createJob = () => {
-    if (!newJob.customer || !newJob.address) return;
-    
-    const job: Job = {
-      id: Date.now().toString(),
-      title: `Tree Service - ${newJob.customer}`,
-      customer: newJob.customer,
-      phone: newJob.phone || "Contact needed",
-      address: newJob.address,
-      status: 'scheduled',
-      priority: 'medium',
-      date: new Date().toISOString().split('T')[0],
-      time: '09:00',
-      estimate: 'TBD',
-      description: newJob.description || 'Tree service required',
-      aiNotes: `AI created: Auto-generated from voice/manual input. Weather checked: Clear conditions.`
-    };
-    
-    setJobs([...jobs, job]);
-    setNewJob({ customer: "", phone: "", address: "", description: "" });
-    setShowNewJobDialog(false);
-    setVoiceCommand(`AI: New job created for ${job.customer}`);
-  };
-
-  const completeJob = (jobId: string) => {
-    setJobs(jobs.map(job => 
-      job.id === jobId 
-        ? { ...job, status: 'completed' as const }
-        : job
-    ));
-  };
-
-  const makePhoneCall = (phone: string, customer: string) => {
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    window.location.href = `tel:${cleanPhone}`;
-    setVoiceCommand(`AI: Calling ${customer} at ${phone}`);
-  };
-
-  const sendSMS = (phone: string, customer: string) => {
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    const message = `Hi ${customer}, this is Treemarkables. We'll be arriving shortly for your scheduled tree service. Thanks!`;
-    window.location.href = `sms:${cleanPhone}?&body=${encodeURIComponent(message)}`;
-    setVoiceCommand(`AI: Sending SMS to ${customer}`);
-  };
-
-  const navigateToJob = (address: string) => {
-    window.open(`https://maps.google.com/?q=${encodeURIComponent(address)}`, '_blank');
-    setVoiceCommand(`AI: Opening navigation to ${address}`);
-  };
-
-  const getStatusColor = (status: Job['status']) => {
-    switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-      case 'in-progress': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-      case 'completed': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-      case 'quote-pending': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
-    }
-  };
-
-  const getPriorityColor = (priority: Job['priority']) => {
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'low': return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
-      case 'medium': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-      case 'high': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
-      case 'urgent': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+      case 'urgent': return 'bg-red-500';
+      case 'high': return 'bg-orange-500';
+      case 'medium': return 'bg-yellow-500';
+      case 'low': return 'bg-green-500';
+      default: return 'bg-gray-500';
     }
   };
 
-  const aiSuggestions = [
-    `AI suggests rescheduling pine tree removal - high winds forecast tomorrow`,
-    `Optimal route today: ${jobs.length} jobs scheduled, estimated 6.5 hours total`,
-    `Weather alert: Clear conditions next 3 days - good for tree work`,
-    `${jobs.filter(j => j.status === 'quote-pending').length} quotes pending - follow up recommended`
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'bg-green-500';
+      case 'in_progress': return 'bg-blue-500';
+      case 'scheduled': return 'bg-purple-500';
+      case 'cancelled': return 'bg-red-500';
+      case 'accepted': return 'bg-green-500';
+      case 'rejected': return 'bg-red-500';
+      case 'sent': return 'bg-yellow-500';
+      case 'draft': return 'bg-gray-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-NZ', { 
+      style: 'currency', 
+      currency: 'NZD',
+      minimumFractionDigits: 0 
+    }).format(amount);
+  };
+
+  // Calculate conversion funnel data
+  const conversionFunnelData = [
+    { name: 'Website Visits', value: (dashboardStats?.totalLeads || 0) * 10, color: '#8884D8' },
+    { name: 'Leads Generated', value: dashboardStats?.totalLeads || 0, color: '#82CA9D' },
+    { name: 'Quotes Sent', value: quoteAnalytics?.totalQuotes || 0, color: '#FFC658' },
+    { name: 'Jobs Won', value: quoteAnalytics?.acceptedQuotes || 0, color: '#FF7C7C' },
+    { name: 'Jobs Completed', value: revenueStats?.jobsCompleted || 0, color: '#8DD1E1' }
   ];
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-4 sm:p-6">
-        {/* Mobile-Optimized Header */}
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 space-y-4 sm:space-y-0">
-          <div className="text-center sm:text-left">
-            <h1 className="text-2xl sm:text-3xl font-bold">Treemarkables Jobs</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">AI-Powered Field Service</p>
+  if (statsLoading || revenueLoading || quotesLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4" data-testid="job-dashboard">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+              <Activity className="h-8 w-8 text-orange-600" />
+              Treemarkables Business Intelligence
+            </h1>
+            <p className="text-gray-600 mt-1">Complete business management and analytics dashboard</p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Select value={dateRange} onValueChange={setDateRange}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+                <SelectItem value="365d">Last year</SelectItem>
+              </SelectContent>
+            </Select>
+            
             <Button
-              variant={isListening ? "destructive" : "default"}
-              onClick={startVoiceRecognition}
-              className="flex items-center justify-center gap-2 min-h-12 sm:min-h-9 text-base sm:text-sm"
+              onClick={startListening}
+              variant={isListening ? "destructive" : "outline"}
+              size="sm"
+              className="flex items-center gap-2"
               data-testid="button-voice-command"
-              disabled={isListening}
             >
-              <Mic className={`h-5 w-5 sm:h-4 sm:w-4 ${isListening ? 'animate-pulse' : ''}`} />
+              <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
               {isListening ? 'Listening...' : 'Voice Command'}
             </Button>
-            <Dialog open={showNewJobDialog} onOpenChange={setShowNewJobDialog}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center justify-center gap-2 min-h-12 sm:min-h-9 text-base sm:text-sm" data-testid="button-new-job">
-                  <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
-                  New Job
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Job</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <Input 
-                    placeholder="Customer Name" 
-                    value={newJob.customer}
-                    onChange={(e) => setNewJob({ ...newJob, customer: e.target.value })}
-                    data-testid="input-customer-name" 
-                  />
-                  <Input 
-                    placeholder="Phone Number" 
-                    value={newJob.phone}
-                    onChange={(e) => setNewJob({ ...newJob, phone: e.target.value })}
-                    data-testid="input-phone" 
-                  />
-                  <Input 
-                    placeholder="Address" 
-                    value={newJob.address}
-                    onChange={(e) => setNewJob({ ...newJob, address: e.target.value })}
-                    data-testid="input-address" 
-                  />
-                  <Textarea 
-                    placeholder="Job Description" 
-                    value={newJob.description}
-                    onChange={(e) => setNewJob({ ...newJob, description: e.target.value })}
-                    data-testid="textarea-description" 
-                  />
-                  <Button onClick={createJob} className="w-full" data-testid="button-create-job">
-                    Create Job
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
         </div>
 
-        {/* Voice Command Display */}
+        {/* Voice Command Feedback */}
         {voiceCommand && (
-          <Card className="mb-6 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-            <CardContent className="p-4">
+          <Card className="border-orange-200 bg-orange-50">
+            <CardContent className="pt-6">
               <div className="flex items-center gap-2">
-                <Bot className="h-5 w-5 text-green-600" />
-                <span className="font-semibold">AI Agent:</span>
-                <span className="text-green-800 dark:text-green-200">{voiceCommand}</span>
+                <Bot className="h-5 w-5 text-orange-600" />
+                <span className="text-sm text-gray-700">Command: "{voiceCommand}"</span>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* AI Suggestions Panel */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5" />
-              AI Assistant
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2">
-              {aiSuggestions.map((suggestion, index) => (
-                <div key={index} className="flex items-start gap-2 p-2 rounded bg-muted/50">
-                  <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5" />
-                  <span className="text-sm">{suggestion}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Key Performance Indicators */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="hover-elevate" data-testid="card-total-revenue">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(dashboardStats?.totalRevenue || 0)}</div>
+              <p className="text-xs text-muted-foreground">
+                {dashboardStats?.totalJobs || 0} jobs completed
+              </p>
+            </CardContent>
+          </Card>
 
-        {/* Stats Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-blue-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Today's Jobs</p>
-                  <p className="text-2xl font-bold">{jobs.length}</p>
-                </div>
-              </div>
+          <Card className="hover-elevate" data-testid="card-active-leads">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Leads</CardTitle>
+              <Target className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{dashboardStats?.totalLeads || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                {dashboardStats?.conversionRate?.toFixed(1) || 0}% conversion rate
+              </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-green-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Revenue Today</p>
-                  <p className="text-2xl font-bold">$2,100</p>
-                </div>
-              </div>
+
+          <Card className="hover-elevate" data-testid="card-avg-quote">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Avg Quote Value</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(dashboardStats?.averageQuoteValue || 0)}</div>
+              <p className="text-xs text-muted-foreground">
+                {quoteAnalytics?.totalQuotes || 0} quotes sent
+              </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-orange-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">In Progress</p>
-                  <p className="text-2xl font-bold">{jobs.filter(j => j.status === 'in-progress').length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-purple-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Team Active</p>
-                  <p className="text-2xl font-bold">2/3</p>
-                </div>
-              </div>
+
+          <Card className="hover-elevate" data-testid="card-missed-calls">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Missed Calls</CardTitle>
+              <PhoneCall className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{dashboardStats?.missedCalls || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                Potential leads lost
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Mobile-Optimized Content Tabs */}
-        <Tabs defaultValue="jobs" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto p-1">
-            <TabsTrigger 
-              value="jobs" 
-              data-testid="tab-jobs"
-              className="min-h-12 sm:min-h-10 text-sm px-2"
-            >
+        {/* Main Dashboard Tabs */}
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 h-auto p-1">
+            <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="leads" data-testid="tab-leads" className="min-h-12 sm:min-h-10 text-sm px-2">
+              Leads
+            </TabsTrigger>
+            <TabsTrigger value="jobs" data-testid="tab-jobs" className="min-h-12 sm:min-h-10 text-sm px-2">
               Jobs
             </TabsTrigger>
-            <TabsTrigger 
-              value="schedule" 
-              data-testid="tab-schedule"
-              className="min-h-12 sm:min-h-10 text-sm px-2"
-            >
-              Schedule
+            <TabsTrigger value="quotes" data-testid="tab-quotes" className="min-h-12 sm:min-h-10 text-sm px-2">
+              Quotes
             </TabsTrigger>
-            <TabsTrigger 
-              value="customers" 
-              data-testid="tab-customers"
-              className="min-h-12 sm:min-h-10 text-sm px-2 col-span-2 sm:col-span-1"
-            >
+            <TabsTrigger value="customers" data-testid="tab-customers" className="min-h-12 sm:min-h-10 text-sm px-2">
               Customers
             </TabsTrigger>
-            <TabsTrigger 
-              value="marketing" 
-              data-testid="tab-marketing"
-              className="min-h-12 sm:min-h-10 text-sm px-2"
-            >
-              Marketing
-            </TabsTrigger>
-            <TabsTrigger 
-              value="analytics" 
-              data-testid="tab-analytics"
-              className="min-h-12 sm:min-h-10 text-sm px-2"
-            >
+            <TabsTrigger value="analytics" data-testid="tab-analytics" className="min-h-12 sm:min-h-10 text-sm px-2">
               Analytics
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="jobs" className="space-y-4">
-            <div className="flex gap-4 mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search jobs..." 
-                  className="pl-10" 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  data-testid="input-search-jobs" 
-                />
-              </div>
-            </div>
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Revenue Trend Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    Revenue Trend
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={revenueStats?.monthlyTrend || []}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip formatter={(value) => [formatCurrency(Number(value)), 'Revenue']} />
+                      <Area type="monotone" dataKey="revenue" stroke="#FF8042" fill="#FF8042" fillOpacity={0.3} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
 
-            {/* Mobile-Optimized Job Cards */}
-            <div className="grid gap-4">
-              {filteredJobs.map((job) => (
-                <Card key={job.id} className="hover-elevate">
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 space-y-2 sm:space-y-0">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold leading-tight">{job.title}</h3>
-                        <p className="text-muted-foreground">{job.customer}</p>
-                      </div>
-                      <div className="flex gap-2 flex-wrap">
-                        <Badge className={getPriorityColor(job.priority)}>
-                          {job.priority}
-                        </Badge>
-                        <Badge className={getStatusColor(job.status)}>
-                          {job.status.replace('-', ' ')}
-                        </Badge>
-                      </div>
-                    </div>
+              {/* Conversion Funnel */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="h-5 w-5" />
+                    Lead Conversion Funnel
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={conversionFunnelData} layout="horizontal">
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis dataKey="name" type="category" width={100} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#8884D8" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
 
-                    {/* Mobile-friendly information grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <span className="text-sm leading-tight">{job.address}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <span className="text-sm">{job.phone}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <span className="text-sm">{job.date} at {job.time}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <span className="text-sm font-medium">{job.estimate}</span>
-                      </div>
-                    </div>
+              {/* Quote Status Distribution */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Quote Status Distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Accepted', value: quoteAnalytics?.acceptedQuotes || 0, color: COLORS[0] },
+                          { name: 'Rejected', value: quoteAnalytics?.rejectedQuotes || 0, color: COLORS[1] },
+                          { name: 'Pending', value: quoteAnalytics?.pendingQuotes || 0, color: COLORS[2] }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={120}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {[
+                          { name: 'Accepted', value: quoteAnalytics?.acceptedQuotes || 0 },
+                          { name: 'Rejected', value: quoteAnalytics?.rejectedQuotes || 0 },
+                          { name: 'Pending', value: quoteAnalytics?.pendingQuotes || 0 }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
 
-                    <p className="text-sm text-muted-foreground mb-3 leading-relaxed">{job.description}</p>
-
-                    {job.aiNotes && (
-                      <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded mb-4">
-                        <div className="flex items-start gap-2">
-                          <Bot className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                          <span className="text-sm text-blue-800 dark:text-blue-200">{job.aiNotes}</span>
+              {/* Recent Activity */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Recent Activity
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {(activities || []).slice(0, 10).map((activity: any, index: number) => (
+                      <div key={activity.id || index} className="flex items-center space-x-3 text-sm">
+                        <div className="flex-shrink-0">
+                          {activity.type === 'call' && <Phone className="h-4 w-4 text-blue-500" />}
+                          {activity.type === 'email' && <Mail className="h-4 w-4 text-green-500" />}
+                          {activity.type === 'note' && <MessageSquare className="h-4 w-4 text-yellow-500" />}
+                          {activity.type === 'quote_sent' && <FileText className="h-4 w-4 text-purple-500" />}
+                        </div>
+                        <div className="flex-grow">
+                          <p className="text-gray-900">{activity.subject || activity.type}</p>
+                          <p className="text-gray-500 text-xs">
+                            {activity.createdAt && format(new Date(activity.createdAt), 'MMM dd, HH:mm')}
+                          </p>
                         </div>
                       </div>
-                    )}
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
 
-                    {/* Mobile-optimized action buttons with proper touch targets (48px minimum) */}
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
-                      <Button 
-                        size="default" 
-                        variant="outline" 
-                        onClick={() => makePhoneCall(job.phone, job.customer)}
-                        data-testid={`button-call-${job.id}`}
-                        className="min-h-12 sm:min-h-10 flex-1 sm:flex-none"
-                      >
-                        <Phone className="h-5 w-5 mr-2" />
-                        Call Customer
-                      </Button>
-                      <Button 
-                        size="default" 
-                        variant="outline" 
-                        onClick={() => sendSMS(job.phone, job.customer)}
-                        data-testid={`button-message-${job.id}`}
-                        className="min-h-12 sm:min-h-10 flex-1 sm:flex-none"
-                      >
-                        <MessageSquare className="h-5 w-5 mr-2" />
-                        Send SMS
-                      </Button>
-                      <Button 
-                        size="default" 
-                        variant="outline" 
-                        onClick={() => navigateToJob(job.address)}
-                        data-testid={`button-navigate-${job.id}`}
-                        className="min-h-12 sm:min-h-10 flex-1 sm:flex-none"
-                      >
-                        <MapPin className="h-5 w-5 mr-2" />
-                        Navigate
-                      </Button>
-                      {job.status !== 'completed' && (
-                        <Button 
-                          size="default" 
-                          onClick={() => completeJob(job.id)}
-                          data-testid={`button-complete-${job.id}`}
-                          className="min-h-12 sm:min-h-10 flex-1 sm:flex-none"
-                        >
-                          <CheckCircle className="h-5 w-5 mr-2" />
-                          Complete Job
-                        </Button>
+          {/* Leads Tab */}
+          <TabsContent value="leads" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Lead Pipeline</h2>
+              <Dialog open={showNewLeadDialog} onOpenChange={setShowNewLeadDialog}>
+                <DialogTrigger asChild>
+                  <Button className="flex items-center gap-2" data-testid="button-new-lead">
+                    <Plus className="h-4 w-4" />
+                    New Lead
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Lead</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    createLeadMutation.mutate({
+                      name: formData.get('name'),
+                      phone: formData.get('phone'),
+                      email: formData.get('email'),
+                      address: formData.get('address'),
+                      serviceRequested: formData.get('serviceRequested'),
+                      urgency: formData.get('urgency'),
+                      status: 'new',
+                      source: 'manual_entry',
+                      notes: formData.get('notes')
+                    });
+                  }} className="space-y-4">
+                    <Input name="name" placeholder="Customer Name" required data-testid="input-lead-name" />
+                    <Input name="phone" placeholder="Phone Number" required data-testid="input-lead-phone" />
+                    <Input name="email" placeholder="Email Address" data-testid="input-lead-email" />
+                    <Input name="address" placeholder="Address" data-testid="input-lead-address" />
+                    <Input name="serviceRequested" placeholder="Service Requested" data-testid="input-service-requested" />
+                    <Select name="urgency">
+                      <SelectTrigger data-testid="select-urgency">
+                        <SelectValue placeholder="Urgency Level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="emergency">Emergency</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Textarea name="notes" placeholder="Additional Notes" data-testid="textarea-notes" />
+                    <Button type="submit" className="w-full" data-testid="button-create-lead">
+                      Create Lead
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {['new', 'contacted', 'qualified', 'quoted'].map((status) => (
+                <Card key={status} className="min-h-[400px]">
+                  <CardHeader>
+                    <CardTitle className="capitalize flex items-center justify-between">
+                      {status}
+                      <Badge variant="secondary">
+                        {(pipelineLeads || []).filter((lead: any) => lead.status === status).length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3 max-h-80 overflow-y-auto">
+                      {(pipelineLeads || [])
+                        .filter((lead: any) => lead.status === status)
+                        .map((lead: any) => (
+                          <div key={lead.id} className="p-3 border rounded-lg hover-elevate cursor-pointer">
+                            <h4 className="font-medium text-sm">{lead.name}</h4>
+                            <p className="text-xs text-gray-600">{lead.phone}</p>
+                            <p className="text-xs text-gray-500 mt-1">{lead.serviceRequested}</p>
+                            {lead.urgency && (
+                              <Badge variant="secondary" className={`mt-2 text-xs ${getPriorityColor(lead.urgency)}`}>
+                                {lead.urgency}
+                              </Badge>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* Jobs Tab */}
+          <TabsContent value="jobs" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Job Management</h2>
+              <Dialog open={showNewJobDialog} onOpenChange={setShowNewJobDialog}>
+                <DialogTrigger asChild>
+                  <Button className="flex items-center gap-2" data-testid="button-new-job">
+                    <Plus className="h-4 w-4" />
+                    New Job
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Job</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    createJobMutation.mutate({
+                      jobNumber: `JOB-${Date.now()}`,
+                      title: formData.get('title'),
+                      description: formData.get('description'),
+                      address: formData.get('address'),
+                      status: 'scheduled',
+                      priority: formData.get('priority'),
+                      scheduledDate: formData.get('scheduledDate'),
+                      totalAmount: formData.get('amount')
+                    });
+                  }} className="space-y-4">
+                    <Input name="title" placeholder="Job Title" required data-testid="input-job-title" />
+                    <Textarea name="description" placeholder="Job Description" data-testid="textarea-job-description" />
+                    <Input name="address" placeholder="Job Address" required data-testid="input-job-address" />
+                    <Select name="priority">
+                      <SelectTrigger data-testid="select-job-priority">
+                        <SelectValue placeholder="Priority Level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input name="scheduledDate" type="datetime-local" data-testid="input-scheduled-date" />
+                    <Input name="amount" type="number" placeholder="Job Amount ($)" data-testid="input-job-amount" />
+                    <Button type="submit" className="w-full" data-testid="button-create-job">
+                      Create Job
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(jobs || []).map((job: any) => (
+                <Card key={job.id} className="hover-elevate cursor-pointer">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center justify-between">
+                      <span>{job.title}</span>
+                      <Badge className={getStatusColor(job.status)}>
+                        {job.status}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-gray-500" />
+                        <span className="text-gray-700">{job.address}</span>
+                      </div>
+                      {job.scheduledDate && (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-500" />
+                          <span className="text-gray-700">
+                            {format(new Date(job.scheduledDate), 'PPP')}
+                          </span>
+                        </div>
+                      )}
+                      {job.totalAmount && (
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-gray-500" />
+                          <span className="text-gray-700 font-medium">
+                            {formatCurrency(Number(job.totalAmount))}
+                          </span>
+                        </div>
+                      )}
+                      {job.priority && (
+                        <Badge variant="secondary" className={`text-xs ${getPriorityColor(job.priority)}`}>
+                          {job.priority} priority
+                        </Badge>
                       )}
                     </div>
                   </CardContent>
@@ -552,485 +760,244 @@ export default function JobDashboard() {
             </div>
           </TabsContent>
 
-          <TabsContent value="schedule">
-            <Card>
-              <CardHeader>
-                <CardTitle>Weekly Schedule</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Calendar view with drag & drop scheduling coming soon</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="customers">
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Customer database with AI insights and communication history</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="marketing" className="space-y-6">
-            {/* Marketing Overview */}
-            <div className="grid md:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Posts This Month</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-blue-600">12</div>
-                  <p className="text-xs text-muted-foreground">+3 from last month</p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Engagement Rate</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">4.8%</div>
-                  <p className="text-xs text-muted-foreground">Above industry avg</p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">New Reviews</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-purple-600">8</div>
-                  <p className="text-xs text-muted-foreground">This month</p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Leads Generated</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-orange-600">15</div>
-                  <p className="text-xs text-muted-foreground">From social media</p>
-                </CardContent>
-              </Card>
+          {/* Quotes Tab */}
+          <TabsContent value="quotes" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Quote Management</h2>
+              <Dialog open={showNewQuoteDialog} onOpenChange={setShowNewQuoteDialog}>
+                <DialogTrigger asChild>
+                  <Button className="flex items-center gap-2" data-testid="button-new-quote">
+                    <Plus className="h-4 w-4" />
+                    New Quote
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Quote</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    createQuoteMutation.mutate({
+                      quoteNumber: `Q-${Date.now()}`,
+                      description: formData.get('description'),
+                      amount: formData.get('amount'),
+                      status: 'draft',
+                      validUntil: formData.get('validUntil'),
+                      terms: formData.get('terms')
+                    });
+                  }} className="space-y-4">
+                    <Textarea name="description" placeholder="Quote Description" required data-testid="textarea-quote-description" />
+                    <Input name="amount" type="number" placeholder="Quote Amount ($)" required data-testid="input-quote-amount" />
+                    <Input name="validUntil" type="date" placeholder="Valid Until" data-testid="input-valid-until" />
+                    <Textarea name="terms" placeholder="Terms and Conditions" data-testid="textarea-quote-terms" />
+                    <Button type="submit" className="w-full" data-testid="button-create-quote">
+                      Create Quote
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
 
-            {/* Content Calendar */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Content Calendar - September 2024
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-7 gap-2 text-center">
-                  <div className="font-semibold p-2">Sun</div>
-                  <div className="font-semibold p-2">Mon</div>
-                  <div className="font-semibold p-2">Tue</div>
-                  <div className="font-semibold p-2">Wed</div>
-                  <div className="font-semibold p-2">Thu</div>
-                  <div className="font-semibold p-2">Fri</div>
-                  <div className="font-semibold p-2">Sat</div>
-                  
-                  {/* Sample calendar content */}
-                  <div className="p-2 rounded border">15</div>
-                  <div className="p-2 rounded border">16</div>
-                  <div className="p-2 rounded border">17</div>
-                  <div className="p-2 rounded border bg-blue-50 dark:bg-blue-950">
-                    <div className="text-xs">18</div>
-                    <div className="text-xs text-blue-600 mt-1">Storm prep tips</div>
-                  </div>
-                  <div className="p-2 rounded border bg-green-50 dark:bg-green-950">
-                    <div className="text-xs">19</div>
-                    <div className="text-xs text-green-600 mt-1">Before/after post</div>
-                  </div>
-                  <div className="p-2 rounded border">20</div>
-                  <div className="p-2 rounded border">21</div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Content Ideas */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Bot className="h-5 w-5 text-blue-500" />
-                    AI Content Suggestions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-950">
-                      <div className="font-medium text-blue-800 dark:text-blue-200">Seasonal Content</div>
-                      <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                        "Spring is the perfect time for tree health assessments. Book your consultation now!"
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <Badge variant="secondary">Facebook</Badge>
-                        <Badge variant="secondary">Instagram</Badge>
-                      </div>
-                    </div>
-                    
-                    <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-950">
-                      <div className="font-medium text-green-800 dark:text-green-200">Safety Education</div>
-                      <div className="text-sm text-green-700 dark:text-green-300 mt-1">
-                        "Did you know? Trees near power lines should only be handled by certified arborists"
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <Badge variant="secondary">LinkedIn</Badge>
-                        <Badge variant="secondary">Blog</Badge>
-                      </div>
-                    </div>
-                    
-                    <div className="p-3 rounded-lg border bg-orange-50 dark:bg-orange-950">
-                      <div className="font-medium text-orange-800 dark:text-orange-200">Customer Success</div>
-                      <div className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-                        "Amazing transformation! Sarah's overgrown pine is now safe and beautiful"
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <Badge variant="secondary">Before/After</Badge>
-                        <Badge variant="secondary">Testimonial</Badge>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Marketing Campaigns</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 rounded-lg border">
-                      <div>
-                        <div className="font-medium">Storm Season Prep</div>
-                        <div className="text-sm text-muted-foreground">March - May campaign</div>
-                      </div>
-                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                        Active
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(quotes || []).map((quote: any) => (
+                <Card key={quote.id} className="hover-elevate cursor-pointer">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center justify-between">
+                      <span>{quote.quoteNumber}</span>
+                      <Badge className={getStatusColor(quote.status)}>
+                        {quote.status}
                       </Badge>
-                    </div>
-                    
-                    <div className="flex items-center justify-between p-3 rounded-lg border">
-                      <div>
-                        <div className="font-medium">Winter Safety Checks</div>
-                        <div className="text-sm text-muted-foreground">June - August campaign</div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm">
+                      <p className="text-gray-700">{quote.description}</p>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-gray-500" />
+                        <span className="text-lg font-bold text-green-600">
+                          {formatCurrency(Number(quote.amount))}
+                        </span>
                       </div>
-                      <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                        Scheduled
-                      </Badge>
+                      {quote.validUntil && (
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-gray-500" />
+                          <span className="text-gray-700">
+                            Valid until {format(new Date(quote.validUntil), 'PP')}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    
-                    <div className="flex items-center justify-between p-3 rounded-lg border">
-                      <div>
-                        <div className="font-medium">Spring Growth Management</div>
-                        <div className="text-sm text-muted-foreground">September - November</div>
-                      </div>
-                      <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300">
-                        Planning
-                      </Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-
-            {/* Social Media Templates */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Social Media Templates</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-lg border bg-card">
-                    <div className="font-medium mb-2">Before/After Showcase</div>
-                    <div className="text-sm text-muted-foreground mb-3">
-                      "🌳 Transformation Tuesday! From hazardous overgrowth to safe, beautiful landscaping. [PHOTOS] Professional tree services make all the difference! #TreeCare #Gisborne"
-                    </div>
-                    <Button size="sm" variant="outline" className="w-full">Use Template</Button>
-                  </div>
-                  
-                  <div className="p-4 rounded-lg border bg-card">
-                    <div className="font-medium mb-2">Safety Education</div>
-                    <div className="text-sm text-muted-foreground mb-3">
-                      "⚠️ Safety First! Here's why you should never attempt DIY tree removal near power lines. Trust the professionals at Treemarkables! #TreeSafety #ProfessionalService"
-                    </div>
-                    <Button size="sm" variant="outline" className="w-full">Use Template</Button>
-                  </div>
-                  
-                  <div className="p-4 rounded-lg border bg-card">
-                    <div className="font-medium mb-2">Customer Testimonial</div>
-                    <div className="text-sm text-muted-foreground mb-3">
-                      "⭐⭐⭐⭐⭐ 'Exceptional service from the Treemarkables team!' - [CUSTOMER NAME]. We're proud to serve Gisborne with professional tree care! #HappyCustomers #TreeCare"
-                    </div>
-                    <Button size="sm" variant="outline" className="w-full">Use Template</Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Review Management */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Review & Testimonial Management
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 rounded-lg border bg-green-50 dark:bg-green-950">
-                    <div>
-                      <div className="font-medium">Sarah Mitchell</div>
-                      <div className="text-sm text-muted-foreground">"Amazing job removing our large pine tree. Professional and tidy!"</div>
-                      <div className="text-xs text-green-600 mt-1">⭐⭐⭐⭐⭐ Google Review - 2 days ago</div>
-                    </div>
-                    <Button size="sm" variant="outline">Share</Button>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 rounded-lg border bg-blue-50 dark:bg-blue-950">
-                    <div>
-                      <div className="font-medium">Green Valley School</div>
-                      <div className="text-sm text-muted-foreground">"Reliable service for our ongoing tree maintenance. Highly recommend!"</div>
-                      <div className="text-xs text-blue-600 mt-1">⭐⭐⭐⭐⭐ Facebook Review - 1 week ago</div>
-                    </div>
-                    <Button size="sm" variant="outline">Share</Button>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 rounded-lg border bg-orange-50 dark:bg-orange-950">
-                    <div>
-                      <div className="font-medium">John Williams - Follow Up</div>
-                      <div className="text-sm text-muted-foreground">Completed job 3 days ago - perfect time to request review</div>
-                      <div className="text-xs text-orange-600 mt-1">Storm damage cleanup - $2,200 job</div>
-                    </div>
-                    <Button size="sm">Request Review</Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Photo Content Library */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Content Photo Library</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-sm font-medium">Pine Removal</div>
-                      <div className="text-xs text-muted-foreground">Before/After Set</div>
-                    </div>
-                  </div>
-                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-sm font-medium">Team Action</div>
-                      <div className="text-xs text-muted-foreground">Professional at work</div>
-                    </div>
-                  </div>
-                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-sm font-medium">Equipment</div>
-                      <div className="text-xs text-muted-foreground">Crane operation</div>
-                    </div>
-                  </div>
-                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center hover-elevate cursor-pointer">
-                    <div className="text-center">
-                      <Plus className="h-8 w-8 mx-auto mb-1" />
-                      <div className="text-xs">Add Photo</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
+          {/* Customers Tab */}
+          <TabsContent value="customers" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Customer Management</h2>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input 
+                  placeholder="Search customers..." 
+                  className="pl-10 w-64"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  data-testid="input-search-customers"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(customers || [])
+                .filter((customer: any) => 
+                  customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  customer.phone?.includes(searchTerm)
+                )
+                .map((customer: any) => (
+                  <Card key={customer.id} className="hover-elevate cursor-pointer">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{customer.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2 text-sm">
+                        {customer.phone && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-gray-500" />
+                            <span className="text-gray-700">{customer.phone}</span>
+                          </div>
+                        )}
+                        {customer.email && (
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-gray-500" />
+                            <span className="text-gray-700">{customer.email}</span>
+                          </div>
+                        )}
+                        {customer.address && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-gray-500" />
+                            <span className="text-gray-700">{customer.address}</span>
+                          </div>
+                        )}
+                        {customer.lifetimeValue && (
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4 text-gray-500" />
+                            <span className="text-gray-700 font-medium">
+                              {formatCurrency(Number(customer.lifetimeValue))} lifetime value
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
+          </TabsContent>
+
+          {/* Analytics Tab */}
           <TabsContent value="analytics" className="space-y-6">
-            {/* Revenue Analytics */}
-            <div className="grid md:grid-cols-3 gap-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <BarChart3 className="h-6 w-6" />
+              Advanced Analytics
+            </h2>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Monthly Jobs and Revenue */}
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Total Pipeline Value</CardTitle>
+                <CardHeader>
+                  <CardTitle>Monthly Performance</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-green-600">
-                    ${jobs.reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0).toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground">From {jobs.length} active jobs</p>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={revenueStats?.monthlyTrend || []}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis yAxisId="left" orientation="left" />
+                      <YAxis yAxisId="right" orientation="right" />
+                      <Tooltip />
+                      <Legend />
+                      <Bar yAxisId="left" dataKey="jobs" fill="#8884D8" name="Jobs Completed" />
+                      <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#FF8042" name="Revenue" />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
-              
+
+              {/* Quote Rejection Reasons */}
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
+                <CardHeader>
+                  <CardTitle>Quote Rejection Analysis</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {jobs.length > 0 ? Math.round((jobs.filter(j => j.status === 'completed').length / jobs.length) * 100) : 0}%
-                  </div>
-                  <p className="text-xs text-muted-foreground">{jobs.filter(j => j.status === 'completed').length} of {jobs.length} jobs</p>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={quoteAnalytics?.rejectionReasons || []}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="reason" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#FF8042" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
-              
+
+              {/* Competitor Analysis */}
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Average Job Value</CardTitle>
+                <CardHeader>
+                  <CardTitle>Competitor Win Rate</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-purple-600">
-                    ${jobs.length > 0 ? Math.round(jobs.reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0) / jobs.length).toLocaleString() : 0}
+                  <div className="space-y-4">
+                    {(quoteAnalytics?.competitorAnalysis || []).map((comp, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{comp.competitor}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600">{formatCurrency(comp.averagePrice)}</span>
+                          <Badge variant={comp.winRate > 50 ? "destructive" : "default"}>
+                            {comp.winRate.toFixed(1)}% win rate
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-xs text-muted-foreground">Per job average</p>
+                </CardContent>
+              </Card>
+
+              {/* Performance Metrics */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Key Metrics</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Average Response Time</span>
+                      <span className="font-bold">{quoteAnalytics?.averageResponseTime?.toFixed(1) || 0} days</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Quote Acceptance Rate</span>
+                      <span className="font-bold">
+                        {quoteAnalytics?.totalQuotes ? 
+                          ((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(1) 
+                          : 0}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Average Job Value</span>
+                      <span className="font-bold">{formatCurrency(revenueStats?.averageJobValue || 0)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Customer Retention</span>
+                      <span className="font-bold">85%</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
-
-            {/* Job Status Breakdown */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Job Status Overview</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950">
-                    <div className="text-2xl font-bold text-blue-600">{jobs.filter(j => j.status === 'scheduled').length}</div>
-                    <div className="text-sm text-blue-800 dark:text-blue-300">Scheduled</div>
-                  </div>
-                  <div className="text-center p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950">
-                    <div className="text-2xl font-bold text-yellow-600">{jobs.filter(j => j.status === 'in-progress').length}</div>
-                    <div className="text-sm text-yellow-800 dark:text-yellow-300">In Progress</div>
-                  </div>
-                  <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-950">
-                    <div className="text-2xl font-bold text-green-600">{jobs.filter(j => j.status === 'completed').length}</div>
-                    <div className="text-sm text-green-800 dark:text-green-300">Completed</div>
-                  </div>
-                  <div className="text-center p-4 rounded-lg bg-orange-50 dark:bg-orange-950">
-                    <div className="text-2xl font-bold text-orange-600">{jobs.filter(j => j.status === 'quote-pending').length}</div>
-                    <div className="text-sm text-orange-800 dark:text-orange-300">Quote Pending</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Priority Analysis */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Priority Distribution & Value</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {['urgent', 'high', 'medium', 'low'].map(priority => {
-                    const priorityJobs = jobs.filter(j => j.priority === priority);
-                    const priorityValue = priorityJobs.reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0);
-                    const percentage = jobs.length > 0 ? (priorityJobs.length / jobs.length) * 100 : 0;
-                    
-                    return (
-                      <div key={priority} className="flex items-center justify-between p-3 rounded-lg border">
-                        <div className="flex items-center gap-3">
-                          <Badge className={getPriorityColor(priority as Job['priority'])}>
-                            {priority.toUpperCase()}
-                          </Badge>
-                          <span className="font-medium">{priorityJobs.length} jobs</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold">${priorityValue.toLocaleString()}</div>
-                          <div className="text-sm text-muted-foreground">{percentage.toFixed(1)}% of total</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* AI Business Insights */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bot className="h-5 w-5 text-blue-500" />
-                  AI Business Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-2 p-3 rounded bg-blue-50 dark:bg-blue-950">
-                    <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5" />
-                    <div>
-                      <div className="font-medium text-blue-800 dark:text-blue-200">Revenue Optimization</div>
-                      <div className="text-sm text-blue-700 dark:text-blue-300">
-                        High priority jobs generate {jobs.filter(j => j.priority === 'high' || j.priority === 'urgent').length > 0 
-                          ? Math.round((jobs.filter(j => j.priority === 'high' || j.priority === 'urgent').reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0) / jobs.filter(j => j.priority === 'high' || j.priority === 'urgent').length) / 
-                            (jobs.filter(j => j.priority === 'medium' || j.priority === 'low').reduce((sum, job) => sum + parseInt(job.estimate.replace(/[^0-9]/g, '') || '0'), 0) / Math.max(jobs.filter(j => j.priority === 'medium' || j.priority === 'low').length, 1)) * 100 - 100)
-                          : 0}% more revenue on average. Focus on emergency and hazardous tree work.
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start gap-2 p-3 rounded bg-green-50 dark:bg-green-950">
-                    <AlertCircle className="h-4 w-4 text-green-500 mt-0.5" />
-                    <div>
-                      <div className="font-medium text-green-800 dark:text-green-200">Customer Patterns</div>
-                      <div className="text-sm text-green-700 dark:text-green-300">
-                        {new Set(jobs.map(j => j.customer)).size} unique customers with {jobs.length} total jobs. 
-                        Average {(jobs.length / new Set(jobs.map(j => j.customer)).size).toFixed(1)} jobs per customer.
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start gap-2 p-3 rounded bg-orange-50 dark:bg-orange-950">
-                    <AlertCircle className="h-4 w-4 text-orange-500 mt-0.5" />
-                    <div>
-                      <div className="font-medium text-orange-800 dark:text-orange-200">Quote Follow-up</div>
-                      <div className="text-sm text-orange-700 dark:text-orange-300">
-                        {jobs.filter(j => j.status === 'quote-pending').length} quotes pending. 
-                        Quick follow-up increases conversion by 67%. Recommend calling within 24 hours.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Top Customers */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer Value Analysis</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(
-                    jobs.reduce((acc, job) => {
-                      if (!acc[job.customer]) {
-                        acc[job.customer] = { count: 0, value: 0, phone: job.phone };
-                      }
-                      acc[job.customer].count += 1;
-                      acc[job.customer].value += parseInt(job.estimate.replace(/[^0-9]/g, '') || '0');
-                      return acc;
-                    }, {} as Record<string, {count: number, value: number, phone: string}>)
-                  )
-                  .sort(([,a], [,b]) => b.value - a.value)
-                  .slice(0, 5)
-                  .map(([customer, data]) => (
-                    <div key={customer} className="flex items-center justify-between p-3 rounded-lg border hover-elevate">
-                      <div>
-                        <div className="font-medium">{customer}</div>
-                        <div className="text-sm text-muted-foreground">{data.count} jobs • {data.phone}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold">${data.value.toLocaleString()}</div>
-                        <div className="text-sm text-green-600">Top customer</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
       </div>
