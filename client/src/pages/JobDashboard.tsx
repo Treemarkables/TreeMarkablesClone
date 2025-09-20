@@ -532,15 +532,6 @@ export default function JobDashboard() {
         <div className="space-y-4 card-colorful rounded-2xl p-6">
           {/* Top Header Bar */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-orange-600" />
-              <div>
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-brand">
-                  Treemarkables
-                </h1>
-                <p className="text-xs sm:text-sm font-medium text-muted-foreground hidden sm:block">Business Intelligence Dashboard</p>
-              </div>
-            </div>
             
             {/* Mobile Menu Toggle */}
             <Button
