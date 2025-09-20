@@ -17,10 +17,13 @@ import {
   Plus,
   Calendar,
   User,
-  Mail
+  Mail,
+  Loader2
 } from 'lucide-react';
 import { useState } from 'react';
 import { format } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 interface Invoice {
   id: string;
@@ -123,6 +126,66 @@ const mockInvoiceData: Invoice[] = [
 export function InvoiceManager({ compact = false }: InvoiceManagerProps) {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showNewInvoiceDialog, setShowNewInvoiceDialog] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedJobId, setSelectedJobId] = useState('');
+  const { toast } = useToast();
+
+  // Query to validate gross margin completion for selected job
+  const { data: grossMarginValidation, isLoading: isValidatingMargin } = useQuery({
+    queryKey: ['gross-margin-validation', selectedJobId],
+    queryFn: async () => {
+      if (!selectedJobId) return null;
+      const response = await fetch(`/api/jobs/${selectedJobId}/gross-margin/validate`);
+      if (!response.ok) throw new Error('Failed to validate gross margin');
+      const result = await response.json();
+      return result.data;
+    },
+    enabled: !!selectedJobId
+  });
+
+  const validateGrossMarginForInvoice = async () => {
+    if (!selectedJobId) {
+      toast({
+        title: "Job Required",
+        description: "Please select a job before creating an invoice.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    if (isValidatingMargin) {
+      toast({
+        title: "Validation in Progress",
+        description: "Please wait while we validate the gross margin calculation.",
+      });
+      return false;
+    }
+
+    if (!grossMarginValidation?.isComplete) {
+      toast({
+        title: "Gross Margin Required",
+        description: "Please complete the gross margin calculation for this job before generating an invoice. This is required for accurate profitability tracking.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleCreateInvoice = async (sendImmediately = false) => {
+    const isValid = await validateGrossMarginForInvoice();
+    if (!isValid) return;
+
+    // TODO: Implement actual invoice creation logic here
+    toast({
+      title: "Invoice Created",
+      description: sendImmediately 
+        ? "Invoice has been created and sent to the customer."
+        : "Invoice has been created successfully.",
+    });
+    setShowNewInvoiceDialog(false);
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NZ', {
@@ -239,7 +302,7 @@ export function InvoiceManager({ compact = false }: InvoiceManagerProps) {
                     <DialogTitle>Create New Invoice</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
-                    <Select>
+                    <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
                       <SelectTrigger data-testid="select-customer">
                         <SelectValue placeholder="Select Customer" />
                       </SelectTrigger>
@@ -250,7 +313,7 @@ export function InvoiceManager({ compact = false }: InvoiceManagerProps) {
                       </SelectContent>
                     </Select>
                     
-                    <Select>
+                    <Select value={selectedJobId} onValueChange={setSelectedJobId}>
                       <SelectTrigger data-testid="select-job">
                         <SelectValue placeholder="Select Job" />
                       </SelectTrigger>
@@ -260,12 +323,49 @@ export function InvoiceManager({ compact = false }: InvoiceManagerProps) {
                       </SelectContent>
                     </Select>
 
+                    {/* Gross Margin Status Indicator */}
+                    {selectedJobId && (
+                      <div className="p-3 rounded-lg border bg-muted/50">
+                        <div className="flex items-center gap-2 text-sm">
+                          {isValidatingMargin ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
+                              <span>Checking gross margin...</span>
+                            </>
+                          ) : grossMarginValidation?.isComplete ? (
+                            <>
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span className="text-green-600">Gross margin calculated - invoice can be generated</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="h-4 w-4 text-orange-600" />
+                              <span className="text-orange-600">Gross margin calculation required before invoice generation</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     <Input placeholder="Amount (NZD)" data-testid="input-amount" />
                     <Input type="date" placeholder="Due Date" data-testid="input-due-date" />
                     
                     <div className="flex gap-2">
-                      <Button className="flex-1" data-testid="create-invoice">Create Invoice</Button>
-                      <Button variant="outline" className="flex-1" data-testid="create-send-invoice">
+                      <Button 
+                        className="flex-1" 
+                        data-testid="create-invoice"
+                        onClick={() => handleCreateInvoice(false)}
+                        disabled={!selectedJobId || !grossMarginValidation?.isComplete || isValidatingMargin}
+                      >
+                        Create Invoice
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="flex-1" 
+                        data-testid="create-send-invoice"
+                        onClick={() => handleCreateInvoice(true)}
+                        disabled={!selectedJobId || !grossMarginValidation?.isComplete || isValidatingMargin}
+                      >
                         Create & Send
                       </Button>
                     </div>
