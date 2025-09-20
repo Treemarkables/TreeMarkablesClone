@@ -14,17 +14,17 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 210 25% 97%;
+  --background: 220 50% 95%;
 
-  --foreground: 210 15% 20%;
+  --foreground: 210 25% 15%;
 
-  --border: 210 30% 85%;
+  --border: 280 60% 70%;
 
   --card: 0 0% 100%;
 
-  --card-foreground: 210 15% 20%;
+  --card-foreground: 210 25% 15%;
 
-  --card-border: 210 40% 82%;
+  --card-border: 260 80% 60%;
 
   --sidebar: 0 0% 94%;
 
@@ -48,15 +48,15 @@
 
   --popover-border: 210 12% 85%;
 
-  --primary: 25 90% 55%;
+  --primary: 15 100% 58%;
 
   --primary-foreground: 0 0% 98%;
 
-  --blue: 210 95% 58%;
+  --blue: 220 100% 55%;
 
   --blue-foreground: 0 0% 98%;
 
-  --blue-border: 210 95% 50%;
+  --blue-border: 220 100% 45%;
 
   --secondary: 260 40% 88%;
 
@@ -276,6 +276,27 @@
     box-shadow: 0 4px 6px -1px hsl(var(--blue) / 0.1), 0 2px 4px -1px hsl(var(--primary) / 0.06);
   }
   
+  .text-rainbow {
+    background: linear-gradient(45deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0, #e91e63);
+    background-size: 400% 400%;
+    animation: rainbow-shift 3s ease infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: bold;
+  }
+  
+  .bg-rainbow {
+    background: linear-gradient(45deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0);
+    background-size: 400% 400%;
+    animation: rainbow-shift 2s ease infinite;
+  }
+  
+  .border-rainbow {
+    border: 4px solid;
+    border-image: linear-gradient(45deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0) 1;
+  }
+  
   .bg-vibrant-blue {
     background: linear-gradient(135deg, hsl(var(--blue)) 0%, hsl(var(--blue) / 0.8) 100%);
   }
@@ -285,24 +306,42 @@
   }
   
   .card-colorful {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(240, 248, 255, 0.9) 50%, rgba(255, 245, 235, 0.9) 100%);
+    background: linear-gradient(145deg, rgba(255, 50, 150, 0.1) 0%, rgba(50, 150, 255, 0.1) 25%, rgba(255, 150, 50, 0.1) 50%, rgba(150, 255, 50, 0.1) 75%, rgba(255, 255, 255, 0.9) 100%);
     backdrop-filter: blur(10px);
-    border: 2px solid transparent;
-    background-clip: padding-box;
-    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.15), 0 4px 16px rgba(249, 115, 22, 0.1);
+    border: 3px solid;
+    border-image: linear-gradient(45deg, #ff3366, #3366ff, #ff9933, #33ff66) 1;
+    box-shadow: 0 12px 40px rgba(255, 51, 102, 0.3), 0 8px 25px rgba(51, 102, 255, 0.2), 0 4px 15px rgba(255, 153, 51, 0.15);
   }
   
   .btn-colorful {
-    background: linear-gradient(145deg, hsl(var(--blue)), hsl(var(--primary)));
+    background: linear-gradient(145deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0);
+    background-size: 400% 400%;
+    animation: rainbow-shift 3s ease infinite;
     color: white;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 6px 20px rgba(255, 23, 68, 0.4), 0 4px 15px rgba(156, 39, 176, 0.3);
     transition: all 0.3s ease;
   }
   
   .btn-colorful:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 10px 30px rgba(255, 23, 68, 0.5), 0 8px 25px rgba(156, 39, 176, 0.4);
+    animation-duration: 1s;
+  }
+  
+  @keyframes rainbow-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  .icon-colorful {
+    background: linear-gradient(45deg, #ff1744, #ff5722, #ff9800, #ffeb3b, #8bc34a, #00bcd4, #2196f3, #9c27b0);
+    background-size: 400% 400%;
+    animation: rainbow-shift 4s ease infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   /* Hide ugly search cancel button in Chrome until we can style it properly */

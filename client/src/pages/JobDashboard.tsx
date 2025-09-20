@@ -427,7 +427,7 @@ export default function JobDashboard() {
 
   if (statsLoading || revenueLoading || quotesLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-orange-50 to-blue-100 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-pink-300 via-purple-300 via-blue-300 via-cyan-300 via-green-300 via-yellow-300 to-orange-300 p-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
@@ -438,7 +438,7 @@ export default function JobDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-orange-50 to-blue-100 p-4" data-testid="job-dashboard">
+    <div className="min-h-screen bg-gradient-to-br from-pink-300 via-purple-300 via-blue-300 via-cyan-300 via-green-300 via-yellow-300 to-orange-300 p-4" data-testid="job-dashboard">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Mobile-Optimized Header */}
@@ -446,12 +446,12 @@ export default function JobDashboard() {
           {/* Top Header Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-pink-600" />
               <div>
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-gradient-blue-orange">
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent">
                   Treemarkables
                 </h1>
-                <p className="text-xs sm:text-sm font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 hidden sm:block">Business Intelligence Dashboard</p>
+                <p className="text-xs sm:text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-500 via-pink-500 via-purple-500 to-blue-500 hidden sm:block animate-pulse">Business Intelligence Dashboard</p>
               </div>
             </div>
             
@@ -507,7 +507,7 @@ export default function JobDashboard() {
 
           {/* Mobile Controls Menu */}
           {isMobileMenuOpen && (
-            <Card className="md:hidden border-2 border-orange-300 bg-gradient-to-br from-orange-100 to-orange-200 shadow-lg">
+            <Card className="md:hidden border-4 border-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-gradient-to-br from-pink-200 via-purple-200 via-blue-200 to-cyan-200 shadow-2xl">
               <CardContent className="pt-4">
                 <div className="space-y-3">
                   <div>
@@ -562,10 +562,10 @@ export default function JobDashboard() {
 
         {/* Voice Command Feedback */}
         {voiceCommand && (
-          <Card className="border-2 border-orange-300 bg-gradient-to-br from-orange-100 via-orange-200 to-yellow-100 shadow-lg">
+          <Card className="border-4 border-gradient-to-r from-yellow-400 via-orange-400 to-pink-400 bg-gradient-to-br from-yellow-200 via-orange-200 via-pink-200 to-red-200 shadow-2xl animate-pulse">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2">
-                <Bot className="h-5 w-5 text-orange-500" />
+                <Bot className="h-5 w-5 icon-colorful" />
                 <span className="text-sm text-gray-700">Command: "{voiceCommand}"</span>
               </div>
             </CardContent>
@@ -646,24 +646,24 @@ export default function JobDashboard() {
 
         {/* Main Dashboard Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 h-auto p-1 bg-gradient-to-r from-blue-300 via-purple-300 to-orange-300 dark:from-blue-700 dark:via-purple-700 dark:to-orange-700 border-3 border-white/50 shadow-xl rounded-xl">
-            <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2">
-              Overview
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 h-auto p-1 bg-gradient-to-r from-pink-400 via-purple-400 via-blue-400 via-cyan-400 via-green-400 via-yellow-400 to-orange-400 dark:from-pink-600 dark:via-purple-600 dark:via-blue-600 dark:via-cyan-600 dark:via-green-600 dark:via-yellow-600 dark:to-orange-600 border-4 border-white shadow-2xl rounded-2xl">
+            <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+              🌟 Overview
             </TabsTrigger>
-            <TabsTrigger value="leads" data-testid="tab-leads" className="min-h-12 sm:min-h-10 text-sm px-2">
-              Leads
+            <TabsTrigger value="leads" data-testid="tab-leads" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+              🎯 Leads
             </TabsTrigger>
-            <TabsTrigger value="jobs" data-testid="tab-jobs" className="min-h-12 sm:min-h-10 text-sm px-2">
-              Jobs
+            <TabsTrigger value="jobs" data-testid="tab-jobs" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+              🌳 Jobs
             </TabsTrigger>
-            <TabsTrigger value="quotes" data-testid="tab-quotes" className="min-h-12 sm:min-h-10 text-sm px-2">
-              Quotes
+            <TabsTrigger value="quotes" data-testid="tab-quotes" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+              📋 Quotes
             </TabsTrigger>
-            <TabsTrigger value="customers" data-testid="tab-customers" className="min-h-12 sm:min-h-10 text-sm px-2">
-              Customers
+            <TabsTrigger value="customers" data-testid="tab-customers" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+              👥 Customers
             </TabsTrigger>
-            <TabsTrigger value="analytics" data-testid="tab-analytics" className="min-h-12 sm:min-h-10 text-sm px-2">
-              Analytics
+            <TabsTrigger value="analytics" data-testid="tab-analytics" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+              📊 Analytics
             </TabsTrigger>
           </TabsList>
 
