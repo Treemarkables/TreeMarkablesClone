@@ -294,9 +294,19 @@ export default function JobDashboard() {
         setIsListening(false);
       };
       
-      recognitionInstance.onerror = () => {
+      recognitionInstance.onerror = (event: any) => {
         setIsListening(false);
-        setVoiceCommand("Voice recognition not available in this browser");
+        console.log('Speech recognition error:', event.error);
+        
+        if (event.error === 'not-allowed') {
+          setVoiceCommand("Microphone access denied. Please allow microphone access to use voice commands.");
+        } else if (event.error === 'network') {
+          setVoiceCommand("Network error. Please check your internet connection.");
+        } else if (event.error === 'aborted') {
+          setVoiceCommand("Voice recognition was cancelled.");
+        } else {
+          setVoiceCommand(`Voice recognition error: ${event.error || 'Unknown error'}`);
+        }
       };
       
       recognitionInstance.onend = () => {
@@ -661,8 +671,16 @@ export default function JobDashboard() {
 
   const startListening = () => {
     if (recognition) {
-      setIsListening(true);
-      recognition.start();
+      try {
+        setIsListening(true);
+        recognition.start();
+      } catch (error) {
+        console.error('Error starting speech recognition:', error);
+        setIsListening(false);
+        setVoiceCommand("Unable to start voice recognition. Please try again.");
+      }
+    } else {
+      setVoiceCommand("Voice recognition not supported in this browser. Please use a modern browser like Chrome, Edge, or Safari.");
     }
   };
 
