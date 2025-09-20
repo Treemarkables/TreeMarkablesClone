@@ -14,6 +14,7 @@ import {
   insertScheduleEventSchema, updateScheduleEventSchema,
   insertJobTemplateSchema, updateJobTemplateSchema,
   insertEquipmentSchema, updateEquipmentSchema,
+  insertBusinessSettingsSchema, updateBusinessSettingsSchema,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import multer from "multer";
@@ -2709,6 +2710,105 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error deleting equipment'
+      });
+    }
+  });
+
+  // ========================================
+  // BUSINESS SETTINGS ROUTES
+  // ========================================
+
+  // Get business settings (with sensitive fields masked)
+  app.get('/api/business-settings', async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.getBusinessSettings();
+      
+      // Remove sensitive fields and add boolean indicators
+      const { servicem8ApiKey, ...publicSettings } = settings;
+      const safeSettings = {
+        ...publicSettings,
+        hasServicem8ApiKey: Boolean(servicem8ApiKey),
+      };
+      
+      res.json({
+        success: true,
+        data: safeSettings
+      });
+    } catch (error) {
+      console.error('Error fetching business settings:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching business settings'
+      });
+    }
+  });
+
+  // Update business settings
+  app.put('/api/business-settings', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateBusinessSettingsSchema.parse(req.body);
+      
+      // Filter out sensitive fields that should not be updated with masked values
+      const cleanData = { ...validatedData };
+      if (cleanData.servicem8ApiKey === '••••••••' || cleanData.servicem8ApiKey === '') {
+        delete cleanData.servicem8ApiKey; // Don't update with mask or empty
+      }
+      
+      const settings = await storage.updateBusinessSettings(cleanData);
+      
+      // Remove sensitive fields and add boolean indicators
+      const { servicem8ApiKey, ...publicSettings } = settings;
+      const safeSettings = {
+        ...publicSettings,
+        hasServicem8ApiKey: Boolean(servicem8ApiKey),
+      };
+      
+      res.json({
+        success: true,
+        data: safeSettings,
+        message: 'Settings updated successfully'
+      });
+    } catch (error) {
+      // Handle validation errors properly
+      if (error instanceof Error && 'issues' in error) { // ZodError check
+        res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: (error as any).issues
+        });
+        return;
+      }
+      
+      console.error('Error updating business settings:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating business settings'
+      });
+    }
+  });
+
+  // Reset business settings to defaults
+  app.post('/api/business-settings/reset', async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.resetBusinessSettings();
+      
+      // Remove sensitive fields and add boolean indicators
+      const { servicem8ApiKey, ...publicSettings } = settings;
+      const safeSettings = {
+        ...publicSettings,
+        hasServicem8ApiKey: Boolean(servicem8ApiKey),
+      };
+      
+      res.json({
+        success: true,
+        data: safeSettings,
+        message: 'Settings reset to defaults successfully'
+      });
+    } catch (error) {
+      console.error('Error resetting business settings:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error resetting business settings'
       });
     }
   });

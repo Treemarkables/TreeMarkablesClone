@@ -453,6 +453,107 @@ export type ServiceM8QuoteCsv = z.infer<typeof servicem8QuoteCsvSchema>;
 export type CsvImportResult = z.infer<typeof csvImportResultSchema>;
 
 // ========================================
+// BUSINESS SETTINGS SYSTEM SCHEMAS
+// ========================================
+
+// Business Settings Table - Comprehensive settings management
+export const businessSettings = pgTable("business_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Business Information
+  businessName: text("business_name").notNull().default("Treemarkables"),
+  businessAddress: text("business_address").default(""),
+  businessPhone: text("business_phone").default(""),
+  businessEmail: text("business_email").default(""),
+  businessWebsite: text("business_website").default(""),
+  businessLogo: text("business_logo").default(""),
+  
+  // Business Rules & Workflow
+  leadAssignmentMethod: text("lead_assignment_method").default("round_robin"), // round_robin, skill_based, manual
+  autoFollowUpDays: integer("auto_follow_up_days").default(3),
+  quotePricingModel: text("quote_pricing_model").default("standard"), // standard, dynamic, competitive
+  quoteValidityDays: integer("quote_validity_days").default(30),
+  autoQuoteApproval: boolean("auto_quote_approval").default(false),
+  jobAutoScheduling: boolean("job_auto_scheduling").default(false),
+  jobBufferTime: integer("job_buffer_time").default(30), // minutes
+  
+  // Data Management & Backup
+  cloudSyncEnabled: boolean("cloud_sync_enabled").default(true),
+  backupFrequency: text("backup_frequency").default("daily"), // daily, weekly, monthly
+  dataRetentionDays: integer("data_retention_days").default(365),
+  autoBackupTime: text("auto_backup_time").default("02:00"), // 24hr format
+  exportFormat: text("export_format").default("csv"), // csv, excel, json
+  
+  // Integration Management
+  servicem8Enabled: boolean("servicem8_enabled").default(false),
+  servicem8ApiKey: text("servicem8_api_key").default(""),
+  googleCalendarEnabled: boolean("google_calendar_enabled").default(false),
+  emailIntegrationEnabled: boolean("email_integration_enabled").default(false),
+  paymentGatewayEnabled: boolean("payment_gateway_enabled").default(false),
+  paymentProvider: text("payment_provider").default("stripe"), // stripe, paypal, square
+  
+  // Performance & Optimization
+  cacheDuration: integer("cache_duration").default(300), // seconds
+  imageQuality: integer("image_quality").default(80), // 1-100
+  realTimeUpdatesInterval: integer("real_time_updates_interval").default(30), // seconds
+  autoRefreshEnabled: boolean("auto_refresh_enabled").default(true),
+  maxConcurrentJobs: integer("max_concurrent_jobs").default(50),
+  
+  // Mobile & Field Operations
+  offlineModeEnabled: boolean("offline_mode_enabled").default(true),
+  gpsTrackingEnabled: boolean("gps_tracking_enabled").default(true),
+  locationAccuracy: text("location_accuracy").default("high"), // low, medium, high
+  mobileDataSync: boolean("mobile_data_sync").default(true),
+  fieldPhotoQuality: integer("field_photo_quality").default(85),
+  
+  // Security & Access Control
+  twoFactorRequired: boolean("two_factor_required").default(false),
+  sessionTimeout: integer("session_timeout").default(480), // minutes
+  passwordExpiration: integer("password_expiration").default(90), // days
+  auditLogging: boolean("audit_logging").default(true),
+  
+  // Metadata
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Business Settings Insert Schema with validation constraints
+export const insertBusinessSettingsSchema = createInsertSchema(businessSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  // Add validation constraints for numeric fields
+  autoFollowUpDays: z.number().int().min(1).max(30).optional(),
+  quoteValidityDays: z.number().int().min(1).max(365).optional(),
+  jobBufferTime: z.number().int().min(0).max(120).optional(), // 0-120 minutes
+  dataRetentionDays: z.number().int().min(30).max(2555).optional(), // 30 days to 7 years
+  cacheDuration: z.number().int().min(60).max(3600).optional(), // 1 minute to 1 hour
+  imageQuality: z.number().int().min(1).max(100).optional(),
+  realTimeUpdatesInterval: z.number().int().min(5).max(300).optional(), // 5 seconds to 5 minutes
+  maxConcurrentJobs: z.number().int().min(1).max(200).optional(),
+  fieldPhotoQuality: z.number().int().min(1).max(100).optional(),
+  sessionTimeout: z.number().int().min(30).max(1440).optional(), // 30 minutes to 24 hours
+  passwordExpiration: z.number().int().min(30).max(365).optional(), // 30 days to 1 year
+  // Add enum constraints for select fields
+  leadAssignmentMethod: z.enum(['round_robin', 'skill_based', 'manual']).optional(),
+  quotePricingModel: z.enum(['standard', 'dynamic', 'competitive']).optional(),
+  backupFrequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
+  exportFormat: z.enum(['csv', 'excel', 'json']).optional(),
+  paymentProvider: z.enum(['stripe', 'paypal', 'square']).optional(),
+  locationAccuracy: z.enum(['low', 'medium', 'high']).optional(),
+});
+
+// Business Settings Update Schema - partial with same constraints
+export const updateBusinessSettingsSchema = insertBusinessSettingsSchema.partial();
+
+// Settings Types
+export type BusinessSettings = typeof businessSettings.$inferSelect;
+export type InsertBusinessSettings = z.infer<typeof insertBusinessSettingsSchema>;
+export type UpdateBusinessSettings = z.infer<typeof updateBusinessSettingsSchema>;
+
+// ========================================
 // NOTIFICATION SYSTEM SCHEMAS
 // ========================================
 
