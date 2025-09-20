@@ -72,6 +72,20 @@ export type InsertLeadSubmission = Omit<LeadSubmission, 'id' | 'createdAt'>;
 // COMPREHENSIVE BUSINESS SYSTEM SCHEMAS
 // ========================================
 
+// Team Management
+export const teams = pgTable("teams", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  teamLeaderId: varchar("team_leader_id"),
+  members: text("members").array(), // Staff IDs
+  specialties: text("specialties").array(), // crane operation, emergency response, etc
+  maxCapacity: integer("max_capacity").default(4),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Customer Management
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -317,6 +331,7 @@ export const priceRules = pgTable("price_rules", {
 // INSERT SCHEMAS & TYPES
 // ========================================
 
+export const insertTeamSchema = createInsertSchema(teams).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCallSchema = createInsertSchema(calls).omit({ id: true, createdAt: true });
@@ -330,6 +345,7 @@ export const insertCompetitorSignalSchema = createInsertSchema(competitorSignals
 export const insertPriceRuleSchema = createInsertSchema(priceRules).omit({ id: true, validFrom: true, createdAt: true, updatedAt: true });
 
 // Select Types
+export type Team = typeof teams.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Lead = typeof leads.$inferSelect;
 export type Call = typeof calls.$inferSelect;
@@ -342,7 +358,8 @@ export type SocialPlan = typeof socialPlans.$inferSelect;
 export type CompetitorSignal = typeof competitorSignals.$inferSelect;
 export type PriceRule = typeof priceRules.$inferSelect;
 
-// Insert Types  
+// Insert Types
+export type InsertTeam = z.infer<typeof insertTeamSchema>;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type InsertCall = z.infer<typeof insertCallSchema>;
