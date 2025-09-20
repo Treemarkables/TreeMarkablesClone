@@ -403,35 +403,35 @@ export default function JobDashboard() {
             <TabsTrigger 
               value="jobs" 
               data-testid="tab-jobs"
-              className="min-h-10 sm:min-h-8 text-sm px-2"
+              className="min-h-12 sm:min-h-10 text-sm px-2"
             >
               Jobs
             </TabsTrigger>
             <TabsTrigger 
               value="schedule" 
               data-testid="tab-schedule"
-              className="min-h-10 sm:min-h-8 text-sm px-2"
+              className="min-h-12 sm:min-h-10 text-sm px-2"
             >
               Schedule
             </TabsTrigger>
             <TabsTrigger 
               value="customers" 
               data-testid="tab-customers"
-              className="min-h-10 sm:min-h-8 text-sm px-2 col-span-2 sm:col-span-1"
+              className="min-h-12 sm:min-h-10 text-sm px-2 col-span-2 sm:col-span-1"
             >
               Customers
             </TabsTrigger>
             <TabsTrigger 
               value="marketing" 
               data-testid="tab-marketing"
-              className="min-h-10 sm:min-h-8 text-sm px-2"
+              className="min-h-12 sm:min-h-10 text-sm px-2"
             >
               Marketing
             </TabsTrigger>
             <TabsTrigger 
               value="analytics" 
               data-testid="tab-analytics"
-              className="min-h-10 sm:min-h-8 text-sm px-2"
+              className="min-h-12 sm:min-h-10 text-sm px-2"
             >
               Analytics
             </TabsTrigger>
@@ -502,16 +502,16 @@ export default function JobDashboard() {
                       </div>
                     )}
 
-                    {/* Mobile-optimized action buttons */}
+                    {/* Mobile-optimized action buttons with proper touch targets (48px minimum) */}
                     <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
                       <Button 
                         size="default" 
                         variant="outline" 
                         onClick={() => makePhoneCall(job.phone, job.customer)}
                         data-testid={`button-call-${job.id}`}
-                        className="min-h-11 sm:min-h-9 flex-1 sm:flex-none"
+                        className="min-h-12 sm:min-h-10 flex-1 sm:flex-none"
                       >
-                        <Phone className="h-4 w-4 mr-2" />
+                        <Phone className="h-5 w-5 mr-2" />
                         Call Customer
                       </Button>
                       <Button 
@@ -519,9 +519,9 @@ export default function JobDashboard() {
                         variant="outline" 
                         onClick={() => sendSMS(job.phone, job.customer)}
                         data-testid={`button-message-${job.id}`}
-                        className="min-h-11 sm:min-h-9 flex-1 sm:flex-none"
+                        className="min-h-12 sm:min-h-10 flex-1 sm:flex-none"
                       >
-                        <MessageSquare className="h-4 w-4 mr-2" />
+                        <MessageSquare className="h-5 w-5 mr-2" />
                         Send SMS
                       </Button>
                       <Button 
@@ -529,19 +529,20 @@ export default function JobDashboard() {
                         variant="outline" 
                         onClick={() => navigateToJob(job.address)}
                         data-testid={`button-navigate-${job.id}`}
-                        className="min-h-11 sm:min-h-9 flex-1 sm:flex-none"
+                        className="min-h-12 sm:min-h-10 flex-1 sm:flex-none"
                       >
-                        <MapPin className="h-4 w-4 mr-2" />
+                        <MapPin className="h-5 w-5 mr-2" />
                         Navigate
                       </Button>
                       {job.status !== 'completed' && (
                         <Button 
-                          size="sm" 
+                          size="default" 
                           onClick={() => completeJob(job.id)}
                           data-testid={`button-complete-${job.id}`}
+                          className="min-h-12 sm:min-h-10 flex-1 sm:flex-none"
                         >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Complete
+                          <CheckCircle className="h-5 w-5 mr-2" />
+                          Complete Job
                         </Button>
                       )}
                     </div>
