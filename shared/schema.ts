@@ -354,3 +354,83 @@ export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
 export type InsertSocialPlan = z.infer<typeof insertSocialPlanSchema>;
 export type InsertCompetitorSignal = z.infer<typeof insertCompetitorSignalSchema>;
 export type InsertPriceRule = z.infer<typeof insertPriceRuleSchema>;
+
+// ========================================
+// CSV IMPORT SCHEMAS FOR SERVICEM8 MIGRATION
+// ========================================
+
+// ServiceM8 Customer CSV Import Schema
+export const servicem8CustomerCsvSchema = z.object({
+  // Required fields
+  Name: z.string().min(1),
+  Email: z.string().email().optional().or(z.literal("")),
+  Phone: z.string().optional().or(z.literal("")),
+  // Address fields  
+  Address: z.string().optional().or(z.literal("")),
+  City: z.string().optional().or(z.literal("")),
+  State: z.string().optional().or(z.literal("")), // Maps to region
+  // Optional fields
+  Notes: z.string().optional().or(z.literal("")),
+  // Date fields
+  "Date Created": z.string().optional().or(z.literal("")), // Will be parsed to timestamp
+  "Date Modified": z.string().optional().or(z.literal("")),
+});
+
+// ServiceM8 Job CSV Import Schema
+export const servicem8JobCsvSchema = z.object({
+  // Job identification
+  "Job Number": z.string().min(1),
+  "Customer Name": z.string().min(1),
+  Description: z.string().optional().or(z.literal("")),
+  Status: z.string().optional().or(z.literal("")), // scheduled, in_progress, completed, cancelled
+  // Location and timing
+  "Job Address": z.string().optional().or(z.literal("")),
+  "Scheduled Date": z.string().optional().or(z.literal("")),
+  "Completed Date": z.string().optional().or(z.literal("")),
+  // Financial
+  "Job Value": z.string().optional().or(z.literal("")), // Will be parsed to decimal
+  "Invoiced Amount": z.string().optional().or(z.literal("")),
+  // Team assignment
+  "Assigned Staff": z.string().optional().or(z.literal("")),
+  // Notes and details
+  Notes: z.string().optional().or(z.literal("")),
+  "Date Created": z.string().optional().or(z.literal("")),
+});
+
+// ServiceM8 Quote CSV Import Schema
+export const servicem8QuoteCsvSchema = z.object({
+  // Quote identification
+  "Quote Number": z.string().min(1),
+  "Customer Name": z.string().min(1),
+  Description: z.string().optional().or(z.literal("")),
+  Status: z.string().optional().or(z.literal("")), // draft, sent, approved, declined, expired
+  // Financial details
+  "Quote Amount": z.string().optional().or(z.literal("")),
+  "Line Items": z.string().optional().or(z.literal("")), // JSON or delimited list
+  // Timing
+  "Quote Date": z.string().optional().or(z.literal("")),
+  "Expiry Date": z.string().optional().or(z.literal("")),
+  "Response Date": z.string().optional().or(z.literal("")),
+  // Additional info
+  Notes: z.string().optional().or(z.literal("")),
+  "Terms and Conditions": z.string().optional().or(z.literal("")),
+});
+
+// CSV Import Result Schema
+export const csvImportResultSchema = z.object({
+  success: z.boolean(),
+  totalRows: z.number(),
+  successfulImports: z.number(),
+  errors: z.array(z.object({
+    row: z.number(),
+    error: z.string(),
+    data: z.record(z.any()).optional(),
+  })),
+  importedIds: z.array(z.string()),
+});
+
+// CSV Import Types
+export type ServiceM8CustomerCsv = z.infer<typeof servicem8CustomerCsvSchema>;
+export type ServiceM8JobCsv = z.infer<typeof servicem8JobCsvSchema>;  
+export type ServiceM8QuoteCsv = z.infer<typeof servicem8QuoteCsvSchema>;
+export type CsvImportResult = z.infer<typeof csvImportResultSchema>;
