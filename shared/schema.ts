@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -230,6 +230,48 @@ export const jobDiaryEntries = pgTable("job_diary_entries", {
   tags: text("tags").array(), // safety, urgent, customer-request, etc
   location: text("location"), // Specific location within job site
   isPrivate: boolean("is_private").default(false), // Internal notes only
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Enhanced Photo Management System
+export const photos = pgTable("photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id),
+  customerId: varchar("customer_id").references(() => customers.id),
+  jobDiaryEntryId: varchar("job_diary_entry_id").references(() => jobDiaryEntries.id),
+  url: text("url").notNull(),
+  filename: text("filename").notNull(),
+  originalName: text("original_name"),
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  type: text("type").notNull(), // 'before', 'during', 'after', 'damage', 'safety', 'equipment', 'progress', 'final'
+  category: text("category").default("general"), // 'progress', 'documentation', 'insurance', 'marketing', 'safety'
+  capturedAt: timestamp("captured_at").notNull(),
+  capturedBy: text("captured_by").notNull(),
+  location: text("location"), // Address or description
+  gpsLatitude: real("gps_latitude"),
+  gpsLongitude: real("gps_longitude"),
+  gpsAccuracy: real("gps_accuracy"), // In meters
+  gpsAddress: text("gps_address"), // Reverse geocoded address
+  notes: text("notes"),
+  tags: text("tags").array().default([]),
+  isPublic: boolean("is_public").default(false),
+  isFeatured: boolean("is_featured").default(false),
+  showToCustomer: boolean("show_to_customer").default(true),
+  processingStatus: text("processing_status").default("uploaded"), // 'uploaded', 'processing', 'ready', 'error'
+  thumbnailUrl: text("thumbnail_url"),
+  mediumUrl: text("medium_url"), // Medium resolution for web viewing
+  exifData: jsonb("exif_data"), // Camera settings, timestamp, etc.
+  weatherConditions: text("weather_conditions"), // Weather when photo was taken
+  equipmentVisible: text("equipment_visible").array().default([]), // Equipment IDs visible in photo
+  safetyIssues: text("safety_issues").array().default([]), // Any safety concerns visible
+  qualityScore: integer("quality_score"), // 1-5 automated quality assessment
+  aiDescription: text("ai_description"), // AI-generated description of photo content
+  beforeAfterPairId: varchar("before_after_pair_id"), // Groups before/after photos
+  sequenceOrder: integer("sequence_order").default(0), // Order within a sequence
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1131,6 +1173,77 @@ export const insertCommunicationRuleSchema = createInsertSchema(communicationRul
   createdAt: true,
   updatedAt: true
 });
+
+// ========================================
+// ENHANCED PHOTO MANAGEMENT SCHEMAS
+// ========================================
+
+export const insertPhotoSchema = createInsertSchema(photos).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const updatePhotoSchema = insertPhotoSchema.partial();
+
+// Additional specific schemas for photo operations
+export const photoUploadSchema = z.object({
+  jobId: z.string().optional(),
+  customerId: z.string().optional(),
+  jobDiaryEntryId: z.string().optional(),
+  type: z.enum(['before', 'during', 'after', 'damage', 'safety', 'equipment', 'progress', 'final']),
+  category: z.enum(['progress', 'documentation', 'insurance', 'marketing', 'safety', 'general']).default('general'),
+  notes: z.string().optional(),
+  tags: z.array(z.string()).default([]),
+  location: z.string().optional(),
+  capturedBy: z.string().min(1, "Captured by is required"),
+  isPublic: z.boolean().default(false),
+  showToCustomer: z.boolean().default(true),
+  weatherConditions: z.string().optional(),
+  equipmentVisible: z.array(z.string()).default([]),
+  safetyIssues: z.array(z.string()).default([]),
+});
+
+export const gpsLocationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  accuracy: z.number().positive().optional(),
+  address: z.string().optional(),
+});
+
+export const beforeAfterPairSchema = z.object({
+  beforePhotoId: z.string(),
+  afterPhotoId: z.string(),
+  jobId: z.string(),
+  location: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export const photoSearchSchema = z.object({
+  jobId: z.string().optional(),
+  customerId: z.string().optional(),
+  type: z.string().optional(),
+  category: z.string().optional(),
+  capturedBy: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  isPublic: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+  hasGps: z.boolean().optional(),
+  minQualityScore: z.number().min(1).max(5).optional(),
+  limit: z.number().min(1).max(100).default(20),
+  offset: z.number().min(0).default(0),
+});
+
+// Type exports for photos
+export type Photo = typeof photos.$inferSelect;
+export type InsertPhoto = z.infer<typeof insertPhotoSchema>;
+export type UpdatePhoto = z.infer<typeof updatePhotoSchema>;
+export type PhotoUpload = z.infer<typeof photoUploadSchema>;
+export type GpsLocation = z.infer<typeof gpsLocationSchema>;
+export type BeforeAfterPair = z.infer<typeof beforeAfterPairSchema>;
+export type PhotoSearch = z.infer<typeof photoSearchSchema>;
 
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
