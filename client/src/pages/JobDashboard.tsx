@@ -56,7 +56,11 @@ import {
   Eye,
   Upload,
   Download,
-  Database
+  Database,
+  Menu,
+  X,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 // Add Speech Recognition types for TypeScript
@@ -112,6 +116,11 @@ export default function JobDashboard() {
   const [importType, setImportType] = useState<'customers' | 'jobs' | 'quotes'>('customers');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [importResults, setImportResults] = useState<any>(null);
+  
+  // Mobile optimization states
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [kpiCollapsed, setKpiCollapsed] = useState(false);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -425,51 +434,123 @@ export default function JobDashboard() {
     <div className="min-h-screen bg-gray-50 p-4" data-testid="job-dashboard">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <Activity className="h-8 w-8 text-orange-600" />
-              Treemarkables Business Intelligence
-            </h1>
-            <p className="text-gray-600 mt-1">Complete business management and analytics dashboard</p>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-                <SelectItem value="365d">Last year</SelectItem>
-              </SelectContent>
-            </Select>
+        {/* Mobile-Optimized Header */}
+        <div className="space-y-4">
+          {/* Top Header Bar */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-orange-600" />
+              <div>
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900">
+                  Treemarkables
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Business Intelligence Dashboard</p>
+              </div>
+            </div>
             
+            {/* Mobile Menu Toggle */}
             <Button
-              onClick={() => setShowCsvImportDialog(true)}
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               variant="outline"
               size="sm"
-              className="flex items-center gap-2"
-              data-testid="button-csv-import"
+              className="md:hidden"
+              data-testid="button-mobile-menu"
             >
-              <Database className="h-4 w-4" />
-              Import ServiceM8
+              {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
-            
-            <Button
-              onClick={startListening}
-              variant={isListening ? "destructive" : "outline"}
-              size="sm"
-              className="flex items-center gap-2"
-              data-testid="button-voice-command"
-            >
-              <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
-              {isListening ? 'Listening...' : 'Voice Command'}
-            </Button>
+
+            {/* Desktop Controls */}
+            <div className="hidden md:flex items-center gap-2">
+              <Select value={dateRange} onValueChange={setDateRange}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="90d">Last 90 days</SelectItem>
+                  <SelectItem value="365d">Last year</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button
+                onClick={() => setShowCsvImportDialog(true)}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+                data-testid="button-csv-import"
+              >
+                <Database className="h-4 w-4" />
+                <span className="hidden lg:inline">Import ServiceM8</span>
+                <span className="lg:hidden">Import</span>
+              </Button>
+              
+              <Button
+                onClick={startListening}
+                variant={isListening ? "destructive" : "outline"}
+                size="sm"
+                className="flex items-center gap-2"
+                data-testid="button-voice-command"
+              >
+                <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
+                <span className="hidden lg:inline">{isListening ? 'Listening...' : 'Voice Command'}</span>
+              </Button>
+            </div>
           </div>
+
+          {/* Mobile Controls Menu */}
+          {isMobileMenuOpen && (
+            <Card className="md:hidden border-orange-200 bg-orange-50">
+              <CardContent className="pt-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 block mb-1">Date Range</label>
+                    <Select value={dateRange} onValueChange={setDateRange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7d">Last 7 days</SelectItem>
+                        <SelectItem value="30d">Last 30 days</SelectItem>
+                        <SelectItem value="90d">Last 90 days</SelectItem>
+                        <SelectItem value="365d">Last year</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      onClick={() => {
+                        setShowCsvImportDialog(true);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2 justify-center"
+                      data-testid="button-csv-import-mobile"
+                    >
+                      <Database className="h-4 w-4" />
+                      Import ServiceM8
+                    </Button>
+                    
+                    <Button
+                      onClick={() => {
+                        startListening();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      variant={isListening ? "destructive" : "outline"}
+                      size="sm"
+                      className="flex items-center gap-2 justify-center"
+                      data-testid="button-voice-command-mobile"
+                    >
+                      <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
+                      {isListening ? 'Listening...' : 'Voice Command'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Voice Command Feedback */}
@@ -484,9 +565,25 @@ export default function JobDashboard() {
           </Card>
         )}
 
-        {/* Key Performance Indicators */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="hover-elevate" data-testid="card-total-revenue">
+        {/* Collapsible Key Performance Indicators */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between md:hidden">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Key Metrics
+            </h2>
+            <Button
+              onClick={() => setKpiCollapsed(!kpiCollapsed)}
+              variant="ghost"
+              size="sm"
+              className="p-1"
+            >
+              {kpiCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+            </Button>
+          </div>
+          
+          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 ${kpiCollapsed ? 'hidden md:grid' : ''}`}>
+            <Card className="hover-elevate" data-testid="card-total-revenue">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -537,6 +634,7 @@ export default function JobDashboard() {
               </p>
             </CardContent>
           </Card>
+          </div>
         </div>
 
         {/* Main Dashboard Tabs */}
