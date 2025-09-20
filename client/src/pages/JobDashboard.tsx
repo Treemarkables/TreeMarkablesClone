@@ -532,6 +532,14 @@ export default function JobDashboard() {
         <div className="space-y-4 card-colorful rounded-2xl p-6">
           {/* Top Header Bar */}
           <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <img 
+                src="/attached_assets/treelogo_1758357598519.webp" 
+                alt="Treemarkables Logo" 
+                className="h-8 sm:h-10 lg:h-12 w-auto"
+                data-testid="logo-treemarkables"
+              />
+            </div>
             
             {/* Mobile Menu Toggle */}
             <Button
