@@ -110,7 +110,16 @@ interface QuoteAnalytics {
   competitorAnalysis: { competitor: string; averagePrice: number; winRate: number }[];
 }
 
-const COLORS = ['#FF8042', '#0088FE', '#00C49F', '#FFBB28', '#8884D8', '#82CA9D'];
+// Single brand color palette
+const BRAND_PRIMARY = 'hsl(var(--primary))';
+const COLORS = [
+  BRAND_PRIMARY,
+  'hsl(var(--primary) / 0.8)',
+  'hsl(var(--primary) / 0.6)', 
+  'hsl(var(--primary) / 0.4)',
+  'hsl(var(--primary) / 0.3)',
+  'hsl(var(--muted-foreground))'
+];
 
 export default function JobDashboard() {
   const [isListening, setIsListening] = useState(false);
@@ -485,11 +494,11 @@ export default function JobDashboard() {
 
   // Calculate conversion funnel data
   const conversionFunnelData = [
-    { name: 'Website Visits', value: (dashboardStats?.totalLeads || 0) * 10, color: '#8884D8' },
-    { name: 'Leads Generated', value: dashboardStats?.totalLeads || 0, color: '#82CA9D' },
-    { name: 'Quotes Sent', value: quoteAnalytics?.totalQuotes || 0, color: '#FFC658' },
-    { name: 'Jobs Won', value: quoteAnalytics?.acceptedQuotes || 0, color: '#FF7C7C' },
-    { name: 'Jobs Completed', value: revenueStats?.jobsCompleted || 0, color: '#8DD1E1' }
+    { name: 'Website Visits', value: (dashboardStats?.totalLeads || 0) * 10, color: 'hsl(var(--primary))' },
+    { name: 'Leads Generated', value: dashboardStats?.totalLeads || 0, color: 'hsl(var(--primary) / 0.8)' },
+    { name: 'Quotes Sent', value: quoteAnalytics?.totalQuotes || 0, color: 'hsl(var(--primary) / 0.6)' },
+    { name: 'Jobs Won', value: quoteAnalytics?.acceptedQuotes || 0, color: 'hsl(var(--primary) / 0.4)' },
+    { name: 'Jobs Completed', value: revenueStats?.jobsCompleted || 0, color: 'hsl(var(--primary) / 0.3)' }
   ];
 
   if (statsLoading || revenueLoading || quotesLoading) {
@@ -515,10 +524,10 @@ export default function JobDashboard() {
             <div className="flex items-center gap-3">
               <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-pink-600" />
               <div>
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent">
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-brand">
                   Treemarkables
                 </h1>
-                <p className="text-xs sm:text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-500 via-pink-500 via-purple-500 to-blue-500 hidden sm:block animate-pulse">Business Intelligence Dashboard</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground hidden sm:block">Business Intelligence Dashboard</p>
               </div>
             </div>
             
@@ -576,7 +585,7 @@ export default function JobDashboard() {
 
           {/* Mobile Controls Menu */}
           {isMobileMenuOpen && (
-            <Card className="md:hidden border-4 border-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-gradient-to-br from-pink-200 via-purple-200 via-blue-200 to-cyan-200 shadow-2xl">
+            <Card className="md:hidden border border-brand shadow-brand">
               <CardContent className="pt-4">
                 <div className="space-y-3">
                   <div>
@@ -631,7 +640,7 @@ export default function JobDashboard() {
 
         {/* Voice Command Feedback */}
         {voiceCommand && (
-          <Card className="border-4 border-gradient-to-r from-yellow-400 via-orange-400 to-pink-400 bg-gradient-to-br from-yellow-200 via-orange-200 via-pink-200 to-red-200 shadow-2xl animate-pulse">
+          <Card className="border border-brand shadow-brand">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2">
                 <Bot className="h-5 w-5 icon-colorful" />
@@ -715,29 +724,29 @@ export default function JobDashboard() {
 
         {/* Main Dashboard Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-8 h-auto p-1 bg-gradient-to-r from-pink-400 via-purple-400 via-blue-400 via-cyan-400 via-green-400 via-yellow-400 to-orange-400 dark:from-pink-600 dark:via-purple-600 dark:via-blue-600 dark:via-cyan-600 dark:via-green-600 dark:via-yellow-600 dark:to-orange-600 border-4 border-white shadow-2xl rounded-2xl">
-            <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-8 h-auto p-1 bg-card border border-border shadow-lg rounded-xl">
+            <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               🌟 Overview
             </TabsTrigger>
-            <TabsTrigger value="leads" data-testid="tab-leads" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+            <TabsTrigger value="leads" data-testid="tab-leads" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               🎯 Leads
             </TabsTrigger>
-            <TabsTrigger value="jobs" data-testid="tab-jobs" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+            <TabsTrigger value="jobs" data-testid="tab-jobs" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               🌳 Jobs
             </TabsTrigger>
-            <TabsTrigger value="quotes" data-testid="tab-quotes" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+            <TabsTrigger value="quotes" data-testid="tab-quotes" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               📋 Quotes
             </TabsTrigger>
-            <TabsTrigger value="customers" data-testid="tab-customers" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+            <TabsTrigger value="customers" data-testid="tab-customers" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               👥 Customers
             </TabsTrigger>
-            <TabsTrigger value="schedule" data-testid="tab-schedule" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+            <TabsTrigger value="schedule" data-testid="tab-schedule" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               📅 Schedule
             </TabsTrigger>
-            <TabsTrigger value="analytics" data-testid="tab-analytics" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+            <TabsTrigger value="analytics" data-testid="tab-analytics" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               📊 Analytics
             </TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+            <TabsTrigger value="settings" data-testid="tab-settings" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               ⚙️ Settings
             </TabsTrigger>
           </TabsList>
@@ -757,11 +766,11 @@ export default function JobDashboard() {
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={revenueStats?.monthlyTrend || []}>
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="month" />
                       <YAxis />
                       <Tooltip formatter={(value) => [formatCurrency(Number(value)), 'Revenue']} />
-                      <Area type="monotone" dataKey="revenue" stroke="#FF8042" fill="#FF8042" fillOpacity={0.3} />
+                      <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.3} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -778,11 +787,11 @@ export default function JobDashboard() {
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={conversionFunnelData} layout="horizontal">
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis type="number" />
                       <YAxis dataKey="name" type="category" width={100} />
                       <Tooltip />
-                      <Bar dataKey="value" fill="#8884D8" />
+                      <Bar dataKey="value" fill="hsl(var(--primary))" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -809,7 +818,7 @@ export default function JobDashboard() {
                         cy="50%"
                         innerRadius={60}
                         outerRadius={120}
-                        fill="#8884d8"
+                        fill="hsl(var(--primary))"
                         dataKey="value"
                       >
                         {[
@@ -1742,18 +1751,18 @@ export default function JobDashboard() {
                     ]}>
                       <defs>
                         <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" stroke="hsl(var(--border))" />
                       <XAxis dataKey="month" />
                       <YAxis yAxisId="left" orientation="left" />
                       <YAxis yAxisId="right" orientation="right" />
                       <Tooltip 
                         contentStyle={{ 
-                          backgroundColor: 'rgba(255,255,255,0.95)', 
-                          border: '2px solid #8884d8',
+                          backgroundColor: 'hsl(var(--background) / 0.95)', 
+                          border: '2px solid hsl(var(--primary))',
                           borderRadius: '8px'
                         }}
                       />
@@ -1762,12 +1771,14 @@ export default function JobDashboard() {
                         yAxisId="left" 
                         type="monotone" 
                         dataKey="revenue" 
-                        stroke="#8884d8" 
+                        stroke="hsl(var(--primary))" 
                         fillOpacity={1} 
                         fill="url(#colorRevenue)" 
                         name="Revenue ($)"
+                        dot={false}
+                        activeDot={{ stroke: 'hsl(var(--primary))', fill: 'hsl(var(--primary))' }}
                       />
-                      <Line yAxisId="right" type="monotone" dataKey="jobs" stroke="#ff7c7c" strokeWidth={3} name="Jobs Completed" />
+                      <Line yAxisId="right" type="monotone" dataKey="jobs" stroke="hsl(var(--muted-foreground))" strokeWidth={3} name="Jobs Completed" dot={false} activeDot={{ stroke: 'hsl(var(--muted-foreground))', fill: 'hsl(var(--muted-foreground))' }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -1787,17 +1798,17 @@ export default function JobDashboard() {
                     <PieChart>
                       <Pie
                         data={[
-                          { name: 'Google Ads', value: 45, fill: '#ff6b6b' },
-                          { name: 'Facebook', value: 30, fill: '#4ecdc4' },
-                          { name: 'Website', value: 20, fill: '#45b7d1' },
-                          { name: 'Referral', value: 5, fill: '#f9ca24' }
+                          { name: 'Google Ads', value: 45, fill: COLORS[0] },
+                          { name: 'Facebook', value: 30, fill: COLORS[1] },
+                          { name: 'Website', value: 20, fill: COLORS[2] },
+                          { name: 'Referral', value: 5, fill: COLORS[3] }
                         ]}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
                         label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                         outerRadius={80}
-                        fill="#8884d8"
+                        fill="hsl(var(--primary))"
                         dataKey="value"
                       >
                       </Pie>
@@ -1820,25 +1831,25 @@ export default function JobDashboard() {
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={[
-                      { segment: 'High Value', customers: 12, avgValue: 8500, fill: '#ff6b6b' },
-                      { segment: 'Medium Value', customers: 28, avgValue: 3200, fill: '#feca57' },
-                      { segment: 'Low Value', customers: 45, avgValue: 1200, fill: '#48dbfb' },
-                      { segment: 'New Customers', customers: 23, avgValue: 800, fill: '#ff9ff3' }
+                      { segment: 'High Value', customers: 12, avgValue: 8500, fill: COLORS[0] },
+                      { segment: 'Medium Value', customers: 28, avgValue: 3200, fill: COLORS[1] },
+                      { segment: 'Low Value', customers: 45, avgValue: 1200, fill: COLORS[2] },
+                      { segment: 'New Customers', customers: 23, avgValue: 800, fill: COLORS[3] }
                     ]}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" stroke="hsl(var(--border))" />
                       <XAxis dataKey="segment" />
                       <YAxis yAxisId="left" orientation="left" />
                       <YAxis yAxisId="right" orientation="right" />
                       <Tooltip 
                         contentStyle={{ 
-                          backgroundColor: 'rgba(255,255,255,0.95)', 
-                          border: '2px solid #feca57',
+                          backgroundColor: 'hsl(var(--background) / 0.95)', 
+                          border: '2px solid hsl(var(--primary))',
                           borderRadius: '8px'
                         }}
                       />
                       <Legend />
-                      <Bar yAxisId="left" dataKey="customers" name="Customer Count" fill="#feca57" />
-                      <Line yAxisId="right" type="monotone" dataKey="avgValue" stroke="#ff6b6b" strokeWidth={3} name="Avg Value ($)" />
+                      <Bar yAxisId="left" dataKey="customers" name="Customer Count" fill="hsl(var(--primary))" />
+                      <Line yAxisId="right" type="monotone" dataKey="avgValue" stroke="hsl(var(--muted-foreground))" strokeWidth={3} name="Avg Value ($)" dot={false} activeDot={{ stroke: 'hsl(var(--muted-foreground))', fill: 'hsl(var(--muted-foreground))' }} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -1856,11 +1867,11 @@ export default function JobDashboard() {
                 <CardContent>
                   <div className="space-y-4">
                     {[
-                      { stage: 'Website Visits', count: 1250, rate: 100, color: 'bg-blue-500' },
-                      { stage: 'Leads Generated', count: 78, rate: 6.2, color: 'bg-green-500' },
-                      { stage: 'Qualified Leads', count: 52, rate: 66.7, color: 'bg-yellow-500' },
-                      { stage: 'Quotes Sent', count: 34, rate: 65.4, color: 'bg-orange-500' },
-                      { stage: 'Jobs Won', count: 23, rate: 67.6, color: 'bg-red-500' }
+                      { stage: 'Website Visits', count: 1250, rate: 100, color: 'bg-brand' },
+                      { stage: 'Leads Generated', count: 78, rate: 6.2, color: 'bg-brand' },
+                      { stage: 'Qualified Leads', count: 52, rate: 66.7, color: 'bg-brand' },
+                      { stage: 'Quotes Sent', count: 34, rate: 65.4, color: 'bg-brand' },
+                      { stage: 'Jobs Won', count: 23, rate: 67.6, color: 'bg-brand' }
                     ].map((stage, index) => (
                       <div key={index} className="relative">
                         <div className="flex items-center justify-between mb-2">

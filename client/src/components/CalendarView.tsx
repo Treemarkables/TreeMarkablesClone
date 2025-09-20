@@ -30,32 +30,32 @@ interface CalendarViewProps {
 
 const eventTypeConfig = {
   job: {
-    color: 'bg-red-500',
+    color: 'bg-brand',
     icon: Wrench,
     label: 'Job',
   },
   meeting: {
-    color: 'bg-blue-500', 
+    color: 'bg-brand', 
     icon: Users,
     label: 'Meeting',
   },
   maintenance: {
-    color: 'bg-orange-500',
+    color: 'bg-brand',
     icon: Calendar,
     label: 'Maintenance',
   },
   break: {
-    color: 'bg-gray-500',
+    color: 'bg-muted',
     icon: Clock,
     label: 'Break',
   },
 };
 
 const priorityColors = {
-  low: 'border-l-gray-400',
-  medium: 'border-l-blue-500',
-  high: 'border-l-orange-500', 
-  urgent: 'border-l-red-600',
+  low: 'border-l-muted-foreground',
+  medium: 'border-l-brand',
+  high: 'border-l-brand border-l-2', 
+  urgent: 'border-l-brand border-l-4',
 };
 
 export function CalendarView({ view = 'week', onEventClick, onAddEvent }: CalendarViewProps) {
@@ -82,11 +82,11 @@ export function CalendarView({ view = 'week', onEventClick, onAddEvent }: Calend
   // Helper function to get job status colors - defined before use
   const getJobStatusColor = (status: string) => {
     switch (status) {
-      case 'scheduled': return '#3B82F6';
-      case 'in_progress': return '#F59E0B';
-      case 'completed': return '#10B981';
-      case 'cancelled': return '#EF4444';
-      default: return '#6B7280';
+      case 'scheduled': return 'hsl(var(--primary))';
+      case 'in_progress': return 'hsl(var(--primary))';
+      case 'completed': return 'hsl(var(--muted-foreground))';
+      case 'cancelled': return 'hsl(var(--muted-foreground))';
+      default: return 'hsl(var(--primary))';
     }
   };
 
@@ -213,8 +213,8 @@ export function CalendarView({ view = 'week', onEventClick, onAddEvent }: Calend
     <Card className="w-full">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 bg-gradient-to-r from-red-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
-            <Calendar className="h-5 w-5 text-blue-600" />
+          <CardTitle className="flex items-center gap-2 text-brand">
+            <Calendar className="h-5 w-5 text-brand" />
             Schedule Calendar
           </CardTitle>
           
@@ -259,13 +259,13 @@ export function CalendarView({ view = 'week', onEventClick, onAddEvent }: Calend
             <div
               key={index}
               className={`p-3 text-center border-r last:border-r-0 ${
-                isToday(day) ? 'bg-blue-50 dark:bg-blue-950/20' : ''
+                isToday(day) ? 'bg-brand-soft' : ''
               }`}
             >
               <div className="text-xs text-muted-foreground font-medium">
                 {format(day, 'EEE')}
               </div>
-              <div className={`text-lg font-semibold ${isToday(day) ? 'text-blue-600' : ''}`}>
+              <div className={`text-lg font-semibold ${isToday(day) ? 'text-brand' : ''}`}>
                 {format(day, 'd')}
               </div>
             </div>
@@ -280,7 +280,7 @@ export function CalendarView({ view = 'week', onEventClick, onAddEvent }: Calend
               <div
                 key={dayIndex}
                 className={`border-r last:border-r-0 p-2 min-h-[400px] relative ${
-                  isToday(day) ? 'bg-blue-50/30 dark:bg-blue-950/10' : ''
+                  isToday(day) ? 'bg-brand-soft' : ''
                 }`}
               >
                 <div className="mb-2">
@@ -304,14 +304,14 @@ export function CalendarView({ view = 'week', onEventClick, onAddEvent }: Calend
                         key={event.id}
                         className={`p-2 rounded-md cursor-pointer transition-colors border-l-4 ${priorityColors[event.priority]} bg-gradient-to-r hover-elevate active-elevate-2`}
                         style={{
-                          backgroundColor: event.color ? `${event.color}15` : '#F3F4F620',
-                          borderColor: event.color || '#6B7280',
+                          backgroundColor: 'hsl(var(--primary) / 0.08)',
+                          borderColor: 'hsl(var(--primary))',
                         }}
                         onClick={() => handleEventClick(event)}
                         data-testid={`event-${event.id}`}
                       >
                         <div className="flex items-start gap-2">
-                          <EventIcon className="h-3 w-3 mt-0.5 flex-shrink-0" style={{ color: event.color }} />
+                          <EventIcon className="h-3 w-3 mt-0.5 flex-shrink-0 text-brand" />
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-medium truncate" data-testid={`event-title-${event.id}`}>
                               {event.title}
@@ -371,16 +371,16 @@ export function CalendarView({ view = 'week', onEventClick, onAddEvent }: Calend
           <div className="mt-2 text-xs text-muted-foreground">
             Priority: 
             <span className="ml-2 inline-flex items-center gap-1">
-              <div className="w-3 h-1 bg-gray-400" /> Low
+              <div className="w-3 h-1 bg-muted" /> Low
             </span>
             <span className="ml-2 inline-flex items-center gap-1">
-              <div className="w-3 h-1 bg-blue-500" /> Medium
+              <div className="w-3 h-1 bg-brand opacity-60" /> Medium
             </span>
             <span className="ml-2 inline-flex items-center gap-1">
-              <div className="w-3 h-1 bg-orange-500" /> High
+              <div className="w-3 h-1 bg-brand opacity-80" /> High
             </span>
             <span className="ml-2 inline-flex items-center gap-1">
-              <div className="w-3 h-1 bg-red-600" /> Urgent
+              <div className="w-3 h-1 bg-brand" /> Urgent
             </span>
           </div>
         </div>
