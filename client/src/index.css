@@ -32,15 +32,15 @@
 
   --sidebar-border: 210 12% 87%;
 
-  --sidebar-primary: 20 90% 48%;
+  --sidebar-primary: 25 90% 55%;
 
-  --sidebar-primary-foreground: 45 15% 95%;
+  --sidebar-primary-foreground: 0 0% 98%;
 
-  --sidebar-accent: 215 25% 90%;
+  --sidebar-accent: 210 85% 92%;
 
-  --sidebar-accent-foreground: 210 15% 20%;
+  --sidebar-accent-foreground: 210 95% 25%;
 
-  --sidebar-ring: 20 90% 48%;
+  --sidebar-ring: 25 90% 55%;
 
   --popover: 0 0% 92%;
 
@@ -48,39 +48,39 @@
 
   --popover-border: 210 12% 85%;
 
-  --primary: 20 90% 48%;
+  --primary: 25 90% 55%;
 
-  --primary-foreground: 45 15% 95%;
+  --primary-foreground: 0 0% 98%;
 
-  --blue: 215 85% 55%;
+  --blue: 210 95% 58%;
 
   --blue-foreground: 0 0% 98%;
 
-  --blue-border: 215 85% 47%;
+  --blue-border: 210 95% 50%;
 
-  --secondary: 0 0% 90%;
+  --secondary: 210 15% 85%;
 
   --secondary-foreground: 210 15% 20%;
 
-  --muted: 120 8% 88%;
+  --muted: 210 10% 88%;
 
-  --muted-foreground: 210 10% 45%;
+  --muted-foreground: 210 15% 45%;
 
-  --accent: 215 25% 88%;
+  --accent: 210 85% 92%;
 
-  --accent-foreground: 210 15% 20%;
+  --accent-foreground: 210 95% 25%;
 
   --destructive: 0 85% 45%;
 
   --destructive-foreground: 0 0% 98%;
 
   --input: 210 15% 75%;
-  --ring: 20 90% 48%;
-  --chart-1: 20 90% 48%;
-  --chart-2: 215 85% 35%;
+  --ring: 25 90% 55%;
+  --chart-1: 25 90% 55%;
+  --chart-2: 210 95% 58%;
   --chart-3: 35 85% 55%;
-  --chart-4: 200 60% 45%;
-  --chart-5: 280 50% 40%;
+  --chart-4: 200 70% 55%;
+  --chart-5: 280 60% 50%;
 
   --font-sans: Open Sans, sans-serif;
   --font-serif: Georgia, serif;
@@ -160,15 +160,15 @@
 
   --sidebar-border: 210 8% 24%;
 
-  --sidebar-primary: 25 85% 55%;
+  --sidebar-primary: 25 85% 60%;
 
-  --sidebar-primary-foreground: 45 15% 95%;
+  --sidebar-primary-foreground: 0 0% 98%;
 
-  --sidebar-accent: 215 25% 22%;
+  --sidebar-accent: 210 80% 28%;
 
-  --sidebar-accent-foreground: 45 15% 95%;
+  --sidebar-accent-foreground: 0 0% 98%;
 
-  --sidebar-ring: 25 85% 55%;
+  --sidebar-ring: 25 85% 60%;
 
   --popover: 210 10% 21%;
 
@@ -176,39 +176,39 @@
 
   --popover-border: 210 8% 26%;
 
-  --primary: 25 85% 55%;
+  --primary: 25 85% 60%;
 
-  --primary-foreground: 45 15% 95%;
+  --primary-foreground: 0 0% 98%;
 
-  --blue: 215 85% 65%;
+  --blue: 210 90% 65%;
 
   --blue-foreground: 0 0% 98%;
 
-  --blue-border: 215 85% 57%;
+  --blue-border: 210 90% 55%;
 
   --secondary: 210 10% 25%;
 
   --secondary-foreground: 45 15% 95%;
 
-  --muted: 120 8% 18%;
+  --muted: 210 8% 18%;
 
-  --muted-foreground: 120 10% 70%;
+  --muted-foreground: 210 15% 70%;
 
-  --accent: 215 25% 25%;
+  --accent: 210 80% 28%;
 
-  --accent-foreground: 45 15% 95%;
+  --accent-foreground: 0 0% 98%;
 
   --destructive: 0 85% 30%;
 
   --destructive-foreground: 0 0% 98%;
 
   --input: 210 15% 35%;
-  --ring: 25 85% 55%;
-  --chart-1: 25 85% 65%;
-  --chart-2: 215 70% 65%;
+  --ring: 25 85% 60%;
+  --chart-1: 25 85% 60%;
+  --chart-2: 210 90% 65%;
   --chart-3: 35 80% 65%;
-  --chart-4: 200 55% 65%;
-  --chart-5: 280 45% 70%;
+  --chart-4: 200 70% 65%;
+  --chart-5: 280 60% 70%;
 
   --shadow-2xs: 0px 2px 0px 0px hsl(210 10% 5% / 0.2);
   --shadow-xs: 0px 2px 0px 0px hsl(210 10% 5% / 0.3);
@@ -251,6 +251,22 @@
  * need to be distinguished from eachother visually.
  */
 @layer utilities {
+  
+  /* Blue and Orange themed utility classes */
+  .bg-gradient-blue-orange {
+    background: linear-gradient(135deg, hsl(var(--blue)) 0%, hsl(var(--primary)) 100%);
+  }
+  
+  .text-gradient-blue-orange {
+    background: linear-gradient(135deg, hsl(var(--blue)), hsl(var(--primary)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .border-gradient-blue-orange {
+    border-image: linear-gradient(135deg, hsl(var(--blue)), hsl(var(--primary))) 1;
+  }
 
   /* Hide ugly search cancel button in Chrome until we can style it properly */
   input[type="search"]::-webkit-search-cancel-button {

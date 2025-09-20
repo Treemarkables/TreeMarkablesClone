@@ -446,12 +446,12 @@ export default function JobDashboard() {
           {/* Top Header Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-orange-600" />
+              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
               <div>
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900">
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-gradient-blue-orange">
                   Treemarkables
                 </h1>
-                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Business Intelligence Dashboard</p>
+                <p className="text-xs sm:text-sm text-blue-600 hidden sm:block">Business Intelligence Dashboard</p>
               </div>
             </div>
             
@@ -646,7 +646,7 @@ export default function JobDashboard() {
 
         {/* Main Dashboard Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 h-auto p-1 bg-gradient-to-r from-blue-100 to-orange-100 dark:from-blue-900 dark:to-orange-900">
             <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2">
               Overview
             </TabsTrigger>
