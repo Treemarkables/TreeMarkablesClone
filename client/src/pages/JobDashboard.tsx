@@ -712,57 +712,6 @@ export default function JobDashboard() {
 
         {/* Compact Navigation Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 xl:grid-cols-14 gap-1 h-auto p-2 bg-white/90 backdrop-blur-sm border border-orange-200 shadow-sm rounded-lg">
-            <TabsTrigger value="overview" data-testid="tab-overview" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
-              <Star className="h-3 w-3" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="leads" data-testid="tab-leads" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
-              <Target className="h-3 w-3" />
-              Leads
-            </TabsTrigger>
-            <TabsTrigger value="jobs" data-testid="tab-jobs" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
-              <Briefcase className="h-3 w-3" />
-              Jobs
-            </TabsTrigger>
-            <TabsTrigger value="quotes" data-testid="tab-quotes" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              📋 Quotes
-            </TabsTrigger>
-            <TabsTrigger value="customers" data-testid="tab-customers" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              👥 Customers
-            </TabsTrigger>
-            <TabsTrigger value="schedule" data-testid="tab-schedule" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              Schedule
-            </TabsTrigger>
-            <TabsTrigger value="analytics" data-testid="tab-analytics" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
-              <BarChart3 className="h-3 w-3" />
-              Analytics
-            </TabsTrigger>
-            <TabsTrigger value="invoices" data-testid="tab-invoices" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              💰 Invoices
-            </TabsTrigger>
-            <TabsTrigger value="photos" data-testid="tab-photos" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              📷 Photos
-            </TabsTrigger>
-            <TabsTrigger value="safety" data-testid="tab-safety" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              🛡️ Safety
-            </TabsTrigger>
-            <TabsTrigger value="routes" data-testid="tab-routes" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              🗺️ Routes
-            </TabsTrigger>
-            <TabsTrigger value="performance" data-testid="tab-performance" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100">
-              📈 Performance
-            </TabsTrigger>
-            <TabsTrigger value="dispatch" data-testid="tab-dispatch" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              Dispatch
-            </TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings" className="h-8 text-xs px-1 font-medium hover:bg-orange-50 data-[state=active]:bg-orange-100 flex items-center gap-1">
-              <Settings className="h-3 w-3" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
 
         {/* Voice Command Feedback */}
         {voiceCommand && (
