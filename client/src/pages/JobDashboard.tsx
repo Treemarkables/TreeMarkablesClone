@@ -14,6 +14,9 @@ import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { CrewManagement } from "@/components/CrewManagement";
 import { EquipmentTracker } from "@/components/EquipmentTracker";
+import { InvoiceManager } from "@/components/InvoiceManager";
+import { PhotoDocumentation } from "@/components/PhotoDocumentation";
+import { SafetyReporting } from "@/components/SafetyReporting";
 import {
   BarChart,
   Bar,
@@ -727,7 +730,7 @@ export default function JobDashboard() {
 
         {/* Main Dashboard Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-8 h-auto p-1 bg-card border border-border shadow-lg rounded-xl">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-11 h-auto p-1 bg-card border border-border shadow-lg rounded-xl">
             <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               🌟 Overview
             </TabsTrigger>
@@ -749,6 +752,15 @@ export default function JobDashboard() {
             <TabsTrigger value="analytics" data-testid="tab-analytics" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               📊 Analytics
             </TabsTrigger>
+            <TabsTrigger value="invoices" data-testid="tab-invoices" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
+              💰 Invoices
+            </TabsTrigger>
+            <TabsTrigger value="photos" data-testid="tab-photos" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
+              📷 Photos
+            </TabsTrigger>
+            <TabsTrigger value="safety" data-testid="tab-safety" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
+              🛡️ Safety
+            </TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               ⚙️ Settings
             </TabsTrigger>
@@ -761,6 +773,13 @@ export default function JobDashboard() {
               <WeatherWidget compact={true} showForecast={false} />
               <CrewManagement showDetailed={false} />
               <EquipmentTracker compact={true} />
+            </div>
+
+            {/* Business Operations Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <InvoiceManager compact={true} />
+              <PhotoDocumentation compact={true} />
+              <SafetyReporting compact={true} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1936,6 +1955,21 @@ export default function JobDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Invoices Tab */}
+          <TabsContent value="invoices" className="space-y-6">
+            <InvoiceManager />
+          </TabsContent>
+
+          {/* Photos Tab */}
+          <TabsContent value="photos" className="space-y-6">
+            <PhotoDocumentation />
+          </TabsContent>
+
+          {/* Safety Tab */}
+          <TabsContent value="safety" className="space-y-6">
+            <SafetyReporting />
           </TabsContent>
 
           {/* Settings Tab */}
