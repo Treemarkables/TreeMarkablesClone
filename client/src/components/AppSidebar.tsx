@@ -14,7 +14,9 @@ import {
   Briefcase,
   GitBranch,
   MessageSquare,
-  Star
+  Star,
+  Inbox,
+  Plug
 } from "lucide-react";
 import {
   Sidebar,
@@ -241,6 +243,22 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   <Link href="/reputation" data-testid="link-reputation">
                     <Star className="h-4 w-4" />
                     <span>Reputation</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/inbox" data-testid="link-inbox">
+                    <Inbox className="h-4 w-4" />
+                    <span>Inbox</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/integrations" data-testid="link-integrations">
+                    <Plug className="h-4 w-4" />
+                    <span>Integrations</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

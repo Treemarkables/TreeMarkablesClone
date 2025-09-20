@@ -18,6 +18,8 @@ import MetricsDashboard from "@/pages/MetricsDashboard";
 import Pipeline from "@/pages/Pipeline";
 import Opportunities from "@/pages/Opportunities";
 import Reputation from "@/pages/Reputation";
+import Inbox from "@/pages/Inbox";
+import Integrations from "@/pages/Integrations";
 import NotFound from "@/pages/not-found";
 import { useState } from "react";
 
@@ -75,6 +77,16 @@ function Router() {
       <Route path="/reputation">
         <SidebarLayout>
           <Reputation />
+        </SidebarLayout>
+      </Route>
+      <Route path="/inbox">
+        <SidebarLayout>
+          <Inbox />
+        </SidebarLayout>
+      </Route>
+      <Route path="/integrations">
+        <SidebarLayout>
+          <Integrations />
         </SidebarLayout>
       </Route>
       {/* Fallback to 404 */}
