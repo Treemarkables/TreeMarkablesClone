@@ -156,7 +156,7 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
 
   if (compact) {
     const totalPhotos = finalPhotos.length;
-    const recentPhotos = finalPhotos
+    const recentPhotos = [...finalPhotos]
       .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())
       .slice(0, 3);
 
