@@ -11,7 +11,8 @@ import {
   Settings,
   Home,
   Target,
-  Briefcase
+  Briefcase,
+  GitBranch
 } from "lucide-react";
 import {
   Sidebar,
@@ -214,9 +215,17 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
 
         {/* External Links */}
         <SidebarGroup>
-          <SidebarGroupLabel>Analysis</SidebarGroupLabel>
+          <SidebarGroupLabel>Sales & Analysis</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/pipeline">
+                    <GitBranch className="h-4 w-4" />
+                    <span>Pipeline</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link href="/metrics">
