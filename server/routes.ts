@@ -26,6 +26,7 @@ import Papa from "papaparse";
 import path from "path";
 import fs from "fs";
 import { format } from "date-fns";
+import { AutomatedTriggers } from "./services/automatedTriggers";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -1066,6 +1067,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
 
       const job = await storage.createJob(validation.data);
+      
+      // Trigger automated notifications for new job
+      AutomatedTriggers.onJobCreated(job)
+        .catch(error => console.error('Error triggering new job notification:', error));
+
       res.json({ success: true, data: job });
     } catch (error) {
       console.error('Error creating job:', error);
@@ -1126,10 +1132,22 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      // Get the old job for status comparison
+      const oldJob = await storage.getJob(req.params.id);
+      const oldStatus = oldJob?.status || '';
+
       const job = await storage.updateJob(req.params.id, validation.data);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
+
+      // Trigger automated notifications if status changed
+      if (validation.data.status && validation.data.status !== oldStatus) {
+        console.log(`🔔 Job status change detected: ${job.title} (${oldStatus} → ${validation.data.status})`);
+        AutomatedTriggers.onJobStatusChange(job.id, oldStatus, validation.data.status)
+          .catch(error => console.error('Error triggering job status change notification:', error));
+      }
+
       res.json({ success: true, data: job });
     } catch (error) {
       console.error('Error updating job:', error);
@@ -3682,6 +3700,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       console.log('Creating service request with data:', validationResult.data);
       const serviceRequest = await storage.createServiceRequest(validationResult.data);
       console.log('Service request created successfully:', serviceRequest.id);
+
+      // Trigger automated notifications for new service request
+      AutomatedTriggers.onServiceRequestCreated(serviceRequest.id)
+        .catch(error => console.error('Error triggering service request notification:', error));
+
       res.json({ success: true, data: serviceRequest });
     } catch (error) {
       console.error('Error creating service request:', error);

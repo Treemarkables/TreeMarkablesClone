@@ -22,6 +22,7 @@ import Inbox from "@/pages/Inbox";
 import Integrations from "@/pages/Integrations";
 import NotFound from "@/pages/not-found";
 import { CustomerPortal } from "@/pages/CustomerPortal";
+import CommunicationsManagement from "@/pages/CommunicationsManagement";
 import { useState } from "react";
 
 // Sidebar layout wrapper for dashboard pages
@@ -89,6 +90,11 @@ function Router() {
       <Route path="/integrations">
         <SidebarLayout>
           <Integrations />
+        </SidebarLayout>
+      </Route>
+      <Route path="/communications">
+        <SidebarLayout>
+          <CommunicationsManagement />
         </SidebarLayout>
       </Route>
       {/* Fallback to 404 */}
