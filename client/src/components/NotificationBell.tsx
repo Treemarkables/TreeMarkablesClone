@@ -1,5 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Bell, Check, Trash2, MoreVertical } from 'lucide-react';
+import { 
+  Bell, 
+  Check, 
+  Trash2, 
+  MoreVertical, 
+  User, 
+  TrendingUp, 
+  Wrench, 
+  FileText, 
+  CheckCircle, 
+  Clock, 
+  Phone, 
+  AlertCircle, 
+  Calendar, 
+  DollarSign, 
+  Settings 
+} from 'lucide-react';
+import { useLocation } from 'wouter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,23 +81,28 @@ const priorityColors = {
   low: 'bg-gray-600 text-white border-gray-700',
 };
 
-const typeIcons = {
-  new_lead: '👤',
-  lead_status_change: '📈',
-  job_status_change: '🔧',
-  quote_sent: '📄',
-  quote_accepted: '✅',
-  quote_expired: '⏰',
-  follow_up_due: '📞',
-  follow_up_overdue: '🚨',
-  job_scheduled: '📅',
-  job_completed: '✅',
-  payment_received: '💰',
-  system_alert: '⚙️',
+const getTypeIcon = (type: string) => {
+  const iconMap = {
+    new_lead: User,
+    lead_status_change: TrendingUp,
+    job_status_change: Wrench,
+    quote_sent: FileText,
+    quote_accepted: CheckCircle,
+    quote_expired: Clock,
+    follow_up_due: Phone,
+    follow_up_overdue: AlertCircle,
+    job_scheduled: Calendar,
+    job_completed: CheckCircle,
+    payment_received: DollarSign,
+    system_alert: Settings,
+  };
+  const IconComponent = iconMap[type as keyof typeof iconMap] || Bell;
+  return <IconComponent className="h-4 w-4" />;
 };
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
   // Fetch notification summary for badge count
@@ -98,13 +120,7 @@ export function NotificationBell() {
   // Mark notification as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/notifications/${id}/read`, {
-        method: 'PATCH',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to mark notification as read');
-      }
-      return response.json();
+      return apiRequest('PATCH', `/api/notifications/${id}/read`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
@@ -115,15 +131,7 @@ export function NotificationBell() {
   // Mark all as read mutation
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/notifications/read-all', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: undefined }), // For demo, not filtering by user
-      });
-      if (!response.ok) {
-        throw new Error('Failed to mark all notifications as read');
-      }
-      return response.json();
+      return apiRequest('PATCH', '/api/notifications/read-all', { userId: undefined });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
@@ -134,13 +142,7 @@ export function NotificationBell() {
   // Delete notification mutation
   const deleteNotificationMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/notifications/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to delete notification');
-      }
-      return response.json();
+      return apiRequest('DELETE', `/api/notifications/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
@@ -163,10 +165,11 @@ export function NotificationBell() {
       markAsReadMutation.mutate(notification.id);
     }
 
-    // Navigate to action URL if provided
-    if (notification.actionUrl) {
-      // For SPA navigation, we'd use router here
-      // For now, just close the dropdown
+    // Navigate to action URL if provided and it's an internal route
+    if (notification.actionUrl && notification.actionUrl.startsWith('/')) {
+      setLocation(notification.actionUrl);
+      setIsOpen(false);
+    } else {
       setIsOpen(false);
     }
   };
@@ -175,9 +178,6 @@ export function NotificationBell() {
     return priorityColors[priority as keyof typeof priorityColors] || priorityColors.medium;
   };
 
-  const getTypeIcon = (type: string) => {
-    return typeIcons[type as keyof typeof typeIcons] || '📢';
-  };
 
   const getRelativeTime = (dateString: string) => {
     try {
@@ -201,7 +201,7 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative hover-elevate active-elevate-2"
+          className="relative"
           data-testid="button-notifications"
         >
           <Bell className="h-5 w-5" />
@@ -227,7 +227,7 @@ export function NotificationBell() {
                   size="sm"
                   onClick={() => markAllAsReadMutation.mutate()}
                   disabled={markAllAsReadMutation.isPending}
-                  className="text-xs hover-elevate"
+                  className="text-xs"
                   data-testid="button-mark-all-read"
                 >
                   <Check className="h-3 w-3 mr-1" />
@@ -265,7 +265,7 @@ export function NotificationBell() {
                   {notifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className={`p-4 hover-elevate cursor-pointer transition-colors ${
+                      className={`p-4 cursor-pointer transition-colors hover:bg-muted/50 ${
                         !notification.isRead 
                           ? 'bg-gradient-to-r from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-blue-950/20 dark:via-purple-950/10 dark:to-pink-950/20 border-l-2 border-l-blue-500' 
                           : 'hover:bg-muted/50'
@@ -275,7 +275,7 @@ export function NotificationBell() {
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex-shrink-0">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 via-red-500 to-pink-500 flex items-center justify-center text-white text-sm">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 via-red-500 to-pink-500 flex items-center justify-center text-white">
                             {getTypeIcon(notification.type)}
                           </div>
                         </div>
@@ -306,7 +306,7 @@ export function NotificationBell() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-6 w-6 p-0 hover-elevate"
+                                    className="h-6 w-6 p-0"
                                     onClick={(e) => e.stopPropagation()}
                                     data-testid={`button-notification-menu-${notification.id}`}
                                   >

@@ -77,12 +77,16 @@ import {
   Shield,
   Bell,
   Globe,
-  Palette
+  Palette,
+  Briefcase
 } from "lucide-react";
 import PhotoUpload from "@/components/PhotoUpload";
 import { NotificationBell } from "@/components/NotificationBell";
 import { CalendarView } from "@/components/CalendarView";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { Link } from "wouter";
+import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 
 // Add Speech Recognition types for TypeScript
 declare global {
@@ -158,6 +162,12 @@ export default function JobDashboard() {
   // Export states
   const [isExporting, setIsExporting] = useState(false);
   
+  // Search and filtering states
+  const [filteredLeads, setFilteredLeads] = useState<any[]>([]);
+  const [filteredJobs, setFilteredJobs] = useState<any[]>([]);
+  const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
+  const [filteredQuotes, setFilteredQuotes] = useState<any[]>([]);
+  
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -231,7 +241,8 @@ export default function JobDashboard() {
 
   // Data fetching queries
   const { data: dashboardStats, isLoading: statsLoading } = useQuery<DashboardStats>({
-    queryKey: ['/api/dashboard-stats']
+    queryKey: ['/api/dashboard-stats'],
+    refetchInterval: 30000 // Refetch every 30 seconds for real-time updates
   });
 
   // Calculate from date for revenue stats
@@ -254,7 +265,8 @@ export default function JobDashboard() {
   });
 
   const { data: pipelineLeads, isLoading: leadsLoading } = useQuery({
-    queryKey: ['/api/pipeline-leads']
+    queryKey: ['/api/pipeline-leads'],
+    refetchInterval: 30000 // Refetch every 30 seconds for lead updates
   });
 
   const { data: jobsData, isLoading: jobsLoading } = useQuery({
@@ -528,21 +540,33 @@ export default function JobDashboard() {
     );
   }
 
+  const style = {
+    "--sidebar-width": "20rem",
+    "--sidebar-width-icon": "4rem",
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-100 via-orange-200 via-orange-300 to-orange-400 p-4" data-testid="job-dashboard">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+        <SidebarInset>
+          <div className="min-h-screen bg-gradient-to-br from-orange-100 via-orange-200 via-orange-300 to-orange-400 p-4" data-testid="job-dashboard">
+            <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Mobile-Optimized Header */}
         <div className="space-y-4 card-colorful rounded-2xl p-6">
           {/* Top Header Bar */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <img 
-                src={logoUrl} 
-                alt="Treemarkables Logo" 
-                className="h-10 sm:h-12 lg:h-16 w-auto"
-                data-testid="logo-treemarkables"
-              />
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="lg:hidden" data-testid="button-sidebar-toggle" />
+              <div className="lg:hidden flex items-center">
+                <img 
+                  src={logoUrl} 
+                  alt="Treemarkables Logo" 
+                  className="h-8 w-auto"
+                  data-testid="logo-treemarkables"
+                />
+              </div>
             </div>
             
             {/* Mobile Menu Toggle */}
@@ -738,6 +762,157 @@ export default function JobDashboard() {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
+            
+            {/* Real-time Dashboard Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <Card className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 shadow-lg hover-elevate">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium opacity-90">Today's Revenue</p>
+                      <p className="text-2xl font-bold">{formatCurrency(revenueStats?.totalRevenue || 0)}</p>
+                      <p className="text-xs opacity-80">+12% from yesterday</p>
+                    </div>
+                    <DollarSign className="h-8 w-8 opacity-80" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white border-0 shadow-lg hover-elevate">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium opacity-90">Active Jobs</p>
+                      <p className="text-2xl font-bold">{Array.isArray(jobs) ? jobs.filter((job: any) => job.status === 'in_progress' || job.status === 'scheduled').length : 0}</p>
+                      <p className="text-xs opacity-80">3 scheduled today</p>
+                    </div>
+                    <Briefcase className="h-8 w-8 opacity-80" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-r from-orange-500 to-amber-600 text-white border-0 shadow-lg hover-elevate">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium opacity-90">Hot Leads</p>
+                      <p className="text-2xl font-bold">{Array.isArray(leadScoring) ? leadScoring.filter((lead: any) => lead.priority === 'hot').length : 0}</p>
+                      <p className="text-xs opacity-80">Need immediate attention</p>
+                    </div>
+                    <Target className="h-8 w-8 opacity-80" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-r from-purple-500 to-pink-600 text-white border-0 shadow-lg hover-elevate">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium opacity-90">Pending Quotes</p>
+                      <p className="text-2xl font-bold">{quoteAnalytics?.pendingQuotes || 0}</p>
+                      <p className="text-xs opacity-80">Awaiting client response</p>
+                    </div>
+                    <FileText className="h-8 w-8 opacity-80" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Priority Alerts & Quick Actions */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <Card className="border-l-4 border-l-orange-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-orange-800">
+                    <AlertTriangle className="h-5 w-5" />
+                    Priority Alerts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {dashboardStats?.missedCalls && dashboardStats.missedCalls > 0 && (
+                      <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg">
+                        <PhoneCall className="h-4 w-4 text-orange-600" />
+                        <div>
+                          <p className="text-sm font-medium">Missed Calls</p>
+                          <p className="text-xs text-gray-600">{dashboardStats.missedCalls} potential leads need follow-up</p>
+                        </div>
+                      </div>
+                    )}
+                    {Array.isArray((followUpQueue as any)?.overdue) && (followUpQueue as any).overdue.length > 0 && (
+                      <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
+                        <Clock className="h-4 w-4 text-red-600" />
+                        <div>
+                          <p className="text-sm font-medium">Overdue Follow-ups</p>
+                          <p className="text-xs text-gray-600">{(followUpQueue as any).overdue.length} leads require immediate attention</p>
+                        </div>
+                      </div>
+                    )}
+                    {quoteAnalytics?.pendingQuotes && quoteAnalytics.pendingQuotes > 5 && (
+                      <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
+                        <FileText className="h-4 w-4 text-yellow-600" />
+                        <div>
+                          <p className="text-sm font-medium">Quote Backlog</p>
+                          <p className="text-xs text-gray-600">{quoteAnalytics.pendingQuotes} quotes pending response</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-l-4 border-l-green-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-green-800">
+                    <Zap className="h-5 w-5" />
+                    Quick Actions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button 
+                      size="sm" 
+                      className="bg-green-600 hover:bg-green-700 text-white h-auto py-3 flex flex-col items-center gap-1"
+                      onClick={() => setShowNewLeadDialog(true)}
+                      data-testid="quick-new-lead"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span className="text-xs">New Lead</span>
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="h-auto py-3 flex flex-col items-center gap-1 hover:bg-blue-50"
+                      onClick={() => setShowNewJobDialog(true)}
+                      data-testid="quick-new-job"
+                    >
+                      <Calendar className="h-4 w-4" />
+                      <span className="text-xs">Schedule Job</span>
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="h-auto py-3 flex flex-col items-center gap-1 hover:bg-purple-50"
+                      onClick={() => setActiveTab('quotes')}
+                      data-testid="quick-view-quotes"
+                    >
+                      <FileText className="h-4 w-4" />
+                      <span className="text-xs">Send Quote</span>
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="h-auto py-3 flex flex-col items-center gap-1 hover:bg-orange-50"
+                      onClick={() => setActiveTab('analytics')}
+                      data-testid="quick-view-analytics"
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                      <span className="text-xs">View Reports</span>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
             {/* Weather, Crew & Equipment Status Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <WeatherWidget compact={true} showForecast={false} />
@@ -945,6 +1120,62 @@ export default function JobDashboard() {
               </Dialog>
               </div>
             </div>
+
+            {/* Global Search and Filters */}
+            <GlobalSearch
+              data={Array.isArray(pipelineLeads?.data) ? pipelineLeads.data : []}
+              searchFields={['name', 'email', 'phone', 'serviceRequested', 'notes', 'source']}
+              onFilteredResults={setFilteredLeads}
+              placeholder="Search leads by name, email, phone, service..."
+              enableFilters={true}
+              filterOptions={[
+                {
+                  field: 'status',
+                  label: 'Status',
+                  type: 'select',
+                  options: [
+                    { value: 'new', label: 'New' },
+                    { value: 'contacted', label: 'Contacted' },
+                    { value: 'qualified', label: 'Qualified' },
+                    { value: 'converted', label: 'Converted' },
+                    { value: 'closed', label: 'Closed' }
+                  ]
+                },
+                {
+                  field: 'priority',
+                  label: 'Priority',
+                  type: 'select',
+                  options: [
+                    { value: 'low', label: 'Low' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'high', label: 'High' },
+                    { value: 'emergency', label: 'Emergency' }
+                  ]
+                },
+                {
+                  field: 'source',
+                  label: 'Source',
+                  type: 'select',
+                  options: [
+                    { value: 'Google Ads', label: 'Google Ads' },
+                    { value: 'Facebook', label: 'Facebook' },
+                    { value: 'Website', label: 'Website' },
+                    { value: 'Referral', label: 'Referral' },
+                    { value: 'Manual Entry', label: 'Manual Entry' }
+                  ]
+                },
+                {
+                  field: 'serviceRequested',
+                  label: 'Service Type',
+                  type: 'text'
+                },
+                {
+                  field: 'followUpDate',
+                  label: 'Follow-up Date',
+                  type: 'date'
+                }
+              ]}
+            />
 
             {/* Follow-Up Queue - Critical Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -2810,7 +3041,10 @@ export default function JobDashboard() {
             )}
           </DialogContent>
         </Dialog>
+            </div>
+          </div>
+        </SidebarInset>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }
