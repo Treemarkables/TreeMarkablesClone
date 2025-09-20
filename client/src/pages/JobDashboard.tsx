@@ -70,6 +70,7 @@ import {
   Palette
 } from "lucide-react";
 import PhotoUpload from "@/components/PhotoUpload";
+import { NotificationBell } from "@/components/NotificationBell";
 
 // Add Speech Recognition types for TypeScript
 declare global {
@@ -533,6 +534,8 @@ export default function JobDashboard() {
 
             {/* Desktop Controls */}
             <div className="hidden md:flex items-center gap-2">
+              <NotificationBell />
+              
               <Select value={dateRange} onValueChange={setDateRange}>
                 <SelectTrigger className="w-32">
                   <SelectValue />
