@@ -223,9 +223,12 @@ export default function JobDashboard() {
                 // Wait a bit more, then start fresh
                 setTimeout(() => {
                   if (recognition && !isListening && isConversationMode) {
+                    console.log('🔄 Attempting to restart listening after TTS in conversation mode');
                     setIsListening(true);
                     recognition.start();
-                    console.log('Restarted listening after TTS');
+                    console.log('🔄 Successfully restarted listening after TTS');
+                  } else {
+                    console.log('🔄 Failed to restart listening - recognition:', !!recognition, 'isListening:', isListening, 'isConversationMode:', isConversationMode);
                   }
                 }, 800);
               } catch (error) {
@@ -315,6 +318,8 @@ export default function JobDashboard() {
       
       recognitionInstance.onresult = (event: any) => {
         const command = event.results[0][0].transcript.toLowerCase();
+        console.log('🎤 Speech recognition result:', command);
+        console.log('🎤 Is conversation mode active:', isConversationMode);
         setVoiceCommand(command);
         processVoiceCommand(command);
         setIsListening(false);
