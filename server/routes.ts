@@ -1233,6 +1233,66 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // ========================================
+  // GROSS MARGIN ROUTES
+  // ========================================
+
+  // Update job gross margin data
+  app.put('/api/jobs/:id/gross-margin', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const grossMarginData = req.body;
+      
+      // Validate the input data
+      const validFields = ['laborCosts', 'materialsCosts', 'otherCosts', 'laborHours', 'hourlyRate'];
+      const filteredData: any = {};
+      
+      for (const [key, value] of Object.entries(grossMarginData)) {
+        if (validFields.includes(key) && value !== undefined && value !== null && value !== '') {
+          filteredData[key] = typeof value === 'string' ? parseFloat(value) : value;
+        }
+      }
+
+      const updatedJob = await storage.updateJobGrossMargin(id, filteredData);
+      res.json({ success: true, data: updatedJob });
+    } catch (error) {
+      console.error('Error updating job gross margin:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error updating gross margin' });
+      }
+    }
+  });
+
+  // Calculate and update gross margin for a job
+  app.post('/api/jobs/:id/calculate-margin', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updatedJob = await storage.calculateAndUpdateGrossMargin(id);
+      res.json({ success: true, data: updatedJob });
+    } catch (error) {
+      console.error('Error calculating gross margin:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error calculating gross margin' });
+      }
+    }
+  });
+
+  // Validate if gross margin calculation is complete
+  app.get('/api/jobs/:id/gross-margin/validate', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const isComplete = await storage.validateGrossMarginComplete(id);
+      res.json({ success: true, data: { isComplete } });
+    } catch (error) {
+      console.error('Error validating gross margin:', error);
+      res.status(500).json({ success: false, message: 'Error validating gross margin' });
+    }
+  });
+
   app.put('/api/jobs/:id', async (req: Request, res: Response) => {
     try {
       const updates = insertJobSchema.partial().safeParse(req.body);
