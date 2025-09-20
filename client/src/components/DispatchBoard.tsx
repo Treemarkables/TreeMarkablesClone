@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   Calendar,
   Clock,
@@ -25,15 +28,36 @@ import {
   RotateCcw,
   MessageSquare,
   X,
-  ExternalLink
+  ExternalLink,
+  AlertTriangle,
+  Target,
+  Zap,
+  GripVertical,
+  Move
 } from 'lucide-react';
-import { useState } from 'react';
-import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO } from 'date-fns';
+import { useState, useMemo } from 'react';
+import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { queryClient } from '@/lib/queryClient';
-import { apiRequest } from '@/lib/queryClient';
+import { queryClient, apiRequest } from '@/lib/queryClient';
 import { GrossMarginCalculator } from '@/components/GrossMarginCalculator';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  restrictToWindowEdges,
+} from '@dnd-kit/modifiers';
 
 interface StaffMember {
   id: string;
@@ -80,56 +104,42 @@ interface DispatchBoardProps {
   compact?: boolean;
 }
 
-const mockStaffMembers: StaffMember[] = [
-  {
-    id: '1',
-    name: 'Daniel Rodriguez',
-    role: 'Senior Arborist',
-    skills: ['Crane Operation', 'Hazardous Removal'],
-    status: 'available',
-    color: 'bg-blue-500'
-  },
-  {
-    id: '2', 
-    name: 'Fenton Chavez',
-    role: 'Arborist',
-    skills: ['Tree Climbing', 'Pruning'],
-    status: 'busy',
-    color: 'bg-green-500'
-  },
-  {
-    id: '3',
-    name: 'Jack Williams',
-    role: 'Ground Crew',
-    skills: ['Equipment Operation', 'Cleanup'],
-    status: 'available',
-    color: 'bg-orange-500'
-  },
-  {
-    id: '4',
-    name: 'Josh Martinez',
-    role: 'Equipment Specialist',
-    skills: ['Heavy Machinery', 'Maintenance'],
-    status: 'available',
-    color: 'bg-purple-500'
-  },
-  {
-    id: '5',
-    name: 'Julian Thompson',
-    role: 'Arborist',
-    skills: ['Tree Climbing', 'Safety'],
-    status: 'offline',
-    color: 'bg-red-500'
-  },
-  {
-    id: '6',
-    name: 'Kelsey Johnson',
-    role: 'Ground Crew',
-    skills: ['Cleanup', 'Customer Service'],
-    status: 'available',
-    color: 'bg-pink-500'
-  }
-];
+// Interface for real Employee from API
+interface Employee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  position: string;
+  status: string;
+  skillLevel: string;
+  certifications: string[];
+  skills: string[];
+  hourlyRate?: number;
+  availableHours?: string;
+  isActive: boolean;
+}
+
+// Interface for conflicts and allocation
+interface ResourceConflict {
+  employeeId: string;
+  employeeName: string;
+  conflictingJobId: string;
+  conflictingJobTitle: string;
+  timeOverlap: {
+    start: Date;
+    end: Date;
+  };
+}
+
+interface AllocationSuggestion {
+  employees: Employee[];
+  estimatedCost: number;
+  skillMatch: number; // 0-100 percentage
+  availability: number; // 0-100 percentage
+  conflicts: ResourceConflict[];
+}
 
 const mockTeams: Team[] = [
   {
@@ -343,7 +353,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const getTeamMembers = (teamId: string) => {
     const team = mockTeams.find(t => t.id === teamId);
     if (!team) return [];
-    return team.members.map(memberId => mockStaffMembers.find(s => s.id === memberId)).filter(Boolean) as StaffMember[];
+    return team.members.map(memberId => ({ id: memberId, name: `Staff ${memberId}`, role: 'Unknown', skills: [], status: 'available', color: 'bg-gray-500' } as StaffMember)).filter(Boolean) as StaffMember[];
   };
 
   const getTodaysJobs = () => {
@@ -362,7 +372,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Job Mutations
   const createJobMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest('POST', '/api/jobs', data);
+      const response = await apiRequest('/api/jobs', { method: 'POST', body: data });
       return response.json();
     },
     onSuccess: () => {
