@@ -21,7 +21,7 @@ import { PhotoDocumentation } from "@/components/PhotoDocumentation";
 import { SafetyReporting } from "@/components/SafetyReporting";
 import { RouteOptimizer } from "@/components/RouteOptimizer";
 import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
-import { DispatchBoard } from "@/components/DispatchBoard";
+import { AdvancedDispatchBoard } from "@/components/AdvancedDispatchBoard";
 import { JobDiary } from "@/components/JobDiary";
 import {
   BarChart,
@@ -1371,7 +1371,7 @@ export default function JobDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <RouteOptimizer compact={true} />
               <PerformanceAnalytics compact={true} />
-              <DispatchBoard compact={true} />
+              <AdvancedDispatchBoard compact={true} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2956,7 +2956,7 @@ export default function JobDashboard() {
 
           {/* Dispatch Tab */}
           <TabsContent value="dispatch" className="space-y-6">
-            <DispatchBoard />
+            <AdvancedDispatchBoard />
           </TabsContent>
 
           {/* Settings Tab */}
