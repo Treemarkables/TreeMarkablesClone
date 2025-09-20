@@ -13,6 +13,7 @@ import BlogPost from "@/pages/BlogPost";
 import SummerOffer from "@/pages/SummerOffer";
 import JobDashboard from "@/pages/JobDashboard";
 import MetricsDashboard from "@/pages/MetricsDashboard";
+import Pipeline from "@/pages/Pipeline";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/summer-offer" component={SummerOffer}/>
       <Route path="/job-dashboard" component={JobDashboard}/>
       <Route path="/metrics" component={MetricsDashboard}/>
+      <Route path="/pipeline" component={Pipeline}/>
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
