@@ -1755,7 +1755,7 @@ export default function JobDashboard() {
                           <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" stroke="hsl(var(--border))" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="month" />
                       <YAxis yAxisId="left" orientation="left" />
                       <YAxis yAxisId="right" orientation="right" />
@@ -1836,7 +1836,7 @@ export default function JobDashboard() {
                       { segment: 'Low Value', customers: 45, avgValue: 1200, fill: COLORS[2] },
                       { segment: 'New Customers', customers: 23, avgValue: 800, fill: COLORS[3] }
                     ]}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" stroke="hsl(var(--border))" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="segment" />
                       <YAxis yAxisId="left" orientation="left" />
                       <YAxis yAxisId="right" orientation="right" />
