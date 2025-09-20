@@ -105,7 +105,7 @@ export default function Opportunities() {
   // Mark as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/communications/${id}/read`, { method: 'PATCH' });
+      return apiRequest('PATCH', `/api/communications/${id}/read`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications'] });
@@ -120,10 +120,7 @@ export default function Opportunities() {
   // Star/unstar mutation
   const starMutation = useMutation({
     mutationFn: async ({ id, starred }: { id: string; starred: boolean }) => {
-      return apiRequest(`/api/communications/${id}/star`, { 
-        method: 'PATCH',
-        body: { starred }
-      });
+      return apiRequest('PATCH', `/api/communications/${id}/star`, { starred });
     },
     onSuccess: (_, { starred }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications'] });
@@ -138,7 +135,7 @@ export default function Opportunities() {
   // Archive mutation
   const archiveMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/communications/${id}/archive`, { method: 'PATCH' });
+      return apiRequest('PATCH', `/api/communications/${id}/archive`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications'] });

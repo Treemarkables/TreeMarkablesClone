@@ -157,13 +157,15 @@ export default function Pipeline() {
     }
   });
 
-  const opportunities = pipelineData || [];
+  const opportunities = Array.isArray(pipelineData) ? pipelineData : [];
 
-  // Group opportunities by status
-  const opportunitiesByStatus = pipelineStages.reduce((acc, stage) => {
-    acc[stage.id] = opportunities.filter((opp: any) => opp.status === stage.id);
-    return acc;
-  }, {} as Record<string, any[]>);
+  // Group opportunities by status (only if data is loaded)
+  const opportunitiesByStatus = opportunities.length > 0 || !isLoading 
+    ? pipelineStages.reduce((acc, stage) => {
+        acc[stage.id] = opportunities.filter((opp: any) => opp.status === stage.id);
+        return acc;
+      }, {} as Record<string, any[]>)
+    : {};
 
   // Calculate stage totals
   const getStageTotals = (stageId: string) => {
