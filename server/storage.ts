@@ -16,6 +16,7 @@ import {
   type Inventory, type InsertInventory,
   type EquipmentCheckout, type InsertEquipmentCheckout,
   type InventoryTransaction, type InsertInventoryTransaction,
+  type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -313,6 +314,19 @@ export interface IStorage {
     byPlatform: { platform: string; count: number }[];
     byPriority: { priority: string; count: number }[];
   }>;
+
+  // Enhanced Photo Management
+  createPhoto(data: InsertPhoto): Promise<Photo>;
+  getPhoto(id: string): Promise<Photo | undefined>;
+  updatePhoto(id: string, updates: UpdatePhoto): Promise<Photo>;
+  deletePhoto(id: string): Promise<void>;
+  getPhotosByJob(jobId: string, filters?: { type?: string; category?: string }): Promise<Photo[]>;
+  getPhotosByCustomer(customerId: string): Promise<Photo[]>;
+  getPublicPhotos(limit?: number, offset?: number): Promise<Photo[]>;
+  getFeaturedPhotos(limit?: number): Promise<Photo[]>;
+  getPhotosByType(type: string, jobId?: string): Promise<Photo[]>;
+  getBeforeAfterPairs(jobId: string): Promise<Photo[][]>;
+  searchPhotos(filters: PhotoSearch): Promise<Photo[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -339,6 +353,7 @@ export class MemStorage implements IStorage {
   private equipmentCheckouts: Map<string, EquipmentCheckout>;
   private equipmentMaintenance: Map<string, EquipmentMaintenance>;
   private inventoryTransactions: Map<string, InventoryTransaction>;
+  private photos: Map<string, Photo>;
   private businessSettings: BusinessSettings;
   private communications: Communication[];
 
@@ -366,6 +381,7 @@ export class MemStorage implements IStorage {
     this.equipmentCheckouts = new Map();
     this.equipmentMaintenance = new Map();
     this.inventoryTransactions = new Map();
+    this.photos = new Map();
     
     // Initialize business settings with defaults
     this.businessSettings = {
@@ -3302,6 +3318,176 @@ export class MemStorage implements IStorage {
     return Array.from(this.inventoryTransactions.values())
       .filter(transaction => transaction.type === type)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  // ========================================
+  // ENHANCED PHOTO MANAGEMENT METHODS
+  // ========================================
+
+  async createPhoto(data: InsertPhoto): Promise<Photo> {
+    const id = (this.photos.size + 1).toString();
+    const photo: Photo = {
+      ...data,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.photos.set(id, photo);
+    console.log(`Stored photo ${id} in MemStorage. Total photos: ${this.photos.size}`);
+    console.log(`Photo details:`, { id, isPublic: photo.isPublic, jobId: photo.jobId, type: photo.type });
+    return photo;
+  }
+
+  async getPhoto(id: string): Promise<Photo | undefined> {
+    return this.photos.get(id);
+  }
+
+  async updatePhoto(id: string, updates: UpdatePhoto): Promise<Photo> {
+    const photo = this.photos.get(id);
+    if (!photo) {
+      throw new Error(`Photo with id ${id} not found`);
+    }
+    const updatedPhoto = { ...photo, ...updates, updatedAt: new Date() };
+    this.photos.set(id, updatedPhoto);
+    return updatedPhoto;
+  }
+
+  async deletePhoto(id: string): Promise<void> {
+    this.photos.delete(id);
+  }
+
+  async getPhotosByJob(jobId: string, filters?: { type?: string; category?: string }): Promise<Photo[]> {
+    let photos = Array.from(this.photos.values()).filter(photo => photo.jobId === jobId);
+    
+    if (filters?.type) {
+      photos = photos.filter(photo => photo.type === filters.type);
+    }
+    if (filters?.category) {
+      photos = photos.filter(photo => photo.category === filters.category);
+    }
+    
+    return photos.sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
+  }
+
+  async getPhotosByCustomer(customerId: string): Promise<Photo[]> {
+    return Array.from(this.photos.values())
+      .filter(photo => photo.customerId === customerId)
+      .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
+  }
+
+  async getPublicPhotos(limit: number = 20, offset: number = 0): Promise<Photo[]> {
+    const allPhotos = Array.from(this.photos.values());
+    console.log(`getPublicPhotos: Total photos in storage: ${allPhotos.length}`);
+    console.log(`getPublicPhotos: Photos with isPublic=true: ${allPhotos.filter(p => p.isPublic).length}`);
+    
+    const publicPhotos = allPhotos
+      .filter(photo => photo.isPublic)
+      .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
+    
+    return publicPhotos.slice(offset, offset + limit);
+  }
+
+  async getFeaturedPhotos(limit: number = 10): Promise<Photo[]> {
+    return Array.from(this.photos.values())
+      .filter(photo => photo.isFeatured && photo.isPublic)
+      .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())
+      .slice(0, limit);
+  }
+
+  async getPhotosByType(type: string, jobId?: string): Promise<Photo[]> {
+    let photos = Array.from(this.photos.values()).filter(photo => photo.type === type);
+    
+    if (jobId) {
+      photos = photos.filter(photo => photo.jobId === jobId);
+    }
+    
+    return photos.sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
+  }
+
+  async getBeforeAfterPairs(jobId: string): Promise<Photo[][]> {
+    const beforePhotos = await this.getPhotosByType('before', jobId);
+    const afterPhotos = await this.getPhotosByType('after', jobId);
+    const pairs: Photo[][] = [];
+
+    // Group photos by beforeAfterPairId or by sequence
+    const pairedPhotos = new Map<string, { before?: Photo; after?: Photo }>();
+    
+    beforePhotos.forEach(photo => {
+      const pairId = photo.beforeAfterPairId || `seq-${photo.sequenceOrder}`;
+      if (!pairedPhotos.has(pairId)) {
+        pairedPhotos.set(pairId, {});
+      }
+      pairedPhotos.get(pairId)!.before = photo;
+    });
+
+    afterPhotos.forEach(photo => {
+      const pairId = photo.beforeAfterPairId || `seq-${photo.sequenceOrder}`;
+      if (!pairedPhotos.has(pairId)) {
+        pairedPhotos.set(pairId, {});
+      }
+      pairedPhotos.get(pairId)!.after = photo;
+    });
+
+    pairedPhotos.forEach(pair => {
+      if (pair.before && pair.after) {
+        pairs.push([pair.before, pair.after]);
+      }
+    });
+
+    return pairs;
+  }
+
+  async searchPhotos(filters: PhotoSearch): Promise<Photo[]> {
+    let photos = Array.from(this.photos.values());
+
+    if (filters.jobId) {
+      photos = photos.filter(p => p.jobId === filters.jobId);
+    }
+    if (filters.customerId) {
+      photos = photos.filter(p => p.customerId === filters.customerId);
+    }
+    if (filters.type) {
+      photos = photos.filter(p => p.type === filters.type);
+    }
+    if (filters.category) {
+      photos = photos.filter(p => p.category === filters.category);
+    }
+    if (filters.capturedBy) {
+      photos = photos.filter(p => p.capturedBy.toLowerCase().includes(filters.capturedBy!.toLowerCase()));
+    }
+    if (filters.isPublic !== undefined) {
+      photos = photos.filter(p => p.isPublic === filters.isPublic);
+    }
+    if (filters.isFeatured !== undefined) {
+      photos = photos.filter(p => p.isFeatured === filters.isFeatured);
+    }
+    if (filters.hasGps) {
+      photos = photos.filter(p => p.gpsLatitude !== null && p.gpsLongitude !== null);
+    }
+    if (filters.minQualityScore) {
+      photos = photos.filter(p => p.qualityScore && p.qualityScore >= filters.minQualityScore!);
+    }
+    if (filters.tags && filters.tags.length > 0) {
+      photos = photos.filter(p => 
+        filters.tags!.some(tag => p.tags.includes(tag))
+      );
+    }
+
+    // Date filtering
+    if (filters.dateFrom) {
+      const fromDate = new Date(filters.dateFrom);
+      photos = photos.filter(p => new Date(p.capturedAt) >= fromDate);
+    }
+    if (filters.dateTo) {
+      const toDate = new Date(filters.dateTo);
+      photos = photos.filter(p => new Date(p.capturedAt) <= toDate);
+    }
+
+    // Sort by capture time (newest first)
+    photos.sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
+
+    // Apply pagination
+    return photos.slice(filters.offset, filters.offset + filters.limit);
   }
 
   // ========================================

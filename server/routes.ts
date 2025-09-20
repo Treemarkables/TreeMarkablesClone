@@ -17,6 +17,7 @@ import {
   insertInventorySchema, insertEquipmentCheckoutSchema, insertEquipmentMaintenanceSchema,
   insertBusinessSettingsSchema, updateBusinessSettingsSchema,
   insertCommunicationSchema, updateCommunicationSchema,
+  insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, gpsLocationSchema,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import multer from "multer";
@@ -41,6 +42,10 @@ const csvUpload = multer({
   }
 });
 
+// Safe file extensions for images
+const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
 // Image upload configuration for job photos
 const imageUpload = multer({
   dest: 'uploads/photos/',
@@ -49,11 +54,20 @@ const imageUpload = multer({
     files: 10 // Maximum 10 files at once
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'));
+    // Check MIME type
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      cb(new Error(`File type ${file.mimetype} not allowed. Only JPEG, PNG, and WebP images are permitted.`));
+      return;
     }
+    
+    // Check file extension
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
+      cb(new Error(`File extension ${ext} not allowed. Only .jpg, .jpeg, .png, and .webp files are permitted.`));
+      return;
+    }
+    
+    cb(null, true);
   }
 });
 
@@ -2236,11 +2250,23 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // PHOTO UPLOAD ENDPOINTS FOR JOB DOCUMENTATION
   // ========================================
 
-  // Serve uploaded photos as static files
-  app.use('/api/photos', (req, res, next) => {
-    // Add basic security headers for image serving
+  // Serve uploaded photos as static files with security headers
+  app.use('/photos', (req, res, next) => {
+    // Add security headers for image serving
     res.set('Cache-Control', 'public, max-age=86400'); // 24 hours cache
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('X-Frame-Options', 'DENY');
     next();
+  }, express.static(path.join(__dirname, '..', 'uploads', 'photos')));
+
+  // Legacy API route compatibility
+  app.use('/api/photos', (req, res, next) => {
+    // Skip if this is an API endpoint (contains alphanumeric photoId)
+    if (/^\/[a-zA-Z0-9-]+$/.test(req.path)) {
+      return next();
+    }
+    // Redirect to new photos route for file serving
+    res.redirect(`/photos${req.path}`);
   }, express.static(path.join(__dirname, '..', 'uploads', 'photos')));
 
   // Upload photos for a job (before/after documentation)
@@ -2291,7 +2317,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         fs.renameSync(file.path, newPath);
         
         // Store relative URL for database
-        photoUrls.push(`/api/photos/${newFileName}`);
+        photoUrls.push(`/photos/${newFileName}`);
       }
 
       // Update job with new photos
@@ -2437,6 +2463,247 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error deleting photo',
+      });
+    }
+  });
+
+  // ========================================
+  // ENHANCED PHOTO MANAGEMENT API ENDPOINTS
+  // ========================================
+
+  // Enhanced photo upload with metadata and GPS
+  app.post('/api/photos/upload', imageUpload.array('photos', 10), async (req: Request, res: Response) => {
+    try {
+      const uploadData = photoUploadSchema.parse(req.body);
+      
+      if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+        return res.status(400).json({ success: false, message: 'No photos provided' });
+      }
+
+      const uploadedPhotos = [];
+      const timestamp = Date.now();
+
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i] as Express.Multer.File;
+        const fileExtension = path.extname(file.originalname);
+        const newFileName = `${uploadData.jobId || uploadData.customerId || 'general'}_${uploadData.type}_${timestamp}_${i}${fileExtension}`;
+        const newPath = path.join(photosDir, newFileName);
+        
+        // Move file to permanent location
+        fs.renameSync(file.path, newPath);
+        
+        // Create photo record in database
+        const photoData = {
+          ...uploadData,
+          url: `/photos/${newFileName}`,
+          filename: newFileName,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          fileSize: file.size,
+          capturedAt: new Date(),
+          sequenceOrder: i,
+          isPublic: true,  // Make photos public by default so they appear in listings
+          isFeatured: false,  // Can be updated later
+        };
+
+        // Add GPS data if provided
+        if (req.body.gpsLatitude && req.body.gpsLongitude) {
+          photoData.gpsLatitude = parseFloat(req.body.gpsLatitude);
+          photoData.gpsLongitude = parseFloat(req.body.gpsLongitude);
+          photoData.gpsAccuracy = req.body.gpsAccuracy ? parseFloat(req.body.gpsAccuracy) : null;
+          photoData.gpsAddress = req.body.gpsAddress || null;
+        }
+
+        const photo = await storage.createPhoto(photoData);
+        uploadedPhotos.push(photo);
+        console.log(`Created photo with ID: ${photo.id}, isPublic: ${photo.isPublic}, jobId: ${photo.jobId}`);
+      }
+
+      res.json({
+        success: true,
+        message: `Successfully uploaded ${uploadedPhotos.length} photos`,
+        photos: uploadedPhotos
+      });
+    } catch (error) {
+      // Clean up uploaded files on error
+      if (req.files && Array.isArray(req.files)) {
+        req.files.forEach((file: any) => {
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        });
+      }
+      
+      console.error('Error uploading photos:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error uploading photos',
+      });
+    }
+  });
+
+  // Get public/featured photos (MUST come before :photoId route)
+  app.get('/api/photos/public', async (req: Request, res: Response) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+      const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
+      
+      const photos = await storage.getPublicPhotos(limit, offset);
+      console.log(`Retrieved ${photos.length} public photos`);
+      res.json({ success: true, photos });
+    } catch (error) {
+      console.error('Error retrieving public photos:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving public photos',
+      });
+    }
+  });
+
+  // Get featured photos
+  app.get('/api/photos/featured', async (req: Request, res: Response) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const photos = await storage.getFeaturedPhotos(limit);
+      console.log(`Retrieved ${photos.length} featured photos`);
+      res.json({ success: true, photos });
+    } catch (error) {
+      console.error('Error retrieving featured photos:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving featured photos',
+      });
+    }
+  });
+
+  // Get photo by ID (MUST come after specific routes)
+  app.get('/api/photos/:photoId', async (req: Request, res: Response) => {
+    try {
+      const { photoId } = req.params;
+      const photo = await storage.getPhoto(photoId);
+      
+      if (!photo) {
+        return res.status(404).json({ success: false, message: 'Photo not found' });
+      }
+
+      res.json({ success: true, photo });
+    } catch (error) {
+      console.error('Error retrieving photo:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving photo',
+      });
+    }
+  });
+
+  // Update photo metadata
+  app.patch('/api/photos/:photoId', async (req: Request, res: Response) => {
+    try {
+      const { photoId } = req.params;
+      const updates = updatePhotoSchema.parse(req.body);
+      
+      const photo = await storage.updatePhoto(photoId, updates);
+      res.json({ success: true, photo });
+    } catch (error) {
+      console.error('Error updating photo:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error updating photo',
+      });
+    }
+  });
+
+  // Delete photo
+  app.delete('/api/photos/:photoId', async (req: Request, res: Response) => {
+    try {
+      const { photoId } = req.params;
+      const photo = await storage.getPhoto(photoId);
+      
+      if (!photo) {
+        return res.status(404).json({ success: false, message: 'Photo not found' });
+      }
+
+      // Delete physical file
+      try {
+        const fileName = path.basename(photo.url);
+        const filePath = path.join(photosDir, fileName);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (fileError) {
+        console.warn('Could not delete physical file:', fileError);
+      }
+
+      await storage.deletePhoto(photoId);
+      res.json({ success: true, message: 'Photo deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting photo:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting photo',
+      });
+    }
+  });
+
+  // Get photos by job with filters
+  app.get('/api/jobs/:jobId/photos/enhanced', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const { type, category } = req.query as { type?: string; category?: string };
+      
+      const photos = await storage.getPhotosByJob(jobId, { type, category });
+      res.json({ success: true, photos });
+    } catch (error) {
+      console.error('Error retrieving job photos:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving job photos',
+      });
+    }
+  });
+
+  // Get customer photos
+  app.get('/api/customers/:customerId/photos', async (req: Request, res: Response) => {
+    try {
+      const { customerId } = req.params;
+      const photos = await storage.getPhotosByCustomer(customerId);
+      res.json({ success: true, photos });
+    } catch (error) {
+      console.error('Error retrieving customer photos:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving customer photos',
+      });
+    }
+  });
+
+  // Get before/after photo pairs
+  app.get('/api/jobs/:jobId/before-after-pairs', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const pairs = await storage.getBeforeAfterPairs(jobId);
+      res.json({ success: true, pairs });
+    } catch (error) {
+      console.error('Error retrieving before/after pairs:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving before/after pairs',
+      });
+    }
+  });
+
+
+  // Search photos with advanced filters
+  app.post('/api/photos/search', async (req: Request, res: Response) => {
+    try {
+      const filters = photoSearchSchema.parse(req.body);
+      const photos = await storage.searchPhotos(filters);
+      res.json({ success: true, photos, filters });
+    } catch (error) {
+      console.error('Error searching photos:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error searching photos',
       });
     }
   });

@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { 
@@ -18,7 +19,9 @@ import {
   Grid,
   List
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 import { format } from 'date-fns';
 
 interface Photo {
@@ -124,14 +127,44 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filterType, setFilterType] = useState<Photo['type'] | 'all'>('all');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  // Replace mock data with real API calls
+  const photosQuery = useQuery({
+    queryKey: jobId ? ['job-photos', jobId, filterType] : ['all-photos', filterType],
+    queryFn: async () => {
+      let url: string;
+      if (jobId) {
+        // Get photos for specific job
+        url = `/api/jobs/${jobId}/photos/enhanced`;
+        if (filterType !== 'all') {
+          url += `?type=${filterType}`;
+        }
+      } else {
+        // Get all public photos
+        url = '/api/photos/public?limit=50';
+      }
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to fetch photos');
+      }
+      
+      return data.photos as Photo[];
+    }
+  });
+
+  // Apply filtering to the fetched photos
+  const allPhotos = photosQuery.data || [];
+  const filteredPhotos = filterType === 'all' 
+    ? allPhotos 
+    : allPhotos.filter(photo => photo.type === filterType);
   
-  const filteredPhotos = jobId 
-    ? mockPhotoData.filter(photo => photo.jobId === jobId)
-    : mockPhotoData;
-  
-  const finalPhotos = filterType === 'all' 
-    ? filteredPhotos 
-    : filteredPhotos.filter(photo => photo.type === filterType);
+  const finalPhotos = filteredPhotos;
 
   const formatFileSize = (bytes: number) => {
     const mb = bytes / (1024 * 1024);
@@ -152,6 +185,67 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
 
   const getTypeText = (type: Photo['type']) => {
     return type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach((file) => {
+        formData.append('photos', file);
+      });
+      
+      formData.append('type', filterType === 'all' ? 'before' : filterType);
+      formData.append('capturedBy', 'Current User');
+      
+      if (jobId) {
+        formData.append('jobId', jobId);
+      }
+
+      // Use the enhanced photo upload API
+      const response = await fetch('/api/photos/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: "Upload Successful",
+          description: `Successfully uploaded ${result.photos.length} photos`,
+        });
+        
+        // Clear the file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        
+        // Invalidate and refetch photos instead of page reload
+        queryClient.invalidateQueries({ 
+          queryKey: jobId ? ['job-photos', jobId] : ['all-photos'] 
+        });
+      } else {
+        throw new Error(result.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : 'An error occurred during upload',
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   if (compact) {
@@ -219,9 +313,15 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
               Photo Documentation {jobId && `- Job ${jobId}`}
             </CardTitle>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" data-testid="upload-photos">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleUploadClick}
+                disabled={isUploading}
+                data-testid="upload-photos"
+              >
                 <Upload className="h-4 w-4 mr-2" />
-                Upload Photos
+                {isUploading ? 'Uploading...' : 'Upload Photos'}
               </Button>
               <Button variant="outline" size="sm" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')} data-testid="toggle-view">
                 {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
@@ -372,14 +472,29 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
               <p className="text-muted-foreground mb-4">
                 {filterType === 'all' ? 'No photos have been uploaded yet.' : `No ${filterType} photos found.`}
               </p>
-              <Button data-testid="upload-first-photos">
+              <Button 
+                onClick={handleUploadClick}
+                disabled={isUploading}
+                data-testid="upload-first-photos"
+              >
                 <Upload className="h-4 w-4 mr-2" />
-                Upload Your First Photos
+                {isUploading ? 'Uploading...' : 'Upload Your First Photos'}
               </Button>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Hidden file input for uploads */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/jpeg,image/jpg,image/png,image/webp"
+        multiple
+        style={{ display: 'none' }}
+        data-testid="file-input"
+      />
 
       {/* Photo Detail Modal */}
       {selectedPhoto && (
