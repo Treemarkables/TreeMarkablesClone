@@ -3,6 +3,8 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 import Home from "@/pages/Home";
 import TreeRemoval from "@/pages/TreeRemoval";
 import TreePruning from "@/pages/TreePruning";
@@ -16,6 +18,33 @@ import MetricsDashboard from "@/pages/MetricsDashboard";
 import Pipeline from "@/pages/Pipeline";
 import Opportunities from "@/pages/Opportunities";
 import NotFound from "@/pages/not-found";
+import { useState } from "react";
+
+// Sidebar layout wrapper for dashboard pages
+function SidebarLayout({ children }: { children: React.ReactNode }) {
+  const [activeTab, setActiveTab] = useState("overview");
+  
+  const style = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+        <div className="flex flex-col flex-1">
+          <header className="flex items-center justify-between p-2 border-b">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+          </header>
+          <main className="flex-1 overflow-hidden">
+            {children}
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
 
 function Router() {
   return (
@@ -30,8 +59,18 @@ function Router() {
       <Route path="/summer-offer" component={SummerOffer}/>
       <Route path="/job-dashboard" component={JobDashboard}/>
       <Route path="/metrics" component={MetricsDashboard}/>
-      <Route path="/pipeline" component={Pipeline}/>
-      <Route path="/opportunities" component={Opportunities}/>
+      
+      {/* Dashboard pages with sidebar */}
+      <Route path="/pipeline">
+        <SidebarLayout>
+          <Pipeline />
+        </SidebarLayout>
+      </Route>
+      <Route path="/opportunities">
+        <SidebarLayout>
+          <Opportunities />
+        </SidebarLayout>
+      </Route>
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
