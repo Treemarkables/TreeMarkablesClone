@@ -387,9 +387,9 @@ export default function JobDashboard() {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'urgent': return 'bg-red-500';
-      case 'high': return 'bg-orange-500';
-      case 'medium': return 'bg-yellow-500';
-      case 'low': return 'bg-green-500';
+      case 'high': return 'bg-gradient-to-r from-orange-500 to-red-500 shadow-lg';
+      case 'medium': return 'bg-gradient-to-r from-yellow-500 to-orange-400 shadow-lg';
+      case 'low': return 'bg-gradient-to-r from-green-500 to-emerald-500 shadow-lg';
       default: return 'bg-gray-500';
     }
   };
@@ -427,7 +427,7 @@ export default function JobDashboard() {
 
   if (statsLoading || revenueLoading || quotesLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-orange-50 to-blue-100 p-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
@@ -438,11 +438,11 @@ export default function JobDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4" data-testid="job-dashboard">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-orange-50 to-blue-100 p-4" data-testid="job-dashboard">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Mobile-Optimized Header */}
-        <div className="space-y-4">
+        <div className="space-y-4 card-colorful rounded-2xl p-6">
           {/* Top Header Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -451,7 +451,7 @@ export default function JobDashboard() {
                 <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-gradient-blue-orange">
                   Treemarkables
                 </h1>
-                <p className="text-xs sm:text-sm text-blue-600 hidden sm:block">Business Intelligence Dashboard</p>
+                <p className="text-xs sm:text-sm font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 hidden sm:block">Business Intelligence Dashboard</p>
               </div>
             </div>
             
@@ -507,7 +507,7 @@ export default function JobDashboard() {
 
           {/* Mobile Controls Menu */}
           {isMobileMenuOpen && (
-            <Card className="md:hidden border-orange-200 bg-orange-50">
+            <Card className="md:hidden border-2 border-orange-300 bg-gradient-to-br from-orange-100 to-orange-200 shadow-lg">
               <CardContent className="pt-4">
                 <div className="space-y-3">
                   <div>
@@ -562,10 +562,10 @@ export default function JobDashboard() {
 
         {/* Voice Command Feedback */}
         {voiceCommand && (
-          <Card className="border-orange-200 bg-orange-50">
+          <Card className="border-2 border-orange-300 bg-gradient-to-br from-orange-100 via-orange-200 to-yellow-100 shadow-lg">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2">
-                <Bot className="h-5 w-5 text-orange-600" />
+                <Bot className="h-5 w-5 text-orange-500" />
                 <span className="text-sm text-gray-700">Command: "{voiceCommand}"</span>
               </div>
             </CardContent>
@@ -590,7 +590,7 @@ export default function JobDashboard() {
           </div>
           
           <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 ${kpiCollapsed ? 'hidden md:grid' : ''}`}>
-            <Card className="hover-elevate" data-testid="card-total-revenue">
+            <Card className="hover-elevate card-colorful" data-testid="card-total-revenue">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -646,7 +646,7 @@ export default function JobDashboard() {
 
         {/* Main Dashboard Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 h-auto p-1 bg-gradient-to-r from-blue-100 to-orange-100 dark:from-blue-900 dark:to-orange-900">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 h-auto p-1 bg-gradient-to-r from-blue-300 via-purple-300 to-orange-300 dark:from-blue-700 dark:via-purple-700 dark:to-orange-700 border-3 border-white/50 shadow-xl rounded-xl">
             <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2">
               Overview
             </TabsTrigger>
