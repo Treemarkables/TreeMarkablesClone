@@ -32,10 +32,23 @@ interface StaffMember {
   color: string;
 }
 
+interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  teamLeaderId: string;
+  members: string[]; // Staff IDs
+  specialties: string[];
+  maxCapacity: number;
+  status: 'available' | 'busy' | 'offline';
+  color: string;
+}
+
 interface JobAssignment {
   id: string;
   jobId: string;
-  staffId: string;
+  teamId: string; // Changed from staffId to teamId
+  assignedTeam: string[]; // Array of staff member IDs
   customerName: string;
   customerPhone: string;
   address: string;
@@ -103,11 +116,48 @@ const mockStaffMembers: StaffMember[] = [
   }
 ];
 
+const mockTeams: Team[] = [
+  {
+    id: 'team1',
+    name: 'Alpha Crew',
+    description: 'Emergency response and hazardous removals',
+    teamLeaderId: '1',
+    members: ['1', '2'],
+    specialties: ['Crane Operation', 'Hazardous Removal', 'Emergency Response'],
+    maxCapacity: 3,
+    status: 'busy',
+    color: 'bg-red-500'
+  },
+  {
+    id: 'team2',
+    name: 'Beta Crew',
+    description: 'General tree services and maintenance',
+    teamLeaderId: '3',
+    members: ['3', '6'],
+    specialties: ['Tree Pruning', 'Cleanup', 'Customer Service'],
+    maxCapacity: 4,
+    status: 'available',
+    color: 'bg-green-500'
+  },
+  {
+    id: 'team3',
+    name: 'Equipment Team',
+    description: 'Heavy machinery and specialized equipment jobs',
+    teamLeaderId: '4',
+    members: ['4', '5'],
+    specialties: ['Heavy Machinery', 'Equipment Operation', 'Maintenance'],
+    maxCapacity: 2,
+    status: 'available',
+    color: 'bg-purple-500'
+  }
+];
+
 const mockJobAssignments: JobAssignment[] = [
   {
     id: '1',
     jobId: 'J001',
-    staffId: '2',
+    teamId: 'team1',
+    assignedTeam: ['1', '2'],
     customerName: 'Stephanie Syre',
     customerPhone: '(555) 123-4567',
     address: '123 Norfolk Pine Ave',
@@ -122,7 +172,8 @@ const mockJobAssignments: JobAssignment[] = [
   {
     id: '2',
     jobId: 'J002',
-    staffId: '1',
+    teamId: 'team1',
+    assignedTeam: ['1', '2'],
     customerName: 'Dave Tarry',
     customerPhone: '(555) 234-5678',
     address: '33 Wellington St, Gisborne',
@@ -136,7 +187,8 @@ const mockJobAssignments: JobAssignment[] = [
   {
     id: '3',
     jobId: 'J003',
-    staffId: '3',
+    teamId: 'team2',
+    assignedTeam: ['3', '6'],
     customerName: 'Johnson, Sarah',
     customerPhone: '(555) 345-6789',
     address: '456 Elm Street',
@@ -151,22 +203,24 @@ const mockJobAssignments: JobAssignment[] = [
   {
     id: '4',
     jobId: 'J004',
-    staffId: '4',
+    teamId: 'team3',
+    assignedTeam: ['4', '5'],
     customerName: 'Gray, Alex',
     customerPhone: '(555) 456-7890',
     address: '789 Pine Avenue',
-    serviceType: 'Contact Inquiry',
+    serviceType: 'Equipment Setup',
     startTime: '2024-12-20T15:45:00',
     endTime: '2024-12-20T16:15:00',
     duration: 0.5,
     status: 'scheduled',
     priority: 'low',
-    notes: 'Follow up on estimate'
+    notes: 'Heavy equipment positioning'
   },
   {
     id: '5',
     jobId: 'J005',
-    staffId: '6',
+    teamId: 'team2',
+    assignedTeam: ['3', '6'],
     customerName: 'Baty, Katrina',
     customerPhone: '(555) 567-8901',
     address: '321 Maple Drive',
@@ -208,11 +262,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
   };
 
-  const getJobsForStaff = (staffId: string) => {
+  const getJobsForTeam = (teamId: string) => {
     return mockJobAssignments.filter(job => {
-      if (job.staffId !== staffId) return false;
+      if (job.teamId !== teamId) return false;
       return isSameDay(new Date(job.startTime), selectedDate);
     });
+  };
+
+  const getTeamMembers = (teamId: string) => {
+    const team = mockTeams.find(t => t.id === teamId);
+    if (!team) return [];
+    return team.members.map(memberId => mockStaffMembers.find(s => s.id === memberId)).filter(Boolean) as StaffMember[];
   };
 
   const getTodaysJobs = () => {
@@ -223,7 +283,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   if (compact) {
     const todaysJobs = getTodaysJobs();
-    const activeStaff = mockStaffMembers.filter(staff => staff.status === 'available').length;
+    const activeTeams = mockTeams.filter(team => team.status === 'available').length;
     const scheduledJobs = todaysJobs.filter(job => job.status === 'scheduled').length;
 
     return (
@@ -239,10 +299,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-blue-500" />
-                <span className="text-sm">Active Staff</span>
+                <span className="text-sm">Active Teams</span>
               </div>
-              <Badge variant="secondary" data-testid="active-staff">
-                {activeStaff}
+              <Badge variant="secondary" data-testid="active-teams">
+                {activeTeams}
               </Badge>
             </div>
 
@@ -363,33 +423,35 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         <CardContent>
           <div className="flex gap-4 h-[600px]">
-            {/* Staff Column */}
+            {/* Team Column */}
             <div className="w-48 border-r pr-4">
-              <h3 className="font-semibold mb-4 text-sm text-muted-foreground">STAFF</h3>
+              <h3 className="font-semibold mb-4 text-sm text-muted-foreground">TEAMS</h3>
               <div className="space-y-2">
-                {mockStaffMembers.map((staff) => (
-                  <div
-                    key={staff.id}
-                    className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer"
-                    data-testid={`staff-${staff.id}`}
-                  >
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className={`${staff.color} text-white text-xs`}>
-                        {staff.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{staff.name.split(' ')[0]}</div>
-                      <div className="text-xs text-muted-foreground">{staff.role}</div>
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className={`text-xs ${getStatusColor(staff.status)}`}
+                {mockTeams.map((team) => {
+                  const teamMembers = getTeamMembers(team.id);
+                  const todaysJobs = getJobsForTeam(team.id);
+                  return (
+                    <div
+                      key={team.id}
+                      className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer"
+                      data-testid={`team-${team.id}`}
                     >
-                      {staff.status}
-                    </Badge>
-                  </div>
-                ))}
+                      <div className={`w-3 h-3 rounded-full ${team.color}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">{team.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {teamMembers.length} members • {todaysJobs.length} jobs
+                        </div>
+                      </div>
+                      <Badge
+                        variant="secondary"
+                        className={`text-xs ${getStatusColor(team.status)}`}
+                      >
+                        {team.status}
+                      </Badge>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -409,26 +471,26 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   ))}
                 </div>
 
-                {/* Staff Rows */}
+                {/* Team Rows */}
                 <div className="space-y-1">
-                  {mockStaffMembers.map((staff) => {
-                    const staffJobs = getJobsForStaff(staff.id);
+                  {mockTeams.map((team) => {
+                    const teamJobs = getJobsForTeam(team.id);
                     return (
-                      <div key={staff.id} className="relative h-16" data-testid={`staff-row-${staff.id}`}>
+                      <div key={team.id} className="relative h-16" data-testid={`team-row-${team.id}`}>
                         {/* Time Grid Background */}
                         <div className="grid grid-cols-12 gap-1 h-full absolute inset-0 z-0">
                           {timeSlots.map((time) => (
                             <div
-                              key={`${staff.id}-${time}`}
+                              key={`${team.id}-${time}`}
                               className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
-                              data-testid={`time-cell-${staff.id}-${time}`}
+                              data-testid={`time-cell-${team.id}-${time}`}
                             />
                           ))}
                         </div>
                         
                         {/* Job Blocks */}
                         <div className="relative h-full z-10">
-                          {staffJobs.map((job) => {
+                          {teamJobs.map((job) => {
                             const jobStart = new Date(job.startTime);
                             const jobEnd = new Date(job.endTime);
                             const dayStart = new Date(selectedDate);
@@ -489,7 +551,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               <div className="h-[540px] overflow-y-auto">
                 <div className="space-y-3">
                   {getTodaysJobs().map((job) => {
-                    const staff = mockStaffMembers.find(s => s.id === job.staffId);
+                    const team = mockTeams.find(t => t.id === job.teamId);
+                    const teamMembers = team ? getTeamMembers(team.id) : [];
                     return (
                       <Card
                         key={job.id}
@@ -530,10 +593,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 {format(new Date(job.startTime), 'HH:mm')} - {format(new Date(job.endTime), 'HH:mm')}
                               </span>
                             </div>
-                            {staff && (
+                            {team && (
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <User className="h-3 w-3" />
-                                <span data-testid={`job-staff-${job.id}`}>{staff.name}</span>
+                                <Users className="h-3 w-3" />
+                                <span data-testid={`job-team-${job.id}`}>
+                                  {team.name} ({teamMembers.length} members)
+                                </span>
                               </div>
                             )}
                           </div>
@@ -581,6 +646,49 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <span className="text-muted-foreground">Address:</span>
                     <span className="text-right max-w-[200px]">{selectedJob.address}</span>
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Team Assignment</h4>
+                <div className="space-y-2 text-sm">
+                  {(() => {
+                    const team = mockTeams.find(t => t.id === selectedJob.teamId);
+                    const teamMembers = team ? getTeamMembers(team.id) : [];
+                    return (
+                      <div>
+                        {team && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Team:</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{team.name}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {teamMembers.length} members
+                              </Badge>
+                            </div>
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Team Members:</span>
+                          <div className="space-y-1 ml-2">
+                            {teamMembers.map((member) => (
+                              <div key={member.id} className="flex items-center gap-2">
+                                <Avatar className="h-5 w-5">
+                                  <AvatarFallback className="text-xs">
+                                    {member.name.split(' ').map(n => n[0]).join('')}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                  <span className="text-xs font-medium">{member.name}</span>
+                                  <div className="text-xs text-muted-foreground">{member.role}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
