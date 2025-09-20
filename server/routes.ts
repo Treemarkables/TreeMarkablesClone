@@ -1436,6 +1436,54 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // ========================================
+  // ENHANCED LEAD ANALYTICS ENDPOINTS
+  // ========================================
+
+  // Lead Scoring endpoint - provides scored and prioritized leads
+  app.get('/api/lead-scoring', async (req: Request, res: Response) => {
+    try {
+      const scoredLeads = await storage.getLeadScoring();
+      res.json({ success: true, data: scoredLeads });
+    } catch (error) {
+      console.error('Error fetching lead scoring:', error);
+      res.status(500).json({ success: false, message: 'Error fetching lead scoring' });
+    }
+  });
+
+  // Conversion Funnel endpoint - provides funnel analysis and conversion rates
+  app.get('/api/conversion-funnel', async (req: Request, res: Response) => {
+    try {
+      const funnelData = await storage.getConversionFunnel();
+      res.json({ success: true, data: funnelData });
+    } catch (error) {
+      console.error('Error fetching conversion funnel:', error);
+      res.status(500).json({ success: false, message: 'Error fetching conversion funnel' });
+    }
+  });
+
+  // Follow-up Queue endpoint - provides leads requiring follow-up action
+  app.get('/api/follow-up-queue', async (req: Request, res: Response) => {
+    try {
+      const followUpQueue = await storage.getFollowUpQueue();
+      res.json({ success: true, data: followUpQueue });
+    } catch (error) {
+      console.error('Error fetching follow-up queue:', error);
+      res.status(500).json({ success: false, message: 'Error fetching follow-up queue' });
+    }
+  });
+
+  // Lead Source Analysis endpoint - provides ROI and performance by source
+  app.get('/api/lead-source-analysis', async (req: Request, res: Response) => {
+    try {
+      const sourceAnalysis = await storage.getLeadSourceAnalysis();
+      res.json({ success: true, data: sourceAnalysis });
+    } catch (error) {
+      console.error('Error fetching lead source analysis:', error);
+      res.status(500).json({ success: false, message: 'Error fetching lead source analysis' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
