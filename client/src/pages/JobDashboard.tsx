@@ -814,7 +814,7 @@ export default function JobDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {(leadScoring || []).filter((lead: any) => lead.priority === 'hot').slice(0, 5).map((lead: any) => (
+                    {Array.isArray(leadScoring) ? leadScoring.filter((lead: any) => lead.priority === 'hot').slice(0, 5).map((lead: any) => (
                       <div key={lead.id} className="p-3 border rounded-lg hover-elevate cursor-pointer">
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-medium text-sm">{lead.name}</h4>
@@ -1008,7 +1008,7 @@ export default function JobDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {(jobs || []).map((job: any) => (
+              {Array.isArray(jobs) ? jobs.map((job: any) => (
                 <Card key={job.id} className="hover-elevate cursor-pointer">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center justify-between">
@@ -1048,7 +1048,7 @@ export default function JobDashboard() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              )) : []}
             </div>
           </TabsContent>
 
@@ -1092,7 +1092,7 @@ export default function JobDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {(quotes || []).map((quote: any) => (
+              {Array.isArray(quotes) ? quotes.map((quote: any) => (
                 <Card key={quote.id} className="hover-elevate cursor-pointer">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center justify-between">
@@ -1122,7 +1122,7 @@ export default function JobDashboard() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              )) : []}
             </div>
           </TabsContent>
 
