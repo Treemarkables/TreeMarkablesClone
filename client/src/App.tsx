@@ -17,6 +17,7 @@ import JobDashboard from "@/pages/JobDashboard";
 import MetricsDashboard from "@/pages/MetricsDashboard";
 import Pipeline from "@/pages/Pipeline";
 import Opportunities from "@/pages/Opportunities";
+import Reputation from "@/pages/Reputation";
 import NotFound from "@/pages/not-found";
 import { useState } from "react";
 
@@ -69,6 +70,11 @@ function Router() {
       <Route path="/opportunities">
         <SidebarLayout>
           <Opportunities />
+        </SidebarLayout>
+      </Route>
+      <Route path="/reputation">
+        <SidebarLayout>
+          <Reputation />
         </SidebarLayout>
       </Route>
       {/* Fallback to 404 */}
