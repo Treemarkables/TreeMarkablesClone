@@ -14,6 +14,7 @@ import {
   insertScheduleEventSchema, updateScheduleEventSchema,
   insertJobTemplateSchema, updateJobTemplateSchema,
   insertEquipmentSchema, updateEquipmentSchema,
+  insertInventorySchema, insertEquipmentCheckoutSchema, insertEquipmentMaintenanceSchema,
   insertBusinessSettingsSchema, updateBusinessSettingsSchema,
   insertCommunicationSchema, updateCommunicationSchema,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
@@ -2810,7 +2811,113 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Get single equipment item
+  // ========================================
+  // EQUIPMENT CHECKOUT ROUTES (Must come before /api/equipment/:id)
+  // ========================================
+
+  // Get all equipment checkouts
+  app.get('/api/equipment/checkouts', async (req: Request, res: Response) => {
+    try {
+      const { status, equipmentId } = req.query;
+      
+      let checkouts;
+      if (status === 'overdue') {
+        checkouts = await storage.getOverdueCheckouts();
+      } else if (status === 'active') {
+        checkouts = await storage.getActiveCheckouts();
+      } else if (equipmentId) {
+        checkouts = await storage.getCheckoutHistory(equipmentId as string);
+      } else {
+        checkouts = await storage.getCheckoutHistory();
+      }
+
+      res.json({
+        success: true,
+        data: checkouts
+      });
+    } catch (error) {
+      console.error('Error fetching equipment checkouts:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching equipment checkouts'
+      });
+    }
+  });
+
+  // Check out equipment
+  app.post('/api/equipment/checkout', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertEquipmentCheckoutSchema.parse(req.body);
+      const checkout = await storage.checkoutEquipment(validatedData);
+      res.json({
+        success: true,
+        data: checkout,
+        message: 'Equipment checked out successfully'
+      });
+    } catch (error) {
+      console.error('Error checking out equipment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error checking out equipment'
+      });
+    }
+  });
+
+  // Check in equipment
+  app.put('/api/equipment/checkin/:checkoutId', async (req: Request, res: Response) => {
+    try {
+      const checkout = await storage.checkinEquipment(req.params.checkoutId, req.body);
+      res.json({
+        success: true,
+        data: checkout,
+        message: 'Equipment checked in successfully'
+      });
+    } catch (error) {
+      console.error('Error checking in equipment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error checking in equipment'
+      });
+    }
+  });
+
+  // Get maintenance records
+  app.get('/api/equipment/:equipmentId/maintenance', async (req: Request, res: Response) => {
+    try {
+      const maintenance = await storage.getMaintenanceByEquipment(req.params.equipmentId);
+      res.json({
+        success: true,
+        data: maintenance
+      });
+    } catch (error) {
+      console.error('Error fetching maintenance records:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching maintenance records'
+      });
+    }
+  });
+
+  // Create maintenance record
+  app.post('/api/equipment/maintenance', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertEquipmentMaintenanceSchema.parse(req.body);
+      const maintenance = await storage.createEquipmentMaintenance(validatedData);
+      res.json({
+        success: true,
+        data: maintenance,
+        message: 'Maintenance record created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating maintenance record:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating maintenance record'
+      });
+    }
+  });
+
+  // Get single equipment item (Must come after specific routes)
   app.get('/api/equipment/:id', async (req: Request, res: Response) => {
     try {
       const equipment = await storage.getEquipment(req.params.id);
@@ -2887,6 +2994,75 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       });
     }
   });
+
+  // ========================================
+  // INVENTORY MANAGEMENT ROUTES
+  // ========================================
+
+  // Get all inventory items
+  app.get('/api/inventory', async (req: Request, res: Response) => {
+    try {
+      const { category, lowStock } = req.query;
+      
+      let inventory;
+      if (lowStock === 'true') {
+        inventory = await storage.getLowStockItems();
+      } else if (category) {
+        inventory = await storage.getInventoryByCategory(category as string);
+      } else {
+        inventory = await storage.getAllInventory();
+      }
+
+      res.json({
+        success: true,
+        data: inventory
+      });
+    } catch (error) {
+      console.error('Error fetching inventory:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching inventory'
+      });
+    }
+  });
+
+  // Create new inventory item
+  app.post('/api/inventory', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertInventorySchema.parse(req.body);
+      const item = await storage.createInventoryItem(validatedData);
+      res.json({
+        success: true,
+        data: item,
+        message: 'Inventory item created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating inventory item:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating inventory item'
+      });
+    }
+  });
+
+  // Update inventory item
+  app.put('/api/inventory/:id', async (req: Request, res: Response) => {
+    try {
+      const item = await storage.updateInventoryItem(req.params.id, req.body);
+      res.json({
+        success: true,
+        data: item,
+        message: 'Inventory item updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating inventory item:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating inventory item'
+      });
+    }
+  });
+
 
   // ========================================
   // BUSINESS SETTINGS ROUTES

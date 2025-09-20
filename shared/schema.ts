@@ -880,6 +880,129 @@ export type Equipment = typeof equipment.$inferSelect;
 export type InsertEquipment = z.infer<typeof insertEquipmentSchema>;
 export type UpdateEquipment = z.infer<typeof updateEquipmentSchema>;
 
+// Equipment Maintenance Records
+export const equipmentMaintenance = pgTable("equipment_maintenance", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  equipmentId: varchar("equipment_id").references(() => equipment.id).notNull(),
+  maintenanceType: text("maintenance_type").notNull(), // routine, repair, inspection, calibration
+  description: text("description").notNull(),
+  performedBy: text("performed_by"), // technician name
+  cost: decimal("cost", { precision: 10, scale: 2 }),
+  partsReplaced: text("parts_replaced").array().default([]),
+  nextServiceDue: timestamp("next_service_due"),
+  notes: text("notes"),
+  photos: text("photos").array().default([]),
+  invoiceNumber: text("invoice_number"),
+  warrantyInfo: text("warranty_info"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Parts and Supplies Inventory
+export const inventory = pgTable("inventory", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  sku: text("sku").unique(),
+  category: text("category").notNull(), // parts, consumables, safety, tools
+  description: text("description"),
+  compatibleEquipment: text("compatible_equipment").array().default([]),
+  
+  // Inventory levels
+  currentStock: integer("current_stock").notNull().default(0),
+  minimumStock: integer("minimum_stock").notNull().default(1),
+  maximumStock: integer("maximum_stock").notNull().default(100),
+  reorderPoint: integer("reorder_point").notNull().default(5),
+  
+  // Pricing and suppliers
+  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }),
+  supplier: text("supplier"),
+  supplierPartNumber: text("supplier_part_number"),
+  
+  // Physical properties
+  unit: text("unit").default("each"), // each, kg, liter, meter
+  weight: decimal("weight", { precision: 8, scale: 2 }),
+  dimensions: text("dimensions"), // L x W x H
+  storageLocation: text("storage_location"),
+  
+  // Tracking
+  lastOrderDate: timestamp("last_order_date"),
+  lastUsedDate: timestamp("last_used_date"),
+  expirationDate: timestamp("expiration_date"),
+  notes: text("notes"),
+  photos: text("photos").array().default([]),
+  
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Equipment Check-in/Check-out System
+export const equipmentCheckouts = pgTable("equipment_checkouts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  equipmentId: varchar("equipment_id").references(() => equipment.id).notNull(),
+  checkedOutBy: text("checked_out_by").notNull(), // employee name
+  checkedOutTo: text("checked_out_to"), // job site or employee
+  jobId: varchar("job_id").references(() => jobs.id),
+  
+  checkoutTime: timestamp("checkout_time").defaultNow(),
+  expectedReturnTime: timestamp("expected_return_time"),
+  actualReturnTime: timestamp("actual_return_time"),
+  
+  checkoutCondition: text("checkout_condition").default("good"), // excellent, good, fair, damaged
+  returnCondition: text("return_condition"), 
+  
+  // Usage tracking
+  hoursUsed: decimal("hours_used", { precision: 8, scale: 2 }),
+  mileageStart: integer("mileage_start"),
+  mileageEnd: integer("mileage_end"),
+  fuelLevelStart: integer("fuel_level_start"), // percentage
+  fuelLevelEnd: integer("fuel_level_end"),
+  
+  notes: text("notes"),
+  damageReport: text("damage_report"),
+  photos: text("photos").array().default([]),
+  
+  status: text("status").default("checked_out"), // checked_out, returned, overdue, damaged
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Inventory Transactions  
+export const inventoryTransactions = pgTable("inventory_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  inventoryId: varchar("inventory_id").references(() => inventory.id).notNull(),
+  transactionType: text("transaction_type").notNull(), // purchase, usage, adjustment, return, waste
+  quantity: integer("quantity").notNull(),
+  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }),
+  totalCost: decimal("total_cost", { precision: 10, scale: 2 }),
+  
+  // Transaction context
+  jobId: varchar("job_id").references(() => jobs.id),
+  equipmentId: varchar("equipment_id").references(() => equipment.id),
+  employeeName: text("employee_name"),
+  supplier: text("supplier"),
+  invoiceNumber: text("invoice_number"),
+  
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Insert schemas for new tables
+export const insertEquipmentMaintenanceSchema = createInsertSchema(equipmentMaintenance).omit({ id: true, createdAt: true });
+export const insertInventorySchema = createInsertSchema(inventory).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertEquipmentCheckoutSchema = createInsertSchema(equipmentCheckouts).omit({ id: true, createdAt: true });
+export const insertInventoryTransactionSchema = createInsertSchema(inventoryTransactions).omit({ id: true, createdAt: true });
+
+// Types for new tables
+export type EquipmentMaintenance = typeof equipmentMaintenance.$inferSelect;
+export type Inventory = typeof inventory.$inferSelect;
+export type EquipmentCheckout = typeof equipmentCheckouts.$inferSelect;
+export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;
+
+export type InsertEquipmentMaintenance = z.infer<typeof insertEquipmentMaintenanceSchema>;
+export type InsertInventory = z.infer<typeof insertInventorySchema>;
+export type InsertEquipmentCheckout = z.infer<typeof insertEquipmentCheckoutSchema>;
+export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransactionSchema>;
+
 // ========================================
 // COMMUNICATIONS SYSTEM SCHEMAS
 // ========================================
