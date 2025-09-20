@@ -15,6 +15,7 @@ import multer from "multer";
 import Papa from "papaparse";
 import path from "path";
 import fs from "fs";
+import { format } from "date-fns";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -1676,6 +1677,198 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         success: false,
         message: error instanceof Error ? error.message : 'Error importing quotes',
       });
+    }
+  });
+
+  // ========================================  
+  // CSV EXPORT ENDPOINTS
+  // ========================================
+
+  // Export leads to CSV
+  app.get('/api/export/leads', async (req: Request, res: Response) => {
+    try {
+      const leads = await storage.getAllPipelineLeads();
+      
+      // Transform data for CSV export
+      const csvData = leads.map(lead => ({
+        ID: lead.id,
+        Name: lead.name,
+        Email: lead.email,
+        Phone: lead.phone,
+        Source: lead.source,
+        Status: lead.status,
+        Priority: lead.priority,
+        'Service Requested': lead.serviceRequested,
+        Notes: lead.notes,
+        'Follow-up Date': lead.followUpDate ? format(new Date(lead.followUpDate), 'yyyy-MM-dd') : '',
+        'Created Date': lead.createdAt ? format(new Date(lead.createdAt), 'yyyy-MM-dd') : '',
+        'Updated Date': lead.updatedAt ? format(new Date(lead.updatedAt), 'yyyy-MM-dd') : ''
+      }));
+
+      // Generate CSV
+      const csv = Papa.unparse(csvData);
+      const filename = `leads_export_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
+
+      res.set({
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      });
+      
+      res.send(csv);
+    } catch (error) {
+      console.error('Error exporting leads:', error);
+      res.status(500).json({ success: false, message: 'Error exporting leads' });
+    }
+  });
+
+  // Export customers to CSV
+  app.get('/api/export/customers', async (req: Request, res: Response) => {
+    try {
+      const customers = await storage.getAllCustomers();
+      
+      // Transform data for CSV export
+      const csvData = customers.map(customer => ({
+        ID: customer.id,
+        Name: customer.name,
+        Email: customer.email,
+        Phone: customer.phone,
+        Address: customer.address,
+        'Lifetime Value': customer.lifetimeValue || '',
+        Notes: customer.notes || '',
+        'Created Date': customer.createdAt ? format(new Date(customer.createdAt), 'yyyy-MM-dd') : '',
+        'Updated Date': customer.updatedAt ? format(new Date(customer.updatedAt), 'yyyy-MM-dd') : ''
+      }));
+
+      // Generate CSV
+      const csv = Papa.unparse(csvData);
+      const filename = `customers_export_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
+
+      res.set({
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      });
+      
+      res.send(csv);
+    } catch (error) {
+      console.error('Error exporting customers:', error);
+      res.status(500).json({ success: false, message: 'Error exporting customers' });
+    }
+  });
+
+  // Export jobs to CSV
+  app.get('/api/export/jobs', async (req: Request, res: Response) => {
+    try {
+      const jobs = await storage.getAllJobs();
+      
+      // Transform data for CSV export
+      const csvData = jobs.map(job => ({
+        ID: job.id,
+        'Customer ID': job.customerId,
+        Title: job.title,
+        Description: job.description,
+        Status: job.status,
+        Priority: job.priority,
+        Price: job.price,
+        'Scheduled Date': job.scheduledDate ? format(new Date(job.scheduledDate), 'yyyy-MM-dd') : '',
+        Location: job.location || '',
+        Notes: job.notes || '',
+        'Before Photos': job.beforePhotos ? job.beforePhotos.length : 0,
+        'After Photos': job.afterPhotos ? job.afterPhotos.length : 0,
+        'Created Date': job.createdAt ? format(new Date(job.createdAt), 'yyyy-MM-dd') : '',
+        'Updated Date': job.updatedAt ? format(new Date(job.updatedAt), 'yyyy-MM-dd') : ''
+      }));
+
+      // Generate CSV
+      const csv = Papa.unparse(csvData);
+      const filename = `jobs_export_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
+
+      res.set({
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      });
+      
+      res.send(csv);
+    } catch (error) {
+      console.error('Error exporting jobs:', error);
+      res.status(500).json({ success: false, message: 'Error exporting jobs' });
+    }
+  });
+
+  // Export quotes to CSV
+  app.get('/api/export/quotes', async (req: Request, res: Response) => {
+    try {
+      const quotes = await storage.getAllQuotes();
+      
+      // Transform data for CSV export
+      const csvData = quotes.map(quote => ({
+        ID: quote.id,
+        'Customer ID': quote.customerId,
+        'Job Title': quote.jobTitle,
+        Description: quote.description,
+        'Total Amount': quote.totalAmount,
+        Status: quote.status,
+        'Valid Until': quote.validUntil ? format(new Date(quote.validUntil), 'yyyy-MM-dd') : '',
+        Notes: quote.notes || '',
+        'Created Date': quote.createdAt ? format(new Date(quote.createdAt), 'yyyy-MM-dd') : '',
+        'Updated Date': quote.updatedAt ? format(new Date(quote.updatedAt), 'yyyy-MM-dd') : ''
+      }));
+
+      // Generate CSV
+      const csv = Papa.unparse(csvData);
+      const filename = `quotes_export_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
+
+      res.set({
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      });
+      
+      res.send(csv);
+    } catch (error) {
+      console.error('Error exporting quotes:', error);
+      res.status(500).json({ success: false, message: 'Error exporting quotes' });
+    }
+  });
+
+  // Export analytics data to CSV
+  app.get('/api/export/analytics', async (req: Request, res: Response) => {
+    try {
+      const [dashboardStats, revenueStats, quoteAnalytics] = await Promise.all([
+        storage.getDashboardStats(),
+        storage.getRevenueStats(),
+        storage.getQuoteAnalytics()
+      ]);
+      
+      // Create analytics summary data
+      const csvData = [{
+        'Export Date': format(new Date(), 'yyyy-MM-dd HH:mm:ss'),
+        'Total Leads': dashboardStats.totalLeads,
+        'Total Customers': dashboardStats.totalCustomers,
+        'Total Jobs': dashboardStats.totalJobs,
+        'Total Revenue': dashboardStats.totalRevenue,
+        'Conversion Rate': `${dashboardStats.conversionRate}%`,
+        'Average Quote Value': dashboardStats.averageQuoteValue,
+        'Jobs Completed': revenueStats.jobsCompleted,
+        'Average Job Value': revenueStats.averageJobValue,
+        'Total Quotes': quoteAnalytics.totalQuotes,
+        'Accepted Quotes': quoteAnalytics.acceptedQuotes,
+        'Rejected Quotes': quoteAnalytics.rejectedQuotes,
+        'Pending Quotes': quoteAnalytics.pendingQuotes,
+        'Average Response Time (days)': quoteAnalytics.averageResponseTime,
+      }];
+
+      // Generate CSV
+      const csv = Papa.unparse(csvData);
+      const filename = `analytics_export_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
+
+      res.set({
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      });
+      
+      res.send(csv);
+    } catch (error) {
+      console.error('Error exporting analytics:', error);
+      res.status(500).json({ success: false, message: 'Error exporting analytics' });
     }
   });
 
