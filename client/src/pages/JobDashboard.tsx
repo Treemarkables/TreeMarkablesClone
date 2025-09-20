@@ -657,7 +657,7 @@ export default function JobDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {(activities || []).slice(0, 10).map((activity: any, index: number) => (
+                    {Array.isArray(activities) ? activities.slice(0, 10).map((activity: any, index: number) => (
                       <div key={activity.id || index} className="flex items-center space-x-3 text-sm">
                         <div className="flex-shrink-0">
                           {activity.type === 'call' && <Phone className="h-4 w-4 text-blue-500" />}
@@ -672,7 +672,7 @@ export default function JobDashboard() {
                           </p>
                         </div>
                       </div>
-                    ))}
+                    )) : <div className="text-sm text-gray-500">No recent activity</div>}
                   </div>
                 </CardContent>
               </Card>
@@ -744,18 +744,18 @@ export default function JobDashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-red-700">
                     <AlertTriangle className="h-5 w-5" />
-                    Overdue Follow-ups ({(followUpQueue?.overdue || []).length})
+                    Overdue Follow-ups ({Array.isArray(followUpQueue?.overdue) ? followUpQueue.overdue.length : 0})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {(followUpQueue?.overdue || []).map((lead: any) => (
+                    {Array.isArray(followUpQueue?.overdue) ? followUpQueue.overdue.map((lead: any) => (
                       <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
                         <div className="font-medium text-sm">{lead.name}</div>
                         <div className="text-xs text-gray-600">{lead.phone}</div>
                         <div className="text-xs text-red-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
                       </div>
-                    )) || <div className="text-sm text-gray-500">No overdue follow-ups</div>}
+                    )) : <div className="text-sm text-gray-500">No overdue follow-ups</div>}
                   </div>
                 </CardContent>
               </Card>
@@ -764,18 +764,18 @@ export default function JobDashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-yellow-700">
                     <Clock className="h-5 w-5" />
-                    Today ({(followUpQueue?.today || []).length})
+                    Today ({Array.isArray(followUpQueue?.today) ? followUpQueue.today.length : 0})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {(followUpQueue?.today || []).map((lead: any) => (
+                    {Array.isArray(followUpQueue?.today) ? followUpQueue.today.map((lead: any) => (
                       <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
                         <div className="font-medium text-sm">{lead.name}</div>
                         <div className="text-xs text-gray-600">{lead.phone}</div>
                         <div className="text-xs text-yellow-600">{lead.serviceRequested}</div>
                       </div>
-                    )) || <div className="text-sm text-gray-500">No follow-ups today</div>}
+                    )) : <div className="text-sm text-gray-500">No follow-ups today</div>}
                   </div>
                 </CardContent>
               </Card>
@@ -784,18 +784,18 @@ export default function JobDashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-blue-700">
                     <Calendar className="h-5 w-5" />
-                    This Week ({(followUpQueue?.thisWeek || []).length})
+                    This Week ({Array.isArray(followUpQueue?.thisWeek) ? followUpQueue.thisWeek.length : 0})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {(followUpQueue?.thisWeek || []).map((lead: any) => (
+                    {Array.isArray(followUpQueue?.thisWeek) ? followUpQueue.thisWeek.map((lead: any) => (
                       <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
                         <div className="font-medium text-sm">{lead.name}</div>
                         <div className="text-xs text-gray-600">{lead.phone}</div>
                         <div className="text-xs text-blue-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
                       </div>
-                    )) || <div className="text-sm text-gray-500">No follow-ups this week</div>}
+                    )) : <div className="text-sm text-gray-500">No follow-ups this week</div>}
                   </div>
                 </CardContent>
               </Card>
@@ -835,7 +835,7 @@ export default function JobDashboard() {
                           </p>
                         )}
                       </div>
-                    )) || <div className="text-sm text-gray-500">No high priority leads</div>}
+                    )) : <div className="text-sm text-gray-500">No high priority leads</div>}
                   </div>
                 </CardContent>
               </Card>
@@ -936,7 +936,7 @@ export default function JobDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(leadSourceAnalysis || []).map((source: any) => (
+                      {Array.isArray(leadSourceAnalysis) ? leadSourceAnalysis.map((source: any) => (
                         <tr key={source.source} className="border-b hover-elevate">
                           <td className="p-2 font-medium capitalize">{source.source}</td>
                           <td className="p-2 text-right">{source.count}</td>
@@ -946,7 +946,11 @@ export default function JobDashboard() {
                             {source.roi.toFixed(0)}%
                           </td>
                         </tr>
-                      ))}
+                      )) : (
+                        <tr>
+                          <td colSpan={5} className="p-4 text-center text-gray-500">No lead source data available</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1143,7 +1147,7 @@ export default function JobDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {(customers || [])
+              {Array.isArray(customers) ? customers
                 .filter((customer: any) => 
                   customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                   customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1185,7 +1189,7 @@ export default function JobDashboard() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                ) : <div className="text-center text-gray-500 py-8">No customers found</div>}
             </div>
           </TabsContent>
 
