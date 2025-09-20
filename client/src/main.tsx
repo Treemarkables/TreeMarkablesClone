@@ -1,30 +1,25 @@
 import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./index.css";
 
-const rootElement = document.getElementById("root")!;
-
-// Test with minimal HTML
-rootElement.innerHTML = `
-  <div style="padding: 20px;">
-    <h1>Basic HTML Test</h1>
-    <p>If you see this, the basic loading works.</p>
-    <p>Now loading React...</p>
-  </div>
-`;
-
-// Try to create React root
-try {
-  const MinimalComponent = () => {
-    return (
-      <div style={{ padding: '20px' }}>
-        <h1>React is Working!</h1>
-        <p>This is rendered by React without any hooks.</p>
-      </div>
-    );
-  };
-  
-  const root = createRoot(rootElement);
-  root.render(<MinimalComponent />);
-} catch (error) {
-  console.error("Error with React:", error);
-  rootElement.innerHTML += `<p style="color: red;">React Error: ${error}</p>`;
+// Unregister service worker in development to prevent caching issues
+if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(registration => registration.unregister());
+  });
 }
+
+// Register Service Worker for PWA functionality (production only)
+if (!import.meta.env.DEV && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((registration) => {
+        console.log('SW registered: ', registration);
+      })
+      .catch((registrationError) => {
+        console.log('SW registration failed: ', registrationError);
+      });
+  });
+}
+
+createRoot(document.getElementById("root")!).render(<App />);
