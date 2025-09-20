@@ -7,6 +7,7 @@ import {
   type SocialPlan, type InsertSocialPlan, type CompetitorSignal, type InsertCompetitorSignal,
   type PriceRule, type InsertPriceRule, type CsvImportResult,
   type ServiceM8CustomerCsv, type ServiceM8JobCsv, type ServiceM8QuoteCsv,
+  type Notification, type InsertNotification, type UpdateNotification, type NotificationSummary, type NotificationWithDetails,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -176,6 +177,18 @@ export interface IStorage {
   importCustomersFromCsv(csvData: any[]): Promise<CsvImportResult>;
   importJobsFromCsv(csvData: any[]): Promise<CsvImportResult>;
   importQuotesFromCsv(csvData: any[]): Promise<CsvImportResult>;
+
+  // Notification Management
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotification(id: string): Promise<Notification | undefined>;
+  updateNotification(id: string, updates: UpdateNotification): Promise<Notification>;
+  getAllNotifications(userId?: string, limit?: number): Promise<NotificationWithDetails[]>;
+  getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]>;
+  markNotificationAsRead(id: string): Promise<Notification>;
+  markAllNotificationsAsRead(userId?: string): Promise<void>;
+  deleteNotification(id: string): Promise<void>;
+  getNotificationSummary(userId?: string): Promise<NotificationSummary>;
+  deleteExpiredNotifications(): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -192,6 +205,7 @@ export class MemStorage implements IStorage {
   private socialPlans: Map<string, SocialPlan>;
   private competitorSignals: Map<string, CompetitorSignal>;
   private priceRules: Map<string, PriceRule>;
+  private notifications: Map<string, Notification>;
 
   constructor() {
     this.users = new Map();
@@ -207,6 +221,7 @@ export class MemStorage implements IStorage {
     this.socialPlans = new Map();
     this.competitorSignals = new Map();
     this.priceRules = new Map();
+    this.notifications = new Map();
     
     // Add sample data for demo purposes
     this.initializeSampleData();
@@ -1680,6 +1695,294 @@ export class MemStorage implements IStorage {
     }
 
     return result;
+  }
+
+  // ========================================
+  // NOTIFICATION METHODS
+  // ========================================
+
+  async createNotification(notificationData: InsertNotification): Promise<Notification> {
+    const notification: Notification = {
+      id: randomUUID(),
+      ...notificationData,
+      createdAt: new Date(),
+      readAt: null,
+    };
+    
+    this.notifications.set(notification.id, notification);
+    return notification;
+  }
+
+  async getNotification(id: string): Promise<Notification | undefined> {
+    return this.notifications.get(id);
+  }
+
+  async updateNotification(id: string, updates: UpdateNotification): Promise<Notification> {
+    const existing = this.notifications.get(id);
+    if (!existing) {
+      throw new Error('Notification not found');
+    }
+
+    const updated: Notification = {
+      ...existing,
+      ...updates,
+    };
+    
+    this.notifications.set(id, updated);
+    return updated;
+  }
+
+  async getAllNotifications(userId?: string, limit?: number): Promise<NotificationWithDetails[]> {
+    let notifications = Array.from(this.notifications.values());
+    
+    // Filter by user if provided
+    if (userId) {
+      notifications = notifications.filter(n => !n.userId || n.userId === userId);
+    }
+    
+    // Sort by creation date (newest first)
+    notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    // Apply limit if provided
+    if (limit) {
+      notifications = notifications.slice(0, limit);
+    }
+    
+    // Enrich with related data
+    return await Promise.all(notifications.map(notification => this.enrichNotificationWithDetails(notification)));
+  }
+
+  async getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]> {
+    let notifications = Array.from(this.notifications.values()).filter(n => !n.isRead);
+    
+    // Filter by user if provided
+    if (userId) {
+      notifications = notifications.filter(n => !n.userId || n.userId === userId);
+    }
+    
+    // Sort by creation date (newest first)
+    notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    // Enrich with related data
+    return await Promise.all(notifications.map(notification => this.enrichNotificationWithDetails(notification)));
+  }
+
+  async markNotificationAsRead(id: string): Promise<Notification> {
+    const notification = this.notifications.get(id);
+    if (!notification) {
+      throw new Error('Notification not found');
+    }
+
+    const updated: Notification = {
+      ...notification,
+      isRead: true,
+      readAt: new Date(),
+    };
+    
+    this.notifications.set(id, updated);
+    return updated;
+  }
+
+  async markAllNotificationsAsRead(userId?: string): Promise<void> {
+    for (const [id, notification] of this.notifications) {
+      if (!notification.isRead && (!userId || !notification.userId || notification.userId === userId)) {
+        const updated: Notification = {
+          ...notification,
+          isRead: true,
+          readAt: new Date(),
+        };
+        this.notifications.set(id, updated);
+      }
+    }
+  }
+
+  async deleteNotification(id: string): Promise<void> {
+    this.notifications.delete(id);
+  }
+
+  async getNotificationSummary(userId?: string): Promise<NotificationSummary> {
+    let notifications = Array.from(this.notifications.values());
+    
+    // Filter by user if provided
+    if (userId) {
+      notifications = notifications.filter(n => !n.userId || n.userId === userId);
+    }
+    
+    const total = notifications.length;
+    const unread = notifications.filter(n => !n.isRead).length;
+    
+    // Group by type
+    const byType: Record<string, number> = {};
+    notifications.forEach(n => {
+      byType[n.type] = (byType[n.type] || 0) + 1;
+    });
+    
+    // Group by priority
+    const byPriority: Record<string, number> = {};
+    notifications.forEach(n => {
+      byPriority[n.priority] = (byPriority[n.priority] || 0) + 1;
+    });
+    
+    // Get recent notifications (last 5)
+    const recent = notifications
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5)
+      .map(n => ({
+        id: n.id,
+        title: n.title,
+        type: n.type,
+        priority: n.priority,
+        createdAt: n.createdAt.toISOString(),
+      }));
+    
+    return {
+      total,
+      unread,
+      byType,
+      byPriority,
+      recent,
+    };
+  }
+
+  async deleteExpiredNotifications(): Promise<void> {
+    const now = new Date();
+    for (const [id, notification] of this.notifications) {
+      if (notification.expiresAt && notification.expiresAt < now) {
+        this.notifications.delete(id);
+      }
+    }
+  }
+
+  // Helper method to enrich notifications with related entity details
+  private async enrichNotificationWithDetails(notification: Notification): Promise<NotificationWithDetails> {
+    const enriched: NotificationWithDetails = { ...notification };
+    
+    // Add lead name if notification is lead-related
+    if (notification.leadId) {
+      const lead = this.pipelineLeads.get(notification.leadId);
+      if (lead) {
+        enriched.leadName = lead.name;
+      }
+    }
+    
+    // Add customer name if notification is customer-related
+    if (notification.customerId) {
+      const customer = this.customers.get(notification.customerId);
+      if (customer) {
+        enriched.customerName = customer.name;
+      }
+    }
+    
+    // Add job title if notification is job-related
+    if (notification.jobId) {
+      const job = this.jobs.get(notification.jobId);
+      if (job) {
+        enriched.jobTitle = job.title;
+      }
+    }
+    
+    // Add quote number if notification is quote-related
+    if (notification.quoteId) {
+      const quote = this.quotes.get(notification.quoteId);
+      if (quote) {
+        enriched.quoteNumber = quote.quoteNumber;
+      }
+    }
+    
+    return enriched;
+  }
+
+  // Helper method to create notifications for business events
+  async createBusinessEventNotification(
+    type: string, 
+    entityId: string, 
+    entityType: 'lead' | 'job' | 'customer' | 'quote',
+    customMessage?: string
+  ): Promise<void> {
+    const notification: InsertNotification = {
+      type,
+      priority: this.getNotificationPriorityForType(type),
+      title: this.getNotificationTitleForType(type, entityType),
+      message: customMessage || this.getNotificationMessageForType(type, entityType),
+      isRead: false,
+      actionUrl: `/job-dashboard?tab=${this.getTabForEntityType(entityType)}`,
+    };
+    
+    // Set the appropriate entity reference
+    switch (entityType) {
+      case 'lead':
+        notification.leadId = entityId;
+        break;
+      case 'job':
+        notification.jobId = entityId;
+        break;
+      case 'customer':
+        notification.customerId = entityId;
+        break;
+      case 'quote':
+        notification.quoteId = entityId;
+        break;
+    }
+    
+    await this.createNotification(notification);
+  }
+
+  private getNotificationPriorityForType(type: string): string {
+    const priorities: Record<string, string> = {
+      'new_lead': 'high',
+      'follow_up_overdue': 'urgent',
+      'quote_expired': 'high',
+      'job_completed': 'medium',
+      'payment_received': 'low',
+      'system_alert': 'medium',
+    };
+    return priorities[type] || 'medium';
+  }
+
+  private getNotificationTitleForType(type: string, entityType: string): string {
+    const titles: Record<string, string> = {
+      'new_lead': 'New Lead Received',
+      'lead_status_change': 'Lead Status Updated',
+      'job_status_change': 'Job Status Updated',
+      'quote_sent': 'Quote Sent',
+      'quote_accepted': 'Quote Accepted',
+      'quote_expired': 'Quote Expired',
+      'follow_up_due': 'Follow-up Due',
+      'follow_up_overdue': 'Follow-up Overdue',
+      'job_scheduled': 'Job Scheduled',
+      'job_completed': 'Job Completed',
+      'payment_received': 'Payment Received',
+      'system_alert': 'System Alert',
+    };
+    return titles[type] || 'Notification';
+  }
+
+  private getNotificationMessageForType(type: string, entityType: string): string {
+    const messages: Record<string, string> = {
+      'new_lead': `A new ${entityType} has been added to your pipeline.`,
+      'lead_status_change': `A ${entityType} status has been updated.`,
+      'job_status_change': `A ${entityType} status has been updated.`,
+      'quote_sent': `A ${entityType} has been sent to the customer.`,
+      'quote_accepted': `A ${entityType} has been accepted by the customer.`,
+      'quote_expired': `A ${entityType} has expired and needs attention.`,
+      'follow_up_due': `A follow-up is due for this ${entityType}.`,
+      'follow_up_overdue': `A follow-up is overdue for this ${entityType}.`,
+      'job_scheduled': `A ${entityType} has been scheduled.`,
+      'job_completed': `A ${entityType} has been completed.`,
+      'payment_received': `Payment has been received for this ${entityType}.`,
+      'system_alert': 'System notification.',
+    };
+    return messages[type] || 'You have a new notification.';
+  }
+
+  private getTabForEntityType(entityType: string): string {
+    const tabs: Record<string, string> = {
+      'lead': 'leads',
+      'job': 'jobs',
+      'customer': 'customers',
+      'quote': 'quotes',
+    };
+    return tabs[entityType] || 'overview';
   }
 }
 

@@ -9,6 +9,7 @@ import {
   insertCustomerSchema, insertLeadSchema, insertCallSchema, insertQuoteSchema,
   insertJobSchema, insertActivitySchema, insertReviewSchema, insertCampaignSchema,
   insertSocialPlanSchema, insertCompetitorSignalSchema, insertPriceRuleSchema,
+  insertNotificationSchema, updateNotificationSchema,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import multer from "multer";
@@ -1676,6 +1677,145 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Error importing quotes',
+      });
+    }
+  });
+
+  // ========================================  
+  // NOTIFICATION ENDPOINTS
+  // ========================================
+
+  // Get all notifications
+  app.get('/api/notifications', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.userId as string;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+      
+      const notifications = await storage.getAllNotifications(userId, limit);
+      
+      res.json({
+        success: true,
+        data: notifications,
+      });
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching notifications',
+      });
+    }
+  });
+
+  // Get unread notifications
+  app.get('/api/notifications/unread', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.userId as string;
+      const notifications = await storage.getUnreadNotifications(userId);
+      
+      res.json({
+        success: true,
+        data: notifications,
+      });
+    } catch (error) {
+      console.error('Error fetching unread notifications:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching unread notifications',
+      });
+    }
+  });
+
+  // Get notification summary
+  app.get('/api/notifications/summary', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.userId as string;
+      const summary = await storage.getNotificationSummary(userId);
+      
+      res.json({
+        success: true,
+        data: summary,
+      });
+    } catch (error) {
+      console.error('Error fetching notification summary:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching notification summary',
+      });
+    }
+  });
+
+  // Mark notification as read
+  app.patch('/api/notifications/:id/read', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const notification = await storage.markNotificationAsRead(id);
+      
+      res.json({
+        success: true,
+        data: notification,
+      });
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error updating notification',
+      });
+    }
+  });
+
+  // Mark all notifications as read
+  app.patch('/api/notifications/read-all', async (req: Request, res: Response) => {
+    try {
+      const userId = req.body.userId as string;
+      await storage.markAllNotificationsAsRead(userId);
+      
+      res.json({
+        success: true,
+        message: 'All notifications marked as read',
+      });
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating notifications',
+      });
+    }
+  });
+
+  // Create a new notification (for testing purposes)
+  app.post('/api/notifications', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertNotificationSchema.parse(req.body);
+      const notification = await storage.createNotification(validatedData);
+      
+      res.json({
+        success: true,
+        data: notification,
+      });
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error creating notification',
+      });
+    }
+  });
+
+  // Delete notification
+  app.delete('/api/notifications/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteNotification(id);
+      
+      res.json({
+        success: true,
+        message: 'Notification deleted successfully',
+      });
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting notification',
       });
     }
   });
