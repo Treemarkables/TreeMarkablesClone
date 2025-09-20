@@ -71,6 +71,7 @@ import {
 } from "lucide-react";
 import PhotoUpload from "@/components/PhotoUpload";
 import { NotificationBell } from "@/components/NotificationBell";
+import { CalendarView } from "@/components/CalendarView";
 
 // Add Speech Recognition types for TypeScript
 declare global {
@@ -714,7 +715,7 @@ export default function JobDashboard() {
 
         {/* Main Dashboard Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-7 h-auto p-1 bg-gradient-to-r from-pink-400 via-purple-400 via-blue-400 via-cyan-400 via-green-400 via-yellow-400 to-orange-400 dark:from-pink-600 dark:via-purple-600 dark:via-blue-600 dark:via-cyan-600 dark:via-green-600 dark:via-yellow-600 dark:to-orange-600 border-4 border-white shadow-2xl rounded-2xl">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-8 h-auto p-1 bg-gradient-to-r from-pink-400 via-purple-400 via-blue-400 via-cyan-400 via-green-400 via-yellow-400 to-orange-400 dark:from-pink-600 dark:via-purple-600 dark:via-blue-600 dark:via-cyan-600 dark:via-green-600 dark:via-yellow-600 dark:to-orange-600 border-4 border-white shadow-2xl rounded-2xl">
             <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
               🌟 Overview
             </TabsTrigger>
@@ -729,6 +730,9 @@ export default function JobDashboard() {
             </TabsTrigger>
             <TabsTrigger value="customers" data-testid="tab-customers" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
               👥 Customers
+            </TabsTrigger>
+            <TabsTrigger value="schedule" data-testid="tab-schedule" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
+              📅 Schedule
             </TabsTrigger>
             <TabsTrigger value="analytics" data-testid="tab-analytics" className="min-h-12 sm:min-h-10 text-sm px-2 text-rainbow">
               📊 Analytics
@@ -1548,6 +1552,91 @@ export default function JobDashboard() {
                 : 
                 <div className="text-center text-gray-500 py-8">No customers found</div>
               }
+            </div>
+          </TabsContent>
+
+          {/* Schedule Tab */}
+          <TabsContent value="schedule" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold flex items-center gap-2 text-rainbow">
+                <Calendar className="h-6 w-6" />
+                Job Schedule
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button 
+                  className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white shadow-lg"
+                  onClick={() => setShowNewJobDialog(true)}
+                  data-testid="button-new-scheduled-job"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Schedule Job
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <CalendarView 
+                view="week"
+                onEventClick={(event) => {
+                  console.log('Event clicked:', event);
+                  // Could open event details dialog here
+                }}
+                onAddEvent={(date) => {
+                  console.log('Add event for date:', date);
+                  setShowNewJobDialog(true);
+                }}
+              />
+
+              {/* Quick Stats for Scheduling */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                <Card className="bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-xl border-0">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-blue-100 text-sm">Today's Jobs</p>
+                        <p className="text-2xl font-bold">3</p>
+                      </div>
+                      <Calendar className="h-8 w-8 text-blue-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-green-500 to-teal-600 text-white shadow-xl border-0">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-green-100 text-sm">This Week</p>
+                        <p className="text-2xl font-bold">12</p>
+                      </div>
+                      <Clock className="h-8 w-8 text-green-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-orange-500 to-red-600 text-white shadow-xl border-0">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-orange-100 text-sm">Crew Members</p>
+                        <p className="text-2xl font-bold">8</p>
+                      </div>
+                      <Users className="h-8 w-8 text-orange-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-xl border-0">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-purple-100 text-sm">Equipment</p>
+                        <p className="text-2xl font-bold">15</p>
+                      </div>
+                      <Settings className="h-8 w-8 text-purple-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 

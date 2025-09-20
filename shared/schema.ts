@@ -528,3 +528,205 @@ export const notificationSummarySchema = z.object({
 });
 
 export type NotificationSummary = z.infer<typeof notificationSummarySchema>;
+
+// ========================================
+// SCHEDULING & TEAM MANAGEMENT SCHEMAS
+// ========================================
+
+// Employee/Team Member Schema
+export const employees = pgTable("employees", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  position: text("position").notNull(), // arborist, ground_crew, foreman, driver
+  status: text("status").notNull().default("active"), // active, inactive, on_leave
+  skillLevel: text("skill_level").notNull().default("beginner"), // beginner, intermediate, expert
+  certifications: text("certifications").array().default([]), // ISA, CTSP, etc.
+  skills: text("skills").array().default([]), // chainsaw, bucket_truck, climbing, etc.
+  hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
+  availableHours: text("available_hours"), // JSON: {"mon": "8-17", "tue": "8-17", ...}
+  emergencyContact: text("emergency_contact"),
+  notes: text("notes"),
+  hireDate: timestamp("hire_date"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertEmployeeSchema = createInsertSchema(employees);
+
+export const updateEmployeeSchema = insertEmployeeSchema.partial();
+
+export type Employee = typeof employees.$inferSelect;
+export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
+export type UpdateEmployee = z.infer<typeof updateEmployeeSchema>;
+
+// Schedule/Calendar Events Schema
+export const scheduleEvents = pgTable("schedule_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  type: text("type").notNull(), // job, meeting, training, maintenance, break
+  status: text("status").notNull().default("scheduled"), // scheduled, in_progress, completed, cancelled
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  allDay: boolean("all_day").notNull().default(false),
+  
+  // Related entities
+  jobId: varchar("job_id"), // FK to jobs
+  customerId: varchar("customer_id"), // FK to customers
+  leadId: varchar("lead_id"), // FK to pipeline_leads
+  
+  // Resource assignments
+  assignedEmployees: text("assigned_employees").array().default([]), // Employee IDs
+  requiredSkills: text("required_skills").array().default([]),
+  equipment: text("equipment").array().default([]), // Equipment/vehicle IDs
+  
+  // Location and logistics
+  location: text("location"),
+  address: text("address"),
+  travelTime: integer("travel_time"), // minutes
+  estimatedDuration: integer("estimated_duration"), // minutes
+  
+  // Priority and planning
+  priority: text("priority").notNull().default("medium"), // low, medium, high, urgent
+  weatherDependent: boolean("weather_dependent").notNull().default(true),
+  
+  // Metadata
+  color: text("color").default("#3B82F6"), // For calendar display
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertScheduleEventSchema = createInsertSchema(scheduleEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  // Override date fields to accept flexible datetime formats
+  startDate: z.union([
+    z.date(),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{3})?Z?$/)
+  ]).transform(val => {
+    if (typeof val === 'string') {
+      // Add seconds if missing (for datetime-local input format)
+      const dateStr = val.includes(':') && val.split(':').length === 2 ? `${val}:00` : val;
+      return new Date(dateStr);
+    }
+    return val;
+  }),
+  endDate: z.union([
+    z.date(),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{3})?Z?$/)
+  ]).transform(val => {
+    if (typeof val === 'string') {
+      // Add seconds if missing (for datetime-local input format)
+      const dateStr = val.includes(':') && val.split(':').length === 2 ? `${val}:00` : val;
+      return new Date(dateStr);
+    }
+    return val;
+  }),
+});
+
+export const updateScheduleEventSchema = insertScheduleEventSchema.partial();
+
+export type ScheduleEvent = typeof scheduleEvents.$inferSelect;
+export type InsertScheduleEvent = z.infer<typeof insertScheduleEventSchema>;
+export type UpdateScheduleEvent = z.infer<typeof updateScheduleEventSchema>;
+
+// Job Template Schema  
+export const jobTemplates = pgTable("job_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  category: text("category").notNull(), // tree_removal, pruning, stump_grinding, emergency, maintenance
+  description: text("description"),
+  
+  // Default pricing
+  basePrice: decimal("base_price", { precision: 10, scale: 2 }),
+  pricePerHour: decimal("price_per_hour", { precision: 10, scale: 2 }),
+  materialCosts: decimal("material_costs", { precision: 10, scale: 2 }),
+  
+  // Resource requirements
+  estimatedDuration: integer("estimated_duration"), // minutes
+  requiredSkills: text("required_skills").array().default([]),
+  requiredEquipment: text("required_equipment").array().default([]),
+  crewSize: integer("crew_size").default(2),
+  
+  // Safety and procedures
+  safetyRequirements: text("safety_requirements").array().default([]),
+  procedures: text("procedures"),
+  riskLevel: text("risk_level").notNull().default("medium"), // low, medium, high, extreme
+  
+  // Checklist items
+  preJobChecklist: text("pre_job_checklist").array().default([]),
+  postJobChecklist: text("post_job_checklist").array().default([]),
+  
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertJobTemplateSchema = createInsertSchema(jobTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateJobTemplateSchema = insertJobTemplateSchema.partial();
+
+export type JobTemplate = typeof jobTemplates.$inferSelect;
+export type InsertJobTemplate = z.infer<typeof insertJobTemplateSchema>;
+export type UpdateJobTemplate = z.infer<typeof updateJobTemplateSchema>;
+
+// Equipment/Resource Schema
+export const equipment = pgTable("equipment", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // vehicle, chainsaw, chipper, bucket_truck, stump_grinder, safety_gear
+  brand: text("brand"),
+  model: text("model"),
+  year: integer("year"),
+  
+  // Status and availability
+  status: text("status").notNull().default("available"), // available, in_use, maintenance, retired
+  condition: text("condition").notNull().default("good"), // excellent, good, fair, needs_repair
+  
+  // Maintenance and tracking
+  lastMaintenanceDate: timestamp("last_maintenance_date"),
+  nextMaintenanceDate: timestamp("next_maintenance_date"),
+  maintenanceIntervalDays: integer("maintenance_interval_days").default(90),
+  hoursUsed: decimal("hours_used", { precision: 10, scale: 2 }).default("0"),
+  
+  // Financial
+  purchasePrice: decimal("purchase_price", { precision: 10, scale: 2 }),
+  currentValue: decimal("current_value", { precision: 10, scale: 2 }),
+  dailyRentalCost: decimal("daily_rental_cost", { precision: 10, scale: 2 }),
+  
+  // Location and assignments
+  currentLocation: text("current_location"),
+  assignedTo: varchar("assigned_to"), // Employee ID
+  
+  // Documentation
+  serialNumber: text("serial_number"),
+  registrationNumber: text("registration_number"),
+  insurancePolicyNumber: text("insurance_policy_number"),
+  notes: text("notes"),
+  photos: text("photos").array().default([]),
+  
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertEquipmentSchema = createInsertSchema(equipment);
+
+export const updateEquipmentSchema = insertEquipmentSchema.partial();
+
+export type Equipment = typeof equipment.$inferSelect;
+export type InsertEquipment = z.infer<typeof insertEquipmentSchema>;
+export type UpdateEquipment = z.infer<typeof updateEquipmentSchema>;
