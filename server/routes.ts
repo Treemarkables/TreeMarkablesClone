@@ -6,10 +6,28 @@ import {
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertLeadSchema, insertCallSchema, insertQuoteSchema,
   insertJobSchema, insertActivitySchema, insertReviewSchema, insertCampaignSchema,
-  insertSocialPlanSchema, insertCompetitorSignalSchema, insertPriceRuleSchema
+  insertSocialPlanSchema, insertCompetitorSignalSchema, insertPriceRuleSchema,
+  servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
+import multer from "multer";
+import Papa from "papaparse";
 import path from "path";
 import fs from "fs";
+
+// Configure multer for file uploads
+const upload = multer({ 
+  dest: 'uploads/',
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'));
+    }
+  }
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // SEO routes - serve sitemap.xml and robots.txt
@@ -1481,6 +1499,154 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error fetching lead source analysis:', error);
       res.status(500).json({ success: false, message: 'Error fetching lead source analysis' });
+    }
+  });
+
+  // ========================================
+  // CSV IMPORT ENDPOINTS FOR SERVICEM8 MIGRATION
+  // ========================================
+
+  // Import customers from ServiceM8 CSV export
+  app.post('/api/import/customers', upload.single('csvFile'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No CSV file provided' });
+      }
+
+      // Read and parse the CSV file
+      const csvContent = fs.readFileSync(req.file.path, 'utf8');
+      const parsedCsv = Papa.parse(csvContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
+
+      if (parsedCsv.errors.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'CSV parsing errors',
+          errors: parsedCsv.errors,
+        });
+      }
+
+      // Import the data
+      const importResult = await storage.importCustomersFromCsv(parsedCsv.data);
+
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      res.json({
+        success: true,
+        message: `Successfully imported ${importResult.successfulImports} of ${importResult.totalRows} customers`,
+        data: importResult,
+      });
+    } catch (error) {
+      // Clean up uploaded file on error
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      console.error('Error importing customers:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error importing customers',
+      });
+    }
+  });
+
+  // Import jobs from ServiceM8 CSV export
+  app.post('/api/import/jobs', upload.single('csvFile'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No CSV file provided' });
+      }
+
+      // Read and parse the CSV file
+      const csvContent = fs.readFileSync(req.file.path, 'utf8');
+      const parsedCsv = Papa.parse(csvContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
+
+      if (parsedCsv.errors.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'CSV parsing errors',
+          errors: parsedCsv.errors,
+        });
+      }
+
+      // Import the data
+      const importResult = await storage.importJobsFromCsv(parsedCsv.data);
+
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      res.json({
+        success: true,
+        message: `Successfully imported ${importResult.successfulImports} of ${importResult.totalRows} jobs`,
+        data: importResult,
+      });
+    } catch (error) {
+      // Clean up uploaded file on error
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      console.error('Error importing jobs:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error importing jobs',
+      });
+    }
+  });
+
+  // Import quotes from ServiceM8 CSV export
+  app.post('/api/import/quotes', upload.single('csvFile'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No CSV file provided' });
+      }
+
+      // Read and parse the CSV file
+      const csvContent = fs.readFileSync(req.file.path, 'utf8');
+      const parsedCsv = Papa.parse(csvContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
+
+      if (parsedCsv.errors.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'CSV parsing errors',
+          errors: parsedCsv.errors,
+        });
+      }
+
+      // Import the data
+      const importResult = await storage.importQuotesFromCsv(parsedCsv.data);
+
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      res.json({
+        success: true,
+        message: `Successfully imported ${importResult.successfulImports} of ${importResult.totalRows} quotes`,
+        data: importResult,
+      });
+    } catch (error) {
+      // Clean up uploaded file on error
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      console.error('Error importing quotes:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error importing quotes',
+      });
     }
   });
 

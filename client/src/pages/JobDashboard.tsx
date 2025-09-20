@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +53,10 @@ import {
   BarChart3,
   Activity,
   Zap,
-  Eye
+  Eye,
+  Upload,
+  Download,
+  Database
 } from "lucide-react";
 
 // Add Speech Recognition types for TypeScript
@@ -101,12 +104,56 @@ export default function JobDashboard() {
   const [showNewJobDialog, setShowNewJobDialog] = useState(false);
   const [showNewLeadDialog, setShowNewLeadDialog] = useState(false);
   const [showNewQuoteDialog, setShowNewQuoteDialog] = useState(false);
+  const [showCsvImportDialog, setShowCsvImportDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [recognition, setRecognition] = useState<any>(null);
   const [dateRange, setDateRange] = useState("30d");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importType, setImportType] = useState<'customers' | 'jobs' | 'quotes'>('customers');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [importResults, setImportResults] = useState<any>(null);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // CSV Import Mutation
+  const csvImportMutation = useMutation({
+    mutationFn: async ({ file, type }: { file: File; type: 'customers' | 'jobs' | 'quotes' }) => {
+      const formData = new FormData();
+      formData.append('csvFile', file);
+
+      const response = await fetch(`/api/import/${type}`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Import failed');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setImportResults(data);
+      toast({
+        title: "Import Successful",
+        description: data.message,
+      });
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard-stats'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Import Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Initialize Web Speech API
   useEffect(() => {
@@ -267,6 +314,36 @@ export default function JobDashboard() {
     }
   });
 
+  // CSV Import file handling
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+      toast({
+        title: "Invalid File",
+        description: "Please select a CSV file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Start import
+    setUploadProgress(0);
+    setImportResults(null);
+    csvImportMutation.mutate({ file, type: importType });
+  };
+
+  const handleImportDialogClose = () => {
+    setShowCsvImportDialog(false);
+    setImportResults(null);
+    setUploadProgress(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const processVoiceCommand = (command: string) => {
     if (command.includes('create job') || command.includes('new job')) {
       setShowNewJobDialog(true);
@@ -370,6 +447,17 @@ export default function JobDashboard() {
                 <SelectItem value="365d">Last year</SelectItem>
               </SelectContent>
             </Select>
+            
+            <Button
+              onClick={() => setShowCsvImportDialog(true)}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              data-testid="button-csv-import"
+            >
+              <Database className="h-4 w-4" />
+              Import ServiceM8
+            </Button>
             
             <Button
               onClick={startListening}
@@ -1204,6 +1292,145 @@ export default function JobDashboard() {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* CSV Import Dialog */}
+        <Dialog open={showCsvImportDialog} onOpenChange={handleImportDialogClose}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Import from ServiceM8
+              </DialogTitle>
+              <CardDescription>
+                Import your existing customers, jobs, and quotes from ServiceM8 CSV export files.
+                This will help you migrate your data to the new system.
+              </CardDescription>
+            </DialogHeader>
+
+            <div className="space-y-6">
+              {!importResults && (
+                <>
+                  {/* Import Type Selection */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">What would you like to import?</label>
+                    <Select 
+                      value={importType} 
+                      onValueChange={(value: 'customers' | 'jobs' | 'quotes') => setImportType(value)}
+                    >
+                      <SelectTrigger data-testid="select-import-type">
+                        <SelectValue placeholder="Select import type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="customers">Customers</SelectItem>
+                        <SelectItem value="jobs">Jobs</SelectItem>
+                        <SelectItem value="quotes">Quotes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* File Upload */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Select CSV File</label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center space-y-2">
+                      <Database className="h-8 w-8 mx-auto text-gray-400" />
+                      <p className="text-sm text-gray-600">
+                        Choose your ServiceM8 {importType} export CSV file
+                      </p>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        data-testid="input-csv-file"
+                      />
+                      <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                        data-testid="button-select-file"
+                        disabled={csvImportMutation.isPending}
+                      >
+                        <Upload className="h-4 w-4" />
+                        {csvImportMutation.isPending ? 'Importing...' : 'Select File'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Instructions */}
+                  <div className="bg-blue-50 p-4 rounded-lg space-y-2">
+                    <h4 className="font-medium text-blue-900">How to export from ServiceM8:</h4>
+                    <ol className="text-sm text-blue-800 space-y-1 list-decimal ml-4">
+                      <li>Log into your ServiceM8 account</li>
+                      <li>Navigate to the {importType} section</li>
+                      <li>Click "Export" and select "CSV format"</li>
+                      <li>Download the file and select it here</li>
+                    </ol>
+                  </div>
+
+                  {csvImportMutation.isPending && (
+                    <div className="space-y-2">
+                      <div className="text-sm text-gray-600">Importing {importType}...</div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="bg-orange-600 h-2 rounded-full animate-pulse w-full"></div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Import Results */}
+              {importResults && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <h3 className="font-medium">Import Complete</h3>
+                  </div>
+
+                  <div className="bg-green-50 p-4 rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Successfully Imported:</span>
+                      <span className="text-sm font-bold text-green-700">
+                        {importResults.data.successfulImports} / {importResults.data.totalRows}
+                      </span>
+                    </div>
+
+                    {importResults.data.errors.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-600" />
+                          <span className="text-sm font-medium text-amber-800">
+                            {importResults.data.errors.length} Errors:
+                          </span>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto space-y-1">
+                          {importResults.data.errors.slice(0, 5).map((error: any, index: number) => (
+                            <div key={index} className="text-xs bg-amber-100 p-2 rounded">
+                              Row {error.row}: {error.error}
+                            </div>
+                          ))}
+                          {importResults.data.errors.length > 5 && (
+                            <div className="text-xs text-amber-700 italic">
+                              ... and {importResults.data.errors.length - 5} more errors
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button 
+                    onClick={handleImportDialogClose}
+                    className="w-full"
+                    data-testid="button-close-import"
+                  >
+                    Done
+                  </Button>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

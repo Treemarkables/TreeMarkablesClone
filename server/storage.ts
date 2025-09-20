@@ -5,7 +5,9 @@ import {
   type Job, type InsertJob, type Activity, type InsertActivity,
   type Review, type InsertReview, type Campaign, type InsertCampaign,
   type SocialPlan, type InsertSocialPlan, type CompetitorSignal, type InsertCompetitorSignal,
-  type PriceRule, type InsertPriceRule
+  type PriceRule, type InsertPriceRule, type CsvImportResult,
+  type ServiceM8CustomerCsv, type ServiceM8JobCsv, type ServiceM8QuoteCsv,
+  servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -169,6 +171,11 @@ export interface IStorage {
     averageValue: number;
     roi: number;
   }[]>;
+
+  // CSV Import Methods
+  importCustomersFromCsv(csvData: any[]): Promise<CsvImportResult>;
+  importJobsFromCsv(csvData: any[]): Promise<CsvImportResult>;
+  importQuotesFromCsv(csvData: any[]): Promise<CsvImportResult>;
 }
 
 export class MemStorage implements IStorage {
@@ -1275,6 +1282,280 @@ export class MemStorage implements IStorage {
       averageValue: data.won > 0 ? data.totalValue / data.won : 0,
       roi: data.cost > 0 ? ((data.totalValue - data.cost) / data.cost) * 100 : 0
     })).sort((a, b) => b.count - a.count);
+  }
+
+  // ========================================
+  // CSV IMPORT IMPLEMENTATIONS
+  // ========================================
+
+  async importCustomersFromCsv(csvData: any[]): Promise<CsvImportResult> {
+    const result: CsvImportResult = {
+      success: true,
+      totalRows: csvData.length,
+      successfulImports: 0,
+      errors: [],
+      importedIds: [],
+    };
+
+    for (let i = 0; i < csvData.length; i++) {
+      try {
+        const row = csvData[i];
+        
+        // Validate and parse the CSV row
+        const validatedData = servicem8CustomerCsvSchema.parse(row);
+        
+        // Map ServiceM8 fields to our Customer schema
+        const customerData: InsertCustomer = {
+          name: validatedData.Name,
+          email: validatedData.Email || undefined,
+          phone: validatedData.Phone || undefined,
+          address: validatedData.Address || undefined,
+          city: validatedData.City || undefined,
+          region: validatedData.State || undefined,
+          notes: validatedData.Notes || undefined,
+          source: "servicem8_import",
+          tags: ["imported", "servicem8"],
+          isActive: true,
+        };
+
+        // Create the customer
+        const customer = await this.createCustomer(customerData);
+        
+        result.successfulImports++;
+        result.importedIds.push(customer.id);
+        
+      } catch (error) {
+        result.success = false;
+        result.errors.push({
+          row: i + 1,
+          error: error instanceof Error ? error.message : "Unknown error",
+          data: csvData[i],
+        });
+      }
+    }
+
+    return result;
+  }
+
+  async importJobsFromCsv(csvData: any[]): Promise<CsvImportResult> {
+    const result: CsvImportResult = {
+      success: true,
+      totalRows: csvData.length,
+      successfulImports: 0,
+      errors: [],
+      importedIds: [],
+    };
+
+    // First pass: collect all customer names to create customers if needed
+    const customerNames = new Set(csvData.map(row => row["Customer Name"]).filter(Boolean));
+    const customerMap = new Map<string, Customer>();
+    
+    // Get existing customers or create new ones
+    for (const customerName of customerNames) {
+      try {
+        const existingCustomers = await this.searchCustomers(customerName);
+        let customer = existingCustomers.find(c => c.name.toLowerCase() === customerName.toLowerCase());
+        
+        if (!customer) {
+          // Create a basic customer record for the import
+          customer = await this.createCustomer({
+            name: customerName,
+            source: "servicem8_import",
+            tags: ["imported", "servicem8"],
+            isActive: true,
+          });
+        }
+        
+        customerMap.set(customerName, customer);
+      } catch (error) {
+        // If customer creation fails, we'll handle it during job processing
+        console.error(`Failed to process customer ${customerName}:`, error);
+      }
+    }
+
+    // Second pass: process jobs
+    for (let i = 0; i < csvData.length; i++) {
+      try {
+        const row = csvData[i];
+        
+        // Validate and parse the CSV row
+        const validatedData = servicem8JobCsvSchema.parse(row);
+        
+        // Find the customer
+        const customer = customerMap.get(validatedData["Customer Name"]);
+        if (!customer) {
+          throw new Error(`Customer not found: ${validatedData["Customer Name"]}`);
+        }
+
+        // Parse dates
+        const scheduledDate = validatedData["Scheduled Date"] ? new Date(validatedData["Scheduled Date"]) : undefined;
+        const completedDate = validatedData["Completed Date"] ? new Date(validatedData["Completed Date"]) : undefined;
+        
+        // Map status from ServiceM8 to our system
+        const statusMap: Record<string, string> = {
+          'quote': 'scheduled',
+          'scheduled': 'scheduled', 
+          'in_progress': 'in_progress',
+          'completed': 'completed',
+          'cancelled': 'cancelled',
+        };
+        const status = statusMap[validatedData.Status?.toLowerCase() || ''] || 'scheduled';
+
+        // Map ServiceM8 fields to our Job schema
+        const jobData: InsertJob = {
+          customerId: customer.id,
+          jobNumber: validatedData["Job Number"],
+          description: validatedData.Description || undefined,
+          status: status,
+          priority: "medium",
+          serviceType: "tree_removal", // Default for tree service
+          scheduledDate: scheduledDate,
+          completedDate: completedDate,
+          address: validatedData["Job Address"] || customer.address || undefined,
+          totalAmount: validatedData["Job Value"] ? parseFloat(validatedData["Job Value"].replace(/[^\d.-]/g, '')) : undefined,
+          notes: validatedData.Notes || undefined,
+          assignedTo: validatedData["Assigned Staff"] || undefined,
+          source: "servicem8_import",
+        };
+
+        // Create the job
+        const job = await this.createJob(jobData);
+        
+        result.successfulImports++;
+        result.importedIds.push(job.id);
+        
+      } catch (error) {
+        result.success = false;
+        result.errors.push({
+          row: i + 1,
+          error: error instanceof Error ? error.message : "Unknown error",
+          data: csvData[i],
+        });
+      }
+    }
+
+    return result;
+  }
+
+  async importQuotesFromCsv(csvData: any[]): Promise<CsvImportResult> {
+    const result: CsvImportResult = {
+      success: true,
+      totalRows: csvData.length,
+      successfulImports: 0,
+      errors: [],
+      importedIds: [],
+    };
+
+    // First pass: collect all customer names to create customers if needed
+    const customerNames = new Set(csvData.map(row => row["Customer Name"]).filter(Boolean));
+    const customerMap = new Map<string, Customer>();
+    
+    // Get existing customers or create new ones
+    for (const customerName of customerNames) {
+      try {
+        const existingCustomers = await this.searchCustomers(customerName);
+        let customer = existingCustomers.find(c => c.name.toLowerCase() === customerName.toLowerCase());
+        
+        if (!customer) {
+          // Create a basic customer record for the import
+          customer = await this.createCustomer({
+            name: customerName,
+            source: "servicem8_import",
+            tags: ["imported", "servicem8"],
+            isActive: true,
+          });
+        }
+        
+        customerMap.set(customerName, customer);
+      } catch (error) {
+        console.error(`Failed to process customer ${customerName}:`, error);
+      }
+    }
+
+    // Second pass: process quotes
+    for (let i = 0; i < csvData.length; i++) {
+      try {
+        const row = csvData[i];
+        
+        // Validate and parse the CSV row
+        const validatedData = servicem8QuoteCsvSchema.parse(row);
+        
+        // Find the customer
+        const customer = customerMap.get(validatedData["Customer Name"]);
+        if (!customer) {
+          throw new Error(`Customer not found: ${validatedData["Customer Name"]}`);
+        }
+
+        // Parse dates
+        const quoteDate = validatedData["Quote Date"] ? new Date(validatedData["Quote Date"]) : new Date();
+        const expiryDate = validatedData["Expiry Date"] ? new Date(validatedData["Expiry Date"]) : undefined;
+        const responseDate = validatedData["Response Date"] ? new Date(validatedData["Response Date"]) : undefined;
+        
+        // Map status from ServiceM8 to our system
+        const statusMap: Record<string, string> = {
+          'draft': 'draft',
+          'sent': 'sent', 
+          'approved': 'approved',
+          'declined': 'declined',
+          'expired': 'expired',
+        };
+        const status = statusMap[validatedData.Status?.toLowerCase() || ''] || 'draft';
+
+        // Parse quote amount
+        const quoteAmount = validatedData["Quote Amount"] ? parseFloat(validatedData["Quote Amount"].replace(/[^\d.-]/g, '')) : 0;
+
+        // Map ServiceM8 fields to our Quote schema
+        const quoteData: InsertQuote = {
+          customerId: customer.id,
+          quoteNumber: validatedData["Quote Number"],
+          description: validatedData.Description || undefined,
+          totalAmount: quoteAmount.toString(),
+          status: status,
+          validUntil: expiryDate,
+          notes: validatedData.Notes || undefined,
+          terms: validatedData["Terms and Conditions"] || undefined,
+          source: "servicem8_import",
+          lineItems: [], // Will be parsed from Line Items if available
+        };
+
+        // Parse line items if provided
+        if (validatedData["Line Items"]) {
+          try {
+            // Try to parse as JSON first
+            const lineItems = JSON.parse(validatedData["Line Items"]);
+            if (Array.isArray(lineItems)) {
+              quoteData.lineItems = lineItems;
+            }
+          } catch {
+            // If not JSON, split by common delimiters and create simple line items
+            const items = validatedData["Line Items"].split(/[,;|\n]/).filter(Boolean);
+            quoteData.lineItems = items.map((item, idx) => ({
+              id: `item_${idx + 1}`,
+              description: item.trim(),
+              quantity: 1,
+              unitPrice: quoteAmount / items.length, // Distribute total evenly
+              total: quoteAmount / items.length,
+            }));
+          }
+        }
+
+        // Create the quote
+        const quote = await this.createQuote(quoteData);
+        
+        result.successfulImports++;
+        result.importedIds.push(quote.id);
+        
+      } catch (error) {
+        result.success = false;
+        result.errors.push({
+          row: i + 1,
+          error: error instanceof Error ? error.message : "Unknown error",
+          data: csvData[i],
+        });
+      }
+    }
+
+    return result;
   }
 }
 
