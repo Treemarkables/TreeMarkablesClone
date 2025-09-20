@@ -673,6 +673,769 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // ========================================
+  // CUSTOMER MANAGEMENT API ROUTES
+  // ========================================
+
+  app.post('/api/customers', async (req: Request, res: Response) => {
+    try {
+      const validation = insertCustomerSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid customer data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const customer = await storage.createCustomer(validation.data);
+      res.json({ success: true, data: customer });
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      res.status(500).json({ success: false, message: 'Error creating customer' });
+    }
+  });
+
+  app.get('/api/customers', async (req: Request, res: Response) => {
+    try {
+      const { search } = req.query;
+      let customers;
+      
+      if (search && typeof search === 'string') {
+        customers = await storage.searchCustomers(search);
+      } else {
+        customers = await storage.getAllCustomers();
+      }
+      
+      res.json({ success: true, data: customers });
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      res.status(500).json({ success: false, message: 'Error fetching customers' });
+    }
+  });
+
+  app.get('/api/customers/:id', async (req: Request, res: Response) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: 'Customer not found' });
+      }
+      res.json({ success: true, data: customer });
+    } catch (error) {
+      console.error('Error fetching customer:', error);
+      res.status(500).json({ success: false, message: 'Error fetching customer' });
+    }
+  });
+
+  app.put('/api/customers/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertCustomerSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const customer = await storage.updateCustomer(req.params.id, updates.data);
+      res.json({ success: true, data: customer });
+    } catch (error) {
+      console.error('Error updating customer:', error);
+      res.status(500).json({ success: false, message: 'Error updating customer' });
+    }
+  });
+
+  // ========================================
+  // PIPELINE LEAD MANAGEMENT API ROUTES
+  // ========================================
+
+  app.post('/api/pipeline-leads', async (req: Request, res: Response) => {
+    try {
+      const validation = insertLeadSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid lead data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const lead = await storage.createPipelineLead(validation.data);
+      res.json({ success: true, data: lead });
+    } catch (error) {
+      console.error('Error creating pipeline lead:', error);
+      res.status(500).json({ success: false, message: 'Error creating lead' });
+    }
+  });
+
+  app.get('/api/pipeline-leads', async (req: Request, res: Response) => {
+    try {
+      const { status } = req.query;
+      let leads;
+      
+      if (status && typeof status === 'string') {
+        leads = await storage.getPipelineLeadsByStatus(status);
+      } else {
+        leads = await storage.getAllPipelineLeads();
+      }
+      
+      res.json({ success: true, data: leads });
+    } catch (error) {
+      console.error('Error fetching pipeline leads:', error);
+      res.status(500).json({ success: false, message: 'Error fetching leads' });
+    }
+  });
+
+  app.get('/api/pipeline-leads/:id', async (req: Request, res: Response) => {
+    try {
+      const lead = await storage.getPipelineLead(req.params.id);
+      if (!lead) {
+        return res.status(404).json({ success: false, message: 'Lead not found' });
+      }
+      res.json({ success: true, data: lead });
+    } catch (error) {
+      console.error('Error fetching pipeline lead:', error);
+      res.status(500).json({ success: false, message: 'Error fetching lead' });
+    }
+  });
+
+  app.put('/api/pipeline-leads/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertLeadSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const lead = await storage.updatePipelineLead(req.params.id, updates.data);
+      res.json({ success: true, data: lead });
+    } catch (error) {
+      console.error('Error updating pipeline lead:', error);
+      res.status(500).json({ success: false, message: 'Error updating lead' });
+    }
+  });
+
+  // ========================================
+  // CALL MANAGEMENT API ROUTES
+  // ========================================
+
+  app.post('/api/calls', async (req: Request, res: Response) => {
+    try {
+      const validation = insertCallSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid call data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const call = await storage.createCall(validation.data);
+      res.json({ success: true, data: call });
+    } catch (error) {
+      console.error('Error creating call:', error);
+      res.status(500).json({ success: false, message: 'Error creating call' });
+    }
+  });
+
+  app.get('/api/calls', async (req: Request, res: Response) => {
+    try {
+      const { customerId, leadId, limit } = req.query;
+      let calls;
+      
+      if (customerId && typeof customerId === 'string') {
+        calls = await storage.getCallsByCustomer(customerId);
+      } else if (leadId && typeof leadId === 'string') {
+        calls = await storage.getCallsByLead(leadId);
+      } else {
+        const limitNum = limit ? parseInt(limit as string) : undefined;
+        calls = await storage.getAllCalls(limitNum);
+      }
+      
+      res.json({ success: true, data: calls });
+    } catch (error) {
+      console.error('Error fetching calls:', error);
+      res.status(500).json({ success: false, message: 'Error fetching calls' });
+    }
+  });
+
+  app.get('/api/calls/:id', async (req: Request, res: Response) => {
+    try {
+      const call = await storage.getCall(req.params.id);
+      if (!call) {
+        return res.status(404).json({ success: false, message: 'Call not found' });
+      }
+      res.json({ success: true, data: call });
+    } catch (error) {
+      console.error('Error fetching call:', error);
+      res.status(500).json({ success: false, message: 'Error fetching call' });
+    }
+  });
+
+  app.put('/api/calls/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertCallSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const call = await storage.updateCall(req.params.id, updates.data);
+      res.json({ success: true, data: call });
+    } catch (error) {
+      console.error('Error updating call:', error);
+      res.status(500).json({ success: false, message: 'Error updating call' });
+    }
+  });
+
+  // ========================================
+  // QUOTE MANAGEMENT API ROUTES
+  // ========================================
+
+  app.post('/api/quotes', async (req: Request, res: Response) => {
+    try {
+      const validation = insertQuoteSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid quote data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const quote = await storage.createQuote(validation.data);
+      res.json({ success: true, data: quote });
+    } catch (error) {
+      console.error('Error creating quote:', error);
+      res.status(500).json({ success: false, message: 'Error creating quote' });
+    }
+  });
+
+  app.get('/api/quotes', async (req: Request, res: Response) => {
+    try {
+      const { customerId, leadId } = req.query;
+      let quotes;
+      
+      if (customerId && typeof customerId === 'string') {
+        quotes = await storage.getQuotesByCustomer(customerId);
+      } else if (leadId && typeof leadId === 'string') {
+        quotes = await storage.getQuotesByLead(leadId);
+      } else {
+        quotes = await storage.getAllQuotes();
+      }
+      
+      res.json({ success: true, data: quotes });
+    } catch (error) {
+      console.error('Error fetching quotes:', error);
+      res.status(500).json({ success: false, message: 'Error fetching quotes' });
+    }
+  });
+
+  app.get('/api/quotes/:id', async (req: Request, res: Response) => {
+    try {
+      const quote = await storage.getQuote(req.params.id);
+      if (!quote) {
+        return res.status(404).json({ success: false, message: 'Quote not found' });
+      }
+      res.json({ success: true, data: quote });
+    } catch (error) {
+      console.error('Error fetching quote:', error);
+      res.status(500).json({ success: false, message: 'Error fetching quote' });
+    }
+  });
+
+  app.put('/api/quotes/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertQuoteSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const quote = await storage.updateQuote(req.params.id, updates.data);
+      res.json({ success: true, data: quote });
+    } catch (error) {
+      console.error('Error updating quote:', error);
+      res.status(500).json({ success: false, message: 'Error updating quote' });
+    }
+  });
+
+  // ========================================
+  // JOB MANAGEMENT API ROUTES
+  // ========================================
+
+  app.post('/api/jobs', async (req: Request, res: Response) => {
+    try {
+      const validation = insertJobSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid job data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const job = await storage.createJob(validation.data);
+      res.json({ success: true, data: job });
+    } catch (error) {
+      console.error('Error creating job:', error);
+      res.status(500).json({ success: false, message: 'Error creating job' });
+    }
+  });
+
+  app.get('/api/jobs', async (req: Request, res: Response) => {
+    try {
+      const { customerId, status } = req.query;
+      let jobs;
+      
+      if (customerId && typeof customerId === 'string') {
+        jobs = await storage.getJobsByCustomer(customerId);
+      } else if (status && typeof status === 'string') {
+        jobs = await storage.getJobsByStatus(status);
+      } else {
+        jobs = await storage.getAllJobs();
+      }
+      
+      res.json({ success: true, data: jobs });
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+      res.status(500).json({ success: false, message: 'Error fetching jobs' });
+    }
+  });
+
+  app.get('/api/jobs/:id', async (req: Request, res: Response) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      res.json({ success: true, data: job });
+    } catch (error) {
+      console.error('Error fetching job:', error);
+      res.status(500).json({ success: false, message: 'Error fetching job' });
+    }
+  });
+
+  app.put('/api/jobs/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertJobSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const job = await storage.updateJob(req.params.id, updates.data);
+      res.json({ success: true, data: job });
+    } catch (error) {
+      console.error('Error updating job:', error);
+      res.status(500).json({ success: false, message: 'Error updating job' });
+    }
+  });
+
+  // ========================================
+  // ACTIVITY TRACKING API ROUTES
+  // ========================================
+
+  app.post('/api/activities', async (req: Request, res: Response) => {
+    try {
+      const validation = insertActivitySchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid activity data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const activity = await storage.createActivity(validation.data);
+      res.json({ success: true, data: activity });
+    } catch (error) {
+      console.error('Error creating activity:', error);
+      res.status(500).json({ success: false, message: 'Error creating activity' });
+    }
+  });
+
+  app.get('/api/activities', async (req: Request, res: Response) => {
+    try {
+      const { customerId, leadId, jobId, limit } = req.query;
+      let activities;
+      
+      if (customerId && typeof customerId === 'string') {
+        activities = await storage.getActivitiesByCustomer(customerId);
+      } else if (leadId && typeof leadId === 'string') {
+        activities = await storage.getActivitiesByLead(leadId);
+      } else if (jobId && typeof jobId === 'string') {
+        activities = await storage.getActivitiesByJob(jobId);
+      } else {
+        const limitNum = limit ? parseInt(limit as string) : undefined;
+        activities = await storage.getAllActivities(limitNum);
+      }
+      
+      res.json({ success: true, data: activities });
+    } catch (error) {
+      console.error('Error fetching activities:', error);
+      res.status(500).json({ success: false, message: 'Error fetching activities' });
+    }
+  });
+
+  // ========================================
+  // REVIEW MANAGEMENT API ROUTES
+  // ========================================
+
+  app.post('/api/reviews', async (req: Request, res: Response) => {
+    try {
+      const validation = insertReviewSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid review data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const review = await storage.createReview(validation.data);
+      res.json({ success: true, data: review });
+    } catch (error) {
+      console.error('Error creating review:', error);
+      res.status(500).json({ success: false, message: 'Error creating review' });
+    }
+  });
+
+  app.get('/api/reviews', async (req: Request, res: Response) => {
+    try {
+      const { customerId } = req.query;
+      let reviews;
+      
+      if (customerId && typeof customerId === 'string') {
+        reviews = await storage.getReviewsByCustomer(customerId);
+      } else {
+        reviews = await storage.getAllReviews();
+      }
+      
+      res.json({ success: true, data: reviews });
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      res.status(500).json({ success: false, message: 'Error fetching reviews' });
+    }
+  });
+
+  app.put('/api/reviews/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertReviewSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const review = await storage.updateReview(req.params.id, updates.data);
+      res.json({ success: true, data: review });
+    } catch (error) {
+      console.error('Error updating review:', error);
+      res.status(500).json({ success: false, message: 'Error updating review' });
+    }
+  });
+
+  // ========================================
+  // CAMPAIGN MANAGEMENT API ROUTES
+  // ========================================
+
+  app.post('/api/campaigns', async (req: Request, res: Response) => {
+    try {
+      const validation = insertCampaignSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid campaign data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const campaign = await storage.createCampaign(validation.data);
+      res.json({ success: true, data: campaign });
+    } catch (error) {
+      console.error('Error creating campaign:', error);
+      res.status(500).json({ success: false, message: 'Error creating campaign' });
+    }
+  });
+
+  app.get('/api/campaigns', async (req: Request, res: Response) => {
+    try {
+      const campaigns = await storage.getAllCampaigns();
+      res.json({ success: true, data: campaigns });
+    } catch (error) {
+      console.error('Error fetching campaigns:', error);
+      res.status(500).json({ success: false, message: 'Error fetching campaigns' });
+    }
+  });
+
+  app.put('/api/campaigns/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertCampaignSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const campaign = await storage.updateCampaign(req.params.id, updates.data);
+      res.json({ success: true, data: campaign });
+    } catch (error) {
+      console.error('Error updating campaign:', error);
+      res.status(500).json({ success: false, message: 'Error updating campaign' });
+    }
+  });
+
+  // ========================================
+  // SOCIAL MEDIA PLANNING API ROUTES
+  // ========================================
+
+  app.post('/api/social-plans', async (req: Request, res: Response) => {
+    try {
+      const validation = insertSocialPlanSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid social plan data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const plan = await storage.createSocialPlan(validation.data);
+      res.json({ success: true, data: plan });
+    } catch (error) {
+      console.error('Error creating social plan:', error);
+      res.status(500).json({ success: false, message: 'Error creating social plan' });
+    }
+  });
+
+  app.get('/api/social-plans', async (req: Request, res: Response) => {
+    try {
+      const { status } = req.query;
+      let plans;
+      
+      if (status && typeof status === 'string') {
+        plans = await storage.getSocialPlansByStatus(status);
+      } else {
+        plans = await storage.getAllSocialPlans();
+      }
+      
+      res.json({ success: true, data: plans });
+    } catch (error) {
+      console.error('Error fetching social plans:', error);
+      res.status(500).json({ success: false, message: 'Error fetching social plans' });
+    }
+  });
+
+  app.put('/api/social-plans/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertSocialPlanSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const plan = await storage.updateSocialPlan(req.params.id, updates.data);
+      res.json({ success: true, data: plan });
+    } catch (error) {
+      console.error('Error updating social plan:', error);
+      res.status(500).json({ success: false, message: 'Error updating social plan' });
+    }
+  });
+
+  // ========================================
+  // COMPETITOR INTELLIGENCE API ROUTES
+  // ========================================
+
+  app.post('/api/competitor-signals', async (req: Request, res: Response) => {
+    try {
+      const validation = insertCompetitorSignalSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid competitor signal data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const signal = await storage.createCompetitorSignal(validation.data);
+      res.json({ success: true, data: signal });
+    } catch (error) {
+      console.error('Error creating competitor signal:', error);
+      res.status(500).json({ success: false, message: 'Error creating competitor signal' });
+    }
+  });
+
+  app.get('/api/competitor-signals', async (req: Request, res: Response) => {
+    try {
+      const { competitor } = req.query;
+      let signals;
+      
+      if (competitor && typeof competitor === 'string') {
+        signals = await storage.getCompetitorSignalsByCompetitor(competitor);
+      } else {
+        signals = await storage.getAllCompetitorSignals();
+      }
+      
+      res.json({ success: true, data: signals });
+    } catch (error) {
+      console.error('Error fetching competitor signals:', error);
+      res.status(500).json({ success: false, message: 'Error fetching competitor signals' });
+    }
+  });
+
+  app.put('/api/competitor-signals/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertCompetitorSignalSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const signal = await storage.updateCompetitorSignal(req.params.id, updates.data);
+      res.json({ success: true, data: signal });
+    } catch (error) {
+      console.error('Error updating competitor signal:', error);
+      res.status(500).json({ success: false, message: 'Error updating competitor signal' });
+    }
+  });
+
+  // ========================================
+  // PRICING RULES API ROUTES
+  // ========================================
+
+  app.post('/api/price-rules', async (req: Request, res: Response) => {
+    try {
+      const validation = insertPriceRuleSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid price rule data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const rule = await storage.createPriceRule(validation.data);
+      res.json({ success: true, data: rule });
+    } catch (error) {
+      console.error('Error creating price rule:', error);
+      res.status(500).json({ success: false, message: 'Error creating price rule' });
+    }
+  });
+
+  app.get('/api/price-rules', async (req: Request, res: Response) => {
+    try {
+      const { service } = req.query;
+      let rules;
+      
+      if (service && typeof service === 'string') {
+        rules = await storage.getPriceRulesByService(service);
+      } else {
+        rules = await storage.getAllPriceRules();
+      }
+      
+      res.json({ success: true, data: rules });
+    } catch (error) {
+      console.error('Error fetching price rules:', error);
+      res.status(500).json({ success: false, message: 'Error fetching price rules' });
+    }
+  });
+
+  app.put('/api/price-rules/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertPriceRuleSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const rule = await storage.updatePriceRule(req.params.id, updates.data);
+      res.json({ success: true, data: rule });
+    } catch (error) {
+      console.error('Error updating price rule:', error);
+      res.status(500).json({ success: false, message: 'Error updating price rule' });
+    }
+  });
+
+  // ========================================
+  // BUSINESS INTELLIGENCE API ROUTES
+  // ========================================
+
+  app.get('/api/dashboard-stats', async (req: Request, res: Response) => {
+    try {
+      const stats = await storage.getDashboardStats();
+      res.json({ success: true, data: stats });
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      res.status(500).json({ success: false, message: 'Error fetching dashboard stats' });
+    }
+  });
+
+  app.get('/api/revenue-stats', async (req: Request, res: Response) => {
+    try {
+      const { from, to } = req.query;
+      
+      let fromDate: Date | undefined;
+      let toDate: Date | undefined;
+      
+      if (from && typeof from === 'string') {
+        fromDate = new Date(from);
+        if (isNaN(fromDate.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid from date format' });
+        }
+      }
+      
+      if (to && typeof to === 'string') {
+        toDate = new Date(to);
+        if (isNaN(toDate.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid to date format' });
+        }
+      }
+      
+      const stats = await storage.getRevenueStats(fromDate, toDate);
+      res.json({ success: true, data: stats });
+    } catch (error) {
+      console.error('Error fetching revenue stats:', error);
+      res.status(500).json({ success: false, message: 'Error fetching revenue stats' });
+    }
+  });
+
+  app.get('/api/quote-analytics', async (req: Request, res: Response) => {
+    try {
+      const analytics = await storage.getQuoteAnalytics();
+      res.json({ success: true, data: analytics });
+    } catch (error) {
+      console.error('Error fetching quote analytics:', error);
+      res.status(500).json({ success: false, message: 'Error fetching quote analytics' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
