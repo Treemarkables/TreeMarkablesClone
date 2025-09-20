@@ -602,6 +602,10 @@ export default function JobDashboard() {
   };
 
   const handleConversationalInput = (input: string) => {
+    console.log('🎙️ Conversation input received:', input);
+    console.log('🎙️ Current conversation step:', conversationStep);
+    console.log('🎙️ Is conversation mode:', isConversationMode);
+    
     const lowerInput = input.toLowerCase().trim();
     
     // Handle global commands
@@ -675,6 +679,7 @@ export default function JobDashboard() {
       [fieldName]: processedInput
     }));
 
+    console.log('🎙️ Updated lead data:', fieldName, '=', processedInput);
     moveToNextStep(processedInput);
   };
 
