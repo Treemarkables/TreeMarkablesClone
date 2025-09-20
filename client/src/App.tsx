@@ -4,7 +4,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/Home";
-import SimpleTest from "@/pages/SimpleTest";
 import TreeRemoval from "@/pages/TreeRemoval";
 import TreePruning from "@/pages/TreePruning";
 import StumpGrinding from "@/pages/StumpGrinding";
