@@ -1021,6 +1021,91 @@ export default function JobDashboard() {
               </Card>
             </div>
 
+            {/* All Pipeline Leads */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  All Pipeline Leads
+                </CardTitle>
+                <CardDescription>Current leads in your sales pipeline</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(() => {
+                    console.log('Pipeline leads data:', pipelineLeads);
+                    const leadsArray = Array.isArray(pipelineLeads) ? pipelineLeads : (pipelineLeads?.data || []);
+                    console.log('Processed leads array:', leadsArray);
+                    
+                    if (leadsLoading) {
+                      return (
+                        <div className="col-span-full text-center text-gray-500 py-8">
+                          Loading leads...
+                        </div>
+                      );
+                    }
+                    
+                    if (!leadsArray || leadsArray.length === 0) {
+                      return (
+                        <div className="col-span-full text-center text-gray-500 py-8">
+                          No pipeline leads found
+                        </div>
+                      );
+                    }
+                    
+                    return leadsArray.map((lead: any) => (
+                      <Card key={lead.id} className="border-2 hover-elevate cursor-pointer">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold text-lg">{lead.name}</h4>
+                            <Badge className={
+                              lead.status === 'new' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                              lead.status === 'contacted' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                              lead.status === 'qualified' ? 'bg-green-100 text-green-800 border-green-300' :
+                              'bg-gray-100 text-gray-800 border-gray-300'
+                            }>
+                              {lead.status}
+                            </Badge>
+                          </div>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-blue-500" />
+                              <span>{lead.phone}</span>
+                            </div>
+                            {lead.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-green-500" />
+                                <span>{lead.email}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <Target className="h-4 w-4 text-purple-500" />
+                              <span>{lead.serviceRequested || 'Service not specified'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Activity className="h-4 w-4 text-orange-500" />
+                              <span className="capitalize">{lead.source} • {lead.priority} priority</span>
+                            </div>
+                            {lead.followUpDate && (
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-red-500" />
+                                <span>Follow-up: {format(new Date(lead.followUpDate), 'PP')}</span>
+                              </div>
+                            )}
+                            {lead.notes && (
+                              <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                                {lead.notes}
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ));
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Lead Source Analysis */}
             <Card>
               <CardHeader>
