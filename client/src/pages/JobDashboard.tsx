@@ -851,9 +851,9 @@ export default function JobDashboard() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'urgent': return 'bg-blue-600';
-      case 'high': return 'bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg';
-      case 'medium': return 'bg-gradient-to-r from-blue-400 to-blue-500 shadow-lg';
+      case 'urgent': return 'bg-gray-600';
+      case 'high': return 'bg-gradient-to-r from-gray-50 to-gray-100 shadow-lg';
+      case 'medium': return 'bg-gradient-to-r from-gray-300 to-gray-400 shadow-lg';
       case 'low': return 'bg-gradient-to-r from-green-500 to-emerald-500 shadow-lg';
       default: return 'bg-gray-500';
     }
@@ -862,7 +862,7 @@ export default function JobDashboard() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'bg-green-500';
-      case 'in_progress': return 'bg-blue-500';
+      case 'in_progress': return 'bg-gray-500';
       case 'scheduled': return 'bg-purple-500';
       case 'cancelled': return 'bg-gray-600';
       case 'accepted': return 'bg-green-500';
@@ -892,10 +892,10 @@ export default function JobDashboard() {
 
   if (statsLoading || revenueLoading || quotesLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 via-blue-200 to-blue-300 p-4">
+      <div className="min-h-screen bg-white p-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-300"></div>
           </div>
         </div>
       </div>
@@ -912,11 +912,11 @@ export default function JobDashboard() {
       <div className="flex h-screen w-full">
         <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <SidebarInset>
-          <div className="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 via-blue-200 to-blue-300 p-4" data-testid="job-dashboard">
+          <div className="min-h-screen bg-gray-50 p-4" data-testid="job-dashboard">
             <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Mobile-Optimized Header */}
-        <div className="space-y-4 card-colorful rounded-2xl p-6">
+        <div className="space-y-4 card-clean rounded-2xl p-6">
           {/* Top Header Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1074,7 +1074,7 @@ export default function JobDashboard() {
               {voiceCommand && (
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600 text-sm font-medium">You</span>
+                    <span className="text-gray-600 text-sm font-medium">You</span>
                   </div>
                   <span className="text-sm text-gray-700">"{voiceCommand}"</span>
                 </div>
@@ -1083,7 +1083,7 @@ export default function JobDashboard() {
               {/* Show AI response */}
               {aiResponse && (
                 <div className="flex items-center gap-2 mb-3">
-                  <Bot className="h-8 w-8 text-blue-600" />
+                  <Bot className="h-8 w-8 text-gray-600" />
                   <div className="flex-1">
                     <span className="text-sm text-gray-700">{aiResponse}</span>
                   </div>
@@ -1092,20 +1092,20 @@ export default function JobDashboard() {
               
               {/* Conversation Progress */}
               {isConversationMode && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <div className="mt-4 p-3 bg-white border border-gray-200 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-blue-800">Creating New Lead</span>
-                    <span className="text-xs text-blue-600">
+                    <span className="text-sm font-medium text-gray-900">Creating New Lead</span>
+                    <span className="text-xs text-gray-600">
                       Step {conversationStep + 1} of {conversationSteps.length}
                     </span>
                   </div>
-                  <div className="w-full bg-blue-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
                     <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                      className="bg-gray-600 h-2 rounded-full transition-all duration-300" 
                       style={{ width: `${((conversationStep + 1) / conversationSteps.length) * 100}%` }}
                     ></div>
                   </div>
-                  <div className="mt-2 text-xs text-blue-700">
+                  <div className="mt-2 text-xs text-gray-700">
                     Collected: {Object.entries(leadFormData).filter(([_, value]) => value.trim() !== "").length} fields
                   </div>
                   
@@ -1115,7 +1115,7 @@ export default function JobDashboard() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-green-600 border-green-300 hover:bg-green-50"
+                        className="text-gray-700 border-gray-300 hover:bg-gray-50"
                         onClick={startListening}
                         data-testid="button-continue-listening"
                       >
@@ -1127,7 +1127,7 @@ export default function JobDashboard() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-blue-600 border-blue-300 hover:bg-blue-100"
+                      className="text-gray-600 border-blue-300 hover:bg-blue-100"
                       onClick={cancelConversation}
                       data-testid="button-cancel-conversation"
                     >
@@ -1136,7 +1136,7 @@ export default function JobDashboard() {
                   </div>
                   
                   {/* Listening status */}
-                  <div className="mt-2 text-xs text-blue-600">
+                  <div className="mt-2 text-xs text-gray-600">
                     {isListening ? (
                       <span className="flex items-center gap-1">
                         <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
@@ -1155,9 +1155,9 @@ export default function JobDashboard() {
               
               {/* Voice listening indicator */}
               {isListening && (
-                <div className="mt-3 p-2 bg-blue-50 rounded-lg flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-blue-700">
+                <div className="mt-3 p-2 bg-white rounded-lg flex items-center gap-2">
+                  <div className="w-3 h-3 bg-white0 rounded-full animate-pulse"></div>
+                  <span className="text-sm text-gray-700">
                     {isConversationMode ? "Listening for your answer..." : "Listening for voice command..."}
                   </span>
                 </div>
@@ -1165,7 +1165,7 @@ export default function JobDashboard() {
               
               {/* Mode selection buttons */}
               {showModeSelection && (
-                <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+                <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
                   <p className="text-sm text-gray-800 mb-3 font-medium">Choose how you'd like to create a lead:</p>
                   <div className="flex gap-3">
                     <Button 
@@ -1230,7 +1230,7 @@ export default function JobDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0 shadow-lg hover-elevate">
+              <Card className="bg-gradient-to-r from-gray-50 to-gray-100 text-white border-0 shadow-lg hover-elevate">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1259,9 +1259,9 @@ export default function JobDashboard() {
 
             {/* Priority Alerts & Quick Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              <Card className="border-l-4 border-l-blue-500">
+              <Card className="border-l-4 border-l-gray-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-blue-800">
+                  <CardTitle className="flex items-center gap-2 text-gray-800">
                     <AlertTriangle className="h-5 w-5" />
                     Priority Alerts
                   </CardTitle>
@@ -1269,8 +1269,8 @@ export default function JobDashboard() {
                 <CardContent>
                   <div className="space-y-3">
                     {dashboardStats?.missedCalls && dashboardStats.missedCalls > 0 && (
-                      <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                        <PhoneCall className="h-4 w-4 text-blue-600" />
+                      <div className="flex items-center gap-3 p-3 bg-white rounded-lg">
+                        <PhoneCall className="h-4 w-4 text-gray-600" />
                         <div>
                           <p className="text-sm font-medium">Missed Calls</p>
                           <p className="text-xs text-gray-600">{dashboardStats.missedCalls} potential leads need follow-up</p>
@@ -1320,7 +1320,7 @@ export default function JobDashboard() {
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      className="h-auto py-3 flex flex-col items-center gap-1 hover:bg-blue-50"
+                      className="h-auto py-3 flex flex-col items-center gap-1 hover:bg-white"
                       onClick={() => setShowNewJobDialog(true)}
                       data-testid="quick-new-job"
                     >
@@ -1340,7 +1340,7 @@ export default function JobDashboard() {
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      className="h-auto py-3 flex flex-col items-center gap-1 hover:bg-blue-50"
+                      className="h-auto py-3 flex flex-col items-center gap-1 hover:bg-white"
                       onClick={() => setActiveTab('analytics')}
                       data-testid="quick-view-analytics"
                     >
@@ -1469,7 +1469,7 @@ export default function JobDashboard() {
                     {Array.isArray(activities) ? activities.slice(0, 10).map((activity: any, index: number) => (
                       <div key={activity.id || index} className="flex items-center space-x-3 text-sm">
                         <div className="flex-shrink-0">
-                          {activity.type === 'call' && <Phone className="h-4 w-4 text-blue-500" />}
+                          {activity.type === 'call' && <Phone className="h-4 w-4 text-gray-500" />}
                           {activity.type === 'email' && <Mail className="h-4 w-4 text-green-500" />}
                           {activity.type === 'note' && <MessageSquare className="h-4 w-4 text-yellow-500" />}
                           {activity.type === 'quote_sent' && <FileText className="h-4 w-4 text-purple-500" />}
@@ -1618,9 +1618,9 @@ export default function JobDashboard() {
 
             {/* Follow-Up Queue - Critical Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <Card className="bg-blue-50 border-blue-200">
+              <Card className="bg-white border-blue-200">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-blue-700">
+                  <CardTitle className="flex items-center gap-2 text-gray-700">
                     <AlertTriangle className="h-5 w-5" />
                     Overdue Follow-ups ({Array.isArray((followUpQueue as any)?.overdue) ? (followUpQueue as any).overdue.length : 0})
                   </CardTitle>
@@ -1631,7 +1631,7 @@ export default function JobDashboard() {
                       <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
                         <div className="font-medium text-sm">{lead.name}</div>
                         <div className="text-xs text-gray-600">{lead.phone}</div>
-                        <div className="text-xs text-blue-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
+                        <div className="text-xs text-gray-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
                       </div>
                     )) : <div className="text-sm text-gray-500">No overdue follow-ups</div>}
                   </div>
@@ -1658,9 +1658,9 @@ export default function JobDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-blue-50 border-blue-200">
+              <Card className="bg-white border-blue-200">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-blue-700">
+                  <CardTitle className="flex items-center gap-2 text-gray-700">
                     <Calendar className="h-5 w-5" />
                     This Week ({Array.isArray((followUpQueue as any)?.thisWeek) ? (followUpQueue as any).thisWeek.length : 0})
                   </CardTitle>
@@ -1671,7 +1671,7 @@ export default function JobDashboard() {
                       <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
                         <div className="font-medium text-sm">{lead.name}</div>
                         <div className="text-xs text-gray-600">{lead.phone}</div>
-                        <div className="text-xs text-blue-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
+                        <div className="text-xs text-gray-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
                       </div>
                     )) : <div className="text-sm text-gray-500">No follow-ups this week</div>}
                   </div>
@@ -1832,7 +1832,7 @@ export default function JobDashboard() {
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="font-semibold text-lg">{lead.name}</h4>
                             <Badge className={
-                              lead.status === 'new' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                              lead.status === 'new' ? 'bg-blue-100 text-gray-800 border-blue-300' :
                               lead.status === 'contacted' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
                               lead.status === 'qualified' ? 'bg-green-100 text-green-800 border-green-300' :
                               'bg-gray-100 text-gray-800 border-gray-300'
@@ -1842,7 +1842,7 @@ export default function JobDashboard() {
                           </div>
                           <div className="space-y-2 text-sm">
                             <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-blue-500" />
+                              <Phone className="h-4 w-4 text-gray-500" />
                               <span>{lead.phone}</span>
                             </div>
                             {lead.email && (
@@ -1856,12 +1856,12 @@ export default function JobDashboard() {
                               <span>{lead.serviceRequested || 'Service not specified'}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Activity className="h-4 w-4 text-blue-500" />
+                              <Activity className="h-4 w-4 text-gray-500" />
                               <span className="capitalize">{lead.source} • {lead.priority} priority</span>
                             </div>
                             {lead.followUpDate && (
                               <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-blue-500" />
+                                <Calendar className="h-4 w-4 text-gray-500" />
                                 <span>Follow-up: {format(new Date(lead.followUpDate), 'PP')}</span>
                               </div>
                             )}
@@ -1907,7 +1907,7 @@ export default function JobDashboard() {
                           <td className="p-2 text-right">{source.count}</td>
                           <td className="p-2 text-right">{source.conversionRate.toFixed(1)}%</td>
                           <td className="p-2 text-right">{formatCurrency(source.averageValue)}</td>
-                          <td className={`p-2 text-right font-medium ${source.roi > 0 ? 'text-green-600' : 'text-blue-600'}`}>
+                          <td className={`p-2 text-right font-medium ${source.roi > 0 ? 'text-green-600' : 'text-gray-600'}`}>
                             {source.roi.toFixed(0)}%
                           </td>
                         </tr>
@@ -2293,10 +2293,10 @@ export default function JobDashboard() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-blue-100 text-sm">Today's Jobs</p>
+                        <p className="text-gray-100 text-sm">Today's Jobs</p>
                         <p className="text-2xl font-bold">3</p>
                       </div>
-                      <Calendar className="h-8 w-8 text-blue-200" />
+                      <Calendar className="h-8 w-8 text-gray-200" />
                     </div>
                   </CardContent>
                 </Card>
@@ -2313,14 +2313,14 @@ export default function JobDashboard() {
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-xl border-0">
+                <Card className="bg-gradient-to-br from-gray-50 to-gray-100 text-white shadow-xl border-0">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-blue-100 text-sm">Crew Members</p>
+                        <p className="text-gray-100 text-sm">Crew Members</p>
                         <p className="text-2xl font-bold">8</p>
                       </div>
-                      <Users className="h-8 w-8 text-blue-200" />
+                      <Users className="h-8 w-8 text-gray-200" />
                     </div>
                   </CardContent>
                 </Card>
@@ -2374,14 +2374,14 @@ export default function JobDashboard() {
 
             {/* Key Performance Indicators */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card className="border-2 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <Card className="border-2 bg-gradient-to-br from-gray-50 to-gray-100 border-blue-200">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-blue-700">Monthly Growth</p>
-                      <p className="text-2xl font-bold text-blue-900">+24%</p>
+                      <p className="text-sm font-medium text-gray-700">Monthly Growth</p>
+                      <p className="text-2xl font-bold text-gray-900">+24%</p>
                     </div>
-                    <TrendingUp className="h-8 w-8 text-blue-500" />
+                    <TrendingUp className="h-8 w-8 text-gray-500" />
                   </div>
                 </CardContent>
               </Card>
@@ -2407,14 +2407,14 @@ export default function JobDashboard() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="border-2 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <Card className="border-2 bg-gradient-to-br from-gray-50 to-gray-100 border-blue-200">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-blue-700">Customer LTV</p>
-                      <p className="text-2xl font-bold text-blue-900">{formatCurrency(4200)}</p>
+                      <p className="text-sm font-medium text-gray-700">Customer LTV</p>
+                      <p className="text-2xl font-bold text-gray-900">{formatCurrency(4200)}</p>
                     </div>
-                    <Users className="h-8 w-8 text-blue-500" />
+                    <Users className="h-8 w-8 text-gray-500" />
                   </div>
                 </CardContent>
               </Card>
@@ -2426,7 +2426,7 @@ export default function JobDashboard() {
               <Card className="border-2 border-gradient-to-r from-blue-200 via-purple-200 to-pink-200">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-blue-500" />
+                    <TrendingUp className="h-5 w-5 text-gray-500" />
                     Revenue Growth Trend
                   </CardTitle>
                   <CardDescription>Monthly revenue and job completion trends</CardDescription>
@@ -2512,7 +2512,7 @@ export default function JobDashboard() {
               
 
               {/* Customer Lifetime Value Analysis */}
-              <Card className="border-2 border-gradient-to-r from-blue-200 via-blue-300 to-blue-400">
+              <Card className="border-2 border-gradient-to-r from-gray-100 via-gray-200 to-gray-300">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5 text-yellow-500" />
@@ -2548,7 +2548,7 @@ export default function JobDashboard() {
               </Card>
 
               {/* Advanced Conversion Funnel */}
-              <Card className="border-2 border-gradient-to-r from-blue-200 via-blue-300 to-blue-400">
+              <Card className="border-2 border-gradient-to-r from-gray-100 via-gray-200 to-gray-300">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Activity className="h-5 w-5 text-purple-500" />
@@ -2645,7 +2645,7 @@ export default function JobDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <TrendingUp className="h-6 w-6 text-blue-600" />
+                  <TrendingUp className="h-6 w-6 text-gray-600" />
                   Performance Analytics Dashboard
                 </h2>
                 <p className="text-muted-foreground">Comprehensive business performance metrics and trends</p>
@@ -2660,7 +2660,7 @@ export default function JobDashboard() {
 
             {/* Key Performance Indicators Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="border-l-4 border-l-blue-500">
+              <Card className="border-l-4 border-l-gray-300">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">Average Response Time</CardTitle>
                 </CardHeader>
@@ -2674,7 +2674,7 @@ export default function JobDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="border-l-4 border-l-blue-500">
+              <Card className="border-l-4 border-l-gray-300">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">Quote Acceptance Rate</CardTitle>
                 </CardHeader>
@@ -2975,10 +2975,10 @@ export default function JobDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* Company Information */}
-              <Card className="border-2 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <Card className="border-2 bg-gradient-to-br from-gray-50 to-gray-100 border-blue-200">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Globe className="h-5 w-5 text-blue-500" />
+                    <Globe className="h-5 w-5 text-gray-500" />
                     Company Information
                   </CardTitle>
                   <CardDescription>Basic business details and contact information</CardDescription>
@@ -3165,10 +3165,10 @@ export default function JobDashboard() {
               </Card>
 
               {/* Security & Access */}
-              <Card className="border-2 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <Card className="border-2 bg-gradient-to-br from-gray-50 to-gray-100 border-blue-200">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-blue-500" />
+                    <Shield className="h-5 w-5 text-gray-500" />
                     Security & Access Control
                   </CardTitle>
                   <CardDescription>User permissions and data security</CardDescription>
@@ -3294,7 +3294,7 @@ export default function JobDashboard() {
                         <p className="text-sm font-medium">ServiceM8 Integration</p>
                         <p className="text-xs text-gray-600">Sync with existing ServiceM8 data</p>
                       </div>
-                      <Badge variant="default" className="bg-blue-500">Connected</Badge>
+                      <Badge variant="default" className="bg-white0">Connected</Badge>
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
@@ -3485,7 +3485,7 @@ export default function JobDashboard() {
                           <p className="text-sm font-medium">Track Crew Location</p>
                           <p className="text-xs text-gray-600">Real-time crew tracking</p>
                         </div>
-                        <Badge variant="default" className="bg-blue-500">Active</Badge>
+                        <Badge variant="default" className="bg-white0">Active</Badge>
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-700">Location Accuracy</label>
@@ -3677,9 +3677,9 @@ export default function JobDashboard() {
                   </div>
 
                   {/* Instructions */}
-                  <div className="bg-blue-50 p-4 rounded-lg space-y-2">
-                    <h4 className="font-medium text-blue-900">How to export from ServiceM8:</h4>
-                    <ol className="text-sm text-blue-800 space-y-1 list-decimal ml-4">
+                  <div className="bg-white p-4 rounded-lg space-y-2">
+                    <h4 className="font-medium text-gray-900">How to export from ServiceM8:</h4>
+                    <ol className="text-sm text-gray-800 space-y-1 list-decimal ml-4">
                       <li>Log into your ServiceM8 account</li>
                       <li>Navigate to the {importType} section</li>
                       <li>Click "Export" and select "CSV format"</li>
@@ -3769,7 +3769,7 @@ export default function JobDashboard() {
                 {/* Before Photos Section */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <Camera className="h-5 w-5 text-blue-600" />
+                    <Camera className="h-5 w-5 text-gray-600" />
                     Before Photos
                   </h3>
                   <PhotoUpload
