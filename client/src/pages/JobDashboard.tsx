@@ -850,12 +850,12 @@ export default function JobDashboard() {
                   <CardDescription>Lead progression and conversion rates</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {conversionFunnel && (
+                  {conversionFunnel && typeof conversionFunnel === 'object' && 'leads' in conversionFunnel ? (
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">Leads</span>
-                          <span className="text-sm">{conversionFunnel.leads}</span>
+                          <span className="text-sm">{(conversionFunnel as any).leads || 0}</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div className="bg-blue-600 h-2 rounded-full" style={{ width: '100%' }}></div>
@@ -865,50 +865,52 @@ export default function JobDashboard() {
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">Contacted</span>
-                          <span className="text-sm">{conversionFunnel.contacted} ({conversionFunnel.conversionRates.leadToContact.toFixed(1)}%)</span>
+                          <span className="text-sm">{(conversionFunnel as any).contacted || 0} ({((conversionFunnel as any).conversionRates?.leadToContact || 0).toFixed(1)}%)</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-green-600 h-2 rounded-full" style={{ width: `${conversionFunnel.conversionRates.leadToContact}%` }}></div>
+                          <div className="bg-green-600 h-2 rounded-full" style={{ width: `${(conversionFunnel as any).conversionRates?.leadToContact || 0}%` }}></div>
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">Qualified</span>
-                          <span className="text-sm">{conversionFunnel.qualified} ({conversionFunnel.conversionRates.contactToQualified.toFixed(1)}%)</span>
+                          <span className="text-sm">{(conversionFunnel as any).qualified || 0} ({((conversionFunnel as any).conversionRates?.contactToQualified || 0).toFixed(1)}%)</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${conversionFunnel.conversionRates.contactToQualified}%` }}></div>
+                          <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${(conversionFunnel as any).conversionRates?.contactToQualified || 0}%` }}></div>
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">Quoted</span>
-                          <span className="text-sm">{conversionFunnel.quoted} ({conversionFunnel.conversionRates.qualifiedToQuote.toFixed(1)}%)</span>
+                          <span className="text-sm">{(conversionFunnel as any).quoted || 0} ({((conversionFunnel as any).conversionRates?.qualifiedToQuote || 0).toFixed(1)}%)</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-orange-600 h-2 rounded-full" style={{ width: `${conversionFunnel.conversionRates.qualifiedToQuote}%` }}></div>
+                          <div className="bg-orange-600 h-2 rounded-full" style={{ width: `${(conversionFunnel as any).conversionRates?.qualifiedToQuote || 0}%` }}></div>
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">Won</span>
-                          <span className="text-sm">{conversionFunnel.won} ({conversionFunnel.conversionRates.quoteToWin.toFixed(1)}%)</span>
+                          <span className="text-sm">{(conversionFunnel as any).won || 0} ({((conversionFunnel as any).conversionRates?.quoteToWin || 0).toFixed(1)}%)</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-red-600 h-2 rounded-full" style={{ width: `${conversionFunnel.conversionRates.quoteToWin}%` }}></div>
+                          <div className="bg-red-600 h-2 rounded-full" style={{ width: `${(conversionFunnel as any).conversionRates?.quoteToWin || 0}%` }}></div>
                         </div>
                       </div>
 
                       <div className="pt-2 border-t">
                         <div className="flex justify-between items-center font-medium">
                           <span className="text-sm">Overall Conversion</span>
-                          <span className="text-sm text-green-600">{conversionFunnel.conversionRates.overallConversion.toFixed(1)}%</span>
+                          <span className="text-sm text-green-600">{((conversionFunnel as any).conversionRates?.overallConversion || 0).toFixed(1)}%</span>
                         </div>
                       </div>
                     </div>
+                  ) : (
+                    <div className="text-sm text-gray-500">No conversion data available</div>
                   )}
                 </CardContent>
               </Card>
@@ -1147,49 +1149,53 @@ export default function JobDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.isArray(customers) ? customers
-                .filter((customer: any) => 
-                  customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  customer.phone?.includes(searchTerm)
-                )
-                .map((customer: any) => (
-                  <Card key={customer.id} className="hover-elevate cursor-pointer">
-                    <CardHeader>
-                      <CardTitle className="text-lg">{customer.name}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2 text-sm">
-                        {customer.phone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-gray-500" />
-                            <span className="text-gray-700">{customer.phone}</span>
-                          </div>
-                        )}
-                        {customer.email && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-gray-500" />
-                            <span className="text-gray-700">{customer.email}</span>
-                          </div>
-                        )}
-                        {customer.address && (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4 text-gray-500" />
-                            <span className="text-gray-700">{customer.address}</span>
-                          </div>
-                        )}
-                        {customer.lifetimeValue && (
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-gray-500" />
-                            <span className="text-gray-700 font-medium">
-                              {formatCurrency(Number(customer.lifetimeValue))} lifetime value
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : <div className="text-center text-gray-500 py-8">No customers found</div>}
+              {Array.isArray(customers) ? 
+                customers
+                  .filter((customer: any) => 
+                    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    customer.phone?.includes(searchTerm)
+                  )
+                  .map((customer: any) => (
+                    <Card key={customer.id} className="hover-elevate cursor-pointer">
+                      <CardHeader>
+                        <CardTitle className="text-lg">{customer.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 text-sm">
+                          {customer.phone && (
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-gray-500" />
+                              <span className="text-gray-700">{customer.phone}</span>
+                            </div>
+                          )}
+                          {customer.email && (
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-gray-500" />
+                              <span className="text-gray-700">{customer.email}</span>
+                            </div>
+                          )}
+                          {customer.address && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-gray-500" />
+                              <span className="text-gray-700">{customer.address}</span>
+                            </div>
+                          )}
+                          {customer.lifetimeValue && (
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4 text-gray-500" />
+                              <span className="text-gray-700 font-medium">
+                                {formatCurrency(Number(customer.lifetimeValue))} lifetime value
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                : 
+                <div className="text-center text-gray-500 py-8">No customers found</div>
+              }
             </div>
           </TabsContent>
 
