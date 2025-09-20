@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ import {
   MessageSquare,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   Users,
   TrendingUp,
   TrendingDown,
@@ -177,6 +178,23 @@ export default function JobDashboard() {
 
   const { data: activities, isLoading: activitiesLoading } = useQuery({
     queryKey: ['/api/activities', { limit: 100 }]
+  });
+
+  // Enhanced lead analytics queries
+  const { data: leadScoring, isLoading: leadScoringLoading } = useQuery({
+    queryKey: ['/api/lead-scoring']
+  });
+
+  const { data: conversionFunnel, isLoading: conversionFunnelLoading } = useQuery({
+    queryKey: ['/api/conversion-funnel']
+  });
+
+  const { data: followUpQueue, isLoading: followUpLoading } = useQuery({
+    queryKey: ['/api/follow-up-queue']
+  });
+
+  const { data: leadSourceAnalysis, isLoading: leadSourceLoading } = useQuery({
+    queryKey: ['/api/lead-source-analysis']
   });
 
   // Mutations for creating new records
@@ -574,9 +592,13 @@ export default function JobDashboard() {
           </TabsContent>
 
           {/* Leads Tab */}
-          <TabsContent value="leads" className="space-y-4">
+          <TabsContent value="leads" className="space-y-6">
+            {/* Enhanced Lead Management Header */}
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Lead Pipeline</h2>
+              <div>
+                <h2 className="text-2xl font-bold">Lead Management</h2>
+                <p className="text-muted-foreground">AI-powered lead scoring, conversion tracking, and pipeline optimization</p>
+              </div>
               <Dialog open={showNewLeadDialog} onOpenChange={setShowNewLeadDialog}>
                 <DialogTrigger asChild>
                   <Button className="flex items-center gap-2" data-testid="button-new-lead">
@@ -628,38 +650,220 @@ export default function JobDashboard() {
               </Dialog>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {['new', 'contacted', 'qualified', 'quoted'].map((status) => (
-                <Card key={status} className="min-h-[400px]">
-                  <CardHeader>
-                    <CardTitle className="capitalize flex items-center justify-between">
-                      {status}
-                      <Badge variant="secondary">
-                        {(pipelineLeads || []).filter((lead: any) => lead.status === status).length}
-                      </Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3 max-h-80 overflow-y-auto">
-                      {(pipelineLeads || [])
-                        .filter((lead: any) => lead.status === status)
-                        .map((lead: any) => (
-                          <div key={lead.id} className="p-3 border rounded-lg hover-elevate cursor-pointer">
-                            <h4 className="font-medium text-sm">{lead.name}</h4>
-                            <p className="text-xs text-gray-600">{lead.phone}</p>
-                            <p className="text-xs text-gray-500 mt-1">{lead.serviceRequested}</p>
-                            {lead.urgency && (
-                              <Badge variant="secondary" className={`mt-2 text-xs ${getPriorityColor(lead.urgency)}`}>
-                                {lead.urgency}
-                              </Badge>
-                            )}
-                          </div>
-                        ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+            {/* Follow-Up Queue - Critical Actions */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <Card className="bg-red-50 border-red-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-red-700">
+                    <AlertTriangle className="h-5 w-5" />
+                    Overdue Follow-ups ({(followUpQueue?.overdue || []).length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {(followUpQueue?.overdue || []).map((lead: any) => (
+                      <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
+                        <div className="font-medium text-sm">{lead.name}</div>
+                        <div className="text-xs text-gray-600">{lead.phone}</div>
+                        <div className="text-xs text-red-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
+                      </div>
+                    )) || <div className="text-sm text-gray-500">No overdue follow-ups</div>}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-yellow-50 border-yellow-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-yellow-700">
+                    <Clock className="h-5 w-5" />
+                    Today ({(followUpQueue?.today || []).length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {(followUpQueue?.today || []).map((lead: any) => (
+                      <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
+                        <div className="font-medium text-sm">{lead.name}</div>
+                        <div className="text-xs text-gray-600">{lead.phone}</div>
+                        <div className="text-xs text-yellow-600">{lead.serviceRequested}</div>
+                      </div>
+                    )) || <div className="text-sm text-gray-500">No follow-ups today</div>}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-blue-50 border-blue-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-blue-700">
+                    <Calendar className="h-5 w-5" />
+                    This Week ({(followUpQueue?.thisWeek || []).length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {(followUpQueue?.thisWeek || []).map((lead: any) => (
+                      <div key={lead.id} className="p-2 bg-white rounded border hover-elevate cursor-pointer">
+                        <div className="font-medium text-sm">{lead.name}</div>
+                        <div className="text-xs text-gray-600">{lead.phone}</div>
+                        <div className="text-xs text-blue-600">Due: {format(new Date(lead.followUpDate), 'PP')}</div>
+                      </div>
+                    )) || <div className="text-sm text-gray-500">No follow-ups this week</div>}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
+
+            {/* Lead Scoring & Conversion Analytics */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Top Priority Leads */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    High-Priority Leads
+                  </CardTitle>
+                  <CardDescription>AI-scored leads requiring immediate attention</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {(leadScoring || []).filter((lead: any) => lead.priority === 'hot').slice(0, 5).map((lead: any) => (
+                      <div key={lead.id} className="p-3 border rounded-lg hover-elevate cursor-pointer">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium text-sm">{lead.name}</h4>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="destructive" className="text-xs">
+                              {lead.priority.toUpperCase()}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              Score: {lead.score}
+                            </Badge>
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-600 mb-1">{lead.phone}</p>
+                        <p className="text-xs text-gray-500">{lead.serviceRequested}</p>
+                        {lead.estimatedValue && (
+                          <p className="text-xs text-green-600 font-medium mt-1">
+                            Est. Value: {formatCurrency(Number(lead.estimatedValue))}
+                          </p>
+                        )}
+                      </div>
+                    )) || <div className="text-sm text-gray-500">No high priority leads</div>}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Conversion Funnel */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Conversion Funnel
+                  </CardTitle>
+                  <CardDescription>Lead progression and conversion rates</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {conversionFunnel && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Leads</span>
+                          <span className="text-sm">{conversionFunnel.leads}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="bg-blue-600 h-2 rounded-full" style={{ width: '100%' }}></div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Contacted</span>
+                          <span className="text-sm">{conversionFunnel.contacted} ({conversionFunnel.conversionRates.leadToContact.toFixed(1)}%)</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="bg-green-600 h-2 rounded-full" style={{ width: `${conversionFunnel.conversionRates.leadToContact}%` }}></div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Qualified</span>
+                          <span className="text-sm">{conversionFunnel.qualified} ({conversionFunnel.conversionRates.contactToQualified.toFixed(1)}%)</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${conversionFunnel.conversionRates.contactToQualified}%` }}></div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Quoted</span>
+                          <span className="text-sm">{conversionFunnel.quoted} ({conversionFunnel.conversionRates.qualifiedToQuote.toFixed(1)}%)</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="bg-orange-600 h-2 rounded-full" style={{ width: `${conversionFunnel.conversionRates.qualifiedToQuote}%` }}></div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Won</span>
+                          <span className="text-sm">{conversionFunnel.won} ({conversionFunnel.conversionRates.quoteToWin.toFixed(1)}%)</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="bg-red-600 h-2 rounded-full" style={{ width: `${conversionFunnel.conversionRates.quoteToWin}%` }}></div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t">
+                        <div className="flex justify-between items-center font-medium">
+                          <span className="text-sm">Overall Conversion</span>
+                          <span className="text-sm text-green-600">{conversionFunnel.conversionRates.overallConversion.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Lead Source Analysis */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  Lead Source Performance
+                </CardTitle>
+                <CardDescription>ROI and conversion rates by marketing channel</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Source</th>
+                        <th className="text-right p-2">Leads</th>
+                        <th className="text-right p-2">Conversion</th>
+                        <th className="text-right p-2">Avg Value</th>
+                        <th className="text-right p-2">ROI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(leadSourceAnalysis || []).map((source: any) => (
+                        <tr key={source.source} className="border-b hover-elevate">
+                          <td className="p-2 font-medium capitalize">{source.source}</td>
+                          <td className="p-2 text-right">{source.count}</td>
+                          <td className="p-2 text-right">{source.conversionRate.toFixed(1)}%</td>
+                          <td className="p-2 text-right">{formatCurrency(source.averageValue)}</td>
+                          <td className={`p-2 text-right font-medium ${source.roi > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {source.roi.toFixed(0)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Jobs Tab */}

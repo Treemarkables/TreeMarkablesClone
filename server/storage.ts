@@ -132,6 +132,43 @@ export interface IStorage {
     rejectionReasons: { reason: string; count: number }[];
     competitorAnalysis: { competitor: string; averagePrice: number; winRate: number }[];
   }>;
+
+  // Enhanced Lead Analytics
+  getLeadScoring(): Promise<(Lead & { score: number; priority: 'hot' | 'warm' | 'cold' })[]>;
+  getConversionFunnel(): Promise<{
+    leads: number;
+    contacted: number;
+    qualified: number;
+    quoted: number;
+    won: number;
+    conversionRates: {
+      leadToContact: number;
+      contactToQualified: number;
+      qualifiedToQuote: number;
+      quoteToWin: number;
+      overallConversion: number;
+    };
+    dropOffAnalysis: {
+      stage: string;
+      count: number;
+      percentage: number;
+    }[];
+  }>;
+  
+  getFollowUpQueue(): Promise<{
+    overdue: Lead[];
+    today: Lead[];
+    thisWeek: Lead[];
+    total: number;
+  }>;
+
+  getLeadSourceAnalysis(): Promise<{
+    source: string;
+    count: number;
+    conversionRate: number;
+    averageValue: number;
+    roi: number;
+  }[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -1037,6 +1074,207 @@ export class MemStorage implements IStorage {
       rejectionReasons,
       competitorAnalysis
     };
+  }
+
+  // ========================================
+  // ENHANCED LEAD ANALYTICS IMPLEMENTATIONS  
+  // ========================================
+
+  async getLeadScoring(): Promise<(Lead & { score: number; priority: 'hot' | 'warm' | 'cold' })[]> {
+    const leads = Array.from(this.pipelineLeads.values());
+    const activities = Array.from(this.activities.values());
+    
+    return leads.map(lead => {
+      let score = 0;
+      
+      // Urgency scoring
+      switch (lead.urgency) {
+        case 'emergency': score += 40; break;
+        case 'high': score += 30; break;
+        case 'medium': score += 20; break;
+        case 'low': score += 10; break;
+      }
+      
+      // Estimated value scoring
+      const value = Number(lead.estimatedValue) || 0;
+      if (value > 5000) score += 30;
+      else if (value > 2000) score += 20;
+      else if (value > 1000) score += 10;
+      
+      // Recent activity scoring
+      const leadActivities = activities.filter(a => a.leadId === lead.id);
+      const recentActivity = leadActivities.find(a => 
+        a.createdAt > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      );
+      if (recentActivity) score += 15;
+      
+      // Source quality scoring
+      switch (lead.source) {
+        case 'referral': score += 25; break;
+        case 'google': score += 20; break;
+        case 'website': score += 15; break;
+        case 'facebook': score += 10; break;
+        case 'phone': score += 20; break;
+      }
+      
+      // Age penalty (older leads lose priority)
+      const daysSinceCreated = Math.floor((Date.now() - lead.createdAt.getTime()) / (24 * 60 * 60 * 1000));
+      if (daysSinceCreated > 14) score -= 20;
+      else if (daysSinceCreated > 7) score -= 10;
+      
+      // Status bonus/penalty
+      switch (lead.status) {
+        case 'new': score += 10; break;
+        case 'contacted': score += 5; break;
+        case 'qualified': score += 20; break;
+        case 'quoted': score += 15; break;
+        case 'lost': score = 0; break;
+      }
+      
+      // Determine priority
+      let priority: 'hot' | 'warm' | 'cold';
+      if (score >= 70) priority = 'hot';
+      else if (score >= 40) priority = 'warm';
+      else priority = 'cold';
+      
+      return { ...lead, score, priority };
+    }).sort((a, b) => b.score - a.score);
+  }
+
+  async getConversionFunnel(): Promise<{
+    leads: number;
+    contacted: number;
+    qualified: number;
+    quoted: number;
+    won: number;
+    conversionRates: {
+      leadToContact: number;
+      contactToQualified: number;
+      qualifiedToQuote: number;
+      quoteToWin: number;
+      overallConversion: number;
+    };
+    dropOffAnalysis: {
+      stage: string;
+      count: number;
+      percentage: number;
+    }[];
+  }> {
+    const leads = Array.from(this.pipelineLeads.values());
+    
+    const statusCounts = {
+      leads: leads.length,
+      contacted: leads.filter(l => ['contacted', 'qualified', 'quoted', 'won'].includes(l.status)).length,
+      qualified: leads.filter(l => ['qualified', 'quoted', 'won'].includes(l.status)).length,
+      quoted: leads.filter(l => ['quoted', 'won'].includes(l.status)).length,
+      won: leads.filter(l => l.status === 'won').length
+    };
+    
+    const conversionRates = {
+      leadToContact: statusCounts.leads > 0 ? (statusCounts.contacted / statusCounts.leads) * 100 : 0,
+      contactToQualified: statusCounts.contacted > 0 ? (statusCounts.qualified / statusCounts.contacted) * 100 : 0,
+      qualifiedToQuote: statusCounts.qualified > 0 ? (statusCounts.quoted / statusCounts.qualified) * 100 : 0,
+      quoteToWin: statusCounts.quoted > 0 ? (statusCounts.won / statusCounts.quoted) * 100 : 0,
+      overallConversion: statusCounts.leads > 0 ? (statusCounts.won / statusCounts.leads) * 100 : 0
+    };
+    
+    const dropOffAnalysis = [
+      { stage: 'Lead to Contact', count: statusCounts.leads - statusCounts.contacted, percentage: 100 - conversionRates.leadToContact },
+      { stage: 'Contact to Qualified', count: statusCounts.contacted - statusCounts.qualified, percentage: 100 - conversionRates.contactToQualified },
+      { stage: 'Qualified to Quote', count: statusCounts.qualified - statusCounts.quoted, percentage: 100 - conversionRates.qualifiedToQuote },
+      { stage: 'Quote to Win', count: statusCounts.quoted - statusCounts.won, percentage: 100 - conversionRates.quoteToWin }
+    ];
+    
+    return {
+      ...statusCounts,
+      conversionRates,
+      dropOffAnalysis
+    };
+  }
+  
+  async getFollowUpQueue(): Promise<{
+    overdue: Lead[];
+    today: Lead[];
+    thisWeek: Lead[];
+    total: number;
+  }> {
+    const leads = Array.from(this.pipelineLeads.values())
+      .filter(lead => lead.followUpDate && !['won', 'lost'].includes(lead.status));
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    const overdue = leads.filter(lead => lead.followUpDate! < today);
+    const todayFollowUps = leads.filter(lead => {
+      const followUp = new Date(lead.followUpDate!);
+      return followUp >= today && followUp < new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    });
+    const thisWeek = leads.filter(lead => {
+      const followUp = new Date(lead.followUpDate!);
+      return followUp >= today && followUp <= weekFromNow && !todayFollowUps.includes(lead);
+    });
+    
+    return {
+      overdue: overdue.sort((a, b) => a.followUpDate!.getTime() - b.followUpDate!.getTime()),
+      today: todayFollowUps.sort((a, b) => a.followUpDate!.getTime() - b.followUpDate!.getTime()),
+      thisWeek: thisWeek.sort((a, b) => a.followUpDate!.getTime() - b.followUpDate!.getTime()),
+      total: leads.length
+    };
+  }
+
+  async getLeadSourceAnalysis(): Promise<{
+    source: string;
+    count: number;
+    conversionRate: number;
+    averageValue: number;
+    roi: number;
+  }[]> {
+    const leads = Array.from(this.pipelineLeads.values());
+    const jobs = Array.from(this.jobs.values());
+    const campaigns = Array.from(this.campaigns.values());
+    
+    const sourceMap = new Map<string, {
+      count: number;
+      won: number;
+      totalValue: number;
+      cost: number;
+    }>();
+    
+    // Initialize source data
+    leads.forEach(lead => {
+      const source = lead.source || 'unknown';
+      const existing = sourceMap.get(source) || { count: 0, won: 0, totalValue: 0, cost: 0 };
+      existing.count += 1;
+      
+      if (lead.status === 'won') {
+        existing.won += 1;
+        // Find associated job for actual value
+        const job = jobs.find(j => j.customerId === lead.customerId);
+        if (job && job.totalAmount) {
+          existing.totalValue += Number(job.totalAmount);
+        }
+      }
+      
+      sourceMap.set(source, existing);
+    });
+    
+    // Add campaign costs
+    campaigns.forEach(campaign => {
+      if (campaign.channel && campaign.totalSpent) {
+        const existing = sourceMap.get(campaign.channel) || { count: 0, won: 0, totalValue: 0, cost: 0 };
+        existing.cost += Number(campaign.totalSpent);
+        sourceMap.set(campaign.channel, existing);
+      }
+    });
+    
+    return Array.from(sourceMap.entries()).map(([source, data]) => ({
+      source,
+      count: data.count,
+      conversionRate: data.count > 0 ? (data.won / data.count) * 100 : 0,
+      averageValue: data.won > 0 ? data.totalValue / data.won : 0,
+      roi: data.cost > 0 ? ((data.totalValue - data.cost) / data.cost) * 100 : 0
+    })).sort((a, b) => b.count - a.count);
   }
 }
 
