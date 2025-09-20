@@ -31,7 +31,6 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
-import logoUrl from '@assets/treelogo_1758218149788.webp';
 
 interface AppSidebarProps {
   activeTab: string;
@@ -134,16 +133,9 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-orange-200">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <img 
-            src={logoUrl} 
-            alt="Treemarkables" 
-            className="h-8 w-auto"
-          />
-          <div className="flex flex-col">
-            <span className="font-semibold text-orange-900">Treemarkables</span>
-            <span className="text-xs text-orange-600">Dashboard</span>
-          </div>
+        <div className="flex flex-col gap-2 p-4">
+          <span className="font-semibold text-orange-900">Treemarkables</span>
+          <span className="text-xs text-orange-600">Dashboard</span>
         </div>
       </SidebarHeader>
 
