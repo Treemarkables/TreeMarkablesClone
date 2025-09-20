@@ -495,6 +495,10 @@ export default function JobDashboard() {
   };
 
   const processVoiceCommand = (command: string) => {
+    console.log('Processing voice command:', command);
+    console.log('Current AI response:', aiResponse);
+    console.log('Is conversation mode:', isConversationMode);
+    
     // Handle conversational flow
     if (isConversationMode) {
       handleConversationalInput(command);
@@ -514,8 +518,10 @@ export default function JobDashboard() {
         speakText("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.", true);
       }
     } else if (command.includes('conversation') && aiResponse.includes('conversation mode or quick mode')) {
+      console.log('Starting conversation mode...');
       startLeadConversation();
     } else if (command.includes('quick') && aiResponse.includes('conversation mode or quick mode')) {
+      console.log('Opening quick mode form...');
       setShowNewLeadDialog(true);
       setAiResponse("Opening quick lead creation form.");
       speakText("Opening quick lead creation form.");
