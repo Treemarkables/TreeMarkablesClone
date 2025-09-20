@@ -1,5 +1,8 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+import type { Communication } from '@shared/schema';
 import {
   Mail,
   MessageSquare,
@@ -20,7 +23,8 @@ import {
   AlertCircle,
   User,
   Hash,
-  Calendar
+  Calendar,
+  Loader2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,29 +37,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-interface Communication {
-  id: string;
-  platform: 'email' | 'sms' | 'facebook' | 'instagram' | 'twitter' | 'linkedin' | 'whatsapp' | 'phone';
-  type: 'message' | 'comment' | 'mention' | 'dm' | 'call';
-  from: string;
-  fromEmail?: string;
-  fromPhone?: string;
-  subject?: string;
-  content: string;
-  timestamp: string;
-  isRead: boolean;
-  isStarred: boolean;
-  isArchived: boolean;
-  priority: 'low' | 'medium' | 'high';
-  attachments?: Array<{
-    name: string;
-    type: string;
-    url: string;
-  }>;
-  threadId?: string;
-  leadId?: string;
-  customerId?: string;
-}
+// Communication type is imported from shared schema
 
 const platformConfig = {
   email: { icon: Mail, color: 'bg-blue-100 text-blue-700', name: 'Email' },
@@ -68,78 +50,7 @@ const platformConfig = {
   phone: { icon: Phone, color: 'bg-gray-100 text-gray-700', name: 'Phone' }
 };
 
-// Sample data - in a real app, this would come from various API integrations
-const sampleCommunications: Communication[] = [
-  {
-    id: '1',
-    platform: 'email',
-    type: 'message',
-    from: 'Sarah Johnson',
-    fromEmail: 'sarah.j@email.com',
-    subject: 'Tree removal quote request',
-    content: 'Hi, I need a quote for removing two large oak trees from my backyard. They are approximately 30 feet tall and located near my house. Can you provide an estimate?',
-    timestamp: '2024-12-20T09:30:00Z',
-    isRead: false,
-    isStarred: false,
-    isArchived: false,
-    priority: 'high',
-    leadId: '1'
-  },
-  {
-    id: '2',
-    platform: 'facebook',
-    type: 'message',
-    from: 'Mike Chen',
-    subject: 'Hedge trimming inquiry',
-    content: 'Saw your Facebook page. Do you do hedge trimming? I have a large hedge that needs professional attention.',
-    timestamp: '2024-12-20T08:15:00Z',
-    isRead: true,
-    isStarred: true,
-    isArchived: false,
-    priority: 'medium',
-    leadId: '2'
-  },
-  {
-    id: '3',
-    platform: 'sms',
-    type: 'message',
-    from: 'Lisa Rodriguez',
-    fromPhone: '+1 (555) 444-5555',
-    content: 'Emergency! Large tree fell on my driveway after the storm. Need immediate assistance.',
-    timestamp: '2024-12-20T07:45:00Z',
-    isRead: false,
-    isStarred: false,
-    isArchived: false,
-    priority: 'high',
-    leadId: '3'
-  },
-  {
-    id: '4',
-    platform: 'instagram',
-    type: 'dm',
-    from: 'garden_lover_2024',
-    content: 'Love your recent tree work! Can you help with stump grinding?',
-    timestamp: '2024-12-19T16:20:00Z',
-    isRead: true,
-    isStarred: false,
-    isArchived: false,
-    priority: 'low'
-  },
-  {
-    id: '5',
-    platform: 'phone',
-    type: 'call',
-    from: 'David Thompson',
-    fromPhone: '+1 (555) 222-3333',
-    content: 'Missed call - voicemail: Interested in tree pruning services for commercial property',
-    timestamp: '2024-12-19T14:30:00Z',
-    isRead: false,
-    isStarred: false,
-    isArchived: false,
-    priority: 'medium',
-    leadId: '4'
-  }
-];
+// Real data will be fetched from backend APIs
 
 export default function Opportunities() {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
@@ -147,29 +58,129 @@ export default function Opportunities() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [selectedCommunication, setSelectedCommunication] = useState<Communication | null>(null);
+  
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  // In a real app, this would fetch from multiple API endpoints
-  const { data: communications = [], isLoading } = useQuery({
-    queryKey: ['/api/communications'],
-    queryFn: () => Promise.resolve(sampleCommunications),
+  // Fetch communications from backend
+  const { data: communicationsResponse, isLoading, error } = useQuery({
+    queryKey: ['/api/communications', { 
+      platform: selectedPlatform !== 'all' ? selectedPlatform : undefined,
+      priority: selectedPriority !== 'all' ? selectedPriority : undefined,
+      search: searchTerm || undefined,
+      isArchived: false
+    }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedPlatform !== 'all') params.append('platform', selectedPlatform);
+      if (selectedPriority !== 'all') params.append('priority', selectedPriority);
+      if (searchTerm) params.append('search', searchTerm);
+      params.append('isArchived', 'false');
+
+      const response = await fetch(`/api/communications?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch communications');
+      return response.json();
+    },
+  });
+
+  const communications = communicationsResponse?.data || [];
+
+  // Fetch communication stats
+  const { data: statsResponse } = useQuery({
+    queryKey: ['/api/communications/stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/communications/stats');
+      if (!response.ok) throw new Error('Failed to fetch stats');
+      return response.json();
+    },
+  });
+
+  const stats = statsResponse?.data || {
+    total: 0,
+    unread: 0,
+    starred: 0,
+    archived: 0
+  };
+
+  // Mark as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/communications/${id}/read`, { method: 'PATCH' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/communications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/communications/stats'] });
+      toast({ title: 'Message marked as read' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to mark message as read', variant: 'destructive' });
+    }
+  });
+
+  // Star/unstar mutation
+  const starMutation = useMutation({
+    mutationFn: async ({ id, starred }: { id: string; starred: boolean }) => {
+      return apiRequest(`/api/communications/${id}/star`, { 
+        method: 'PATCH',
+        body: { starred }
+      });
+    },
+    onSuccess: (_, { starred }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/communications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/communications/stats'] });
+      toast({ title: starred ? 'Message starred' : 'Message unstarred' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update star status', variant: 'destructive' });
+    }
+  });
+
+  // Archive mutation
+  const archiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/communications/${id}/archive`, { method: 'PATCH' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/communications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/communications/stats'] });
+      setSelectedCommunication(null);
+      toast({ title: 'Message archived' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to archive message', variant: 'destructive' });
+    }
   });
 
   const filteredCommunications = useMemo(() => {
     return communications.filter(comm => {
-      const matchesPlatform = selectedPlatform === 'all' || comm.platform === selectedPlatform;
-      const matchesPriority = selectedPriority === 'all' || comm.priority === selectedPriority;
-      const matchesSearch = searchTerm === '' || 
-        comm.from.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        comm.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (comm.subject && comm.subject.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesRead = !showUnreadOnly || !comm.isRead;
-      
-      return matchesPlatform && matchesPriority && matchesSearch && matchesRead && !comm.isArchived;
+      return matchesRead && !comm.isArchived;
     });
-  }, [communications, selectedPlatform, selectedPriority, searchTerm, showUnreadOnly]);
+  }, [communications, showUnreadOnly]);
 
-  const unreadCount = communications.filter(c => !c.isRead && !c.isArchived).length;
-  const starredCount = communications.filter(c => c.isStarred && !c.isArchived).length;
+  // Handle communication click
+  const handleCommunicationClick = (communication: Communication) => {
+    setSelectedCommunication(communication);
+    
+    // Mark as read if not already read
+    if (!communication.isRead) {
+      markAsReadMutation.mutate(communication.id);
+    }
+  };
+
+  // Handle star toggle
+  const handleStarToggle = (communication: Communication, event: React.MouseEvent) => {
+    event.stopPropagation();
+    starMutation.mutate({ 
+      id: communication.id, 
+      starred: !communication.isStarred 
+    });
+  };
+
+  // Handle archive
+  const handleArchive = (communication: Communication) => {
+    archiveMutation.mutate(communication.id);
+  };
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -193,12 +204,41 @@ export default function Opportunities() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="space-y-4">
-          <div className="h-8 bg-gray-200 rounded animate-pulse" />
-          <div className="h-32 bg-gray-200 rounded animate-pulse" />
-          <div className="h-32 bg-gray-200 rounded animate-pulse" />
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="mb-6">
+          <div className="h-8 bg-gray-200 rounded animate-pulse mb-2" />
+          <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2" />
         </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-24 bg-gray-200 rounded animate-pulse" />
+          ))}
+        </div>
+        <div className="space-y-4">
+          <div className="h-32 bg-gray-200 rounded animate-pulse" />
+          <div className="h-96 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Opportunities Hub</h1>
+          <p className="text-gray-600">Centralized communication center for all your platforms</p>
+        </div>
+        <Card>
+          <CardContent className="p-8 text-center">
+            <AlertCircle className="h-16 w-16 mx-auto mb-4 text-red-300" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Error loading communications</h3>
+            <p className="text-gray-600 mb-4">There was a problem loading your messages. Please try again.</p>
+            <Button onClick={() => window.location.reload()}>
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -220,7 +260,7 @@ export default function Opportunities() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Messages</p>
-                <p className="text-2xl font-bold text-gray-900">{communications.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
             </div>
           </CardContent>
@@ -234,7 +274,7 @@ export default function Opportunities() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Unread</p>
-                <p className="text-2xl font-bold text-gray-900">{unreadCount}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.unread}</p>
               </div>
             </div>
           </CardContent>
@@ -248,7 +288,7 @@ export default function Opportunities() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Starred</p>
-                <p className="text-2xl font-bold text-gray-900">{starredCount}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.starred}</p>
               </div>
             </div>
           </CardContent>
@@ -261,8 +301,8 @@ export default function Opportunities() {
                 <CheckCircle className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Today's Responses</p>
-                <p className="text-2xl font-bold text-gray-900">12</p>
+                <p className="text-sm text-gray-600">Archived</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.archived}</p>
               </div>
             </div>
           </CardContent>
@@ -352,7 +392,7 @@ export default function Opportunities() {
                               ? 'border-l-transparent hover:bg-gray-50' 
                               : 'border-l-orange-200 bg-orange-25 hover:bg-orange-50'
                         }`}
-                        onClick={() => setSelectedCommunication(comm)}
+                        onClick={() => handleCommunicationClick(comm)}
                         data-testid={`communication-item-${comm.id}`}
                       >
                         <div className="flex items-start gap-3">
@@ -389,12 +429,16 @@ export default function Opportunities() {
                             
                             <div className="flex items-center justify-between mt-2">
                               <span className="text-xs text-gray-500">
-                                {formatTimestamp(comm.timestamp)}
+                                {formatTimestamp(comm.receivedAt)}
                               </span>
                               <div className="flex items-center gap-1">
-                                {comm.isStarred && (
-                                  <Star className="h-3 w-3 text-yellow-500 fill-current" />
-                                )}
+                                <button
+                                  onClick={(e) => handleStarToggle(comm, e)}
+                                  className="p-1 hover:bg-gray-200 rounded"
+                                  disabled={starMutation.isPending}
+                                >
+                                  <Star className={`h-3 w-3 ${comm.isStarred ? 'text-yellow-500 fill-current' : 'text-gray-400'}`} />
+                                </button>
                                 {!comm.isRead && (
                                   <div className="h-2 w-2 bg-orange-500 rounded-full" />
                                 )}
@@ -449,11 +493,17 @@ export default function Opportunities() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleStarToggle(selectedCommunication, {} as React.MouseEvent)}
+                        disabled={starMutation.isPending}
+                      >
                         <Star className="h-4 w-4 mr-2" />
                         {selectedCommunication.isStarred ? 'Unstar' : 'Star'}
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleArchive(selectedCommunication)}
+                        disabled={archiveMutation.isPending}
+                      >
                         <Archive className="h-4 w-4 mr-2" />
                         Archive
                       </DropdownMenuItem>
@@ -469,7 +519,7 @@ export default function Opportunities() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Calendar className="h-4 w-4" />
-                    {new Date(selectedCommunication.timestamp).toLocaleString()}
+                    {new Date(selectedCommunication.receivedAt).toLocaleString()}
                   </div>
                   
                   {selectedCommunication.subject && (
@@ -497,9 +547,28 @@ export default function Opportunities() {
                       <Forward className="h-4 w-4 mr-2" />
                       Forward
                     </Button>
-                    <Button variant="outline" data-testid="button-create-lead">
+                    <Button 
+                      variant="outline" 
+                      data-testid="button-create-lead"
+                      onClick={() => {
+                        // In a real app, this would navigate to lead creation
+                        toast({ title: 'Feature coming soon', description: 'Lead creation will be available soon.' });
+                      }}
+                    >
                       <User className="h-4 w-4 mr-2" />
                       Create Lead
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handleArchive(selectedCommunication)}
+                      disabled={archiveMutation.isPending}
+                    >
+                      {archiveMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Archive className="h-4 w-4 mr-2" />
+                      )}
+                      Archive
                     </Button>
                   </div>
                 </div>
