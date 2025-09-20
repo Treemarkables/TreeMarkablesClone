@@ -14,6 +14,7 @@ import SummerOffer from "@/pages/SummerOffer";
 import JobDashboard from "@/pages/JobDashboard";
 import MetricsDashboard from "@/pages/MetricsDashboard";
 import Pipeline from "@/pages/Pipeline";
+import Opportunities from "@/pages/Opportunities";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/job-dashboard" component={JobDashboard}/>
       <Route path="/metrics" component={MetricsDashboard}/>
       <Route path="/pipeline" component={Pipeline}/>
+      <Route path="/opportunities" component={Opportunities}/>
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>

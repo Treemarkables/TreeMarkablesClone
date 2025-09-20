@@ -12,7 +12,8 @@ import {
   Home,
   Target,
   Briefcase,
-  GitBranch
+  GitBranch,
+  MessageSquare
 } from "lucide-react";
 import {
   Sidebar,
@@ -220,7 +221,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <Link href="/pipeline">
+                  <Link href="/pipeline" data-testid="link-pipeline">
                     <GitBranch className="h-4 w-4" />
                     <span>Pipeline</span>
                   </Link>
@@ -228,7 +229,15 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <Link href="/metrics">
+                  <Link href="/opportunities" data-testid="link-opportunities">
+                    <MessageSquare className="h-4 w-4" />
+                    <span>Opportunities</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/metrics" data-testid="link-metrics">
                     <BarChart3 className="h-4 w-4" />
                     <span>Metrics Dashboard</span>
                   </Link>
