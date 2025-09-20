@@ -33,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { apiRequest } from '@/lib/queryClient';
+import { GrossMarginCalculator } from '@/components/GrossMarginCalculator';
 
 interface StaffMember {
   id: string;
@@ -273,7 +274,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   // Fetch jobs from backend API
   const { data: jobsData } = useQuery({
-    queryKey: ['/api/jobs']
+    queryKey: ['/api/jobs'],
+    queryFn: async () => {
+      const response = await fetch('/api/jobs');
+      if (!response.ok) throw new Error('Failed to fetch jobs');
+      return response.json();
+    }
   });
 
   // Convert API jobs to DispatchBoard format
@@ -1130,6 +1136,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   </p>
                 </div>
               )}
+
+              {/* Gross Margin Calculator */}
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Cost & Margin Analysis</h4>
+                <GrossMarginCalculator 
+                  jobId={selectedJob.jobId} 
+                  compact={true} 
+                />
+              </div>
 
               {/* Quick Actions */}
               <div className="space-y-3">
