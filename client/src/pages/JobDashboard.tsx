@@ -548,8 +548,11 @@ export default function JobDashboard() {
       return;
     }
 
-    // Regular voice commands
-    if (command.includes('create lead') || command.includes('new lead')) {
+    // Regular voice commands - more flexible matching
+    if (command.includes('create lead') || command.includes('new lead') || 
+        command.includes('create a lead') || command.includes('add lead') ||
+        (command.includes('create') && (command.includes('customer') || command.includes('client'))) ||
+        command === 'create it' || command === 'create one') {
       // Check if they want conversational or quick mode
       if (command.includes('conversation') || command.includes('step by step')) {
         startLeadConversation();
