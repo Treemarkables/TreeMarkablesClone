@@ -543,7 +543,25 @@ export default function JobDashboard() {
     console.log('Is conversation mode:', isConversationMode);
     
     // Handle conversational flow
-    if (isConversationMode) {
+    // Check multiple indicators for conversation mode (backup in case isConversationMode gets reset)
+    const isInConversation = isConversationMode || 
+                            (conversationStep >= 0 && conversationStep < conversationSteps.length && 
+                             aiResponse.includes("customer's name") || 
+                             aiResponse.includes("phone number") || 
+                             aiResponse.includes("email address") ||
+                             aiResponse.includes("property address") ||
+                             aiResponse.includes("tree service") ||
+                             aiResponse.includes("urgent") ||
+                             aiResponse.includes("additional notes") ||
+                             aiResponse.includes("confirm the details"));
+    
+    if (isInConversation) {
+      console.log('🔄 Processing as conversation input (mode:', isConversationMode, 'step:', conversationStep, ')');
+      // Ensure conversation mode is set if we're clearly in a conversation
+      if (!isConversationMode) {
+        console.log('🔧 Auto-correcting conversation mode to true');
+        setIsConversationMode(true);
+      }
       handleConversationalInput(command);
       return;
     }
@@ -692,6 +710,7 @@ export default function JobDashboard() {
   };
 
   const cancelConversation = () => {
+    console.log('🚨 RESETTING isConversationMode to false - cancelConversation called');
     setIsConversationMode(false);
     setConversationStep(0);
     setAiResponse("Lead creation cancelled.");
