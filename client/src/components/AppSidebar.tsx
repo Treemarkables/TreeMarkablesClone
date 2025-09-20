@@ -132,10 +132,6 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b border-orange-200">
-        <div className="flex flex-col gap-2 p-4">
-        </div>
-      </SidebarHeader>
 
       <SidebarContent>
         {/* Core Dashboard */}
