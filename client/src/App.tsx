@@ -21,6 +21,7 @@ import Reputation from "@/pages/Reputation";
 import Inbox from "@/pages/Inbox";
 import Integrations from "@/pages/Integrations";
 import NotFound from "@/pages/not-found";
+import { CustomerPortal } from "@/pages/CustomerPortal";
 import { useState } from "react";
 
 // Sidebar layout wrapper for dashboard pages
@@ -62,6 +63,7 @@ function Router() {
       <Route path="/summer-offer" component={SummerOffer}/>
       <Route path="/job-dashboard" component={JobDashboard}/>
       <Route path="/metrics" component={MetricsDashboard}/>
+      <Route path="/customer-portal" component={CustomerPortal}/>
       
       {/* Dashboard pages with sidebar */}
       <Route path="/pipeline">
