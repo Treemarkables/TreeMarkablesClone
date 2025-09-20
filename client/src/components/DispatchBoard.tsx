@@ -18,7 +18,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Grid3X3,
-  List
+  List,
+  Settings
 } from 'lucide-react';
 import { useState } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO } from 'date-fns';
@@ -47,8 +48,9 @@ interface Team {
 interface JobAssignment {
   id: string;
   jobId: string;
-  teamId: string; // Changed from staffId to teamId
-  assignedTeam: string[]; // Array of staff member IDs
+  teamId?: string; // Optional for team mode
+  staffId?: string; // Optional for individual mode
+  assignedTeam: string[]; // Array of staff member IDs (used in team mode)
   customerName: string;
   customerPhone: string;
   address: string;
@@ -60,6 +62,8 @@ interface JobAssignment {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   notes?: string;
 }
+
+type AssignmentMode = 'teams' | 'individual';
 
 interface DispatchBoardProps {
   compact?: boolean;
@@ -187,8 +191,8 @@ const mockJobAssignments: JobAssignment[] = [
   {
     id: '3',
     jobId: 'J003',
-    teamId: 'team2',
-    assignedTeam: ['3', '6'],
+    staffId: '3', // Individual assignment
+    assignedTeam: [],
     customerName: 'Johnson, Sarah',
     customerPhone: '(555) 345-6789',
     address: '456 Elm Street',
@@ -203,8 +207,8 @@ const mockJobAssignments: JobAssignment[] = [
   {
     id: '4',
     jobId: 'J004',
-    teamId: 'team3',
-    assignedTeam: ['4', '5'],
+    staffId: '4', // Individual assignment
+    assignedTeam: [],
     customerName: 'Gray, Alex',
     customerPhone: '(555) 456-7890',
     address: '789 Pine Avenue',
@@ -219,8 +223,8 @@ const mockJobAssignments: JobAssignment[] = [
   {
     id: '5',
     jobId: 'J005',
-    teamId: 'team2',
-    assignedTeam: ['3', '6'],
+    staffId: '6', // Individual assignment
+    assignedTeam: [],
     customerName: 'Baty, Katrina',
     customerPhone: '(555) 567-8901',
     address: '321 Maple Drive',
@@ -242,6 +246,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [selectedDate, setSelectedDate] = useState(new Date('2024-12-20'));
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('teams');
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -269,6 +274,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     });
   };
 
+  const getJobsForStaff = (staffId: string) => {
+    return mockJobAssignments.filter(job => {
+      if (job.staffId !== staffId) return false;
+      return isSameDay(new Date(job.startTime), selectedDate);
+    });
+  };
+
   const getTeamMembers = (teamId: string) => {
     const team = mockTeams.find(t => t.id === teamId);
     if (!team) return [];
@@ -277,13 +289,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const getTodaysJobs = () => {
     return mockJobAssignments
-      .filter(job => isSameDay(new Date(job.startTime), selectedDate))
+      .filter(job => {
+        const isToday = isSameDay(new Date(job.startTime), selectedDate);
+        if (assignmentMode === 'teams') {
+          return job.teamId && isToday;
+        } else {
+          return job.staffId && isToday;
+        }
+      })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   };
 
   if (compact) {
     const todaysJobs = getTodaysJobs();
     const activeTeams = mockTeams.filter(team => team.status === 'available').length;
+    const activeStaff = mockStaffMembers.filter(staff => staff.status === 'available').length;
     const scheduledJobs = todaysJobs.filter(job => job.status === 'scheduled').length;
 
     return (
@@ -298,11 +318,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-blue-500" />
-                <span className="text-sm">Active Teams</span>
+                {assignmentMode === 'teams' ? (
+                  <>
+                    <Users className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm">Active Teams</span>
+                  </>
+                ) : (
+                  <>
+                    <User className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm">Active Staff</span>
+                  </>
+                )}
               </div>
-              <Badge variant="secondary" data-testid="active-teams">
-                {activeTeams}
+              <Badge variant="secondary" data-testid={assignmentMode === 'teams' ? 'active-teams' : 'active-staff'}>
+                {assignmentMode === 'teams' ? activeTeams : activeStaff}
               </Badge>
             </div>
 
@@ -399,6 +428,26 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               >
                 Today
               </Button>
+              <Select value={assignmentMode} onValueChange={(value: AssignmentMode) => setAssignmentMode(value)}>
+                <SelectTrigger className="w-[160px]" data-testid="assignment-mode-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="teams" data-testid="teams-mode">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Teams
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="individual" data-testid="individual-mode">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Individual Staff
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
               <div className="flex border rounded-md">
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'ghost'}
@@ -423,35 +472,70 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         <CardContent>
           <div className="flex gap-4 h-[600px]">
-            {/* Team Column */}
+            {/* Team/Staff Column */}
             <div className="w-48 border-r pr-4">
-              <h3 className="font-semibold mb-4 text-sm text-muted-foreground">TEAMS</h3>
+              <h3 className="font-semibold mb-4 text-sm text-muted-foreground">
+                {assignmentMode === 'teams' ? 'TEAMS' : 'STAFF'}
+              </h3>
               <div className="space-y-2">
-                {mockTeams.map((team) => {
-                  const teamMembers = getTeamMembers(team.id);
-                  const todaysJobs = getJobsForTeam(team.id);
-                  return (
-                    <div
-                      key={team.id}
-                      className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer"
-                      data-testid={`team-${team.id}`}
-                    >
-                      <div className={`w-3 h-3 rounded-full ${team.color}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{team.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {teamMembers.length} members • {todaysJobs.length} jobs
-                        </div>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className={`text-xs ${getStatusColor(team.status)}`}
+                {assignmentMode === 'teams' ? (
+                  // Teams Mode
+                  mockTeams.map((team) => {
+                    const teamMembers = getTeamMembers(team.id);
+                    const todaysJobs = getJobsForTeam(team.id);
+                    return (
+                      <div
+                        key={team.id}
+                        className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer"
+                        data-testid={`team-${team.id}`}
                       >
-                        {team.status}
-                      </Badge>
-                    </div>
-                  );
-                })}
+                        <div className={`w-3 h-3 rounded-full ${team.color}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{team.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {teamMembers.length} members • {todaysJobs.length} jobs
+                          </div>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${getStatusColor(team.status)}`}
+                        >
+                          {team.status}
+                        </Badge>
+                      </div>
+                    );
+                  })
+                ) : (
+                  // Individual Staff Mode
+                  mockStaffMembers.map((staff) => {
+                    const staffJobs = getJobsForStaff(staff.id);
+                    return (
+                      <div
+                        key={staff.id}
+                        className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer"
+                        data-testid={`staff-${staff.id}`}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className={`${staff.color} text-white text-xs`}>
+                            {staff.name.split(' ').map(n => n[0]).join('')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{staff.name.split(' ')[0]}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {staff.role} • {staffJobs.length} jobs
+                          </div>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${getStatusColor(staff.status)}`}
+                        >
+                          {staff.status}
+                        </Badge>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -471,69 +555,135 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   ))}
                 </div>
 
-                {/* Team Rows */}
+                {/* Team/Staff Rows */}
                 <div className="space-y-1">
-                  {mockTeams.map((team) => {
-                    const teamJobs = getJobsForTeam(team.id);
-                    return (
-                      <div key={team.id} className="relative h-16" data-testid={`team-row-${team.id}`}>
-                        {/* Time Grid Background */}
-                        <div className="grid grid-cols-12 gap-1 h-full absolute inset-0 z-0">
-                          {timeSlots.map((time) => (
-                            <div
-                              key={`${team.id}-${time}`}
-                              className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
-                              data-testid={`time-cell-${team.id}-${time}`}
-                            />
-                          ))}
-                        </div>
-                        
-                        {/* Job Blocks */}
-                        <div className="relative h-full z-10">
-                          {teamJobs.map((job) => {
-                            const jobStart = new Date(job.startTime);
-                            const jobEnd = new Date(job.endTime);
-                            const dayStart = new Date(selectedDate);
-                            dayStart.setHours(7, 0, 0, 0); // 7:00 AM start
-                            
-                            const startHour = jobStart.getHours();
-                            const startMinutes = jobStart.getMinutes();
-                            const endHour = jobEnd.getHours();
-                            const endMinutes = jobEnd.getMinutes();
-                            
-                            // Calculate position and width as percentage of the 12-hour grid (7 AM to 7 PM)
-                            const totalMinutes = 12 * 60; // 7 AM to 7 PM = 12 hours = 720 minutes
-                            const jobStartMinutes = (startHour - 7) * 60 + startMinutes;
-                            const jobEndMinutes = (endHour - 7) * 60 + endMinutes;
-                            
-                            const leftPercent = Math.max(0, (jobStartMinutes / totalMinutes) * 100);
-                            const widthPercent = Math.min(100 - leftPercent, ((jobEndMinutes - jobStartMinutes) / totalMinutes) * 100);
-                            
-                            return (
+                  {assignmentMode === 'teams' ? (
+                    // Teams Mode
+                    mockTeams.map((team) => {
+                      const teamJobs = getJobsForTeam(team.id);
+                      return (
+                        <div key={team.id} className="relative h-16" data-testid={`team-row-${team.id}`}>
+                          {/* Time Grid Background */}
+                          <div className="grid grid-cols-12 gap-1 h-full absolute inset-0 z-0">
+                            {timeSlots.map((time) => (
                               <div
-                                key={job.id}
-                                className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs p-1 cursor-pointer hover:opacity-80 transition-opacity top-1 bottom-1`}
-                                onClick={() => setSelectedJob(job)}
-                                data-testid={`job-block-${job.id}`}
-                                style={{
-                                  left: `${leftPercent}%`,
-                                  width: `${widthPercent}%`,
-                                  minWidth: '80px'
-                                }}
-                              >
-                                <div className="font-medium truncate text-[10px]">
-                                  {job.customerName}
+                                key={`${team.id}-${time}`}
+                                className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
+                                data-testid={`time-cell-${team.id}-${time}`}
+                              />
+                            ))}
+                          </div>
+                          
+                          {/* Job Blocks */}
+                          <div className="relative h-full z-10">
+                            {teamJobs.map((job) => {
+                              const jobStart = new Date(job.startTime);
+                              const jobEnd = new Date(job.endTime);
+                              const dayStart = new Date(selectedDate);
+                              dayStart.setHours(7, 0, 0, 0); // 7:00 AM start
+                              
+                              const startHour = jobStart.getHours();
+                              const startMinutes = jobStart.getMinutes();
+                              const endHour = jobEnd.getHours();
+                              const endMinutes = jobEnd.getMinutes();
+                              
+                              // Calculate position and width as percentage of the 12-hour grid (7 AM to 7 PM)
+                              const totalMinutes = 12 * 60; // 7 AM to 7 PM = 12 hours = 720 minutes
+                              const jobStartMinutes = (startHour - 7) * 60 + startMinutes;
+                              const jobEndMinutes = (endHour - 7) * 60 + endMinutes;
+                              
+                              const leftPercent = Math.max(0, (jobStartMinutes / totalMinutes) * 100);
+                              const widthPercent = Math.min(100 - leftPercent, ((jobEndMinutes - jobStartMinutes) / totalMinutes) * 100);
+                              
+                              return (
+                                <div
+                                  key={job.id}
+                                  className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs p-1 cursor-pointer hover:opacity-80 transition-opacity top-1 bottom-1`}
+                                  onClick={() => setSelectedJob(job)}
+                                  data-testid={`job-block-${job.id}`}
+                                  style={{
+                                    left: `${leftPercent}%`,
+                                    width: `${widthPercent}%`,
+                                    minWidth: '80px'
+                                  }}
+                                >
+                                  <div className="font-medium truncate text-[10px]">
+                                    {job.customerName}
+                                  </div>
+                                  <div className="truncate text-[9px] opacity-90">
+                                    {job.serviceType}
+                                  </div>
                                 </div>
-                                <div className="truncate text-[9px] opacity-90">
-                                  {job.serviceType}
-                                </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  ) : (
+                    // Individual Staff Mode
+                    mockStaffMembers.map((staff) => {
+                      const staffJobs = getJobsForStaff(staff.id);
+                      return (
+                        <div key={staff.id} className="relative h-16" data-testid={`staff-row-${staff.id}`}>
+                          {/* Time Grid Background */}
+                          <div className="grid grid-cols-12 gap-1 h-full absolute inset-0 z-0">
+                            {timeSlots.map((time) => (
+                              <div
+                                key={`${staff.id}-${time}`}
+                                className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
+                                data-testid={`time-cell-${staff.id}-${time}`}
+                              />
+                            ))}
+                          </div>
+                          
+                          {/* Job Blocks */}
+                          <div className="relative h-full z-10">
+                            {staffJobs.map((job) => {
+                              const jobStart = new Date(job.startTime);
+                              const jobEnd = new Date(job.endTime);
+                              const dayStart = new Date(selectedDate);
+                              dayStart.setHours(7, 0, 0, 0); // 7:00 AM start
+                              
+                              const startHour = jobStart.getHours();
+                              const startMinutes = jobStart.getMinutes();
+                              const endHour = jobEnd.getHours();
+                              const endMinutes = jobEnd.getMinutes();
+                              
+                              // Calculate position and width as percentage of the 12-hour grid (7 AM to 7 PM)
+                              const totalMinutes = 12 * 60; // 7 AM to 7 PM = 12 hours = 720 minutes
+                              const jobStartMinutes = (startHour - 7) * 60 + startMinutes;
+                              const jobEndMinutes = (endHour - 7) * 60 + endMinutes;
+                              
+                              const leftPercent = Math.max(0, (jobStartMinutes / totalMinutes) * 100);
+                              const widthPercent = Math.min(100 - leftPercent, ((jobEndMinutes - jobStartMinutes) / totalMinutes) * 100);
+                              
+                              return (
+                                <div
+                                  key={job.id}
+                                  className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs p-1 cursor-pointer hover:opacity-80 transition-opacity top-1 bottom-1`}
+                                  onClick={() => setSelectedJob(job)}
+                                  data-testid={`job-block-${job.id}`}
+                                  style={{
+                                    left: `${leftPercent}%`,
+                                    width: `${widthPercent}%`,
+                                    minWidth: '80px'
+                                  }}
+                                >
+                                  <div className="font-medium truncate text-[10px]">
+                                    {job.customerName}
+                                  </div>
+                                  <div className="truncate text-[9px] opacity-90">
+                                    {job.serviceType}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -552,6 +702,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <div className="space-y-3">
                   {getTodaysJobs().map((job) => {
                     const team = mockTeams.find(t => t.id === job.teamId);
+                    const staff = mockStaffMembers.find(s => s.id === job.staffId);
                     const teamMembers = team ? getTeamMembers(team.id) : [];
                     return (
                       <Card
@@ -593,14 +744,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 {format(new Date(job.startTime), 'HH:mm')} - {format(new Date(job.endTime), 'HH:mm')}
                               </span>
                             </div>
-                            {team && (
+                            {assignmentMode === 'teams' && team ? (
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Users className="h-3 w-3" />
                                 <span data-testid={`job-team-${job.id}`}>
                                   {team.name} ({teamMembers.length} members)
                                 </span>
                               </div>
-                            )}
+                            ) : assignmentMode === 'individual' && staff ? (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <User className="h-3 w-3" />
+                                <span data-testid={`job-staff-${job.id}`}>
+                                  {staff.name}
+                                </span>
+                              </div>
+                            ) : null}
                           </div>
 
                           {job.notes && (
@@ -650,45 +808,87 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
 
               <div>
-                <h4 className="font-semibold text-sm mb-2">Team Assignment</h4>
+                <h4 className="font-semibold text-sm mb-2">
+                  {assignmentMode === 'teams' ? 'Team Assignment' : 'Staff Assignment'}
+                </h4>
                 <div className="space-y-2 text-sm">
-                  {(() => {
-                    const team = mockTeams.find(t => t.id === selectedJob.teamId);
-                    const teamMembers = team ? getTeamMembers(team.id) : [];
-                    return (
-                      <div>
-                        {team && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Team:</span>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{team.name}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {teamMembers.length} members
-                              </Badge>
+                  {assignmentMode === 'teams' ? (
+                    // Team Assignment Details
+                    (() => {
+                      const team = mockTeams.find(t => t.id === selectedJob.teamId);
+                      const teamMembers = team ? getTeamMembers(team.id) : [];
+                      return (
+                        <div>
+                          {team && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Team:</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{team.name}</span>
+                                <Badge variant="outline" className="text-xs">
+                                  {teamMembers.length} members
+                                </Badge>
+                              </div>
+                            </div>
+                          )}
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">Team Members:</span>
+                            <div className="space-y-1 ml-2">
+                              {teamMembers.map((member) => (
+                                <div key={member.id} className="flex items-center gap-2">
+                                  <Avatar className="h-5 w-5">
+                                    <AvatarFallback className="text-xs">
+                                      {member.name.split(' ').map(n => n[0]).join('')}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1">
+                                    <span className="text-xs font-medium">{member.name}</span>
+                                    <div className="text-xs text-muted-foreground">{member.role}</div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        )}
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground">Team Members:</span>
-                          <div className="space-y-1 ml-2">
-                            {teamMembers.map((member) => (
-                              <div key={member.id} className="flex items-center gap-2">
-                                <Avatar className="h-5 w-5">
-                                  <AvatarFallback className="text-xs">
-                                    {member.name.split(' ').map(n => n[0]).join('')}
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    // Individual Staff Assignment Details
+                    (() => {
+                      const staff = mockStaffMembers.find(s => s.id === selectedJob.staffId);
+                      return (
+                        <div>
+                          {staff && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Assigned to:</span>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-6 w-6">
+                                  <AvatarFallback className={`${staff.color} text-white text-xs`}>
+                                    {staff.name.split(' ').map(n => n[0]).join('')}
                                   </AvatarFallback>
                                 </Avatar>
-                                <div className="flex-1">
-                                  <span className="text-xs font-medium">{member.name}</span>
-                                  <div className="text-xs text-muted-foreground">{member.role}</div>
+                                <div className="text-right">
+                                  <div className="font-medium">{staff.name}</div>
+                                  <div className="text-xs text-muted-foreground">{staff.role}</div>
                                 </div>
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          )}
+                          {staff && (
+                            <div className="mt-2">
+                              <span className="text-xs text-muted-foreground">Skills:</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {staff.skills.map((skill, index) => (
+                                  <Badge key={index} variant="outline" className="text-xs">
+                                    {skill}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()
+                  )}
                 </div>
               </div>
 
