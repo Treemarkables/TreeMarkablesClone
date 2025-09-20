@@ -46,7 +46,18 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="padding: 40px; text-align: center; font-family: Arial, sans-serif; background: white;">
+        <h1 style="color: #2563eb;">🌲 Tree Removal Dashboard</h1>
+        <p style="color: #666;">Loading application...</p>
+        <div id="debug-info" style="margin-top: 20px; padding: 20px; background: #f3f4f6; border-radius: 8px; text-align: left;">
+          <h3>Debug Information:</h3>
+          <p>✅ HTML loaded successfully</p>
+          <p>✅ Server running on port 5000</p>
+          <p id="script-status">⏳ Loading React modules...</p>
+        </div>
+      </div>
+    </div>
     
     <style>
       @keyframes spin {
@@ -55,7 +66,27 @@
       }
     </style>
     
-    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, trying to load React...');
+        document.getElementById('script-status').innerHTML = '⏳ Attempting to load React...';
+        
+        setTimeout(() => {
+          const script = document.createElement('script');
+          script.type = 'module';
+          script.src = '/src/main.tsx';
+          script.onload = function() {
+            console.log('React script loaded successfully');
+            document.getElementById('script-status').innerHTML = '✅ React modules loaded';
+          };
+          script.onerror = function(e) {
+            console.error('Failed to load React script:', e);
+            document.getElementById('script-status').innerHTML = '❌ Failed to load React: ' + e.message;
+          };
+          document.head.appendChild(script);
+        }, 500);
+      });
+    </script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
   </body>
