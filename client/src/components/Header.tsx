@@ -70,8 +70,7 @@ export default function Header() {
     { href: "/summer-offer", label: "Summer Offer" },
     { href: "/tree-pruning", label: "Tree Pruning" },
     { href: "/stump-grinding", label: "Stump Grinding" },
-    { href: "/hedge-trimming", label: "Hedge Trimming" },
-    { href: "/job-dashboard", label: "Job Manager Demo" }
+    { href: "/hedge-trimming", label: "Hedge Trimming" }
   ];
 
   return (
