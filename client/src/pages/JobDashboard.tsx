@@ -19,6 +19,7 @@ import { PhotoDocumentation } from "@/components/PhotoDocumentation";
 import { SafetyReporting } from "@/components/SafetyReporting";
 import { RouteOptimizer } from "@/components/RouteOptimizer";
 import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
+import { DispatchBoard } from "@/components/DispatchBoard";
 import {
   BarChart,
   Bar,
@@ -135,6 +136,7 @@ export default function JobDashboard() {
   const [showNewJobDialog, setShowNewJobDialog] = useState(false);
   const [showNewLeadDialog, setShowNewLeadDialog] = useState(false);
   const [showNewQuoteDialog, setShowNewQuoteDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("overview");
   const [showCsvImportDialog, setShowCsvImportDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [recognition, setRecognition] = useState<any>(null);
@@ -146,7 +148,6 @@ export default function JobDashboard() {
   
   // Mobile optimization states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
   
   // Photo management states
@@ -731,8 +732,8 @@ export default function JobDashboard() {
         </div>
 
         {/* Main Dashboard Tabs */}
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-13 h-auto p-1 bg-card border border-border shadow-lg rounded-xl">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-14 h-auto p-1 bg-card border border-border shadow-lg rounded-xl">
             <TabsTrigger value="overview" data-testid="tab-overview" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               🌟 Overview
             </TabsTrigger>
@@ -769,6 +770,9 @@ export default function JobDashboard() {
             <TabsTrigger value="performance" data-testid="tab-performance" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               📈 Performance
             </TabsTrigger>
+            <TabsTrigger value="dispatch" data-testid="tab-dispatch" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
+              📅 Dispatch
+            </TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings" className="min-h-12 sm:min-h-10 text-sm px-2 font-medium">
               ⚙️ Settings
             </TabsTrigger>
@@ -791,9 +795,10 @@ export default function JobDashboard() {
             </div>
 
             {/* Operations & Analytics Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <RouteOptimizer compact={true} />
               <PerformanceAnalytics compact={true} />
+              <DispatchBoard compact={true} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1994,6 +1999,11 @@ export default function JobDashboard() {
           {/* Performance Tab */}
           <TabsContent value="performance" className="space-y-6">
             <PerformanceAnalytics />
+          </TabsContent>
+
+          {/* Dispatch Tab */}
+          <TabsContent value="dispatch" className="space-y-6">
+            <DispatchBoard />
           </TabsContent>
 
           {/* Settings Tab */}
