@@ -211,9 +211,14 @@ export default function JobDashboard() {
       utterance.onend = () => {
         if (restartListening && isConversationMode && recognition) {
           setTimeout(() => {
-            setIsListening(true);
-            recognition.start();
-          }, 500); // Small delay for better UX
+            try {
+              setIsListening(true);
+              recognition.start();
+            } catch (error) {
+              console.log('Failed to restart recognition after TTS:', error);
+              setIsListening(false);
+            }
+          }, 1000); // Longer delay for better reliability
         }
       };
       
@@ -221,8 +226,13 @@ export default function JobDashboard() {
     } else if (restartListening && isConversationMode && recognition) {
       // No TTS available, go straight to listening
       setTimeout(() => {
-        setIsListening(true);
-        recognition.start();
+        try {
+          setIsListening(true);
+          recognition.start();
+        } catch (error) {
+          console.log('Failed to restart recognition (no TTS):', error);
+          setIsListening(false);
+        }
       }, 1000);
     }
   };
@@ -493,7 +503,22 @@ export default function JobDashboard() {
 
     // Regular voice commands
     if (command.includes('create lead') || command.includes('new lead')) {
+      // Check if they want conversational or quick mode
+      if (command.includes('conversation') || command.includes('step by step')) {
+        startLeadConversation();
+      } else if (command.includes('quick') || command.includes('fast')) {
+        setShowNewLeadDialog(true);
+      } else {
+        // Default: Ask which mode they prefer
+        setAiResponse("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.");
+        speakText("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.", true);
+      }
+    } else if (command.includes('conversation') && aiResponse.includes('conversation mode or quick mode')) {
       startLeadConversation();
+    } else if (command.includes('quick') && aiResponse.includes('conversation mode or quick mode')) {
+      setShowNewLeadDialog(true);
+      setAiResponse("Opening quick lead creation form.");
+      speakText("Opening quick lead creation form.");
     } else if (command.includes('create job') || command.includes('new job')) {
       setShowNewJobDialog(true);
     } else if (command.includes('create quote') || command.includes('new quote')) {
@@ -1018,7 +1043,20 @@ export default function JobDashboard() {
               {isListening && (
                 <div className="mt-3 p-2 bg-blue-50 rounded-lg flex items-center gap-2">
                   <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-blue-700">Listening for your response...</span>
+                  <span className="text-sm text-blue-700">
+                    {isConversationMode ? "Listening for your answer..." : "Listening for voice command..."}
+                  </span>
+                </div>
+              )}
+              
+              {/* Mode selection helper */}
+              {!isConversationMode && aiResponse.includes('conversation mode or quick mode') && (
+                <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <p className="text-sm text-orange-800 mb-2">💡 <strong>Choose Your Mode:</strong></p>
+                  <div className="text-xs text-orange-700 space-y-1">
+                    <div>• Say <strong>"conversation"</strong> for step-by-step voice guidance</div>
+                    <div>• Say <strong>"quick"</strong> to open the standard form</div>
+                  </div>
                 </div>
               )}
             </CardContent>
