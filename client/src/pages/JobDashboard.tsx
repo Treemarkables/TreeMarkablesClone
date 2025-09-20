@@ -134,6 +134,9 @@ export default function JobDashboard() {
   const [selectedJobForPhotos, setSelectedJobForPhotos] = useState<string | null>(null);
   const [showPhotosDialog, setShowPhotosDialog] = useState(false);
   
+  // Export states
+  const [isExporting, setIsExporting] = useState(false);
+  
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -386,6 +389,63 @@ export default function JobDashboard() {
     if (recognition) {
       setIsListening(true);
       recognition.start();
+    }
+  };
+
+  // CSV Export functions
+  const handleExportData = async (type: 'leads' | 'customers' | 'jobs' | 'quotes' | 'analytics') => {
+    setIsExporting(true);
+    try {
+      const response = await fetch(`/api/export/${type}`);
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.statusText}`);
+      }
+      
+      // Get filename from response headers
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || `${type}_export.csv`;
+      
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Export Successful",
+        description: `${type.charAt(0).toUpperCase() + type.slice(1)} data exported successfully`,
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Failed",
+        description: "There was an error exporting the data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleGenerateReport = async () => {
+    setIsExporting(true);
+    try {
+      // Generate comprehensive report with analytics data
+      await handleExportData('analytics');
+    } catch (error) {
+      console.error('Report generation error:', error);
+      toast({
+        title: "Report Generation Failed", 
+        description: "There was an error generating the report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -800,13 +860,25 @@ export default function JobDashboard() {
                 <h2 className="text-2xl font-bold">Lead Management</h2>
                 <p className="text-muted-foreground">AI-powered lead scoring, conversion tracking, and pipeline optimization</p>
               </div>
-              <Dialog open={showNewLeadDialog} onOpenChange={setShowNewLeadDialog}>
-                <DialogTrigger asChild>
-                  <Button className="flex items-center gap-2" data-testid="button-new-lead">
-                    <Plus className="h-4 w-4" />
-                    New Lead
-                  </Button>
-                </DialogTrigger>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center gap-2"
+                  onClick={() => handleExportData('leads')}
+                  disabled={isExporting}
+                  data-testid="button-export-leads"
+                >
+                  <Download className="h-4 w-4" />
+                  {isExporting ? 'Exporting...' : 'Export'}
+                </Button>
+                <Dialog open={showNewLeadDialog} onOpenChange={setShowNewLeadDialog}>
+                  <DialogTrigger asChild>
+                    <Button className="flex items-center gap-2" data-testid="button-new-lead">
+                      <Plus className="h-4 w-4" />
+                      New Lead
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Create New Lead</DialogTitle>
@@ -849,6 +921,7 @@ export default function JobDashboard() {
                   </form>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
 
             {/* Follow-Up Queue - Critical Actions */}
@@ -1162,7 +1235,19 @@ export default function JobDashboard() {
           <TabsContent value="jobs" className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">Job Management</h2>
-              <Dialog open={showNewJobDialog} onOpenChange={setShowNewJobDialog}>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center gap-2"
+                  onClick={() => handleExportData('jobs')}
+                  disabled={isExporting}
+                  data-testid="button-export-jobs"
+                >
+                  <Download className="h-4 w-4" />
+                  {isExporting ? 'Exporting...' : 'Export'}
+                </Button>
+                <Dialog open={showNewJobDialog} onOpenChange={setShowNewJobDialog}>
                 <DialogTrigger asChild>
                   <Button className="flex items-center gap-2" data-testid="button-new-job">
                     <Plus className="h-4 w-4" />
@@ -1209,6 +1294,7 @@ export default function JobDashboard() {
                   </form>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1299,7 +1385,19 @@ export default function JobDashboard() {
           <TabsContent value="quotes" className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">Quote Management</h2>
-              <Dialog open={showNewQuoteDialog} onOpenChange={setShowNewQuoteDialog}>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center gap-2"
+                  onClick={() => handleExportData('quotes')}
+                  disabled={isExporting}
+                  data-testid="button-export-quotes"
+                >
+                  <Download className="h-4 w-4" />
+                  {isExporting ? 'Exporting...' : 'Export'}
+                </Button>
+                <Dialog open={showNewQuoteDialog} onOpenChange={setShowNewQuoteDialog}>
                 <DialogTrigger asChild>
                   <Button className="flex items-center gap-2" data-testid="button-new-quote">
                     <Plus className="h-4 w-4" />
@@ -1332,6 +1430,7 @@ export default function JobDashboard() {
                   </form>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1373,7 +1472,19 @@ export default function JobDashboard() {
           <TabsContent value="customers" className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">Customer Management</h2>
-              <div className="relative">
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center gap-2"
+                  onClick={() => handleExportData('customers')}
+                  disabled={isExporting}
+                  data-testid="button-export-customers"
+                >
+                  <Download className="h-4 w-4" />
+                  {isExporting ? 'Exporting...' : 'Export'}
+                </Button>
+                <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input 
                   placeholder="Search customers..." 
@@ -1382,6 +1493,7 @@ export default function JobDashboard() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   data-testid="input-search-customers"
                 />
+              </div>
               </div>
             </div>
 
@@ -1444,12 +1556,25 @@ export default function JobDashboard() {
                 Advanced Business Intelligence
               </h2>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center gap-2"
+                  onClick={() => handleExportData('analytics')}
+                  disabled={isExporting}
+                  data-testid="button-export-analytics"
+                >
                   <Download className="h-4 w-4" />
-                  Export Data
+                  {isExporting ? 'Exporting...' : 'Export Data'}
                 </Button>
-                <Button variant="outline" size="sm">
-                  📊 Generate Report
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleGenerateReport}
+                  disabled={isExporting}
+                  data-testid="button-generate-report"
+                >
+                  📊 {isExporting ? 'Generating...' : 'Generate Report'}
                 </Button>
               </div>
             </div>
