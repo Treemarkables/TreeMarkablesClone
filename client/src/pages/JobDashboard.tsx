@@ -318,6 +318,9 @@ export default function JobDashboard() {
           setVoiceCommand("Network error. Please check your internet connection.");
         } else if (event.error === 'aborted') {
           setVoiceCommand("Voice recognition was cancelled.");
+        } else if (event.error === 'audio-capture') {
+          setVoiceCommand("Microphone connection lost. Click Voice Command again to reconnect.");
+          setAiResponse("Microphone connection lost. Please click Voice Command again to restart.");
         } else {
           setVoiceCommand(`Voice recognition error: ${event.error || 'Unknown error'}`);
         }
@@ -519,7 +522,21 @@ export default function JobDashboard() {
       } else {
         // Default: Ask which mode they prefer
         setAiResponse("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.");
-        speakText("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.", true, true); // Force restart listening
+        speakText("Would you like to create a lead using conversation mode or quick mode? Say 'conversation' for step-by-step guidance, or 'quick' for a form.", false);
+        
+        // Manual restart listening after a delay to avoid conflicts
+        setTimeout(() => {
+          if (recognition) {
+            try {
+              setIsListening(true);
+              recognition.start();
+              console.log('Manually restarted listening for mode selection');
+            } catch (error) {
+              console.log('Failed to manually restart listening:', error);
+              setIsListening(false);
+            }
+          }
+        }, 2000); // Longer delay to ensure TTS finishes
       }
     } else if (command.includes('conversation') && aiResponse.includes('conversation mode or quick mode')) {
       console.log('Starting conversation mode...');
