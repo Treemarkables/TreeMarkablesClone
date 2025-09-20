@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a professional tree removal service website for Treemarkables, a New Zealand-based arborist company. The application provides a modern, responsive marketing website showcasing tree removal services with a focus on hazardous tree removal, emergency services, and precision cutting. The site includes comprehensive service information, process explanations, and contact functionality to generate leads for the business.
+This is a comprehensive tree removal service business management application for Treemarkables, a New Zealand-based arborist company. The application has evolved from a marketing website into a full-featured business dashboard with advanced scheduling, job management, customer relationship tools, and operational analytics. The system includes a ServiceM8-style dispatch board for visual job scheduling, crew management, equipment tracking, invoice management, photo documentation, safety reporting, route optimization, and performance analytics.
 
 ## User Preferences
 
@@ -37,11 +37,20 @@ Preferred communication style: Simple, everyday language.
 - **Database**: PostgreSQL (configured but using in-memory storage currently)
 - **Migrations**: Drizzle Kit for database migrations and schema management
 
-### Content Strategy
-- **Static Assets**: Images served from public directory and attached_assets
-- **SEO Optimization**: Comprehensive meta tags, structured headings, and semantic HTML
-- **Content Structure**: Service-focused sections including hero, services, process, and contact forms
-- **Lead Generation**: Multiple call-to-action points directing users to contact forms
+### Business Features
+- **Job Dashboard**: Central hub at `/job-dashboard` with comprehensive business management tools
+- **Dispatch Board**: ServiceM8-style visual scheduling interface with time-grid (7 AM - 6 PM), staff roster, job assignments, and drag-and-drop scheduling capabilities
+- **Lead Management**: Pipeline tracking, lead scoring, conversion funnels, and automated follow-up systems
+- **Customer Management**: Complete customer profiles, service history, communication logs, and relationship tracking
+- **Quote Management**: Professional quote generation, analytics, approval workflows, and conversion tracking
+- **Business Analytics**: Revenue tracking, performance metrics, service analytics, and comprehensive reporting
+- **Weather Integration**: Real-time weather data for job planning and safety considerations
+- **Crew Management**: Staff scheduling, skill tracking, certification management, and performance monitoring
+- **Equipment Tracking**: Asset management, maintenance schedules, usage tracking, and availability status
+- **Invoice Management**: Professional invoice generation, payment tracking, and financial reporting
+- **Photo Documentation**: Job documentation, before/after photos, and visual progress tracking
+- **Safety Reporting**: Incident tracking, safety protocols, risk assessments, and compliance monitoring
+- **Route Optimization**: Efficient job routing, travel time calculation, and fuel cost optimization
 
 ## External Dependencies
 
@@ -74,4 +83,4 @@ Preferred communication style: Simple, everyday language.
 - **autoprefixer**: CSS vendor prefixing
 - **Google Fonts**: Inter, Source Sans Pro, and Merriweather font families
 
-The application is structured for easy scaling with a clear separation between frontend marketing content and backend API capabilities, ready for future enhancements like booking systems, customer portals, or service management features.
+The application now serves as a complete business management platform with professional-grade features comparable to industry-standard field service management solutions. The system maintains consistent amber/orange branding throughout all interfaces and provides mobile-optimized experiences for field teams and office staff alike.
