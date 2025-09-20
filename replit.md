@@ -83,4 +83,13 @@ Preferred communication style: Simple, everyday language.
 - **autoprefixer**: CSS vendor prefixing
 - **Google Fonts**: Inter, Source Sans Pro, and Merriweather font families
 
+### Job Diary System (Latest Addition)
+- **Comprehensive Diary Management**: Complete CRUD operations for job diary entries with rich metadata support
+- **Entry Types**: Multiple entry categories (note, progress, issue, milestone, weather, equipment, safety, completion) with color-coded UI
+- **Advanced Features**: Private entries, filtering by type, progress tracking, weather documentation, equipment logging, time tracking
+- **API Integration**: RESTful endpoints for diary management (`/api/jobs/:jobId/diary`, `/api/diary/:id`) with proper validation
+- **UI Components**: Modal dialog integration, timeline view, rich form inputs, delete confirmation, responsive design
+- **Real-time Updates**: Automatic cache invalidation and UI updates using TanStack Query
+- **Data Persistence**: Proper storage interface with in-memory implementation ready for database scaling
+
 The application now serves as a complete business management platform with professional-grade features comparable to industry-standard field service management solutions. The system maintains consistent amber/orange branding throughout all interfaces and provides mobile-optimized experiences for field teams and office staff alike.

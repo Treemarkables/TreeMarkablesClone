@@ -7,7 +7,7 @@ import { sendContactEmail } from "./email";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertLeadSchema, insertCallSchema, insertQuoteSchema,
-  insertJobSchema, insertActivitySchema, insertReviewSchema, insertCampaignSchema,
+  insertJobSchema, insertJobDiaryEntrySchema, insertActivitySchema, insertReviewSchema, insertCampaignSchema,
   insertSocialPlanSchema, insertCompetitorSignalSchema, insertPriceRuleSchema,
   insertNotificationSchema, updateNotificationSchema,
   insertEmployeeSchema, updateEmployeeSchema,
@@ -1117,6 +1117,119 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error updating job:', error);
       res.status(500).json({ success: false, message: 'Error updating job' });
+    }
+  });
+
+  // ========================================
+  // JOB DIARY ROUTES
+  // ========================================
+
+  // Create job diary entry
+  app.post('/api/jobs/:jobId/diary', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const entryData = {
+        ...req.body,
+        jobId
+      };
+      
+      const validation = insertJobDiaryEntrySchema.safeParse(entryData);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid diary entry data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const entry = await storage.createJobDiaryEntry(validation.data);
+      res.json({ success: true, data: entry });
+    } catch (error) {
+      console.error('Error creating job diary entry:', error);
+      res.status(500).json({ success: false, message: 'Error creating diary entry' });
+    }
+  });
+
+  // Get job diary entries
+  app.get('/api/jobs/:jobId/diary', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const { entryType } = req.query;
+      
+      let entries;
+      if (entryType && typeof entryType === 'string') {
+        entries = await storage.getJobDiaryEntriesByType(jobId, entryType);
+      } else {
+        entries = await storage.getJobDiaryEntriesByJob(jobId);
+      }
+      
+      res.json({ success: true, data: entries });
+    } catch (error) {
+      console.error('Error fetching job diary entries:', error);
+      res.status(500).json({ success: false, message: 'Error fetching diary entries' });
+    }
+  });
+
+  // Get single diary entry
+  app.get('/api/diary/:id', async (req: Request, res: Response) => {
+    try {
+      const entry = await storage.getJobDiaryEntry(req.params.id);
+      if (!entry) {
+        return res.status(404).json({ success: false, message: 'Diary entry not found' });
+      }
+      res.json({ success: true, data: entry });
+    } catch (error) {
+      console.error('Error fetching diary entry:', error);
+      res.status(500).json({ success: false, message: 'Error fetching diary entry' });
+    }
+  });
+
+  // Update diary entry
+  app.put('/api/diary/:id', async (req: Request, res: Response) => {
+    try {
+      const validation = insertJobDiaryEntrySchema.partial().safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid diary entry data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const entry = await storage.updateJobDiaryEntry(req.params.id, validation.data);
+      res.json({ success: true, data: entry });
+    } catch (error) {
+      console.error('Error updating diary entry:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Diary entry not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error updating diary entry' });
+      }
+    }
+  });
+
+  // Delete diary entry
+  app.delete('/api/diary/:id', async (req: Request, res: Response) => {
+    try {
+      const success = await storage.deleteJobDiaryEntry(req.params.id);
+      if (!success) {
+        return res.status(404).json({ success: false, message: 'Diary entry not found' });
+      }
+      res.json({ success: true, message: 'Diary entry deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting diary entry:', error);
+      res.status(500).json({ success: false, message: 'Error deleting diary entry' });
+    }
+  });
+
+  // Get all diary entries (for admin view)
+  app.get('/api/diary', async (req: Request, res: Response) => {
+    try {
+      const entries = await storage.getAllJobDiaryEntries();
+      res.json({ success: true, data: entries });
+    } catch (error) {
+      console.error('Error fetching all diary entries:', error);
+      res.status(500).json({ success: false, message: 'Error fetching diary entries' });
     }
   });
 
