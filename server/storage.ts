@@ -20,6 +20,13 @@ import {
   type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
   type Invoice, type InsertInvoice, type ServiceRequest, type InsertServiceRequest,
   type CustomerAuth, type InsertCustomerAuth,
+  // Business Intelligence types
+  type BusinessReport, type InsertBusinessReport,
+  type KpiMetric, type InsertKpiMetric,
+  type PerformanceAnalytics, type InsertPerformanceAnalytics,
+  type FinancialAnalytics, type InsertFinancialAnalytics,
+  type DashboardConfig, type InsertDashboardConfig,
+  type ReportAnalytics, type InsertReportAnalytics,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";

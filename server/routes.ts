@@ -29,6 +29,7 @@ import fs from "fs";
 import { format } from "date-fns";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
+import { businessIntelligenceService } from "./services/businessIntelligence";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -4006,6 +4007,262 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error fetching service requests:', error);
       res.status(500).json({ success: false, message: 'Error fetching service requests' });
+    }
+  });
+
+  // ========================================
+  // BUSINESS INTELLIGENCE & ANALYTICS API ROUTES
+  // ========================================
+
+  // Get executive dashboard statistics
+  app.get('/api/analytics/dashboard', async (req: Request, res: Response) => {
+    try {
+      const jobs = await storage.getAllJobs();
+      const customers = await storage.getAllCustomers();
+      const quotes = await storage.getAllQuotes();
+      const equipment = await storage.getAllEquipment();
+      
+      const dashboardStats = await businessIntelligenceService.calculateDashboardStats(
+        jobs, customers, quotes, equipment
+      );
+      
+      res.json({ success: true, data: dashboardStats });
+    } catch (error) {
+      console.error('Error generating dashboard analytics:', error);
+      res.status(500).json({ success: false, message: 'Error generating dashboard analytics' });
+    }
+  });
+
+  // Get comprehensive revenue analytics
+  app.get('/api/analytics/revenue', async (req: Request, res: Response) => {
+    try {
+      const jobs = await storage.getAllJobs();
+      const customers = await storage.getAllCustomers();
+      
+      const revenueAnalytics = await businessIntelligenceService.calculateRevenueAnalytics(jobs, customers);
+      
+      res.json({ success: true, data: revenueAnalytics });
+    } catch (error) {
+      console.error('Error generating revenue analytics:', error);
+      res.status(500).json({ success: false, message: 'Error generating revenue analytics' });
+    }
+  });
+
+  // Get operational analytics
+  app.get('/api/analytics/operational', async (req: Request, res: Response) => {
+    try {
+      const jobs = await storage.getAllJobs();
+      const equipment = await storage.getAllEquipment();
+      const teams = await storage.getAllTeams();
+      
+      const operationalAnalytics = await businessIntelligenceService.calculateOperationalAnalytics(
+        jobs, equipment, teams
+      );
+      
+      res.json({ success: true, data: operationalAnalytics });
+    } catch (error) {
+      console.error('Error generating operational analytics:', error);
+      res.status(500).json({ success: false, message: 'Error generating operational analytics' });
+    }
+  });
+
+  // Get customer analytics
+  app.get('/api/analytics/customers', async (req: Request, res: Response) => {
+    try {
+      const customers = await storage.getAllCustomers();
+      const jobs = await storage.getAllJobs();
+      const communications = await storage.getAllCommunications();
+      
+      const customerAnalytics = await businessIntelligenceService.calculateCustomerAnalytics(
+        customers, jobs, communications
+      );
+      
+      res.json({ success: true, data: customerAnalytics });
+    } catch (error) {
+      console.error('Error generating customer analytics:', error);
+      res.status(500).json({ success: false, message: 'Error generating customer analytics' });
+    }
+  });
+
+  // Get executive report (comprehensive business intelligence)
+  app.get('/api/analytics/executive-report', async (req: Request, res: Response) => {
+    try {
+      const jobs = await storage.getAllJobs();
+      const customers = await storage.getAllCustomers();
+      const quotes = await storage.getAllQuotes();
+      const equipment = await storage.getAllEquipment();
+      
+      const executiveReport = await businessIntelligenceService.generateExecutiveReport(
+        jobs, customers, quotes, equipment
+      );
+      
+      res.json({ success: true, data: executiveReport });
+    } catch (error) {
+      console.error('Error generating executive report:', error);
+      res.status(500).json({ success: false, message: 'Error generating executive report' });
+    }
+  });
+
+  // Generate custom analytics report
+  app.post('/api/analytics/custom-report', async (req: Request, res: Response) => {
+    try {
+      const { reportType, configuration } = req.body;
+      
+      if (!reportType || !configuration) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Report type and configuration are required' 
+        });
+      }
+
+      // Get all necessary data
+      const jobs = await storage.getAllJobs();
+      const customers = await storage.getAllCustomers();
+      const quotes = await storage.getAllQuotes();
+      const equipment = await storage.getAllEquipment();
+      const communications = await storage.getAllCommunications();
+      const teams = await storage.getAllTeams();
+
+      const data = {
+        jobs,
+        customers, 
+        quotes,
+        equipment,
+        communications,
+        teams
+      };
+
+      const report = await businessIntelligenceService.generateReport(reportType, configuration, data);
+      
+      res.json({ success: true, data: report });
+    } catch (error) {
+      console.error('Error generating custom report:', error);
+      res.status(500).json({ success: false, message: 'Error generating custom report' });
+    }
+  });
+
+  // Get KPI metrics and performance indicators
+  app.get('/api/analytics/kpis', async (req: Request, res: Response) => {
+    try {
+      const jobs = await storage.getAllJobs();
+      const customers = await storage.getAllCustomers();
+      const quotes = await storage.getAllQuotes();
+      const equipment = await storage.getAllEquipment();
+      
+      const executiveData = await businessIntelligenceService.generateExecutiveReport(
+        jobs, customers, quotes, equipment
+      );
+
+      // Transform executive data into KPI format
+      const kpis = [
+        {
+          id: 'total-revenue',
+          name: 'Total Revenue',
+          value: executiveData.totalRevenue,
+          unit: 'currency',
+          trend: executiveData.revenueGrowth > 0 ? 'up' : 'down',
+          trendValue: Math.abs(executiveData.revenueGrowth),
+          category: 'financial'
+        },
+        {
+          id: 'customer-acquisition-cost',
+          name: 'Customer Acquisition Cost',
+          value: executiveData.customerAcquisitionCost,
+          unit: 'currency', 
+          trend: 'neutral',
+          trendValue: 0,
+          category: 'customer'
+        },
+        {
+          id: 'conversion-rate',
+          name: 'Quote Conversion Rate',
+          value: executiveData.quotesToJobConversionRate,
+          unit: 'percentage',
+          trend: 'up',
+          trendValue: 2.3,
+          category: 'operational'
+        },
+        {
+          id: 'equipment-utilization',
+          name: 'Equipment Utilization',
+          value: executiveData.equipmentUtilizationRate,
+          unit: 'percentage',
+          trend: 'up',
+          trendValue: 5.2,
+          category: 'operational'
+        },
+        {
+          id: 'customer-satisfaction',
+          name: 'Customer Satisfaction',
+          value: executiveData.customerSatisfactionScore,
+          unit: 'rating',
+          trend: 'up',
+          trendValue: 0.2,
+          category: 'customer'
+        },
+        {
+          id: 'profit-margin',
+          name: 'Profit Margin',
+          value: executiveData.profitMargin,
+          unit: 'percentage',
+          trend: 'up',
+          trendValue: 1.5,
+          category: 'financial'
+        }
+      ];
+      
+      res.json({ success: true, data: kpis });
+    } catch (error) {
+      console.error('Error generating KPI metrics:', error);
+      res.status(500).json({ success: false, message: 'Error generating KPI metrics' });
+    }
+  });
+
+  // Export analytics data as CSV
+  app.get('/api/analytics/export/:type', async (req: Request, res: Response) => {
+    try {
+      const { type } = req.params;
+      const { format = 'csv' } = req.query;
+
+      let data: any;
+      let filename: string;
+
+      switch (type) {
+        case 'dashboard':
+          const jobs = await storage.getAllJobs();
+          const customers = await storage.getAllCustomers();
+          const quotes = await storage.getAllQuotes();
+          const equipment = await storage.getAllEquipment();
+          data = await businessIntelligenceService.calculateDashboardStats(jobs, customers, quotes, equipment);
+          filename = `dashboard_export_${new Date().toISOString().split('T')[0]}.csv`;
+          break;
+          
+        case 'revenue':
+          const revenueJobs = await storage.getAllJobs();
+          const revenueCustomers = await storage.getAllCustomers();
+          data = await businessIntelligenceService.calculateRevenueAnalytics(revenueJobs, revenueCustomers);
+          filename = `revenue_export_${new Date().toISOString().split('T')[0]}.csv`;
+          break;
+          
+        default:
+          return res.status(400).json({ success: false, message: 'Invalid export type' });
+      }
+
+      if (format === 'csv') {
+        // Convert data to CSV format
+        const csv = Object.entries(data)
+          .map(([key, value]) => `${key},${value}`)
+          .join('\n');
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(`Metric,Value\n${csv}`);
+      } else {
+        res.json({ success: true, data, filename });
+      }
+    } catch (error) {
+      console.error('Error exporting analytics data:', error);
+      res.status(500).json({ success: false, message: 'Error exporting analytics data' });
     }
   });
 
