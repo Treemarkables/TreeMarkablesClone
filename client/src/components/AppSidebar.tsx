@@ -220,7 +220,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuButton asChild>
                   <Link href="/opportunities" data-testid="link-opportunities">
                     <MessageSquare className="h-4 w-4" />
-                    <span>Opportunities</span>
+                    <span>Conversations</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
