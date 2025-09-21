@@ -29,6 +29,9 @@ import {
 import {
   useSortable,
 } from '@dnd-kit/sortable';
+import {
+  useDroppable,
+} from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import {
   Grid3X3,
@@ -114,6 +117,29 @@ const pipelineStages = [
     headerColor: 'bg-green-100 text-green-800'
   }
 ];
+
+// Droppable Stage Column Component
+function DroppableStageColumn({ 
+  stage, 
+  children 
+}: { 
+  stage: any; 
+  children: React.ReactNode; 
+}) {
+  const { setNodeRef } = useDroppable({
+    id: stage.id,
+  });
+
+  return (
+    <CardContent 
+      ref={setNodeRef}
+      className="space-y-3 min-h-[200px]"
+      data-testid={`droppable-stage-${stage.id}`}
+    >
+      {children}
+    </CardContent>
+  );
+}
 
 // Draggable Opportunity Card Component
 function DraggableOpportunityCard({ 
@@ -406,13 +432,27 @@ export default function Pipeline() {
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    // If dropped on a different stage
-    if (overId && overId !== activeId) {
-      const opportunity = opportunities.find((opp: any) => opp.id === activeId);
-      if (opportunity) {
-        const currentStageId = StageMap.toStageId[opportunity.status] || opportunity.status;
-        if (overId !== currentStageId) {
-          handleMoveOpportunity(activeId, overId);
+    // Find the opportunity being dragged
+    const opportunity = opportunities.find((opp: any) => opp.id === activeId);
+    if (!opportunity) return;
+
+    const currentStageId = StageMap.toStageId[opportunity.status] || opportunity.status;
+    
+    // Check if overId is a stage (droppable area) or an item
+    const isStageId = pipelineStages.some(stage => stage.id === overId);
+    
+    if (isStageId) {
+      // Dropped on a stage column
+      if (overId !== currentStageId) {
+        handleMoveOpportunity(activeId, overId);
+      }
+    } else {
+      // Dropped on an item - find which stage the target item belongs to
+      const targetOpportunity = opportunities.find((opp: any) => opp.id === overId);
+      if (targetOpportunity) {
+        const targetStageId = StageMap.toStageId[targetOpportunity.status] || targetOpportunity.status;
+        if (targetStageId !== currentStageId) {
+          handleMoveOpportunity(activeId, targetStageId);
         }
       }
     }
@@ -677,20 +717,14 @@ export default function Pipeline() {
                       {formatCurrency(stageTotals.value)}
                     </div>
                   </CardHeader>
-                  <CardContent 
-                    className="space-y-3 min-h-[200px]"
-                    style={{
-                      minHeight: '200px'
-                    }}
-                  >
+                  <DroppableStageColumn stage={stage}>
                     <SortableContext 
                       items={stageOpportunities.map((opp: any) => opp.id)}
                       strategy={verticalListSortingStrategy}
                     >
                       {stageOpportunities.length === 0 ? (
                         <div 
-                          className="text-center py-8 text-gray-500 droppable-area"
-                          data-droppable-id={stage.id}
+                          className="text-center py-8 text-gray-500"
                           style={{ minHeight: '100px' }}
                         >
                           <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -698,109 +732,17 @@ export default function Pipeline() {
                           <p className="text-xs mt-1">Drop opportunities here</p>
                         </div>
                       ) : (
-                        <>
-                          <div
-                            className="droppable-area"
-                            data-droppable-id={stage.id}
-                            style={{ minHeight: '20px' }}
+                        stageOpportunities.map((opportunity: any) => (
+                          <DraggableOpportunityCard
+                            key={opportunity.id}
+                            opportunity={opportunity}
+                            isLoading={updateOpportunityMutation.isPending}
+                            onMoveOpportunity={handleMoveOpportunity}
                           />
-                          {stageOpportunities.map((opportunity: any) => (
-                        <Card key={opportunity.id} className="bg-white hover-elevate cursor-pointer">
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between mb-2">
-                              <h4 className="font-semibold text-sm" data-testid={`opportunity-name-${opportunity.id}`}>
-                                {opportunity.name || opportunity.customerName}
-                              </h4>
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                                <MoreVertical className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            
-                            <div className="space-y-2 text-xs text-gray-600">
-                              <div className="flex items-center justify-between">
-                                <span>Opportunity Value:</span>
-                                <span className="font-medium" data-testid={`opportunity-value-${opportunity.id}`}>
-                                  {formatCurrency(parseFloat(opportunity.estimatedValue || '0'))}
-                                </span>
-                              </div>
-                              
-                              {opportunity.source && (
-                                <div className="flex items-center justify-between">
-                                  <span>Source:</span>
-                                  <Badge className={`${getSourceBadgeColor(opportunity.source)} text-xs`}>
-                                    {opportunity.source}
-                                  </Badge>
-                                </div>
-                              )}
-
-                              {opportunity.serviceRequested && (
-                                <div className="text-xs text-gray-500 mt-2">
-                                  {opportunity.serviceRequested}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-1 mt-3">
-                              {opportunity.phone && (
-                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid={`call-${opportunity.id}`}>
-                                  <Phone className="h-3 w-3" />
-                                </Button>
-                              )}
-                              {opportunity.email && (
-                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid={`email-${opportunity.id}`}>
-                                  <Mail className="h-3 w-3" />
-                                </Button>
-                              )}
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid={`schedule-${opportunity.id}`}>
-                                <Calendar className="h-3 w-3" />
-                              </Button>
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid={`view-${opportunity.id}`}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            </div>
-
-                            {/* Stage Movement Buttons */}
-                            <div className="flex gap-1 mt-2">
-                              {stage.id !== 'closed' && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-xs h-6 px-2"
-                                  onClick={() => {
-                                    const currentIndex = pipelineStages.findIndex(s => s.id === stage.id);
-                                    const nextStage = pipelineStages[currentIndex + 1];
-                                    if (nextStage) {
-                                      handleMoveOpportunity(opportunity.id, nextStage.id);
-                                    }
-                                  }}
-                                  data-testid={`move-forward-${opportunity.id}`}
-                                >
-                                  Move Forward
-                                </Button>
-                              )}
-                              {stage.id !== 'new_lead' && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-xs h-6 px-2"
-                                  onClick={() => {
-                                    const currentIndex = pipelineStages.findIndex(s => s.id === stage.id);
-                                    const prevStage = pipelineStages[currentIndex - 1];
-                                    if (prevStage) {
-                                      handleMoveOpportunity(opportunity.id, prevStage.id);
-                                    }
-                                  }}
-                                  data-testid={`move-back-${opportunity.id}`}
-                                >
-                                  Move Back
-                                </Button>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                    )}
-                  </CardContent>
+                        ))
+                      )}
+                    </SortableContext>
+                  </DroppableStageColumn>
                 </Card>
               );
             })}
@@ -825,6 +767,30 @@ export default function Pipeline() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+      
+      {/* Drag Overlay */}
+      <DragOverlay>
+        {activeId ? (
+          <div className="opacity-50 rotate-3 scale-105">
+            {(() => {
+              const draggedOpp = opportunities.find((opp: any) => opp.id === activeId);
+              return draggedOpp ? (
+                <Card className="bg-white border-orange-500 border-2">
+                  <CardContent className="p-4">
+                    <h4 className="font-semibold text-sm">
+                      {draggedOpp.name || draggedOpp.customerName}
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {draggedOpp.serviceRequested}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : null;
+            })()}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
