@@ -166,9 +166,9 @@ export function WeatherDashboard({
   }
 
   return (
-    <div className="space-y-4" data-testid="weather-dashboard-full">
+    <div className="space-y-4 w-full max-w-full overflow-hidden min-w-0" data-testid="weather-dashboard-full">
       {/* Operational Status Header */}
-      <Card>
+      <Card className="w-full max-w-full">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
@@ -216,7 +216,7 @@ export function WeatherDashboard({
 
       {/* Regional Overview */}
       {regionalStats && (
-        <Card>
+        <Card className="w-full max-w-full">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <MapPin className="h-5 w-5 text-green-600" />
@@ -224,7 +224,7 @@ export function WeatherDashboard({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-full">
               <div className="text-center p-3 rounded-lg bg-muted/50" data-testid="overview-locations">
                 <div className="text-2xl font-bold text-blue-600">{regionalStats.totalLocations}</div>
                 <div className="text-sm text-muted-foreground">Locations</div>
@@ -249,8 +249,8 @@ export function WeatherDashboard({
       )}
 
       {/* Detailed Weather by Location */}
-      <Tabs defaultValue={defaultLocation?.name} className="space-y-4">
-        <TabsList className="grid grid-cols-4 gap-1">
+      <Tabs defaultValue={defaultLocation?.name} className="space-y-4 w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 gap-1 w-full max-w-full">
           {locations.map(location => (
             <TabsTrigger 
               key={location.name} 
@@ -277,7 +277,7 @@ export function WeatherDashboard({
 
       {/* Job Impact Analysis */}
       {showJobImpact && (
-        <Card>
+        <Card className="w-full max-w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-purple-600" />

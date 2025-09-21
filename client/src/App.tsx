@@ -41,11 +41,11 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
         <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
-        <div className="flex flex-col flex-1">
+        <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between p-2 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
-          <main className="flex-1 overflow-hidden">
+          <main className="flex-1 overflow-hidden w-full max-w-full min-w-0">
             {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
           </main>
         </div>

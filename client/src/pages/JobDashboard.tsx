@@ -117,8 +117,8 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   };
 
   return (
-    <div className="h-full bg-background p-4 md:p-6 overflow-hidden">
-      <div className="max-w-7xl mx-auto h-full flex flex-col">
+    <div className="h-full bg-background p-4 md:p-6 overflow-hidden w-full max-w-full min-w-0">
+      <div className="w-full max-w-full h-full flex flex-col min-w-0">
         <div className="mb-4 md:mb-6 shrink-0">
           <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="heading-job-dashboard">
             Job Dashboard
@@ -341,7 +341,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
 
           {/* Weather Tab */}
           <TabsContent value="weather" className="flex-1 overflow-auto">
-            <div className="space-y-4">
+            <div className="space-y-4 w-full max-w-full overflow-hidden min-w-0">
               <WeatherDashboard />
             </div>
           </TabsContent>
