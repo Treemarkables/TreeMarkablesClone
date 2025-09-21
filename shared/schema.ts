@@ -309,12 +309,54 @@ export const riskAssessments = pgTable("risk_assessments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Job Templates System - removed duplicate, will use the one below
+
+// Proposal System
+export const proposals = pgTable("proposals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteId: varchar("quote_id").references(() => quotes.id).notNull(),
+  customerId: varchar("customer_id").references(() => customers.id).notNull(),
+  proposalNumber: text("proposal_number").notNull().unique(),
+  title: text("title").notNull(),
+  introduction: text("introduction"),
+  conclusion: text("conclusion"),
+  status: text("status").notNull().default("draft"), // draft, sent, viewed, accepted, rejected
+  deliveryMethod: text("delivery_method"), // email, sms, portal, print
+  sentDate: timestamp("sent_date"),
+  viewedDate: timestamp("viewed_date"),
+  responseDate: timestamp("response_date"),
+  expiryDate: timestamp("expiry_date"),
+  customerSignature: text("customer_signature"),
+  signedDate: timestamp("signed_date"),
+  templateUsed: text("template_used"),
+  branding: jsonb("branding"), // logo, colors, fonts
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Proposal Sections
+export const proposalSections = pgTable("proposal_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  proposalId: varchar("proposal_id").references(() => proposals.id, { onDelete: 'cascade' }).notNull(),
+  sectionType: text("section_type").notNull(), // intro, service_description, pricing, terms, photos, custom
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  images: text("images").array().default([]),
+  sortOrder: integer("sort_order").notNull(),
+  isVisible: boolean("is_visible").default(true),
+  styling: jsonb("styling"), // custom CSS or styling options
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Enhanced Photo Management System
 export const photos = pgTable("photos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id),
   customerId: varchar("customer_id").references(() => customers.id),
   jobDiaryEntryId: varchar("job_diary_entry_id").references(() => jobDiaryEntries.id),
+  proposalSectionId: varchar("proposal_section_id").references(() => proposalSections.id),
   url: text("url").notNull(),
   filename: text("filename").notNull(),
   originalName: text("original_name"),
@@ -994,28 +1036,38 @@ export const jobTemplates = pgTable("job_templates", {
   name: text("name").notNull(),
   category: text("category").notNull(), // tree_removal, pruning, stump_grinding, emergency, maintenance
   description: text("description"),
+  serviceType: text("service_type").notNull(), // tree_removal, hedge_trimming, stump_grinding, etc
+  defaultTitle: text("default_title").notNull(),
+  defaultDescription: text("default_description"),
   
   // Default pricing
   basePrice: decimal("base_price", { precision: 10, scale: 2 }),
   pricePerHour: decimal("price_per_hour", { precision: 10, scale: 2 }),
   materialCosts: decimal("material_costs", { precision: 10, scale: 2 }),
+  priceModel: text("price_model").default("fixed"), // fixed, hourly, per_tree, custom
   
   // Resource requirements
   estimatedDuration: integer("estimated_duration"), // minutes
   requiredSkills: text("required_skills").array().default([]),
   requiredEquipment: text("required_equipment").array().default([]),
   crewSize: integer("crew_size").default(2),
+  defaultPriority: text("default_priority").default("medium"),
   
   // Safety and procedures
   safetyRequirements: text("safety_requirements").array().default([]),
   procedures: text("procedures"),
   riskLevel: text("risk_level").notNull().default("medium"), // low, medium, high, extreme
+  specialInstructions: text("special_instructions"),
+  requiredPermits: boolean("required_permits").default(false),
+  weatherDependent: boolean("weather_dependent").default(true),
   
   // Checklist items
   preJobChecklist: text("pre_job_checklist").array().default([]),
   postJobChecklist: text("post_job_checklist").array().default([]),
+  categoryTags: text("category_tags").array().default([]),
   
   isActive: boolean("is_active").notNull().default(true),
+  createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -1031,6 +1083,32 @@ export const updateJobTemplateSchema = insertJobTemplateSchema.partial();
 export type JobTemplate = typeof jobTemplates.$inferSelect;
 export type InsertJobTemplate = z.infer<typeof insertJobTemplateSchema>;
 export type UpdateJobTemplate = z.infer<typeof updateJobTemplateSchema>;
+
+// Proposal Schema Exports
+export const insertProposalSchema = createInsertSchema(proposals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateProposalSchema = insertProposalSchema.partial();
+
+export type Proposal = typeof proposals.$inferSelect;
+export type InsertProposal = z.infer<typeof insertProposalSchema>;
+export type UpdateProposal = z.infer<typeof updateProposalSchema>;
+
+// Proposal Section Schema Exports
+export const insertProposalSectionSchema = createInsertSchema(proposalSections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateProposalSectionSchema = insertProposalSectionSchema.partial();
+
+export type ProposalSection = typeof proposalSections.$inferSelect;
+export type InsertProposalSection = z.infer<typeof insertProposalSectionSchema>;
+export type UpdateProposalSection = z.infer<typeof updateProposalSectionSchema>;
 
 // Equipment/Resource Schema
 export const equipment = pgTable("equipment", {
