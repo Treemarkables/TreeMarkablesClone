@@ -15,7 +15,8 @@ import {
   Star,
   Inbox,
   Plug,
-  Workflow
+  Workflow,
+  FileText
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,7 +37,7 @@ interface AppSidebarProps {
   onTabChange: (tab: string) => void;
 }
 
-// Dashboard navigation items
+// Dashboard navigation items (tabs within JobDashboard)
 const dashboardItems = [
   {
     title: "Overview",
@@ -45,78 +46,56 @@ const dashboardItems = [
     value: "overview"
   },
   {
+    title: "Pipeline",
+    url: "#",
+    icon: GitBranch,
+    value: "pipeline"
+  },
+  {
     title: "Leads",
     url: "#",
     icon: Target,
     value: "leads"
   },
   {
-    title: "Jobs",
-    url: "#",
-    icon: Briefcase,
-    value: "jobs"
-  },
-  {
     title: "Customers",
     url: "#",
     icon: Users,
     value: "customers"
-  }
-];
-
-// Additional features
-const featuresItems = [
-  {
-    title: "Schedule",
-    url: "#",
-    icon: Calendar,
-    value: "schedule"
   },
   {
     title: "Analytics",
     url: "#", 
     icon: BarChart3,
     value: "analytics"
-  },
-  {
-    title: "Invoices",
-    url: "#",
-    icon: DollarSign,
-    value: "invoices"
-  },
-  {
-    title: "Photos",
-    url: "#",
-    icon: Camera,
-    value: "photos"
   }
 ];
 
-// Operations items  
-const operationsItems = [
+// Business management items (tabs within JobDashboard)
+const businessItems = [
   {
-    title: "Safety",
+    title: "Quotes",
     url: "#",
-    icon: Shield,
-    value: "safety"
+    icon: FileText,
+    value: "quotes"
   },
   {
-    title: "Performance",
+    title: "Equipment",
     url: "#",
-    icon: TrendingUp,
-    value: "performance"
+    icon: Settings,
+    value: "equipment"
   },
   {
-    title: "Dispatch",
+    title: "Communications",
     url: "#",
-    icon: Calendar,
-    value: "dispatch"
+    icon: MessageSquare,
+    value: "communications"
   },
   {
-    title: "Workflows",
+    title: "Integrations",
     url: "#",
-    icon: Workflow,
-    value: "workflows"
+    icon: Plug,
+    value: "integrations"
   }
 ];
 
@@ -150,12 +129,12 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Business Features */}
+        {/* Business Management */}
         <SidebarGroup>
-          <SidebarGroupLabel>Business Features</SidebarGroupLabel>
+          <SidebarGroupLabel>Business Management</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {featuresItems.map((item) => (
+              {businessItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
                   <SidebarMenuButton
                     asChild
@@ -173,39 +152,24 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Operations */}
+        {/* Operations & Analysis */}
         <SidebarGroup>
-          <SidebarGroupLabel>Operations</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {operationsItems.map((item) => (
-                <SidebarMenuItem key={item.value}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={activeTab === item.value}
-                    onClick={() => onTabChange(item.value)}
-                  >
-                    <button className="w-full justify-start">
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </button>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* External Links */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Sales & Analysis</SidebarGroupLabel>
+          <SidebarGroupLabel>Operations & Analysis</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <Link href="/pipeline" data-testid="link-pipeline">
-                    <GitBranch className="h-4 w-4" />
-                    <span>Pipeline</span>
+                  <Link href="/dispatch" data-testid="link-dispatch">
+                    <Calendar className="h-4 w-4" />
+                    <span>Dispatch Board</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/workflows" data-testid="link-workflows">
+                    <Workflow className="h-4 w-4" />
+                    <span>Workflows</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -227,33 +191,9 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <Link href="/dispatch" data-testid="link-dispatch">
-                    <Calendar className="h-4 w-4" />
-                    <span>Dispatch</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
                   <Link href="/inbox" data-testid="link-inbox">
                     <Inbox className="h-4 w-4" />
                     <span>Inbox</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="/integrations" data-testid="link-integrations">
-                    <Plug className="h-4 w-4" />
-                    <span>Integrations</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="/equipment" data-testid="link-equipment">
-                    <Settings className="h-4 w-4" />
-                    <span>Equipment</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
