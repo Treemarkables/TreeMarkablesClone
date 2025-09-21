@@ -228,13 +228,22 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
   // Mutation for updating job assignments
   const updateJobAssignmentMutation = useMutation({
-    mutationFn: async ({ jobId, assignedTeam }: { jobId: string; assignedTeam: string[] }) => {
+    mutationFn: async ({ jobId, assignedTeam, scheduledDate, status }: { 
+      jobId: string; 
+      assignedTeam: string[];
+      scheduledDate?: string;
+      status?: string;
+    }) => {
+      const updateData: any = { assignedTeam };
+      if (scheduledDate) updateData.scheduledDate = scheduledDate;
+      if (status) updateData.status = status;
+      
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ assignedTeam }),
+        body: JSON.stringify(updateData),
       });
       if (!response.ok) throw new Error('Failed to update job assignment');
       return response.json();
@@ -295,7 +304,17 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   // Drag and Drop Handlers
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    const job = jobs.find(j => j.id === active.id);
+    const activeId = active.id as string;
+    
+    // Handle both scheduled and unscheduled jobs
+    let job;
+    if (activeId.startsWith('unscheduled-')) {
+      const jobId = activeId.replace('unscheduled-', '');
+      job = jobs.find(j => j.id === jobId);
+    } else {
+      job = jobs.find(j => j.id === activeId);
+    }
+    
     setDraggedJob(job);
   };
 
@@ -307,36 +326,66 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       return;
     }
 
-    const jobId = active.id as string;
+    const activeId = active.id as string;
     const employeeId = over.id as string;
+    
+    // Determine if this is an unscheduled job
+    let jobId = activeId;
+    let isUnscheduledJob = false;
+    
+    if (activeId.startsWith('unscheduled-')) {
+      jobId = activeId.replace('unscheduled-', '');
+      isUnscheduledJob = true;
+    }
     
     // Find the job being dragged
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
 
-    // Check for conflicts before assignment
-    const conflicts = detectSchedulingConflicts(
-      employeeId,
-      new Date(job.scheduledDate),
-      addHours(new Date(job.scheduledDate), job.estimatedDuration || 4),
-      jobs
-    );
-
-    if (conflicts.length > 0) {
-      toast({
-        title: "Scheduling Conflict Detected",
-        description: `Employee ${getEmployeeName(employeeId)} has ${conflicts.length} conflicting assignment(s)`,
-        variant: "destructive",
+    // If this is an unscheduled job being dragged to an employee, schedule it for today
+    if (isUnscheduledJob) {
+      // Schedule the job for today at 9 AM
+      const scheduledDate = new Date(currentDate);
+      scheduledDate.setHours(9, 0, 0, 0);
+      
+      // Update job with schedule and assignment
+      updateJobAssignmentMutation.mutate({ 
+        jobId, 
+        assignedTeam: [employeeId],
+        scheduledDate: scheduledDate.toISOString(),
+        status: 'scheduled'
       });
+      
+      toast({
+        title: "Job Scheduled",
+        description: `Job assigned to ${getEmployeeName(employeeId)} for ${format(scheduledDate, 'MMM dd, yyyy at h:mm a')}`,
+      });
+    } else {
+      // Existing logic for already scheduled jobs
+      const conflicts = detectSchedulingConflicts(
+        employeeId,
+        new Date(job.scheduledDate),
+        addHours(new Date(job.scheduledDate), job.estimatedDuration || 4),
+        jobs
+      );
+
+      if (conflicts.length > 0) {
+        toast({
+          title: "Scheduling Conflict Detected",
+          description: `Employee ${getEmployeeName(employeeId)} has ${conflicts.length} conflicting assignment(s)`,
+          variant: "destructive",
+        });
+      }
+
+      // Update assignment (add employee to existing team or create new)
+      const currentTeam = job.assignedTeam || [];
+      const newTeam = currentTeam.includes(employeeId) 
+        ? currentTeam 
+        : [...currentTeam, employeeId];
+
+      updateJobAssignmentMutation.mutate({ jobId, assignedTeam: newTeam });
     }
-
-    // Update assignment (add employee to existing team or create new)
-    const currentTeam = job.assignedTeam || [];
-    const newTeam = currentTeam.includes(employeeId) 
-      ? currentTeam 
-      : [...currentTeam, employeeId];
-
-    updateJobAssignmentMutation.mutate({ jobId, assignedTeam: newTeam });
+    
     setDraggedJob(null);
   };
 
@@ -366,6 +415,13 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       job.scheduledDate && isSameDay(new Date(job.scheduledDate), currentDate)
     );
   }, [jobs, currentDate]);
+
+  // Filter unscheduled jobs (jobs without a scheduledDate)
+  const unscheduledJobs = useMemo(() => {
+    return jobs.filter(job => 
+      !job.scheduledDate || job.status === 'new' || job.status === 'quote_accepted'
+    ).slice(0, 10); // Limit to 10 to prevent UI overflow
+  }, [jobs]);
 
   // Group employees by availability
   const employeesByAvailability = useMemo(() => {
@@ -445,7 +501,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         onDragEnd={handleDragEnd}
         modifiers={[restrictToWindowEdges]}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Employee Roster */}
           <div className="lg:col-span-1">
             <Card>
@@ -513,6 +569,70 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Unscheduled Jobs */}
+          <div className="lg:col-span-1">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5" />
+                  Unscheduled Jobs ({unscheduledJobs.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {unscheduledJobs.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No unscheduled jobs</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {unscheduledJobs.map((job) => (
+                      <div
+                        key={job.id}
+                        id={`unscheduled-${job.id}`}
+                        className={`p-3 border rounded-lg cursor-move hover:shadow-md transition-shadow ${getPriorityColor(job.priority)} border-l-4 bg-gray-50`}
+                        data-testid={`unscheduled-job-${job.id}`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <GripVertical className="w-4 h-4 text-muted-foreground mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 mb-1">
+                              <h5 className="font-medium text-sm truncate">{job.title}</h5>
+                              <Badge variant="outline" className="text-xs">
+                                {job.status}
+                              </Badge>
+                            </div>
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                <span className="truncate">{job.address}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                <span>{job.estimatedDuration || 4}h estimated</span>
+                              </div>
+                              {job.serviceType && (
+                                <div className="flex items-center gap-1">
+                                  <User className="w-3 h-3" />
+                                  <span className="truncate">{job.serviceType}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-2">
+                              <Badge variant="secondary" className="text-xs">
+                                {job.priority}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
