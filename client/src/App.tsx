@@ -24,6 +24,7 @@ import Equipment from "@/pages/Equipment";
 import NotFound from "@/pages/not-found";
 import { CustomerPortal } from "@/pages/CustomerPortal";
 import CommunicationsManagement from "@/pages/CommunicationsManagement";
+import Dispatch from "@/pages/Dispatch";
 import { WorkflowAutomation } from "@/components/WorkflowAutomation";
 import { useState } from "react";
 
@@ -114,7 +115,7 @@ function Router() {
       </Route>
       <Route path="/dispatch">
         <SidebarLayout>
-          <Pipeline />
+          <Dispatch />
         </SidebarLayout>
       </Route>
       <Route path="/workflows">
