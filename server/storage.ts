@@ -32,6 +32,13 @@ import {
   type RiskAssessment, type InsertRiskAssessment,
   type ComplianceRequirement, type InsertComplianceRequirement,
   type ComplianceRecord, type InsertComplianceRecord,
+  // Employee and Schedule Management
+  type Employee, type InsertEmployee, type UpdateEmployee,
+  type ScheduleEvent, type InsertScheduleEvent, type UpdateScheduleEvent,
+  // Job Templates and Proposals
+  type JobTemplate, type InsertJobTemplate, type UpdateJobTemplate,
+  type Proposal, type InsertProposal, type UpdateProposal,
+  type ProposalSection, type InsertProposalSection, type UpdateProposalSection,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -267,6 +274,23 @@ export interface IStorage {
   getJobTemplatesByCategory(category: string): Promise<JobTemplate[]>;
   deleteJobTemplate(id: string): Promise<void>;
 
+  // Proposal Management
+  createProposal(proposal: InsertProposal): Promise<Proposal>;
+  getProposal(id: string): Promise<Proposal | undefined>;
+  updateProposal(id: string, updates: UpdateProposal): Promise<Proposal>;
+  getProposalsByCustomer(customerId: string): Promise<Proposal[]>;
+  getProposalsByQuote(quoteId: string): Promise<Proposal[]>;
+  getAllProposals(): Promise<Proposal[]>;
+  deleteProposal(id: string): Promise<void>;
+
+  // Proposal Section Management
+  createProposalSection(section: InsertProposalSection): Promise<ProposalSection>;
+  getProposalSection(id: string): Promise<ProposalSection | undefined>;
+  updateProposalSection(id: string, updates: UpdateProposalSection): Promise<ProposalSection>;
+  getProposalSectionsByProposal(proposalId: string): Promise<ProposalSection[]>;
+  deleteProposalSection(id: string): Promise<void>;
+  reorderProposalSections(proposalId: string, sectionIds: string[]): Promise<ProposalSection[]>;
+
   // Equipment Management
   createEquipment(equipment: InsertEquipment): Promise<Equipment>;
   getEquipment(id: string): Promise<Equipment | undefined>;
@@ -428,6 +452,10 @@ export class MemStorage implements IStorage {
   private complianceRequirements: Map<string, ComplianceRequirement>;
   private complianceRecords: Map<string, ComplianceRecord>;
 
+  // Proposal System Storage
+  private proposals: Map<string, Proposal>;
+  private proposalSections: Map<string, ProposalSection>;
+
   constructor() {
     this.users = new Map();
     this.leads = [];
@@ -465,6 +493,10 @@ export class MemStorage implements IStorage {
     this.riskAssessments = new Map();
     this.complianceRequirements = new Map();
     this.complianceRecords = new Map();
+
+    // Proposal System Storage
+    this.proposals = new Map();
+    this.proposalSections = new Map();
     
     // Initialize business settings with defaults
     this.businessSettings = {
@@ -3326,6 +3358,129 @@ export class MemStorage implements IStorage {
 
   async deleteJobTemplate(id: string): Promise<void> {
     this.jobTemplates.delete(id);
+  }
+
+  // ========================================
+  // PROPOSAL MANAGEMENT METHODS
+  // ========================================
+
+  async createProposal(proposalData: InsertProposal): Promise<Proposal> {
+    const proposalNumber = `PROP-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+    const proposal: Proposal = {
+      id: randomUUID(),
+      ...proposalData,
+      proposalNumber,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.proposals.set(proposal.id, proposal);
+    return proposal;
+  }
+
+  async getProposal(id: string): Promise<Proposal | undefined> {
+    return this.proposals.get(id);
+  }
+
+  async updateProposal(id: string, updates: UpdateProposal): Promise<Proposal> {
+    const existing = this.proposals.get(id);
+    if (!existing) {
+      throw new Error('Proposal not found');
+    }
+
+    const updated: Proposal = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.proposals.set(id, updated);
+    return updated;
+  }
+
+  async getProposalsByCustomer(customerId: string): Promise<Proposal[]> {
+    return Array.from(this.proposals.values()).filter(proposal => proposal.customerId === customerId);
+  }
+
+  async getProposalsByQuote(quoteId: string): Promise<Proposal[]> {
+    return Array.from(this.proposals.values()).filter(proposal => proposal.quoteId === quoteId);
+  }
+
+  async getAllProposals(): Promise<Proposal[]> {
+    return Array.from(this.proposals.values());
+  }
+
+  async deleteProposal(id: string): Promise<void> {
+    // Also delete associated sections
+    const sections = Array.from(this.proposalSections.values()).filter(section => section.proposalId === id);
+    sections.forEach(section => this.proposalSections.delete(section.id));
+    
+    this.proposals.delete(id);
+  }
+
+  // ========================================
+  // PROPOSAL SECTION MANAGEMENT METHODS
+  // ========================================
+
+  async createProposalSection(sectionData: InsertProposalSection): Promise<ProposalSection> {
+    const section: ProposalSection = {
+      id: randomUUID(),
+      ...sectionData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.proposalSections.set(section.id, section);
+    return section;
+  }
+
+  async getProposalSection(id: string): Promise<ProposalSection | undefined> {
+    return this.proposalSections.get(id);
+  }
+
+  async updateProposalSection(id: string, updates: UpdateProposalSection): Promise<ProposalSection> {
+    const existing = this.proposalSections.get(id);
+    if (!existing) {
+      throw new Error('Proposal section not found');
+    }
+
+    const updated: ProposalSection = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.proposalSections.set(id, updated);
+    return updated;
+  }
+
+  async getProposalSectionsByProposal(proposalId: string): Promise<ProposalSection[]> {
+    return Array.from(this.proposalSections.values())
+      .filter(section => section.proposalId === proposalId && section.isVisible)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  async deleteProposalSection(id: string): Promise<void> {
+    this.proposalSections.delete(id);
+  }
+
+  async reorderProposalSections(proposalId: string, sectionIds: string[]): Promise<ProposalSection[]> {
+    const sections = await this.getProposalSectionsByProposal(proposalId);
+    
+    // Update sort order for each section
+    sectionIds.forEach((sectionId, index) => {
+      const section = this.proposalSections.get(sectionId);
+      if (section && section.proposalId === proposalId) {
+        const updated = {
+          ...section,
+          sortOrder: index + 1,
+          updatedAt: new Date(),
+        };
+        this.proposalSections.set(sectionId, updated);
+      }
+    });
+
+    return await this.getProposalSectionsByProposal(proposalId);
   }
 
   // ========================================
