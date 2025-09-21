@@ -2641,8 +2641,51 @@ export default function JobDashboard() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
 
-            {/* Enhanced KPI Cards with Real Data */}
+          {/* Invoices Tab */}
+          <TabsContent value="invoices" className="space-y-6">
+            <InvoiceManager />
+          </TabsContent>
+
+          {/* Photos Tab */}
+          <TabsContent value="photos" className="space-y-6">
+            <PhotoDocumentation />
+          </TabsContent>
+
+          {/* Safety Tab */}
+          <TabsContent value="safety" className="space-y-6">
+            <SafetyReporting />
+          </TabsContent>
+
+          {/* Equipment & Inventory Tab */}
+          <TabsContent value="equipment" className="space-y-6">
+            <InventoryManager />
+          </TabsContent>
+
+          {/* Performance Tab */}
+          <TabsContent value="performance" className="space-y-6">
+            <PerformanceAnalytics />
+          </TabsContent>
+
+          {/* Dispatch Tab */}
+          <TabsContent value="dispatch" className="space-y-6">
+            <AdvancedDispatchBoard />
+          </TabsContent>
+
+          {/* Workflow Automation Tab */}
+          <TabsContent value="workflows" className="space-y-6">
+            <WorkflowAutomation />
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold flex items-center gap-2 text-rainbow">
+                <Settings className="h-6 w-6" />
+                Business Settings & Configuration
+              </h2>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Card className="border-2 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
                 <CardContent className="p-4">
