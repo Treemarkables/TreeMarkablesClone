@@ -732,9 +732,9 @@ export default function Pipeline() {
                       key={stage.id} 
                       className={`${stage.color} border-2 flex-shrink-0`}
                       style={{ 
-                        width: 'calc(100vw - 32px)', 
-                        maxWidth: '350px',
-                        minWidth: '280px',
+                        width: 'calc(75vw - 16px)', 
+                        maxWidth: '320px',
+                        minWidth: '260px',
                         maxHeight: '70vh',
                         scrollSnapAlign: 'start'
                       }}
