@@ -2,14 +2,9 @@ import {
   Calendar,
   BarChart3,
   Users,
-  DollarSign,
-  Camera,
-  Shield,
-  TrendingUp,
   Settings,
   Home,
   Target,
-  Briefcase,
   GitBranch,
   MessageSquare,
   Star,
@@ -118,7 +113,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     isActive={activeTab === item.value}
                     onClick={() => onTabChange(item.value)}
                   >
-                    <button className="w-full justify-start">
+                    <button className="w-full justify-start" data-testid={`button-tab-${item.value}`}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </button>
@@ -141,7 +136,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     isActive={activeTab === item.value}
                     onClick={() => onTabChange(item.value)}
                   >
-                    <button className="w-full justify-start">
+                    <button className="w-full justify-start" data-testid={`button-tab-${item.value}`}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </button>
@@ -158,7 +153,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild isActive={location === "/dispatch"}>
                   <Link href="/dispatch" data-testid="link-dispatch">
                     <Calendar className="h-4 w-4" />
                     <span>Dispatch Board</span>
@@ -166,7 +161,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild isActive={location === "/workflows"}>
                   <Link href="/workflows" data-testid="link-workflows">
                     <Workflow className="h-4 w-4" />
                     <span>Workflows</span>
@@ -174,7 +169,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild isActive={location === "/opportunities"}>
                   <Link href="/opportunities" data-testid="link-opportunities">
                     <MessageSquare className="h-4 w-4" />
                     <span>Conversations</span>
@@ -182,7 +177,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild isActive={location === "/reputation"}>
                   <Link href="/reputation" data-testid="link-reputation">
                     <Star className="h-4 w-4" />
                     <span>Reputation</span>
@@ -190,7 +185,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild isActive={location === "/inbox"}>
                   <Link href="/inbox" data-testid="link-inbox">
                     <Inbox className="h-4 w-4" />
                     <span>Inbox</span>
@@ -198,7 +193,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild isActive={location === "/metrics"}>
                   <Link href="/metrics" data-testid="link-metrics">
                     <BarChart3 className="h-4 w-4" />
                     <span>Metrics Dashboard</span>
@@ -218,7 +213,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               isActive={activeTab === "settings"}
               onClick={() => onTabChange("settings")}
             >
-              <button className="w-full justify-start">
+              <button className="w-full justify-start" data-testid="button-tab-settings">
                 <Settings className="h-4 w-4" />
                 <span>Settings</span>
               </button>
