@@ -16,6 +16,14 @@ interface CustomerContactInfo {
     emailEnabled: boolean;
     smsEnabled: boolean;
     marketingOptIn: boolean;
+    jobNotifications: boolean;
+    quoteNotifications: boolean;
+    reminderNotifications: boolean;
+    emergencyNotifications: boolean;
+    preferredNotificationTime: string;
+    quietHoursStart: string;
+    quietHoursEnd: string;
+    timezone: string;
   };
 }
 
@@ -80,7 +88,8 @@ class NotificationService {
       type: 'job_status_update',
       jobTitle: job.title,
       status: newStatus,
-      jobData: job
+      jobData: job,
+      notificationType: 'jobNotifications'
     });
 
     console.log(`✅ Job status change notifications sent for job ${job.id}: ${oldStatus} → ${newStatus}`);
@@ -120,7 +129,10 @@ class NotificationService {
     // Send quote to customer
     const customerInfo = await this.getCustomerContactInfo(customer.id);
     if (customerInfo) {
-      if (customerInfo.email && customerInfo.communicationPreferences?.emailEnabled !== false) {
+      // Check both email enabled and quote notifications enabled
+      if (customerInfo.email && 
+          customerInfo.communicationPreferences?.emailEnabled !== false &&
+          customerInfo.communicationPreferences?.quoteNotifications !== false) {
         await emailService.sendQuoteEmail(
           customerInfo.email,
           customerInfo.name,
@@ -130,7 +142,10 @@ class NotificationService {
         );
       }
 
-      if (customerInfo.phone && customerInfo.communicationPreferences?.smsEnabled !== false) {
+      // Check both SMS enabled and quote notifications enabled
+      if (customerInfo.phone && 
+          customerInfo.communicationPreferences?.smsEnabled !== false &&
+          customerInfo.communicationPreferences?.quoteNotifications !== false) {
         await smsService.sendQuoteSMS(
           customerInfo.phone,
           customerInfo.name,
@@ -156,22 +171,30 @@ class NotificationService {
       actionUrl: `/customer-portal`
     });
 
-    // Send confirmation to customer
+    // Send confirmation to customer - respecting communication preferences
     const customerInfo = await this.getCustomerContactInfo(customer.id);
-    if (customerInfo?.email) {
-      await emailService.sendEmail({
-        to: customerInfo.email,
-        from: 'noreply@treemarkables.co.nz',
-        subject: 'Service Request Received - Treemarkables',
-        html: this.getServiceRequestConfirmationEmail(customerInfo.name, serviceRequest)
-      });
-    }
+    if (customerInfo) {
+      // Send email confirmation if enabled
+      if (customerInfo.email && 
+          customerInfo.communicationPreferences?.emailEnabled !== false &&
+          customerInfo.communicationPreferences?.jobNotifications !== false) {
+        await emailService.sendEmail({
+          to: customerInfo.email,
+          from: 'noreply@treemarkables.co.nz',
+          subject: 'Service Request Received - Treemarkables',
+          html: this.getServiceRequestConfirmationEmail(customerInfo.name, serviceRequest)
+        });
+      }
 
-    if (customerInfo?.phone && customerInfo.communicationPreferences?.smsEnabled !== false) {
-      await smsService.sendSMS({
-        to: customerInfo.phone,
-        message: `Hi ${customerInfo.name}, we received your ${serviceRequest.serviceType} request. We'll contact you within 24 hours. - Treemarkables`
-      });
+      // Send SMS confirmation if enabled
+      if (customerInfo.phone && 
+          customerInfo.communicationPreferences?.smsEnabled !== false &&
+          customerInfo.communicationPreferences?.jobNotifications !== false) {
+        await smsService.sendSMS({
+          to: customerInfo.phone,
+          message: `Hi ${customerInfo.name}, we received your ${serviceRequest.serviceType} request. We'll contact you within 24 hours. - Treemarkables`
+        });
+      }
     }
 
     console.log(`✅ Service request notifications sent for request ${serviceRequest.id}`);
@@ -180,7 +203,7 @@ class NotificationService {
   private async handleJobScheduled(data: { job: Job; scheduledDate: Date }): Promise<void> {
     const { job, scheduledDate } = data;
     
-    const customer = await this.getCustomerInfo(job.customerId);
+    const customer = await this.getCustomerContactInfo(job.customerId);
     if (!customer) return;
 
     // Send scheduling confirmation
@@ -188,7 +211,8 @@ class NotificationService {
       type: 'job_scheduled',
       jobTitle: job.title,
       scheduledDate,
-      jobData: job
+      jobData: job,
+      notificationType: 'jobNotifications'
     });
 
     console.log(`✅ Job scheduled notifications sent for job ${job.id}`);
@@ -197,14 +221,15 @@ class NotificationService {
   private async handleJobCompleted(data: { job: Job }): Promise<void> {
     const { job } = data;
     
-    const customer = await this.getCustomerInfo(job.customerId);
+    const customer = await this.getCustomerContactInfo(job.customerId);
     if (!customer) return;
 
     // Send completion notification
     await this.sendCustomerNotifications(customer, {
       type: 'job_completed',
       jobTitle: job.title,
-      jobData: job
+      jobData: job,
+      notificationType: 'jobNotifications'
     });
 
     // Create follow-up notification for team (request review/feedback)
@@ -222,7 +247,16 @@ class NotificationService {
   }
 
   private async sendCustomerNotifications(customer: CustomerContactInfo, notification: any): Promise<void> {
-    const { type, jobTitle, status, scheduledDate, jobData } = notification;
+    const { type, jobTitle, status, scheduledDate, jobData, notificationType } = notification;
+    
+    // Check if customer has enabled this specific notification type
+    const isNotificationTypeEnabled = !notificationType || 
+      customer.communicationPreferences?.[notificationType] !== false;
+    
+    if (!isNotificationTypeEnabled) {
+      console.log(`📵 Skipping ${type} notification - ${notificationType} disabled for customer`);
+      return;
+    }
 
     // Send email notification
     if (customer.email && customer.communicationPreferences?.emailEnabled !== false) {
@@ -234,6 +268,32 @@ class NotificationService {
           status,
           { scheduledDate: scheduledDate || jobData?.scheduledDate }
         );
+      } else if (type === 'job_scheduled' && scheduledDate) {
+        await emailService.sendEmail({
+          to: customer.email,
+          from: 'noreply@treemarkables.co.nz',
+          subject: `Job Scheduled - ${jobTitle}`,
+          html: `
+            <h2>Job Scheduled</h2>
+            <p>Hi ${customer.name},</p>
+            <p>Your job "${jobTitle}" has been scheduled for ${new Date(scheduledDate).toLocaleDateString('en-NZ')}.</p>
+            <p>We'll be in touch with any updates.</p>
+            <p>Best regards,<br>Treemarkables Team</p>
+          `
+        });
+      } else if (type === 'job_completed') {
+        await emailService.sendEmail({
+          to: customer.email,
+          from: 'noreply@treemarkables.co.nz',
+          subject: `Job Completed - ${jobTitle}`,
+          html: `
+            <h2>Job Completed</h2>
+            <p>Hi ${customer.name},</p>
+            <p>Your job "${jobTitle}" has been completed successfully!</p>
+            <p>Thank you for choosing Treemarkables. We hope you're satisfied with our service.</p>
+            <p>Best regards,<br>Treemarkables Team</p>
+          `
+        });
       }
     }
 
@@ -250,6 +310,11 @@ class NotificationService {
         await smsService.sendSMS({
           to: customer.phone,
           message: `Hi ${customer.name}, your job "${jobTitle}" is scheduled for ${new Date(scheduledDate).toLocaleDateString('en-NZ')}. - Treemarkables`
+        });
+      } else if (type === 'job_completed') {
+        await smsService.sendSMS({
+          to: customer.phone,
+          message: `Hi ${customer.name}, your job "${jobTitle}" has been completed successfully! Thank you for choosing Treemarkables.`
         });
       }
     }
@@ -279,17 +344,41 @@ class NotificationService {
       const customer = await storage.getCustomer(customerId);
       if (!customer) return null;
 
-      // TODO: Fetch communication preferences from customer settings
-      // For now, default to enabled
+      // Fetch real communication preferences from database
+      const preferences = await storage.getCommunicationPreferences(customerId);
+      
+      // Use defaults if no preferences found
+      const defaultPreferences = {
+        emailEnabled: true,
+        smsEnabled: true,
+        marketingOptIn: false,
+        jobNotifications: true,
+        quoteNotifications: true,
+        reminderNotifications: true,
+        emergencyNotifications: true,
+        preferredNotificationTime: 'anytime',
+        quietHoursStart: '22:00',
+        quietHoursEnd: '08:00',
+        timezone: 'Pacific/Auckland'
+      };
+
       return {
         email: customer.email || undefined,
         phone: customer.phone || undefined,
         name: customer.name,
-        communicationPreferences: {
-          emailEnabled: true,
-          smsEnabled: true,
-          marketingOptIn: false
-        }
+        communicationPreferences: preferences ? {
+          emailEnabled: preferences.emailEnabled,
+          smsEnabled: preferences.smsEnabled,
+          marketingOptIn: preferences.marketingOptIn,
+          jobNotifications: preferences.jobNotifications,
+          quoteNotifications: preferences.quoteNotifications,
+          reminderNotifications: preferences.reminderNotifications,
+          emergencyNotifications: preferences.emergencyNotifications,
+          preferredNotificationTime: preferences.preferredNotificationTime || 'anytime',
+          quietHoursStart: preferences.quietHoursStart || '22:00',
+          quietHoursEnd: preferences.quietHoursEnd || '08:00',
+          timezone: preferences.timezone || 'Pacific/Auckland'
+        } : defaultPreferences
       };
     } catch (error) {
       console.error('Error fetching customer contact info:', error);
