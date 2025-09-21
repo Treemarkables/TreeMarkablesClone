@@ -116,9 +116,9 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
+    <div className="h-full bg-background p-4 md:p-6 overflow-hidden">
+      <div className="max-w-7xl mx-auto h-full flex flex-col">
+        <div className="mb-4 md:mb-6 shrink-0">
           <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="heading-job-dashboard">
             Job Dashboard
           </h1>
@@ -127,22 +127,23 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
           </p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={onTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8" data-testid="tabs-dashboard-navigation">
-            <TabsTrigger value="overview" data-testid="tab-overview"><TrendingUp className="w-4 h-4 mr-2" />Overview</TabsTrigger>
-            <TabsTrigger value="pipeline" data-testid="tab-pipeline"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
-            <TabsTrigger value="leads" data-testid="tab-leads"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
-            <TabsTrigger value="customers" data-testid="tab-customers"><Users className="w-4 h-4 mr-2" />Customers</TabsTrigger>
-            <TabsTrigger value="quotes" data-testid="tab-quotes"><FileText className="w-4 h-4 mr-2" />Quotes</TabsTrigger>
-            <TabsTrigger value="analytics" data-testid="tab-analytics"><TrendingUp className="w-4 h-4 mr-2" />Analytics</TabsTrigger>
-            <TabsTrigger value="equipment" data-testid="tab-equipment"><Wrench className="w-4 h-4 mr-2" />Equipment</TabsTrigger>
-            <TabsTrigger value="communications" data-testid="tab-communications"><MessageSquare className="w-4 h-4 mr-2" />Communications</TabsTrigger>
-            <TabsTrigger value="integrations" data-testid="tab-integrations"><Plug className="w-4 h-4 mr-2" />Integrations</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full">
+          <TabsList className="flex w-full overflow-x-auto whitespace-nowrap gap-2 md:gap-3 mb-4 md:mb-6 shrink-0 no-scrollbar" data-testid="tabs-dashboard-navigation">
+            <TabsTrigger value="overview" data-testid="tab-overview" className="shrink-0"><TrendingUp className="w-4 h-4 mr-2" />Overview</TabsTrigger>
+            <TabsTrigger value="pipeline" data-testid="tab-pipeline" className="shrink-0"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
+            <TabsTrigger value="leads" data-testid="tab-leads" className="shrink-0"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
+            <TabsTrigger value="customers" data-testid="tab-customers" className="shrink-0"><Users className="w-4 h-4 mr-2" />Customers</TabsTrigger>
+            <TabsTrigger value="quotes" data-testid="tab-quotes" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Quotes</TabsTrigger>
+            <TabsTrigger value="analytics" data-testid="tab-analytics" className="shrink-0"><TrendingUp className="w-4 h-4 mr-2" />Analytics</TabsTrigger>
+            <TabsTrigger value="equipment" data-testid="tab-equipment" className="shrink-0"><Wrench className="w-4 h-4 mr-2" />Equipment</TabsTrigger>
+            <TabsTrigger value="communications" data-testid="tab-communications" className="shrink-0"><MessageSquare className="w-4 h-4 mr-2" />Communications</TabsTrigger>
+            <TabsTrigger value="integrations" data-testid="tab-integrations" className="shrink-0"><Plug className="w-4 h-4 mr-2" />Integrations</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <TabsContent value="overview" className="flex-1 overflow-auto">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card data-testid="card-total-revenue">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -188,9 +189,9 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                   <p className="text-xs text-muted-foreground">Requires attention</p>
                 </CardContent>
               </Card>
-            </div>
+              </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card data-testid="card-recent-jobs">
                 <CardHeader>
                   <CardTitle>Recent Jobs</CardTitle>
@@ -244,16 +245,18 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                   </div>
                 </CardContent>
               </Card>
+              </div>
             </div>
           </TabsContent>
 
           {/* Pipeline Tab */}
-          <TabsContent value="pipeline" className="space-y-6">
+          <TabsContent value="pipeline" className="flex-1 overflow-auto">
             <Pipeline />
           </TabsContent>
 
           {/* Leads Tab */}
-          <TabsContent value="leads" className="space-y-6">
+          <TabsContent value="leads" className="flex-1 overflow-auto">
+            <div className="space-y-4">
             <Card data-testid="card-leads-management">
               <CardHeader>
                 <CardTitle>Lead Management</CardTitle>
@@ -280,10 +283,12 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </div>
               </CardContent>
             </Card>
+            </div>
           </TabsContent>
 
           {/* Customers Tab */}
-          <TabsContent value="customers" className="space-y-6">
+          <TabsContent value="customers" className="flex-1 overflow-auto">
+            <div className="space-y-4">
             <Card data-testid="card-customer-management">
               <CardHeader>
                 <CardTitle>Customer Management</CardTitle>
@@ -309,30 +314,31 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </div>
               </CardContent>
             </Card>
+            </div>
           </TabsContent>
 
           {/* Quotes Tab */}
-          <TabsContent value="quotes" className="space-y-6">
+          <TabsContent value="quotes" className="flex-1 overflow-auto">
             <QuoteManagement />
           </TabsContent>
 
           {/* Analytics Tab */}
-          <TabsContent value="analytics" className="space-y-6">
+          <TabsContent value="analytics" className="flex-1 overflow-auto">
             <PerformanceAnalytics />
           </TabsContent>
 
           {/* Equipment Tab */}
-          <TabsContent value="equipment" className="space-y-6">
+          <TabsContent value="equipment" className="flex-1 overflow-auto">
             <EquipmentTracker />
           </TabsContent>
 
           {/* Communications Tab */}
-          <TabsContent value="communications" className="space-y-6">
+          <TabsContent value="communications" className="flex-1 overflow-auto">
             <CommunicationsManagement />
           </TabsContent>
 
           {/* Integrations Tab */}
-          <TabsContent value="integrations" className="space-y-6">
+          <TabsContent value="integrations" className="flex-1 overflow-auto">
             <Integrations />
           </TabsContent>
         </Tabs>
