@@ -382,6 +382,16 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           )}
         </div>
         
+        {/* Assigned Team Display */}
+        {job.assignedTeam && job.assignedTeam.length > 0 && (
+          <div className="flex items-center gap-1 mb-2 text-muted-foreground">
+            <Users className="w-3 h-3" />
+            <span className="text-xs truncate">
+              {getAssignedStaffNames(job.assignedTeam)}
+            </span>
+          </div>
+        )}
+        
         {/* Status Control */}
         {!isCompleted && !isUnsuccessful && (
           <Select 
@@ -478,6 +488,14 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       >
         <div className="font-medium truncate">{job.title}</div>
         <div className="text-muted-foreground truncate">{job.address}</div>
+        {job.assignedTeam && job.assignedTeam.length > 0 && (
+          <div className="flex items-center gap-1 mt-1 text-muted-foreground">
+            <Users className="w-3 h-3" />
+            <span className="text-xs truncate">
+              {getAssignedStaffNames(job.assignedTeam)}
+            </span>
+          </div>
+        )}
         <Badge variant="outline" className="text-xs mt-1">
           {job.status}
         </Badge>
