@@ -191,26 +191,26 @@ function DraggableOpportunityCard({
       className={`bg-white hover-elevate cursor-pointer ${isLoading ? 'opacity-50' : ''}`}
       data-testid={`opportunity-card-${opportunity.id}`}
     >
-      <CardContent className="p-4">
+      <CardContent className="p-2 sm:p-4">
         <div className="flex items-start justify-between mb-2">
-          <h4 className="font-semibold text-sm" data-testid={`opportunity-name-${opportunity.id}`}>
+          <h4 className="font-semibold text-xs sm:text-sm leading-tight mr-2 min-w-0 truncate" data-testid={`opportunity-name-${opportunity.id}`}>
             {opportunity.name || opportunity.customerName}
           </h4>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <Button
               variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 cursor-grab active:cursor-grabbing"
+              size="icon"
+              className="cursor-grab active:cursor-grabbing h-8 w-8"
               {...attributes}
               {...listeners}
               data-testid={`drag-handle-${opportunity.id}`}
             >
-              <GripVertical className="h-3 w-3" />
+              <GripVertical className="h-4 w-4" />
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid={`menu-${opportunity.id}`}>
-                  <MoreVertical className="h-3 w-3" />
+                <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`menu-${opportunity.id}`}>
+                  <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -256,22 +256,22 @@ function DraggableOpportunityCard({
           )}
         </div>
 
-        <div className="flex items-center gap-1 mt-3">
+        <div className="flex items-center gap-1 mt-2 sm:mt-3">
           {opportunity.phone && (
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid={`call-${opportunity.id}`}>
-              <Phone className="h-3 w-3" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`call-${opportunity.id}`}>
+              <Phone className="h-4 w-4" />
             </Button>
           )}
           {opportunity.email && (
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid={`email-${opportunity.id}`}>
-              <Mail className="h-3 w-3" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`email-${opportunity.id}`}>
+              <Mail className="h-4 w-4" />
             </Button>
           )}
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid={`schedule-${opportunity.id}`}>
-            <Calendar className="h-3 w-3" />
+          <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`schedule-${opportunity.id}`}>
+            <Calendar className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid={`view-${opportunity.id}`}>
-            <Eye className="h-3 w-3" />
+          <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`view-${opportunity.id}`}>
+            <Eye className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>
@@ -528,21 +528,21 @@ export default function Pipeline() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="p-6 space-y-6">
+      <div className="p-2 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Opportunities</h1>
-          <p className="text-gray-600 mt-1">Track leads through your sales pipeline</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Opportunities</h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">Track leads through your sales pipeline</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" data-testid="import-opportunities">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto" data-testid="import-opportunities">
             <Import className="h-4 w-4 mr-2" />
             Import
           </Button>
           <Dialog open={showNewOpportunityDialog} onOpenChange={setShowNewOpportunityDialog}>
             <DialogTrigger asChild>
-              <Button size="sm" data-testid="add-opportunity">
+              <Button size="sm" className="w-full sm:w-auto" data-testid="add-opportunity">
                 <Plus className="h-4 w-4 mr-2" />
                 Add opportunity
               </Button>
@@ -631,20 +631,20 @@ export default function Pipeline() {
 
       {/* Tabs */}
       <Tabs defaultValue="opportunities" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="opportunities" data-testid="tab-opportunities">Opportunities</TabsTrigger>
-          <TabsTrigger value="pipelines" data-testid="tab-pipelines">Pipelines</TabsTrigger>
-          <TabsTrigger value="bulk-actions" data-testid="tab-bulk-actions">Bulk Actions</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsTrigger value="opportunities" className="text-xs sm:text-sm" data-testid="tab-opportunities">Opportunities</TabsTrigger>
+          <TabsTrigger value="pipelines" className="text-xs sm:text-sm" data-testid="tab-pipelines">Pipelines</TabsTrigger>
+          <TabsTrigger value="bulk-actions" className="text-xs sm:text-sm" data-testid="tab-bulk-actions">Bulk Actions</TabsTrigger>
         </TabsList>
 
         <TabsContent value="opportunities" className="space-y-4">
           {/* Filters and Controls */}
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                   <Select value={selectedSource} onValueChange={setSelectedSource}>
-                    <SelectTrigger className="w-32" data-testid="filter-source">
+                    <SelectTrigger className="w-full sm:w-40" data-testid="filter-source">
                       <SelectValue placeholder="All Sources" />
                     </SelectTrigger>
                     <SelectContent>
@@ -656,18 +656,18 @@ export default function Pipeline() {
                       <SelectItem value="word of mouth">Word of Mouth</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Badge variant="outline" className="px-3 py-1" data-testid="opportunity-count">
+                  <Badge variant="outline" className="px-3 py-1 self-start sm:self-center" data-testid="opportunity-count">
                     {opportunities.length} opportunities
                   </Badge>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
                       placeholder="Search Opportunities"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 w-64"
+                      className="pl-10 w-full sm:w-64"
                       data-testid="search-opportunities"
                     />
                   </div>
@@ -695,7 +695,7 @@ export default function Pipeline() {
           </Card>
 
           {/* Pipeline Stages */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             {pipelineStages.map((stage) => {
               const stageTotals = getStageTotals(stage.id);
               const stageOpportunities = opportunitiesByStatus[stage.id] || [];
@@ -706,14 +706,14 @@ export default function Pipeline() {
                   className={`${stage.color} border-2`}
                   data-testid={`stage-column-${stage.id}`}
                 >
-                  <CardHeader className={`${stage.headerColor} -m-6 mb-4 rounded-t-lg`}>
-                    <CardTitle className="text-lg flex items-center justify-between">
-                      <span>{stage.title}</span>
-                      <Badge variant="secondary" className="bg-white/20">
+                  <CardHeader className={`${stage.headerColor} -m-6 mb-4 rounded-t-lg p-3 sm:p-6`}>
+                    <CardTitle className="text-base sm:text-lg flex items-center justify-between">
+                      <span className="truncate mr-2">{stage.title}</span>
+                      <Badge variant="secondary" className="bg-white/20 text-xs sm:text-sm flex-shrink-0">
                         {stageTotals.count}
                       </Badge>
                     </CardTitle>
-                    <div className="text-sm font-medium">
+                    <div className="text-xs sm:text-sm font-medium">
                       {formatCurrency(stageTotals.value)}
                     </div>
                   </CardHeader>
@@ -724,12 +724,12 @@ export default function Pipeline() {
                     >
                       {stageOpportunities.length === 0 ? (
                         <div 
-                          className="text-center py-8 text-gray-500"
-                          style={{ minHeight: '100px' }}
+                          className="text-center py-4 sm:py-8 text-gray-500 px-2"
+                          style={{ minHeight: '80px' }}
                         >
-                          <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">No opportunities</p>
-                          <p className="text-xs mt-1">Drop opportunities here</p>
+                          <User className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-xs sm:text-sm">No opportunities</p>
+                          <p className="text-xs mt-1 hidden sm:block">Drop opportunities here</p>
                         </div>
                       ) : (
                         stageOpportunities.map((opportunity: any) => (
