@@ -352,7 +352,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         style={style}
         {...(canBeDragged ? listeners : {})}
         {...(canBeDragged ? attributes : {})}
-        className={`p-3 bg-white border rounded shadow-sm text-xs ${getPriorityColor(job.priority)} border-l-4 ${
+        className={`p-2 bg-white border rounded shadow-sm text-xs ${getPriorityColor(job.priority)} border-l-4 ${
           canBeDragged 
             ? `cursor-move ${isDragging ? 'opacity-50 z-50' : 'hover:shadow-md'}` 
             : isCompleted || isUnsuccessful 
@@ -361,17 +361,17 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         }`}
         data-testid={`job-card-${job.id}`}
       >
-        <div className="flex items-start justify-between mb-2">
+        <div className="flex items-start justify-between mb-1">
           <div className="flex-1 min-w-0">
-            <h4 className="font-medium truncate">{job.title}</h4>
-            <p className="text-muted-foreground truncate">{job.address}</p>
+            <h4 className="font-medium text-xs truncate">{job.title}</h4>
+            <p className="text-muted-foreground text-xs truncate">{job.address}</p>
           </div>
           {canBeDragged && (
-            <GripVertical className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
+            <GripVertical className="w-3 h-3 text-gray-400 ml-1 flex-shrink-0" />
           )}
         </div>
         
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <Badge variant="outline" className={getStatusColor(job.status || 'lead')}>
             {getStatusDisplayName(job.status || 'lead')}
           </Badge>
@@ -384,7 +384,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         
         {/* Assigned Team Display */}
         {job.assignedTeam && job.assignedTeam.length > 0 && (
-          <div className="flex items-center gap-1 mb-2 text-muted-foreground">
+          <div className="flex items-center gap-1 mb-1 text-muted-foreground">
             <Users className="w-3 h-3" />
             <span className="text-xs truncate">
               {getAssignedStaffNames(job.assignedTeam)}
@@ -398,7 +398,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             value={job.status || 'lead'} 
             onValueChange={(value: JobStatusType) => updateJobStatus(value)}
           >
-            <SelectTrigger className="h-6 text-xs" data-testid={`status-select-${job.id}`}>
+            <SelectTrigger className="h-5 text-xs" data-testid={`status-select-${job.id}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -412,9 +412,9 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         )}
         
         {job.scheduledDate && (
-          <div className="flex items-center gap-1 mt-2 text-muted-foreground">
+          <div className="flex items-center gap-1 mt-1 text-muted-foreground">
             <Clock className="w-3 h-3" />
-            <span>{format(new Date(job.scheduledDate), 'h:mm a')}</span>
+            <span className="text-xs">{format(new Date(job.scheduledDate), 'h:mm a')}</span>
           </div>
         )}
       </div>
@@ -445,7 +445,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     return (
       <div
         ref={setNodeRef}
-        className={`w-[96px] p-1 border-r relative min-h-16 transition-colors ${
+        className={`w-[80px] p-1 border-r relative min-h-12 transition-colors ${
           isOver ? 'bg-blue-100' : 'hover:bg-blue-50'
         } ${className}`}
         data-testid={`time-slot-${employeeId}-${hour}`}
@@ -522,7 +522,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     return (
       <div
         ref={setNodeRef}
-        className={`flex items-center gap-2 p-3 border-b transition-colors ${
+        className={`flex items-center gap-2 p-2 border-b transition-colors ${
           isOver ? 'bg-blue-100' : 'hover:bg-gray-100'
         } cursor-pointer`}
         data-testid={`staff-member-${employee.id}`}
@@ -724,10 +724,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     );
   }
 
-  // Generate time slots for the grid (7 AM to 6 PM)
+  // Generate time slots for the grid (8 AM to 5 PM for compact view)
   const timeSlots = useMemo(() => {
     const slots = [];
-    for (let hour = 7; hour <= 18; hour++) {
+    for (let hour = 8; hour <= 17; hour++) {
       slots.push({
         time: `${hour}:00`,
         displayTime: format(new Date().setHours(hour, 0, 0, 0), 'h:mm a'),
@@ -740,10 +740,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   return (
     <div className="h-full bg-white" data-testid="advanced-dispatch-board">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
+      <div className="flex items-center justify-between px-2 py-1 border-b bg-gray-50">
         <div>
-          <h2 className="text-2xl font-bold">Dispatch Board</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-lg font-bold">Dispatch Board</h2>
+          <p className="text-xs text-muted-foreground">
             Drag and drop to schedule jobs
           </p>
         </div>
@@ -778,27 +778,27 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         onDragEnd={handleDragEnd}
         modifiers={[restrictToWindowEdges]}
       >
-        <div className="flex h-[calc(100vh-140px)]">
+        <div className="flex h-[calc(100vh-120px)]">
           {/* Staff Column (Left) */}
-          <div className="w-48 border-r bg-gray-50">
-            <div className="p-3 border-b">
-              <h3 className="font-semibold text-sm">Staff</h3>
+          <div className="w-44 border-r bg-gray-50">
+            <div className="p-1 border-b">
+              <h3 className="font-semibold text-xs">Staff</h3>
             </div>
             <div className="overflow-y-auto h-full">
               {employees.map((employee) => (
                 <DroppableEmployee key={employee.id} employee={employee}>
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback>{employee.firstName[0]}{employee.lastName[0]}</AvatarFallback>
+                  <Avatar className="w-6 h-6">
+                    <AvatarFallback className="text-xs">{employee.firstName[0]}{employee.lastName[0]}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">
+                    <div className="font-medium text-xs truncate">
                       {employee.firstName} {employee.lastName}
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
                       {employee.position}
                     </div>
-                    <div className="flex items-center gap-1 mt-1">
-                      <div className={`w-2 h-2 rounded-full ${
+                    <div className="flex items-center gap-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${
                         employee.isActive && employee.status === 'active' 
                           ? 'bg-green-500' 
                           : employee.status === 'busy' 
@@ -818,9 +818,9 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
               ))}
               
               {employees.length === 0 && (
-                <div className="p-6 text-center text-muted-foreground">
-                  <Users className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-sm">No staff members</p>
+                <div className="p-4 text-center text-muted-foreground">
+                  <Users className="w-6 h-6 mx-auto mb-1" />
+                  <p className="text-xs">No staff members</p>
                 </div>
               )}
             </div>
@@ -834,7 +834,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
               {timeSlots.map((slot) => (
                 <div
                   key={slot.time}
-                  className="w-[96px] p-2 border-r text-center text-sm font-medium"
+                  className="w-[80px] p-1 border-r text-center text-xs font-medium"
                 >
                   {slot.displayTime}
                 </div>
@@ -844,10 +844,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             {/* Staff Rows with Time Slots */}
             <div>
               {employees.map((employee) => (
-                <div key={employee.id} className="flex border-b min-h-16">
+                <div key={employee.id} className="flex border-b min-h-12">
                   {/* Staff Name (sticky) */}
-                  <div className="w-16 p-2 bg-gray-50 border-r flex items-center justify-center sticky left-0 z-10">
-                    <Avatar className="w-6 h-6">
+                  <div className="w-14 p-1 bg-gray-50 border-r flex items-center justify-center sticky left-0 z-10">
+                    <Avatar className="w-5 h-5">
                       <AvatarFallback className="text-xs">
                         {employee.firstName[0]}{employee.lastName[0]}
                       </AvatarFallback>
@@ -891,40 +891,40 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           </div>
 
           {/* Jobs Panel (Right) */}
-          <div className="w-80 border-l bg-gray-50">
-            <div className="p-3 border-b">
-              <h3 className="font-semibold text-sm">Jobs by Status</h3>
+          <div className="w-72 border-l bg-gray-50">
+            <div className="p-1 border-b">
+              <h3 className="font-semibold text-xs">Jobs by Status</h3>
             </div>
             
             <Tabs value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as JobStatusType)} className="h-full">
-              <TabsList className="grid w-full grid-cols-5 p-1 m-3 mb-0">
-                <TabsTrigger value="lead" className="text-xs px-1" data-testid="tab-lead">
+              <TabsList className="grid w-full grid-cols-5 p-0.5 m-1 mb-0">
+                <TabsTrigger value="lead" className="text-xs px-0.5" data-testid="tab-lead">
                   Lead ({leadJobs.length})
                 </TabsTrigger>
-                <TabsTrigger value="quote" className="text-xs px-1" data-testid="tab-quote">
+                <TabsTrigger value="quote" className="text-xs px-0.5" data-testid="tab-quote">
                   Quote ({quoteJobs.length})
                 </TabsTrigger>
-                <TabsTrigger value="work_order" className="text-xs px-1" data-testid="tab-work-order">
+                <TabsTrigger value="work_order" className="text-xs px-0.5" data-testid="tab-work-order">
                   Work ({workOrderJobs.length})
                 </TabsTrigger>
-                <TabsTrigger value="completed" className="text-xs px-1" data-testid="tab-completed">
+                <TabsTrigger value="completed" className="text-xs px-0.5" data-testid="tab-completed">
                   Done ({completedJobs.length})
                 </TabsTrigger>
-                <TabsTrigger value="unsuccessful" className="text-xs px-1" data-testid="tab-unsuccessful">
+                <TabsTrigger value="unsuccessful" className="text-xs px-0.5" data-testid="tab-unsuccessful">
                   Lost ({unsuccessfulJobs.length})
                 </TabsTrigger>
               </TabsList>
               
-              <TabsContent value={selectedStatus} className="p-3 mt-0">
-                <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
+              <TabsContent value={selectedStatus} className="p-1 mt-0">
+                <div className="space-y-1 max-h-[calc(100vh-220px)] overflow-y-auto">
                   {currentStatusJobs.map((job) => (
                     <JobCard key={job.id} job={job} selectedStatus={selectedStatus} />
                   ))}
                   
                   {currentStatusJobs.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Target className="w-8 h-8 mx-auto mb-2" />
-                      <p className="text-sm">No {getStatusDisplayName(selectedStatus).toLowerCase()} jobs</p>
+                    <div className="text-center py-4 text-muted-foreground">
+                      <Target className="w-6 h-6 mx-auto mb-1" />
+                      <p className="text-xs">No {getStatusDisplayName(selectedStatus).toLowerCase()} jobs</p>
                     </div>
                   )}
                 </div>
