@@ -227,6 +227,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
+                  <Link href="/dispatch" data-testid="link-dispatch">
+                    <Calendar className="h-4 w-4" />
+                    <span>Dispatch</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
                   <Link href="/inbox" data-testid="link-inbox">
                     <Inbox className="h-4 w-4" />
                     <span>Inbox</span>

@@ -107,6 +107,11 @@ function Router() {
           <Equipment />
         </SidebarLayout>
       </Route>
+      <Route path="/dispatch">
+        <SidebarLayout>
+          <Pipeline />
+        </SidebarLayout>
+      </Route>
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
