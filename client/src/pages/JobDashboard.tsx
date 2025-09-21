@@ -69,15 +69,15 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
 
   // Helper function to get customer name by ID
   const getCustomerName = (customerId: string) => {
-    const customer = displayCustomers.find(c => c.id === customerId);
+    const customer = displayCustomers.find((c: any) => c.id === customerId);
     return customer?.name || 'Unknown Customer';
   };
 
   // Calculate metrics
-  const totalRevenue = displayJobs.reduce((sum, job) => sum + (job.estimatedValue || job.value || 0), 0);
-  const completedJobs = displayJobs.filter(job => job.status === "completed").length;
-  const activeJobs = displayJobs.filter(job => job.status === "in-progress" || job.status === "scheduled").length;
-  const newLeads = displayLeads.filter(lead => lead.status === "new").length;
+  const totalRevenue = displayJobs.reduce((sum: number, job: any) => sum + (job.estimatedValue || job.value || 0), 0);
+  const completedJobs = displayJobs.filter((job: any) => job.status === "completed").length;
+  const activeJobs = displayJobs.filter((job: any) => job.status === "in-progress" || job.status === "scheduled").length;
+  const newLeads = displayLeads.filter((lead: any) => lead.status === "new").length;
 
   const getJobStatusBadge = (status: string) => {
     const jobStatusConfig = {
@@ -201,7 +201,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {displayJobs.slice(0, 5).map((job) => (
+                    {displayJobs.slice(0, 5).map((job: any) => (
                       <div key={job.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`job-item-${job.id}`}>
                         <div className="flex-1">
                           <h4 className="font-medium" data-testid={`job-title-${job.id}`}>{job.title}</h4>
@@ -231,7 +231,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {displayLeads.slice(0, 5).map((lead) => (
+                    {displayLeads.slice(0, 5).map((lead: any) => (
                       <div key={lead.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`lead-item-${lead.id}`}>
                         <div className="flex-1">
                           <h4 className="font-medium" data-testid={`lead-name-${lead.id}`}>{lead.name}</h4>
@@ -266,7 +266,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {displayLeads.map((lead) => (
+                  {displayLeads.map((lead: any) => (
                     <div key={lead.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`lead-card-${lead.id}`}>
                       <div className="flex-1">
                         <h4 className="font-medium" data-testid={`lead-title-${lead.id}`}>{lead.name}</h4>
@@ -298,7 +298,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {displayCustomers.map((customer) => (
+                  {displayCustomers.map((customer: any) => (
                     <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`customer-card-${customer.id}`}>
                       <div className="flex-1">
                         <h4 className="font-medium" data-testid={`customer-name-${customer.id}`}>{customer.name}</h4>
