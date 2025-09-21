@@ -19,7 +19,6 @@ import { InventoryManager } from "@/components/InventoryManager";
 import { InvoiceManager } from "@/components/InvoiceManager";
 import { PhotoDocumentation } from "@/components/PhotoDocumentation";
 import { SafetyReporting } from "@/components/SafetyReporting";
-import { RouteOptimizer } from "@/components/RouteOptimizer";
 import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
 import { AdvancedDispatchBoard } from "@/components/AdvancedDispatchBoard";
 import { JobDiary } from "@/components/JobDiary";
@@ -1368,8 +1367,7 @@ export default function JobDashboard() {
             </div>
 
             {/* Operations & Analytics Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <RouteOptimizer compact={true} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <PerformanceAnalytics compact={true} />
               <AdvancedDispatchBoard compact={true} />
             </div>
@@ -2636,10 +2634,6 @@ export default function JobDashboard() {
             <SafetyReporting />
           </TabsContent>
 
-          {/* Routes Tab */}
-          <TabsContent value="routes" className="space-y-6">
-            <RouteOptimizer />
-          </TabsContent>
 
           {/* Equipment & Inventory Tab */}
           <TabsContent value="equipment" className="space-y-6">
