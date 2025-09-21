@@ -281,8 +281,19 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
                     onClick={() => setSelectedPhoto(photo)}
                     data-testid={`photo-thumb-${photo.id}`}
                   >
-                    {/* Mock photo thumbnail - in production would use actual image */}
-                    <div className="w-full h-full bg-gradient-to-br from-green-200 to-blue-200 flex items-center justify-center">
+                    <img
+                      src={photo.url}
+                      alt={`${getTypeText(photo.type)} photo for ${photo.jobTitle}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to placeholder if image fails to load
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const placeholder = target.nextElementSibling as HTMLElement;
+                        if (placeholder) placeholder.style.display = 'flex';
+                      }}
+                    />
+                    <div className="w-full h-full bg-gradient-to-br from-green-200 to-blue-200 flex items-center justify-center" style={{ display: 'none' }}>
                       <FileImage className="h-8 w-8 text-white" />
                     </div>
                     <Badge className={`${getTypeColor(photo.type)} text-white absolute top-1 left-1 text-xs`}>
@@ -370,8 +381,19 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
                 >
                   <CardContent className="p-3">
                     <div className="relative aspect-square bg-gray-100 rounded-md overflow-hidden mb-2">
-                      {/* Mock photo - in production would use actual image */}
-                      <div className="w-full h-full bg-gradient-to-br from-green-200 to-blue-200 flex items-center justify-center">
+                      <img
+                        src={photo.url}
+                        alt={`${getTypeText(photo.type)} photo for ${photo.jobTitle}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback to placeholder if image fails to load
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const placeholder = target.nextElementSibling as HTMLElement;
+                          if (placeholder) placeholder.style.display = 'flex';
+                        }}
+                      />
+                      <div className="w-full h-full bg-gradient-to-br from-green-200 to-blue-200 flex items-center justify-center" style={{ display: 'none' }}>
                         <FileImage className="h-12 w-12 text-white" />
                       </div>
                       <Badge className={`${getTypeColor(photo.type)} text-white absolute top-1 left-1 text-xs`}>
@@ -406,7 +428,19 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
                   <CardContent className="p-4">
                     <div className="flex items-center gap-4">
                       <div className="relative w-16 h-16 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
-                        <div className="w-full h-full bg-gradient-to-br from-green-200 to-blue-200 flex items-center justify-center">
+                        <img
+                          src={photo.url}
+                          alt={`${getTypeText(photo.type)} photo for ${photo.jobTitle}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Fallback to placeholder if image fails to load
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const placeholder = target.nextElementSibling as HTMLElement;
+                            if (placeholder) placeholder.style.display = 'flex';
+                          }}
+                        />
+                        <div className="w-full h-full bg-gradient-to-br from-green-200 to-blue-200 flex items-center justify-center" style={{ display: 'none' }}>
                           <FileImage className="h-8 w-8 text-white" />
                         </div>
                       </div>
@@ -510,7 +544,19 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
               <div className="space-y-4">
                 {/* Photo Display */}
                 <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden">
-                  <div className="w-full h-full bg-gradient-to-br from-green-200 to-blue-200 flex items-center justify-center">
+                  <img
+                    src={selectedPhoto.url}
+                    alt={`${getTypeText(selectedPhoto.type)} photo for ${selectedPhoto.jobTitle}`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to placeholder if image fails to load
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const placeholder = target.nextElementSibling as HTMLElement;
+                      if (placeholder) placeholder.style.display = 'flex';
+                    }}
+                  />
+                  <div className="w-full h-full bg-gradient-to-br from-green-200 to-blue-200 flex items-center justify-center" style={{ display: 'none' }}>
                     <FileImage className="h-24 w-24 text-white" />
                   </div>
                 </div>
