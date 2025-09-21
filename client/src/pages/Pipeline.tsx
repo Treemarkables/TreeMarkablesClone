@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -279,9 +279,27 @@ function DraggableOpportunityCard({
   );
 }
 
+// Hook to detect mobile screen size
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 640); // sm breakpoint
+    };
+
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
+
+  return isMobile;
+}
+
 export default function Pipeline() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
+  const isMobile = useIsMobile();
   const [selectedSource, setSelectedSource] = useState('all');
   const [showNewOpportunityDialog, setShowNewOpportunityDialog] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -695,58 +713,121 @@ export default function Pipeline() {
           </Card>
 
           {/* Pipeline Stages */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-            {pipelineStages.map((stage) => {
-              const stageTotals = getStageTotals(stage.id);
-              const stageOpportunities = opportunitiesByStatus[stage.id] || [];
+          {isMobile ? (
+            /* Mobile: Horizontal scroll container */
+            <div className="overflow-x-auto -mx-2 px-2">
+              <div className="flex gap-3 pb-4" style={{ width: 'max-content' }}>
+                {pipelineStages.map((stage) => {
+                  const stageTotals = getStageTotals(stage.id);
+                  const stageOpportunities = opportunitiesByStatus[stage.id] || [];
 
-              return (
-                <Card 
-                  key={stage.id} 
-                  className={`${stage.color} border-2`}
-                  data-testid={`stage-column-${stage.id}`}
-                >
-                  <CardHeader className={`${stage.headerColor} -m-6 mb-4 rounded-t-lg p-3 sm:p-6`}>
-                    <CardTitle className="text-base sm:text-lg flex items-center justify-between">
-                      <span className="truncate mr-2">{stage.title}</span>
-                      <Badge variant="secondary" className="bg-white/20 text-xs sm:text-sm flex-shrink-0">
-                        {stageTotals.count}
-                      </Badge>
-                    </CardTitle>
-                    <div className="text-xs sm:text-sm font-medium">
-                      {formatCurrency(stageTotals.value)}
-                    </div>
-                  </CardHeader>
-                  <DroppableStageColumn stage={stage}>
-                    <SortableContext 
-                      items={stageOpportunities.map((opp: any) => opp.id)}
-                      strategy={verticalListSortingStrategy}
+                  return (
+                    <Card 
+                      key={stage.id} 
+                      className={`${stage.color} border-2 flex-shrink-0`}
+                      style={{ width: '280px', maxHeight: '70vh' }}
+                      data-testid={`stage-column-${stage.id}`}
                     >
-                      {stageOpportunities.length === 0 ? (
-                        <div 
-                          className="text-center py-4 sm:py-8 text-gray-500 px-2"
-                          style={{ minHeight: '80px' }}
-                        >
-                          <User className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-xs sm:text-sm">No opportunities</p>
-                          <p className="text-xs mt-1 hidden sm:block">Drop opportunities here</p>
+                      <CardHeader className={`${stage.headerColor} -m-6 mb-4 rounded-t-lg p-3`}>
+                        <CardTitle className="text-base flex items-center justify-between">
+                          <span className="truncate mr-2">{stage.title}</span>
+                          <Badge variant="secondary" className="bg-white/20 text-xs flex-shrink-0">
+                            {stageTotals.count}
+                          </Badge>
+                        </CardTitle>
+                        <div className="text-xs font-medium">
+                          {formatCurrency(stageTotals.value)}
                         </div>
-                      ) : (
-                        stageOpportunities.map((opportunity: any) => (
-                          <DraggableOpportunityCard
-                            key={opportunity.id}
-                            opportunity={opportunity}
-                            isLoading={updateOpportunityMutation.isPending}
-                            onMoveOpportunity={handleMoveOpportunity}
-                          />
-                        ))
-                      )}
-                    </SortableContext>
-                  </DroppableStageColumn>
-                </Card>
-              );
-            })}
-          </div>
+                      </CardHeader>
+                      <div className="flex-1 overflow-y-auto px-6 pb-6">
+                        <DroppableStageColumn stage={stage}>
+                          <SortableContext 
+                            items={stageOpportunities.map((opp: any) => opp.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {stageOpportunities.length === 0 ? (
+                              <div 
+                                className="text-center py-4 text-gray-500 px-2"
+                                style={{ minHeight: '80px' }}
+                              >
+                                <User className="h-6 w-6 mx-auto mb-2 opacity-50" />
+                                <p className="text-xs">No opportunities</p>
+                                <p className="text-xs mt-1">Drop here</p>
+                              </div>
+                            ) : (
+                              stageOpportunities.map((opportunity: any) => (
+                                <div key={opportunity.id} className="mb-3">
+                                  <DraggableOpportunityCard
+                                    opportunity={opportunity}
+                                    isLoading={updateOpportunityMutation.isPending}
+                                    onMoveOpportunity={handleMoveOpportunity}
+                                  />
+                                </div>
+                              ))
+                            )}
+                          </SortableContext>
+                        </DroppableStageColumn>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Desktop: Grid layout */
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              {pipelineStages.map((stage) => {
+                const stageTotals = getStageTotals(stage.id);
+                const stageOpportunities = opportunitiesByStatus[stage.id] || [];
+
+                return (
+                  <Card 
+                    key={stage.id} 
+                    className={`${stage.color} border-2`}
+                    data-testid={`stage-column-${stage.id}`}
+                  >
+                    <CardHeader className={`${stage.headerColor} -m-6 mb-4 rounded-t-lg p-6`}>
+                      <CardTitle className="text-lg flex items-center justify-between">
+                        <span className="truncate mr-2">{stage.title}</span>
+                        <Badge variant="secondary" className="bg-white/20 text-sm flex-shrink-0">
+                          {stageTotals.count}
+                        </Badge>
+                      </CardTitle>
+                      <div className="text-sm font-medium">
+                        {formatCurrency(stageTotals.value)}
+                      </div>
+                    </CardHeader>
+                    <DroppableStageColumn stage={stage}>
+                      <SortableContext 
+                        items={stageOpportunities.map((opp: any) => opp.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {stageOpportunities.length === 0 ? (
+                          <div 
+                            className="text-center py-8 text-gray-500 px-2"
+                            style={{ minHeight: '100px' }}
+                          >
+                            <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">No opportunities</p>
+                            <p className="text-xs mt-1">Drop opportunities here</p>
+                          </div>
+                        ) : (
+                          stageOpportunities.map((opportunity: any) => (
+                            <DraggableOpportunityCard
+                              key={opportunity.id}
+                              opportunity={opportunity}
+                              isLoading={updateOpportunityMutation.isPending}
+                              onMoveOpportunity={handleMoveOpportunity}
+                            />
+                          ))
+                        )}
+                      </SortableContext>
+                    </DroppableStageColumn>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="pipelines" className="space-y-4">
