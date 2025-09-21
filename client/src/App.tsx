@@ -63,15 +63,11 @@ function Router() {
       <Route path="/blog" component={Blog}/>
       <Route path="/blog/:slug" component={BlogPost}/>
       <Route path="/summer-offer" component={SummerOffer}/>
-      <Route path="/job-dashboard" component={() => (
-        <div style={{padding: '20px', backgroundColor: '#f0f0f0', minHeight: '100vh'}}>
-          <h1 style={{color: '#059669'}}>✅ SUCCESS: Job Dashboard Page Loaded!</h1>
-          <p>The routing issue has been resolved. You should now see this working page.</p>
-          <div style={{marginTop: '20px', padding: '15px', backgroundColor: '#dcfce7', borderRadius: '8px'}}>
-            <strong>Next Steps:</strong> I'll now restore the full dashboard features.
-          </div>
-        </div>
-      )} />
+      <Route path="/job-dashboard">
+        <SidebarLayout>
+          <JobDashboard />
+        </SidebarLayout>
+      </Route>
       <Route path="/metrics" component={MetricsDashboard}/>
       <Route path="/customer-portal" component={CustomerPortal}/>
       
