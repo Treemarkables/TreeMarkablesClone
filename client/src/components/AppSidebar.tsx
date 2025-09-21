@@ -2,11 +2,9 @@ import {
   Calendar,
   BarChart3,
   Users,
-  FileText,
   DollarSign,
   Camera,
   Shield,
-  MapPin,
   TrendingUp,
   Settings,
   Home,
@@ -100,12 +98,6 @@ const operationsItems = [
     url: "#",
     icon: Shield,
     value: "safety"
-  },
-  {
-    title: "Routes",
-    url: "#",
-    icon: MapPin,
-    value: "routes"
   },
   {
     title: "Performance",
