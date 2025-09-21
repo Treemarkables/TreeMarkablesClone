@@ -306,7 +306,7 @@ export default function Pipeline() {
   // DnD sensors - configure for mobile vs desktop
   const sensors = useSensors(
     useSensor(PointerSensor, { 
-      activationConstraint: isMobile ? { distance: 50 } : { distance: 3 }
+      activationConstraint: isMobile ? { distance: 50, tolerance: 5, delay: 250 } : { distance: 3 }
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -706,10 +706,20 @@ export default function Pipeline() {
               className="overflow-x-auto pb-4" 
               style={{ 
                 WebkitOverflowScrolling: 'touch', 
-                touchAction: 'auto',
+                touchAction: 'pan-x',
                 overscrollBehaviorX: 'contain',
                 scrollSnapType: 'x mandatory',
-                pointerEvents: 'auto'
+                pointerEvents: 'auto',
+                cursor: 'grab',
+                userSelect: 'none'
+              }}
+              onTouchStart={(e) => {
+                // Prevent DnD from interfering with horizontal scrolling
+                e.stopPropagation();
+              }}
+              onTouchMove={(e) => {
+                // Allow native scrolling
+                e.stopPropagation();
               }}
             >
               <div className="flex gap-4" style={{ width: 'max-content', paddingLeft: '8px', paddingRight: '8px' }}>
