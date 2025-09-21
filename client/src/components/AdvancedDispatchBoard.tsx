@@ -190,10 +190,13 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const [selectedJobForAllocation, setSelectedJobForAllocation] = useState<any | null>(null);
   const [showMobileCalendar, setShowMobileCalendar] = useState(false);
 
-  // Drag and drop sensors
+  // Drag and drop sensors with mobile optimization
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: {
+      activationConstraint: isMobile ? {
+        distance: 12,
+        delay: 100,
+      } : {
         distance: 8,
       },
     })
@@ -761,18 +764,35 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="center">
-                <CalendarComponent
-                  mode="single"
-                  selected={currentDate}
-                  onSelect={(date) => {
-                    if (date) {
-                      setCurrentDate(date);
-                      setShowMobileCalendar(false);
-                    }
-                  }}
-                  className="rounded-md border"
-                  data-testid="mobile-calendar-widget"
-                />
+                <div className="space-y-2">
+                  <CalendarComponent
+                    mode="single"
+                    selected={currentDate}
+                    defaultMonth={currentDate}
+                    onSelect={(date) => {
+                      if (date) {
+                        setCurrentDate(date);
+                        setShowMobileCalendar(false);
+                      }
+                    }}
+                    className="rounded-md border-0"
+                    data-testid="mobile-calendar-widget"
+                  />
+                  <div className="flex p-3 pt-0 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCurrentDate(new Date());
+                        setShowMobileCalendar(false);
+                      }}
+                      className="flex-1"
+                      data-testid="button-calendar-today"
+                    >
+                      Today
+                    </Button>
+                  </div>
+                </div>
               </PopoverContent>
             </Popover>
           ) : (

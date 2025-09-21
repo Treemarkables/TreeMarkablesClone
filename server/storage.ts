@@ -27,6 +27,9 @@ import {
   type FinancialAnalytics, type InsertFinancialAnalytics,
   type DashboardConfig, type InsertDashboardConfig,
   type ReportAnalytics, type InsertReportAnalytics,
+  // Safety Management types
+  type SafetyIncident, type InsertSafetyIncident,
+  type RiskAssessment, type InsertRiskAssessment,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -355,6 +358,24 @@ export interface IStorage {
   createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest>;
   getServiceRequest(id: string): Promise<ServiceRequest | undefined>;
   getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]>;
+
+  // Safety Incident Management
+  getSafetyIncidents(): Promise<SafetyIncident[]>;
+  getSafetyIncident(id: string): Promise<SafetyIncident | undefined>;
+  createSafetyIncident(incident: InsertSafetyIncident & { incidentNumber: string }): Promise<SafetyIncident>;
+  updateSafetyIncident(id: string, updates: Partial<InsertSafetyIncident>): Promise<SafetyIncident>;
+  deleteSafetyIncident(id: string): Promise<void>;
+  getSafetyIncidentsByJob(jobId: string): Promise<SafetyIncident[]>;
+  getSafetyIncidentsByType(type: string): Promise<SafetyIncident[]>;
+  getSafetyIncidentsBySeverity(severity: string): Promise<SafetyIncident[]>;
+  getSafetyIncidentsByStatus(status: string): Promise<SafetyIncident[]>;
+
+  // Risk Assessment Management
+  createRiskAssessment(assessment: InsertRiskAssessment): Promise<RiskAssessment>;
+  getRiskAssessment(id: string): Promise<RiskAssessment | undefined>;
+  updateRiskAssessment(id: string, updates: Partial<InsertRiskAssessment>): Promise<RiskAssessment>;
+  getRiskAssessmentsByJob(jobId: string): Promise<RiskAssessment[]>;
+  getAllRiskAssessments(): Promise<RiskAssessment[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -390,6 +411,10 @@ export class MemStorage implements IStorage {
   private invoices: Map<string, Invoice>;
   private serviceRequests: Map<string, ServiceRequest>;
   private customerAuth: Map<string, CustomerAuth>;
+  
+  // Safety Management Storage
+  private safetyIncidents: Map<string, SafetyIncident>;
+  private riskAssessments: Map<string, RiskAssessment>;
 
   constructor() {
     this.users = new Map();
@@ -422,6 +447,10 @@ export class MemStorage implements IStorage {
     this.invoices = new Map();
     this.serviceRequests = new Map();
     this.customerAuth = new Map();
+    
+    // Initialize Safety Management storage
+    this.safetyIncidents = new Map();
+    this.riskAssessments = new Map();
     
     // Initialize business settings with defaults
     this.businessSettings = {
@@ -4042,6 +4071,130 @@ export class MemStorage implements IStorage {
     return Array.from(this.serviceRequests.values())
       .filter(request => request.customerId === customerId)
       .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  // ========================================
+  // Safety Incident Management Implementation
+  // ========================================
+
+  async getSafetyIncidents(): Promise<SafetyIncident[]> {
+    return Array.from(this.safetyIncidents.values()).sort((a, b) => 
+      new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime()
+    );
+  }
+
+  async getSafetyIncident(id: string): Promise<SafetyIncident | undefined> {
+    return this.safetyIncidents.get(id);
+  }
+
+  async createSafetyIncident(incident: InsertSafetyIncident & { incidentNumber: string }): Promise<SafetyIncident> {
+    const id = randomUUID();
+    const now = new Date();
+    
+    const newIncident: SafetyIncident = {
+      ...incident,
+      id,
+      createdAt: now,
+      updatedAt: now,
+      reportedAt: now,
+    };
+
+    this.safetyIncidents.set(id, newIncident);
+    return newIncident;
+  }
+
+  async updateSafetyIncident(id: string, updates: Partial<InsertSafetyIncident>): Promise<SafetyIncident> {
+    const existing = this.safetyIncidents.get(id);
+    if (!existing) {
+      throw new Error('Safety incident not found');
+    }
+
+    const updated: SafetyIncident = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.safetyIncidents.set(id, updated);
+    return updated;
+  }
+
+  async deleteSafetyIncident(id: string): Promise<void> {
+    this.safetyIncidents.delete(id);
+  }
+
+  async getSafetyIncidentsByJob(jobId: string): Promise<SafetyIncident[]> {
+    return Array.from(this.safetyIncidents.values())
+      .filter(incident => incident.jobId === jobId)
+      .sort((a, b) => new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime());
+  }
+
+  async getSafetyIncidentsByType(type: string): Promise<SafetyIncident[]> {
+    return Array.from(this.safetyIncidents.values())
+      .filter(incident => incident.type === type)
+      .sort((a, b) => new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime());
+  }
+
+  async getSafetyIncidentsBySeverity(severity: string): Promise<SafetyIncident[]> {
+    return Array.from(this.safetyIncidents.values())
+      .filter(incident => incident.severity === severity)
+      .sort((a, b) => new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime());
+  }
+
+  async getSafetyIncidentsByStatus(status: string): Promise<SafetyIncident[]> {
+    return Array.from(this.safetyIncidents.values())
+      .filter(incident => incident.status === status)
+      .sort((a, b) => new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime());
+  }
+
+  // ========================================
+  // Risk Assessment Management Implementation
+  // ========================================
+
+  async createRiskAssessment(assessment: InsertRiskAssessment): Promise<RiskAssessment> {
+    const id = randomUUID();
+    const now = new Date();
+    
+    const newAssessment: RiskAssessment = {
+      ...assessment,
+      id,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.riskAssessments.set(id, newAssessment);
+    return newAssessment;
+  }
+
+  async getRiskAssessment(id: string): Promise<RiskAssessment | undefined> {
+    return this.riskAssessments.get(id);
+  }
+
+  async updateRiskAssessment(id: string, updates: Partial<InsertRiskAssessment>): Promise<RiskAssessment> {
+    const existing = this.riskAssessments.get(id);
+    if (!existing) {
+      throw new Error('Risk assessment not found');
+    }
+
+    const updated: RiskAssessment = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.riskAssessments.set(id, updated);
+    return updated;
+  }
+
+  async getRiskAssessmentsByJob(jobId: string): Promise<RiskAssessment[]> {
+    return Array.from(this.riskAssessments.values())
+      .filter(assessment => assessment.jobId === jobId)
+      .sort((a, b) => new Date(b.assessmentDate).getTime() - new Date(a.assessmentDate).getTime());
+  }
+
+  async getAllRiskAssessments(): Promise<RiskAssessment[]> {
+    return Array.from(this.riskAssessments.values())
+      .sort((a, b) => new Date(b.assessmentDate).getTime() - new Date(a.assessmentDate).getTime());
   }
 }
 

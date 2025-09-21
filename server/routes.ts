@@ -4326,6 +4326,133 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // ========================================
+  // SAFETY INCIDENT MANAGEMENT ROUTES
+  // ========================================
+
+  // Get all safety incidents
+  app.get('/api/safety-incidents', async (req: Request, res: Response) => {
+    try {
+      const incidents = await storage.getSafetyIncidents();
+      res.json({
+        success: true,
+        data: incidents,
+        count: incidents.length,
+        message: 'Safety incidents retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting safety incidents:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving safety incidents'
+      });
+    }
+  });
+
+  // Create a new safety incident
+  app.post('/api/safety-incidents', async (req: Request, res: Response) => {
+    try {
+      const validatedData = safetyIncidentInsertSchema.parse(req.body);
+      
+      // Generate incident number
+      const incidents = await storage.getSafetyIncidents();
+      const incidentNumber = `INC-${new Date().getFullYear()}-${String(incidents.length + 1).padStart(3, '0')}`;
+      
+      const incidentData = {
+        ...validatedData,
+        incidentNumber,
+      };
+
+      const incident = await storage.createSafetyIncident(incidentData);
+      res.status(201).json({
+        success: true,
+        data: incident,
+        message: 'Safety incident created successfully'
+      });
+    } catch (error: any) {
+      console.error('Error creating safety incident:', error);
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid incident data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error creating safety incident'
+      });
+    }
+  });
+
+  // Update safety incident
+  app.put('/api/safety-incidents/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      const existingIncident = await storage.getSafetyIncident(id);
+      if (!existingIncident) {
+        return res.status(404).json({
+          success: false,
+          message: 'Safety incident not found'
+        });
+      }
+
+      const updatedIncident = await storage.updateSafetyIncident(id, updateData);
+      res.json({
+        success: true,
+        data: updatedIncident,
+        message: 'Safety incident updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating safety incident:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating safety incident'
+      });
+    }
+  });
+
+  // Get safety analytics
+  app.get('/api/safety-analytics', async (req: Request, res: Response) => {
+    try {
+      const incidents = await storage.getSafetyIncidents();
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const analytics = {
+        totalIncidents: incidents.length,
+        openIncidents: incidents.filter(i => i.status === 'reported' || i.status === 'investigating').length,
+        highSeverityIncidents: incidents.filter(i => i.severity === 'high' || i.severity === 'critical').length,
+        recentIncidents: incidents.filter(i => new Date(i.reportedAt) >= thirtyDaysAgo).length,
+        incidentsByType: incidents.reduce((acc: any, incident) => {
+          acc[incident.type] = (acc[incident.type] || 0) + 1;
+          return acc;
+        }, {}),
+        incidentsBySeverity: incidents.reduce((acc: any, incident) => {
+          acc[incident.severity] = (acc[incident.severity] || 0) + 1;
+          return acc;
+        }, {}),
+        costImpact: incidents.reduce((total, incident) => total + (parseFloat(incident.cost || '0')), 0),
+      };
+
+      res.json({
+        success: true,
+        data: analytics,
+        message: 'Safety analytics retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting safety analytics:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving safety analytics'
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
