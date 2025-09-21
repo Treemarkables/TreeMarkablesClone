@@ -225,10 +225,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       if (scheduledDate) updateData.scheduledDate = scheduledDate;
       if (status) updateData.status = status;
       
-      return apiRequest(`/api/jobs/${jobId}`, {
-        method: 'PUT',
-        body: updateData,
-      });
+      return apiRequest('PUT', `/api/jobs/${jobId}`, updateData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
@@ -326,10 +323,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
     const updateJobStatus = async (newStatus: JobStatusType) => {
       try {
-        await apiRequest(`/api/jobs/${job.id}`, {
-          method: 'PUT',
-          body: { status: newStatus }
-        });
+        await apiRequest('PUT', `/api/jobs/${job.id}`, { status: newStatus });
         
         queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
@@ -352,7 +346,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         style={style}
         {...(canBeDragged ? listeners : {})}
         {...(canBeDragged ? attributes : {})}
-        className={`p-2 bg-white border rounded shadow-sm text-xs ${getPriorityColor(job.priority)} border-l-4 ${
+        className={`p-2 bg-white border rounded shadow-sm text-xs ${getPriorityColor(job.priority || 'medium')} border-l-4 ${
           canBeDragged 
             ? `cursor-move ${isDragging ? 'opacity-50 z-50' : 'hover:shadow-md'}` 
             : isCompleted || isUnsuccessful 
