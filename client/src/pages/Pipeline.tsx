@@ -106,7 +106,19 @@ export default function Pipeline() {
   // Create new opportunity mutation
   const createOpportunityMutation = useMutation({
     mutationFn: async (data: typeof newOpportunityData) => {
-      return await apiRequest('POST', '/api/pipeline-leads', data);
+      // Map frontend field names to schema field names
+      const mappedData = {
+        name: data.customerName,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        serviceRequested: data.serviceRequested,
+        estimatedValue: data.opportunityValue ? parseFloat(data.opportunityValue) : undefined,
+        source: data.source,
+        status: data.status === 'new_lead' ? 'new' : data.status,
+        notes: data.notes
+      };
+      return await apiRequest('POST', '/api/pipeline-leads', mappedData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/pipeline-leads'] });
