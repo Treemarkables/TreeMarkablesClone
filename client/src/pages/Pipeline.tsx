@@ -285,9 +285,6 @@ export default function Pipeline() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const isMobile = useIsMobile();
-
-  // Debug mobile detection
-  console.log('Mobile detection:', { isMobile, windowWidth: typeof window !== 'undefined' ? window.innerWidth : 'N/A' });
   const [selectedSource, setSelectedSource] = useState('all');
   const [showNewOpportunityDialog, setShowNewOpportunityDialog] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -306,9 +303,9 @@ export default function Pipeline() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // DnD sensors - add activation constraint to prevent touch scroll interference
+  // DnD sensors - disable on mobile to allow touch scrolling
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
+    ...(!isMobile ? [useSensor(PointerSensor, { activationConstraint: { distance: 3 } })] : []),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -701,18 +698,19 @@ export default function Pipeline() {
           </Card>
 
           {/* Pipeline Stages */}
-          {isMobile ? (
-            /* Mobile: Horizontal scroll container */
+          <div className={`${isMobile ? 'block' : 'hidden'}`}>
+            {/* Mobile: Horizontal scroll container */}
             <div 
-              className="overflow-x-auto -mx-2 px-2" 
+              className="overflow-x-auto pb-4" 
               style={{ 
                 WebkitOverflowScrolling: 'touch', 
-                touchAction: 'pan-x auto',
+                touchAction: 'auto',
                 overscrollBehaviorX: 'contain',
-                scrollSnapType: 'x mandatory'
+                scrollSnapType: 'x mandatory',
+                pointerEvents: 'auto'
               }}
             >
-              <div className="flex gap-3 pb-4" style={{ minWidth: 'max-content' }}>
+              <div className="flex gap-4" style={{ width: 'max-content', paddingLeft: '8px', paddingRight: '8px' }}>
                 {pipelineStages.map((stage) => {
                   const stageTotals = getStageTotals(stage.id);
                   const stageOpportunities = opportunitiesByStatus[stage.id] || [];
@@ -721,7 +719,13 @@ export default function Pipeline() {
                     <Card 
                       key={stage.id} 
                       className={`${stage.color} border-2 flex-shrink-0`}
-                      style={{ width: '280px', maxHeight: '70vh', scrollSnapAlign: 'start' }}
+                      style={{ 
+                        width: 'calc(100vw - 32px)', 
+                        maxWidth: '350px',
+                        minWidth: '280px',
+                        maxHeight: '70vh',
+                        scrollSnapAlign: 'start'
+                      }}
                       data-testid={`stage-column-${stage.id}`}
                     >
                       <CardHeader className={`${stage.headerColor} -m-6 mb-4 rounded-t-lg p-3`}>
@@ -769,8 +773,10 @@ export default function Pipeline() {
                 })}
               </div>
             </div>
-          ) : (
-            /* Desktop: Grid layout */
+          </div>
+          
+          <div className={`${isMobile ? 'hidden' : 'block'}`}>
+            {/* Desktop: Grid layout */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               {pipelineStages.map((stage) => {
                 const stageTotals = getStageTotals(stage.id);
@@ -823,7 +829,7 @@ export default function Pipeline() {
                 );
               })}
             </div>
-          )}
+          </div>
         </TabsContent>
 
         <TabsContent value="pipelines" className="space-y-4">
