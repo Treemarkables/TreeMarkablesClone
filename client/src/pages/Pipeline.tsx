@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DndContext,
   DragEndEvent,
@@ -279,22 +280,6 @@ function DraggableOpportunityCard({
   );
 }
 
-// Hook to detect mobile screen size
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 640); // sm breakpoint
-    };
-
-    checkIsMobile();
-    window.addEventListener('resize', checkIsMobile);
-    return () => window.removeEventListener('resize', checkIsMobile);
-  }, []);
-
-  return isMobile;
-}
 
 export default function Pipeline() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -318,9 +303,9 @@ export default function Pipeline() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // DnD sensors
+  // DnD sensors - add activation constraint to prevent touch scroll interference
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -347,7 +332,7 @@ export default function Pipeline() {
         phone: data.phone,
         address: data.address,
         serviceRequested: data.serviceRequested,
-        estimatedValue: data.opportunityValue ? parseFloat(data.opportunityValue) : undefined,
+        estimatedValue: data.opportunityValue || undefined,
         source: data.source,
         status: StageMap.toApiStatus[data.status] || data.status,
         notes: data.notes
@@ -715,8 +700,15 @@ export default function Pipeline() {
           {/* Pipeline Stages */}
           {isMobile ? (
             /* Mobile: Horizontal scroll container */
-            <div className="overflow-x-auto -mx-2 px-2">
-              <div className="flex gap-3 pb-4" style={{ width: 'max-content' }}>
+            <div 
+              className="overflow-x-auto -mx-2 px-2 [scrollbar-gutter:stable]" 
+              style={{ 
+                WebkitOverflowScrolling: 'touch', 
+                touchAction: 'pan-x', 
+                overscrollBehaviorX: 'contain' 
+              }}
+            >
+              <div className="inline-flex flex-nowrap gap-3 pb-4 min-w-max">
                 {pipelineStages.map((stage) => {
                   const stageTotals = getStageTotals(stage.id);
                   const stageOpportunities = opportunitiesByStatus[stage.id] || [];
@@ -724,8 +716,8 @@ export default function Pipeline() {
                   return (
                     <Card 
                       key={stage.id} 
-                      className={`${stage.color} border-2 flex-shrink-0`}
-                      style={{ width: '280px', maxHeight: '70vh' }}
+                      className={`${stage.color} border-2 flex-none w-[280px]`}
+                      style={{ maxHeight: '70vh' }}
                       data-testid={`stage-column-${stage.id}`}
                     >
                       <CardHeader className={`${stage.headerColor} -m-6 mb-4 rounded-t-lg p-3`}>
