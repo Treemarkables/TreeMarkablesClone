@@ -303,9 +303,11 @@ export default function Pipeline() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // DnD sensors - disable on mobile to allow touch scrolling
+  // DnD sensors - configure for mobile vs desktop
   const sensors = useSensors(
-    ...(!isMobile ? [useSensor(PointerSensor, { activationConstraint: { distance: 3 } })] : []),
+    useSensor(PointerSensor, { 
+      activationConstraint: isMobile ? { distance: 50 } : { distance: 3 }
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -698,8 +700,8 @@ export default function Pipeline() {
           </Card>
 
           {/* Pipeline Stages */}
-          <div className={`${isMobile ? 'block' : 'hidden'}`}>
-            {/* Mobile: Horizontal scroll container */}
+          {isMobile ? (
+            /* Mobile: Horizontal scroll container */
             <div 
               className="overflow-x-auto pb-4" 
               style={{ 
@@ -773,10 +775,8 @@ export default function Pipeline() {
                 })}
               </div>
             </div>
-          </div>
-          
-          <div className={`${isMobile ? 'hidden' : 'block'}`}>
-            {/* Desktop: Grid layout */}
+          ) : (
+            /* Desktop: Grid layout */
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               {pipelineStages.map((stage) => {
                 const stageTotals = getStageTotals(stage.id);
@@ -829,7 +829,7 @@ export default function Pipeline() {
                 );
               })}
             </div>
-          </div>
+          )}
         </TabsContent>
 
         <TabsContent value="pipelines" className="space-y-4">
