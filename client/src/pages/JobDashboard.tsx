@@ -196,6 +196,13 @@ export default function JobDashboard() {
   const [filteredJobs, setFilteredJobs] = useState<any[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
   const [filteredQuotes, setFilteredQuotes] = useState<any[]>([]);
+
+  // Enhanced customer management states
+  const [customerFilter, setCustomerFilter] = useState("all");
+  const [customerSort, setCustomerSort] = useState("name");
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [showCustomerDetail, setShowCustomerDetail] = useState(false);
+  const [showNewCustomerDialog, setShowNewCustomerDialog] = useState(false);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -2174,10 +2181,13 @@ export default function JobDashboard() {
             </div>
           </TabsContent>
 
-          {/* Customers Tab */}
+          {/* Enhanced Customers Tab */}
           <TabsContent value="customers" className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Customer Management</h2>
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Users className="h-6 w-6" />
+                Customer Management
+              </h2>
               <div className="flex items-center gap-2">
                 <Button 
                   variant="outline" 
@@ -2190,33 +2200,174 @@ export default function JobDashboard() {
                   <Download className="h-4 w-4" />
                   {isExporting ? 'Exporting...' : 'Export'}
                 </Button>
+                <Button 
+                  size="sm" 
+                  className="flex items-center gap-2"
+                  onClick={() => setShowNewCustomerDialog(true)}
+                  data-testid="button-new-customer"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Customer
+                </Button>
                 <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input 
-                  placeholder="Search customers..." 
-                  className="pl-10 w-64"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  data-testid="input-search-customers"
-                />
-              </div>
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input 
+                    placeholder="Search customers..." 
+                    className="pl-10 w-64"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    data-testid="input-search-customers"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Customer Analytics Summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Total Customers</p>
+                      <p className="text-2xl font-bold">{Array.isArray(customers) ? customers.length : 0}</p>
+                    </div>
+                    <Users className="h-8 w-8 text-blue-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Active Customers</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {Array.isArray(customers) ? customers.filter((c: any) => c.isActive !== false).length : 0}
+                      </p>
+                    </div>
+                    <CheckCircle className="h-8 w-8 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Avg Lifetime Value</p>
+                      <p className="text-2xl font-bold text-orange-600">
+                        {Array.isArray(customers) && customers.length > 0 
+                          ? formatCurrency(customers.reduce((sum: number, c: any) => sum + (Number(c.lifetimeValue) || 0), 0) / customers.length)
+                          : formatCurrency(0)}
+                      </p>
+                    </div>
+                    <DollarSign className="h-8 w-8 text-orange-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">High Value Customers</p>
+                      <p className="text-2xl font-bold text-purple-600">
+                        {Array.isArray(customers) ? customers.filter((c: any) => Number(c.lifetimeValue) > 5000).length : 0}
+                      </p>
+                    </div>
+                    <Star className="h-8 w-8 text-purple-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Customer Filters */}
+            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Filter:</label>
+                <Select value={customerFilter} onValueChange={setCustomerFilter}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="All Customers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Customers</SelectItem>
+                    <SelectItem value="active">Active Only</SelectItem>
+                    <SelectItem value="inactive">Inactive Only</SelectItem>
+                    <SelectItem value="high-value">High Value ($5K+)</SelectItem>
+                    <SelectItem value="recent">Recent Jobs</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Sort by:</label>
+                <Select value={customerSort} onValueChange={setCustomerSort}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Name" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name">Name A-Z</SelectItem>
+                    <SelectItem value="value-desc">Highest Value</SelectItem>
+                    <SelectItem value="jobs-desc">Most Jobs</SelectItem>
+                    <SelectItem value="recent">Recent Contact</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Enhanced Customer List */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {Array.isArray(customers) ? 
                 customers
-                  .filter((customer: any) => 
-                    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    customer.phone?.includes(searchTerm)
-                  )
+                  .filter((customer: any) => {
+                    const searchMatch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      customer.phone?.includes(searchTerm);
+                    
+                    switch (customerFilter) {
+                      case 'active': return searchMatch && customer.isActive !== false;
+                      case 'inactive': return searchMatch && customer.isActive === false;
+                      case 'high-value': return searchMatch && Number(customer.lifetimeValue) > 5000;
+                      case 'recent': return searchMatch && customer.lastContactDate && 
+                        new Date(customer.lastContactDate) > subDays(new Date(), 30);
+                      default: return searchMatch;
+                    }
+                  })
+                  .sort((a: any, b: any) => {
+                    switch (customerSort) {
+                      case 'value-desc': return Number(b.lifetimeValue || 0) - Number(a.lifetimeValue || 0);
+                      case 'jobs-desc': return Number(b.totalJobs || 0) - Number(a.totalJobs || 0);
+                      case 'recent': return new Date(b.lastContactDate || 0).getTime() - new Date(a.lastContactDate || 0).getTime();
+                      default: return a.name.localeCompare(b.name);
+                    }
+                  })
                   .map((customer: any) => (
-                    <Card key={customer.id} className="hover-elevate cursor-pointer">
-                      <CardHeader>
-                        <CardTitle className="text-lg">{customer.name}</CardTitle>
+                    <Card 
+                      key={customer.id} 
+                      className="hover-elevate cursor-pointer transition-all duration-200" 
+                      onClick={() => {
+                        setSelectedCustomer(customer);
+                        setShowCustomerDetail(true);
+                      }}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex justify-between items-start">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            {customer.name}
+                            {customer.isActive === false && (
+                              <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                            )}
+                            {Number(customer.lifetimeValue) > 5000 && (
+                              <Badge variant="outline" className="text-xs border-yellow-400 text-yellow-600">
+                                <Star className="h-3 w-3 mr-1" />
+                                VIP
+                              </Badge>
+                            )}
+                          </CardTitle>
+                          <div className="flex gap-1">
+                            {customer.tags?.map((tag: string, index: number) => (
+                              <Badge key={index} variant="outline" className="text-xs">{tag}</Badge>
+                            ))}
+                          </div>
+                        </div>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="pt-0">
                         <div className="space-y-2 text-sm">
                           {customer.phone && (
                             <div className="flex items-center gap-2">
@@ -2233,15 +2384,27 @@ export default function JobDashboard() {
                           {customer.address && (
                             <div className="flex items-center gap-2">
                               <MapPin className="h-4 w-4 text-gray-500" />
-                              <span className="text-gray-700">{customer.address}</span>
+                              <span className="text-gray-700 truncate">{customer.address}</span>
                             </div>
                           )}
-                          {customer.lifetimeValue && (
-                            <div className="flex items-center gap-2">
-                              <DollarSign className="h-4 w-4 text-gray-500" />
-                              <span className="text-gray-700 font-medium">
-                                {formatCurrency(Number(customer.lifetimeValue))} lifetime value
+                          <div className="flex justify-between pt-2 border-t border-gray-100">
+                            <div className="flex items-center gap-1">
+                              <DollarSign className="h-4 w-4 text-green-500" />
+                              <span className="font-medium text-green-600">
+                                {formatCurrency(Number(customer.lifetimeValue) || 0)}
                               </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Briefcase className="h-4 w-4 text-blue-500" />
+                              <span className="font-medium text-blue-600">
+                                {customer.totalJobs || 0} jobs
+                              </span>
+                            </div>
+                          </div>
+                          {customer.lastContactDate && (
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <Clock className="h-3 w-3" />
+                              Last contact: {format(new Date(customer.lastContactDate), 'MMM d, yyyy')}
                             </div>
                           )}
                         </div>
@@ -2249,7 +2412,9 @@ export default function JobDashboard() {
                     </Card>
                   ))
                 : 
-                <div className="text-center text-gray-500 py-8">No customers found</div>
+                <div className="col-span-full text-center text-gray-500 py-8">
+                  {customersLoading ? 'Loading customers...' : 'No customers found'}
+                </div>
               }
             </div>
           </TabsContent>
@@ -3827,6 +3992,376 @@ export default function JobDashboard() {
                 />
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Customer Detail Dialog */}
+        <Dialog open={showCustomerDetail} onOpenChange={setShowCustomerDetail}>
+          <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Customer Details
+              </DialogTitle>
+              <DialogDescription>
+                Comprehensive customer information, service history, and relationship management
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedCustomer && (
+              <div className="mt-4">
+                <Tabs defaultValue="overview" className="w-full">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="jobs">Service History</TabsTrigger>
+                    <TabsTrigger value="communications">Communications</TabsTrigger>
+                    <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="overview" className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Customer Info Card */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <User className="h-5 w-5" />
+                            Contact Information
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-sm font-medium text-gray-600">Name</label>
+                              <p className="text-lg font-semibold">{selectedCustomer.name}</p>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-gray-600">Status</label>
+                              <div className="flex items-center gap-2">
+                                <Badge variant={selectedCustomer.isActive === false ? "secondary" : "outline"}>
+                                  {selectedCustomer.isActive === false ? "Inactive" : "Active"}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            {selectedCustomer.phone && (
+                              <div className="flex items-center gap-3">
+                                <Phone className="h-4 w-4 text-gray-500" />
+                                <span>{selectedCustomer.phone}</span>
+                                <Button variant="outline" size="sm">
+                                  <PhoneCall className="h-3 w-3 mr-1" />
+                                  Call
+                                </Button>
+                              </div>
+                            )}
+                            {selectedCustomer.email && (
+                              <div className="flex items-center gap-3">
+                                <Mail className="h-4 w-4 text-gray-500" />
+                                <span>{selectedCustomer.email}</span>
+                                <Button variant="outline" size="sm">
+                                  <Mail className="h-3 w-3 mr-1" />
+                                  Email
+                                </Button>
+                              </div>
+                            )}
+                            {selectedCustomer.address && (
+                              <div className="flex items-center gap-3">
+                                <MapPin className="h-4 w-4 text-gray-500" />
+                                <span>{selectedCustomer.address}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {selectedCustomer.tags && selectedCustomer.tags.length > 0 && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-600">Tags</label>
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {selectedCustomer.tags.map((tag: string, index: number) => (
+                                  <Badge key={index} variant="outline">{tag}</Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {/* Customer Metrics Card */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <BarChart3 className="h-5 w-5" />
+                            Customer Metrics
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="text-center p-4 bg-green-50 rounded-lg">
+                              <div className="text-2xl font-bold text-green-600">
+                                {formatCurrency(Number(selectedCustomer.lifetimeValue) || 0)}
+                              </div>
+                              <div className="text-sm text-green-700">Lifetime Value</div>
+                            </div>
+                            <div className="text-center p-4 bg-blue-50 rounded-lg">
+                              <div className="text-2xl font-bold text-blue-600">
+                                {selectedCustomer.totalJobs || 0}
+                              </div>
+                              <div className="text-sm text-blue-700">Total Jobs</div>
+                            </div>
+                          </div>
+                          
+                          {selectedCustomer.lastContactDate && (
+                            <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                              <Clock className="h-4 w-4 text-gray-500" />
+                              <div>
+                                <div className="text-sm font-medium">Last Contact</div>
+                                <div className="text-sm text-gray-600">
+                                  {format(new Date(selectedCustomer.lastContactDate), 'PPP')}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedCustomer.preferredContactMethod && (
+                            <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                              <MessageSquare className="h-4 w-4 text-gray-500" />
+                              <div>
+                                <div className="text-sm font-medium">Preferred Contact</div>
+                                <div className="text-sm text-gray-600 capitalize">
+                                  {selectedCustomer.preferredContactMethod}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Notes Section */}
+                    {selectedCustomer.notes && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <FileText className="h-5 w-5" />
+                            Notes
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-gray-700 whitespace-pre-wrap">{selectedCustomer.notes}</p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="jobs" className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-semibold">Service History</h3>
+                      <Button size="sm">
+                        <Plus className="h-4 w-4 mr-2" />
+                        New Job
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="text-center text-gray-500 py-8">
+                            <Briefcase className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                            <p>Service history integration coming soon</p>
+                            <p className="text-sm">This will show all jobs associated with this customer</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="communications" className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-semibold">Communication History</h3>
+                      <Button size="sm">
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        New Message
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="text-center text-gray-500 py-8">
+                            <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                            <p>Communication history integration coming soon</p>
+                            <p className="text-sm">This will show email, SMS, and call history with this customer</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="analytics" className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-semibold">Customer Analytics</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Job Performance</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-center text-gray-500 py-4">
+                            <TrendingUp className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                            <p className="text-sm">Performance analytics coming soon</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Revenue Trends</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-center text-gray-500 py-4">
+                            <DollarSign className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                            <p className="text-sm">Revenue analytics coming soon</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* New Customer Dialog */}
+        <Dialog open={showNewCustomerDialog} onOpenChange={setShowNewCustomerDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                Add New Customer
+              </DialogTitle>
+              <DialogDescription>
+                Create a new customer profile with contact information and preferences
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="customer-name">Name *</Label>
+                  <Input 
+                    id="customer-name"
+                    placeholder="Customer full name"
+                    data-testid="input-customer-name"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="customer-phone">Phone *</Label>
+                  <Input 
+                    id="customer-phone"
+                    placeholder="Phone number"
+                    data-testid="input-customer-phone"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="customer-email">Email</Label>
+                  <Input 
+                    id="customer-email"
+                    type="email"
+                    placeholder="Email address"
+                    data-testid="input-customer-email"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="customer-source">Source</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="How did they find us?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="google">Google Search</SelectItem>
+                      <SelectItem value="facebook">Facebook</SelectItem>
+                      <SelectItem value="referral">Referral</SelectItem>
+                      <SelectItem value="website">Website</SelectItem>
+                      <SelectItem value="phone">Phone Call</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="customer-address">Address</Label>
+                <Input 
+                  id="customer-address"
+                  placeholder="Property address"
+                  data-testid="input-customer-address"
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="customer-city">City</Label>
+                  <Input 
+                    id="customer-city"
+                    placeholder="City"
+                    data-testid="input-customer-city"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="customer-contact-method">Preferred Contact</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="How to contact" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="phone">Phone</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="sms">SMS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="customer-notes">Notes</Label>
+                <Textarea 
+                  id="customer-notes"
+                  placeholder="Any additional notes about this customer..."
+                  rows={3}
+                  data-testid="textarea-customer-notes"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowNewCustomerDialog(false)}
+                data-testid="button-cancel-new-customer"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  // TODO: Implement customer creation
+                  toast({
+                    title: "Customer Created",
+                    description: "New customer has been added successfully.",
+                  });
+                  setShowNewCustomerDialog(false);
+                }}
+                data-testid="button-save-new-customer"
+              >
+                Create Customer
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
             </div>
