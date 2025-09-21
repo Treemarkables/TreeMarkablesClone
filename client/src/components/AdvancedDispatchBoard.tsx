@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,7 +25,7 @@ import { useState, useMemo } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { queryClient } from '@/lib/queryClient';
+import { queryClient, apiRequest } from '@/lib/queryClient';
 import {
   DndContext,
   DragEndEvent,
@@ -41,7 +42,7 @@ import {
 } from '@dnd-kit/modifiers';
 
 // Import types from shared schema
-import type { Job } from '@shared/schema';
+import type { Job, JobStatusType } from '@shared/schema';
 
 // Interface for real Employee from API
 interface Employee {
@@ -179,6 +180,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const [isNewJobModalOpen, setIsNewJobModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [draggedJob, setDraggedJob] = useState<any | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<JobStatusType>('work_order');
   const [allocationSuggestions, setAllocationSuggestions] = useState<AllocationSuggestion[]>([]);
   const [showAllocationPanel, setShowAllocationPanel] = useState(false);
   const [selectedJobForAllocation, setSelectedJobForAllocation] = useState<any | null>(null);
@@ -223,18 +225,14 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       if (scheduledDate) updateData.scheduledDate = scheduledDate;
       if (status) updateData.status = status;
       
-      const response = await fetch(`/api/jobs/${jobId}`, {
+      return apiRequest(`/api/jobs/${jobId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updateData),
+        body: updateData,
       });
-      if (!response.ok) throw new Error('Failed to update job assignment');
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
       toast({
         title: "Assignment Updated",
         description: "Job assignment updated successfully",
@@ -261,13 +259,27 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     return colors[index];
   };
 
+  // Helper function to get status color for the new 5 statuses
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'scheduled': return 'bg-blue-500';
-      case 'in_progress': return 'bg-orange-500';
-      case 'completed': return 'bg-green-500';
-      case 'cancelled': return 'bg-red-500';
-      default: return 'bg-gray-500';
+      case 'lead': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'quote': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'work_order': return 'bg-green-100 text-green-800 border-green-200';
+      case 'completed': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'unsuccessful': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // Helper function to get status display name
+  const getStatusDisplayName = (status: string) => {
+    switch (status) {
+      case 'lead': return 'Lead';
+      case 'quote': return 'Quote';
+      case 'work_order': return 'Work Order';
+      case 'completed': return 'Completed';
+      case 'unsuccessful': return 'Unsuccessful';
+      default: return status;
     }
   };
 
@@ -286,16 +298,22 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     return staffIds.map(id => getEmployeeName(id)).join(', ');
   };
 
-  // Draggable Job Card Component
-  function DraggableJobCard({ job, isDragging }: { job: Job; isDragging?: boolean }) {
+  // Job Card Component with Status Controls
+  function JobCard({ job, selectedStatus }: { job: Job; selectedStatus: JobStatusType }) {
+    const { toast } = useToast();
+    
+    // All jobs can be dragged to the schedule (they auto-convert to work order when dropped)
+    const canBeDragged = selectedStatus !== 'completed' && selectedStatus !== 'unsuccessful';
+    
     const {
       attributes,
       listeners,
       setNodeRef,
       transform,
-      isDragging: dragging,
+      isDragging,
     } = useDraggable({
-      id: `unscheduled-${job.id}`,
+      id: `job-${job.id}`,
+      disabled: !canBeDragged,
       data: {
         type: 'job',
         job,
@@ -306,31 +324,89 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
     } : undefined;
 
+    const updateJobStatus = async (newStatus: JobStatusType) => {
+      try {
+        await apiRequest(`/api/jobs/${job.id}`, {
+          method: 'PUT',
+          body: { status: newStatus }
+        });
+        
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
+        toast({ description: `Job status updated to ${getStatusDisplayName(newStatus)}` });
+      } catch (error) {
+        console.error('Error updating job status:', error);
+        toast({ 
+          variant: 'destructive',
+          description: 'Failed to update job status'
+        });
+      }
+    };
+
+    const isCompleted = selectedStatus === 'completed';
+    const isUnsuccessful = selectedStatus === 'unsuccessful';
+    
     return (
       <div
         ref={setNodeRef}
         style={style}
-        {...listeners}
-        {...attributes}
-        className={`p-2 bg-white border rounded cursor-move hover:shadow-sm transition-shadow ${getPriorityColor(job.priority)} border-l-4 ${
-          dragging ? 'opacity-50' : ''
+        {...(canBeDragged ? listeners : {})}
+        {...(canBeDragged ? attributes : {})}
+        className={`p-3 bg-white border rounded shadow-sm text-xs ${getPriorityColor(job.priority)} border-l-4 ${
+          canBeDragged 
+            ? `cursor-move ${isDragging ? 'opacity-50 z-50' : 'hover:shadow-md'}` 
+            : isCompleted || isUnsuccessful 
+              ? 'opacity-60' 
+              : 'hover:shadow-sm'
         }`}
-        data-testid={`unscheduled-job-${job.id}`}
+        data-testid={`job-card-${job.id}`}
       >
-        <div className="flex items-start gap-2">
-          <GripVertical className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+        <div className="flex items-start justify-between mb-2">
           <div className="flex-1 min-w-0">
-            <div className="font-medium text-sm truncate">{job.title}</div>
-            <div className="text-xs text-muted-foreground truncate">{job.address}</div>
-            <div className="flex items-center gap-1 mt-1">
-              <Clock className="w-3 h-3" />
-              <span className="text-xs">{job.estimatedDuration || 4}h</span>
-              <Badge variant="outline" className="text-xs ml-2">
-                {job.priority}
-              </Badge>
-            </div>
+            <h4 className="font-medium truncate">{job.title}</h4>
+            <p className="text-muted-foreground truncate">{job.address}</p>
           </div>
+          {canBeDragged && (
+            <GripVertical className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
+          )}
         </div>
+        
+        <div className="flex items-center justify-between mb-2">
+          <Badge variant="outline" className={getStatusColor(job.status || 'lead')}>
+            {getStatusDisplayName(job.status || 'lead')}
+          </Badge>
+          {job.estimatedDuration && (
+            <span className="text-muted-foreground">
+              {job.estimatedDuration}h
+            </span>
+          )}
+        </div>
+        
+        {/* Status Control */}
+        {!isCompleted && !isUnsuccessful && (
+          <Select 
+            value={job.status || 'lead'} 
+            onValueChange={(value: JobStatusType) => updateJobStatus(value)}
+          >
+            <SelectTrigger className="h-6 text-xs" data-testid={`status-select-${job.id}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lead">Lead</SelectItem>
+              <SelectItem value="quote">Quote</SelectItem>
+              <SelectItem value="work_order">Work Order</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="unsuccessful">Unsuccessful</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        
+        {job.scheduledDate && (
+          <div className="flex items-center gap-1 mt-2 text-muted-foreground">
+            <Clock className="w-3 h-3" />
+            <span>{format(new Date(job.scheduledDate), 'h:mm a')}</span>
+          </div>
+        )}
       </div>
     );
   }
@@ -443,15 +519,13 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     const { active } = event;
     const activeId = active.id as string;
     
-    // Handle both scheduled and unscheduled jobs
-    let job;
-    if (activeId.startsWith('unscheduled-')) {
-      const jobId = activeId.replace('unscheduled-', '');
-      job = jobs.find(j => j.id === jobId);
-    } else {
-      job = jobs.find(j => j.id === activeId);
+    // Handle job cards with consistent job-* format
+    let jobId = activeId;
+    if (activeId.startsWith('job-')) {
+      jobId = activeId.replace('job-', '');
     }
     
+    const job = jobs.find(j => j.id === jobId);
     setDraggedJob(job);
   };
 
@@ -480,76 +554,69 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       targetEmployeeId = overId;
     }
     
-    // Determine if this is an unscheduled job
+    // Get job ID - now using consistent job-${id} format
     let jobId = activeId;
-    let isUnscheduledJob = false;
-    
-    if (activeId.startsWith('unscheduled-')) {
-      jobId = activeId.replace('unscheduled-', '');
-      isUnscheduledJob = true;
+    if (activeId.startsWith('job-')) {
+      jobId = activeId.replace('job-', '');
     }
     
     // Find the job being dragged
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
 
-    // If this is an unscheduled job being dragged to an employee, schedule it for today
-    if (isUnscheduledJob) {
-      // Schedule the job with specific time if dropped on time slot
-      const scheduledDate = new Date(currentDate);
-      if (targetHour !== null) {
-        scheduledDate.setHours(targetHour, 0, 0, 0);
-      } else {
-        // Default to 9:00 AM if dropped on employee but not specific time slot
-        scheduledDate.setHours(9, 0, 0, 0);
-      }
-      
-      // Update job with schedule and assignment
-      updateJobAssignmentMutation.mutate({ 
-        jobId, 
-        assignedTeam: [targetEmployeeId],
-        scheduledDate: scheduledDate.toISOString(),
-        status: 'scheduled'
+    // Calculate the scheduled date
+    const scheduledDate = new Date(currentDate);
+    if (targetHour !== null) {
+      scheduledDate.setHours(targetHour, 0, 0, 0);
+    } else if (job.scheduledDate) {
+      // Keep existing time if job is already scheduled but dropped on employee
+      const existingDate = new Date(job.scheduledDate);
+      scheduledDate.setHours(existingDate.getHours(), existingDate.getMinutes(), 0, 0);
+    } else {
+      // Default to 9:00 AM for new scheduling
+      scheduledDate.setHours(9, 0, 0, 0);
+    }
+
+    // Check for conflicts if moving to a different employee or time
+    const conflicts = detectSchedulingConflicts(
+      targetEmployeeId,
+      scheduledDate,
+      addHours(scheduledDate, job.estimatedDuration || 4),
+      jobs.filter(j => j.id !== jobId)
+    );
+
+    if (conflicts.length > 0) {
+      toast({
+        title: "Scheduling Conflict Detected",
+        description: `Employee ${getEmployeeName(targetEmployeeId)} has ${conflicts.length} conflicting assignment(s)`,
+        variant: "destructive",
       });
-      
+    }
+
+    // Determine new status - auto-convert to work_order if not already
+    const newStatus = job.status === 'work_order' ? 'work_order' : 'work_order';
+    const wasConverted = job.status !== 'work_order';
+
+    // Update job with schedule, assignment, and status
+    updateJobAssignmentMutation.mutate({ 
+      jobId, 
+      assignedTeam: [targetEmployeeId],
+      scheduledDate: scheduledDate.toISOString(),
+      status: newStatus
+    });
+
+    // Show appropriate toast message
+    if (wasConverted) {
+      toast({
+        title: "Job Converted & Scheduled",
+        description: `Job converted to Work Order and assigned to ${getEmployeeName(targetEmployeeId)} for ${format(scheduledDate, 'MMM dd, yyyy at h:mm a')}`,
+      });
+    } else if (!job.scheduledDate) {
       toast({
         title: "Job Scheduled",
         description: `Job assigned to ${getEmployeeName(targetEmployeeId)} for ${format(scheduledDate, 'MMM dd, yyyy at h:mm a')}`,
       });
     } else {
-      // Moving an already scheduled job to a new time/employee
-      const scheduledDate = new Date(currentDate);
-      if (targetHour !== null) {
-        scheduledDate.setHours(targetHour, 0, 0, 0);
-      } else {
-        // Keep existing time if dropped on employee but not specific time slot
-        const existingDate = new Date(job.scheduledDate);
-        scheduledDate.setHours(existingDate.getHours(), existingDate.getMinutes(), 0, 0);
-      }
-
-      const conflicts = detectSchedulingConflicts(
-        targetEmployeeId,
-        scheduledDate,
-        addHours(scheduledDate, job.estimatedDuration || 4),
-        jobs.filter(j => j.id !== jobId)
-      );
-
-      if (conflicts.length > 0) {
-        toast({
-          title: "Scheduling Conflict Detected",
-          description: `Employee ${getEmployeeName(targetEmployeeId)} has ${conflicts.length} conflicting assignment(s)`,
-          variant: "destructive",
-        });
-      }
-
-      // Update assignment and time
-      updateJobAssignmentMutation.mutate({ 
-        jobId, 
-        assignedTeam: [targetEmployeeId],
-        scheduledDate: scheduledDate.toISOString(),
-        status: 'scheduled'
-      });
-
       toast({
         title: "Job Rescheduled",
         description: `Job moved to ${getEmployeeName(targetEmployeeId)} at ${format(scheduledDate, 'h:mm a')}`,
@@ -579,19 +646,27 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     setSelectedJobForAllocation(null);
   };
 
-  // Filter jobs for today
-  const todaysJobs = useMemo(() => {
-    return jobs.filter(job => 
-      job.scheduledDate && isSameDay(new Date(job.scheduledDate), currentDate)
-    );
-  }, [jobs, currentDate]);
+  // Filter jobs by status
+  const getJobsByStatus = (status: JobStatusType) => {
+    return jobs.filter(job => (job.status || 'lead') === status);
+  };
 
-  // Filter unscheduled jobs (jobs without a scheduledDate)
-  const unscheduledJobs = useMemo(() => {
-    return jobs.filter(job => 
-      !job.scheduledDate || job.status === 'new' || job.status === 'quote_accepted'
-    ).slice(0, 10); // Limit to 10 to prevent UI overflow
-  }, [jobs]);
+  const leadJobs = useMemo(() => getJobsByStatus('lead'), [jobs]);
+  const quoteJobs = useMemo(() => getJobsByStatus('quote'), [jobs]);
+  const workOrderJobs = useMemo(() => getJobsByStatus('work_order'), [jobs]);
+  const completedJobs = useMemo(() => getJobsByStatus('completed'), [jobs]);
+  const unsuccessfulJobs = useMemo(() => getJobsByStatus('unsuccessful'), [jobs]);
+
+  // Filter jobs for today (only work orders that are scheduled)
+  const todaysJobs = useMemo(() => {
+    return workOrderJobs.filter(job => {
+      if (!job.scheduledDate) return false;
+      return isSameDay(new Date(job.scheduledDate), currentDate);
+    });
+  }, [workOrderJobs, currentDate]);
+
+  // Get current status jobs for the selected tab
+  const currentStatusJobs = useMemo(() => getJobsByStatus(selectedStatus), [jobs, selectedStatus]);
 
   // Group employees by availability
   const employeesByAvailability = useMemo(() => {
@@ -800,60 +875,43 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           {/* Jobs Panel (Right) */}
           <div className="w-80 border-l bg-gray-50">
             <div className="p-3 border-b">
-              <h3 className="font-semibold text-sm">Jobs</h3>
+              <h3 className="font-semibold text-sm">Jobs by Status</h3>
             </div>
             
-            {/* Unscheduled Jobs */}
-            <div className="p-3">
-              <h4 className="text-sm font-medium mb-2 text-orange-600">
-                Unscheduled ({unscheduledJobs.length})
-              </h4>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {unscheduledJobs.map((job) => (
-                  <DraggableJobCard key={job.id} job={job} />
-                ))}
-                
-                {unscheduledJobs.length === 0 && (
-                  <div className="text-center py-6 text-muted-foreground">
-                    <Calendar className="w-6 h-6 mx-auto mb-2" />
-                    <p className="text-xs">No unscheduled jobs</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Today's Jobs */}
-            <div className="p-3 border-t">
-              <h4 className="text-sm font-medium mb-2 text-blue-600">
-                Today's Jobs ({todaysJobs.length})
-              </h4>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {todaysJobs.map((job) => (
-                  <div
-                    key={job.id}
-                    className="p-2 bg-blue-50 border border-blue-200 rounded text-xs"
-                    data-testid={`todays-job-${job.id}`}
-                  >
-                    <div className="font-medium truncate">{job.title}</div>
-                    <div className="text-muted-foreground truncate">{job.address}</div>
-                    <div className="flex items-center gap-1 mt-1">
-                      <Clock className="w-3 h-3" />
-                      <span>{job.scheduledDate ? format(new Date(job.scheduledDate), 'h:mm a') : 'No time'}</span>
-                      <span className="ml-auto">
-                        {getAssignedStaffNames(job.assignedTeam || [])}
-                      </span>
+            <Tabs value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as JobStatusType)} className="h-full">
+              <TabsList className="grid w-full grid-cols-5 p-1 m-3 mb-0">
+                <TabsTrigger value="lead" className="text-xs px-1" data-testid="tab-lead">
+                  Lead ({leadJobs.length})
+                </TabsTrigger>
+                <TabsTrigger value="quote" className="text-xs px-1" data-testid="tab-quote">
+                  Quote ({quoteJobs.length})
+                </TabsTrigger>
+                <TabsTrigger value="work_order" className="text-xs px-1" data-testid="tab-work-order">
+                  Work ({workOrderJobs.length})
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="text-xs px-1" data-testid="tab-completed">
+                  Done ({completedJobs.length})
+                </TabsTrigger>
+                <TabsTrigger value="unsuccessful" className="text-xs px-1" data-testid="tab-unsuccessful">
+                  Lost ({unsuccessfulJobs.length})
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value={selectedStatus} className="p-3 mt-0">
+                <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
+                  {currentStatusJobs.map((job) => (
+                    <JobCard key={job.id} job={job} selectedStatus={selectedStatus} />
+                  ))}
+                  
+                  {currentStatusJobs.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Target className="w-8 h-8 mx-auto mb-2" />
+                      <p className="text-sm">No {getStatusDisplayName(selectedStatus).toLowerCase()} jobs</p>
                     </div>
-                  </div>
-                ))}
-                
-                {todaysJobs.length === 0 && (
-                  <div className="text-center py-6 text-muted-foreground">
-                    <Calendar className="w-6 h-6 mx-auto mb-2" />
-                    <p className="text-xs">No jobs scheduled</p>
-                  </div>
-                )}
-              </div>
-            </div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
 
