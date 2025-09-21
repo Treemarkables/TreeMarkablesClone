@@ -11,52 +11,37 @@ import {
   Calendar,
   Clock,
   MapPin,
-  Phone,
   User,
   Users,
-  Plus,
-  Search,
-  Filter,
-  MoreHorizontal,
   ChevronLeft,
   ChevronRight,
-  Grid3X3,
-  List,
-  Settings,
-  Edit,
-  Check,
-  RotateCcw,
-  MessageSquare,
-  X,
-  ExternalLink,
+  MoreHorizontal,
   AlertTriangle,
   Target,
-  Zap,
-  GripVertical,
-  Move
+  GripVertical
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { queryClient, apiRequest } from '@/lib/queryClient';
+import { queryClient } from '@/lib/queryClient';
 import {
   DndContext,
   DragEndEvent,
-  DragOverlay,
   DragStartEvent,
   PointerSensor,
   useSensor,
   useSensors,
   closestCenter,
+  useDraggable,
+  useDroppable,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
 import {
   restrictToWindowEdges,
 } from '@dnd-kit/modifiers';
+
+// Import types from shared schema
+import type { Job } from '@shared/schema';
 
 // Interface for real Employee from API
 interface Employee {
@@ -301,6 +286,158 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     return staffIds.map(id => getEmployeeName(id)).join(', ');
   };
 
+  // Draggable Job Card Component
+  function DraggableJobCard({ job, isDragging }: { job: Job; isDragging?: boolean }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      isDragging: dragging,
+    } = useDraggable({
+      id: `unscheduled-${job.id}`,
+      data: {
+        type: 'job',
+        job,
+      },
+    });
+
+    const style = transform ? {
+      transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    } : undefined;
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...listeners}
+        {...attributes}
+        className={`p-2 bg-white border rounded cursor-move hover:shadow-sm transition-shadow ${getPriorityColor(job.priority)} border-l-4 ${
+          dragging ? 'opacity-50' : ''
+        }`}
+        data-testid={`unscheduled-job-${job.id}`}
+      >
+        <div className="flex items-start gap-2">
+          <GripVertical className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="font-medium text-sm truncate">{job.title}</div>
+            <div className="text-xs text-muted-foreground truncate">{job.address}</div>
+            <div className="flex items-center gap-1 mt-1">
+              <Clock className="w-3 h-3" />
+              <span className="text-xs">{job.estimatedDuration || 4}h</span>
+              <Badge variant="outline" className="text-xs ml-2">
+                {job.priority}
+              </Badge>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Droppable Time Slot Component
+  function DroppableTimeSlot({ 
+    employeeId, 
+    hour, 
+    children, 
+    className = "" 
+  }: { 
+    employeeId: string; 
+    hour: number; 
+    children: React.ReactNode; 
+    className?: string;
+  }) {
+    const { isOver, setNodeRef } = useDroppable({
+      id: `slot:${employeeId}:${hour}`,
+      data: {
+        type: 'timeslot',
+        employeeId,
+        hour,
+      },
+    });
+
+    return (
+      <div
+        ref={setNodeRef}
+        className={`w-[96px] p-1 border-r relative min-h-16 transition-colors ${
+          isOver ? 'bg-blue-100' : 'hover:bg-blue-50'
+        } ${className}`}
+        data-testid={`time-slot-${employeeId}-${hour}`}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  // Draggable Scheduled Job Component
+  function DraggableScheduledJob({ job }: { job: Job }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      isDragging,
+    } = useDraggable({
+      id: job.id,
+      data: {
+        type: 'scheduled-job',
+        job,
+      },
+    });
+
+    const style = transform ? {
+      transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    } : undefined;
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...listeners}
+        {...attributes}
+        className={`absolute inset-1 bg-blue-100 border border-blue-300 rounded p-1 text-xs cursor-move hover:bg-blue-200 transition-colors ${
+          isDragging ? 'opacity-50 z-50' : ''
+        }`}
+        data-testid={`job-${job.id}`}
+      >
+        <div className="font-medium truncate">{job.title}</div>
+        <div className="text-muted-foreground truncate">{job.address}</div>
+        <Badge variant="outline" className="text-xs mt-1">
+          {job.status}
+        </Badge>
+      </div>
+    );
+  }
+
+  // Droppable Employee Component
+  function DroppableEmployee({ 
+    employee, 
+    children 
+  }: { 
+    employee: Employee; 
+    children: React.ReactNode;
+  }) {
+    const { isOver, setNodeRef } = useDroppable({
+      id: employee.id,
+      data: {
+        type: 'employee',
+        employee,
+      },
+    });
+
+    return (
+      <div
+        ref={setNodeRef}
+        className={`flex items-center gap-2 p-3 border-b transition-colors ${
+          isOver ? 'bg-blue-100' : 'hover:bg-gray-100'
+        } cursor-pointer`}
+        data-testid={`staff-member-${employee.id}`}
+      >
+        {children}
+      </div>
+    );
+  }
+
   // Drag and Drop Handlers
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -327,7 +464,21 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     }
 
     const activeId = active.id as string;
-    const employeeId = over.id as string;
+    const overId = over.id as string;
+    
+    // Parse the drop target
+    let targetEmployeeId: string;
+    let targetHour: number | null = null;
+    
+    if (overId.startsWith('slot:')) {
+      // Dropped on a time slot: slot:employeeId:hour
+      const parts = overId.split(':');
+      targetEmployeeId = parts[1];
+      targetHour = parseInt(parts[2]);
+    } else {
+      // Dropped on employee (for general assignment)
+      targetEmployeeId = overId;
+    }
     
     // Determine if this is an unscheduled job
     let jobId = activeId;
@@ -344,46 +495,65 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
     // If this is an unscheduled job being dragged to an employee, schedule it for today
     if (isUnscheduledJob) {
-      // Schedule the job for today at 9 AM
+      // Schedule the job with specific time if dropped on time slot
       const scheduledDate = new Date(currentDate);
-      scheduledDate.setHours(9, 0, 0, 0);
+      if (targetHour !== null) {
+        scheduledDate.setHours(targetHour, 0, 0, 0);
+      } else {
+        // Default to 9:00 AM if dropped on employee but not specific time slot
+        scheduledDate.setHours(9, 0, 0, 0);
+      }
       
       // Update job with schedule and assignment
       updateJobAssignmentMutation.mutate({ 
         jobId, 
-        assignedTeam: [employeeId],
+        assignedTeam: [targetEmployeeId],
         scheduledDate: scheduledDate.toISOString(),
         status: 'scheduled'
       });
       
       toast({
         title: "Job Scheduled",
-        description: `Job assigned to ${getEmployeeName(employeeId)} for ${format(scheduledDate, 'MMM dd, yyyy at h:mm a')}`,
+        description: `Job assigned to ${getEmployeeName(targetEmployeeId)} for ${format(scheduledDate, 'MMM dd, yyyy at h:mm a')}`,
       });
     } else {
-      // Existing logic for already scheduled jobs
+      // Moving an already scheduled job to a new time/employee
+      const scheduledDate = new Date(currentDate);
+      if (targetHour !== null) {
+        scheduledDate.setHours(targetHour, 0, 0, 0);
+      } else {
+        // Keep existing time if dropped on employee but not specific time slot
+        const existingDate = new Date(job.scheduledDate);
+        scheduledDate.setHours(existingDate.getHours(), existingDate.getMinutes(), 0, 0);
+      }
+
       const conflicts = detectSchedulingConflicts(
-        employeeId,
-        new Date(job.scheduledDate),
-        addHours(new Date(job.scheduledDate), job.estimatedDuration || 4),
-        jobs
+        targetEmployeeId,
+        scheduledDate,
+        addHours(scheduledDate, job.estimatedDuration || 4),
+        jobs.filter(j => j.id !== jobId)
       );
 
       if (conflicts.length > 0) {
         toast({
           title: "Scheduling Conflict Detected",
-          description: `Employee ${getEmployeeName(employeeId)} has ${conflicts.length} conflicting assignment(s)`,
+          description: `Employee ${getEmployeeName(targetEmployeeId)} has ${conflicts.length} conflicting assignment(s)`,
           variant: "destructive",
         });
       }
 
-      // Update assignment (add employee to existing team or create new)
-      const currentTeam = job.assignedTeam || [];
-      const newTeam = currentTeam.includes(employeeId) 
-        ? currentTeam 
-        : [...currentTeam, employeeId];
+      // Update assignment and time
+      updateJobAssignmentMutation.mutate({ 
+        jobId, 
+        assignedTeam: [targetEmployeeId],
+        scheduledDate: scheduledDate.toISOString(),
+        status: 'scheduled'
+      });
 
-      updateJobAssignmentMutation.mutate({ jobId, assignedTeam: newTeam });
+      toast({
+        title: "Job Rescheduled",
+        description: `Job moved to ${getEmployeeName(targetEmployeeId)} at ${format(scheduledDate, 'h:mm a')}`,
+      });
     }
     
     setDraggedJob(null);
@@ -461,14 +631,27 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     );
   }
 
+  // Generate time slots for the grid (7 AM to 6 PM)
+  const timeSlots = useMemo(() => {
+    const slots = [];
+    for (let hour = 7; hour <= 18; hour++) {
+      slots.push({
+        time: `${hour}:00`,
+        displayTime: format(new Date().setHours(hour, 0, 0, 0), 'h:mm a'),
+        hour
+      });
+    }
+    return slots;
+  }, []);
+
   return (
-    <div className="space-y-6" data-testid="advanced-dispatch-board">
+    <div className="h-full bg-white" data-testid="advanced-dispatch-board">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
         <div>
-          <h2 className="text-3xl font-bold">Advanced Dispatch Board</h2>
-          <p className="text-muted-foreground">
-            Drag and drop jobs to assign crew members with real-time conflict detection
+          <h2 className="text-2xl font-bold">Dispatch Board</h2>
+          <p className="text-sm text-muted-foreground">
+            Drag and drop to schedule jobs
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -481,7 +664,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             <ChevronLeft className="w-4 h-4" />
           </Button>
           <div className="font-medium min-w-[120px] text-center">
-            {format(currentDate, 'MMM dd, yyyy')}
+            {format(currentDate, 'EEE dd MMM yyyy')}
           </div>
           <Button
             variant="outline"
@@ -494,6 +677,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         </div>
       </div>
 
+      {/* Main Layout - ServiceM8 Style */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -501,224 +685,175 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         onDragEnd={handleDragEnd}
         modifiers={[restrictToWindowEdges]}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Employee Roster */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Crew Roster
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Available Employees */}
-                <div>
-                  <h4 className="font-medium text-green-600 mb-2">Available ({employeesByAvailability.available.length})</h4>
-                  <div className="space-y-2">
-                    {employeesByAvailability.available.map((employee) => (
-                      <div
-                        key={employee.id}
-                        id={employee.id}
-                        className="p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 transition-colors"
-                        data-testid={`employee-available-${employee.id}`}
+        <div className="flex h-[calc(100vh-140px)]">
+          {/* Staff Column (Left) */}
+          <div className="w-48 border-r bg-gray-50">
+            <div className="p-3 border-b">
+              <h3 className="font-semibold text-sm">Staff</h3>
+            </div>
+            <div className="overflow-y-auto h-full">
+              {employees.map((employee) => (
+                <DroppableEmployee key={employee.id} employee={employee}>
+                  <Avatar className="w-8 h-8">
+                    <AvatarFallback>{employee.firstName[0]}{employee.lastName[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">
+                      {employee.firstName} {employee.lastName}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {employee.position}
+                    </div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <div className={`w-2 h-2 rounded-full ${
+                        employee.isActive && employee.status === 'active' 
+                          ? 'bg-green-500' 
+                          : employee.status === 'busy' 
+                          ? 'bg-yellow-500' 
+                          : 'bg-gray-400'
+                      }`} />
+                      <span className="text-xs text-muted-foreground">
+                        {employee.isActive && employee.status === 'active' 
+                          ? 'Available' 
+                          : employee.status === 'busy' 
+                          ? 'Busy' 
+                          : 'Offline'}
+                      </span>
+                    </div>
+                  </div>
+                </DroppableEmployee>
+              ))}
+              
+              {employees.length === 0 && (
+                <div className="p-6 text-center text-muted-foreground">
+                  <Users className="w-8 h-8 mx-auto mb-2" />
+                  <p className="text-sm">No staff members</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Schedule Grid (Center) */}
+          <div className="flex-1 overflow-auto">
+            {/* Time Header */}
+            <div className="flex border-b bg-white sticky top-0 z-20">
+              <div className="w-16"></div> {/* Empty corner */}
+              {timeSlots.map((slot) => (
+                <div
+                  key={slot.time}
+                  className="w-[96px] p-2 border-r text-center text-sm font-medium"
+                >
+                  {slot.displayTime}
+                </div>
+              ))}
+            </div>
+
+            {/* Staff Rows with Time Slots */}
+            <div>
+              {employees.map((employee) => (
+                <div key={employee.id} className="flex border-b min-h-16">
+                  {/* Staff Name (sticky) */}
+                  <div className="w-16 p-2 bg-gray-50 border-r flex items-center justify-center sticky left-0 z-10">
+                    <Avatar className="w-6 h-6">
+                      <AvatarFallback className="text-xs">
+                        {employee.firstName[0]}{employee.lastName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+                  
+                  {/* Time Slots for this staff member */}
+                  {timeSlots.map((slot) => {
+                    // Find jobs for this employee at this time
+                    const jobsInSlot = todaysJobs.filter(job => {
+                      if (!job.assignedTeam?.includes(employee.id) || !job.scheduledDate) return false;
+                      const jobDate = new Date(job.scheduledDate);
+                      const jobHour = jobDate.getHours();
+                      return jobHour === slot.hour;
+                    });
+
+                    return (
+                      <DroppableTimeSlot
+                        key={`${employee.id}-${slot.time}`}
+                        employeeId={employee.id}
+                        hour={slot.hour}
                       >
-                        <div className="flex items-center gap-2">
-                          <Avatar className="w-8 h-8">
-                            <AvatarFallback>{employee.firstName[0]}{employee.lastName[0]}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium text-sm">{employee.firstName} {employee.lastName}</div>
-                            <div className="text-xs text-muted-foreground">{employee.position}</div>
-                            {employee.skills && employee.skills.length > 0 && (
-                              <div className="flex gap-1 mt-1">
-                                {employee.skills.slice(0, 2).map((skill, index) => (
-                                  <Badge key={index} variant="secondary" className="text-xs">
-                                    {skill}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                        {jobsInSlot.map((job) => (
+                          <DraggableScheduledJob key={job.id} job={job} />
+                        ))}
+                      </DroppableTimeSlot>
+                    );
+                  })}
+                </div>
+              ))}
+              
+              {employees.length === 0 && (
+                <div className="flex items-center justify-center h-32 text-muted-foreground">
+                  <div className="text-center">
+                    <Calendar className="w-8 h-8 mx-auto mb-2" />
+                    <p className="text-sm">No staff to schedule</p>
                   </div>
                 </div>
-
-                {/* Busy Employees */}
-                {employeesByAvailability.busy.length > 0 && (
-                  <div>
-                    <h4 className="font-medium text-yellow-600 mb-2">Busy ({employeesByAvailability.busy.length})</h4>
-                    <div className="space-y-2">
-                      {employeesByAvailability.busy.map((employee) => (
-                        <div
-                          key={employee.id}
-                          className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg opacity-60"
-                          data-testid={`employee-busy-${employee.id}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Avatar className="w-8 h-8">
-                              <AvatarFallback>{employee.firstName[0]}{employee.lastName[0]}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="font-medium text-sm">{employee.firstName} {employee.lastName}</div>
-                              <div className="text-xs text-muted-foreground">{employee.position}</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              )}
+            </div>
           </div>
 
-          {/* Unscheduled Jobs */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
-                  Unscheduled Jobs ({unscheduledJobs.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {unscheduledJobs.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No unscheduled jobs</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {unscheduledJobs.map((job) => (
-                      <div
-                        key={job.id}
-                        id={`unscheduled-${job.id}`}
-                        className={`p-3 border rounded-lg cursor-move hover:shadow-md transition-shadow ${getPriorityColor(job.priority)} border-l-4 bg-gray-50`}
-                        data-testid={`unscheduled-job-${job.id}`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <GripVertical className="w-4 h-4 text-muted-foreground mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1 mb-1">
-                              <h5 className="font-medium text-sm truncate">{job.title}</h5>
-                              <Badge variant="outline" className="text-xs">
-                                {job.status}
-                              </Badge>
-                            </div>
-                            <div className="space-y-1 text-xs text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3" />
-                                <span className="truncate">{job.address}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                <span>{job.estimatedDuration || 4}h estimated</span>
-                              </div>
-                              {job.serviceType && (
-                                <div className="flex items-center gap-1">
-                                  <User className="w-3 h-3" />
-                                  <span className="truncate">{job.serviceType}</span>
-                                </div>
-                              )}
-                            </div>
-                            <div className="mt-2">
-                              <Badge variant="secondary" className="text-xs">
-                                {job.priority}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+          {/* Jobs Panel (Right) */}
+          <div className="w-80 border-l bg-gray-50">
+            <div className="p-3 border-b">
+              <h3 className="font-semibold text-sm">Jobs</h3>
+            </div>
+            
+            {/* Unscheduled Jobs */}
+            <div className="p-3">
+              <h4 className="text-sm font-medium mb-2 text-orange-600">
+                Unscheduled ({unscheduledJobs.length})
+              </h4>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {unscheduledJobs.map((job) => (
+                  <DraggableJobCard key={job.id} job={job} />
+                ))}
+                
+                {unscheduledJobs.length === 0 && (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Calendar className="w-6 h-6 mx-auto mb-2" />
+                    <p className="text-xs">No unscheduled jobs</p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </div>
 
-          {/* Jobs Schedule */}
-          <div className="lg:col-span-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
-                  Today's Jobs ({todaysJobs.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {todaysJobs.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No jobs scheduled</h3>
-                    <p className="text-muted-foreground">Jobs for {format(currentDate, 'MMMM dd, yyyy')} will appear here</p>
-                  </div>
-                ) : (
-                  <SortableContext items={todaysJobs.map(job => job.id)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-4">
-                      {todaysJobs.map((job) => (
-                        <div
-                          key={job.id}
-                          id={job.id}
-                          className={`p-4 border rounded-lg cursor-move hover:shadow-md transition-shadow ${getPriorityColor(job.priority)} border-l-4`}
-                          data-testid={`job-card-${job.id}`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <GripVertical className="w-4 h-4 text-muted-foreground" />
-                                <h4 className="font-medium">{job.title}</h4>
-                                <Badge variant="outline" className={getStatusColor(job.status)}>
-                                  {job.status}
-                                </Badge>
-                                <Badge variant="secondary">
-                                  {job.priority}
-                                </Badge>
-                              </div>
-                              <div className="space-y-1 text-sm text-muted-foreground">
-                                <div className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
-                                  {job.address}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  {format(new Date(job.scheduledDate), 'h:mm a')} - {job.estimatedDuration}h
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Users className="w-3 h-3" />
-                                  {getAssignedStaffNames(job.assignedTeam || [])}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleResourceAllocation(job)}
-                                data-testid={`button-allocate-${job.id}`}
-                              >
-                                <Target className="w-4 h-4" />
-                                Auto-Assign
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedJob(job)}
-                                data-testid={`button-details-${job.id}`}
-                              >
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+            {/* Today's Jobs */}
+            <div className="p-3 border-t">
+              <h4 className="text-sm font-medium mb-2 text-blue-600">
+                Today's Jobs ({todaysJobs.length})
+              </h4>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {todaysJobs.map((job) => (
+                  <div
+                    key={job.id}
+                    className="p-2 bg-blue-50 border border-blue-200 rounded text-xs"
+                    data-testid={`todays-job-${job.id}`}
+                  >
+                    <div className="font-medium truncate">{job.title}</div>
+                    <div className="text-muted-foreground truncate">{job.address}</div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Clock className="w-3 h-3" />
+                      <span>{job.scheduledDate ? format(new Date(job.scheduledDate), 'h:mm a') : 'No time'}</span>
+                      <span className="ml-auto">
+                        {getAssignedStaffNames(job.assignedTeam || [])}
+                      </span>
                     </div>
-                  </SortableContext>
+                  </div>
+                ))}
+                
+                {todaysJobs.length === 0 && (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Calendar className="w-6 h-6 mx-auto mb-2" />
+                    <p className="text-xs">No jobs scheduled</p>
+                  </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
 
