@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertEquipmentCheckoutSchema } from "@shared/schema";
+import { insertEquipmentCheckoutSchema, insertEquipmentMaintenanceSchema } from "@shared/schema";
 import {
   Truck,
   Wrench,
@@ -82,9 +82,26 @@ const checkinFormSchema = z.object({
   notes: z.string().optional()
 });
 
+// Maintenance form schema using shared schema
+const maintenanceFormSchema = insertEquipmentMaintenanceSchema.omit({
+  equipmentId: true,
+  createdAt: true
+}).extend({
+  maintenanceType: z.enum(["routine", "repair", "inspection", "calibration"]).default("routine"),
+  description: z.string().min(1, "Description is required"),
+  performedBy: z.string().optional(),
+  cost: z.string().optional(),
+  partsReplaced: z.array(z.string()).default([]),
+  nextServiceDue: z.string().optional(),
+  notes: z.string().optional(),
+  invoiceNumber: z.string().optional(),
+  warrantyInfo: z.string().optional()
+});
+
 type EquipmentFormData = z.infer<typeof equipmentFormSchema>;
 type CheckoutFormData = z.infer<typeof checkoutFormSchema>;
 type CheckinFormData = z.infer<typeof checkinFormSchema>;
+type MaintenanceFormData = z.infer<typeof maintenanceFormSchema>;
 
 // Equipment types for filtering
 const equipmentTypes = [
@@ -140,9 +157,11 @@ export default function Equipment() {
   const [isAddEquipmentOpen, setIsAddEquipmentOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isCheckinOpen, setIsCheckinOpen] = useState(false);
+  const [isMaintenanceOpen, setIsMaintenanceOpen] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<any>(null);
   const [selectedCheckout, setSelectedCheckout] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [partsInput, setPartsInput] = useState("");
 
   // Fetch equipment data
   const { data: equipmentData, isLoading } = useQuery({
@@ -154,8 +173,15 @@ export default function Equipment() {
     queryKey: ["/api/equipment/checkouts"],
   });
 
+  // Fetch maintenance records for all equipment - using individual queries for now
+  const { data: maintenanceData, isLoading: isMaintenanceLoading } = useQuery({
+    queryKey: ["/api/maintenance/all"],
+    enabled: false, // Disabled for now as we'll aggregate from equipment-specific queries
+  });
+
   const equipment = Array.isArray((equipmentData as any)?.data) ? (equipmentData as any).data : [];
   const checkouts = Array.isArray((checkoutData as any)?.data) ? (checkoutData as any).data : [];
+  const maintenanceRecords: any[] = []; // TODO: Aggregate from individual equipment queries
 
   // Add equipment mutation
   const addEquipmentMutation = useMutation({
@@ -225,6 +251,32 @@ export default function Equipment() {
     },
   });
 
+  // Add maintenance record mutation
+  const maintenanceMutation = useMutation({
+    mutationFn: (data: any) => 
+      apiRequest("/api/equipment/maintenance", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance"] });
+      setIsMaintenanceOpen(false);
+      setSelectedEquipment(null);
+      setPartsInput("");
+      maintenanceForm.reset();
+      toast({
+        title: "Success",
+        description: "Maintenance record added successfully",
+      });
+    },
+    onError: (error: any) => {
+      console.error('Maintenance error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add maintenance record",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Equipment form
   const form = useForm<EquipmentFormData>({
     resolver: zodResolver(equipmentFormSchema),
@@ -250,6 +302,15 @@ export default function Equipment() {
     },
   });
 
+  // Maintenance form
+  const maintenanceForm = useForm<MaintenanceFormData>({
+    resolver: zodResolver(maintenanceFormSchema),
+    defaultValues: {
+      maintenanceType: "routine",
+      partsReplaced: [],
+    },
+  });
+
   const onSubmit = (data: EquipmentFormData) => {
     addEquipmentMutation.mutate(data);
   };
@@ -263,6 +324,20 @@ export default function Equipment() {
   const onCheckin = (data: CheckinFormData) => {
     if (selectedCheckout) {
       checkinMutation.mutate({ ...data, checkoutId: selectedCheckout.id });
+    }
+  };
+
+  const onMaintenance = (data: MaintenanceFormData) => {
+    if (selectedEquipment) {
+      // Convert and format data properly
+      const formattedData = {
+        ...data,
+        equipmentId: selectedEquipment.id,
+        cost: data.cost ? parseFloat(data.cost) : undefined,
+        partsReplaced: partsInput ? partsInput.split(',').map(p => p.trim()).filter(p => p) : [],
+        nextServiceDue: data.nextServiceDue ? new Date(data.nextServiceDue).toISOString() : undefined,
+      };
+      maintenanceMutation.mutate(formattedData);
     }
   };
 
@@ -293,9 +368,11 @@ export default function Equipment() {
     retired: equipment.filter((e: any) => e.status === "retired").length,
     activeCheckouts: activeCheckouts.length,
     overdueCheckouts: overdueCheckouts.length,
+    overdueMaintenance: overdueMaintenance.length,
+    maintenanceRecords: maintenanceRecords.length,
   };
 
-  // Handle checkout/checkin actions
+  // Handle checkout/checkin/maintenance actions
   const handleCheckout = (equipmentItem: any) => {
     setSelectedEquipment(equipmentItem);
     setIsCheckoutOpen(true);
@@ -307,6 +384,26 @@ export default function Equipment() {
     setIsCheckinOpen(true);
     checkinForm.reset();
   };
+
+  const handleMaintenance = (equipmentItem: any) => {
+    setSelectedEquipment(equipmentItem);
+    setIsMaintenanceOpen(true);
+    maintenanceForm.reset();
+    setPartsInput("");
+  };
+
+  // Get overdue maintenance equipment (for now, using lastMaintenanceDate + intervalDays)
+  const getOverdueMaintenance = () => {
+    const now = new Date();
+    return equipment.filter((item: any) => {
+      if (!item.lastMaintenanceDate || !item.maintenanceIntervalDays) return false;
+      const lastMaintenance = new Date(item.lastMaintenanceDate);
+      const nextDue = new Date(lastMaintenance.getTime() + (item.maintenanceIntervalDays * 24 * 60 * 60 * 1000));
+      return nextDue < now;
+    });
+  };
+
+  const overdueMaintenance = getOverdueMaintenance();
 
   if (isLoading) {
     return (
@@ -323,12 +420,20 @@ export default function Equipment() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Equipment Management</h1>
           <p className="text-gray-600 mt-1">Track and manage your equipment inventory</p>
-          {overdueCheckouts.length > 0 && (
-            <div className="mt-2">
-              <Badge variant="destructive" className="animate-pulse">
-                <AlertTriangle className="h-3 w-3 mr-1" />
-                {overdueCheckouts.length} overdue item{overdueCheckouts.length > 1 ? 's' : ''}
-              </Badge>
+          {(overdueCheckouts.length > 0 || overdueMaintenance.length > 0) && (
+            <div className="mt-2 space-y-1">
+              {overdueCheckouts.length > 0 && (
+                <Badge variant="destructive" className="animate-pulse">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  {overdueCheckouts.length} overdue checkout{overdueCheckouts.length > 1 ? 's' : ''}
+                </Badge>
+              )}
+              {overdueMaintenance.length > 0 && (
+                <Badge variant="destructive" className="animate-pulse">
+                  <Wrench className="h-3 w-3 mr-1" />
+                  {overdueMaintenance.length} overdue maintenance
+                </Badge>
+              )}
             </div>
           )}
         </div>
@@ -555,7 +660,7 @@ export default function Equipment() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -639,14 +744,27 @@ export default function Equipment() {
             </div>
           </CardContent>
         </Card>
+
+        <Card className={`bg-gradient-to-r ${overdueMaintenance.length > 0 ? 'from-orange-50 to-orange-100' : 'from-gray-50 to-gray-100'}`}>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm font-medium ${overdueMaintenance.length > 0 ? 'text-orange-600' : 'text-gray-600'}`}>Overdue Maintenance</p>
+                <p className={`text-2xl font-bold ${overdueMaintenance.length > 0 ? 'text-orange-900' : 'text-gray-900'}`} data-testid="stat-overdue-maintenance">{stats.overdueMaintenance}</p>
+              </div>
+              <Wrench className={`h-8 w-8 ${overdueMaintenance.length > 0 ? 'text-orange-600' : 'text-gray-600'}`} />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview" data-testid="tab-overview">Equipment Overview</TabsTrigger>
           <TabsTrigger value="checkouts" data-testid="tab-checkouts">Active Checkouts ({activeCheckouts.length})</TabsTrigger>
-          <TabsTrigger value="history" data-testid="tab-history">Checkout History</TabsTrigger>
+          <TabsTrigger value="maintenance" data-testid="tab-maintenance">Maintenance ({stats.overdueMaintenance})</TabsTrigger>
+          <TabsTrigger value="history" data-testid="tab-history">History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -815,7 +933,12 @@ export default function Equipment() {
                     <Button variant="ghost" size="sm" data-testid={`button-edit-${item.id}`}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" data-testid={`button-maintenance-${item.id}`}>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleMaintenance(item)}
+                      data-testid={`button-maintenance-${item.id}`}
+                    >
                       <Wrench className="h-4 w-4" />
                     </Button>
                   </div>
@@ -920,6 +1043,98 @@ export default function Equipment() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="maintenance" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="h-5 w-5" />
+                Maintenance Management
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {overdueMaintenance.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-red-900 mb-3 flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5" />
+                    Overdue Maintenance ({overdueMaintenance.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {overdueMaintenance.map((item: any) => (
+                      <Card key={item.id} className="border-l-4 border-l-red-500">
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-semibold">{item.name}</h4>
+                              <p className="text-sm text-gray-600">{item.brand} {item.model}</p>
+                              <p className="text-sm text-red-600">Last maintenance: {item.lastMaintenanceDate ? new Date(item.lastMaintenanceDate).toLocaleDateString() : 'Never'}</p>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleMaintenance(item)}
+                              data-testid={`button-maintenance-overdue-${item.id}`}
+                            >
+                              <Wrench className="h-4 w-4 mr-2" />
+                              Schedule Maintenance
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Recent Maintenance Records</h3>
+                {maintenanceRecords.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Wrench className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Maintenance Records</h3>
+                    <p className="text-gray-600">Equipment maintenance history will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {maintenanceRecords.slice(0, 10).map((record: any) => (
+                      <Card key={record.id} className="border-l-4 border-l-blue-500">
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-semibold">{record.equipmentName || 'Equipment'}</h4>
+                              <p className="text-sm text-gray-600">Type: {record.maintenanceType}</p>
+                              <p className="text-sm text-gray-600">{record.description}</p>
+                              <div className="grid grid-cols-2 gap-4 mt-2 text-sm text-gray-500">
+                                <div>
+                                  <span className="font-medium">Performed by:</span> {record.performedBy || 'N/A'}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Date:</span> {new Date(record.createdAt).toLocaleDateString()}
+                                </div>
+                                {record.cost && (
+                                  <div>
+                                    <span className="font-medium">Cost:</span> ${record.cost}
+                                  </div>
+                                )}
+                                {record.nextServiceDue && (
+                                  <div>
+                                    <span className="font-medium">Next service:</span> {new Date(record.nextServiceDue).toLocaleDateString()}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <Badge className="bg-blue-100 text-blue-800">
+                              {record.maintenanceType}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1151,6 +1366,191 @@ export default function Equipment() {
                       data-testid="button-confirm-checkin"
                     >
                       {checkinMutation.isPending ? "Checking In..." : "Check In Equipment"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Maintenance Record Dialog */}
+      <Dialog open={isMaintenanceOpen} onOpenChange={setIsMaintenanceOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Maintenance Record</DialogTitle>
+          </DialogHeader>
+          
+          {selectedEquipment && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold">{selectedEquipment.name}</h4>
+                <p className="text-sm text-gray-600">{selectedEquipment.brand} {selectedEquipment.model}</p>
+              </div>
+
+              <Form {...maintenanceForm}>
+                <form onSubmit={maintenanceForm.handleSubmit(onMaintenance)} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={maintenanceForm.control}
+                      name="maintenanceType"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Maintenance Type</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-maintenance-type">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="routine">Routine</SelectItem>
+                              <SelectItem value="repair">Repair</SelectItem>
+                              <SelectItem value="inspection">Inspection</SelectItem>
+                              <SelectItem value="calibration">Calibration</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={maintenanceForm.control}
+                      name="performedBy"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Performed By</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Technician name" {...field} data-testid="input-performed-by" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={maintenanceForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Describe the maintenance performed..."
+                            {...field}
+                            data-testid="textarea-maintenance-description"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <FormField
+                      control={maintenanceForm.control}
+                      name="cost"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cost ($)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-maintenance-cost" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={maintenanceForm.control}
+                      name="nextServiceDue"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Next Service Due</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-next-service" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={maintenanceForm.control}
+                      name="invoiceNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Invoice Number</FormLabel>
+                          <FormControl>
+                            <Input placeholder="INV-001" {...field} data-testid="input-invoice-number" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Parts Replaced (comma-separated)
+                    </label>
+                    <Input
+                      placeholder="Oil filter, spark plug, air filter"
+                      value={partsInput}
+                      onChange={(e) => setPartsInput(e.target.value)}
+                      data-testid="input-parts-replaced"
+                    />
+                  </div>
+
+                  <FormField
+                    control={maintenanceForm.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notes</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Additional notes about the maintenance..."
+                            {...field}
+                            data-testid="textarea-maintenance-notes"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={maintenanceForm.control}
+                    name="warrantyInfo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Warranty Information</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Warranty details for parts or service..."
+                            {...field}
+                            data-testid="textarea-warranty-info"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <Button type="button" variant="outline" onClick={() => setIsMaintenanceOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={maintenanceMutation.isPending}
+                      data-testid="button-confirm-maintenance"
+                    >
+                      {maintenanceMutation.isPending ? "Adding..." : "Add Maintenance Record"}
                     </Button>
                   </div>
                 </form>
