@@ -49,6 +49,8 @@ import {
   User,
   MapPin,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   Edit,
   Trash2,
@@ -288,6 +290,7 @@ export default function Pipeline() {
   const [selectedSource, setSelectedSource] = useState('all');
   const [showNewOpportunityDialog, setShowNewOpportunityDialog] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedMobileStage, setSelectedMobileStage] = useState('new_lead');
   const [newOpportunityData, setNewOpportunityData] = useState({
     customerName: '',
     email: '',
@@ -701,70 +704,97 @@ export default function Pipeline() {
 
           {/* Pipeline Stages */}
           {isMobile ? (
-            /* Mobile: Horizontal scroll container */
-            <div 
-              className="overflow-x-auto pb-4" 
-              style={{ 
-                WebkitOverflowScrolling: 'touch', 
-                touchAction: 'pan-x',
-                overscrollBehaviorX: 'contain',
-                scrollSnapType: 'x mandatory',
-                pointerEvents: 'auto',
-                cursor: 'grab',
-                userSelect: 'none'
-              }}
-              onTouchStart={(e) => {
-                // Prevent DnD from interfering with horizontal scrolling
-                e.stopPropagation();
-              }}
-              onTouchMove={(e) => {
-                // Allow native scrolling
-                e.stopPropagation();
-              }}
-            >
-              <div className="flex gap-4" style={{ width: 'max-content', paddingLeft: '8px', paddingRight: '8px' }}>
-                {pipelineStages.map((stage) => {
-                  const stageTotals = getStageTotals(stage.id);
-                  const stageOpportunities = opportunitiesByStatus[stage.id] || [];
-
-                  return (
-                    <Card 
-                      key={stage.id} 
-                      className={`${stage.color} border-2 flex-shrink-0`}
-                      style={{ 
-                        width: 'calc(75vw - 16px)', 
-                        maxWidth: '320px',
-                        minWidth: '260px',
-                        maxHeight: '70vh',
-                        scrollSnapAlign: 'start'
-                      }}
-                      data-testid={`stage-column-${stage.id}`}
-                    >
-                      <CardHeader className={`${stage.headerColor} -m-6 mb-4 rounded-t-lg p-3`}>
-                        <CardTitle className="text-base flex items-center justify-between">
-                          <span className="truncate mr-2">{stage.title}</span>
-                          <Badge variant="secondary" className="bg-white/20 text-xs flex-shrink-0">
-                            {stageTotals.count}
-                          </Badge>
-                        </CardTitle>
-                        <div className="text-xs font-medium">
-                          {formatCurrency(stageTotals.value)}
+            <div className="space-y-4">
+              {/* Compact Pipeline Overview - Fits on screen */}
+              <Card className="p-4">
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium">Pipeline Overview</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {pipelineStages.map((stage) => {
+                      const stageTotals = getStageTotals(stage.id);
+                      return (
+                        <div 
+                          key={stage.id}
+                          className={`${stage.color} rounded-lg p-3 border-2 cursor-pointer transition-all`}
+                          onClick={() => setSelectedMobileStage(stage.id)}
+                          data-testid={`stage-overview-${stage.id}`}
+                        >
+                          <div className="text-xs font-medium text-center">
+                            {stage.title}
+                          </div>
+                          <div className="text-center mt-1">
+                            <Badge variant="secondary" className="bg-white/20 text-xs">
+                              {stageTotals.count}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-center mt-1 font-medium">
+                            {formatCurrency(stageTotals.value)}
+                          </div>
                         </div>
-                      </CardHeader>
-                      <div className="flex-1 overflow-y-auto px-6 pb-6">
-                        <DroppableStageColumn stage={stage}>
+                      );
+                    })}
+                  </div>
+                </div>
+              </Card>
+
+              {/* Selected Stage Detail - Move through pipeline */}
+              <Card className="flex-1">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">
+                      {pipelineStages.find(s => s.id === selectedMobileStage)?.title || 'Select Stage'}
+                    </CardTitle>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          const currentIndex = pipelineStages.findIndex(s => s.id === selectedMobileStage);
+                          if (currentIndex > 0) {
+                            setSelectedMobileStage(pipelineStages[currentIndex - 1].id);
+                          }
+                        }}
+                        disabled={pipelineStages.findIndex(s => s.id === selectedMobileStage) === 0}
+                        data-testid="prev-stage"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          const currentIndex = pipelineStages.findIndex(s => s.id === selectedMobileStage);
+                          if (currentIndex < pipelineStages.length - 1) {
+                            setSelectedMobileStage(pipelineStages[currentIndex + 1].id);
+                          }
+                        }}
+                        disabled={pipelineStages.findIndex(s => s.id === selectedMobileStage) === pipelineStages.length - 1}
+                        data-testid="next-stage"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {(() => {
+                    const selectedStage = pipelineStages.find(s => s.id === selectedMobileStage);
+                    const stageOpportunities = opportunitiesByStatus[selectedMobileStage] || [];
+                    
+                    if (!selectedStage) return null;
+                    
+                    return (
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        <DroppableStageColumn stage={selectedStage}>
                           <SortableContext 
                             items={stageOpportunities.map((opp: any) => opp.id)}
                             strategy={verticalListSortingStrategy}
                           >
                             {stageOpportunities.length === 0 ? (
-                              <div 
-                                className="text-center py-4 text-gray-500 px-2"
-                                style={{ minHeight: '80px' }}
-                              >
-                                <User className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                                <p className="text-xs">No opportunities</p>
-                                <p className="text-xs mt-1">Drop here</p>
+                              <div className="text-center py-8 text-gray-500">
+                                <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                <p className="text-sm">No opportunities in this stage</p>
+                                <p className="text-xs mt-1">Drag opportunities here</p>
                               </div>
                             ) : (
                               stageOpportunities.map((opportunity: any) => (
@@ -780,10 +810,11 @@ export default function Pipeline() {
                           </SortableContext>
                         </DroppableStageColumn>
                       </div>
-                    </Card>
-                  );
-                })}
-              </div>
+                    );
+                  })() 
+                }
+                </CardContent>
+              </Card>
             </div>
           ) : (
             /* Desktop: Grid layout */
