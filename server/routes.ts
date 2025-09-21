@@ -19,6 +19,7 @@ import {
   insertCommunicationSchema, updateCommunicationSchema,
   insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, gpsLocationSchema,
   insertInvoiceSchema, insertServiceRequestSchema, insertCustomerAuthSchema,
+  insertCommunicationPreferencesSchema,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import multer from "multer";
@@ -964,6 +965,120 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error updating call:', error);
       res.status(500).json({ success: false, message: 'Error updating call' });
+    }
+  });
+
+  // ========================================
+  // COMMUNICATION PREFERENCES API ROUTES
+  // ========================================
+
+  app.get('/api/customers/:customerId/communication-preferences', async (req: Request, res: Response) => {
+    try {
+      const { customerId } = req.params;
+      console.log(`[COMM_PREFS] GET request for customer: ${customerId}`);
+      const preferences = await storage.getCommunicationPreferences(customerId);
+      console.log(`[COMM_PREFS] Retrieved preferences:`, preferences);
+      
+      if (!preferences) {
+        // Return default preferences if none exist
+        const defaultPreferences = {
+          customerId,
+          emailEnabled: true,
+          smsEnabled: true,
+          marketingOptIn: false,
+          jobNotifications: true,
+          quoteNotifications: true,
+          reminderNotifications: true,
+          emergencyNotifications: true,
+          preferredNotificationTime: 'morning',
+          quietHoursStart: '22:00',
+          quietHoursEnd: '08:00',
+          timezone: 'Pacific/Auckland',
+          language: 'en',
+        };
+        console.log(`[COMM_PREFS] Returning default preferences for customer: ${customerId}`);
+        return res.json({ success: true, data: defaultPreferences });
+      }
+      
+      console.log(`[COMM_PREFS] Returning saved preferences for customer: ${customerId}`);
+      res.json({ success: true, data: preferences });
+    } catch (error) {
+      console.error('Error fetching communication preferences:', error);
+      res.status(500).json({ success: false, message: 'Error fetching communication preferences' });
+    }
+  });
+
+  app.put('/api/customers/:customerId/communication-preferences', async (req: Request, res: Response) => {
+    try {
+      const { customerId } = req.params;
+      
+      // SECURITY WARNING: This endpoint lacks authentication/authorization!
+      // In production, verify the requesting user can only access their own preferences
+      console.log(`[COMM_PREFS] PUT request for customer: ${customerId}`);
+      console.log(`[COMM_PREFS] Request body:`, req.body);
+      
+      const validation = insertCommunicationPreferencesSchema.partial().safeParse({
+        ...req.body,
+        customerId
+      });
+      
+      if (!validation.success) {
+        console.log(`[COMM_PREFS] Validation failed:`, validation.error.errors);
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid communication preferences data',
+          errors: validation.error.errors 
+        });
+      }
+
+      console.log(`[COMM_PREFS] Validated data:`, validation.data);
+      // Use UPSERT logic: creates new record if none exists, updates if exists
+      const preferences = await storage.updateCommunicationPreferences(customerId, validation.data);
+      console.log(`[COMM_PREFS] Updated preferences:`, preferences);
+      res.json({ success: true, data: preferences });
+    } catch (error) {
+      console.error('Error updating communication preferences:', error);
+      res.status(500).json({ success: false, message: 'Error updating communication preferences' });
+    }
+  });
+
+  app.post('/api/customers/:customerId/communication-preferences', async (req: Request, res: Response) => {
+    try {
+      const { customerId } = req.params;
+      const validation = insertCommunicationPreferencesSchema.safeParse({
+        ...req.body,
+        customerId
+      });
+      
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid communication preferences data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const preferences = await storage.createCommunicationPreferences(validation.data);
+      res.json({ success: true, data: preferences });
+    } catch (error) {
+      console.error('Error creating communication preferences:', error);
+      res.status(500).json({ success: false, message: 'Error creating communication preferences' });
+    }
+  });
+
+  app.delete('/api/customers/:customerId/communication-preferences', async (req: Request, res: Response) => {
+    try {
+      const { customerId } = req.params;
+      const deleted = await storage.deleteCommunicationPreferences(customerId);
+      
+      if (!deleted) {
+        return res.status(404).json({ success: false, message: 'Communication preferences not found' });
+      }
+      
+      res.json({ success: true, message: 'Communication preferences deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting communication preferences:', error);
+      res.status(500).json({ success: false, message: 'Error deleting communication preferences' });
     }
   });
 

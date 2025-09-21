@@ -107,6 +107,26 @@ export const customers = pgTable("customers", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Customer Communication Preferences
+export const communicationPreferences = pgTable("communication_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: 'cascade' }),
+  emailEnabled: boolean("email_enabled").default(true),
+  smsEnabled: boolean("sms_enabled").default(true),
+  marketingOptIn: boolean("marketing_opt_in").default(false),
+  jobNotifications: boolean("job_notifications").default(true),
+  quoteNotifications: boolean("quote_notifications").default(true),
+  reminderNotifications: boolean("reminder_notifications").default(true),
+  emergencyNotifications: boolean("emergency_notifications").default(true),
+  preferredNotificationTime: text("preferred_notification_time"), // morning, afternoon, evening
+  quietHoursStart: text("quiet_hours_start"), // 22:00
+  quietHoursEnd: text("quiet_hours_end"), // 08:00
+  timezone: text("timezone").default("Pacific/Auckland"),
+  language: text("language").default("en"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Lead Pipeline Management  
 export const leads = pgTable("leads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -403,6 +423,7 @@ export const priceRules = pgTable("price_rules", {
 
 export const insertTeamSchema = createInsertSchema(teams).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCommunicationPreferencesSchema = createInsertSchema(communicationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCallSchema = createInsertSchema(calls).omit({ id: true, createdAt: true });
 export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, createdAt: true, updatedAt: true });
@@ -418,6 +439,7 @@ export const insertJobDiaryEntrySchema = createInsertSchema(jobDiaryEntries).omi
 // Select Types
 export type Team = typeof teams.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
+export type CommunicationPreferences = typeof communicationPreferences.$inferSelect;
 export type Lead = typeof leads.$inferSelect;
 export type Call = typeof calls.$inferSelect;
 export type Quote = typeof quotes.$inferSelect;
@@ -433,6 +455,7 @@ export type PriceRule = typeof priceRules.$inferSelect;
 // Insert Types
 export type InsertTeam = z.infer<typeof insertTeamSchema>;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type InsertCommunicationPreferences = z.infer<typeof insertCommunicationPreferencesSchema>;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type InsertCall = z.infer<typeof insertCallSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
