@@ -857,15 +857,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           </div>
         </div>
 
-        {/* Drag Overlay */}
-        <DragOverlay>
-          {draggedJob && (
-            <div className="p-4 bg-white border rounded-lg shadow-lg">
-              <h4 className="font-medium">{draggedJob.title}</h4>
-              <p className="text-sm text-muted-foreground">{draggedJob.address}</p>
-            </div>
-          )}
-        </DragOverlay>
       </DndContext>
 
       {/* Resource Allocation Panel */}
