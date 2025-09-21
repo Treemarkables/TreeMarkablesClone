@@ -109,14 +109,12 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               {dashboardItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
                   <SidebarMenuButton 
-                    asChild
                     isActive={activeTab === item.value}
                     onClick={() => onTabChange(item.value)}
+                    data-testid={`button-tab-${item.value}`}
                   >
-                    <button className="w-full justify-start" data-testid={`button-tab-${item.value}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </button>
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -132,14 +130,12 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               {businessItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
                   <SidebarMenuButton
-                    asChild
                     isActive={activeTab === item.value}
                     onClick={() => onTabChange(item.value)}
+                    data-testid={`button-tab-${item.value}`}
                   >
-                    <button className="w-full justify-start" data-testid={`button-tab-${item.value}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </button>
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
