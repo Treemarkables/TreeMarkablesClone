@@ -1,30 +1,403 @@
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import type { Job, Lead, Customer } from "@shared/schema";
+
+// Using shared schema types instead of local interfaces
+
 export default function JobDashboard() {
+  const [activeTab, setActiveTab] = useState("overview");
+
+  // Fetch jobs data
+  const { data: jobsResponse, isLoading: jobsLoading } = useQuery({
+    queryKey: ['/api/jobs'],
+  });
+
+  // Fetch leads data
+  const { data: leadsResponse, isLoading: leadsLoading } = useQuery({
+    queryKey: ['/api/leads'],
+  });
+
+  // Fetch customers data  
+  const { data: customersResponse, isLoading: customersLoading } = useQuery({
+    queryKey: ['/api/customers'],
+  });
+
+  // Extract data from API responses
+  const jobs = (jobsResponse as any)?.data || [];
+  const leads = (leadsResponse as any)?.data || [];
+  const customers = (customersResponse as any)?.data || [];
+
+  // Mock data for demonstration when API data is not available
+  const mockJobs = [
+    { id: "1", title: "Large Oak Tree Removal", customerId: "1", status: "scheduled", priority: "high", scheduledDate: "2024-09-23", estimatedValue: 2500, location: "Auckland" },
+    { id: "2", title: "Commercial Hedge Trimming", customerId: "2", status: "in-progress", priority: "medium", scheduledDate: "2024-09-22", estimatedValue: 800, location: "Wellington" },
+    { id: "3", title: "Storm Damage Tree Removal", customerId: "3", status: "completed", priority: "emergency", scheduledDate: "2024-09-21", estimatedValue: 3200, location: "Christchurch" },
+  ];
+
+  const mockLeads = [
+    { id: "1", name: "Green Valley Property", source: "Website", status: "new", estimatedValue: 1500, lastContact: "2024-09-21" },
+    { id: "2", name: "City Council", source: "Referral", status: "quoted", estimatedValue: 5000, lastContact: "2024-09-20" },
+    { id: "3", name: "Park Estate", source: "Google Ads", status: "contacted", estimatedValue: 2200, lastContact: "2024-09-19" },
+  ];
+
+  const mockCustomers = [
+    { id: "1", name: "Smith Family", email: "smith@email.com", phone: "021-123-4567", totalJobs: 3, lifetimeValue: "4500.00" },
+    { id: "2", name: "ABC Corporation", email: "contact@abc.co.nz", phone: "09-987-6543", totalJobs: 12, lifetimeValue: "15600.00" },
+    { id: "3", name: "Johnson Residence", email: "johnson@gmail.com", phone: "027-456-7890", totalJobs: 1, lifetimeValue: "3200.00" },
+  ];
+
+  const displayJobs = jobs.length > 0 ? jobs : mockJobs;
+  const displayLeads = leads.length > 0 ? leads : mockLeads;
+  const displayCustomers = customers.length > 0 ? customers : mockCustomers;
+
+  // Helper function to get customer name by ID
+  const getCustomerName = (customerId: string) => {
+    const customer = displayCustomers.find(c => c.id === customerId);
+    return customer?.name || 'Unknown Customer';
+  };
+
+  // Calculate metrics
+  const totalRevenue = displayJobs.reduce((sum, job) => sum + (job.estimatedValue || job.value || 0), 0);
+  const completedJobs = displayJobs.filter(job => job.status === "completed").length;
+  const activeJobs = displayJobs.filter(job => job.status === "in-progress" || job.status === "scheduled").length;
+  const newLeads = displayLeads.filter(lead => lead.status === "new").length;
+
+  const getJobStatusBadge = (status: string) => {
+    const jobStatusConfig = {
+      "scheduled": { variant: "outline" as const, label: "Scheduled" },
+      "in-progress": { variant: "default" as const, label: "In Progress" },
+      "completed": { variant: "default" as const, label: "Completed" },
+      "cancelled": { variant: "destructive" as const, label: "Cancelled" }
+    };
+    
+    const config = jobStatusConfig[status as keyof typeof jobStatusConfig];
+    return <Badge variant={config?.variant || "default"} data-testid={`badge-status-${status}`}>{config?.label || status}</Badge>;
+  };
+
+  const getLeadStatusBadge = (status: string) => {
+    const leadStatusConfig = {
+      "new": { variant: "default" as const, label: "New" },
+      "contacted": { variant: "outline" as const, label: "Contacted" },
+      "quoted": { variant: "outline" as const, label: "Quoted" },
+      "won": { variant: "default" as const, label: "Won" },
+      "lost": { variant: "destructive" as const, label: "Lost" }
+    };
+    
+    const config = leadStatusConfig[status as keyof typeof leadStatusConfig];
+    return <Badge variant={config?.variant || "default"} data-testid={`badge-status-${status}`}>{config?.label || status}</Badge>;
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    const priorityConfig = {
+      "low": { variant: "outline" as const, label: "Low" },
+      "medium": { variant: "outline" as const, label: "Medium" },
+      "high": { variant: "destructive" as const, label: "High" },
+      "emergency": { variant: "destructive" as const, label: "Emergency" }
+    };
+    
+    const config = priorityConfig[priority as keyof typeof priorityConfig];
+    return <Badge variant={config?.variant || "default"} data-testid={`badge-priority-${priority}`}>{config?.label || priority}</Badge>;
+  };
+
   return (
-    <div style={{
-      minHeight: '100vh', 
-      backgroundColor: '#f3f4f6', 
-      padding: '2rem',
-      fontFamily: 'Arial, sans-serif'
-    }}>
-      <h1 style={{fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem'}}>
-        Job Dashboard - Direct Test
-      </h1>
-      <p style={{fontSize: '1.2rem', color: '#4b5563'}}>
-        This is a completely minimal JobDashboard component with no dependencies.
-      </p>
-      <div style={{
-        marginTop: '2rem', 
-        padding: '1rem', 
-        backgroundColor: '#dcfce7', 
-        border: '1px solid #16a34a',
-        borderRadius: '0.5rem'
-      }}>
-        <p style={{color: '#15803d', fontWeight: 'bold'}}>
-          ✅ SUCCESS: JobDashboard component is rendering!
-        </p>
-        <p style={{color: '#166534', fontSize: '0.9rem', marginTop: '0.5rem'}}>
-          If you can see this green box, the component and routing are working correctly.
-        </p>
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="heading-job-dashboard">
+            Job Dashboard
+          </h1>
+          <p className="text-muted-foreground" data-testid="text-dashboard-description">
+            Comprehensive business management for Treemarkables
+          </p>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-8" data-testid="tabs-dashboard-navigation">
+            <TabsTrigger value="overview" data-testid="tab-overview"><TrendingUp className="w-4 h-4 mr-2" />Overview</TabsTrigger>
+            <TabsTrigger value="pipeline" data-testid="tab-pipeline"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
+            <TabsTrigger value="leads" data-testid="tab-leads"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
+            <TabsTrigger value="customers" data-testid="tab-customers"><Users className="w-4 h-4 mr-2" />Customers</TabsTrigger>
+            <TabsTrigger value="quotes" data-testid="tab-quotes"><FileText className="w-4 h-4 mr-2" />Quotes</TabsTrigger>
+            <TabsTrigger value="analytics" data-testid="tab-analytics"><TrendingUp className="w-4 h-4 mr-2" />Analytics</TabsTrigger>
+            <TabsTrigger value="equipment" data-testid="tab-equipment"><Wrench className="w-4 h-4 mr-2" />Equipment</TabsTrigger>
+            <TabsTrigger value="communications" data-testid="tab-communications"><MessageSquare className="w-4 h-4 mr-2" />Communications</TabsTrigger>
+            <TabsTrigger value="integrations" data-testid="tab-integrations"><Plug className="w-4 h-4 mr-2" />Integrations</TabsTrigger>
+          </TabsList>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card data-testid="card-total-revenue">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-total-revenue">
+                    ${totalRevenue.toLocaleString()}
+                  </div>
+                  <p className="text-xs text-muted-foreground">This month</p>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-active-jobs">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-active-jobs">{activeJobs}</div>
+                  <p className="text-xs text-muted-foreground">In progress + scheduled</p>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-completed-jobs">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Completed Jobs</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-completed-jobs">{completedJobs}</div>
+                  <p className="text-xs text-muted-foreground">This month</p>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-new-leads">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">New Leads</CardTitle>
+                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-new-leads">{newLeads}</div>
+                  <p className="text-xs text-muted-foreground">Requires attention</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card data-testid="card-recent-jobs">
+                <CardHeader>
+                  <CardTitle>Recent Jobs</CardTitle>
+                  <CardDescription>Latest job activities</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {displayJobs.slice(0, 5).map((job) => (
+                      <div key={job.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`job-item-${job.id}`}>
+                        <div className="flex-1">
+                          <h4 className="font-medium" data-testid={`job-title-${job.id}`}>{job.title}</h4>
+                          <p className="text-sm text-muted-foreground" data-testid={`job-customer-${job.id}`}>{job.customer}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <MapPin className="w-3 h-3" />
+                            <span className="text-xs text-muted-foreground" data-testid={`job-location-${job.id}`}>{job.location}</span>
+                          </div>
+                        </div>
+                        <div className="text-right space-y-1">
+                          <div className="font-medium" data-testid={`job-value-${job.id}`}>${(job.estimatedValue || job.value || 0).toLocaleString()}</div>
+                          <div className="flex gap-1">
+                            {getJobStatusBadge(job.status)}
+                            {getPriorityBadge(job.priority)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-recent-leads">
+                <CardHeader>
+                  <CardTitle>Recent Leads</CardTitle>
+                  <CardDescription>Latest lead inquiries</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {displayLeads.slice(0, 5).map((lead) => (
+                      <div key={lead.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`lead-item-${lead.id}`}>
+                        <div className="flex-1">
+                          <h4 className="font-medium" data-testid={`lead-name-${lead.id}`}>{lead.name}</h4>
+                          <p className="text-sm text-muted-foreground" data-testid={`lead-source-${lead.id}`}>Source: {lead.source}</p>
+                          <p className="text-xs text-muted-foreground" data-testid={`lead-last-contact-${lead.id}`}>Last contact: {lead.lastContact}</p>
+                        </div>
+                        <div className="text-right space-y-1">
+                          <div className="font-medium" data-testid={`lead-value-${lead.id}`}>${(lead.estimatedValue || lead.value || 0).toLocaleString()}</div>
+                          {getLeadStatusBadge(lead.status)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Pipeline Tab */}
+          <TabsContent value="pipeline" className="space-y-6">
+            <Card data-testid="card-pipeline">
+              <CardHeader>
+                <CardTitle>Job Pipeline</CardTitle>
+                <CardDescription>Visual job scheduling and management</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12 text-muted-foreground">
+                  <CalendarDays className="w-12 h-12 mx-auto mb-4" />
+                  <p data-testid="text-pipeline-placeholder">Pipeline view coming soon</p>
+                  <p className="text-sm">Drag-and-drop job scheduling with mobile optimization</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Leads Tab */}
+          <TabsContent value="leads" className="space-y-6">
+            <Card data-testid="card-leads-management">
+              <CardHeader>
+                <CardTitle>Lead Management</CardTitle>
+                <CardDescription>Track and convert potential customers</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {displayLeads.map((lead) => (
+                    <div key={lead.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`lead-card-${lead.id}`}>
+                      <div className="flex-1">
+                        <h4 className="font-medium" data-testid={`lead-title-${lead.id}`}>{lead.name}</h4>
+                        <p className="text-sm text-muted-foreground">Source: {lead.source}</p>
+                        <p className="text-xs text-muted-foreground">Last contact: {lead.lastContact}</p>
+                      </div>
+                      <div className="text-right space-y-2">
+                        <div className="font-medium">${(lead.estimatedValue || lead.value || 0).toLocaleString()}</div>
+                        {getLeadStatusBadge(lead.status)}
+                        <div>
+                          <Button size="sm" variant="outline" data-testid={`button-contact-lead-${lead.id}`}>Contact</Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Customers Tab */}
+          <TabsContent value="customers" className="space-y-6">
+            <Card data-testid="card-customer-management">
+              <CardHeader>
+                <CardTitle>Customer Management</CardTitle>
+                <CardDescription>Manage customer relationships and history</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {displayCustomers.map((customer) => (
+                    <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`customer-card-${customer.id}`}>
+                      <div className="flex-1">
+                        <h4 className="font-medium" data-testid={`customer-name-${customer.id}`}>{customer.name}</h4>
+                        <p className="text-sm text-muted-foreground">{customer.email}</p>
+                        <p className="text-sm text-muted-foreground">{customer.phone}</p>
+                        <p className="text-xs text-muted-foreground">Last service: {customer.lastContactDate || 'N/A'}</p>
+                      </div>
+                      <div className="text-right space-y-1">
+                        <div className="font-medium">${parseFloat(customer.lifetimeValue || "0").toLocaleString()}</div>
+                        <p className="text-sm text-muted-foreground">{customer.totalJobs} jobs</p>
+                        <Button size="sm" variant="outline" data-testid={`button-view-customer-${customer.id}`}>View Details</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Quotes Tab */}
+          <TabsContent value="quotes" className="space-y-6">
+            <Card data-testid="card-quote-management">
+              <CardHeader>
+                <CardTitle>Quote Management</CardTitle>
+                <CardDescription>Professional quote generation and tracking</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12 text-muted-foreground">
+                  <FileText className="w-12 h-12 mx-auto mb-4" />
+                  <p data-testid="text-quotes-placeholder">Quote management system coming soon</p>
+                  <p className="text-sm">Generate and track professional quotes</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-6">
+            <Card data-testid="card-analytics">
+              <CardHeader>
+                <CardTitle>Business Analytics</CardTitle>
+                <CardDescription>Performance metrics and reporting</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12 text-muted-foreground">
+                  <TrendingUp className="w-12 h-12 mx-auto mb-4" />
+                  <p data-testid="text-analytics-placeholder">Analytics dashboard coming soon</p>
+                  <p className="text-sm">Revenue trends, conversion rates, and performance metrics</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Equipment Tab */}
+          <TabsContent value="equipment" className="space-y-6">
+            <Card data-testid="card-equipment">
+              <CardHeader>
+                <CardTitle>Equipment Management</CardTitle>
+                <CardDescription>Asset tracking and maintenance schedules</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12 text-muted-foreground">
+                  <Wrench className="w-12 h-12 mx-auto mb-4" />
+                  <p data-testid="text-equipment-placeholder">Equipment tracking coming soon</p>
+                  <p className="text-sm">Manage assets, maintenance, and availability</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Communications Tab */}
+          <TabsContent value="communications" className="space-y-6">
+            <Card data-testid="card-communications">
+              <CardHeader>
+                <CardTitle>Communications Management</CardTitle>
+                <CardDescription>Automated workflows and messaging</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12 text-muted-foreground">
+                  <MessageSquare className="w-12 h-12 mx-auto mb-4" />
+                  <p data-testid="text-communications-placeholder">Communication workflows coming soon</p>
+                  <p className="text-sm">Automated notifications and customer communication</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Integrations Tab */}
+          <TabsContent value="integrations" className="space-y-6">
+            <Card data-testid="card-integrations">
+              <CardHeader>
+                <CardTitle>Integrations</CardTitle>
+                <CardDescription>External service connections and APIs</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12 text-muted-foreground">
+                  <Plug className="w-12 h-12 mx-auto mb-4" />
+                  <p data-testid="text-integrations-placeholder">Integration management coming soon</p>
+                  <p className="text-sm">Connect with external services and APIs</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
