@@ -543,16 +543,38 @@ export class MemStorage implements IStorage {
     };
     const job2 = {
       id: '2', customerId: '2', title: 'Storm Damage Tree Removal', description: 'Emergency removal of storm-damaged pine tree',
-      status: 'in_progress', priority: 'high', scheduledDate: new Date('2024-12-20'), completedDate: null,
-      estimatedHours: 6, actualHours: null, totalAmount: '1200.00', address: '456 Pine Avenue, Wellington, NZ',
-      notes: 'Waiting for city permits before proceeding', beforePhotos: ['/api/photos/storm_before_1.jpg'],
-      afterPhotos: [], jobNumber: 'JOB-002', quoteId: '2', leadId: null, assignedCrew: null, equipmentRequired: null,
+      status: 'completed', priority: 'high', scheduledDate: new Date('2024-12-20'), completedDate: new Date('2024-12-20'),
+      estimatedHours: 6, actualHours: 5, totalAmount: '1200.00', address: '456 Pine Avenue, Wellington, NZ',
+      notes: 'Completed successfully, permits obtained', beforePhotos: ['/api/photos/storm_before_1.jpg'],
+      afterPhotos: ['/api/photos/storm_after_1.jpg'], jobNumber: 'JOB-002', quoteId: '2', leadId: null, assignedCrew: null, equipmentRequired: null,
       specialInstructions: null, weatherDependent: null, permitRequired: null, safetyNotes: null, rescheduledFrom: null,
       rescheduledReason: null, createdAt: new Date('2024-12-10'), updatedAt: new Date('2024-12-20')
     };
     
+    const job3 = {
+      id: '3', customerId: '3', title: 'Commercial Hedge Trimming', description: 'Monthly hedge maintenance for office complex',
+      status: 'completed', priority: 'medium', scheduledDate: new Date('2024-12-15'), completedDate: new Date('2024-12-15'),
+      estimatedHours: 4, actualHours: 4, totalAmount: '800.00', address: '789 Business Park, Auckland, NZ',
+      notes: 'Regular maintenance contract completed', beforePhotos: ['/api/photos/hedge_before_1.jpg'],
+      afterPhotos: ['/api/photos/hedge_after_1.jpg'], jobNumber: 'JOB-003', quoteId: null, leadId: null, assignedCrew: null, equipmentRequired: null,
+      specialInstructions: null, weatherDependent: null, permitRequired: null, safetyNotes: null, rescheduledFrom: null,
+      rescheduledReason: null, createdAt: new Date('2024-12-12'), updatedAt: new Date('2024-12-15')
+    };
+    
+    const job4 = {
+      id: '4', customerId: '1', title: 'Fruit Tree Pruning', description: 'Seasonal pruning of apple and pear trees',
+      status: 'in_progress', priority: 'low', scheduledDate: new Date('2024-12-25'), completedDate: null,
+      estimatedHours: 3, actualHours: null, totalAmount: '450.00', address: '123 Maple Street, Auckland, NZ',
+      notes: 'Scheduled for next week', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-004', 
+      quoteId: null, leadId: null, assignedCrew: null, equipmentRequired: null,
+      specialInstructions: null, weatherDependent: null, permitRequired: null, safetyNotes: null, rescheduledFrom: null,
+      rescheduledReason: null, createdAt: new Date('2024-12-20'), updatedAt: new Date('2024-12-20')
+    };
+    
     this.jobs.set('1', job1);
     this.jobs.set('2', job2);
+    this.jobs.set('3', job3);
+    this.jobs.set('4', job4);
 
     // Sample invoices for Customer Portal
     const invoice1 = {
