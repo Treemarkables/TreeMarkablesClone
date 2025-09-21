@@ -20,6 +20,7 @@ import Opportunities from "@/pages/Opportunities";
 import Reputation from "@/pages/Reputation";
 import Inbox from "@/pages/Inbox";
 import Integrations from "@/pages/Integrations";
+import Equipment from "@/pages/Equipment";
 import NotFound from "@/pages/not-found";
 import { CustomerPortal } from "@/pages/CustomerPortal";
 import CommunicationsManagement from "@/pages/CommunicationsManagement";
@@ -95,6 +96,11 @@ function Router() {
       <Route path="/communications">
         <SidebarLayout>
           <CommunicationsManagement />
+        </SidebarLayout>
+      </Route>
+      <Route path="/equipment">
+        <SidebarLayout>
+          <Equipment />
         </SidebarLayout>
       </Route>
       {/* Fallback to 404 */}
