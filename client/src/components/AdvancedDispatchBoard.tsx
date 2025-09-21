@@ -8,6 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { 
   Calendar,
   Clock,
@@ -175,6 +178,7 @@ const calculateResourceAllocation = (
 
 export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoardProps) {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
   const [isNewJobModalOpen, setIsNewJobModalOpen] = useState(false);
@@ -184,6 +188,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const [allocationSuggestions, setAllocationSuggestions] = useState<AllocationSuggestion[]>([]);
   const [showAllocationPanel, setShowAllocationPanel] = useState(false);
   const [selectedJobForAllocation, setSelectedJobForAllocation] = useState<any | null>(null);
+  const [showMobileCalendar, setShowMobileCalendar] = useState(false);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -742,25 +747,58 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentDate(subDays(currentDate, 1))}
-            data-testid="button-prev-day"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <div className="font-medium min-w-[120px] text-center">
-            {format(currentDate, 'EEE dd MMM yyyy')}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentDate(addDays(currentDate, 1))}
-            data-testid="button-next-day"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Button>
+          {/* Mobile Calendar Widget */}
+          {isMobile ? (
+            <Popover open={showMobileCalendar} onOpenChange={setShowMobileCalendar}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="min-w-[200px] justify-center"
+                  data-testid="button-mobile-calendar"
+                >
+                  <Calendar className="w-4 h-4 mr-2" />
+                  {format(currentDate, 'EEE dd MMM yyyy')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="center">
+                <CalendarComponent
+                  mode="single"
+                  selected={currentDate}
+                  onSelect={(date) => {
+                    if (date) {
+                      setCurrentDate(date);
+                      setShowMobileCalendar(false);
+                    }
+                  }}
+                  className="rounded-md border"
+                  data-testid="mobile-calendar-widget"
+                />
+              </PopoverContent>
+            </Popover>
+          ) : (
+            // Desktop Navigation
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(subDays(currentDate, 1))}
+                data-testid="button-prev-day"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <div className="font-medium min-w-[120px] text-center">
+                {format(currentDate, 'EEE dd MMM yyyy')}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(addDays(currentDate, 1))}
+                data-testid="button-next-day"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
