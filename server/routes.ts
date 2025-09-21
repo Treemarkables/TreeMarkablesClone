@@ -24,7 +24,10 @@ import {
   safetyIncidentInsertSchema, type InsertSafetyIncident,
   riskAssessmentInsertSchema, type InsertRiskAssessment,
   complianceRequirementInsertSchema, type InsertComplianceRequirement,
-  complianceRecordInsertSchema, type InsertComplianceRecord
+  complianceRecordInsertSchema, type InsertComplianceRecord,
+  // Proposal Management
+  insertProposalSchema, updateProposalSchema,
+  insertProposalSectionSchema, updateProposalSectionSchema
 } from "@shared/schema";
 import multer from "multer";
 import Papa from "papaparse";
@@ -4768,6 +4771,281 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error retrieving compliance analytics'
+      });
+    }
+  });
+
+  // ========================================
+  // PROPOSAL MANAGEMENT ROUTES
+  // ========================================
+
+  // Get all proposals
+  app.get('/api/proposals', async (req: Request, res: Response) => {
+    try {
+      const { customerId, quoteId } = req.query;
+      
+      let proposals;
+      if (customerId) {
+        proposals = await storage.getProposalsByCustomer(customerId as string);
+      } else if (quoteId) {
+        proposals = await storage.getProposalsByQuote(quoteId as string);
+      } else {
+        proposals = await storage.getAllProposals();
+      }
+
+      res.json({
+        success: true,
+        data: proposals,
+        count: proposals.length,
+        message: 'Proposals retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error fetching proposals:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching proposals'
+      });
+    }
+  });
+
+  // Get single proposal
+  app.get('/api/proposals/:id', async (req: Request, res: Response) => {
+    try {
+      const proposal = await storage.getProposal(req.params.id);
+      if (!proposal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal not found'
+        });
+      }
+      
+      // Also get proposal sections
+      const sections = await storage.getProposalSectionsByProposal(proposal.id);
+      
+      res.json({
+        success: true,
+        data: { ...proposal, sections }
+      });
+    } catch (error) {
+      console.error('Error fetching proposal:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching proposal'
+      });
+    }
+  });
+
+  // Create new proposal
+  app.post('/api/proposals', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertProposalSchema.parse(req.body);
+      const proposal = await storage.createProposal(validatedData);
+      
+      res.status(201).json({
+        success: true,
+        data: proposal,
+        message: 'Proposal created successfully'
+      });
+    } catch (error: any) {
+      console.error('Error creating proposal:', error);
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid proposal data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error creating proposal'
+      });
+    }
+  });
+
+  // Update proposal
+  app.put('/api/proposals/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateProposalSchema.parse(req.body);
+      const proposal = await storage.updateProposal(req.params.id, validatedData);
+      
+      res.json({
+        success: true,
+        data: proposal,
+        message: 'Proposal updated successfully'
+      });
+    } catch (error: any) {
+      console.error('Error updating proposal:', error);
+      
+      if (error.message === 'Proposal not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal not found'
+        });
+      }
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid proposal data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error updating proposal'
+      });
+    }
+  });
+
+  // Delete proposal
+  app.delete('/api/proposals/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteProposal(req.params.id);
+      res.json({
+        success: true,
+        message: 'Proposal deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting proposal:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting proposal'
+      });
+    }
+  });
+
+  // Get proposal sections
+  app.get('/api/proposals/:proposalId/sections', async (req: Request, res: Response) => {
+    try {
+      const sections = await storage.getProposalSectionsByProposal(req.params.proposalId);
+      res.json({
+        success: true,
+        data: sections,
+        count: sections.length
+      });
+    } catch (error) {
+      console.error('Error fetching proposal sections:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching proposal sections'
+      });
+    }
+  });
+
+  // Create proposal section
+  app.post('/api/proposals/:proposalId/sections', async (req: Request, res: Response) => {
+    try {
+      const sectionData = {
+        ...req.body,
+        proposalId: req.params.proposalId
+      };
+      
+      const validatedData = insertProposalSectionSchema.parse(sectionData);
+      const section = await storage.createProposalSection(validatedData);
+      
+      res.status(201).json({
+        success: true,
+        data: section,
+        message: 'Proposal section created successfully'
+      });
+    } catch (error: any) {
+      console.error('Error creating proposal section:', error);
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid section data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error creating proposal section'
+      });
+    }
+  });
+
+  // Update proposal section
+  app.put('/api/proposals/sections/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateProposalSectionSchema.parse(req.body);
+      const section = await storage.updateProposalSection(req.params.id, validatedData);
+      
+      res.json({
+        success: true,
+        data: section,
+        message: 'Proposal section updated successfully'
+      });
+    } catch (error: any) {
+      console.error('Error updating proposal section:', error);
+      
+      if (error.message === 'Proposal section not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal section not found'
+        });
+      }
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid section data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error updating proposal section'
+      });
+    }
+  });
+
+  // Delete proposal section
+  app.delete('/api/proposals/sections/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteProposalSection(req.params.id);
+      res.json({
+        success: true,
+        message: 'Proposal section deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting proposal section:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting proposal section'
+      });
+    }
+  });
+
+  // Reorder proposal sections
+  app.put('/api/proposals/:proposalId/sections/reorder', async (req: Request, res: Response) => {
+    try {
+      const { sectionIds } = req.body;
+      
+      if (!Array.isArray(sectionIds)) {
+        return res.status(400).json({
+          success: false,
+          message: 'sectionIds must be an array'
+        });
+      }
+      
+      const sections = await storage.reorderProposalSections(req.params.proposalId, sectionIds);
+      
+      res.json({
+        success: true,
+        data: sections,
+        message: 'Proposal sections reordered successfully'
+      });
+    } catch (error) {
+      console.error('Error reordering proposal sections:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error reordering proposal sections'
       });
     }
   });
