@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud } from "lucide-react";
+import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud } from "lucide-react";
 import Pipeline from './Pipeline';
 import { PerformanceAnalytics } from '@/components/PerformanceAnalytics';
 import { EquipmentTracker } from '@/components/EquipmentTracker';
@@ -13,6 +13,7 @@ import Integrations from './Integrations';
 import { WeatherDashboard } from '@/components/WeatherDashboard';
 import QuoteManagement from '@/components/QuoteManagement';
 import { LeadEnhancement } from '@/components/LeadEnhancement';
+import { AdvancedDispatchBoard } from '@/components/AdvancedDispatchBoard';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
 
@@ -210,6 +211,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
         <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full">
           <TabsList className="flex w-full overflow-x-auto whitespace-nowrap gap-2 md:gap-3 mb-4 md:mb-6 shrink-0 no-scrollbar" data-testid="tabs-dashboard-navigation">
             <TabsTrigger value="overview" data-testid="tab-overview" className="shrink-0"><TrendingUp className="w-4 h-4 mr-2" />Overview</TabsTrigger>
+            <TabsTrigger value="dispatch" data-testid="tab-dispatch" className="shrink-0"><Calendar className="w-4 h-4 mr-2" />Dispatch</TabsTrigger>
             <TabsTrigger value="pipeline" data-testid="tab-pipeline" className="shrink-0"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
             <TabsTrigger value="leads" data-testid="tab-leads" className="shrink-0"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
             <TabsTrigger value="customers" data-testid="tab-customers" className="shrink-0"><Users className="w-4 h-4 mr-2" />Customers</TabsTrigger>
@@ -328,6 +330,11 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
               </Card>
               </div>
             </div>
+          </TabsContent>
+
+          {/* Dispatch Tab */}
+          <TabsContent value="dispatch" className="flex-1 overflow-hidden">
+            <AdvancedDispatchBoard />
           </TabsContent>
 
           {/* Pipeline Tab */}
