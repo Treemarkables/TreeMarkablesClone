@@ -63,7 +63,11 @@ function Router() {
       <Route path="/blog" component={Blog}/>
       <Route path="/blog/:slug" component={BlogPost}/>
       <Route path="/summer-offer" component={SummerOffer}/>
-      <Route path="/job-dashboard" component={JobDashboard}/>
+      <Route path="/job-dashboard">
+        <SidebarLayout>
+          <JobDashboard />
+        </SidebarLayout>
+      </Route>
       <Route path="/metrics" component={MetricsDashboard}/>
       <Route path="/customer-portal" component={CustomerPortal}/>
       

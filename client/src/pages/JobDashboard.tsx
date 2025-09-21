@@ -98,8 +98,6 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { CalendarView } from "@/components/CalendarView";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { Link } from "wouter";
-import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
 import { 
   MobileContainer, 
   MobileGrid, 
@@ -950,25 +948,15 @@ export default function JobDashboard() {
     );
   }
 
-  const style = {
-    "--sidebar-width": "9.6rem",
-    "--sidebar-width-icon": "4rem",
-  };
-
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
-        <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
-        <SidebarInset>
-          <div className="min-h-screen bg-gray-50 p-4" data-testid="job-dashboard">
-            <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50 p-4" data-testid="job-dashboard">
+      <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Mobile-Optimized Header */}
         <div className="space-y-4 card-clean rounded-2xl p-6">
           {/* Top Header Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <SidebarTrigger className="lg:hidden" data-testid="button-sidebar-toggle" />
               <div className="lg:hidden flex items-center">
                 <img 
                   src={logoUrl} 
@@ -4809,10 +4797,7 @@ export default function JobDashboard() {
             </div>
           </DialogContent>
         </Dialog>
-            </div>
-          </div>
-        </SidebarInset>
       </div>
-    </SidebarProvider>
+    </div>
   );
 }
