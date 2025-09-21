@@ -17,12 +17,14 @@ import {
   User,
   FileImage,
   Grid,
-  List
+  List,
+  ArrowLeft
 } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { format } from 'date-fns';
+import { Link } from 'wouter';
 
 interface Photo {
   id: string;
@@ -319,10 +321,18 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Camera className="h-5 w-5" />
-              Photo Documentation {jobId && `- Job ${jobId}`}
-            </CardTitle>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" asChild data-testid="back-to-dashboard">
+                <Link href="/job-dashboard">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Dashboard
+                </Link>
+              </Button>
+              <CardTitle className="flex items-center gap-2">
+                <Camera className="h-5 w-5" />
+                Photo Documentation {jobId && `- Job ${jobId}`}
+              </CardTitle>
+            </div>
             <div className="flex gap-2">
               <Button 
                 variant="outline" 
