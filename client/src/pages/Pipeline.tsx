@@ -285,6 +285,9 @@ export default function Pipeline() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const isMobile = useIsMobile();
+
+  // Debug mobile detection
+  console.log('Mobile detection:', { isMobile, windowWidth: typeof window !== 'undefined' ? window.innerWidth : 'N/A' });
   const [selectedSource, setSelectedSource] = useState('all');
   const [showNewOpportunityDialog, setShowNewOpportunityDialog] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -701,14 +704,15 @@ export default function Pipeline() {
           {isMobile ? (
             /* Mobile: Horizontal scroll container */
             <div 
-              className="overflow-x-auto -mx-2 px-2 [scrollbar-gutter:stable]" 
+              className="overflow-x-auto -mx-2 px-2" 
               style={{ 
                 WebkitOverflowScrolling: 'touch', 
-                touchAction: 'pan-x', 
-                overscrollBehaviorX: 'contain' 
+                touchAction: 'pan-x auto',
+                overscrollBehaviorX: 'contain',
+                scrollSnapType: 'x mandatory'
               }}
             >
-              <div className="inline-flex flex-nowrap gap-3 pb-4 min-w-max">
+              <div className="flex gap-3 pb-4" style={{ minWidth: 'max-content' }}>
                 {pipelineStages.map((stage) => {
                   const stageTotals = getStageTotals(stage.id);
                   const stageOpportunities = opportunitiesByStatus[stage.id] || [];
@@ -716,8 +720,8 @@ export default function Pipeline() {
                   return (
                     <Card 
                       key={stage.id} 
-                      className={`${stage.color} border-2 flex-none w-[280px]`}
-                      style={{ maxHeight: '70vh' }}
+                      className={`${stage.color} border-2 flex-shrink-0`}
+                      style={{ width: '280px', maxHeight: '70vh', scrollSnapAlign: 'start' }}
                       data-testid={`stage-column-${stage.id}`}
                     >
                       <CardHeader className={`${stage.headerColor} -m-6 mb-4 rounded-t-lg p-3`}>
