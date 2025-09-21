@@ -5,6 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug } from "lucide-react";
+import Pipeline from './Pipeline';
+import { PerformanceAnalytics } from '@/components/PerformanceAnalytics';
+import { EquipmentTracker } from '@/components/EquipmentTracker';
+import CommunicationsManagement from './CommunicationsManagement';
+import Integrations from './Integrations';
+import QuoteManagement from '@/components/QuoteManagement';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
 
@@ -243,19 +249,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
 
           {/* Pipeline Tab */}
           <TabsContent value="pipeline" className="space-y-6">
-            <Card data-testid="card-pipeline">
-              <CardHeader>
-                <CardTitle>Job Pipeline</CardTitle>
-                <CardDescription>Visual job scheduling and management</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <CalendarDays className="w-12 h-12 mx-auto mb-4" />
-                  <p data-testid="text-pipeline-placeholder">Pipeline view coming soon</p>
-                  <p className="text-sm">Drag-and-drop job scheduling with mobile optimization</p>
-                </div>
-              </CardContent>
-            </Card>
+            <Pipeline />
           </TabsContent>
 
           {/* Leads Tab */}
@@ -319,87 +313,27 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
 
           {/* Quotes Tab */}
           <TabsContent value="quotes" className="space-y-6">
-            <Card data-testid="card-quote-management">
-              <CardHeader>
-                <CardTitle>Quote Management</CardTitle>
-                <CardDescription>Professional quote generation and tracking</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <FileText className="w-12 h-12 mx-auto mb-4" />
-                  <p data-testid="text-quotes-placeholder">Quote management system coming soon</p>
-                  <p className="text-sm">Generate and track professional quotes</p>
-                </div>
-              </CardContent>
-            </Card>
+            <QuoteManagement />
           </TabsContent>
 
           {/* Analytics Tab */}
           <TabsContent value="analytics" className="space-y-6">
-            <Card data-testid="card-analytics">
-              <CardHeader>
-                <CardTitle>Business Analytics</CardTitle>
-                <CardDescription>Performance metrics and reporting</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <TrendingUp className="w-12 h-12 mx-auto mb-4" />
-                  <p data-testid="text-analytics-placeholder">Analytics dashboard coming soon</p>
-                  <p className="text-sm">Revenue trends, conversion rates, and performance metrics</p>
-                </div>
-              </CardContent>
-            </Card>
+            <PerformanceAnalytics />
           </TabsContent>
 
           {/* Equipment Tab */}
           <TabsContent value="equipment" className="space-y-6">
-            <Card data-testid="card-equipment">
-              <CardHeader>
-                <CardTitle>Equipment Management</CardTitle>
-                <CardDescription>Asset tracking and maintenance schedules</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <Wrench className="w-12 h-12 mx-auto mb-4" />
-                  <p data-testid="text-equipment-placeholder">Equipment tracking coming soon</p>
-                  <p className="text-sm">Manage assets, maintenance, and availability</p>
-                </div>
-              </CardContent>
-            </Card>
+            <EquipmentTracker />
           </TabsContent>
 
           {/* Communications Tab */}
           <TabsContent value="communications" className="space-y-6">
-            <Card data-testid="card-communications">
-              <CardHeader>
-                <CardTitle>Communications Management</CardTitle>
-                <CardDescription>Automated workflows and messaging</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <MessageSquare className="w-12 h-12 mx-auto mb-4" />
-                  <p data-testid="text-communications-placeholder">Communication workflows coming soon</p>
-                  <p className="text-sm">Automated notifications and customer communication</p>
-                </div>
-              </CardContent>
-            </Card>
+            <CommunicationsManagement />
           </TabsContent>
 
           {/* Integrations Tab */}
           <TabsContent value="integrations" className="space-y-6">
-            <Card data-testid="card-integrations">
-              <CardHeader>
-                <CardTitle>Integrations</CardTitle>
-                <CardDescription>External service connections and APIs</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <Plug className="w-12 h-12 mx-auto mb-4" />
-                  <p data-testid="text-integrations-placeholder">Integration management coming soon</p>
-                  <p className="text-sm">Connect with external services and APIs</p>
-                </div>
-              </CardContent>
-            </Card>
+            <Integrations />
           </TabsContent>
         </Tabs>
       </div>
