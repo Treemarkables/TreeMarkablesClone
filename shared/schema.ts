@@ -72,6 +72,10 @@ export type InsertLeadSubmission = Omit<LeadSubmission, 'id' | 'createdAt'>;
 // COMPREHENSIVE BUSINESS SYSTEM SCHEMAS
 // ========================================
 
+// Job Status Enum
+export const JobStatus = z.enum(['lead', 'quote', 'work_order', 'completed', 'unsuccessful']);
+export type JobStatusType = z.infer<typeof JobStatus>;
+
 // Team Management
 export const teams = pgTable("teams", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -206,7 +210,7 @@ export const jobs = pgTable("jobs", {
   address: text("address").notNull(),
   scheduledDate: timestamp("scheduled_date"),
   completedDate: timestamp("completed_date"),
-  status: text("status").notNull(), // scheduled, in_progress, completed, cancelled, rescheduled
+  status: text("status").notNull().default('lead'), // lead, quote, work_order, completed, unsuccessful
   priority: text("priority"), // low, medium, high, urgent
   assignedTeam: text("assigned_team").array(),
   estimatedDuration: integer("estimated_duration"), // hours
@@ -427,7 +431,11 @@ export const insertCommunicationPreferencesSchema = createInsertSchema(communica
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCallSchema = createInsertSchema(calls).omit({ id: true, createdAt: true });
 export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertJobSchema = createInsertSchema(jobs)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    status: JobStatus.optional().default('lead')
+  });
 export const insertActivitySchema = createInsertSchema(activities).omit({ id: true, createdAt: true });
 export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
 export const insertCampaignSchema = createInsertSchema(campaigns).omit({ id: true, createdAt: true, updatedAt: true });
