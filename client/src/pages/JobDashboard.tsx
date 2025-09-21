@@ -12,10 +12,49 @@ import CommunicationsManagement from './CommunicationsManagement';
 import Integrations from './Integrations';
 import { WeatherDashboard } from '@/components/WeatherDashboard';
 import QuoteManagement from '@/components/QuoteManagement';
+import { LeadEnhancement } from '@/components/LeadEnhancement';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
 
-// Using shared schema types instead of local interfaces
+// API Response types
+interface ApiResponse<T> {
+  success: boolean;
+  data: T[];
+  message?: string;
+  count?: number;
+}
+
+// Display types that combine schema with UI requirements
+type DisplayJob = {
+  id: string;
+  title: string;
+  customerId: string;
+  status: string;
+  priority: string;
+  scheduledDate: string;
+  estimatedValue: number;
+  location: string;
+  customer?: string;
+};
+
+type DisplayLead = {
+  id: string;
+  name: string;
+  source: string;
+  status: string;
+  estimatedValue: number;
+  lastContact: string;
+};
+
+type DisplayCustomer = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  totalJobs: number;
+  lifetimeValue: string;
+  lastContactDate?: string;
+};
 
 interface JobDashboardProps {
   activeTab?: string;
@@ -24,60 +63,100 @@ interface JobDashboardProps {
 
 export default function JobDashboard({ activeTab = "overview", onTabChange }: JobDashboardProps) {
 
-  // Fetch jobs data
-  const { data: jobsResponse, isLoading: jobsLoading } = useQuery({
+  // Fetch jobs data with proper typing
+  const { data: jobsResponse, isLoading: jobsLoading } = useQuery<ApiResponse<Job>>({
     queryKey: ['/api/jobs'],
   });
 
-  // Fetch leads data
-  const { data: leadsResponse, isLoading: leadsLoading } = useQuery({
+  // Fetch leads data with proper typing
+  const { data: leadsResponse, isLoading: leadsLoading } = useQuery<ApiResponse<Lead>>({
     queryKey: ['/api/leads'],
   });
 
-  // Fetch customers data  
-  const { data: customersResponse, isLoading: customersLoading } = useQuery({
+  // Fetch customers data with proper typing
+  const { data: customersResponse, isLoading: customersLoading } = useQuery<ApiResponse<Customer>>({
     queryKey: ['/api/customers'],
   });
 
-  // Extract data from API responses
-  const jobs = (jobsResponse as any)?.data || [];
-  const leads = (leadsResponse as any)?.data || [];
-  const customers = (customersResponse as any)?.data || [];
+  // Extract data from API responses with type safety
+  const jobs = jobsResponse?.data || [];
+  const leads = leadsResponse?.data || [];
+  const customers = customersResponse?.data || [];
 
   // Mock data for demonstration when API data is not available
-  const mockJobs = [
+  const mockJobs: DisplayJob[] = [
     { id: "1", title: "Large Oak Tree Removal", customerId: "1", status: "scheduled", priority: "high", scheduledDate: "2024-09-23", estimatedValue: 2500, location: "Auckland" },
     { id: "2", title: "Commercial Hedge Trimming", customerId: "2", status: "in-progress", priority: "medium", scheduledDate: "2024-09-22", estimatedValue: 800, location: "Wellington" },
     { id: "3", title: "Storm Damage Tree Removal", customerId: "3", status: "completed", priority: "emergency", scheduledDate: "2024-09-21", estimatedValue: 3200, location: "Christchurch" },
   ];
 
-  const mockLeads = [
+  const mockLeads: DisplayLead[] = [
     { id: "1", name: "Green Valley Property", source: "Website", status: "new", estimatedValue: 1500, lastContact: "2024-09-21" },
     { id: "2", name: "City Council", source: "Referral", status: "quoted", estimatedValue: 5000, lastContact: "2024-09-20" },
     { id: "3", name: "Park Estate", source: "Google Ads", status: "contacted", estimatedValue: 2200, lastContact: "2024-09-19" },
   ];
 
-  const mockCustomers = [
+  const mockCustomers: DisplayCustomer[] = [
     { id: "1", name: "Smith Family", email: "smith@email.com", phone: "021-123-4567", totalJobs: 3, lifetimeValue: "4500.00" },
     { id: "2", name: "ABC Corporation", email: "contact@abc.co.nz", phone: "09-987-6543", totalJobs: 12, lifetimeValue: "15600.00" },
     { id: "3", name: "Johnson Residence", email: "johnson@gmail.com", phone: "027-456-7890", totalJobs: 1, lifetimeValue: "3200.00" },
   ];
 
-  const displayJobs = jobs.length > 0 ? jobs : mockJobs;
-  const displayLeads = leads.length > 0 ? leads : mockLeads;
-  const displayCustomers = customers.length > 0 ? customers : mockCustomers;
+  // Initialize customers first to avoid temporal dead zone
+  const transformCustomersForDisplay = (apiCustomers: Customer[]): DisplayCustomer[] => {
+    return apiCustomers.map(customer => ({
+      id: customer.id,
+      name: customer.name || 'Unnamed Customer',
+      email: customer.email || '',
+      phone: customer.phone || '',
+      totalJobs: customer.totalJobs || 0,
+      lifetimeValue: customer.lifetimeValue ? String(customer.lifetimeValue) : '0.00',
+      lastContactDate: customer.lastContactDate ? new Date(customer.lastContactDate).toLocaleDateString() : undefined
+    }));
+  };
 
-  // Helper function to get customer name by ID
+  const displayCustomers: DisplayCustomer[] = customers.length > 0 ? transformCustomersForDisplay(customers) : mockCustomers;
+
+  // Helper function to get customer name by ID - now safe to use
   const getCustomerName = (customerId: string) => {
-    const customer = displayCustomers.find((c: any) => c.id === customerId);
+    const customer = displayCustomers.find(c => c.id === customerId);
     return customer?.name || 'Unknown Customer';
   };
 
+  // Transform API data to display format - now safe to use getCustomerName
+  const transformJobsForDisplay = (apiJobs: Job[]): DisplayJob[] => {
+    return apiJobs.map(job => ({
+      id: job.id,
+      title: job.title || 'Untitled Job',
+      customerId: job.customerId || '',
+      status: job.status || 'unknown',
+      priority: job.priority || 'medium',
+      scheduledDate: job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : '',
+      estimatedValue: job.totalAmount ? Number(job.totalAmount) : 0,
+      location: job.address || 'Location TBD',
+      customer: getCustomerName(job.customerId || '')
+    }));
+  };
+
+  const transformLeadsForDisplay = (apiLeads: Lead[]): DisplayLead[] => {
+    return apiLeads.map(lead => ({
+      id: lead.id,
+      name: lead.name || 'Unnamed Lead',
+      source: lead.source || 'Unknown',
+      status: lead.status || 'new',
+      estimatedValue: lead.estimatedValue ? Number(lead.estimatedValue) : 0,
+      lastContact: lead.followUpDate ? new Date(lead.followUpDate).toLocaleDateString() : 'Never'
+    }));
+  };
+
+  const displayJobs: DisplayJob[] = jobs.length > 0 ? transformJobsForDisplay(jobs) : mockJobs.map(job => ({...job, customer: getCustomerName(job.customerId)}));
+  const displayLeads: DisplayLead[] = leads.length > 0 ? transformLeadsForDisplay(leads) : mockLeads;
+
   // Calculate metrics
-  const totalRevenue = displayJobs.reduce((sum: number, job: any) => sum + (job.estimatedValue || job.value || 0), 0);
-  const completedJobs = displayJobs.filter((job: any) => job.status === "completed").length;
-  const activeJobs = displayJobs.filter((job: any) => job.status === "in-progress" || job.status === "scheduled").length;
-  const newLeads = displayLeads.filter((lead: any) => lead.status === "new").length;
+  const totalRevenue = displayJobs.reduce((sum, job) => sum + (job.estimatedValue ?? 0), 0);
+  const completedJobs = displayJobs.filter(job => job.status === "completed").length;
+  const activeJobs = displayJobs.filter(job => job.status === "in-progress" || job.status === "scheduled").length;
+  const newLeads = displayLeads.filter(lead => lead.status === "new").length;
 
   const getJobStatusBadge = (status: string) => {
     const jobStatusConfig = {
@@ -201,7 +280,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {displayJobs.slice(0, 5).map((job: any) => (
+                    {displayJobs.slice(0, 5).map(job => (
                       <div key={job.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`job-item-${job.id}`}>
                         <div className="flex-1">
                           <h4 className="font-medium" data-testid={`job-title-${job.id}`}>{job.title}</h4>
@@ -212,7 +291,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                           </div>
                         </div>
                         <div className="text-right space-y-1">
-                          <div className="font-medium" data-testid={`job-value-${job.id}`}>${(job.estimatedValue || job.value || 0).toLocaleString()}</div>
+                          <div className="font-medium" data-testid={`job-value-${job.id}`}>${(job.estimatedValue || 0).toLocaleString()}</div>
                           <div className="flex gap-1">
                             {getJobStatusBadge(job.status)}
                             {getPriorityBadge(job.priority)}
@@ -231,7 +310,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {displayLeads.slice(0, 5).map((lead: any) => (
+                    {displayLeads.slice(0, 5).map(lead => (
                       <div key={lead.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`lead-item-${lead.id}`}>
                         <div className="flex-1">
                           <h4 className="font-medium" data-testid={`lead-name-${lead.id}`}>{lead.name}</h4>
@@ -239,7 +318,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                           <p className="text-xs text-muted-foreground" data-testid={`lead-last-contact-${lead.id}`}>Last contact: {lead.lastContact}</p>
                         </div>
                         <div className="text-right space-y-1">
-                          <div className="font-medium" data-testid={`lead-value-${lead.id}`}>${(lead.estimatedValue || lead.value || 0).toLocaleString()}</div>
+                          <div className="font-medium" data-testid={`lead-value-${lead.id}`}>${(lead.estimatedValue || 0).toLocaleString()}</div>
                           {getLeadStatusBadge(lead.status)}
                         </div>
                       </div>
@@ -258,34 +337,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
 
           {/* Leads Tab */}
           <TabsContent value="leads" className="flex-1 overflow-auto">
-            <div className="space-y-4">
-            <Card data-testid="card-leads-management">
-              <CardHeader>
-                <CardTitle>Lead Management</CardTitle>
-                <CardDescription>Track and convert potential customers</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {displayLeads.map((lead: any) => (
-                    <div key={lead.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`lead-card-${lead.id}`}>
-                      <div className="flex-1">
-                        <h4 className="font-medium" data-testid={`lead-title-${lead.id}`}>{lead.name}</h4>
-                        <p className="text-sm text-muted-foreground">Source: {lead.source}</p>
-                        <p className="text-xs text-muted-foreground">Last contact: {lead.lastContact}</p>
-                      </div>
-                      <div className="text-right space-y-2">
-                        <div className="font-medium">${(lead.estimatedValue || lead.value || 0).toLocaleString()}</div>
-                        {getLeadStatusBadge(lead.status)}
-                        <div>
-                          <Button size="sm" variant="outline" data-testid={`button-contact-lead-${lead.id}`}>Contact</Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            </div>
+            <LeadEnhancement />
           </TabsContent>
 
           {/* Customers Tab */}
@@ -298,7 +350,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {displayCustomers.map((customer: any) => (
+                  {displayCustomers.map(customer => (
                     <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`customer-card-${customer.id}`}>
                       <div className="flex-1">
                         <h4 className="font-medium" data-testid={`customer-name-${customer.id}`}>{customer.name}</h4>
