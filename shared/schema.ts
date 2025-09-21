@@ -1359,3 +1359,204 @@ export type InsertCommunicationTemplate = z.infer<typeof insertCommunicationTemp
 
 export type CommunicationRule = typeof communicationRules.$inferSelect;
 export type InsertCommunicationRule = z.infer<typeof insertCommunicationRuleSchema>;
+
+// ========================================
+// ADVANCED REPORTING & BUSINESS INTELLIGENCE SCHEMAS
+// ========================================
+
+// Business Intelligence Reports
+export const businessReports = pgTable("business_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  reportType: text("report_type").notNull(), // revenue, performance, customer, operational, financial
+  configuration: jsonb("configuration").notNull(), // Filter criteria, date ranges, metrics
+  visualizationType: text("visualization_type").notNull(), // chart, table, dashboard, kpi
+  isPublic: boolean("is_public").default(false),
+  createdBy: varchar("created_by").notNull(),
+  schedule: text("schedule"), // daily, weekly, monthly, quarterly
+  recipients: text("recipients").array(), // Email list for scheduled reports
+  lastGenerated: timestamp("last_generated"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Key Performance Indicators (KPIs)
+export const kpiMetrics = pgTable("kpi_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // financial, operational, customer, efficiency
+  calculation: text("calculation").notNull(), // Formula or calculation method
+  dataSource: text("data_source").notNull(), // jobs, customers, quotes, equipment
+  targetValue: decimal("target_value", { precision: 10, scale: 2 }),
+  warningThreshold: decimal("warning_threshold", { precision: 10, scale: 2 }),
+  criticalThreshold: decimal("critical_threshold", { precision: 10, scale: 2 }),
+  unit: text("unit"), // currency, percentage, count, hours
+  isActive: boolean("is_active").default(true),
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Performance Analytics Data
+export const performanceAnalytics = pgTable("performance_analytics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  metricDate: timestamp("metric_date").notNull(),
+  period: text("period").notNull(), // daily, weekly, monthly, quarterly, yearly
+  totalRevenue: decimal("total_revenue", { precision: 12, scale: 2 }).default("0"),
+  totalJobs: integer("total_jobs").default(0),
+  totalQuotes: integer("total_quotes").default(0),
+  quotesAccepted: integer("quotes_accepted").default(0),
+  quotesRejected: integer("quotes_rejected").default(0),
+  averageJobValue: decimal("average_job_value", { precision: 10, scale: 2 }).default("0"),
+  averageQuoteValue: decimal("average_quote_value", { precision: 10, scale: 2 }).default("0"),
+  conversionRate: decimal("conversion_rate", { precision: 5, scale: 2 }).default("0"),
+  customerAcquisitionCost: decimal("customer_acquisition_cost", { precision: 10, scale: 2 }).default("0"),
+  customerLifetimeValue: decimal("customer_lifetime_value", { precision: 10, scale: 2 }).default("0"),
+  grossMargin: decimal("gross_margin", { precision: 5, scale: 2 }).default("0"),
+  netMargin: decimal("net_margin", { precision: 5, scale: 2 }).default("0"),
+  equipmentUtilization: decimal("equipment_utilization", { precision: 5, scale: 2 }).default("0"),
+  averageResponseTime: decimal("average_response_time", { precision: 8, scale: 2 }).default("0"), // hours
+  customerSatisfactionScore: decimal("customer_satisfaction_score", { precision: 3, scale: 1 }).default("0"),
+  repeatCustomerRate: decimal("repeat_customer_rate", { precision: 5, scale: 2 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Financial Analytics
+export const financialAnalytics = pgTable("financial_analytics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  periodType: text("period_type").notNull(), // monthly, quarterly, yearly
+  totalIncome: decimal("total_income", { precision: 12, scale: 2 }).default("0"),
+  totalExpenses: decimal("total_expenses", { precision: 12, scale: 2 }).default("0"),
+  laborCosts: decimal("labor_costs", { precision: 12, scale: 2 }).default("0"),
+  materialCosts: decimal("material_costs", { precision: 12, scale: 2 }).default("0"),
+  equipmentCosts: decimal("equipment_costs", { precision: 12, scale: 2 }).default("0"),
+  operationalCosts: decimal("operational_costs", { precision: 12, scale: 2 }).default("0"),
+  marketingCosts: decimal("marketing_costs", { precision: 12, scale: 2 }).default("0"),
+  grossProfit: decimal("gross_profit", { precision: 12, scale: 2 }).default("0"),
+  netProfit: decimal("net_profit", { precision: 12, scale: 2 }).default("0"),
+  profitMargin: decimal("profit_margin", { precision: 5, scale: 2 }).default("0"),
+  cashFlow: decimal("cash_flow", { precision: 12, scale: 2 }).default("0"),
+  accountsReceivable: decimal("accounts_receivable", { precision: 12, scale: 2 }).default("0"),
+  accountsPayable: decimal("accounts_payable", { precision: 12, scale: 2 }).default("0"),
+  outstandingInvoices: integer("outstanding_invoices").default(0),
+  averageCollectionPeriod: decimal("average_collection_period", { precision: 8, scale: 2 }).default("0"), // days
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Dashboard Configurations
+export const dashboardConfigs = pgTable("dashboard_configs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  userId: varchar("user_id"), // For user-specific dashboards
+  isDefault: boolean("is_default").default(false),
+  layout: jsonb("layout").notNull(), // Widget positions and sizes
+  widgets: jsonb("widgets").notNull(), // Widget configurations
+  filters: jsonb("filters"), // Global dashboard filters
+  refreshInterval: integer("refresh_interval").default(300), // seconds
+  isPublic: boolean("is_public").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Report Analytics Tracking
+export const reportAnalytics = pgTable("report_analytics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").references(() => businessReports.id),
+  viewedBy: varchar("viewed_by"),
+  viewedAt: timestamp("viewed_at").notNull(),
+  exportFormat: text("export_format"), // pdf, csv, excel
+  executionTime: decimal("execution_time", { precision: 8, scale: 3 }), // seconds
+  dataPointsReturned: integer("data_points_returned"),
+  userAgent: text("user_agent"),
+});
+
+// Insert schemas for Business Intelligence
+export const insertBusinessReportSchema = createInsertSchema(businessReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastGenerated: true,
+});
+
+export const insertKpiMetricSchema = createInsertSchema(kpiMetrics).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPerformanceAnalyticsSchema = createInsertSchema(performanceAnalytics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertFinancialAnalyticsSchema = createInsertSchema(financialAnalytics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertDashboardConfigSchema = createInsertSchema(dashboardConfigs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertReportAnalyticsSchema = createInsertSchema(reportAnalytics).omit({
+  id: true,
+});
+
+// Validation schemas for report configurations
+export const reportConfigSchema = z.object({
+  dateRange: z.object({
+    start: z.string(),
+    end: z.string(),
+    period: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']),
+  }),
+  filters: z.object({
+    customerIds: z.array(z.string()).optional(),
+    jobStatuses: z.array(z.string()).optional(),
+    teamIds: z.array(z.string()).optional(),
+    equipmentIds: z.array(z.string()).optional(),
+    serviceTypes: z.array(z.string()).optional(),
+  }).optional(),
+  metrics: z.array(z.string()),
+  groupBy: z.array(z.string()).optional(),
+  sortBy: z.string().optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+});
+
+export const dashboardWidgetSchema = z.object({
+  id: z.string(),
+  type: z.enum(['kpi', 'chart', 'table', 'metric', 'gauge', 'progress']),
+  title: z.string(),
+  dataSource: z.string(),
+  configuration: z.record(z.any()),
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+    width: z.number(),
+    height: z.number(),
+  }),
+  refreshInterval: z.number().optional(),
+});
+
+// Types for Business Intelligence
+export type BusinessReport = typeof businessReports.$inferSelect;
+export type InsertBusinessReport = z.infer<typeof insertBusinessReportSchema>;
+export type KpiMetric = typeof kpiMetrics.$inferSelect;
+export type InsertKpiMetric = z.infer<typeof insertKpiMetricSchema>;
+export type PerformanceAnalytics = typeof performanceAnalytics.$inferSelect;
+export type InsertPerformanceAnalytics = z.infer<typeof insertPerformanceAnalyticsSchema>;
+export type FinancialAnalytics = typeof financialAnalytics.$inferSelect;
+export type InsertFinancialAnalytics = z.infer<typeof insertFinancialAnalyticsSchema>;
+export type DashboardConfig = typeof dashboardConfigs.$inferSelect;
+export type InsertDashboardConfig = z.infer<typeof insertDashboardConfigSchema>;
+export type ReportAnalytics = typeof reportAnalytics.$inferSelect;
+export type InsertReportAnalytics = z.infer<typeof insertReportAnalyticsSchema>;
+export type ReportConfiguration = z.infer<typeof reportConfigSchema>;
+export type DashboardWidget = z.infer<typeof dashboardWidgetSchema>;
