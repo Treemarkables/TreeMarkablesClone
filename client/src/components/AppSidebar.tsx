@@ -250,6 +250,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
+                  <Link href="/equipment" data-testid="link-equipment">
+                    <Settings className="h-4 w-4" />
+                    <span>Equipment</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
                   <Link href="/metrics" data-testid="link-metrics">
                     <BarChart3 className="h-4 w-4" />
                     <span>Metrics Dashboard</span>
