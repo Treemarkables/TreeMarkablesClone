@@ -936,7 +936,7 @@ export default function JobDashboard() {
     { name: 'Jobs Completed', value: revenueStats?.jobsCompleted || 0, color: 'hsl(var(--primary) / 0.3)' }
   ];
 
-  if (statsLoading || revenueLoading || quotesLoading) {
+  if (statsLoading) {
     return (
       <div className="min-h-screen bg-white p-4">
         <div className="max-w-7xl mx-auto">
