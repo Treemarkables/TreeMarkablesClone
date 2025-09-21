@@ -9,9 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { insertEquipmentCheckoutSchema } from "@shared/schema";
 import {
   Truck,
   Wrench,
@@ -30,7 +32,11 @@ import {
   Edit,
   Settings,
   BarChart3,
-  Package
+  Package,
+  LogOut,
+  LogIn,
+  History,
+  Undo2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -52,7 +58,33 @@ const equipmentFormSchema = z.object({
   notes: z.string().optional(),
 });
 
+// Checkout form schema using shared schema
+const checkoutFormSchema = insertEquipmentCheckoutSchema.omit({
+  equipmentId: true,
+  checkoutTime: true,
+  status: true
+}).extend({
+  checkedOutBy: z.string().min(1, "Employee name is required"),
+  checkedOutTo: z.string().optional(),
+  jobId: z.string().optional(),
+  expectedReturnTime: z.string().optional(),
+  checkoutCondition: z.enum(["excellent", "good", "fair", "damaged"]).default("good"),
+  notes: z.string().optional()
+});
+
+// Checkin form schema
+const checkinFormSchema = z.object({
+  returnCondition: z.enum(["excellent", "good", "fair", "damaged"]).default("good"),
+  hoursUsed: z.string().optional(),
+  mileageEnd: z.string().optional(),
+  fuelLevelEnd: z.string().optional(),
+  damageReport: z.string().optional(),
+  notes: z.string().optional()
+});
+
 type EquipmentFormData = z.infer<typeof equipmentFormSchema>;
+type CheckoutFormData = z.infer<typeof checkoutFormSchema>;
+type CheckinFormData = z.infer<typeof checkinFormSchema>;
 
 // Equipment types for filtering
 const equipmentTypes = [
@@ -106,7 +138,11 @@ export default function Equipment() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [isAddEquipmentOpen, setIsAddEquipmentOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isCheckinOpen, setIsCheckinOpen] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<any>(null);
+  const [selectedCheckout, setSelectedCheckout] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Fetch equipment data
   const { data: equipmentData, isLoading } = useQuery({
@@ -141,6 +177,54 @@ export default function Equipment() {
     },
   });
 
+  // Checkout equipment mutation
+  const checkoutMutation = useMutation({
+    mutationFn: (data: CheckoutFormData & { equipmentId: string }) => 
+      apiRequest("/api/equipment/checkout", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/equipment/checkouts"] });
+      setIsCheckoutOpen(false);
+      setSelectedEquipment(null);
+      toast({
+        title: "Success",
+        description: "Equipment checked out successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to checkout equipment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Checkin equipment mutation
+  const checkinMutation = useMutation({
+    mutationFn: (data: CheckinFormData & { checkoutId: string }) => {
+      const { checkoutId, ...checkinData } = data;
+      return apiRequest(`/api/equipment/checkin/${checkoutId}`, "PUT", checkinData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/equipment/checkouts"] });
+      setIsCheckinOpen(false);
+      setSelectedCheckout(null);
+      toast({
+        title: "Success",
+        description: "Equipment checked in successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to checkin equipment",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Equipment form
   const form = useForm<EquipmentFormData>({
     resolver: zodResolver(equipmentFormSchema),
@@ -150,8 +234,36 @@ export default function Equipment() {
     },
   });
 
+  // Checkout form
+  const checkoutForm = useForm<CheckoutFormData>({
+    resolver: zodResolver(checkoutFormSchema),
+    defaultValues: {
+      checkoutCondition: "good",
+    },
+  });
+
+  // Checkin form
+  const checkinForm = useForm<CheckinFormData>({
+    resolver: zodResolver(checkinFormSchema),
+    defaultValues: {
+      returnCondition: "good",
+    },
+  });
+
   const onSubmit = (data: EquipmentFormData) => {
     addEquipmentMutation.mutate(data);
+  };
+
+  const onCheckout = (data: CheckoutFormData) => {
+    if (selectedEquipment) {
+      checkoutMutation.mutate({ ...data, equipmentId: selectedEquipment.id });
+    }
+  };
+
+  const onCheckin = (data: CheckinFormData) => {
+    if (selectedCheckout) {
+      checkinMutation.mutate({ ...data, checkoutId: selectedCheckout.id });
+    }
   };
 
   // Filter equipment
@@ -165,6 +277,13 @@ export default function Equipment() {
     return matchesSearch && matchesStatus && matchesType;
   });
 
+  // Get active checkouts for display
+  const activeCheckouts = checkouts.filter((checkout: any) => !checkout.actualReturnTime);
+  const overdueCheckouts = activeCheckouts.filter((checkout: any) => {
+    if (!checkout.expectedReturnTime) return false;
+    return new Date(checkout.expectedReturnTime) < new Date();
+  });
+
   // Calculate stats
   const stats = {
     total: equipment.length,
@@ -172,6 +291,21 @@ export default function Equipment() {
     inUse: equipment.filter((e: any) => e.status === "in_use").length,
     maintenance: equipment.filter((e: any) => e.status === "maintenance").length,
     retired: equipment.filter((e: any) => e.status === "retired").length,
+    activeCheckouts: activeCheckouts.length,
+    overdueCheckouts: overdueCheckouts.length,
+  };
+
+  // Handle checkout/checkin actions
+  const handleCheckout = (equipmentItem: any) => {
+    setSelectedEquipment(equipmentItem);
+    setIsCheckoutOpen(true);
+    checkoutForm.reset();
+  };
+
+  const handleCheckin = (checkout: any) => {
+    setSelectedCheckout(checkout);
+    setIsCheckinOpen(true);
+    checkinForm.reset();
   };
 
   if (isLoading) {
@@ -189,6 +323,14 @@ export default function Equipment() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Equipment Management</h1>
           <p className="text-gray-600 mt-1">Track and manage your equipment inventory</p>
+          {overdueCheckouts.length > 0 && (
+            <div className="mt-2">
+              <Badge variant="destructive" className="animate-pulse">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                {overdueCheckouts.length} overdue item{overdueCheckouts.length > 1 ? 's' : ''}
+              </Badge>
+            </div>
+          )}
         </div>
         
         <Dialog open={isAddEquipmentOpen} onOpenChange={setIsAddEquipmentOpen}>
@@ -413,7 +555,7 @@ export default function Equipment() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -473,8 +615,41 @@ export default function Equipment() {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="bg-gradient-to-r from-blue-50 to-blue-100">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Active Checkouts</p>
+                <p className="text-2xl font-bold text-blue-900" data-testid="stat-active-checkouts">{stats.activeCheckouts}</p>
+              </div>
+              <LogOut className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={`bg-gradient-to-r ${overdueCheckouts.length > 0 ? 'from-red-50 to-red-100' : 'from-gray-50 to-gray-100'}`}>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm font-medium ${overdueCheckouts.length > 0 ? 'text-red-600' : 'text-gray-600'}`}>Overdue</p>
+                <p className={`text-2xl font-bold ${overdueCheckouts.length > 0 ? 'text-red-900' : 'text-gray-900'}`} data-testid="stat-overdue-checkouts">{stats.overdueCheckouts}</p>
+              </div>
+              <AlertTriangle className={`h-8 w-8 ${overdueCheckouts.length > 0 ? 'text-red-600' : 'text-gray-600'}`} />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
+      {/* Tabs Navigation */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="overview" data-testid="tab-overview">Equipment Overview</TabsTrigger>
+          <TabsTrigger value="checkouts" data-testid="tab-checkouts">Active Checkouts ({activeCheckouts.length})</TabsTrigger>
+          <TabsTrigger value="history" data-testid="tab-history">Checkout History</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
       {/* Filters */}
       <Card>
         <CardHeader>
@@ -619,10 +794,22 @@ export default function Equipment() {
                 )}
 
                 <div className="flex justify-between items-center pt-3 border-t">
-                  <Button variant="outline" size="sm" data-testid={`button-view-${item.id}`}>
-                    <Eye className="h-4 w-4 mr-2" />
-                    View Details
-                  </Button>
+                  {item.status === "available" ? (
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={() => handleCheckout(item)}
+                      data-testid={`button-checkout-${item.id}`}
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Check Out
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" data-testid={`button-view-${item.id}`}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Details
+                    </Button>
+                  )}
                   
                   <div className="flex gap-2">
                     <Button variant="ghost" size="sm" data-testid={`button-edit-${item.id}`}>
@@ -638,6 +825,340 @@ export default function Equipment() {
           ))
         )}
       </div>
+        </TabsContent>
+
+        <TabsContent value="checkouts" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <LogOut className="h-5 w-5" />
+                Active Checkouts ({activeCheckouts.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activeCheckouts.length === 0 ? (
+                <div className="text-center py-8">
+                  <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Active Checkouts</h3>
+                  <p className="text-gray-600">All equipment is currently available.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {activeCheckouts.map((checkout: any) => (
+                    <Card key={checkout.id} className="border-l-4 border-l-blue-500">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-semibold">{checkout.equipmentName || 'Equipment'}</h4>
+                            <p className="text-sm text-gray-600">Checked out to: {checkout.checkedOutTo || checkout.checkedOutBy}</p>
+                            <p className="text-sm text-gray-500">Since: {new Date(checkout.checkoutTime).toLocaleDateString()}</p>
+                            {checkout.expectedReturnTime && (
+                              <p className="text-sm text-gray-500">Expected return: {new Date(checkout.expectedReturnTime).toLocaleDateString()}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleCheckin(checkout)}
+                              data-testid={`button-checkin-${checkout.id}`}
+                            >
+                              <LogIn className="h-4 w-4 mr-2" />
+                              Check In
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Checkout History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {checkouts.length === 0 ? (
+                <div className="text-center py-8">
+                  <History className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Checkout History</h3>
+                  <p className="text-gray-600">Equipment checkout history will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {checkouts.map((checkout: any) => (
+                    <Card key={checkout.id} className={`${checkout.actualReturnTime ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-blue-500'}`}>
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-semibold">{checkout.equipmentName || 'Equipment'}</h4>
+                            <p className="text-sm text-gray-600">Checked out to: {checkout.checkedOutTo || checkout.checkedOutBy}</p>
+                            <div className="grid grid-cols-2 gap-4 mt-2 text-sm text-gray-500">
+                              <div>
+                                <span className="font-medium">Checked out:</span> {new Date(checkout.checkoutTime).toLocaleDateString()}
+                              </div>
+                              {checkout.actualReturnTime && (
+                                <div>
+                                  <span className="font-medium">Returned:</span> {new Date(checkout.actualReturnTime).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <Badge className={checkout.actualReturnTime ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
+                            {checkout.actualReturnTime ? 'Returned' : 'Active'}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Checkout Equipment Dialog */}
+      <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Check Out Equipment</DialogTitle>
+          </DialogHeader>
+          
+          {selectedEquipment && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold">{selectedEquipment.name}</h4>
+                <p className="text-sm text-gray-600">{selectedEquipment.brand} {selectedEquipment.model}</p>
+              </div>
+
+              <Form {...checkoutForm}>
+                <form onSubmit={checkoutForm.handleSubmit(onCheckout)} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={checkoutForm.control}
+                      name="checkedOutBy"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Checked Out By</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Employee name" {...field} data-testid="input-checked-out-by" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={checkoutForm.control}
+                      name="checkedOutTo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Checked Out To</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Job site or crew member" {...field} data-testid="input-checked-out-to" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={checkoutForm.control}
+                      name="expectedReturnTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Expected Return Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-expected-return" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={checkoutForm.control}
+                      name="checkoutCondition"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Condition</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-checkout-condition">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="excellent">Excellent</SelectItem>
+                              <SelectItem value="good">Good</SelectItem>
+                              <SelectItem value="fair">Fair</SelectItem>
+                              <SelectItem value="damaged">Damaged</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={checkoutForm.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notes</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Additional notes..."
+                            {...field}
+                            data-testid="textarea-checkout-notes"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <Button type="button" variant="outline" onClick={() => setIsCheckoutOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={checkoutMutation.isPending}
+                      data-testid="button-confirm-checkout"
+                    >
+                      {checkoutMutation.isPending ? "Checking Out..." : "Check Out Equipment"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Checkin Equipment Dialog */}
+      <Dialog open={isCheckinOpen} onOpenChange={setIsCheckinOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Check In Equipment</DialogTitle>
+          </DialogHeader>
+          
+          {selectedCheckout && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold">{selectedCheckout.equipmentName || 'Equipment'}</h4>
+                <p className="text-sm text-gray-600">Checked out to: {selectedCheckout.checkedOutTo}</p>
+                <p className="text-sm text-gray-500">Since: {new Date(selectedCheckout.checkoutTime).toLocaleDateString()}</p>
+              </div>
+
+              <Form {...checkinForm}>
+                <form onSubmit={checkinForm.handleSubmit(onCheckin)} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={checkinForm.control}
+                      name="returnCondition"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Return Condition</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-return-condition">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="excellent">Excellent</SelectItem>
+                              <SelectItem value="good">Good</SelectItem>
+                              <SelectItem value="fair">Fair</SelectItem>
+                              <SelectItem value="damaged">Damaged</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={checkinForm.control}
+                      name="hoursUsed"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Hours Used</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" placeholder="0.0" {...field} data-testid="input-hours-used" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={checkinForm.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Return Notes</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Any issues or observations..."
+                            {...field}
+                            data-testid="textarea-checkin-notes"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={checkinForm.control}
+                    name="damageReport"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Damage Report (if any)</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Describe any damage or issues..."
+                            {...field}
+                            data-testid="textarea-damage-report"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <Button type="button" variant="outline" onClick={() => setIsCheckinOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={checkinMutation.isPending}
+                      data-testid="button-confirm-checkin"
+                    >
+                      {checkinMutation.isPending ? "Checking In..." : "Check In Equipment"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
