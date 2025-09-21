@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -27,23 +29,13 @@ import {
   User,
   FileText
 } from 'lucide-react';
-import type { SafetyIncident, InsertSafetyIncident } from '@shared/schema';
+import type { SafetyIncident, InsertSafetyIncident, RiskAssessment, InsertRiskAssessment } from '@shared/schema';
+import { safetyIncidentInsertSchema, riskAssessmentInsertSchema } from '@shared/schema';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 
-// Form validation schema
-const safetyIncidentSchema = z.object({
-  type: z.string().min(1, 'Incident type is required'),
-  severity: z.string().min(1, 'Severity is required'),
-  title: z.string().min(1, 'Incident title is required'),
-  location: z.string().min(1, 'Location is required'),
-  description: z.string().min(10, 'Description must be at least 10 characters'),
-  immediateActions: z.string().min(5, 'Immediate actions must be at least 5 characters'),
-  jobId: z.string().optional(),
-  reportedBy: z.string().optional(),
-  resolutionNotes: z.string().optional(),
-});
-
-type SafetyIncidentFormData = z.infer<typeof safetyIncidentSchema>;
+// Use shared schema for consistency
+type SafetyIncidentFormData = InsertSafetyIncident;
+type RiskAssessmentFormData = InsertRiskAssessment;
 
 interface SafetyReportingProps {
   compact?: boolean;
@@ -55,6 +47,12 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
   const [selectedIncident, setSelectedIncident] = useState<SafetyIncident | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [filter, setFilter] = useState<{ type?: string; severity?: string; status?: string }>({});
+  
+  // Risk Assessment State
+  const [showNewRiskAssessmentDialog, setShowNewRiskAssessmentDialog] = useState(false);
+  const [selectedRiskAssessment, setSelectedRiskAssessment] = useState<RiskAssessment | null>(null);
+  const [showEditRiskAssessmentDialog, setShowEditRiskAssessmentDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<'incidents' | 'assessments'>('incidents');
 
   // Fetch safety incidents
   const { data: incidentsResponse, isLoading } = useQuery({
@@ -63,13 +61,19 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
   
   const incidents = incidentsResponse?.data || [];
 
+  // Fetch risk assessments
+  const { data: assessmentsResponse, isLoading: isLoadingAssessments } = useQuery({
+    queryKey: ['/api/risk-assessments'],
+  });
+  
+  const riskAssessments = assessmentsResponse?.data || [];
+
   // Create incident mutation
   const createIncidentMutation = useMutation({
     mutationFn: async (data: SafetyIncidentFormData) => {
-      const incidentNumber = `INC-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-      const payload: InsertSafetyIncident & { incidentNumber: string } = {
+      // Let server generate incident number for security and consistency
+      const payload: InsertSafetyIncident = {
         ...data,
-        incidentNumber,
         status: 'reported',
         reportedBy: data.reportedBy || 'Current User',
       };
@@ -115,6 +119,51 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
     },
   });
 
+  // Create risk assessment mutation
+  const createRiskAssessmentMutation = useMutation({
+    mutationFn: async (data: RiskAssessmentFormData) => {
+      return apiRequest('POST', '/api/risk-assessments', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/risk-assessments'] });
+      setShowNewRiskAssessmentDialog(false);
+      toast({
+        title: 'Success',
+        description: 'Risk assessment created successfully',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: `Failed to create risk assessment: ${error.message}`,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Update risk assessment mutation
+  const updateRiskAssessmentMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<RiskAssessmentFormData> }) => {
+      return apiRequest('PUT', `/api/risk-assessments/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/risk-assessments'] });
+      setShowEditRiskAssessmentDialog(false);
+      setSelectedRiskAssessment(null);
+      toast({
+        title: 'Success',
+        description: 'Risk assessment updated successfully',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: `Failed to update risk assessment: ${error.message}`,
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Delete incident mutation
   const deleteIncidentMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -138,7 +187,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
 
   // Form for creating new incidents
   const newIncidentForm = useForm<SafetyIncidentFormData>({
-    resolver: zodResolver(safetyIncidentSchema),
+    resolver: zodResolver(safetyIncidentInsertSchema),
     defaultValues: {
       type: '',
       severity: '',
@@ -152,11 +201,11 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
 
   // Form for editing incidents
   const editIncidentForm = useForm<SafetyIncidentFormData>({
-    resolver: zodResolver(safetyIncidentSchema),
+    resolver: zodResolver(safetyIncidentInsertSchema),
   });
 
-  // Set edit form values when incident is selected
-  useState(() => {
+  // Set edit form values when incident is selected (fix useEffect usage)
+  useEffect(() => {
     if (selectedIncident) {
       editIncidentForm.reset({
         type: selectedIncident.type,
@@ -168,7 +217,50 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
         resolutionNotes: selectedIncident.resolutionNotes || '',
       });
     }
+  }, [selectedIncident, editIncidentForm]);
+
+  // Risk Assessment Forms
+  const newRiskAssessmentForm = useForm<RiskAssessmentFormData>({
+    resolver: zodResolver(riskAssessmentInsertSchema),
+    defaultValues: {
+      jobId: '',
+      assessedBy: 'Current User',
+      overallRisk: '',
+      weatherRisk: '',
+      equipmentRisk: '',
+      siteConditions: '',
+      hazards: [],
+      controlMeasures: [],
+      requiredPPE: [],
+      recommendations: '',
+      approvedBy: '',
+      isActive: true,
+    },
   });
+
+  const editRiskAssessmentForm = useForm<RiskAssessmentFormData>({
+    resolver: zodResolver(riskAssessmentInsertSchema),
+  });
+
+  // Set edit form values when risk assessment is selected
+  useEffect(() => {
+    if (selectedRiskAssessment) {
+      editRiskAssessmentForm.reset({
+        jobId: selectedRiskAssessment.jobId,
+        assessedBy: selectedRiskAssessment.assessedBy,
+        overallRisk: selectedRiskAssessment.overallRisk,
+        weatherRisk: selectedRiskAssessment.weatherRisk || '',
+        equipmentRisk: selectedRiskAssessment.equipmentRisk || '',
+        siteConditions: selectedRiskAssessment.siteConditions,
+        hazards: selectedRiskAssessment.hazards || [],
+        controlMeasures: selectedRiskAssessment.controlMeasures || [],
+        requiredPPE: selectedRiskAssessment.requiredPPE || [],
+        recommendations: selectedRiskAssessment.recommendations || '',
+        approvedBy: selectedRiskAssessment.approvedBy || '',
+        isActive: selectedRiskAssessment.isActive,
+      });
+    }
+  }, [selectedRiskAssessment, editRiskAssessmentForm]);
 
   const onSubmitNewIncident = (data: SafetyIncidentFormData) => {
     createIncidentMutation.mutate(data);
@@ -177,6 +269,16 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
   const onSubmitEditIncident = (data: SafetyIncidentFormData) => {
     if (selectedIncident) {
       updateIncidentMutation.mutate({ id: selectedIncident.id, data });
+    }
+  };
+
+  const onSubmitNewRiskAssessment = (data: RiskAssessmentFormData) => {
+    createRiskAssessmentMutation.mutate(data);
+  };
+
+  const onSubmitEditRiskAssessment = (data: RiskAssessmentFormData) => {
+    if (selectedRiskAssessment) {
+      updateRiskAssessmentMutation.mutate({ id: selectedRiskAssessment.id, data });
     }
   };
 
@@ -304,15 +406,32 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
 
   return (
     <div className="space-y-6">
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Incidents</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-total">{stats.total}</div>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-foreground">Safety Management</h2>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'incidents' | 'assessments')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="incidents" data-testid="tab-incidents">
+            <Shield className="w-4 h-4 mr-2" />
+            Safety Incidents
+          </TabsTrigger>
+          <TabsTrigger value="assessments" data-testid="tab-assessments">
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Risk Assessments
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="incidents" className="space-y-6">
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Incidents</CardTitle>
+                <Shield className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="stat-total">{stats.total}</div>
           </CardContent>
         </Card>
 
@@ -762,6 +881,256 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
           )}
         </DialogContent>
       </Dialog>
+        </TabsContent>
+
+        <TabsContent value="assessments" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-foreground">Risk Assessments</h3>
+            <Dialog open={showNewRiskAssessmentDialog} onOpenChange={setShowNewRiskAssessmentDialog}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-assessment">
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Assessment
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create Risk Assessment</DialogTitle>
+                </DialogHeader>
+                <Form {...newRiskAssessmentForm}>
+                  <form onSubmit={newRiskAssessmentForm.handleSubmit(onSubmitNewRiskAssessment)} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={newRiskAssessmentForm.control}
+                        name="jobId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Job ID</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter job ID" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newRiskAssessmentForm.control}
+                        name="assessedBy"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Assessed By</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Assessor name" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={newRiskAssessmentForm.control}
+                        name="overallRisk"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Overall Risk Level</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select risk level" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="critical">Critical</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newRiskAssessmentForm.control}
+                        name="weatherRisk"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Weather Risk</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select weather risk" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="safe">Safe</SelectItem>
+                                <SelectItem value="caution">Caution</SelectItem>
+                                <SelectItem value="unsafe">Unsafe</SelectItem>
+                                <SelectItem value="suspended">Suspended</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newRiskAssessmentForm.control}
+                        name="equipmentRisk"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Equipment Risk</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select equipment risk" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={newRiskAssessmentForm.control}
+                      name="siteConditions"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Site Conditions</FormLabel>
+                          <FormControl>
+                            <Textarea 
+                              placeholder="Describe current site conditions..."
+                              rows={3}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={newRiskAssessmentForm.control}
+                      name="recommendations"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Recommendations</FormLabel>
+                          <FormControl>
+                            <Textarea 
+                              placeholder="Safety recommendations and additional measures..."
+                              rows={3}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="flex gap-2 pt-4">
+                      <Button 
+                        type="submit" 
+                        disabled={createRiskAssessmentMutation.isPending}
+                      >
+                        {createRiskAssessmentMutation.isPending ? 'Creating...' : 'Create Assessment'}
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        onClick={() => setShowNewRiskAssessmentDialog(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Risk Assessment Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{riskAssessments.length}</div>
+                  <div className="text-sm text-muted-foreground">Total Assessments</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">
+                    {riskAssessments.filter((a: RiskAssessment) => a.overallRisk === 'high' || a.overallRisk === 'critical').length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">High Risk</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {riskAssessments.filter((a: RiskAssessment) => a.isActive).length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Active</div>
+                </div>
+              </div>
+
+              {isLoadingAssessments ? (
+                <div className="text-center py-4">Loading assessments...</div>
+              ) : riskAssessments.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No risk assessments found. Create your first assessment to get started.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {riskAssessments.map((assessment: RiskAssessment) => (
+                    <div
+                      key={assessment.id}
+                      className="border rounded-lg p-4 hover:bg-muted/50 cursor-pointer"
+                      data-testid={`assessment-${assessment.id}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Badge className={`${getSeverityColor(assessment.overallRisk)} text-white`}>
+                            {assessment.overallRisk.toUpperCase()}
+                          </Badge>
+                          <span className="font-medium">Job: {assessment.jobId}</span>
+                          {assessment.weatherRisk && (
+                            <Badge variant="outline">
+                              Weather: {assessment.weatherRisk}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={assessment.isActive ? "default" : "secondary"}>
+                            {assessment.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {new Date(assessment.assessmentDate).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-sm text-muted-foreground">
+                        Assessed by: {assessment.assessedBy}
+                      </div>
+                      {assessment.recommendations && (
+                        <div className="mt-2 text-sm">
+                          <strong>Recommendations:</strong> {assessment.recommendations}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

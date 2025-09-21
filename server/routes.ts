@@ -20,7 +20,9 @@ import {
   insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, gpsLocationSchema,
   insertInvoiceSchema, insertServiceRequestSchema, insertCustomerAuthSchema,
   insertCommunicationPreferencesSchema,
-  servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
+  servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema,
+  safetyIncidentInsertSchema, type InsertSafetyIncident,
+  riskAssessmentInsertSchema, type InsertRiskAssessment
 } from "@shared/schema";
 import multer from "multer";
 import Papa from "papaparse";
@@ -4449,6 +4451,107 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error retrieving safety analytics'
+      });
+    }
+  });
+
+  // ========================================
+  // RISK ASSESSMENT MANAGEMENT ROUTES  
+  // ========================================
+
+  // Get all risk assessments
+  app.get('/api/risk-assessments', async (req: Request, res: Response) => {
+    try {
+      const assessments = await storage.getAllRiskAssessments();
+      res.json({
+        success: true,
+        data: assessments,
+        count: assessments.length,
+        message: 'Risk assessments retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting risk assessments:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving risk assessments'
+      });
+    }
+  });
+
+  // Get risk assessments by job
+  app.get('/api/risk-assessments/job/:jobId', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const assessments = await storage.getRiskAssessmentsByJob(jobId);
+      res.json({
+        success: true,
+        data: assessments,
+        count: assessments.length,
+        message: 'Job risk assessments retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting job risk assessments:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving job risk assessments'
+      });
+    }
+  });
+
+  // Create a new risk assessment
+  app.post('/api/risk-assessments', async (req: Request, res: Response) => {
+    try {
+      const validatedData = riskAssessmentInsertSchema.parse(req.body);
+      
+      const assessment = await storage.createRiskAssessment(validatedData);
+      res.status(201).json({
+        success: true,
+        data: assessment,
+        message: 'Risk assessment created successfully'
+      });
+    } catch (error: any) {
+      console.error('Error creating risk assessment:', error);
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid assessment data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error creating risk assessment'
+      });
+    }
+  });
+
+  // Update risk assessment
+  app.put('/api/risk-assessments/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      const existingAssessment = await storage.getRiskAssessment(id);
+      if (!existingAssessment) {
+        return res.status(404).json({
+          success: false,
+          message: 'Risk assessment not found'
+        });
+      }
+
+      const updatedAssessment = await storage.updateRiskAssessment(id, updateData);
+      res.json({
+        success: true,
+        data: updatedAssessment,
+        message: 'Risk assessment updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating risk assessment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating risk assessment'
       });
     }
   });
