@@ -28,7 +28,7 @@ import { WorkflowAutomation } from "@/components/WorkflowAutomation";
 import { useState } from "react";
 
 // Sidebar layout wrapper for dashboard pages
-function SidebarLayout({ children }: { children: React.ReactNode }) {
+function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const [activeTab, setActiveTab] = useState("overview");
   
   const style = {
@@ -45,7 +45,7 @@ function SidebarLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
           <main className="flex-1 overflow-hidden">
-            {children}
+            {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
           </main>
         </div>
       </div>
@@ -65,9 +65,13 @@ function Router() {
       <Route path="/blog/:slug" component={BlogPost}/>
       <Route path="/summer-offer" component={SummerOffer}/>
       <Route path="/job-dashboard">
-        <SidebarLayout>
-          <JobDashboard />
-        </SidebarLayout>
+        {() => (
+          <SidebarLayout>
+            {(activeTab, onTabChange) => (
+              <JobDashboard activeTab={activeTab} onTabChange={onTabChange} />
+            )}
+          </SidebarLayout>
+        )}
       </Route>
       <Route path="/metrics" component={MetricsDashboard}/>
       <Route path="/customer-portal" component={CustomerPortal}/>
