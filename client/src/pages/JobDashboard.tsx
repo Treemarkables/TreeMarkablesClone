@@ -24,6 +24,7 @@ import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
 import { AdvancedDispatchBoard } from "@/components/AdvancedDispatchBoard";
 import { JobDiary } from "@/components/JobDiary";
 import { WorkflowAutomation } from "@/components/WorkflowAutomation";
+import { ExecutiveDashboard } from "@/components/ExecutiveDashboard";
 import {
   BarChart,
   Bar,
@@ -2546,61 +2547,11 @@ export default function JobDashboard() {
 
           {/* Enhanced Analytics Tab */}
           <TabsContent value="analytics" className="space-y-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-3xl font-bold flex items-center gap-2 text-rainbow">
-                  <BarChart3 className="h-7 w-7" />
-                  Advanced Business Intelligence
-                </h2>
-                <p className="text-muted-foreground mt-1">Real-time analytics, insights, and performance monitoring</p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Select value={analyticsDateRange} onValueChange={setAnalyticsDateRange}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="Date Range" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="7d">Last 7 days</SelectItem>
-                    <SelectItem value="30d">Last 30 days</SelectItem>
-                    <SelectItem value="90d">Last 90 days</SelectItem>
-                    <SelectItem value="12m">Last 12 months</SelectItem>
-                    <SelectItem value="ytd">Year to date</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex items-center gap-2"
-                  onClick={() => handleExportData('analytics')}
-                  disabled={isExporting}
-                  data-testid="button-export-analytics"
-                >
-                  <Download className="h-4 w-4" />
-                  {isExporting ? 'Exporting...' : 'Export Data'}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleGenerateReport}
-                  disabled={isExporting}
-                  data-testid="button-generate-report"
-                >
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  {isExporting ? 'Generating...' : 'Generate Report'}
-                </Button>
-                <Button 
-                  size="sm"
-                  onClick={() => setShowInsights(!showInsights)}
-                  data-testid="button-toggle-insights"
-                >
-                  <Zap className="h-4 w-4 mr-2" />
-                  {showInsights ? 'Hide' : 'Show'} Insights
-                </Button>
-              </div>
-            </div>
+            <ExecutiveDashboard />
+          </TabsContent>
 
-            {/* Enhanced AI-Powered Insights Panel */}
-            {showInsights && (
+          {/* Dispatch Tab */}
+          <TabsContent value="dispatch" className="space-y-6">
               <Card className="border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -3248,14 +3199,21 @@ export default function JobDashboard() {
 
           {/* Performance Tab */}
           <TabsContent value="performance" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <TrendingUp className="h-6 w-6 text-gray-600" />
-                  Performance Analytics Dashboard
-                </h2>
-                <p className="text-muted-foreground">Comprehensive business performance metrics and trends</p>
-              </div>
+            <PerformanceAnalytics />
+          </TabsContent>
+
+          {/* Dispatch Tab */}
+          <TabsContent value="dispatch" className="space-y-6">
+            <AdvancedDispatchBoard />
+          </TabsContent>
+
+          {/* Workflow Automation Tab */}
+          <TabsContent value="workflows" className="space-y-6">
+            <WorkflowAutomation />
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6">
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => handleExportData('performance')} disabled={isExporting}>
                   <Download className="h-4 w-4" />
