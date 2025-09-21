@@ -16,6 +16,7 @@ import { LeadEnhancement } from '@/components/LeadEnhancement';
 import { AdvancedDispatchBoard } from '@/components/AdvancedDispatchBoard';
 import { JobDiary } from '@/components/JobDiary';
 import { SafetyReporting } from '@/components/SafetyReporting';
+import { JobTemplateManagement } from '@/components/JobTemplateManagement';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
 
@@ -215,6 +216,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
             <TabsTrigger value="overview" data-testid="tab-overview" className="shrink-0"><TrendingUp className="w-4 h-4 mr-2" />Overview</TabsTrigger>
             <TabsTrigger value="dispatch" data-testid="tab-dispatch" className="shrink-0"><Calendar className="w-4 h-4 mr-2" />Dispatch</TabsTrigger>
             <TabsTrigger value="pipeline" data-testid="tab-pipeline" className="shrink-0"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
+            <TabsTrigger value="templates" data-testid="tab-templates" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Templates</TabsTrigger>
             <TabsTrigger value="leads" data-testid="tab-leads" className="shrink-0"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
             <TabsTrigger value="customers" data-testid="tab-customers" className="shrink-0"><Users className="w-4 h-4 mr-2" />Customers</TabsTrigger>
             <TabsTrigger value="diary" data-testid="tab-diary" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Job Diary</TabsTrigger>
@@ -380,6 +382,11 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
               </CardContent>
             </Card>
             </div>
+          </TabsContent>
+
+          {/* Job Templates Tab */}
+          <TabsContent value="templates" className="flex-1 overflow-auto">
+            <JobTemplateManagement />
           </TabsContent>
 
           {/* Job Diary Tab */}
