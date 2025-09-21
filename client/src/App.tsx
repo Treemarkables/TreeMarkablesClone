@@ -24,6 +24,7 @@ import Equipment from "@/pages/Equipment";
 import NotFound from "@/pages/not-found";
 import { CustomerPortal } from "@/pages/CustomerPortal";
 import CommunicationsManagement from "@/pages/CommunicationsManagement";
+import { WorkflowAutomation } from "@/components/WorkflowAutomation";
 import { useState } from "react";
 
 // Sidebar layout wrapper for dashboard pages
@@ -110,6 +111,11 @@ function Router() {
       <Route path="/dispatch">
         <SidebarLayout>
           <Pipeline />
+        </SidebarLayout>
+      </Route>
+      <Route path="/workflows">
+        <SidebarLayout>
+          <WorkflowAutomation />
         </SidebarLayout>
       </Route>
       {/* Fallback to 404 */}
