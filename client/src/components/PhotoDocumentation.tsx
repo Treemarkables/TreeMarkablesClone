@@ -550,7 +550,12 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
                     </div>
                     <div className="flex justify-between">
                       <span>Dimensions:</span>
-                      <span>{selectedPhoto.dimensions.width} × {selectedPhoto.dimensions.height}</span>
+                      <span>
+                        {selectedPhoto.dimensions ? 
+                          `${selectedPhoto.dimensions.width} × ${selectedPhoto.dimensions.height}` : 
+                          'Auto-detected'
+                        }
+                      </span>
                     </div>
                   </div>
                 </div>
