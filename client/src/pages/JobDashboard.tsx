@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +10,12 @@ import type { Job, Lead, Customer } from "@shared/schema";
 
 // Using shared schema types instead of local interfaces
 
-export default function JobDashboard() {
-  const [activeTab, setActiveTab] = useState("overview");
+interface JobDashboardProps {
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
+}
+
+export default function JobDashboard({ activeTab = "overview", onTabChange }: JobDashboardProps) {
 
   // Fetch jobs data
   const { data: jobsResponse, isLoading: jobsLoading } = useQuery({
@@ -117,7 +121,7 @@ export default function JobDashboard() {
           </p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={onTabChange} className="space-y-6">
           <TabsList className="grid w-full grid-cols-8" data-testid="tabs-dashboard-navigation">
             <TabsTrigger value="overview" data-testid="tab-overview"><TrendingUp className="w-4 h-4 mr-2" />Overview</TabsTrigger>
             <TabsTrigger value="pipeline" data-testid="tab-pipeline"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
