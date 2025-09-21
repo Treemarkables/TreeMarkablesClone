@@ -258,6 +258,57 @@ export const jobDiaryEntries = pgTable("job_diary_entries", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Safety Incident Management
+export const safetyIncidents = pgTable("safety_incidents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  incidentNumber: text("incident_number").notNull().unique(),
+  type: text("type").notNull(), // near_miss, minor_injury, major_injury, property_damage, environmental, equipment_failure
+  severity: text("severity").notNull(), // low, medium, high, critical
+  status: text("status").notNull().default("reported"), // reported, investigating, resolved, closed
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  location: text("location").notNull(),
+  jobId: varchar("job_id").references(() => jobs.id),
+  reportedBy: text("reported_by").notNull(),
+  reportedAt: timestamp("reported_at").defaultNow(),
+  involvedPersons: text("involved_persons").array().default([]),
+  witnesses: text("witnesses").array().default([]),
+  injuriesDescription: text("injuries_description"),
+  immediateActions: text("immediate_actions").notNull(),
+  rootCause: text("root_cause"),
+  preventiveActions: text("preventive_actions"),
+  followUpRequired: boolean("follow_up_required").default(false),
+  followUpDate: timestamp("follow_up_date"),
+  assignedTo: text("assigned_to"),
+  photos: text("photos").array().default([]),
+  cost: decimal("cost", { precision: 10, scale: 2 }),
+  regulatoryNotification: boolean("regulatory_notification").default(false),
+  regulatoryReference: text("regulatory_reference"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Risk Assessment Management  
+export const riskAssessments = pgTable("risk_assessments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id).notNull(),
+  assessmentDate: timestamp("assessment_date").defaultNow(),
+  assessedBy: text("assessed_by").notNull(),
+  overallRisk: text("overall_risk").notNull(), // low, medium, high, critical
+  weatherRisk: text("weather_risk"), // safe, caution, unsafe, suspended
+  equipmentRisk: text("equipment_risk"), // low, medium, high
+  siteConditions: text("site_conditions").notNull(),
+  hazards: text("hazards").array().default([]),
+  controlMeasures: text("control_measures").array().default([]),
+  requiredPPE: text("required_ppe").array().default([]),
+  recommendations: text("recommendations"),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Enhanced Photo Management System
 export const photos = pgTable("photos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -463,6 +514,25 @@ export type PriceRule = typeof priceRules.$inferSelect;
 // Insert Types
 export type InsertTeam = z.infer<typeof insertTeamSchema>;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+
+// Safety Incident Types & Schemas
+export const safetyIncidentInsertSchema = createInsertSchema(safetyIncidents).omit({
+  id: true,
+  incidentNumber: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const riskAssessmentInsertSchema = createInsertSchema(riskAssessments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SafetyIncident = typeof safetyIncidents.$inferSelect;
+export type InsertSafetyIncident = z.infer<typeof safetyIncidentInsertSchema>;
+export type RiskAssessment = typeof riskAssessments.$inferSelect;
+export type InsertRiskAssessment = z.infer<typeof riskAssessmentInsertSchema>;
 export type InsertCommunicationPreferences = z.infer<typeof insertCommunicationPreferencesSchema>;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type InsertCall = z.infer<typeof insertCallSchema>;

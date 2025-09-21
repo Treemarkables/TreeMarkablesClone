@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud } from "lucide-react";
+import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield } from "lucide-react";
 import Pipeline from './Pipeline';
 import { PerformanceAnalytics } from '@/components/PerformanceAnalytics';
 import { EquipmentTracker } from '@/components/EquipmentTracker';
@@ -15,6 +15,7 @@ import QuoteManagement from '@/components/QuoteManagement';
 import { LeadEnhancement } from '@/components/LeadEnhancement';
 import { AdvancedDispatchBoard } from '@/components/AdvancedDispatchBoard';
 import { JobDiary } from '@/components/JobDiary';
+import { SafetyReporting } from '@/components/SafetyReporting';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
 
@@ -222,6 +223,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
             <TabsTrigger value="equipment" data-testid="tab-equipment" className="shrink-0"><Wrench className="w-4 h-4 mr-2" />Equipment</TabsTrigger>
             <TabsTrigger value="communications" data-testid="tab-communications" className="shrink-0"><MessageSquare className="w-4 h-4 mr-2" />Communications</TabsTrigger>
             <TabsTrigger value="weather" data-testid="tab-weather" className="shrink-0"><Cloud className="w-4 h-4 mr-2" />Weather</TabsTrigger>
+            <TabsTrigger value="safety" data-testid="tab-safety" className="shrink-0"><Shield className="w-4 h-4 mr-2" />Safety</TabsTrigger>
             <TabsTrigger value="integrations" data-testid="tab-integrations" className="shrink-0"><Plug className="w-4 h-4 mr-2" />Integrations</TabsTrigger>
           </TabsList>
 
@@ -477,6 +479,21 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
           <TabsContent value="weather" className="flex-1 overflow-auto">
             <div className="space-y-4 w-full max-w-full overflow-hidden min-w-0">
               <WeatherDashboard />
+            </div>
+          </TabsContent>
+
+          {/* Safety Tab */}
+          <TabsContent value="safety" className="flex-1 overflow-auto">
+            <div className="space-y-4">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="heading-safety-management">
+                  Safety Management & Compliance
+                </h2>
+                <p className="text-muted-foreground" data-testid="text-safety-description">
+                  Comprehensive safety incident tracking, risk assessments, and compliance monitoring for tree removal operations
+                </p>
+              </div>
+              <SafetyReporting />
             </div>
           </TabsContent>
 
