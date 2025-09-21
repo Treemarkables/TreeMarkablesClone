@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -97,6 +98,17 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import { Link } from "wouter";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { 
+  MobileContainer, 
+  MobileGrid, 
+  MobileTable, 
+  MobileButtonGroup, 
+  MobileCard, 
+  MobileStatsGrid, 
+  MobileAnalytics,
+  mobileTouchSizes,
+  mobileUtils
+} from "@/components/MobileOptimized";
 
 // Add Speech Recognition types for TypeScript
 declare global {
@@ -104,6 +116,13 @@ declare global {
     SpeechRecognition?: any;
     webkitSpeechRecognition?: any;
   }
+}
+
+interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
 }
 
 interface DashboardStats {
