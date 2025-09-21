@@ -2640,7 +2640,6 @@ export default function JobDashboard() {
                   )}
                 </CardContent>
               </Card>
-            )}
           </TabsContent>
 
           {/* Invoices Tab */}
@@ -3263,7 +3262,6 @@ export default function JobDashboard() {
                   {isExporting ? 'Exporting...' : 'Export Report'}
                 </Button>
               </div>
-            </div>
 
             {/* Key Performance Indicators Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
