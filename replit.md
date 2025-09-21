@@ -83,7 +83,16 @@ Preferred communication style: Simple, everyday language.
 - **autoprefixer**: CSS vendor prefixing
 - **Google Fonts**: Inter, Source Sans Pro, and Merriweather font families
 
-### Job Diary System (Latest Addition)
+### Advanced Workflow Automation System (Latest Addition)
+- **Intelligent Process Automation**: Complete workflow automation system with intelligent job assignment, automated communications, and business process triggers
+- **Event-Driven Architecture**: Automatically triggers on real business events (job creation, status changes, quote acceptance) through integration with existing AutomatedTriggers service
+- **Workflow Management UI**: Comprehensive dashboard at `/job-dashboard` → "Workflows" tab with real-time statistics, workflow rule management, trigger testing, and mobile-optimized interface
+- **API Integration**: RESTful endpoints for complete workflow CRUD operations (`/api/workflows`, `/api/workflows/:id/toggle`, `/api/workflows/trigger`) with enhanced validation
+- **Business Logic**: Pre-configured workflows for emergency job handling, invoice generation, customer follow-up scheduling, and intelligent crew assignment based on availability and skills
+- **Real-time Operations**: Background processing for automated assignment, notification delivery, and scheduling with comprehensive logging and error handling
+- **Integration Architecture**: Seamlessly integrated with existing notification service, storage interface, and business logic without disrupting current operations
+
+### Job Diary System
 - **Comprehensive Diary Management**: Complete CRUD operations for job diary entries with rich metadata support
 - **Entry Types**: Multiple entry categories (note, progress, issue, milestone, weather, equipment, safety, completion) with color-coded UI
 - **Advanced Features**: Private entries, filtering by type, progress tracking, weather documentation, equipment logging, time tracking
