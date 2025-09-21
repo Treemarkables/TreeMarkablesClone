@@ -160,62 +160,234 @@ export function JobDiary({ jobId, jobTitle, compact = false }: JobDiaryProps) {
 
   if (compact) {
     return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between text-lg">
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Job Diary
-            </div>
-            <Button
-              size="sm"
-              onClick={() => setShowNewEntryDialog(true)}
-              data-testid="button-add-diary-entry"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Entry
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {isLoading ? (
-            <div className="text-sm text-gray-500">Loading diary entries...</div>
-          ) : filteredEntries.length === 0 ? (
-            <div className="text-sm text-gray-500">No diary entries yet</div>
-          ) : (
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {filteredEntries.slice(0, 3).map((entry: JobDiaryEntry) => {
-                const config = entryTypeConfig[entry.entryType as keyof typeof entryTypeConfig] || entryTypeConfig.note;
-                const IconComponent = config.icon;
-                
-                return (
-                  <div key={entry.id} className="flex items-start gap-2 p-2 bg-gray-50 rounded text-sm">
-                    <IconComponent className="h-4 w-4 mt-0.5 text-gray-600" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{entry.title}</span>
-                        <Badge variant="secondary" className={`text-xs ${config.color}`}>
-                          {config.label}
-                        </Badge>
-                        {entry.isPrivate && <EyeOff className="h-3 w-3 text-gray-400" />}
-                      </div>
-                      <div className="text-gray-600 text-xs truncate">{entry.description}</div>
-                      <div className="text-gray-400 text-xs">
-                        {entry.authorName} • {format(new Date(entry.createdAt), 'MMM dd, HH:mm')}
+      <>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between text-lg">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Job Diary
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setShowNewEntryDialog(true)}
+                data-testid="button-add-diary-entry"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Entry
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isLoading ? (
+              <div className="text-sm text-gray-500">Loading diary entries...</div>
+            ) : filteredEntries.length === 0 ? (
+              <div className="text-sm text-gray-500">No diary entries yet</div>
+            ) : (
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {filteredEntries.slice(0, 3).map((entry: JobDiaryEntry) => {
+                  const config = entryTypeConfig[entry.entryType as keyof typeof entryTypeConfig] || entryTypeConfig.note;
+                  const IconComponent = config.icon;
+                  
+                  return (
+                    <div key={entry.id} className="flex items-start gap-2 p-2 bg-gray-50 rounded text-sm">
+                      <IconComponent className="h-4 w-4 mt-0.5 text-gray-600" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium truncate">{entry.title}</span>
+                          <Badge variant="secondary" className={`text-xs ${config.color}`}>
+                            {config.label}
+                          </Badge>
+                          {entry.isPrivate && <EyeOff className="h-3 w-3 text-gray-400" />}
+                        </div>
+                        <div className="text-gray-600 text-xs truncate">{entry.description}</div>
+                        <div className="text-gray-400 text-xs">
+                          {entry.authorName} • {format(new Date(entry.createdAt), 'MMM dd, HH:mm')}
+                        </div>
                       </div>
                     </div>
+                  );
+                })}
+                {filteredEntries.length > 3 && (
+                  <div className="text-xs text-gray-500 text-center">
+                    +{filteredEntries.length - 3} more entries
                   </div>
-                );
-              })}
-              {filteredEntries.length > 3 && (
-                <div className="text-xs text-gray-500 text-center">
-                  +{filteredEntries.length - 3} more entries
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Modal Dialog for compact mode */}
+        <Dialog open={showNewEntryDialog} onOpenChange={setShowNewEntryDialog}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add Diary Entry</DialogTitle>
+              <DialogDescription>
+                Record progress, notes, or important events for this job.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Entry Type</label>
+                  <Select name="entryType" required>
+                    <SelectTrigger data-testid="select-entry-type">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(entryTypeConfig).map(([type, config]) => (
+                        <SelectItem key={type} value={type}>{config.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <div>
+                  <label className="text-sm font-medium">Author Name</label>
+                  <Input 
+                    name="authorName" 
+                    placeholder="Your name" 
+                    required 
+                    data-testid="input-author-name"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Title</label>
+                <Input 
+                  name="title" 
+                  placeholder="Brief description of entry" 
+                  required 
+                  data-testid="input-entry-title"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Description</label>
+                <Textarea 
+                  name="description" 
+                  placeholder="Detailed description of work performed, observations, or notes"
+                  rows={3}
+                  required
+                  data-testid="textarea-description"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Author Role (Optional)</label>
+                  <Select name="authorRole">
+                    <SelectTrigger data-testid="select-author-role">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="foreman">Foreman</SelectItem>
+                      <SelectItem value="technician">Technician</SelectItem>
+                      <SelectItem value="supervisor">Supervisor</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Weather Conditions (Optional)</label>
+                  <Select name="weatherConditions">
+                    <SelectTrigger data-testid="select-weather">
+                      <SelectValue placeholder="Weather" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sunny">Sunny</SelectItem>
+                      <SelectItem value="cloudy">Cloudy</SelectItem>
+                      <SelectItem value="rainy">Rainy</SelectItem>
+                      <SelectItem value="windy">Windy</SelectItem>
+                      <SelectItem value="stormy">Stormy</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Equipment Used (Optional)</label>
+                  <Input 
+                    name="equipmentUsed" 
+                    placeholder="Chainsaw, crane, truck (comma separated)"
+                    data-testid="input-equipment"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Time Spent (Minutes)</label>
+                  <Input 
+                    name="timeSpent" 
+                    type="number" 
+                    placeholder="120"
+                    data-testid="input-time-spent"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Progress (%)</label>
+                  <Input 
+                    name="progress" 
+                    type="number" 
+                    min="0" 
+                    max="100" 
+                    placeholder="75"
+                    data-testid="input-progress"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Location (Optional)</label>
+                  <Input 
+                    name="location" 
+                    placeholder="Front yard, back garden"
+                    data-testid="input-location"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Tags (Optional)</label>
+                <Input 
+                  name="tags" 
+                  placeholder="safety, urgent, customer-request (comma separated)"
+                  data-testid="input-tags"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input 
+                  type="checkbox" 
+                  name="isPrivate" 
+                  className="rounded"
+                  data-testid="checkbox-private"
+                />
+                <label className="text-sm font-medium">Private entry (internal use only)</label>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowNewEntryDialog(false)}
+                  data-testid="button-cancel-entry"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createEntryMutation.isPending}
+                  data-testid="button-save-entry"
+                >
+                  {createEntryMutation.isPending ? 'Saving...' : 'Save Entry'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </>
     );
   }
 

@@ -14,6 +14,7 @@ import { WeatherDashboard } from '@/components/WeatherDashboard';
 import QuoteManagement from '@/components/QuoteManagement';
 import { LeadEnhancement } from '@/components/LeadEnhancement';
 import { AdvancedDispatchBoard } from '@/components/AdvancedDispatchBoard';
+import { JobDiary } from '@/components/JobDiary';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
 
@@ -215,6 +216,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
             <TabsTrigger value="pipeline" data-testid="tab-pipeline" className="shrink-0"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
             <TabsTrigger value="leads" data-testid="tab-leads" className="shrink-0"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
             <TabsTrigger value="customers" data-testid="tab-customers" className="shrink-0"><Users className="w-4 h-4 mr-2" />Customers</TabsTrigger>
+            <TabsTrigger value="diary" data-testid="tab-diary" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Job Diary</TabsTrigger>
             <TabsTrigger value="quotes" data-testid="tab-quotes" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Quotes</TabsTrigger>
             <TabsTrigger value="analytics" data-testid="tab-analytics" className="shrink-0"><TrendingUp className="w-4 h-4 mr-2" />Analytics</TabsTrigger>
             <TabsTrigger value="equipment" data-testid="tab-equipment" className="shrink-0"><Wrench className="w-4 h-4 mr-2" />Equipment</TabsTrigger>
@@ -375,6 +377,79 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </div>
               </CardContent>
             </Card>
+            </div>
+          </TabsContent>
+
+          {/* Job Diary Tab */}
+          <TabsContent value="diary" className="flex-1 overflow-auto">
+            <div className="space-y-4">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="heading-job-diary">
+                  Job Documentation & Progress Tracking
+                </h2>
+                <p className="text-muted-foreground" data-testid="text-diary-description">
+                  Comprehensive job diary system for documentation, progress tracking, and field notes
+                </p>
+              </div>
+
+              {/* Featured Job Diary - Using sample job for demonstration */}
+              <Card data-testid="card-featured-job-diary">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2" data-testid="title-featured-job">
+                    <FileText className="w-5 h-5" />
+                    Featured Job: Large Oak Tree Removal
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground" data-testid="text-job-details">
+                    Job #JOB-001 - 123 Maple Street, Auckland, NZ
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <JobDiary 
+                    jobId="1" 
+                    jobTitle="Large Oak Tree Removal" 
+                    compact={false}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Additional Job Dairy Examples */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card data-testid="card-hedge-trimming-diary">
+                  <CardHeader>
+                    <CardTitle className="text-lg" data-testid="title-hedge-job">
+                      Hedge Trimming & Pruning
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground" data-testid="text-hedge-details">
+                      Job #JOB-002 - 456 Pine Avenue, Wellington, NZ
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <JobDiary 
+                      jobId="2" 
+                      jobTitle="Hedge Trimming & Pruning" 
+                      compact={true}
+                    />
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-stump-removal-diary">
+                  <CardHeader>
+                    <CardTitle className="text-lg" data-testid="title-stump-job">
+                      Stump Grinding Service
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground" data-testid="text-stump-details">
+                      Job #JOB-003 - 789 Cedar Lane, Christchurch, NZ
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <JobDiary 
+                      jobId="3" 
+                      jobTitle="Stump Grinding Service" 
+                      compact={true}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 
