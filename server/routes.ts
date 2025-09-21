@@ -30,6 +30,7 @@ import { format } from "date-fns";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
 import { businessIntelligenceService } from "./services/businessIntelligence";
+import { weatherService } from "./services/weatherService";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -4263,6 +4264,65 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error exporting analytics data:', error);
       res.status(500).json({ success: false, message: 'Error exporting analytics data' });
+    }
+  });
+
+  // ========================================
+  // WEATHER INTEGRATION API ENDPOINTS
+  // ========================================
+
+  // Get current weather conditions
+  app.get('/api/weather/current', async (req: Request, res: Response) => {
+    try {
+      const { location } = req.query;
+      const weather = await weatherService.getCurrentWeather(location as string);
+      res.json({ success: true, data: weather });
+    } catch (error) {
+      console.error('Error fetching current weather:', error);
+      res.status(500).json({ success: false, message: 'Error fetching current weather' });
+    }
+  });
+
+  // Get weather-based work safety recommendations
+  app.get('/api/weather/safety-recommendation', async (req: Request, res: Response) => {
+    try {
+      const { location } = req.query;
+      const weather = await weatherService.getCurrentWeather(location as string);
+      const recommendation = weatherService.getWorkSafetyRecommendation(weather);
+      
+      res.json({ 
+        success: true, 
+        data: {
+          weather,
+          recommendation
+        }
+      });
+    } catch (error) {
+      console.error('Error generating weather safety recommendation:', error);
+      res.status(500).json({ success: false, message: 'Error generating weather safety recommendation' });
+    }
+  });
+
+  // Get weather forecast for job planning
+  app.get('/api/weather/forecast', async (req: Request, res: Response) => {
+    try {
+      const { location, days = 7 } = req.query;
+      const weather = await weatherService.getCurrentWeather(location as string);
+      
+      // Extract forecast for requested number of days
+      const forecast = weather.forecast.slice(0, Number(days));
+      
+      res.json({ 
+        success: true, 
+        data: {
+          location: weather.location,
+          forecast,
+          lastUpdated: weather.lastUpdated
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching weather forecast:', error);
+      res.status(500).json({ success: false, message: 'Error fetching weather forecast' });
     }
   });
 

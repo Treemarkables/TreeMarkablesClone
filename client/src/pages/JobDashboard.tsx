@@ -4,12 +4,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug } from "lucide-react";
+import { CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud } from "lucide-react";
 import Pipeline from './Pipeline';
 import { PerformanceAnalytics } from '@/components/PerformanceAnalytics';
 import { EquipmentTracker } from '@/components/EquipmentTracker';
 import CommunicationsManagement from './CommunicationsManagement';
 import Integrations from './Integrations';
+import { WeatherDashboard } from '@/components/WeatherDashboard';
 import QuoteManagement from '@/components/QuoteManagement';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
@@ -137,6 +138,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
             <TabsTrigger value="analytics" data-testid="tab-analytics" className="shrink-0"><TrendingUp className="w-4 h-4 mr-2" />Analytics</TabsTrigger>
             <TabsTrigger value="equipment" data-testid="tab-equipment" className="shrink-0"><Wrench className="w-4 h-4 mr-2" />Equipment</TabsTrigger>
             <TabsTrigger value="communications" data-testid="tab-communications" className="shrink-0"><MessageSquare className="w-4 h-4 mr-2" />Communications</TabsTrigger>
+            <TabsTrigger value="weather" data-testid="tab-weather" className="shrink-0"><Cloud className="w-4 h-4 mr-2" />Weather</TabsTrigger>
             <TabsTrigger value="integrations" data-testid="tab-integrations" className="shrink-0"><Plug className="w-4 h-4 mr-2" />Integrations</TabsTrigger>
           </TabsList>
 
@@ -335,6 +337,13 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
           {/* Communications Tab */}
           <TabsContent value="communications" className="flex-1 overflow-auto">
             <CommunicationsManagement />
+          </TabsContent>
+
+          {/* Weather Tab */}
+          <TabsContent value="weather" className="flex-1 overflow-auto">
+            <div className="space-y-4">
+              <WeatherDashboard />
+            </div>
           </TabsContent>
 
           {/* Integrations Tab */}
