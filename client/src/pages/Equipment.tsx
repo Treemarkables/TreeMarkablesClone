@@ -36,7 +36,10 @@ import {
   LogOut,
   LogIn,
   History,
-  Undo2
+  Undo2,
+  TrendingUp,
+  PieChart,
+  Table as TableIcon
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -173,15 +176,14 @@ export default function Equipment() {
     queryKey: ["/api/equipment/checkouts"],
   });
 
-  // Fetch maintenance records for all equipment - using individual queries for now
+  // Fetch maintenance records for all equipment
   const { data: maintenanceData, isLoading: isMaintenanceLoading } = useQuery({
-    queryKey: ["/api/maintenance/all"],
-    enabled: false, // Disabled for now as we'll aggregate from equipment-specific queries
+    queryKey: ["/api/equipment/maintenance"],
   });
 
   const equipment = Array.isArray((equipmentData as any)?.data) ? (equipmentData as any).data : [];
   const checkouts = Array.isArray((checkoutData as any)?.data) ? (checkoutData as any).data : [];
-  const maintenanceRecords: any[] = []; // TODO: Aggregate from individual equipment queries
+  const maintenanceRecords = Array.isArray((maintenanceData as any)?.data) ? (maintenanceData as any).data : [];
 
   // Add equipment mutation
   const addEquipmentMutation = useMutation({
@@ -760,10 +762,11 @@ export default function Equipment() {
 
       {/* Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview" data-testid="tab-overview">Equipment Overview</TabsTrigger>
           <TabsTrigger value="checkouts" data-testid="tab-checkouts">Active Checkouts ({activeCheckouts.length})</TabsTrigger>
           <TabsTrigger value="maintenance" data-testid="tab-maintenance">Maintenance ({stats.overdueMaintenance})</TabsTrigger>
+          <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
           <TabsTrigger value="history" data-testid="tab-history">History</TabsTrigger>
         </TabsList>
 
@@ -997,6 +1000,286 @@ export default function Equipment() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          {/* Analytics Overview Cards */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Equipment Value</p>
+                    <p className="text-2xl font-bold text-gray-900" data-testid="stat-total-value">
+                      ${equipment.reduce((sum: number, item: any) => {
+                        const price = parseFloat(item.purchasePrice?.toString() || "0");
+                        return sum + (isNaN(price) ? 0 : price);
+                      }, 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <DollarSign className="h-8 w-8 text-green-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Utilization Rate</p>
+                    <p className="text-2xl font-bold text-gray-900" data-testid="stat-utilization-rate">
+                      {stats.total > 0 ? Math.round((stats.inUse / stats.total) * 100) : 0}%
+                    </p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-blue-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Avg. Equipment Age</p>
+                    <p className="text-2xl font-bold text-gray-900" data-testid="stat-avg-age">
+                      {equipment.length > 0 ? 
+                        Math.round(equipment.reduce((sum: number, item: any) => {
+                          const age = item.purchaseDate ? 
+                            (new Date().getFullYear() - new Date(item.purchaseDate).getFullYear()) : 0;
+                          return sum + age;
+                        }, 0) / equipment.length) : 0} years
+                    </p>
+                  </div>
+                  <Calendar className="h-8 w-8 text-purple-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Maintenance Cost</p>
+                    <p className="text-2xl font-bold text-gray-900" data-testid="stat-maintenance-cost">
+                      ${maintenanceRecords.reduce((sum: number, record: any) => {
+                        const cost = parseFloat(record.cost?.toString() || "0");
+                        return sum + (isNaN(cost) ? 0 : cost);
+                      }, 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <Wrench className="h-8 w-8 text-orange-600" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Equipment Utilization Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Equipment Utilization by Type
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {Array.from(new Set(equipment.map((item: any) => item.type))).map((type: string) => {
+                  const typeEquipment = equipment.filter((item: any) => item.type === type);
+                  const inUseCount = typeEquipment.filter((item: any) => item.status === 'in_use').length;
+                  const utilizationRate = typeEquipment.length > 0 ? (inUseCount / typeEquipment.length) * 100 : 0;
+                  
+                  return (
+                    <div key={type} className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium capitalize">{type.replace('_', ' ')}</span>
+                        <span className="text-gray-600">{inUseCount}/{typeEquipment.length} ({Math.round(utilizationRate)}%)</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                          style={{ width: `${utilizationRate}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Equipment Performance Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TableIcon className="h-5 w-5" />
+                Equipment Performance Analysis
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-3 font-medium">Equipment</th>
+                      <th className="text-left p-3 font-medium">Type</th>
+                      <th className="text-left p-3 font-medium">Age</th>
+                      <th className="text-left p-3 font-medium">Status</th>
+                      <th className="text-left p-3 font-medium">Total Checkouts</th>
+                      <th className="text-left p-3 font-medium">Current Usage</th>
+                      <th className="text-left p-3 font-medium">Last Maintenance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {equipment.map((item: any) => {
+                      const itemCheckouts = checkouts.filter((checkout: any) => checkout.equipmentId === item.id);
+                      const currentCheckout = itemCheckouts.find((checkout: any) => !checkout.actualReturnTime);
+                      const age = item.purchaseDate ? 
+                        (new Date().getFullYear() - new Date(item.purchaseDate).getFullYear()) : 'Unknown';
+                      
+                      return (
+                        <tr key={item.id} className="border-b hover:bg-gray-50">
+                          <td className="p-3">
+                            <div>
+                              <div className="font-medium">{item.name}</div>
+                              <div className="text-gray-600 text-xs">{item.brand} {item.model}</div>
+                            </div>
+                          </td>
+                          <td className="p-3 capitalize">{item.type?.replace('_', ' ')}</td>
+                          <td className="p-3">{age} {age !== 'Unknown' && 'years'}</td>
+                          <td className="p-3">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
+                              {getStatusIcon(item.status)}
+                              <span className="ml-1 capitalize">{item.status?.replace('_', ' ')}</span>
+                            </span>
+                          </td>
+                          <td className="p-3 text-center" data-testid={`equipment-checkouts-${item.id}`}>{itemCheckouts.length}</td>
+                          <td className="p-3">
+                            {currentCheckout ? (
+                              <div className="text-sm">
+                                <div className="font-medium">{currentCheckout.customerName}</div>
+                                <div className="text-gray-600">Since {new Date(currentCheckout.checkoutTime).toLocaleDateString()}</div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-500">Not in use</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {item.lastMaintenanceDate ? 
+                              new Date(item.lastMaintenanceDate).toLocaleDateString() : 
+                              <span className="text-gray-500">Never</span>
+                            }
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Cost Analysis */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PieChart className="h-5 w-5" />
+                  Equipment Value by Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {['available', 'in_use', 'maintenance', 'retired'].map((status) => {
+                  const statusEquipment = equipment.filter((item: any) => item.status === status);
+                  const statusValue = statusEquipment.reduce((sum: number, item: any) => {
+                    const price = parseFloat(item.purchasePrice?.toString() || "0");
+                    return sum + (isNaN(price) ? 0 : price);
+                  }, 0);
+                  const totalValue = equipment.reduce((sum: number, item: any) => {
+                    const price = parseFloat(item.purchasePrice?.toString() || "0");
+                    return sum + (isNaN(price) ? 0 : price);
+                  }, 0);
+                  const percentage = totalValue > 0 ? (statusValue / totalValue) * 100 : 0;
+                  
+                  return (
+                    <div key={status} className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium capitalize flex items-center gap-2">
+                          {getStatusIcon(status)}
+                          {status.replace('_', ' ')}
+                        </span>
+                        <span className="text-gray-600">${statusValue.toLocaleString()} ({Math.round(percentage)}%)</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full transition-all duration-300 ${getStatusColor(status).includes('green') ? 'bg-green-500' : 
+                            getStatusColor(status).includes('blue') ? 'bg-blue-500' : 
+                            getStatusColor(status).includes('yellow') ? 'bg-yellow-500' : 'bg-red-500'}`}
+                          style={{ width: `${percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Equipment Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Most Utilized Equipment:</span>
+                    <span className="text-sm font-medium">
+                      {equipment.length > 0 ? 
+                        equipment
+                          .map((item: any) => ({
+                            ...item,
+                            checkoutCount: checkouts.filter((c: any) => c.equipmentId === item.id).length
+                          }))
+                          .sort((a, b) => b.checkoutCount - a.checkoutCount)[0]?.name || 'N/A'
+                        : 'N/A'
+                      }
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Oldest Equipment:</span>
+                    <span className="text-sm font-medium">
+                      {equipment.length > 0 ? 
+                        equipment
+                          .filter((item: any) => item.purchaseDate)
+                          .sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime())[0]?.name || 'N/A'
+                        : 'N/A'
+                      }
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Most Expensive:</span>
+                    <span className="text-sm font-medium">
+                      {equipment.length > 0 ? 
+                        equipment
+                          .sort((a, b) => (b.purchasePrice || 0) - (a.purchasePrice || 0))[0]?.name || 'N/A'
+                        : 'N/A'
+                      }
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Equipment Needing Attention:</span>
+                    <span className="text-sm font-medium text-red-600">
+                      {overdueMaintenance.length + stats.maintenance} items
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="history" className="space-y-4">
