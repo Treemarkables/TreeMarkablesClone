@@ -1,6 +1,7 @@
 import { 
   type User, type InsertUser, type LeadSubmission, type InsertLeadSubmission,
-  type Customer, type InsertCustomer, type Lead, type InsertLead,
+  type Customer, type InsertCustomer, type CommunicationPreferences, type InsertCommunicationPreferences,
+  type Lead, type InsertLead,
   type Call, type InsertCall, type Quote, type InsertQuote,
   type Job, type InsertJob, type JobDiaryEntry, type InsertJobDiaryEntry,
   type Activity, type InsertActivity,
@@ -43,6 +44,12 @@ export interface IStorage {
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   getAllCustomers(): Promise<Customer[]>;
   searchCustomers(query: string): Promise<Customer[]>;
+  
+  // Communication Preferences Management
+  createCommunicationPreferences(preferences: InsertCommunicationPreferences): Promise<CommunicationPreferences>;
+  getCommunicationPreferences(customerId: string): Promise<CommunicationPreferences | undefined>;
+  updateCommunicationPreferences(customerId: string, updates: Partial<InsertCommunicationPreferences>): Promise<CommunicationPreferences>;
+  deleteCommunicationPreferences(customerId: string): Promise<boolean>;
   
   // Lead Pipeline Management
   createPipelineLead(lead: InsertLead): Promise<Lead>;
@@ -347,6 +354,7 @@ export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private leads: LeadSubmission[];
   private customers: Map<string, Customer>;
+  private communicationPreferences: Map<string, CommunicationPreferences>;
   private pipelineLeads: Map<string, Lead>;
   private calls: Map<string, Call>;
   private quotes: Map<string, Quote>;
@@ -380,6 +388,7 @@ export class MemStorage implements IStorage {
     this.users = new Map();
     this.leads = [];
     this.customers = new Map();
+    this.communicationPreferences = new Map();
     this.pipelineLeads = new Map();
     this.calls = new Map();
     this.quotes = new Map();
@@ -1297,6 +1306,69 @@ export class MemStorage implements IStorage {
         customer.address?.toLowerCase().includes(lowercaseQuery)
       )
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  // ========================================
+  // COMMUNICATION PREFERENCES MANAGEMENT IMPLEMENTATIONS
+  // ========================================
+
+  async createCommunicationPreferences(preferences: InsertCommunicationPreferences): Promise<CommunicationPreferences> {
+    const id = randomUUID();
+    const now = new Date();
+    const newPreferences: CommunicationPreferences = {
+      ...preferences,
+      id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.communicationPreferences.set(preferences.customerId, newPreferences);
+    return newPreferences;
+  }
+
+  async getCommunicationPreferences(customerId: string): Promise<CommunicationPreferences | undefined> {
+    return this.communicationPreferences.get(customerId);
+  }
+
+  async updateCommunicationPreferences(customerId: string, updates: Partial<InsertCommunicationPreferences>): Promise<CommunicationPreferences> {
+    const existing = this.communicationPreferences.get(customerId);
+    
+    if (!existing) {
+      // UPSERT: Create new preferences if they don't exist (idempotent operation)
+      console.log(`[STORAGE] Creating new communication preferences for customer: ${customerId}`);
+      const defaultPreferences: InsertCommunicationPreferences = {
+        customerId,
+        emailEnabled: true,
+        smsEnabled: true,
+        marketingOptIn: false,
+        jobNotifications: true,
+        quoteNotifications: true,
+        reminderNotifications: true,
+        emergencyNotifications: true,
+        preferredNotificationTime: 'morning',
+        quietHoursStart: '22:00',
+        quietHoursEnd: '08:00',
+        timezone: 'Pacific/Auckland',
+        language: 'en',
+        ...updates, // Apply the updates to the defaults
+      };
+      return this.createCommunicationPreferences(defaultPreferences);
+    }
+
+    // UPDATE: Merge updates with existing preferences
+    console.log(`[STORAGE] Updating existing communication preferences for customer: ${customerId}`);
+    const updated: CommunicationPreferences = {
+      ...existing,
+      ...updates,
+      customerId, // Ensure customerId doesn't change
+      updatedAt: new Date(),
+    };
+    this.communicationPreferences.set(customerId, updated);
+    console.log(`[STORAGE] Updated preferences saved:`, updated);
+    return updated;
+  }
+
+  async deleteCommunicationPreferences(customerId: string): Promise<boolean> {
+    return this.communicationPreferences.delete(customerId);
   }
 
   // ========================================

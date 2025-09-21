@@ -43,7 +43,12 @@ import {
   Home,
   Shield,
   Truck,
-  Users
+  Users,
+  Bell,
+  BellOff,
+  Volume2,
+  VolumeX,
+  AlertTriangle
 } from "lucide-react";
 
 interface Customer {
@@ -118,6 +123,22 @@ export function CustomerPortal() {
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const [showPhotoDialog, setShowPhotoDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+
+  // Communication Preferences State
+  const [communicationPreferences, setCommunicationPreferences] = useState({
+    emailEnabled: true,
+    smsEnabled: true,
+    marketingOptIn: false,
+    jobNotifications: true,
+    quoteNotifications: true,
+    reminderNotifications: true,
+    emergencyNotifications: true,
+    preferredNotificationTime: 'morning',
+    quietHoursStart: '22:00',
+    quietHoursEnd: '08:00',
+    timezone: 'Pacific/Auckland',
+    language: 'en',
+  });
 
   // Service Request Schema
   const serviceRequestSchema = z.object({
@@ -243,6 +264,55 @@ export function CustomerPortal() {
       toast({
         title: "Error",
         description: "Failed to submit service request. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Communication Preferences API
+  const { data: commPrefsData, isLoading: preferencesLoading } = useQuery({
+    queryKey: ['communication-preferences', customer?.id],
+    queryFn: async () => {
+      console.log(`[FRONTEND] Fetching communication preferences for customer: ${customer?.id}`);
+      const response = await apiRequest('GET', `/api/customers/${customer?.id}/communication-preferences`);
+      const result = await response.json();
+      console.log(`[FRONTEND] Received preferences response:`, result);
+      return result;
+    },
+    enabled: !!customer?.id,
+    onSuccess: (data) => {
+      console.log(`[FRONTEND] Query onSuccess callback with data:`, data);
+      if (data.success && data.data) {
+        console.log(`[FRONTEND] Updating state with preferences:`, data.data);
+        setCommunicationPreferences(data.data);
+      }
+    }
+  });
+
+  // Update preferences when data is loaded (React Query v5 approach)
+  React.useEffect(() => {
+    if (commPrefsData?.success && commPrefsData?.data) {
+      console.log(`[FRONTEND] useEffect updating preferences:`, commPrefsData.data);
+      setCommunicationPreferences(commPrefsData.data);
+    }
+  }, [commPrefsData]);
+
+  const updatePreferencesMutation = useMutation({
+    mutationFn: async (preferences: typeof communicationPreferences) => {
+      const response = await apiRequest('PUT', `/api/customers/${customer?.id}/communication-preferences`, preferences);
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Preferences Updated",
+        description: "Your communication preferences have been saved.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['communication-preferences', customer?.id] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update preferences. Please try again.",
         variant: "destructive"
       });
     }
@@ -443,10 +513,11 @@ export function CustomerPortal() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="jobs" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="jobs" data-testid="tab-jobs">My Jobs</TabsTrigger>
             <TabsTrigger value="invoices" data-testid="tab-invoices">Invoices</TabsTrigger>
             <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule Service</TabsTrigger>
+            <TabsTrigger value="preferences" data-testid="tab-preferences">Communication</TabsTrigger>
             <TabsTrigger value="profile" data-testid="tab-profile">Profile</TabsTrigger>
           </TabsList>
 
@@ -823,6 +894,303 @@ export function CustomerPortal() {
                 </Form>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Communication Preferences Tab */}
+          <TabsContent value="preferences" className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold">Communication Preferences</h2>
+              <p className="text-muted-foreground">Manage how and when you receive notifications</p>
+            </div>
+
+            <div className="grid gap-6">
+              {/* Notification Methods */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="w-5 h-5" />
+                    Notification Methods
+                  </CardTitle>
+                  <CardDescription>Choose how you want to receive notifications</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between" data-testid="row-email-notifications">
+                    <div className="flex items-center gap-3">
+                      <Mail className="w-4 h-4 text-blue-500" />
+                      <div>
+                        <Label className="font-medium">Email Notifications</Label>
+                        <p className="text-sm text-muted-foreground">Receive notifications via email</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={communicationPreferences.emailEnabled}
+                        onChange={(e) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          emailEnabled: e.target.checked
+                        }))}
+                        className="sr-only peer"
+                        data-testid="toggle-email-notifications"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between" data-testid="row-sms-notifications">
+                    <div className="flex items-center gap-3">
+                      <MessageSquare className="w-4 h-4 text-green-500" />
+                      <div>
+                        <Label className="font-medium">SMS Notifications</Label>
+                        <p className="text-sm text-muted-foreground">Receive important alerts via SMS</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={communicationPreferences.smsEnabled}
+                        onChange={(e) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          smsEnabled: e.target.checked
+                        }))}
+                        className="sr-only peer"
+                        data-testid="toggle-sms-notifications"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Notification Types */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    Notification Types
+                  </CardTitle>
+                  <CardDescription>Select which notifications you want to receive</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Truck className="w-4 h-4 text-orange-500" />
+                      <div>
+                        <Label className="font-medium">Job Updates</Label>
+                        <p className="text-sm text-muted-foreground">Scheduling, progress, and completion updates</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={communicationPreferences.jobNotifications}
+                        onChange={(e) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          jobNotifications: e.target.checked
+                        }))}
+                        className="sr-only peer"
+                        data-testid="toggle-job-notifications"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-4 h-4 text-blue-500" />
+                      <div>
+                        <Label className="font-medium">Quote Notifications</Label>
+                        <p className="text-sm text-muted-foreground">New quotes and quote status updates</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={communicationPreferences.quoteNotifications}
+                        onChange={(e) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          quoteNotifications: e.target.checked
+                        }))}
+                        className="sr-only peer"
+                        data-testid="toggle-quote-notifications"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-4 h-4 text-purple-500" />
+                      <div>
+                        <Label className="font-medium">Reminders</Label>
+                        <p className="text-sm text-muted-foreground">Appointment reminders and follow-ups</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={communicationPreferences.reminderNotifications}
+                        onChange={(e) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          reminderNotifications: e.target.checked
+                        }))}
+                        className="sr-only peer"
+                        data-testid="toggle-reminder-notifications"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                      <div>
+                        <Label className="font-medium">Emergency Alerts</Label>
+                        <p className="text-sm text-muted-foreground">Urgent updates and emergency notifications</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={communicationPreferences.emergencyNotifications}
+                        onChange={(e) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          emergencyNotifications: e.target.checked
+                        }))}
+                        className="sr-only peer"
+                        data-testid="toggle-emergency-notifications"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Timing Preferences */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Volume2 className="w-5 h-5" />
+                    Timing & Preferences
+                  </CardTitle>
+                  <CardDescription>Configure when and how often you receive notifications</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Preferred Notification Time</Label>
+                      <Select
+                        value={communicationPreferences.preferredNotificationTime}
+                        onValueChange={(value) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          preferredNotificationTime: value
+                        }))}
+                      >
+                        <SelectTrigger data-testid="select-notification-time">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="morning">Morning (8 AM - 12 PM)</SelectItem>
+                          <SelectItem value="afternoon">Afternoon (12 PM - 5 PM)</SelectItem>
+                          <SelectItem value="evening">Evening (5 PM - 8 PM)</SelectItem>
+                          <SelectItem value="anytime">Anytime</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Timezone</Label>
+                      <Select
+                        value={communicationPreferences.timezone}
+                        onValueChange={(value) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          timezone: value
+                        }))}
+                      >
+                        <SelectTrigger data-testid="select-timezone">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Pacific/Auckland">Auckland, New Zealand</SelectItem>
+                          <SelectItem value="Australia/Sydney">Sydney, Australia</SelectItem>
+                          <SelectItem value="America/Los_Angeles">Los Angeles, USA</SelectItem>
+                          <SelectItem value="Europe/London">London, UK</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Quiet Hours Start</Label>
+                      <Input
+                        type="time"
+                        value={communicationPreferences.quietHoursStart}
+                        onChange={(e) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          quietHoursStart: e.target.value
+                        }))}
+                        data-testid="input-quiet-start"
+                      />
+                      <p className="text-xs text-muted-foreground">No non-urgent notifications during quiet hours</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Quiet Hours End</Label>
+                      <Input
+                        type="time"
+                        value={communicationPreferences.quietHoursEnd}
+                        onChange={(e) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          quietHoursEnd: e.target.value
+                        }))}
+                        data-testid="input-quiet-end"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="flex items-center gap-3">
+                      <Star className="w-4 h-4 text-orange-500" />
+                      <div>
+                        <Label className="font-medium text-orange-900">Marketing Communications</Label>
+                        <p className="text-sm text-orange-700">Receive occasional updates about new services and special offers</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={communicationPreferences.marketingOptIn}
+                        onChange={(e) => setCommunicationPreferences(prev => ({
+                          ...prev,
+                          marketingOptIn: e.target.checked
+                        }))}
+                        className="sr-only peer"
+                        data-testid="toggle-marketing-opt-in"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Save Button */}
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => updatePreferencesMutation.mutate(communicationPreferences)}
+                  disabled={updatePreferencesMutation.isPending}
+                  className="min-w-32"
+                  data-testid="button-save-preferences"
+                >
+                  {updatePreferencesMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Settings className="w-4 h-4 mr-2" />
+                  )}
+                  Save Preferences
+                </Button>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Profile Tab */}
