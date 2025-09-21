@@ -29,13 +29,22 @@ import {
   User,
   FileText
 } from 'lucide-react';
-import type { SafetyIncident, InsertSafetyIncident, RiskAssessment, InsertRiskAssessment } from '@shared/schema';
-import { safetyIncidentInsertSchema, riskAssessmentInsertSchema } from '@shared/schema';
+import type { 
+  SafetyIncident, InsertSafetyIncident, 
+  RiskAssessment, InsertRiskAssessment,
+  ComplianceRequirement, InsertComplianceRequirement 
+} from '@shared/schema';
+import { 
+  safetyIncidentInsertSchema, 
+  riskAssessmentInsertSchema,
+  complianceRequirementInsertSchema 
+} from '@shared/schema';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 
 // Use shared schema for consistency
 type SafetyIncidentFormData = InsertSafetyIncident;
 type RiskAssessmentFormData = InsertRiskAssessment;
+type ComplianceRequirementFormData = InsertComplianceRequirement;
 
 interface SafetyReportingProps {
   compact?: boolean;
@@ -52,7 +61,12 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
   const [showNewRiskAssessmentDialog, setShowNewRiskAssessmentDialog] = useState(false);
   const [selectedRiskAssessment, setSelectedRiskAssessment] = useState<RiskAssessment | null>(null);
   const [showEditRiskAssessmentDialog, setShowEditRiskAssessmentDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<'incidents' | 'assessments'>('incidents');
+  
+  // Compliance State
+  const [showNewComplianceDialog, setShowNewComplianceDialog] = useState(false);
+  const [selectedCompliance, setSelectedCompliance] = useState<ComplianceRequirement | null>(null);
+  const [showEditComplianceDialog, setShowEditComplianceDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<'incidents' | 'assessments' | 'compliance'>('incidents');
 
   // Fetch safety incidents
   const { data: incidentsResponse, isLoading } = useQuery({
@@ -67,6 +81,20 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
   });
   
   const riskAssessments = assessmentsResponse?.data || [];
+
+  // Fetch compliance requirements
+  const { data: complianceResponse, isLoading: isLoadingCompliance } = useQuery({
+    queryKey: ['/api/compliance/requirements'],
+  });
+  
+  const complianceRequirements = complianceResponse?.data || [];
+
+  // Fetch compliance analytics
+  const { data: complianceAnalyticsResponse } = useQuery({
+    queryKey: ['/api/compliance/analytics'],
+  });
+  
+  const complianceAnalytics = complianceAnalyticsResponse?.data || {};
 
   // Create incident mutation
   const createIncidentMutation = useMutation({
@@ -159,6 +187,53 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
       toast({
         title: 'Error',
         description: `Failed to update risk assessment: ${error.message}`,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Create compliance requirement mutation
+  const createComplianceMutation = useMutation({
+    mutationFn: async (data: ComplianceRequirementFormData) => {
+      return apiRequest('POST', '/api/compliance/requirements', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/compliance/requirements'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/compliance/analytics'] });
+      setShowNewComplianceDialog(false);
+      toast({
+        title: 'Success',
+        description: 'Compliance requirement created successfully',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: `Failed to create compliance requirement: ${error.message}`,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Update compliance requirement mutation
+  const updateComplianceMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<ComplianceRequirementFormData> }) => {
+      return apiRequest('PUT', `/api/compliance/requirements/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/compliance/requirements'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/compliance/analytics'] });
+      setShowEditComplianceDialog(false);
+      setSelectedCompliance(null);
+      toast({
+        title: 'Success',
+        description: 'Compliance requirement updated successfully',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: `Failed to update compliance requirement: ${error.message}`,
         variant: 'destructive',
       });
     },
@@ -281,6 +356,39 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
       updateRiskAssessmentMutation.mutate({ id: selectedRiskAssessment.id, data });
     }
   };
+
+  const onSubmitNewCompliance = (data: ComplianceRequirementFormData) => {
+    createComplianceMutation.mutate(data);
+  };
+
+  const onSubmitEditCompliance = (data: ComplianceRequirementFormData) => {
+    if (selectedCompliance) {
+      updateComplianceMutation.mutate({ id: selectedCompliance.id, data });
+    }
+  };
+
+  // Compliance forms
+  const newComplianceForm = useForm<ComplianceRequirementFormData>({
+    resolver: zodResolver(complianceRequirementInsertSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      category: '',
+      type: '',
+      frequency: '',
+      regulatoryBody: '',
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      nextDue: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      priority: 'medium',
+      status: 'pending',
+      assignedTo: 'Current User',
+      requirements: [],
+      attachments: [],
+      notes: '',
+      complianceScore: undefined,
+      isActive: true,
+    },
+  });
 
   const getSeverityColor = (severity: string) => {
     switch (severity.toLowerCase()) {
@@ -410,8 +518,8 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
         <h2 className="text-2xl font-bold text-foreground">Safety Management</h2>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'incidents' | 'assessments')}>
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'incidents' | 'assessments' | 'compliance')}>
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="incidents" data-testid="tab-incidents">
             <Shield className="w-4 h-4 mr-2" />
             Safety Incidents
@@ -419,6 +527,10 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
           <TabsTrigger value="assessments" data-testid="tab-assessments">
             <AlertTriangle className="w-4 h-4 mr-2" />
             Risk Assessments
+          </TabsTrigger>
+          <TabsTrigger value="compliance" data-testid="tab-compliance">
+            <FileText className="w-4 h-4 mr-2" />
+            Compliance
           </TabsTrigger>
         </TabsList>
 
@@ -1121,6 +1233,368 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
                       {assessment.recommendations && (
                         <div className="mt-2 text-sm">
                           <strong>Recommendations:</strong> {assessment.recommendations}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="compliance" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-foreground">Compliance Monitoring</h3>
+            <Dialog open={showNewComplianceDialog} onOpenChange={setShowNewComplianceDialog}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-compliance">
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Requirement
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create Compliance Requirement</DialogTitle>
+                </DialogHeader>
+                <Form {...newComplianceForm}>
+                  <form onSubmit={newComplianceForm.handleSubmit(onSubmitNewCompliance)} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={newComplianceForm.control}
+                        name="title"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Requirement Title</FormLabel>
+                            <FormControl>
+                              <Input placeholder="e.g., Monthly Safety Inspection" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newComplianceForm.control}
+                        name="assignedTo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Assigned To</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Responsible person" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={newComplianceForm.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea 
+                              placeholder="Detailed description of the compliance requirement..."
+                              rows={3}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <FormField
+                        control={newComplianceForm.control}
+                        name="category"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Category</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select category" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="safety">Safety</SelectItem>
+                                <SelectItem value="environmental">Environmental</SelectItem>
+                                <SelectItem value="regulatory">Regulatory</SelectItem>
+                                <SelectItem value="internal">Internal</SelectItem>
+                                <SelectItem value="certification">Certification</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newComplianceForm.control}
+                        name="type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Type</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="inspection">Inspection</SelectItem>
+                                <SelectItem value="audit">Audit</SelectItem>
+                                <SelectItem value="training">Training</SelectItem>
+                                <SelectItem value="certification">Certification</SelectItem>
+                                <SelectItem value="documentation">Documentation</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newComplianceForm.control}
+                        name="frequency"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Frequency</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select frequency" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="quarterly">Quarterly</SelectItem>
+                                <SelectItem value="annual">Annual</SelectItem>
+                                <SelectItem value="one_time">One Time</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newComplianceForm.control}
+                        name="priority"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Priority</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select priority" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="critical">Critical</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={newComplianceForm.control}
+                        name="dueDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Due Date</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="date" 
+                                value={field.value instanceof Date && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
+                                onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : new Date())}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newComplianceForm.control}
+                        name="nextDue"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Next Due Date</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="date" 
+                                value={field.value instanceof Date && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
+                                onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : new Date())}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={newComplianceForm.control}
+                      name="regulatoryBody"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Regulatory Body (Optional)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., OSHA, EPA, Local Authority" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={newComplianceForm.control}
+                      name="notes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Notes</FormLabel>
+                          <FormControl>
+                            <Textarea 
+                              placeholder="Additional notes or requirements..."
+                              rows={3}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="flex gap-2 pt-4">
+                      <Button 
+                        type="submit" 
+                        disabled={createComplianceMutation.isPending}
+                      >
+                        {createComplianceMutation.isPending ? 'Creating...' : 'Create Requirement'}
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        onClick={() => setShowNewComplianceDialog(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Compliance Analytics Dashboard */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Requirements</CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{complianceAnalytics.totalRequirements || 0}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Overdue</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">{complianceAnalytics.overdueRequirements || 0}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Upcoming (30 days)</CardTitle>
+                <Calendar className="h-4 w-4 text-yellow-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">{complianceAnalytics.upcomingRequirements || 0}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Avg Score</CardTitle>
+                <Activity className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{complianceAnalytics.averageComplianceScore || 0}%</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Compliance Requirements List */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Compliance Requirements</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingCompliance ? (
+                <div className="text-center py-4">Loading requirements...</div>
+              ) : complianceRequirements.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No compliance requirements found. Create your first requirement to get started.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {complianceRequirements.map((requirement: ComplianceRequirement) => (
+                    <div
+                      key={requirement.id}
+                      className="border rounded-lg p-4 hover:bg-muted/50 cursor-pointer"
+                      data-testid={`requirement-${requirement.id}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Badge className={`${getSeverityColor(requirement.priority)} text-white`}>
+                            {requirement.priority.toUpperCase()}
+                          </Badge>
+                          <span className="font-medium">{requirement.title}</span>
+                          <Badge variant="outline">
+                            {requirement.category}
+                          </Badge>
+                          <Badge variant="outline">
+                            {requirement.frequency}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant={
+                              requirement.status === 'completed' ? 'default' : 
+                              requirement.status === 'overdue' ? 'destructive' : 
+                              'secondary'
+                            }
+                          >
+                            {requirement.status}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            Due: {new Date(requirement.nextDue).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-sm text-muted-foreground">
+                        Assigned to: {requirement.assignedTo}
+                      </div>
+                      <div className="mt-2 text-sm">
+                        {requirement.description}
+                      </div>
+                      {requirement.regulatoryBody && (
+                        <div className="mt-2 text-sm">
+                          <strong>Regulatory Body:</strong> {requirement.regulatoryBody}
                         </div>
                       )}
                     </div>
