@@ -184,7 +184,7 @@ export default function Pipeline() {
     const stageOpportunities = opportunitiesByStatus[stageId] || [];
     const count = stageOpportunities.length;
     const value = stageOpportunities.reduce((sum, opp) => {
-      return sum + (parseFloat(opp.opportunityValue || '0') || 0);
+      return sum + (parseFloat(opp.estimatedValue || '0') || 0);
     }, 0);
     return { count, value };
   };
@@ -442,7 +442,7 @@ export default function Pipeline() {
                               <div className="flex items-center justify-between">
                                 <span>Opportunity Value:</span>
                                 <span className="font-medium" data-testid={`opportunity-value-${opportunity.id}`}>
-                                  {formatCurrency(parseFloat(opportunity.opportunityValue || '0'))}
+                                  {formatCurrency(parseFloat(opportunity.estimatedValue || '0'))}
                                 </span>
                               </div>
                               
