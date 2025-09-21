@@ -58,12 +58,6 @@ const dashboardItems = [
     value: "jobs"
   },
   {
-    title: "Quotes", 
-    url: "#",
-    icon: FileText,
-    value: "quotes"
-  },
-  {
     title: "Customers",
     url: "#",
     icon: Users,
