@@ -473,32 +473,78 @@ export class MemStorage implements IStorage {
   }
   
   private initializeSampleData() {
-    // Sample customers
+    // Enhanced sample customers with realistic data
     const customer1 = { 
       id: '1', name: 'Sarah Johnson', email: 'sarah.johnson@email.com', phone: '(555) 123-4567', 
-      address: '123 Maple Street, Auckland, NZ', city: 'Auckland', region: 'Auckland', 
-      notes: 'Has large oak tree requiring removal. Previous customer.', source: 'Google Ads', 
-      leadId: null, isActive: true, totalSpent: null, lastContactDate: null, preferredContactMethod: 'phone',
-      createdAt: new Date('2024-12-15'), updatedAt: new Date('2024-12-15') 
+      address: '123 Maple Street, Remuera, Auckland 1050', city: 'Auckland', region: 'Auckland', 
+      notes: 'VIP customer with multiple properties. Prefers morning appointments and detailed quotes. Has a landscaping budget of $15,000 annually.', 
+      source: 'Google Ads', lifetimeValue: '8500.00', totalJobs: 12, isActive: true, 
+      lastContactDate: new Date('2024-12-18'), preferredContactMethod: 'phone',
+      tags: ['vip', 'high-value', 'multiple-properties'],
+      createdAt: new Date('2024-01-15'), updatedAt: new Date('2024-12-18') 
     };
     const customer2 = { 
       id: '2', name: 'Mike Chen', email: 'mike.chen@email.com', phone: '(555) 987-6543',
-      address: '456 Pine Avenue, Wellington, NZ', city: 'Wellington', region: 'Wellington',
-      notes: 'Storm damaged tree removal needed urgently.', source: 'Facebook', 
-      leadId: null, isActive: true, totalSpent: null, lastContactDate: null, preferredContactMethod: 'email',
-      createdAt: new Date('2024-12-10'), updatedAt: new Date('2024-12-10') 
+      address: '456 Pine Avenue, Mt Victoria, Wellington 6011', city: 'Wellington', region: 'Wellington',
+      notes: 'Commercial property manager for several office buildings. Requires safety certificates and detailed documentation for all work.', 
+      source: 'Facebook', lifetimeValue: '12400.00', totalJobs: 8, isActive: true, 
+      lastContactDate: new Date('2024-12-20'), preferredContactMethod: 'email',
+      tags: ['commercial', 'property-manager', 'documentation-required'],
+      createdAt: new Date('2024-03-10'), updatedAt: new Date('2024-12-20') 
     };
     const customer3 = { 
       id: '3', name: 'Emma Wilson', email: 'emma.wilson@email.com', phone: '(555) 456-7890',
-      address: '789 Cedar Lane, Christchurch, NZ', city: 'Christchurch', region: 'Canterbury',
-      notes: 'Regular maintenance customer. Quarterly pruning.', source: 'Website',
-      leadId: null, isActive: true, totalSpent: null, lastContactDate: null, preferredContactMethod: 'phone',
-      createdAt: new Date('2024-12-08'), updatedAt: new Date('2024-12-08') 
+      address: '789 Cedar Lane, Fendalton, Christchurch 8041', city: 'Christchurch', region: 'Canterbury',
+      notes: 'Regular maintenance customer with quarterly service agreement. Environmentally conscious - prefers sustainable practices.', 
+      source: 'Website', lifetimeValue: '3200.00', totalJobs: 15, isActive: true, 
+      lastContactDate: new Date('2024-11-25'), preferredContactMethod: 'phone',
+      tags: ['maintenance-contract', 'eco-friendly', 'quarterly-service'],
+      createdAt: new Date('2024-02-08'), updatedAt: new Date('2024-11-25') 
+    };
+    const customer4 = { 
+      id: '4', name: 'David Rodriguez', email: 'david.rodriguez@email.com', phone: '(555) 321-9876',
+      address: '246 Oak Drive, Hamilton East, Hamilton 3216', city: 'Hamilton', region: 'Waikato',
+      notes: 'New customer interested in large-scale land clearing project. Budget-conscious but quality-focused.', 
+      source: 'Referral', lifetimeValue: '6800.00', totalJobs: 3, isActive: true, 
+      lastContactDate: new Date('2024-12-15'), preferredContactMethod: 'sms',
+      tags: ['new-customer', 'land-clearing', 'budget-conscious'],
+      createdAt: new Date('2024-11-20'), updatedAt: new Date('2024-12-15') 
+    };
+    const customer5 = { 
+      id: '5', name: 'Jennifer Thompson', email: 'jennifer.thompson@email.com', phone: '(555) 654-3210',
+      address: '135 Birch Road, Mount Eden, Auckland 1024', city: 'Auckland', region: 'Auckland',
+      notes: 'Insurance work specialist. Handles storm damage claims and requires detailed photos and reports for insurance companies.', 
+      source: 'Insurance Partner', lifetimeValue: '15600.00', totalJobs: 22, isActive: true, 
+      lastContactDate: new Date('2024-12-22'), preferredContactMethod: 'email',
+      tags: ['insurance-work', 'storm-damage', 'high-volume'],
+      createdAt: new Date('2023-09-12'), updatedAt: new Date('2024-12-22') 
+    };
+    const customer6 = { 
+      id: '6', name: 'Robert Kim', email: 'robert.kim@business.com', phone: '(555) 111-2222',
+      address: '88 Corporate Plaza, Newmarket, Auckland 1023', city: 'Auckland', region: 'Auckland',
+      notes: 'Corporate client with multiple retail locations. Requires scheduling outside business hours and branded uniforms for staff visibility.', 
+      source: 'Website', lifetimeValue: '9200.00', totalJobs: 6, isActive: true, 
+      lastContactDate: new Date('2024-12-10'), preferredContactMethod: 'email',
+      tags: ['corporate', 'multiple-locations', 'after-hours'],
+      createdAt: new Date('2024-05-14'), updatedAt: new Date('2024-12-10') 
+    };
+    const customer7 = { 
+      id: '7', name: 'Lisa Anderson', email: 'lisa.anderson@email.com', phone: '(555) 777-8888',
+      address: '95 Elm Street, Riccarton, Christchurch 8011', city: 'Christchurch', region: 'Canterbury',
+      notes: 'Elderly customer who has been with us for 5+ years. Requires gentle communication and flexible payment terms.', 
+      source: 'Referral', lifetimeValue: '4100.00', totalJobs: 18, isActive: false, 
+      lastContactDate: new Date('2024-08-14'), preferredContactMethod: 'phone',
+      tags: ['long-term', 'senior-customer', 'flexible-payment'],
+      createdAt: new Date('2019-04-20'), updatedAt: new Date('2024-08-14') 
     };
     
     this.customers.set('1', customer1);
     this.customers.set('2', customer2); 
     this.customers.set('3', customer3);
+    this.customers.set('4', customer4);
+    this.customers.set('5', customer5);
+    this.customers.set('6', customer6);
+    this.customers.set('7', customer7);
     
     // Sample pipeline leads
     const lead1 = {
