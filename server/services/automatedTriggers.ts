@@ -1,5 +1,6 @@
 import { notificationService } from './notificationService';
 import { storage } from '../storage';
+import { workflowAutomationService } from './workflowAutomation';
 import type { Job, Customer, InsertJob } from '@shared/schema';
 
 // Hook into job status changes to trigger automated notifications
@@ -24,6 +25,14 @@ export class AutomatedTriggers {
           oldStatus,
           newStatus
         }
+      });
+
+      // Trigger workflow automation for job status changes
+      await workflowAutomationService.processWorkflowTrigger('job_status_changed', {
+        jobId,
+        oldStatus,
+        newStatus,
+        job
       });
 
       // Additional specific triggers for important status changes
@@ -114,6 +123,13 @@ export class AutomatedTriggers {
         event: 'quote_accepted',
         data: { quote, customer }
       });
+
+      // Trigger workflow automation for quote acceptance
+      await workflowAutomationService.processWorkflowTrigger('quote_accepted', {
+        quoteId,
+        quote,
+        customer
+      });
     } catch (error) {
       console.error('Error in quote accepted trigger:', error);
     }
@@ -147,6 +163,12 @@ export class AutomatedTriggers {
   static async onJobCreated(job: Job): Promise<void> {
     try {
       console.log(`📝 New job created: ${job.title}`);
+      
+      // Trigger workflow automation for new job creation
+      await workflowAutomationService.processWorkflowTrigger('job_created', {
+        jobId: job.id,
+        job
+      });
       
       // If the job is created with a scheduled status, trigger scheduling notifications
       if (job.status === 'scheduled' && job.scheduledDate) {

@@ -87,8 +87,7 @@ const checkinFormSchema = z.object({
 
 // Maintenance form schema using shared schema
 const maintenanceFormSchema = insertEquipmentMaintenanceSchema.omit({
-  equipmentId: true,
-  createdAt: true
+  equipmentId: true
 }).extend({
   maintenanceType: z.enum(["routine", "repair", "inspection", "calibration"]).default("routine"),
   description: z.string().min(1, "Description is required"),
@@ -354,6 +353,19 @@ export default function Equipment() {
     return matchesSearch && matchesStatus && matchesType;
   });
 
+  // Get overdue maintenance equipment (for now, using lastMaintenanceDate + intervalDays)
+  const getOverdueMaintenance = () => {
+    const now = new Date();
+    return equipment.filter((item: any) => {
+      if (!item.lastMaintenanceDate || !item.maintenanceIntervalDays) return false;
+      const lastMaintenance = new Date(item.lastMaintenanceDate);
+      const nextDue = new Date(lastMaintenance.getTime() + (item.maintenanceIntervalDays * 24 * 60 * 60 * 1000));
+      return nextDue < now;
+    });
+  };
+
+  const overdueMaintenance = getOverdueMaintenance();
+
   // Get active checkouts for display
   const activeCheckouts = checkouts.filter((checkout: any) => !checkout.actualReturnTime);
   const overdueCheckouts = activeCheckouts.filter((checkout: any) => {
@@ -393,19 +405,6 @@ export default function Equipment() {
     maintenanceForm.reset();
     setPartsInput("");
   };
-
-  // Get overdue maintenance equipment (for now, using lastMaintenanceDate + intervalDays)
-  const getOverdueMaintenance = () => {
-    const now = new Date();
-    return equipment.filter((item: any) => {
-      if (!item.lastMaintenanceDate || !item.maintenanceIntervalDays) return false;
-      const lastMaintenance = new Date(item.lastMaintenanceDate);
-      const nextDue = new Date(lastMaintenance.getTime() + (item.maintenanceIntervalDays * 24 * 60 * 60 * 1000));
-      return nextDue < now;
-    });
-  };
-
-  const overdueMaintenance = getOverdueMaintenance();
 
   if (isLoading) {
     return (
@@ -1083,7 +1082,7 @@ export default function Equipment() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Array.from(new Set(equipment.map((item: any) => item.type))).map((type: string) => {
+                {(Array.from(new Set(equipment.map((item: any) => item.type))) as string[]).map((type: string) => {
                   const typeEquipment = equipment.filter((item: any) => item.type === type);
                   const inUseCount = typeEquipment.filter((item: any) => item.status === 'in_use').length;
                   const utilizationRate = typeEquipment.length > 0 ? (inUseCount / typeEquipment.length) * 100 : 0;
@@ -1241,7 +1240,7 @@ export default function Equipment() {
                             ...item,
                             checkoutCount: checkouts.filter((c: any) => c.equipmentId === item.id).length
                           }))
-                          .sort((a, b) => b.checkoutCount - a.checkoutCount)[0]?.name || 'N/A'
+                          .sort((a: any, b: any) => b.checkoutCount - a.checkoutCount)[0]?.name || 'N/A'
                         : 'N/A'
                       }
                     </span>
@@ -1253,7 +1252,7 @@ export default function Equipment() {
                       {equipment.length > 0 ? 
                         equipment
                           .filter((item: any) => item.purchaseDate)
-                          .sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime())[0]?.name || 'N/A'
+                          .sort((a: any, b: any) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime())[0]?.name || 'N/A'
                         : 'N/A'
                       }
                     </span>
@@ -1264,7 +1263,7 @@ export default function Equipment() {
                     <span className="text-sm font-medium">
                       {equipment.length > 0 ? 
                         equipment
-                          .sort((a, b) => (b.purchasePrice || 0) - (a.purchasePrice || 0))[0]?.name || 'N/A'
+                          .sort((a: any, b: any) => (b.purchasePrice || 0) - (a.purchasePrice || 0))[0]?.name || 'N/A'
                         : 'N/A'
                       }
                     </span>

@@ -28,6 +28,7 @@ import path from "path";
 import fs from "fs";
 import { format } from "date-fns";
 import { AutomatedTriggers } from "./services/automatedTriggers";
+import { workflowAutomationService } from "./services/workflowAutomation";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -1898,6 +1899,174 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error fetching lead source analysis:', error);
       res.status(500).json({ success: false, message: 'Error fetching lead source analysis' });
+    }
+  });
+
+  // ========================================
+  // WORKFLOW AUTOMATION ENDPOINTS
+  // ========================================
+
+  // Get all workflow rules
+  app.get('/api/workflows', async (req: Request, res: Response) => {
+    try {
+      const workflows = workflowAutomationService.getWorkflows();
+      res.json({ success: true, data: workflows });
+    } catch (error) {
+      console.error('Error fetching workflows:', error);
+      res.status(500).json({ success: false, message: 'Error fetching workflows' });
+    }
+  });
+
+  // Get specific workflow by ID
+  app.get('/api/workflows/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const workflow = workflowAutomationService.getWorkflow(id);
+      
+      if (!workflow) {
+        return res.status(404).json({ success: false, message: 'Workflow not found' });
+      }
+      
+      res.json({ success: true, data: workflow });
+    } catch (error) {
+      console.error('Error fetching workflow:', error);
+      res.status(500).json({ success: false, message: 'Error fetching workflow' });
+    }
+  });
+
+  // Toggle workflow enabled/disabled
+  app.patch('/api/workflows/:id/toggle', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { enabled } = req.body;
+      
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'enabled field must be a boolean' });
+      }
+      
+      const success = workflowAutomationService.toggleWorkflow(id, enabled);
+      
+      if (!success) {
+        return res.status(404).json({ success: false, message: 'Workflow not found' });
+      }
+      
+      res.json({ success: true, message: `Workflow ${enabled ? 'enabled' : 'disabled'} successfully` });
+    } catch (error) {
+      console.error('Error toggling workflow:', error);
+      res.status(500).json({ success: false, message: 'Error toggling workflow' });
+    }
+  });
+
+  // Trigger a workflow manually for testing
+  app.post('/api/workflows/trigger', async (req: Request, res: Response) => {
+    try {
+      const { triggerType, data, context } = req.body;
+      
+      if (!triggerType) {
+        return res.status(400).json({ success: false, message: 'triggerType is required' });
+      }
+      
+      await workflowAutomationService.processWorkflowTrigger(triggerType, data || {}, context);
+      
+      res.json({ success: true, message: 'Workflow trigger processed successfully' });
+    } catch (error) {
+      console.error('Error processing workflow trigger:', error);
+      res.status(500).json({ success: false, message: 'Error processing workflow trigger' });
+    }
+  });
+
+  // Add new workflow rule
+  app.post('/api/workflows', async (req: Request, res: Response) => {
+    try {
+      const workflowRule = req.body;
+      
+      // Enhanced validation
+      if (!workflowRule.id || !workflowRule.name || !workflowRule.trigger) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Workflow must have id, name, and trigger' 
+        });
+      }
+      
+      if (!workflowRule.conditions || !Array.isArray(workflowRule.conditions)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Workflow must have conditions array' 
+        });
+      }
+      
+      if (!workflowRule.actions || !Array.isArray(workflowRule.actions)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Workflow must have actions array' 
+        });
+      }
+      
+      workflowAutomationService.addWorkflowRule(workflowRule);
+      
+      res.json({ success: true, message: 'Workflow rule added successfully' });
+    } catch (error) {
+      console.error('Error adding workflow rule:', error);
+      res.status(500).json({ success: false, message: 'Error adding workflow rule' });
+    }
+  });
+
+  // Update workflow rule
+  app.put('/api/workflows/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const workflowRule = req.body;
+      
+      // Enhanced validation
+      if (!workflowRule.name || !workflowRule.trigger) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Workflow must have name and trigger' 
+        });
+      }
+      
+      if (!workflowRule.conditions || !Array.isArray(workflowRule.conditions)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Workflow must have conditions array' 
+        });
+      }
+      
+      if (!workflowRule.actions || !Array.isArray(workflowRule.actions)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Workflow must have actions array' 
+        });
+      }
+      
+      const success = workflowAutomationService.updateWorkflow(id, workflowRule);
+      
+      if (!success) {
+        return res.status(404).json({ success: false, message: 'Workflow not found' });
+      }
+      
+      res.json({ success: true, message: 'Workflow updated successfully' });
+    } catch (error) {
+      console.error('Error updating workflow:', error);
+      res.status(500).json({ success: false, message: 'Error updating workflow' });
+    }
+  });
+
+  // Delete workflow rule
+  app.delete('/api/workflows/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      const success = workflowAutomationService.deleteWorkflow(id);
+      
+      if (!success) {
+        return res.status(404).json({ success: false, message: 'Workflow not found' });
+      }
+      
+      res.json({ success: true, message: 'Workflow deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting workflow:', error);
+      res.status(500).json({ success: false, message: 'Error deleting workflow' });
     }
   });
 

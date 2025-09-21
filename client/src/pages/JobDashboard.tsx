@@ -23,6 +23,7 @@ import { SafetyReporting } from "@/components/SafetyReporting";
 import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
 import { AdvancedDispatchBoard } from "@/components/AdvancedDispatchBoard";
 import { JobDiary } from "@/components/JobDiary";
+import { WorkflowAutomation } from "@/components/WorkflowAutomation";
 import {
   BarChart,
   Bar,
@@ -3558,6 +3559,11 @@ export default function JobDashboard() {
             <AdvancedDispatchBoard />
           </TabsContent>
 
+          {/* Workflow Automation Tab */}
+          <TabsContent value="workflows" className="space-y-6">
+            <WorkflowAutomation />
+          </TabsContent>
+
           {/* Settings Tab */}
           <TabsContent value="settings" className="space-y-6">
             <div className="flex items-center justify-between">
@@ -4464,7 +4470,7 @@ export default function JobDashboard() {
                       <Card>
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2">
-                            <User className="h-5 w-5" />
+                            <Users className="h-5 w-5" />
                             Contact Information
                           </CardTitle>
                         </CardHeader>

@@ -14,7 +14,8 @@ import {
   MessageSquare,
   Star,
   Inbox,
-  Plug
+  Plug,
+  Workflow
 } from "lucide-react";
 import {
   Sidebar,
@@ -110,6 +111,12 @@ const operationsItems = [
     url: "#",
     icon: Calendar,
     value: "dispatch"
+  },
+  {
+    title: "Workflows",
+    url: "#",
+    icon: Workflow,
+    value: "workflows"
   }
 ];
 
