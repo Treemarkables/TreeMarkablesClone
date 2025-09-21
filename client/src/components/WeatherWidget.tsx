@@ -14,14 +14,19 @@ import {
   Calendar
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 interface WeatherData {
+  location: string;
   temperature: number;
   condition: string;
   humidity: number;
   windSpeed: number;
+  windDirection?: string;
   precipitation: number;
   visibility: number;
+  pressure?: number;
+  uvIndex?: number;
   alerts: string[];
   forecast: {
     date: string;
@@ -29,63 +34,59 @@ interface WeatherData {
     condition: string;
     precipitation: number;
     windSpeed: number;
+    humidity: number;
+    visibility: number;
   }[];
+  lastUpdated: string;
+}
+
+interface SafetyRecommendation {
+  level: 'safe' | 'caution' | 'unsafe' | 'suspended';
+  message: string;
+  recommendations: string[];
+}
+
+interface WeatherApiResponse {
+  success: boolean;
+  data: WeatherData;
+}
+
+interface SafetyApiResponse {
+  success: boolean;
+  data: {
+    weather: WeatherData;
+    recommendation: SafetyRecommendation;
+  };
 }
 
 interface WeatherWidgetProps {
   location?: string;
   showForecast?: boolean;
   compact?: boolean;
+  showSafetyRecommendations?: boolean;
 }
 
-export function WeatherWidget({ location = "Auckland, NZ", showForecast = true, compact = false }: WeatherWidgetProps) {
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [loading, setLoading] = useState(true);
+export function WeatherWidget({ 
+  location = "Auckland, NZ", 
+  showForecast = true, 
+  compact = false, 
+  showSafetyRecommendations = true 
+}: WeatherWidgetProps) {
+  // Fetch current weather data from API
+  const { data: weatherResponse, isLoading, error } = useQuery<WeatherApiResponse>({
+    queryKey: [`/api/weather/current?location=${encodeURIComponent(location)}`],
+    refetchInterval: 30 * 60 * 1000, // Refresh every 30 minutes
+  });
 
-  // Mock weather data - in production this would fetch from OpenWeatherMap API
-  useEffect(() => {
-    const fetchWeather = () => {
-      const conditions = ['sunny', 'partly-cloudy', 'cloudy', 'rainy', 'windy', 'stormy'];
-      const condition = conditions[Math.floor(Math.random() * conditions.length)];
-      
-      const mockWeather: WeatherData = {
-        temperature: Math.floor(Math.random() * 15) + 12, // 12-27°C
-        condition,
-        humidity: Math.floor(Math.random() * 40) + 45, // 45-85%
-        windSpeed: Math.floor(Math.random() * 25) + 5, // 5-30 km/h
-        precipitation: condition === 'rainy' || condition === 'stormy' 
-          ? Math.floor(Math.random() * 70) + 20 
-          : Math.floor(Math.random() * 10),
-        visibility: condition === 'stormy' ? 3 : condition === 'rainy' ? 8 : 15,
-        alerts: condition === 'stormy' 
-          ? ['High Wind Warning', 'Work Suspension Recommended'] 
-          : condition === 'windy' && Math.random() > 0.5
-          ? ['Strong Wind Advisory']
-          : [],
-        forecast: Array.from({ length: 7 }, (_, i) => {
-          const forecastCondition = conditions[Math.floor(Math.random() * conditions.length)];
-          return {
-            date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toLocaleDateString('en-NZ', { 
-              weekday: 'short', 
-              day: 'numeric' 
-            }),
-            temp: Math.floor(Math.random() * 15) + 10,
-            condition: forecastCondition,
-            precipitation: forecastCondition === 'rainy' || forecastCondition === 'stormy' ? 70 : 10,
-            windSpeed: Math.floor(Math.random() * 20) + 5
-          };
-        })
-      };
-      
-      setWeather(mockWeather);
-      setLoading(false);
-    };
+  // Fetch safety recommendations if requested
+  const { data: safetyResponse } = useQuery<SafetyApiResponse>({
+    queryKey: [`/api/weather/safety-recommendation?location=${encodeURIComponent(location)}`],
+    enabled: showSafetyRecommendations,
+    refetchInterval: 30 * 60 * 1000,
+  });
 
-    fetchWeather();
-    // Refresh weather data every 30 minutes
-    const interval = setInterval(fetchWeather, 30 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const weather = weatherResponse?.data;
+  const safety = safetyResponse?.data?.recommendation;
 
   const getWeatherIcon = (condition: string) => {
     switch (condition) {
@@ -99,20 +100,34 @@ export function WeatherWidget({ location = "Auckland, NZ", showForecast = true, 
     }
   };
 
-  const getWorkSuitability = (weather: WeatherData) => {
-    if (weather.alerts.some(alert => alert.includes('Work Suspension'))) {
+  const getWorkSuitability = (weather: WeatherData, safety?: SafetyRecommendation) => {
+    if (safety) {
+      switch (safety.level) {
+        case 'suspended':
+          return { level: 'suspended', text: 'Work Suspended', color: 'bg-red-600' };
+        case 'unsafe':
+          return { level: 'unsafe', text: 'Unsafe Conditions', color: 'bg-red-500' };
+        case 'caution':
+          return { level: 'caution', text: 'Exercise Caution', color: 'bg-orange-500' };
+        case 'safe':
+          return { level: 'safe', text: 'Good for Tree Work', color: 'bg-green-500' };
+      }
+    }
+    
+    // Fallback logic
+    if (weather.alerts.some(alert => alert.includes('suspension') || alert.includes('warning'))) {
       return { level: 'dangerous', text: 'Work Not Recommended', color: 'bg-red-500' };
     }
-    if (weather.windSpeed > 20 || weather.precipitation > 50) {
+    if (weather.windSpeed > 25 || weather.precipitation > 50) {
       return { level: 'caution', text: 'Exercise Caution', color: 'bg-orange-500' };
     }
-    if (weather.windSpeed > 15 || weather.precipitation > 20) {
+    if (weather.windSpeed > 20 || weather.precipitation > 30) {
       return { level: 'monitor', text: 'Monitor Conditions', color: 'bg-yellow-500' };
     }
     return { level: 'good', text: 'Good for Tree Work', color: 'bg-green-500' };
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Card className={compact ? "p-4" : ""}>
         <CardContent className="flex items-center justify-center h-32">
@@ -122,9 +137,22 @@ export function WeatherWidget({ location = "Auckland, NZ", showForecast = true, 
     );
   }
 
+  if (error) {
+    return (
+      <Card className={compact ? "p-4" : ""}>
+        <CardContent className="flex items-center justify-center h-32">
+          <div className="text-center">
+            <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">Unable to load weather data</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!weather) return null;
 
-  const workSuitability = getWorkSuitability(weather);
+  const workSuitability = getWorkSuitability(weather, safety);
 
   if (compact) {
     return (
@@ -135,7 +163,10 @@ export function WeatherWidget({ location = "Auckland, NZ", showForecast = true, 
               {getWeatherIcon(weather.condition)}
               <div>
                 <div className="text-2xl font-bold">{weather.temperature}°C</div>
-                <div className="text-sm text-muted-foreground capitalize">{weather.condition}</div>
+                <div className="text-sm text-muted-foreground capitalize">{weather.condition.replace('-', ' ')}</div>
+                {weather.windDirection && (
+                  <div className="text-xs text-muted-foreground">{weather.windSpeed} km/h {weather.windDirection}</div>
+                )}
               </div>
             </div>
             <Badge className={`${workSuitability.color} text-white`}>
@@ -170,7 +201,10 @@ export function WeatherWidget({ location = "Auckland, NZ", showForecast = true, 
             {getWeatherIcon(weather.condition)}
             <div>
               <div className="text-3xl font-bold">{weather.temperature}°C</div>
-              <div className="text-muted-foreground capitalize">{weather.condition}</div>
+              <div className="text-muted-foreground capitalize">{weather.condition.replace('-', ' ')}</div>
+              {weather.windDirection && (
+                <div className="text-sm text-muted-foreground">{weather.windSpeed} km/h {weather.windDirection}</div>
+              )}
             </div>
           </div>
           
@@ -222,12 +256,38 @@ export function WeatherWidget({ location = "Auckland, NZ", showForecast = true, 
         {/* Weather Alerts */}
         {weather.alerts.length > 0 && (
           <div className="space-y-2">
-            {weather.alerts.map((alert, index) => (
-              <Alert key={index} className="border-orange-200 bg-orange-50">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>{alert}</AlertDescription>
-              </Alert>
-            ))}
+            {weather.alerts.map((alert: string, index: number) => {
+              const alertLevel = alert.includes('suspension') || alert.includes('warning') ? 'error' : 'warning';
+              return (
+                <Alert key={index} className={alertLevel === 'error' ? 'border-red-200 bg-red-50' : 'border-orange-200 bg-orange-200'}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="capitalize">{alert.replace(/_/g, ' ')}</AlertDescription>
+                </Alert>
+              );
+            })}
+          </div>
+        )}
+        
+        {/* Safety Recommendations */}
+        {safety && showSafetyRecommendations && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Safety Recommendations</h4>
+            <Alert className={safety.level === 'suspended' || safety.level === 'unsafe' ? 'border-red-200 bg-red-50' : 'border-blue-200 bg-blue-50'}>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-medium">{safety.message}</p>
+                  <ul className="text-xs space-y-1">
+                    {safety.recommendations.slice(0, 3).map((rec: string, index: number) => (
+                      <li key={index} className="flex items-center gap-1">
+                        <span className="w-1 h-1 bg-current rounded-full flex-shrink-0"></span>
+                        {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </AlertDescription>
+            </Alert>
           </div>
         )}
 
@@ -239,7 +299,7 @@ export function WeatherWidget({ location = "Auckland, NZ", showForecast = true, 
               7-Day Forecast
             </h4>
             <div className="grid grid-cols-7 gap-1">
-              {weather.forecast.map((day, index) => (
+              {weather.forecast.map((day: any, index: number) => (
                 <div key={index} className="text-center p-2 rounded-md bg-muted/50">
                   <div className="text-xs font-medium text-muted-foreground">{day.date}</div>
                   <div className="my-1">
@@ -248,22 +308,19 @@ export function WeatherWidget({ location = "Auckland, NZ", showForecast = true, 
                   <div className="text-sm font-medium">{day.temp}°C</div>
                   <div className="text-xs text-blue-600">{day.precipitation}%</div>
                   <div className="text-xs text-gray-600">{day.windSpeed}km/h</div>
+                  <div className="text-xs text-muted-foreground">{day.visibility}km vis</div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 pt-2">
-          <Button variant="outline" size="sm" className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            View Alerts
-          </Button>
-          <Button variant="outline" size="sm" className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            Weather Impact
-          </Button>
+        {/* Last Updated */}
+        <div className="text-xs text-muted-foreground text-center pt-2">
+          Last updated: {new Date(weather.lastUpdated).toLocaleTimeString('en-NZ', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })}
         </div>
       </CardContent>
     </Card>
