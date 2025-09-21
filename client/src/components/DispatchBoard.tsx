@@ -40,6 +40,13 @@ import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, is
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import type { JobTemplate } from "@shared/schema";
+
+interface ApiResponse<T> {
+  success: boolean;
+  data: T[];
+  message?: string;
+}
 import { GrossMarginCalculator } from '@/components/GrossMarginCalculator';
 import {
   DndContext,
@@ -140,6 +147,34 @@ interface AllocationSuggestion {
   availability: number; // 0-100 percentage
   conflicts: ResourceConflict[];
 }
+
+// Mock staff data for dispatch board
+const mockStaffMembers: StaffMember[] = [
+  { 
+    id: '1', 
+    name: 'Jake Morrison', 
+    role: 'foreman', 
+    skills: ['tree_removal', 'safety', 'leadership'],
+    status: 'available', 
+    color: 'bg-blue-500' 
+  },
+  { 
+    id: '2', 
+    name: 'Maria Silva', 
+    role: 'arborist', 
+    skills: ['tree_removal', 'pruning', 'assessment'],
+    status: 'available', 
+    color: 'bg-green-500' 
+  },
+  { 
+    id: '3', 
+    name: 'Tom Bradley', 
+    role: 'ground_crew', 
+    skills: ['cleanup', 'equipment'],
+    status: 'offline', 
+    color: 'bg-orange-500' 
+  },
+];
 
 const mockTeams: Team[] = [
   {
@@ -265,6 +300,54 @@ const timeSlots = [
 
 export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const { toast } = useToast();
+
+  // Fetch job templates for template selection
+  const { data: templatesResponse } = useQuery<ApiResponse<JobTemplate>>({
+    queryKey: ['/api/job-templates'],
+  });
+  const templates = templatesResponse?.data || [];
+
+  // Handle template selection and auto-populate form
+  const handleTemplateSelection = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    
+    if (!templateId) return;
+    
+    const template = templates.find((t: JobTemplate) => t.id === templateId);
+    if (!template) return;
+
+    // Auto-populate form fields based on template
+    setNewJobFormData(prev => ({
+      ...prev,
+      serviceType: template.category || template.serviceType || prev.serviceType,
+      priority: template.riskLevel === 'High Risk' ? 'high' : 
+                template.riskLevel === 'Medium Risk' ? 'medium' : 'low',
+      notes: template.description || prev.notes,
+      // Set estimated start/end times based on template duration
+      startTime: prev.startTime || '09:00',
+      endTime: template.estimatedDuration ? 
+        calculateEndTime('09:00', template.estimatedDuration) : 
+        prev.endTime || '17:00'
+    }));
+
+    toast({
+      title: 'Template Applied',
+      description: `Applied "${template.name}" template settings.`,
+    });
+  };
+
+  // Helper function to calculate end time based on duration
+  const calculateEndTime = (startTime: string, durationHours: number): string => {
+    if (!startTime) return '';
+    
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const startDate = new Date();
+    startDate.setHours(hours, minutes, 0, 0);
+    
+    const endDate = new Date(startDate.getTime() + (durationHours * 60 * 60 * 1000));
+    
+    return `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+  };
   const [selectedDate, setSelectedDate] = useState(new Date('2024-12-20'));
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -281,6 +364,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     notes: '',
     assignedTo: '' // Will hold teamId or staffId based on mode
   });
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
   // Fetch jobs from backend API
   const { data: jobsData } = useQuery({
@@ -1231,6 +1315,51 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </DialogHeader>
 
             <div className="space-y-4">
+              {/* Template Selection */}
+              <div>
+                <h4 className="font-semibold text-sm mb-3">Job Template (Optional)</h4>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Select Template to Auto-Fill Details
+                  </label>
+                  <Select 
+                    value={selectedTemplate} 
+                    onValueChange={handleTemplateSelection}
+                  >
+                    <SelectTrigger data-testid="select-template">
+                      <SelectValue placeholder="Choose a job template..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">
+                        <div className="flex items-center gap-2">
+                          <X className="w-4 h-4" />
+                          No Template
+                        </div>
+                      </SelectItem>
+                      {templates.map((template: JobTemplate) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-col">
+                              <span className="font-medium">{template.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {template.category} • {template.estimatedDuration}h • ${template.basePrice}
+                              </span>
+                            </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedTemplate && (
+                    <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                      <div className="text-xs text-blue-700">
+                        ✓ Template applied! You can still modify any field below.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Customer Information */}
               <div>
                 <h4 className="font-semibold text-sm mb-3">Customer Information</h4>

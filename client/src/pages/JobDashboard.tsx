@@ -13,7 +13,7 @@ import Integrations from './Integrations';
 import { WeatherDashboard } from '@/components/WeatherDashboard';
 import QuoteManagement from '@/components/QuoteManagement';
 import { LeadEnhancement } from '@/components/LeadEnhancement';
-import { AdvancedDispatchBoard } from '@/components/AdvancedDispatchBoard';
+import { DispatchBoard } from '@/components/DispatchBoard';
 import { JobDiary } from '@/components/JobDiary';
 import { SafetyReporting } from '@/components/SafetyReporting';
 import { JobTemplateManagement } from '@/components/JobTemplateManagement';
@@ -340,7 +340,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
 
           {/* Dispatch Tab */}
           <TabsContent value="dispatch" className="flex-1 overflow-hidden">
-            <AdvancedDispatchBoard />
+            <DispatchBoard />
           </TabsContent>
 
           {/* Pipeline Tab */}
