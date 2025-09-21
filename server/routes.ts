@@ -22,7 +22,9 @@ import {
   insertCommunicationPreferencesSchema,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema,
   safetyIncidentInsertSchema, type InsertSafetyIncident,
-  riskAssessmentInsertSchema, type InsertRiskAssessment
+  riskAssessmentInsertSchema, type InsertRiskAssessment,
+  complianceRequirementInsertSchema, type InsertComplianceRequirement,
+  complianceRecordInsertSchema, type InsertComplianceRecord
 } from "@shared/schema";
 import multer from "multer";
 import Papa from "papaparse";
@@ -4552,6 +4554,220 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error updating risk assessment'
+      });
+    }
+  });
+
+  // ========================================
+  // COMPLIANCE MONITORING ROUTES  
+  // ========================================
+
+  // Get all compliance requirements
+  app.get('/api/compliance/requirements', async (req: Request, res: Response) => {
+    try {
+      const requirements = await storage.getAllComplianceRequirements();
+      res.json({
+        success: true,
+        data: requirements,
+        count: requirements.length,
+        message: 'Compliance requirements retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting compliance requirements:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving compliance requirements'
+      });
+    }
+  });
+
+  // Create compliance requirement
+  app.post('/api/compliance/requirements', async (req: Request, res: Response) => {
+    try {
+      // Convert date strings to Date objects before validation
+      const processedBody = {
+        ...req.body,
+        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : undefined,
+        nextDue: req.body.nextDue ? new Date(req.body.nextDue) : undefined,
+      };
+      
+      const validatedData = complianceRequirementInsertSchema.parse(processedBody);
+      
+      const requirement = await storage.createComplianceRequirement(validatedData);
+      res.status(201).json({
+        success: true,
+        data: requirement,
+        message: 'Compliance requirement created successfully'
+      });
+    } catch (error: any) {
+      console.error('Error creating compliance requirement:', error);
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid requirement data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error creating compliance requirement'
+      });
+    }
+  });
+
+  // Update compliance requirement
+  app.put('/api/compliance/requirements/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      // Convert date strings to Date objects and validate
+      const processedBody = {
+        ...req.body,
+        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : undefined,
+        nextDue: req.body.nextDue ? new Date(req.body.nextDue) : undefined,
+      };
+      
+      const validatedData = complianceRequirementInsertSchema.partial().parse(processedBody);
+
+      const requirement = await storage.updateComplianceRequirement(id, validatedData);
+      res.json({
+        success: true,
+        data: requirement,
+        message: 'Compliance requirement updated successfully'
+      });
+    } catch (error: any) {
+      console.error('Error updating compliance requirement:', error);
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid requirement data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error updating compliance requirement'
+      });
+    }
+  });
+
+  // Get compliance analytics
+  app.get('/api/compliance/analytics', async (req: Request, res: Response) => {
+    try {
+      const analytics = await storage.getComplianceAnalytics();
+      res.json({
+        success: true,
+        data: analytics,
+        message: 'Compliance analytics retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting compliance analytics:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving compliance analytics'
+      });
+    }
+  });
+
+  // Get compliance records
+  app.get('/api/compliance/records', async (req: Request, res: Response) => {
+    try {
+      const records = await storage.getAllComplianceRecords();
+      res.json({
+        success: true,
+        data: records,
+        count: records.length,
+        message: 'Compliance records retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting compliance records:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving compliance records'
+      });
+    }
+  });
+
+  // Create compliance record
+  app.post('/api/compliance/records', async (req: Request, res: Response) => {
+    try {
+      const validatedData = complianceRecordInsertSchema.parse(req.body);
+      
+      const record = await storage.createComplianceRecord(validatedData);
+      res.status(201).json({
+        success: true,
+        data: record,
+        message: 'Compliance record created successfully'
+      });
+    } catch (error: any) {
+      console.error('Error creating compliance record:', error);
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid record data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error creating compliance record'
+      });
+    }
+  });
+
+  // Get compliance dashboard analytics
+  app.get('/api/compliance/analytics', async (req: Request, res: Response) => {
+    try {
+      const requirements = await storage.getAllComplianceRequirements();
+      const records = await storage.getAllComplianceRecords();
+
+      const now = new Date();
+      const overdueRequirements = requirements.filter(r => new Date(r.nextDue) < now && r.status !== 'completed');
+      const upcomingRequirements = requirements.filter(r => {
+        const dueDate = new Date(r.nextDue);
+        const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return daysUntilDue <= 30 && daysUntilDue > 0 && r.status !== 'completed';
+      });
+
+      const analytics = {
+        totalRequirements: requirements.length,
+        pendingRequirements: requirements.filter(r => r.status === 'pending').length,
+        overdueRequirements: overdueRequirements.length,
+        upcomingRequirements: upcomingRequirements.length,
+        completedThisMonth: records.filter(r => {
+          const completedDate = new Date(r.completedAt);
+          return completedDate.getMonth() === now.getMonth() && 
+                 completedDate.getFullYear() === now.getFullYear();
+        }).length,
+        averageComplianceScore: requirements.filter(r => r.complianceScore).length > 0 
+          ? Math.round(requirements.filter(r => r.complianceScore).reduce((sum, r) => sum + (r.complianceScore || 0), 0) / requirements.filter(r => r.complianceScore).length)
+          : 0,
+        requirementsByCategory: requirements.reduce((acc: any, req) => {
+          acc[req.category] = (acc[req.category] || 0) + 1;
+          return acc;
+        }, {}),
+        requirementsByStatus: requirements.reduce((acc: any, req) => {
+          acc[req.status] = (acc[req.status] || 0) + 1;
+          return acc;
+        }, {}),
+      };
+
+      res.json({
+        success: true,
+        data: analytics,
+        message: 'Compliance analytics retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting compliance analytics:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving compliance analytics'
       });
     }
   });

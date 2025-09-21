@@ -30,6 +30,8 @@ import {
   // Safety Management types
   type SafetyIncident, type InsertSafetyIncident,
   type RiskAssessment, type InsertRiskAssessment,
+  type ComplianceRequirement, type InsertComplianceRequirement,
+  type ComplianceRecord, type InsertComplianceRecord,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -376,6 +378,14 @@ export interface IStorage {
   updateRiskAssessment(id: string, updates: Partial<InsertRiskAssessment>): Promise<RiskAssessment>;
   getRiskAssessmentsByJob(jobId: string): Promise<RiskAssessment[]>;
   getAllRiskAssessments(): Promise<RiskAssessment[]>;
+
+  // Compliance Monitoring Management
+  createComplianceRequirement(requirement: InsertComplianceRequirement): Promise<ComplianceRequirement>;
+  getComplianceRequirement(id: string): Promise<ComplianceRequirement | undefined>;
+  updateComplianceRequirement(id: string, updates: Partial<InsertComplianceRequirement>): Promise<ComplianceRequirement>;
+  getAllComplianceRequirements(): Promise<ComplianceRequirement[]>;
+  createComplianceRecord(record: InsertComplianceRecord): Promise<ComplianceRecord>;
+  getAllComplianceRecords(): Promise<ComplianceRecord[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -415,6 +425,8 @@ export class MemStorage implements IStorage {
   // Safety Management Storage
   private safetyIncidents: Map<string, SafetyIncident>;
   private riskAssessments: Map<string, RiskAssessment>;
+  private complianceRequirements: Map<string, ComplianceRequirement>;
+  private complianceRecords: Map<string, ComplianceRecord>;
 
   constructor() {
     this.users = new Map();
@@ -451,6 +463,8 @@ export class MemStorage implements IStorage {
     // Initialize Safety Management storage
     this.safetyIncidents = new Map();
     this.riskAssessments = new Map();
+    this.complianceRequirements = new Map();
+    this.complianceRecords = new Map();
     
     // Initialize business settings with defaults
     this.businessSettings = {
@@ -4195,6 +4209,120 @@ export class MemStorage implements IStorage {
   async getAllRiskAssessments(): Promise<RiskAssessment[]> {
     return Array.from(this.riskAssessments.values())
       .sort((a, b) => new Date(b.assessmentDate).getTime() - new Date(a.assessmentDate).getTime());
+  }
+
+  // ========================================
+  // Compliance Monitoring Management Implementation
+  // ========================================
+
+  async createComplianceRequirement(requirement: InsertComplianceRequirement): Promise<ComplianceRequirement> {
+    const id = randomUUID();
+    const now = new Date();
+    
+    const newRequirement: ComplianceRequirement = {
+      ...requirement,
+      id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    this.complianceRequirements.set(id, newRequirement);
+    return newRequirement;
+  }
+
+  async getComplianceRequirement(id: string): Promise<ComplianceRequirement | undefined> {
+    return this.complianceRequirements.get(id);
+  }
+
+  async updateComplianceRequirement(id: string, updates: Partial<InsertComplianceRequirement>): Promise<ComplianceRequirement> {
+    const existing = this.complianceRequirements.get(id);
+    if (!existing) {
+      throw new Error('Compliance requirement not found');
+    }
+    
+    const updated: ComplianceRequirement = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.complianceRequirements.set(id, updated);
+    return updated;
+  }
+
+  async getAllComplianceRequirements(): Promise<ComplianceRequirement[]> {
+    return Array.from(this.complianceRequirements.values())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async createComplianceRecord(record: InsertComplianceRecord): Promise<ComplianceRecord> {
+    const id = randomUUID();
+    const now = new Date();
+    
+    const newRecord: ComplianceRecord = {
+      ...record,
+      id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    this.complianceRecords.set(id, newRecord);
+    
+    // Update the related requirement's last completed date and status if this record shows completion
+    if (record.status === 'passed' || record.status === 'partial') {
+      const requirement = this.complianceRequirements.get(record.requirementId);
+      if (requirement) {
+        requirement.lastCompleted = record.completedAt;
+        requirement.status = 'completed';
+        this.complianceRequirements.set(requirement.id, requirement);
+      }
+    }
+    
+    return newRecord;
+  }
+
+  async getAllComplianceRecords(): Promise<ComplianceRecord[]> {
+    return Array.from(this.complianceRecords.values())
+      .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+  }
+
+  async getComplianceAnalytics(): Promise<{
+    totalRequirements: number;
+    overdueRequirements: number;
+    upcomingRequirements: number;
+    averageComplianceScore: number;
+  }> {
+    const requirements = Array.from(this.complianceRequirements.values());
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const totalRequirements = requirements.length;
+    
+    const overdueRequirements = requirements.filter(req => 
+      req.isActive && new Date(req.nextDue) < now && req.status !== 'completed'
+    ).length;
+
+    const upcomingRequirements = requirements.filter(req => 
+      req.isActive && 
+      new Date(req.nextDue) >= now && 
+      new Date(req.nextDue) <= thirtyDaysFromNow &&
+      req.status !== 'completed'
+    ).length;
+
+    const requirementsWithScores = requirements.filter(req => 
+      req.complianceScore !== undefined && req.complianceScore !== null
+    );
+    
+    const averageComplianceScore = requirementsWithScores.length > 0
+      ? Math.round(requirementsWithScores.reduce((sum, req) => sum + (req.complianceScore || 0), 0) / requirementsWithScores.length)
+      : 0;
+
+    return {
+      totalRequirements,
+      overdueRequirements,
+      upcomingRequirements,
+      averageComplianceScore
+    };
   }
 }
 

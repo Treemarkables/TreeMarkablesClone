@@ -529,10 +529,67 @@ export const riskAssessmentInsertSchema = createInsertSchema(riskAssessments).om
   updatedAt: true,
 });
 
+// Compliance Monitoring System
+export const complianceRequirements = pgTable("compliance_requirements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(), // safety, environmental, regulatory, internal, certification
+  type: text("type").notNull(), // inspection, audit, training, certification, documentation
+  frequency: text("frequency").notNull(), // daily, weekly, monthly, quarterly, annual, one_time
+  regulatoryBody: text("regulatory_body"), // OSHA, EPA, local authority, etc.
+  dueDate: timestamp("due_date").notNull(),
+  lastCompleted: timestamp("last_completed"),
+  nextDue: timestamp("next_due").notNull(),
+  priority: text("priority").notNull().default("medium"), // low, medium, high, critical
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, overdue, exempt
+  assignedTo: text("assigned_to").notNull(),
+  requirements: text("requirements").array().default([]),
+  attachments: text("attachments").array().default([]),
+  notes: text("notes"),
+  complianceScore: integer("compliance_score"), // 0-100
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const complianceRecords = pgTable("compliance_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requirementId: varchar("requirement_id").references(() => complianceRequirements.id).notNull(),
+  completedBy: text("completed_by").notNull(),
+  completedAt: timestamp("completed_at").notNull(),
+  status: text("status").notNull(), // passed, failed, partial, deferred
+  score: integer("score"), // 0-100
+  findings: text("findings").array().default([]),
+  corrective_actions: text("corrective_actions").array().default([]),
+  evidence: text("evidence").array().default([]), // file URLs or references
+  nextReviewDate: timestamp("next_review_date"),
+  notes: text("notes"),
+  auditorNotes: text("auditor_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const complianceRequirementInsertSchema = createInsertSchema(complianceRequirements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const complianceRecordInsertSchema = createInsertSchema(complianceRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type SafetyIncident = typeof safetyIncidents.$inferSelect;
 export type InsertSafetyIncident = z.infer<typeof safetyIncidentInsertSchema>;
 export type RiskAssessment = typeof riskAssessments.$inferSelect;
 export type InsertRiskAssessment = z.infer<typeof riskAssessmentInsertSchema>;
+export type ComplianceRequirement = typeof complianceRequirements.$inferSelect;
+export type InsertComplianceRequirement = z.infer<typeof complianceRequirementInsertSchema>;
+export type ComplianceRecord = typeof complianceRecords.$inferSelect;
+export type InsertComplianceRecord = z.infer<typeof complianceRecordInsertSchema>;
 export type InsertCommunicationPreferences = z.infer<typeof insertCommunicationPreferencesSchema>;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type InsertCall = z.infer<typeof insertCallSchema>;
