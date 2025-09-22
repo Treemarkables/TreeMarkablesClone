@@ -1454,6 +1454,95 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // ========================================
+  // ENHANCED EXPENSE TRACKING API ROUTES
+  // ========================================
+
+  // Update job expenses
+  app.put('/api/jobs/:id/expenses', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const expenseData = req.body;
+      
+      // Validate and convert expense data
+      const validFields = ['actualLaborCosts', 'actualMaterialsCosts', 'equipmentCosts', 
+                          'subcontractorCosts', 'permitCosts', 'travelCosts', 
+                          'disposalCosts', 'miscExpenses'];
+      const filteredData: any = {};
+      
+      for (const [key, value] of Object.entries(expenseData)) {
+        if (validFields.includes(key) && value !== undefined && value !== null && value !== '') {
+          filteredData[key] = typeof value === 'string' ? parseFloat(value) : value;
+        }
+      }
+
+      const updatedJob = await storage.updateJobExpenses(id, filteredData);
+      res.json({ success: true, data: updatedJob });
+    } catch (error) {
+      console.error('Error updating job expenses:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error updating job expenses' });
+      }
+    }
+  });
+
+  // Update expense completion status
+  app.put('/api/jobs/:id/expense-completion', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const completionData = req.body;
+      
+      // Validate completion data
+      const validFields = ['laborCostsComplete', 'materialsCostsComplete', 
+                          'equipmentCostsComplete', 'subcontractorCostsComplete', 
+                          'otherExpensesComplete'];
+      const filteredData: any = {};
+      
+      for (const [key, value] of Object.entries(completionData)) {
+        if (validFields.includes(key) && typeof value === 'boolean') {
+          filteredData[key] = value;
+        }
+      }
+
+      const updatedJob = await storage.updateExpenseCompletionStatus(id, filteredData);
+      res.json({ success: true, data: updatedJob });
+    } catch (error) {
+      console.error('Error updating expense completion status:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error updating expense completion status' });
+      }
+    }
+  });
+
+  // Check invoice eligibility
+  app.get('/api/jobs/:id/invoice-eligibility', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updatedJob = await storage.updateInvoiceEligibility(id);
+      res.json({ 
+        success: true, 
+        data: { 
+          invoiceEligible: updatedJob.invoiceEligible,
+          invoiceBlocked: updatedJob.invoiceBlocked,
+          allExpensesComplete: updatedJob.allExpensesComplete,
+          marginMeetsThreshold: updatedJob.marginMeetsThreshold,
+          grossMargin: updatedJob.grossMargin
+        } 
+      });
+    } catch (error) {
+      console.error('Error checking invoice eligibility:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error checking invoice eligibility' });
+      }
+    }
+  });
+
   app.put('/api/jobs/:id', async (req: Request, res: Response) => {
     try {
       const updates = insertJobSchema.partial().safeParse(req.body);

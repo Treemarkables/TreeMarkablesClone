@@ -719,6 +719,12 @@ export class MemStorage implements IStorage {
       afterPhotos: ['/api/photos/oak_after_1.jpg', '/api/photos/oak_after_2.jpg'], jobNumber: 'JOB-001',
       quoteId: '1', leadId: null, assignedCrew: null, equipmentRequired: null,
       safetyNotes: null, rescheduledFrom: null, rescheduledReason: null,
+      // Expense tracking fields
+      actualLaborCosts: 0, actualMaterialsCosts: 0, equipmentCosts: 0, subcontractorCosts: 0,
+      travelCosts: 0, disposalCosts: 0, miscExpenses: 0,
+      laborCostsComplete: false, materialsCostsComplete: false, equipmentCostsComplete: false,
+      subcontractorCostsComplete: false, otherExpensesComplete: false, allExpensesComplete: false,
+      marginMeetsThreshold: false, invoiceBlocked: true,
       createdAt: new Date('2024-12-15'), updatedAt: new Date('2024-12-18')
     };
     const job2 = {
