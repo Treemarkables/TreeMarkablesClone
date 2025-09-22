@@ -54,6 +54,21 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     enabled: !!jobId
   });
 
+  // Fetch staff time entries to check if labor costs should be read-only
+  const { data: staffTimeData } = useQuery({
+    queryKey: ['staff-time', jobId],
+    queryFn: async () => {
+      const response = await fetch(`/api/jobs/${jobId}/staff-time`);
+      if (!response.ok) throw new Error('Failed to fetch staff time entries');
+      return response.json();
+    },
+    enabled: !!jobId
+  });
+
+  const hasStaffTimeEntries = staffTimeData?.data?.length > 0;
+  const staffTimeEntries = staffTimeData?.data || [];
+  const staffTimeLaborCost = staffTimeEntries.reduce((sum: number, entry: any) => sum + (entry.hours * entry.rate), 0);
+
   // Update form data when job data changes
   useEffect(() => {
     if (job) {
@@ -94,7 +109,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
 
   // Calculate derived values
   const totalAmount = job?.totalAmount ? parseFloat(job.totalAmount) : 0;
-  const laborCosts = formData.laborCosts || 0;
+  const laborCosts = hasStaffTimeEntries ? staffTimeLaborCost : (formData.laborCosts || 0);
   const materialsCosts = formData.materialsCosts || 0;
   const otherCosts = formData.otherCosts || 0;
   const costOfGoods = job?.costOfGoods ? parseFloat(job.costOfGoods) : 0;
@@ -237,80 +252,107 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
           <div className="flex items-center gap-2 mb-3">
             <Clock className="h-5 w-5" />
             <h3 className="font-semibold">Labor Costs</h3>
+            {hasStaffTimeEntries && (
+              <Badge className="bg-blue-100 text-blue-800 text-xs">
+                Auto from Staff Time
+              </Badge>
+            )}
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="calculation-mode">Calculation Method</Label>
-              <div className="flex gap-2 mt-1">
-                <Button
-                  type="button"
-                  variant={calculationMode === 'manual' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setCalculationMode('manual')}
-                  data-testid="button-manual-calculation"
-                >
-                  Manual Entry
-                </Button>
-                <Button
-                  type="button"
-                  variant={calculationMode === 'hourly' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setCalculationMode('hourly')}
-                  data-testid="button-hourly-calculation"
-                >
-                  Hours × Rate
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {calculationMode === 'manual' ? (
-            <div>
-              <Label htmlFor="laborCosts">Labor Costs ($)</Label>
-              <Input
-                id="laborCosts"
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.laborCosts || ''}
-                onChange={(e) => handleInputChange('laborCosts', e.target.value)}
-                placeholder="Enter total labor costs"
-                data-testid="input-labor-costs"
-              />
-            </div>
-          ) : (
+          {!hasStaffTimeEntries && (
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="laborHours">Labor Hours</Label>
-                <Input
-                  id="laborHours"
-                  type="number"
-                  step="0.25"
-                  min="0"
-                  value={formData.laborHours || ''}
-                  onChange={(e) => handleInputChange('laborHours', e.target.value)}
-                  placeholder="Hours worked"
-                  data-testid="input-labor-hours"
-                />
-              </div>
-              <div>
-                <Label htmlFor="hourlyRate">Hourly Rate ($)</Label>
-                <Input
-                  id="hourlyRate"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.hourlyRate || ''}
-                  onChange={(e) => handleInputChange('hourlyRate', e.target.value)}
-                  placeholder="Rate per hour"
-                  data-testid="input-hourly-rate"
-                />
+                <Label htmlFor="calculation-mode">Calculation Method</Label>
+                <div className="flex gap-2 mt-1">
+                  <Button
+                    type="button"
+                    variant={calculationMode === 'manual' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCalculationMode('manual')}
+                    data-testid="button-manual-calculation"
+                  >
+                    Manual Entry
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={calculationMode === 'hourly' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCalculationMode('hourly')}
+                    data-testid="button-hourly-calculation"
+                  >
+                    Hours × Rate
+                  </Button>
+                </div>
               </div>
             </div>
           )}
 
-          {calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate && (
+          {hasStaffTimeEntries ? (
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-blue-900">Labor Costs (from Staff Time)</Label>
+                <Badge className="bg-blue-200 text-blue-800">Read-only</Badge>
+              </div>
+              <div className="text-2xl font-bold text-blue-800 mb-3">
+                ${staffTimeLaborCost.toFixed(2)}
+              </div>
+              <div className="text-sm text-blue-700">
+                Calculated from {staffTimeEntries.length} staff time entries
+              </div>
+              <div className="text-xs text-blue-600 mt-1">
+                Total Hours: {staffTimeEntries.reduce((sum: number, entry: any) => sum + entry.hours, 0).toFixed(2)}h
+              </div>
+            </div>
+          ) : (
+            <>
+              {calculationMode === 'manual' ? (
+                <div>
+                  <Label htmlFor="laborCosts">Labor Costs ($)</Label>
+                  <Input
+                    id="laborCosts"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.laborCosts || ''}
+                    onChange={(e) => handleInputChange('laborCosts', e.target.value)}
+                    placeholder="Enter total labor costs"
+                    data-testid="input-labor-costs"
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="laborHours">Labor Hours</Label>
+                    <Input
+                      id="laborHours"
+                      type="number"
+                      step="0.25"
+                      min="0"
+                      value={formData.laborHours || ''}
+                      onChange={(e) => handleInputChange('laborHours', e.target.value)}
+                      placeholder="Hours worked"
+                      data-testid="input-labor-hours"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="hourlyRate">Hourly Rate ($)</Label>
+                    <Input
+                      id="hourlyRate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.hourlyRate || ''}
+                      onChange={(e) => handleInputChange('hourlyRate', e.target.value)}
+                      placeholder="Rate per hour"
+                      data-testid="input-hourly-rate"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {!hasStaffTimeEntries && calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate && (
             <div className="bg-gray-50 p-3 rounded">
               <span className="text-sm text-gray-600">Calculated Labor Cost: </span>
               <span className="font-semibold">${calculatedLaborCosts.toFixed(2)}</span>
@@ -360,7 +402,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span>Labor Costs:</span>
-              <span>${(calculationMode === 'hourly' ? calculatedLaborCosts : laborCosts).toFixed(2)}</span>
+              <span>${(hasStaffTimeEntries ? staffTimeLaborCost : (calculationMode === 'hourly' ? calculatedLaborCosts : laborCosts)).toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span>Materials Costs:</span>

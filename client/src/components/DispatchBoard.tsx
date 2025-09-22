@@ -49,6 +49,7 @@ interface ApiResponse<T> {
   message?: string;
 }
 import { GrossMarginCalculator } from '@/components/GrossMarginCalculator';
+import { StaffTimeTracker } from '@/components/StaffTimeTracker';
 import {
   DndContext,
   DragEndEvent,
@@ -1435,6 +1436,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               <div>
                 <h4 className="font-semibold text-sm mb-2">Cost & Margin Analysis</h4>
                 <GrossMarginCalculator 
+                  jobId={selectedJob.jobId} 
+                  compact={true} 
+                />
+              </div>
+              
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Staff Time Tracking</h4>
+                <StaffTimeTracker 
                   jobId={selectedJob.jobId} 
                   compact={true} 
                 />
