@@ -1,20 +1,31 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSensors, useSensor, PointerSensor } from "@dnd-kit/core";
+import { useSensors, useSensor, PointerSensor, DndContext, DragEndEvent, DragOverlay } from "@dnd-kit/core";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { GlobalJobCard } from "./GlobalJobCard";
 import type { JobStatusType, Job } from "@shared/schema";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { 
+  Calendar,
+  Clock,
+  MapPin,
+  User,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  Grid3X3,
+  List,
+  Settings,
+  Edit
+} from 'lucide-react';
+import { format, addDays, subDays, startOfDay, addHours, isSameDay } from 'date-fns';
 
 type AdvancedDispatchBoardProps = {
   compact?: boolean;
-};
-
-type AllocationSuggestion = {
-  id: string;
-  name: string;
-  skills: string[];
-  availability: number;
 };
 
 export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoardProps) {
@@ -22,18 +33,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const isMobile = useIsMobile();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
-  const [editedJobData, setEditedJobData] = useState<any>({});
   const [showGlobalJobCardEdit, setShowGlobalJobCardEdit] = useState(false);
   const [jobToEdit, setJobToEdit] = useState<any | null>(null);
-
-  const [isNewJobModalOpen, setIsNewJobModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [draggedJob, setDraggedJob] = useState<any | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<JobStatusType>('work_order');
-  const [allocationSuggestions, setAllocationSuggestions] = useState<AllocationSuggestion[]>([]);
-  const [showAllocationPanel, setShowAllocationPanel] = useState(false);
-  const [selectedJobForAllocation, setSelectedJobForAllocation] = useState<any | null>(null);
-  const [showMobileCalendar, setShowMobileCalendar] = useState(false);
 
   // Drag and drop sensors with mobile optimization
   const sensors = useSensors(
@@ -63,53 +66,254 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     queryKey: ['/api/customers'],
   });
 
-  // Fetch schedule events for conflict detection
-  const { data: scheduleEventsData } = useQuery({
-    queryKey: ['/api/schedule-events'],
-  });
+  // Time slots from 7 AM to 6 PM (11 hours)
+  const timeSlots = [];
+  for (let i = 0; i < 11; i++) {
+    const time = addHours(startOfDay(currentDate).setHours(7), i);
+    timeSlots.push(time);
+  }
 
-  // Rest of the component logic would go here...
-  // For now, let me just provide a simple placeholder until we can fix the full component
+  // Get staff members from employees data
+  const staff = (employeesData as any)?.data?.map((emp: any) => ({
+    id: emp.id,
+    name: `${emp.firstName} ${emp.lastName}`,
+    role: emp.position,
+    status: emp.status === 'active' ? 'available' : 'offline',
+    color: '#3B82F6'
+  })) || [];
 
-  // Reset edited data when opening a new job
-  const handleJobSelect = (job: any) => {
-    // Open GlobalJobCard in edit mode instead of the old modal
+  // Filter jobs for today
+  const todaysJobs = (jobsData as any)?.data?.filter((job: any) => {
+    if (!job.scheduledDate) return false;
+    const jobDate = new Date(job.scheduledDate);
+    return isSameDay(jobDate, currentDate);
+  }) || [];
+
+  // Handle job card click to edit
+  const handleJobCardClick = (job: any) => {
     setJobToEdit(job);
     setShowGlobalJobCardEdit(true);
   };
 
-  return (
-    <div className="h-full p-4">
-      <div className="h-full bg-white rounded-lg border">
-        <div className="p-4">
-          <h2 className="text-lg font-semibold mb-4">Advanced Dispatch Board</h2>
-          <p className="text-muted-foreground">
-            Component is being updated to use the new Global Job Card interface.
-          </p>
+  // Handle drag and drop
+  const handleDragStart = (event: any) => {
+    setDraggedJob(event.active.data.current);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setDraggedJob(null);
+    // Handle job time slot reassignment here
+    // This would update the job's scheduled time
+  };
+
+  // Get customer name for a job
+  const getCustomerName = (customerId: string) => {
+    const customer = (customersData as any)?.data?.find((c: any) => c.id === customerId);
+    return customer?.name || 'Unknown Customer';
+  };
+
+  // Render job card
+  const renderJobCard = (job: any) => (
+    <Card 
+      key={job.id} 
+      className="mb-2 cursor-pointer hover:shadow-md transition-shadow"
+      onClick={() => handleJobCardClick(job)}
+      data-testid={`job-card-${job.id}`}
+    >
+      <CardContent className="p-3">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h4 className="font-medium text-sm text-gray-900">{job.title}</h4>
+            <p className="text-xs text-gray-600 mt-1">{getCustomerName(job.customerId)}</p>
+            <div className="flex items-center gap-1 mt-1">
+              <MapPin className="w-3 h-3 text-gray-400" />
+              <span className="text-xs text-gray-500">{job.address}</span>
+            </div>
+          </div>
+          <Badge 
+            variant={job.priority === 'high' ? 'destructive' : job.priority === 'medium' ? 'default' : 'secondary'}
+            className="text-xs"
+          >
+            {job.priority}
+          </Badge>
         </div>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="h-full flex flex-col" data-testid="advanced-dispatch-board">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b bg-white">
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-semibold">Dispatch Board</h1>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(subDays(currentDate, 1))}
+                data-testid="button-previous-day"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-medium min-w-[120px] text-center">
+                {format(currentDate, 'MMM dd, yyyy')}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(addDays(currentDate, 1))}
+                data-testid="button-next-day"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              data-testid="button-grid-view"
+            >
+              <Grid3X3 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              data-testid="button-list-view"
+            >
+              <List className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Staff Roster Sidebar */}
+          <div className="w-64 border-r bg-gray-50 p-4 overflow-y-auto">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-4 h-4" />
+              <h3 className="font-medium">Staff Roster</h3>
+            </div>
+            {staff.map((member: any) => (
+              <Card key={member.id} className="mb-2" data-testid={`staff-member-${member.id}`}>
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="w-8 h-8">
+                      <AvatarFallback className="text-xs">
+                        {member.name.split(' ').map((n: string) => n[0]).join('')}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{member.name}</p>
+                      <p className="text-xs text-gray-600">{member.role}</p>
+                    </div>
+                    <Badge 
+                      variant={member.status === 'available' ? 'default' : 'secondary'}
+                      className="text-xs"
+                    >
+                      {member.status}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="flex-1 overflow-auto">
+            <div className="min-w-full">
+              {/* Time Grid Header */}
+              <div className="grid grid-cols-12 border-b bg-white sticky top-0 z-10">
+                <div className="p-2 text-sm font-medium border-r">Time</div>
+                {staff.slice(0, 11).map((member: any) => (
+                  <div key={member.id} className="p-2 text-sm font-medium border-r text-center">
+                    {member.name.split(' ')[0]}
+                  </div>
+                ))}
+              </div>
+
+              {/* Time Slots */}
+              {timeSlots.map((timeSlot) => (
+                <div key={timeSlot.toString()} className="grid grid-cols-12 border-b min-h-[80px]">
+                  {/* Time Label */}
+                  <div className="p-2 border-r bg-gray-50 flex items-start">
+                    <span className="text-sm font-medium">
+                      {format(timeSlot, 'h:mm a')}
+                    </span>
+                  </div>
+
+                  {/* Staff Time Slots */}
+                  {staff.slice(0, 11).map((member: any) => (
+                    <div 
+                      key={`${timeSlot}-${member.id}`}
+                      className="border-r p-1 min-h-[80px] hover:bg-gray-50"
+                      data-testid={`time-slot-${member.id}-${format(timeSlot, 'HH:mm')}`}
+                    >
+                      {/* Jobs scheduled for this time slot and staff member */}
+                      {todaysJobs
+                        .filter((job: any) => {
+                          if (!job.scheduledTime) return false;
+                          const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledTime}`);
+                          const slotHour = timeSlot.getHours();
+                          return jobTime.getHours() === slotHour && job.assignedTo === member.id;
+                        })
+                        .map((job: any) => renderJobCard(job))
+                      }
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Job Details Sidebar */}
+          <div className="w-80 border-l bg-white p-4 overflow-y-auto">
+            <h3 className="font-medium mb-4">Today's Jobs</h3>
+            <div className="space-y-2">
+              {todaysJobs.length > 0 ? (
+                todaysJobs.map((job: any) => renderJobCard(job))
+              ) : (
+                <p className="text-sm text-gray-500">No jobs scheduled for today</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Global Job Card for editing */}
+        <GlobalJobCard
+          isOpen={showGlobalJobCardEdit}
+          mode="edit"
+          jobId={jobToEdit?.id}
+          job={jobToEdit}
+          onClose={() => {
+            setShowGlobalJobCardEdit(false);
+            setJobToEdit(null);
+          }}
+          onJobUpdated={(updatedJob: Job) => {
+            toast({
+              title: "Job Updated",
+              description: `${updatedJob.title} has been updated successfully.`,
+            });
+            setShowGlobalJobCardEdit(false);
+            setJobToEdit(null);
+            // Refresh the jobs data
+            jobsQuery.refetch();
+          }}
+        />
       </div>
 
-      {/* Global Job Card for editing */}
-      <GlobalJobCard
-        isOpen={showGlobalJobCardEdit}
-        mode="edit"
-        jobId={jobToEdit?.id}
-        job={jobToEdit}
-        onClose={() => {
-          setShowGlobalJobCardEdit(false);
-          setJobToEdit(null);
-        }}
-        onJobUpdated={(updatedJob: Job) => {
-          toast({
-            title: "Job Updated",
-            description: `${updatedJob.title} has been updated successfully.`,
-          });
-          setShowGlobalJobCardEdit(false);
-          setJobToEdit(null);
-          // Refresh the jobs data
-          jobsQuery.refetch();
-        }}
-      />
-    </div>
+      {/* Drag Overlay */}
+      <DragOverlay>
+        {draggedJob ? renderJobCard(draggedJob) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
