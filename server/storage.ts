@@ -746,10 +746,44 @@ export class MemStorage implements IStorage {
       rescheduledReason: null, createdAt: new Date('2024-12-20'), updatedAt: new Date('2024-12-20')
     };
     
+    // Add some lead jobs for testing drag functionality
+    const job5 = {
+      id: '5', customerId: '4', title: 'Large Rimu Tree Assessment', description: 'Initial assessment for possible tree removal',
+      status: 'lead', priority: 'medium', scheduledDate: null, completedDate: null,
+      estimatedHours: 2, actualHours: null, totalAmount: null, address: '246 Oak Drive, Hamilton, NZ',
+      notes: 'Customer called about large rimu tree near power lines', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-005',
+      quoteId: null, leadId: '1', assignedCrew: null, equipmentRequired: null, specialInstructions: 'Requires power company coordination',
+      weatherDependent: true, permitRequired: true, safetyNotes: 'High voltage lines nearby', rescheduledFrom: null,
+      rescheduledReason: null, createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
+    };
+    
+    const job6 = {
+      id: '6', customerId: '5', title: 'Storm Damage Quote', description: 'Quote for multiple storm-damaged trees',
+      status: 'lead', priority: 'high', scheduledDate: null, completedDate: null,
+      estimatedHours: 6, actualHours: null, totalAmount: null, address: '135 Birch Road, Auckland, NZ',
+      notes: 'Insurance claim - urgent assessment needed', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-006',
+      quoteId: null, leadId: '2', assignedCrew: null, equipmentRequired: null, specialInstructions: 'Insurance documentation required',
+      weatherDependent: false, permitRequired: false, safetyNotes: 'Multiple trees unstable', rescheduledFrom: null,
+      rescheduledReason: null, createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
+    };
+    
+    const job7 = {
+      id: '7', customerId: '6', title: 'Corporate Landscaping Consultation', description: 'Consultation for ongoing maintenance contract',
+      status: 'lead', priority: 'low', scheduledDate: null, completedDate: null,
+      estimatedHours: 1, actualHours: null, totalAmount: null, address: '88 Corporate Plaza, Auckland, NZ',
+      notes: 'Potential high-value maintenance contract', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-007',
+      quoteId: null, leadId: '3', assignedCrew: null, equipmentRequired: null, specialInstructions: 'Present professional appearance',
+      weatherDependent: false, permitRequired: false, safetyNotes: 'Office hours only', rescheduledFrom: null,
+      rescheduledReason: null, createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
+    };
+
     this.jobs.set('1', job1);
     this.jobs.set('2', job2);
     this.jobs.set('3', job3);
     this.jobs.set('4', job4);
+    this.jobs.set('5', job5);
+    this.jobs.set('6', job6);
+    this.jobs.set('7', job7);
 
     // Sample invoices for Customer Portal
     const invoice1 = {
