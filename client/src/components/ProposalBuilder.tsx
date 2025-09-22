@@ -22,28 +22,21 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { insertProposalSchema, insertProposalLineItemSchema } from "@shared/schema";
 
-// Proposal schema for validation
-const proposalSchema = z.object({
+// Extend shared schemas for form validation  
+const proposalFormSchema = insertProposalSchema.extend({
   jobId: z.string().optional(), // Allow empty for draft proposals
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
-  validUntil: z.string().optional(),
   totalAmount: z.number().min(0, "Total amount must be positive").optional(),
   taxRate: z.preprocess((val) => parseFloat(val as string) || 15, z.number().min(0).max(100).default(15)),
-  notes: z.string().optional(),
-});
+  validUntil: z.string().optional(), // UI field that maps to expiryDays
+}).omit({ createdAt: true, updatedAt: true, expiryDays: true }).partial();
 
-// Line item schema
-const lineItemSchema = z.object({
-  description: z.string().min(1, "Description is required"),
-  quantity: z.number().min(0.01, "Quantity must be positive"),
-  unitPrice: z.number().min(0, "Unit price must be positive"),
-  unit: z.string().default("each"),
-  category: z.string().optional(),
-  notes: z.string().optional(),
-  isOptional: z.boolean().default(false),
-});
+// Line item form schema with validation
+const lineItemFormSchema = insertProposalLineItemSchema.extend({
+  quantity: z.preprocess((val) => parseFloat(val as string) || 0, z.number().min(0.01, "Quantity must be positive")),
+  unitPrice: z.preprocess((val) => parseFloat(val as string) || 0, z.number().min(0, "Unit price must be positive")),
+}).omit({ id: true, proposalId: true, createdAt: true, updatedAt: true, totalPrice: true, sortOrder: true });
 
 interface ProposalBuilderProps {
   isOpen: boolean;
@@ -89,15 +82,17 @@ export function ProposalBuilder({
   
   // Form state
   const form = useForm({
-    resolver: zodResolver(proposalSchema),
+    resolver: zodResolver(proposalFormSchema),
     defaultValues: {
       jobId: jobId || "",
+      customerId: customerId || "",
       title: "",
       description: "",
       validUntil: "",
       totalAmount: 0,
       taxRate: 15,
       notes: "",
+      deliveryMethod: "email" as const,
     },
   });
 
@@ -145,23 +140,28 @@ export function ProposalBuilder({
   // Photo upload mutation
   const uploadPhotoMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      // Convert FormData to regular object for apiRequest
-      const photoData = {
-        photo: formData.get('photo'),
-        type: formData.get('type'),
-        category: formData.get('category'),
-        capturedBy: formData.get('capturedBy'),
-        capturedAt: formData.get('capturedAt'),
-      };
-      const response = await apiRequest('POST', `/api/jobs/${jobId}/photos`, photoData);
-      return response;
+      if (!jobId) {
+        throw new Error('Job ID required for photo upload');
+      }
+      // Use fetch directly for file uploads to maintain FormData
+      const response = await fetch(`/api/jobs/${jobId}/photos`, {
+        method: 'POST',
+        body: formData, // Send FormData directly for multipart upload
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Upload failed' }));
+        throw new Error(errorData.message || 'Upload failed');
+      }
+      return response.json();
     },
     onSuccess: (data) => {
-      setUploadedPhotos(prev => [...prev, data.data]);
+      // Photos are added to state in handlePhotoUpload
       toast({
         title: "Success",
-        description: "Photo uploaded successfully",
+        description: "Photos uploaded successfully",
       });
+      // Invalidate photos query
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'photos'] });
     },
     onError: (error: any) => {
       toast({
@@ -172,55 +172,138 @@ export function ProposalBuilder({
     },
   });
 
+  // Delete photo mutation
+  const deletePhotoMutation = useMutation({
+    mutationFn: async ({ photoId, photoUrl }: { photoId: string; photoUrl: string }) => {
+      if (!jobId) {
+        throw new Error('Job ID required for photo deletion');
+      }
+      const response = await fetch(`/api/jobs/${jobId}/photos`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photoUrl, type: 'proposal' }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Delete failed' }));
+        throw new Error(errorData.message || 'Delete failed');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Photo deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'photos'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete Error",
+        description: error.message || "Failed to delete photo",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle photo deletion
+  const handleDeletePhoto = async (photoId: string, photoUrl: string) => {
+    try {
+      await deletePhotoMutation.mutateAsync({ photoId, photoUrl });
+      // Remove from local state
+      setUploadedPhotos(prev => prev.filter(p => p.id !== photoId));
+    } catch (error) {
+      console.error("Delete error:", error);
+    }
+  };
+  
+  // Load existing photos for the job
+  const { data: existingPhotos } = useQuery({
+    queryKey: ['/api/jobs', jobId, 'photos'],
+    enabled: !!jobId && isOpen,
+    select: (data) => data?.data?.filter((photo: any) => photo.type === 'proposal') || [],
+  });
+  
+  // Initialize photos when component opens or existing photos load
+  useEffect(() => {
+    if (existingPhotos && existingPhotos.length > 0) {
+      setUploadedPhotos(existingPhotos);
+    }
+  }, [existingPhotos]);
+
   // Handle file upload
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-
-    setPhotoUploading(true);
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const formData = new FormData();
-      formData.append("photo", file);
-      formData.append("type", "proposal");
-      formData.append("category", "documentation");
-      formData.append("capturedBy", "User");
-      formData.append("capturedAt", new Date().toISOString());
-      
-      try {
-        await uploadPhotoMutation.mutateAsync(formData);
-      } catch (error) {
-        console.error("Upload error:", error);
-      }
-    }
-    
-    setPhotoUploading(false);
-    event.target.value = ""; // Reset file input
-  };
-
-  // Add line item
-  const addLineItem = () => {
-    if (!currentLineItem.description || !currentLineItem.quantity || currentLineItem.unitPrice === undefined) {
+    if (!jobId) {
       toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
+        title: "Upload Error",
+        description: "Job must be saved before uploading photos",
         variant: "destructive",
       });
       return;
     }
 
-    const totalPrice = currentLineItem.quantity! * currentLineItem.unitPrice!;
+    setPhotoUploading(true);
+    
+    try {
+      const formData = new FormData();
+      
+      // Append all files with "photos" field name (backend expects this)
+      for (let i = 0; i < files.length; i++) {
+        formData.append("photos", files[i]);
+      }
+      
+      // Add metadata
+      formData.append("type", "proposal");
+      formData.append("category", "documentation");
+      formData.append("capturedBy", "User");
+      formData.append("capturedAt", new Date().toISOString());
+      
+      const result = await uploadPhotoMutation.mutateAsync(formData);
+      
+      // Add uploaded photos to state
+      if (result.data && Array.isArray(result.data)) {
+        setUploadedPhotos(prev => [...prev, ...result.data]);
+      } else if (result.data) {
+        setUploadedPhotos(prev => [...prev, result.data]);
+      }
+      
+    } catch (error) {
+      console.error("Upload error:", error);
+      // Error toast is handled by mutation onError
+    } finally {
+      setPhotoUploading(false);
+      event.target.value = ""; // Reset file input
+    }
+  };
+
+  // Add line item with validation
+  const addLineItem = () => {
+    // Validate line item using Zod schema
+    const validation = lineItemFormSchema.safeParse(currentLineItem);
+    if (!validation.success) {
+      toast({
+        title: "Validation Error",
+        description: validation.error.errors[0]?.message || "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const validatedItem = validation.data;
+
+    const totalPrice = validatedItem.quantity * validatedItem.unitPrice;
     const newItem: LineItem = {
       id: Math.random().toString(36).substr(2, 9),
-      description: currentLineItem.description!,
-      quantity: currentLineItem.quantity!,
-      unitPrice: currentLineItem.unitPrice!,
+      description: validatedItem.description,
+      quantity: validatedItem.quantity,
+      unitPrice: validatedItem.unitPrice,
       totalPrice,
-      unit: currentLineItem.unit || "each",
-      category: currentLineItem.category,
-      notes: currentLineItem.notes,
-      isOptional: currentLineItem.isOptional || false,
+      unit: validatedItem.unit || "each",
+      category: validatedItem.category,
+      notes: validatedItem.notes,
+      isOptional: validatedItem.isOptional || false,
     };
 
     setLineItems(prev => [...prev, newItem]);
@@ -261,18 +344,40 @@ export function ProposalBuilder({
 
   // Submit proposal
   const onSubmit = async (data: any) => {
+    // Map form data to backend schema
     const proposalData = {
-      ...data,
-      customerId,
-      lineItems,
-      photos: uploadedPhotos.map(photo => photo.id),
+      customerId: data.customerId || customerId,
+      title: data.title,
+      description: data.description || "",
+      deliveryMethod: data.deliveryMethod || "email",
+      expiryDays: data.validUntil ? Math.ceil((new Date(data.validUntil).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 30,
+      notes: data.notes,
       status: "draft",
-      subtotal,
-      taxAmount,
-      totalAmount: grandTotal,
+      subtotal: subtotal.toString(),
+      taxAmount: taxAmount.toString(), 
+      totalAmount: grandTotal.toString(),
+    };
+    
+    // Normalize line items for backend
+    const normalizedLineItems = lineItems.map(item => ({
+      sourceType: "fixed" as const,
+      description: item.description,
+      quantity: item.quantity.toString(),
+      unitPrice: item.unitPrice.toString(),
+      totalPrice: item.totalPrice.toString(),
+      unit: item.unit,
+      category: item.category,
+      notes: item.notes || "",
+      isOptional: item.isOptional,
+    }));
+
+    const payload = {
+      ...proposalData,
+      lineItems: normalizedLineItems,
+      photos: uploadedPhotos.map(photo => photo.id),
     };
 
-    await createProposalMutation.mutateAsync(proposalData);
+    await createProposalMutation.mutateAsync(payload);
   };
 
   useEffect(() => {
@@ -450,7 +555,7 @@ export function ProposalBuilder({
                                 type="button"
                                 variant="destructive"
                                 size="sm"
-                                onClick={() => setUploadedPhotos(prev => prev.filter(p => p.id !== photo.id))}
+                                onClick={() => handleDeletePhoto(photo.id, photo.url)}
                                 data-testid={`button-delete-photo-${photo.id}`}
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -511,7 +616,7 @@ export function ProposalBuilder({
                         <Input
                           type="number"
                           value={currentLineItem.quantity}
-                          onChange={(e) => setCurrentLineItem(prev => ({...prev, quantity: parseFloat(e.target.value) || 0}))}
+                          onChange={(e) => setCurrentLineItem(prev => ({...prev, quantity: e.target.value}))}
                           min="0.01"
                           step="0.01"
                           data-testid="input-line-item-quantity"
@@ -540,7 +645,7 @@ export function ProposalBuilder({
                         <Input
                           type="number"
                           value={currentLineItem.unitPrice}
-                          onChange={(e) => setCurrentLineItem(prev => ({...prev, unitPrice: parseFloat(e.target.value) || 0}))}
+                          onChange={(e) => setCurrentLineItem(prev => ({...prev, unitPrice: e.target.value}))}
                           min="0"
                           step="0.01"
                           data-testid="input-line-item-price"
