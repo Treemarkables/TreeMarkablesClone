@@ -3478,6 +3478,23 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Get all maintenance records  
+  app.get('/api/equipment/maintenance', async (req: Request, res: Response) => {
+    try {
+      const maintenance = await storage.getAllMaintenanceRecords();
+      res.json({
+        success: true,
+        data: maintenance
+      });
+    } catch (error) {
+      console.error('Error fetching all maintenance records:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching maintenance records'
+      });
+    }
+  });
+
   // Create maintenance record
   app.post('/api/equipment/maintenance', async (req: Request, res: Response) => {
     try {
