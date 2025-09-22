@@ -369,6 +369,34 @@ export interface IStorage {
     byPriority: { priority: string; count: number }[];
   }>;
 
+  // Conversation Management
+  createConversation(conversation: InsertConversation): Promise<Conversation>;
+  getConversation(id: string): Promise<Conversation | undefined>;
+  updateConversation(id: string, updates: UpdateConversation): Promise<Conversation>;
+  deleteConversation(id: string): Promise<void>;
+  getAllConversations(filters?: {
+    status?: string;
+    priority?: string;
+    assignedTo?: string;
+    source?: string;
+    serviceType?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Conversation[]>;
+  getConversationsByLead(leadId: string): Promise<Conversation[]>;
+  getConversationsByCustomer(customerId: string): Promise<Conversation[]>;
+  convertConversationToQuote(conversationId: string, quoteId: string): Promise<Conversation>;
+  
+  // Conversation Message Management
+  createConversationMessage(message: InsertConversationMessage): Promise<ConversationMessage>;
+  getConversationMessage(id: string): Promise<ConversationMessage | undefined>;
+  updateConversationMessage(id: string, updates: UpdateConversationMessage): Promise<ConversationMessage>;
+  deleteConversationMessage(id: string): Promise<void>;
+  getConversationMessages(conversationId: string): Promise<ConversationMessage[]>;
+  markConversationMessagesAsRead(conversationId: string, beforeTimestamp?: Date): Promise<void>;
+  getUnreadConversationCount(conversationId?: string): Promise<number>;
+
   // Enhanced Photo Management
   createPhoto(data: InsertPhoto): Promise<Photo>;
   getPhoto(id: string): Promise<Photo | undefined>;
@@ -466,6 +494,10 @@ export class MemStorage implements IStorage {
   private proposalSections: Map<string, ProposalSection>;
   private proposalLineItems: Map<string, ProposalLineItem>;
 
+  // Conversation Management Storage
+  private conversations: Map<string, Conversation>;
+  private conversationMessages: Map<string, ConversationMessage>;
+
   constructor() {
     this.users = new Map();
     this.leads = [];
@@ -508,6 +540,10 @@ export class MemStorage implements IStorage {
     this.proposals = new Map();
     this.proposalSections = new Map();
     this.proposalLineItems = new Map();
+
+    // Conversation Management Storage
+    this.conversations = new Map();
+    this.conversationMessages = new Map();
     
     // Initialize business settings with defaults
     this.businessSettings = {
@@ -4233,6 +4269,209 @@ export class MemStorage implements IStorage {
       byPlatform,
       byPriority
     };
+  }
+
+  // ========================================
+  // CONVERSATION MANAGEMENT METHODS
+  // ========================================
+
+  async createConversation(conversation: InsertConversation): Promise<Conversation> {
+    const id = randomUUID();
+    const now = new Date();
+    const newConversation: Conversation = {
+      id,
+      ...conversation,
+      unreadCount: 0,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.conversations.set(id, newConversation);
+    return newConversation;
+  }
+
+  async getConversation(id: string): Promise<Conversation | undefined> {
+    return this.conversations.get(id);
+  }
+
+  async updateConversation(id: string, updates: UpdateConversation): Promise<Conversation> {
+    const conversation = this.conversations.get(id);
+    if (!conversation) {
+      throw new Error(`Conversation with id ${id} not found`);
+    }
+    
+    const updatedConversation: Conversation = {
+      ...conversation,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.conversations.set(id, updatedConversation);
+    return updatedConversation;
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    // Also delete all messages in this conversation
+    const messages = Array.from(this.conversationMessages.values())
+      .filter(msg => msg.conversationId === id);
+    messages.forEach(msg => this.conversationMessages.delete(msg.id));
+    
+    this.conversations.delete(id);
+  }
+
+  async getAllConversations(filters?: {
+    status?: string;
+    priority?: string;
+    assignedTo?: string;
+    source?: string;
+    serviceType?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Conversation[]> {
+    let conversations = Array.from(this.conversations.values())
+      .filter(conv => conv.isActive);
+
+    // Apply filters
+    if (filters?.status) {
+      conversations = conversations.filter(conv => conv.status === filters.status);
+    }
+    if (filters?.priority) {
+      conversations = conversations.filter(conv => conv.priority === filters.priority);
+    }
+    if (filters?.assignedTo) {
+      conversations = conversations.filter(conv => conv.assignedTo === filters.assignedTo);
+    }
+    if (filters?.source) {
+      conversations = conversations.filter(conv => conv.source === filters.source);
+    }
+    if (filters?.serviceType) {
+      conversations = conversations.filter(conv => conv.serviceType === filters.serviceType);
+    }
+    if (filters?.search) {
+      const searchLower = filters.search.toLowerCase();
+      conversations = conversations.filter(conv => 
+        conv.title.toLowerCase().includes(searchLower) ||
+        conv.tags.some(tag => tag.toLowerCase().includes(searchLower))
+      );
+    }
+
+    // Sort by last message date (most recent first)
+    conversations.sort((a, b) => {
+      const aTime = a.lastMessageAt ? a.lastMessageAt.getTime() : a.createdAt.getTime();
+      const bTime = b.lastMessageAt ? b.lastMessageAt.getTime() : b.createdAt.getTime();
+      return bTime - aTime;
+    });
+
+    // Apply pagination
+    const offset = filters?.offset || 0;
+    const limit = filters?.limit || conversations.length;
+    return conversations.slice(offset, offset + limit);
+  }
+
+  async getConversationsByLead(leadId: string): Promise<Conversation[]> {
+    return Array.from(this.conversations.values())
+      .filter(conv => conv.leadId === leadId && conv.isActive)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getConversationsByCustomer(customerId: string): Promise<Conversation[]> {
+    return Array.from(this.conversations.values())
+      .filter(conv => conv.customerId === customerId && conv.isActive)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async convertConversationToQuote(conversationId: string, quoteId: string): Promise<Conversation> {
+    return this.updateConversation(conversationId, {
+      status: 'converted',
+      convertedToQuoteId: quoteId,
+      conversionDate: new Date(),
+    });
+  }
+
+  // Conversation Message Management
+  async createConversationMessage(message: InsertConversationMessage): Promise<ConversationMessage> {
+    const id = randomUUID();
+    const now = new Date();
+    const newMessage: ConversationMessage = {
+      id,
+      ...message,
+      isRead: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.conversationMessages.set(id, newMessage);
+
+    // Update conversation with last message info
+    const conversation = this.conversations.get(message.conversationId);
+    if (conversation) {
+      await this.updateConversation(message.conversationId, {
+        lastMessageAt: now,
+        lastMessageBy: message.direction === 'inbound' ? 'customer' : 'staff',
+        unreadCount: message.direction === 'inbound' ? conversation.unreadCount + 1 : conversation.unreadCount,
+      });
+    }
+
+    return newMessage;
+  }
+
+  async getConversationMessage(id: string): Promise<ConversationMessage | undefined> {
+    return this.conversationMessages.get(id);
+  }
+
+  async updateConversationMessage(id: string, updates: UpdateConversationMessage): Promise<ConversationMessage> {
+    const message = this.conversationMessages.get(id);
+    if (!message) {
+      throw new Error(`Conversation message with id ${id} not found`);
+    }
+    
+    const updatedMessage: ConversationMessage = {
+      ...message,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.conversationMessages.set(id, updatedMessage);
+    return updatedMessage;
+  }
+
+  async deleteConversationMessage(id: string): Promise<void> {
+    this.conversationMessages.delete(id);
+  }
+
+  async getConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
+    return Array.from(this.conversationMessages.values())
+      .filter(msg => msg.conversationId === conversationId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }
+
+  async markConversationMessagesAsRead(conversationId: string, beforeTimestamp?: Date): Promise<void> {
+    const messages = Array.from(this.conversationMessages.values())
+      .filter(msg => msg.conversationId === conversationId && !msg.isRead);
+
+    let unreadCount = 0;
+    for (const message of messages) {
+      if (!beforeTimestamp || message.createdAt <= beforeTimestamp) {
+        await this.updateConversationMessage(message.id, {
+          isRead: true,
+          readAt: new Date(),
+        });
+      } else {
+        unreadCount++;
+      }
+    }
+
+    // Update conversation unread count
+    await this.updateConversation(conversationId, { unreadCount });
+  }
+
+  async getUnreadConversationCount(conversationId?: string): Promise<number> {
+    if (conversationId) {
+      const conversation = this.conversations.get(conversationId);
+      return conversation?.unreadCount || 0;
+    }
+    
+    // Return total unread messages across all conversations
+    return Array.from(this.conversationMessages.values())
+      .filter(msg => !msg.isRead && msg.direction === 'inbound').length;
   }
 
   // ========================================
