@@ -239,17 +239,74 @@ export function ProposalBuilder({
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-    
-    if (!jobId) {
-      toast({
-        title: "Upload Error",
-        description: "Job must be saved before uploading photos",
-        variant: "destructive",
-      });
-      return;
-    }
 
     setPhotoUploading(true);
+    
+    // If no jobId, store photos locally until job is created
+    if (!jobId) {
+      try {
+        const newPhotos: UploadedPhoto[] = [];
+        
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          
+          // Validate file type and size
+          if (!file.type.startsWith('image/')) {
+            toast({
+              title: "Upload Error",
+              description: `${file.name} is not a valid image file`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          
+          if (file.size > 10 * 1024 * 1024) { // 10MB limit
+            toast({
+              title: "Upload Error", 
+              description: `${file.name} is too large. Maximum size is 10MB`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          
+          // Create local photo object with data URL for preview
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const localPhoto: UploadedPhoto = {
+              id: `temp_${Date.now()}_${i}`,
+              url: e.target?.result as string,
+              filename: file.name,
+              type: file.type,
+              category: "documentation",
+              capturedAt: new Date().toISOString(),
+              notes: ""
+            };
+            newPhotos.push(localPhoto);
+            
+            // Add to state when all files are processed
+            if (newPhotos.length === files.length) {
+              setUploadedPhotos(prev => [...prev, ...newPhotos]);
+              toast({
+                title: "Success",
+                description: `${newPhotos.length} photo(s) added. They will be uploaded when the job is saved.`,
+              });
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      } catch (error) {
+        console.error("Local photo processing error:", error);
+        toast({
+          title: "Upload Error",
+          description: "Failed to process photos",
+          variant: "destructive",
+        });
+      } finally {
+        setPhotoUploading(false);
+        event.target.value = ""; // Reset file input
+      }
+      return;
+    }
     
     try {
       const formData = new FormData();
