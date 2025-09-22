@@ -64,7 +64,6 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
   });
 
   const employees: Employee[] = employeesData?.data || [];
-  console.log('Debug StaffTimeTracker employees data:', employeesData, 'employees array:', employees, 'employees length:', employees.length);
 
   // Fetch existing staff time entries for this job
   const { data: staffTimeData, isLoading } = useQuery({
