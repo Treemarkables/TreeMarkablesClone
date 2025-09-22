@@ -1236,6 +1236,32 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                     </div>
                   </div>
 
+                  {/* Lead Source */}
+                  <div>
+                    <Label htmlFor="lead-source">Lead Source</Label>
+                    <Select 
+                      value={editedJobData.leadSource ?? (selectedJob.leadSource || "")} 
+                      onValueChange={(value) => {
+                        // Track lead source change
+                        setEditedJobData((prev: any) => ({ ...prev, leadSource: value }));
+                      }}
+                    >
+                      <SelectTrigger id="lead-source" data-testid="select-lead-source">
+                        <SelectValue placeholder="Select lead source..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="phone">Phone Call</SelectItem>
+                        <SelectItem value="website">Website Form</SelectItem>
+                        <SelectItem value="referral">Customer Referral</SelectItem>
+                        <SelectItem value="google">Google Search</SelectItem>
+                        <SelectItem value="facebook">Facebook</SelectItem>
+                        <SelectItem value="direct">Direct Contact</SelectItem>
+                        <SelectItem value="advertisement">Advertisement</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {/* Job Description */}
                   <div>
                     <Label htmlFor="job-description">Job Description</Label>
