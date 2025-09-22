@@ -240,9 +240,9 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         <h4 className="font-semibold text-sm text-gray-900 mb-2 break-words">{customer}</h4>
         
         {/* Address section */}
-        <div className="mb-2 min-w-0">
+        <div className="mb-2">
           <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block">Address</span>
-          <p className="text-xs text-gray-700 mt-1 leading-tight break-all whitespace-normal">{job.address}</p>
+          <p className="text-xs text-gray-700 mt-1 leading-normal break-words hyphens-auto">{job.address}</p>
         </div>
         
         {/* Job title */}
