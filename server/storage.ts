@@ -3815,6 +3815,11 @@ export class MemStorage implements IStorage {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
+  async getAllMaintenanceRecords(): Promise<EquipmentMaintenance[]> {
+    return Array.from(this.equipmentMaintenance.values())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
   // ========================================
   // INVENTORY TRANSACTION METHODS
   // ========================================
