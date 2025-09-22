@@ -1414,8 +1414,30 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
 
+      // Check if job has staff time entries and ignore labor cost fields if so
+      let warningMessage = null;
+      try {
+        const staffTimeEntries = await storage.getJobStaffTimeEntries(id);
+        if (staffTimeEntries.length > 0) {
+          // Remove labor-related fields - they're calculated from staff time
+          if (filteredData.laborCosts || filteredData.laborHours || filteredData.hourlyRate) {
+            warningMessage = 'Labor cost fields ignored - calculated automatically from staff time entries';
+          }
+          delete filteredData.laborCosts;
+          delete filteredData.laborHours;
+          delete filteredData.hourlyRate;
+        }
+      } catch (error) {
+        // If we can't check staff time, proceed normally
+        console.warn('Could not check staff time entries for job', id, error);
+      }
+
       const updatedJob = await storage.updateJobGrossMargin(id, filteredData);
-      res.json({ success: true, data: updatedJob });
+      const response: any = { success: true, data: updatedJob };
+      if (warningMessage) {
+        response.warning = warningMessage;
+      }
+      res.json(response);
     } catch (error) {
       console.error('Error updating job gross margin:', error);
       if (error instanceof Error && error.message.includes('not found')) {
