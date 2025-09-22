@@ -18,7 +18,6 @@ import { apiRequest } from "@/lib/queryClient";
 // Form schema based on existing job schema
 const jobFormSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
-  title: z.string().min(1, "Job title is required"),
   description: z.string().optional(),
   address: z.string().min(1, "Job address is required"),
   status: z.string().min(1, "Job status is required"),
@@ -66,7 +65,6 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
     resolver: zodResolver(jobFormSchema),
     defaultValues: {
       customerId: customerId || "",
-      title: "",
       description: "",
       address: "",
       status: "scheduled",
@@ -103,39 +101,27 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
 
   const createJobMutation = useMutation({
     mutationFn: async (data: JobFormData) => {
+      console.log('Mutation received data:', data);
+      console.log('Mutation data.category:', data.category);
       const jobNumber = getNextJobNumber();
       
       const jobData = {
         customerId: data.customerId,
+        jobNumber: `JOB-${Date.now()}`,
         title: `Job #${jobNumber}`,
         description: data.description || "",
         address: data.address,
-        scheduledDate: new Date().toISOString(),
+        scheduledDate: new Date(),
         status: data.status,
         category: data.category,
         priority: data.priority,
         estimatedDuration: parseInt(data.estimatedDuration || "4"),
-        assignedCrewIds: [],
-        requiredEquipmentIds: [],
-        specialInstructions: "",
-        safetyRequirements: [],
-        poNumber: data.poNumber || "",
-        // Add contact information to job data
-        metadata: {
-          jobContact: {
-            firstName: data.jobContactFirstName,
-            lastName: data.jobContactLastName,
-            email: data.jobContactEmail,
-            phone: data.jobContactPhone,
-          },
-          billingContact: {
-            phone: data.billingContactPhone,
-            mobile: data.billingContactMobile,
-          },
-          checklist: checklist,
-        }
+        assignedTeam: [],
+        equipment: [],
+        specialInstructions: ""
       };
 
+      console.log('Sending jobData to API:', jobData);
       const response = await apiRequest('POST', '/api/jobs', jobData);
       return response.json();
     },
@@ -178,6 +164,9 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
   };
 
   const onSubmit = (data: JobFormData) => {
+    console.log('Form submitted with data:', data);
+    console.log('Form data.category value:', data.category);
+    console.log('Form errors:', form.formState.errors);
     createJobMutation.mutate(data);
   };
 
@@ -258,7 +247,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {((customersData as any)?.customers || []).map((customer: any) => (
+                          {((customersData as any)?.data || []).map((customer: any) => (
                             <SelectItem key={customer.id} value={customer.id}>
                               {customer.name}
                             </SelectItem>
@@ -528,6 +517,11 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
                   type="submit" 
                   disabled={createJobMutation.isPending}
                   data-testid="button-submit-job-form"
+                  onClick={() => {
+                    console.log('Submit button clicked');
+                    console.log('Form valid:', form.formState.isValid);
+                    console.log('Form errors:', form.formState.errors);
+                  }}
                 >
                   {createJobMutation.isPending ? "Creating..." : "Create Job"}
                 </Button>
