@@ -220,35 +220,35 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       <Button
         key={job.id}
         variant="ghost"
-        className={`border rounded-lg p-3 mb-3 hover:shadow-md transition-shadow ${styling.bgColor} h-auto text-left justify-start w-full`}
+        className={`border rounded-lg p-2 mb-3 hover:shadow-md transition-shadow ${styling.bgColor} h-auto text-left justify-start w-full min-w-0`}
         onClick={() => handleJobCardClick(job)}
         data-testid={`job-sidebar-card-${job.id}`}
         aria-label={`View job for ${customer}`}
       >
         {/* Header with status and job number */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${styling.dotColor}`}></div>
-            <span className={`text-xs font-medium ${styling.textColor} uppercase tracking-wide`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-2 h-2 rounded-full ${styling.dotColor} flex-shrink-0`}></div>
+            <span className={`text-xs font-medium ${styling.textColor} uppercase tracking-wide truncate`}>
               {styling.label}
             </span>
           </div>
-          <span className="text-xs text-gray-500 font-mono">#{job.id.slice(-4)}</span>
+          <span className="text-xs text-gray-500 font-mono flex-shrink-0">#{job.id.slice(-4)}</span>
         </div>
         
         {/* Customer name */}
-        <h4 className="font-semibold text-sm text-gray-900 mb-2">{customer}</h4>
+        <h4 className="font-semibold text-sm text-gray-900 mb-2 break-words">{customer}</h4>
         
         {/* Address section */}
-        <div className="mb-2">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Address</span>
-          <p className="text-xs text-gray-700 mt-1 leading-relaxed break-words overflow-wrap-anywhere">{job.address}</p>
+        <div className="mb-2 min-w-0">
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block">Address</span>
+          <p className="text-xs text-gray-700 mt-1 leading-tight break-all whitespace-normal">{job.address}</p>
         </div>
         
         {/* Job title */}
-        <div>
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Service</span>
-          <p className="text-xs text-gray-800 mt-1 font-medium">{job.title}</p>
+        <div className="min-w-0">
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block">Service</span>
+          <p className="text-xs text-gray-800 mt-1 font-medium break-words">{job.title}</p>
         </div>
       </Button>
     );
