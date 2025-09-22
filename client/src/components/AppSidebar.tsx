@@ -25,7 +25,7 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
 
 interface AppSidebarProps {
   activeTab: string;
@@ -104,7 +104,16 @@ const businessItems = [
 ];
 
 export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  
+  const handleTabClick = (tabValue: string) => {
+    // If not on job dashboard, navigate there first
+    if (location !== "/job-dashboard") {
+      setLocation("/job-dashboard");
+    }
+    // Set the tab
+    onTabChange(tabValue);
+  };
 
   return (
     <Sidebar>
@@ -120,7 +129,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   {item.isTab ? (
                     <SidebarMenuButton 
                       isActive={activeTab === item.value && location === "/job-dashboard"}
-                      onClick={() => onTabChange(item.value)}
+                      onClick={() => handleTabClick(item.value)}
                       data-testid={`button-tab-${item.value}`}
                     >
                       <item.icon className="h-4 w-4" />
@@ -150,7 +159,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   {item.isTab ? (
                     <SidebarMenuButton
                       isActive={activeTab === item.value && location === "/job-dashboard"}
-                      onClick={() => onTabChange(item.value)}
+                      onClick={() => handleTabClick(item.value)}
                       data-testid={`button-tab-${item.value}`}
                     >
                       <item.icon className="h-4 w-4" />
