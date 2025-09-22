@@ -311,7 +311,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                 <div className="p-2 text-sm font-medium border-r bg-gray-50"></div>
                 {staff.map((member: any) => (
                   <div key={member.id} className="p-2 text-sm font-medium border-r text-center bg-gray-50">
-                    {member.firstName}
                   </div>
                 ))}
               </div>
