@@ -22,7 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { insertProposalSchema, insertProposalLineItemSchema } from "@shared/schema";
+import { insertProposalSchema, insertProposalLineItemSchema, type ProposalLineItem } from "@shared/schema";
 
 // Extend shared schemas for form validation  
 const proposalFormSchema = insertProposalSchema.extend({
@@ -32,11 +32,16 @@ const proposalFormSchema = insertProposalSchema.extend({
   validUntil: z.string().optional(), // UI field that maps to expiryDays
 }).omit({ createdAt: true, updatedAt: true, expiryDays: true }).partial();
 
-// Line item form schema with validation
-const lineItemFormSchema = insertProposalLineItemSchema.extend({
+// Simplified line item form schema (avoiding complex shared schema for now)
+const lineItemFormSchema = z.object({
+  description: z.string().min(1, "Description is required"),
   quantity: z.preprocess((val) => parseFloat(val as string) || 0, z.number().min(0.01, "Quantity must be positive")),
   unitPrice: z.preprocess((val) => parseFloat(val as string) || 0, z.number().min(0, "Unit price must be positive")),
-}).omit({ id: true, proposalId: true, createdAt: true, updatedAt: true, totalPrice: true, sortOrder: true });
+  unit: z.string().default("each"),
+  category: z.string().optional(),
+  notes: z.string().optional(),
+  isOptional: z.boolean().default(false),
+});
 
 interface ProposalBuilderProps {
   isOpen: boolean;
