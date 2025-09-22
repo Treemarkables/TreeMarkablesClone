@@ -1274,6 +1274,79 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                     />
                   </div>
 
+                  {/* Financial Breakdown */}
+                  {selectedJob.totalAmount && (
+                    <div className="border rounded-lg p-4 bg-gray-50" data-testid="financial-breakdown">
+                      <Label className="text-base font-medium mb-3 block">Financial Breakdown</Label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-sm text-muted-foreground">Total Amount</Label>
+                          <div className="text-lg font-semibold" data-testid="total-amount">
+                            ${parseFloat(selectedJob.totalAmount || '0').toLocaleString()}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-sm text-muted-foreground">Gross Margin</Label>
+                          <div className="text-lg font-semibold text-green-600" data-testid="gross-margin">
+                            {selectedJob.grossMargin ? `${parseFloat(selectedJob.grossMargin)}%` : 'N/A'}
+                          </div>
+                        </div>
+                        {selectedJob.laborCosts && (
+                          <div>
+                            <Label className="text-sm text-muted-foreground">Labor Costs</Label>
+                            <div className="font-medium" data-testid="labor-costs">
+                              ${parseFloat(selectedJob.laborCosts).toLocaleString()}
+                            </div>
+                          </div>
+                        )}
+                        {selectedJob.materialsCosts && (
+                          <div>
+                            <Label className="text-sm text-muted-foreground">Materials</Label>
+                            <div className="font-medium" data-testid="materials-costs">
+                              ${parseFloat(selectedJob.materialsCosts).toLocaleString()}
+                            </div>
+                          </div>
+                        )}
+                        {selectedJob.laborHours && (
+                          <div>
+                            <Label className="text-sm text-muted-foreground">Labor Hours</Label>
+                            <div className="font-medium" data-testid="labor-hours">
+                              {parseFloat(selectedJob.laborHours)} hours
+                            </div>
+                          </div>
+                        )}
+                        {selectedJob.hourlyRate && (
+                          <div>
+                            <Label className="text-sm text-muted-foreground">Hourly Rate</Label>
+                            <div className="font-medium" data-testid="hourly-rate">
+                              ${parseFloat(selectedJob.hourlyRate).toFixed(2)}/hr
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {selectedJob.assignedTeam && selectedJob.assignedTeam.length > 0 && (
+                        <div className="mt-4">
+                          <Label className="text-sm text-muted-foreground">Assigned Team</Label>
+                          <div className="flex flex-wrap gap-2 mt-1" data-testid="assigned-team">
+                            {selectedJob.assignedTeam.map((member: string, index: number) => (
+                              <Badge key={index} variant="secondary">{member}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedJob.equipment && selectedJob.equipment.length > 0 && (
+                        <div className="mt-4">
+                          <Label className="text-sm text-muted-foreground">Equipment Used</Label>
+                          <div className="flex flex-wrap gap-2 mt-1" data-testid="equipment-used">
+                            {selectedJob.equipment.map((item: string, index: number) => (
+                              <Badge key={index} variant="outline">{item}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Checklist */}
                   <div>
                     <div className="flex items-center justify-between mb-3">

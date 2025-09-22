@@ -707,73 +707,108 @@ export class MemStorage implements IStorage {
     
     // Sample jobs
     const job1 = {
-      id: '1', customerId: '1', title: 'Large Oak Tree Removal', description: 'Remove dangerous oak tree leaning toward house',
+      id: '1', customerId: '1', title: 'Large Oak Tree Removal', description: 'Remove dangerous oak tree leaning toward house. Tree shows signs of disease and structural weakness.',
       status: 'completed', priority: 'high', scheduledDate: new Date('2024-12-18'), completedDate: new Date('2024-12-18'),
-      estimatedHours: 8, actualHours: 9, totalAmount: '2500.00', address: '123 Maple Street, Auckland, NZ',
+      estimatedDuration: 8, actualDuration: 9, totalAmount: '2500.00', address: '123 Maple Street, Auckland, NZ',
+      serviceType: 'Tree Removal', leadSource: 'website', assignedTeam: ['John Smith', 'Mike Johnson'],
+      equipment: ['Chainsaw', 'Wood Chipper', 'Crane', 'Safety Harness'], specialInstructions: 'Coordinate with power company before starting',
+      weatherDependent: true, permitRequired: true, insuranceClaim: false,
+      laborCosts: '1400.00', materialsCosts: '300.00', otherCosts: '200.00', costOfGoods: '600.00',
+      grossMargin: '76.00', profitMargin: '24.00', laborHours: '18.00', hourlyRate: '77.78',
       notes: 'Required additional safety equipment due to power lines', beforePhotos: ['/api/photos/oak_before_1.jpg', '/api/photos/oak_before_2.jpg'],
       afterPhotos: ['/api/photos/oak_after_1.jpg', '/api/photos/oak_after_2.jpg'], jobNumber: 'JOB-001',
-      quoteId: '1', leadId: null, assignedCrew: null, equipmentRequired: null, specialInstructions: null,
-      weatherDependent: null, permitRequired: null, safetyNotes: null, rescheduledFrom: null, rescheduledReason: null,
+      quoteId: '1', leadId: null, assignedCrew: null, equipmentRequired: null,
+      safetyNotes: null, rescheduledFrom: null, rescheduledReason: null,
       createdAt: new Date('2024-12-15'), updatedAt: new Date('2024-12-18')
     };
     const job2 = {
-      id: '2', customerId: '2', title: 'Storm Damage Tree Removal', description: 'Emergency removal of storm-damaged pine tree',
+      id: '2', customerId: '2', title: 'Storm Damage Tree Removal', description: 'Emergency removal of storm-damaged pine tree blocking access road. Insurance claim approved.',
       status: 'completed', priority: 'high', scheduledDate: new Date('2024-12-20'), completedDate: new Date('2024-12-20'),
-      estimatedHours: 6, actualHours: 5, totalAmount: '1200.00', address: '456 Pine Avenue, Wellington, NZ',
+      estimatedDuration: 6, actualDuration: 5, totalAmount: '1200.00', address: '456 Pine Avenue, Wellington, NZ',
+      serviceType: 'Emergency Tree Removal', leadSource: 'phone', assignedTeam: ['Sarah Wilson', 'Tom Brown'],
+      equipment: ['Chainsaw', 'Bucket Truck', 'Safety Equipment'], specialInstructions: 'Emergency response - fast cleanup required',
+      weatherDependent: false, permitRequired: true, insuranceClaim: true,
+      laborCosts: '700.00', materialsCosts: '150.00', otherCosts: '100.00', costOfGoods: '250.00',
+      grossMargin: '79.17', profitMargin: '29.17', laborHours: '10.00', hourlyRate: '70.00',
       notes: 'Completed successfully, permits obtained', beforePhotos: ['/api/photos/storm_before_1.jpg'],
       afterPhotos: ['/api/photos/storm_after_1.jpg'], jobNumber: 'JOB-002', quoteId: '2', leadId: null, assignedCrew: null, equipmentRequired: null,
-      specialInstructions: null, weatherDependent: null, permitRequired: null, safetyNotes: null, rescheduledFrom: null,
+      safetyNotes: null, rescheduledFrom: null,
       rescheduledReason: null, createdAt: new Date('2024-12-10'), updatedAt: new Date('2024-12-20')
     };
     
     const job3 = {
-      id: '3', customerId: '3', title: 'Commercial Hedge Trimming', description: 'Monthly hedge maintenance for office complex',
+      id: '3', customerId: '3', title: 'Commercial Hedge Trimming', description: 'Monthly hedge maintenance for office complex. Part of annual maintenance contract.',
       status: 'completed', priority: 'medium', scheduledDate: new Date('2024-12-15'), completedDate: new Date('2024-12-15'),
-      estimatedHours: 4, actualHours: 4, totalAmount: '800.00', address: '789 Business Park, Auckland, NZ',
+      estimatedDuration: 4, actualDuration: 4, totalAmount: '800.00', address: '789 Business Park, Auckland, NZ',
+      serviceType: 'Hedge Trimming', leadSource: 'referral', assignedTeam: ['Lisa Chen', 'Mark Davis'],
+      equipment: ['Hedge Trimmer', 'Ladder', 'Cleanup Equipment'], specialInstructions: 'Work during business hours only',
+      weatherDependent: true, permitRequired: false, insuranceClaim: false,
+      laborCosts: '480.00', materialsCosts: '80.00', otherCosts: '40.00', costOfGoods: '120.00',
+      grossMargin: '85.00', profitMargin: '35.00', laborHours: '8.00', hourlyRate: '60.00',
       notes: 'Regular maintenance contract completed', beforePhotos: ['/api/photos/hedge_before_1.jpg'],
       afterPhotos: ['/api/photos/hedge_after_1.jpg'], jobNumber: 'JOB-003', quoteId: null, leadId: null, assignedCrew: null, equipmentRequired: null,
-      specialInstructions: null, weatherDependent: null, permitRequired: null, safetyNotes: null, rescheduledFrom: null,
+      safetyNotes: null, rescheduledFrom: null,
       rescheduledReason: null, createdAt: new Date('2024-12-12'), updatedAt: new Date('2024-12-15')
     };
     
     const job4 = {
-      id: '4', customerId: '1', title: 'Fruit Tree Pruning', description: 'Seasonal pruning of apple and pear trees',
-      status: 'in_progress', priority: 'low', scheduledDate: new Date('2024-12-25'), completedDate: null,
-      estimatedHours: 3, actualHours: null, totalAmount: '450.00', address: '123 Maple Street, Auckland, NZ',
+      id: '4', customerId: '1', title: 'Fruit Tree Pruning', description: 'Seasonal pruning of apple and pear trees to improve fruit production and tree health.',
+      status: 'work_order', priority: 'low', scheduledDate: new Date('2024-12-25'), completedDate: null,
+      estimatedDuration: 3, actualDuration: null, totalAmount: '450.00', address: '123 Maple Street, Auckland, NZ',
+      serviceType: 'Tree Pruning', leadSource: 'direct', assignedTeam: ['Emma Garcia'],
+      equipment: ['Pruning Shears', 'Ladder', 'Collection Bags'], specialInstructions: 'Focus on shape and health, remove diseased branches',
+      weatherDependent: true, permitRequired: false, insuranceClaim: false,
+      laborCosts: '300.00', materialsCosts: '50.00', otherCosts: '25.00', costOfGoods: '75.00',
+      grossMargin: '83.33', profitMargin: '27.78', laborHours: '6.00', hourlyRate: '50.00',
       notes: 'Scheduled for next week', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-004', 
       quoteId: null, leadId: null, assignedCrew: null, equipmentRequired: null,
-      specialInstructions: null, weatherDependent: null, permitRequired: null, safetyNotes: null, rescheduledFrom: null,
+      safetyNotes: null, rescheduledFrom: null,
       rescheduledReason: null, createdAt: new Date('2024-12-20'), updatedAt: new Date('2024-12-20')
     };
     
     // Add some lead jobs for testing drag functionality
     const job5 = {
-      id: '5', customerId: '4', title: 'Large Rimu Tree Assessment', description: 'Initial assessment for possible tree removal',
+      id: '5', customerId: '4', title: 'Large Rimu Tree Assessment', description: 'Initial assessment for possible tree removal. Customer concerned about tree stability near property structures.',
       status: 'lead', priority: 'medium', scheduledDate: null, completedDate: null,
-      estimatedHours: 2, actualHours: null, totalAmount: null, address: '246 Oak Drive, Hamilton, NZ',
+      estimatedDuration: 2, actualDuration: null, totalAmount: null, address: '246 Oak Drive, Hamilton, NZ',
+      serviceType: 'Tree Assessment', leadSource: 'google', assignedTeam: [],
+      equipment: ['Assessment Tools', 'Measuring Equipment'], specialInstructions: 'Requires power company coordination',
+      weatherDependent: true, permitRequired: true, insuranceClaim: false,
+      laborCosts: null, materialsCosts: null, otherCosts: null, costOfGoods: null,
+      grossMargin: null, profitMargin: null, laborHours: null, hourlyRate: null,
       notes: 'Customer called about large rimu tree near power lines', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-005',
-      quoteId: null, leadId: '1', assignedCrew: null, equipmentRequired: null, specialInstructions: 'Requires power company coordination',
-      weatherDependent: true, permitRequired: true, safetyNotes: 'High voltage lines nearby', rescheduledFrom: null,
+      quoteId: null, leadId: '1', assignedCrew: null, equipmentRequired: null,
+      safetyNotes: 'High voltage lines nearby', rescheduledFrom: null,
       rescheduledReason: null, createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
     };
     
     const job6 = {
-      id: '6', customerId: '5', title: 'Storm Damage Quote', description: 'Quote for multiple storm-damaged trees',
-      status: 'lead', priority: 'high', scheduledDate: null, completedDate: null,
-      estimatedHours: 6, actualHours: null, totalAmount: null, address: '135 Birch Road, Auckland, NZ',
+      id: '6', customerId: '5', title: 'Storm Damage Quote', description: 'Quote for multiple storm-damaged trees after severe weather event. Three large trees damaged, blocking driveway.',
+      status: 'quote', priority: 'high', scheduledDate: null, completedDate: null,
+      estimatedDuration: 6, actualDuration: null, totalAmount: '3200.00', address: '135 Birch Road, Auckland, NZ',
+      serviceType: 'Storm Damage Assessment', leadSource: 'facebook', assignedTeam: ['John Smith', 'Sarah Wilson'],
+      equipment: ['Chainsaw', 'Crane', 'Safety Equipment', 'Cleanup Tools'], specialInstructions: 'Insurance documentation required',
+      weatherDependent: false, permitRequired: false, insuranceClaim: true,
+      laborCosts: '2000.00', materialsCosts: '400.00', otherCosts: '300.00', costOfGoods: '700.00',
+      grossMargin: '78.13', profitMargin: '34.38', laborHours: '12.00', hourlyRate: '166.67',
       notes: 'Insurance claim - urgent assessment needed', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-006',
-      quoteId: null, leadId: '2', assignedCrew: null, equipmentRequired: null, specialInstructions: 'Insurance documentation required',
-      weatherDependent: false, permitRequired: false, safetyNotes: 'Multiple trees unstable', rescheduledFrom: null,
+      quoteId: null, leadId: '2', assignedCrew: null, equipmentRequired: null,
+      safetyNotes: 'Multiple trees unstable', rescheduledFrom: null,
       rescheduledReason: null, createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
     };
     
     const job7 = {
-      id: '7', customerId: '6', title: 'Corporate Landscaping Consultation', description: 'Consultation for ongoing maintenance contract',
-      status: 'lead', priority: 'low', scheduledDate: null, completedDate: null,
-      estimatedHours: 1, actualHours: null, totalAmount: null, address: '88 Corporate Plaza, Auckland, NZ',
+      id: '7', customerId: '6', title: 'Corporate Landscaping Consultation', description: 'Consultation for ongoing maintenance contract. Large corporate campus with extensive grounds requiring monthly service.',
+      status: 'quote', priority: 'low', scheduledDate: null, completedDate: null,
+      estimatedDuration: 1, actualDuration: null, totalAmount: '12000.00', address: '88 Corporate Plaza, Auckland, NZ',
+      serviceType: 'Consultation', leadSource: 'advertisement', assignedTeam: ['Emma Garcia'],
+      equipment: ['Assessment Tools', 'Measuring Equipment'], specialInstructions: 'Present professional appearance',
+      weatherDependent: false, permitRequired: false, insuranceClaim: false,
+      laborCosts: '8000.00', materialsCosts: '2000.00', otherCosts: '500.00', costOfGoods: '2500.00',
+      grossMargin: '79.17', profitMargin: '29.17', laborHours: '40.00', hourlyRate: '200.00',
       notes: 'Potential high-value maintenance contract', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-007',
-      quoteId: null, leadId: '3', assignedCrew: null, equipmentRequired: null, specialInstructions: 'Present professional appearance',
-      weatherDependent: false, permitRequired: false, safetyNotes: 'Office hours only', rescheduledFrom: null,
+      quoteId: null, leadId: '3', assignedCrew: null, equipmentRequired: null,
+      safetyNotes: 'Office hours only', rescheduledFrom: null,
       rescheduledReason: null, createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
     };
 
