@@ -1285,7 +1285,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
               </div>
 
               {/* Main Content */}
-              <div className="flex-1 p-4 overflow-y-auto">
+              <div className="flex-1 p-4 overflow-y-auto max-h-full">
                 <div className="space-y-6">
                   {/* Job Status & Category */}
                   <div className="grid grid-cols-2 gap-4">
