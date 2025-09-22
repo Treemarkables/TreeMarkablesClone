@@ -176,6 +176,17 @@ const skillDistribution = [
   { name: 'Equipment Maintenance', value: 20, color: '#ff7300' }
 ];
 
+// Lead Source Analytics Data based on enhanced job data
+const leadSourceData = [
+  { name: 'Website Form', value: 15650, jobs: 4, color: '#10B981' }, // jobs 1,5: $2500 + $12000 + $450
+  { name: 'Phone Call', value: 1200, jobs: 1, color: '#3B82F6' }, // job 2: $1200
+  { name: 'Customer Referral', value: 800, jobs: 1, color: '#F59E0B' }, // job 3: $800
+  { name: 'Google Search', value: 0, jobs: 1, color: '#8B5CF6' }, // job 5: assessment (no revenue yet)
+  { name: 'Facebook', value: 3200, jobs: 1, color: '#EF4444' }, // job 6: $3200
+  { name: 'Direct Contact', value: 450, jobs: 1, color: '#6366F1' }, // job 4: $450
+  { name: 'Advertisement', value: 12000, jobs: 1, color: '#EC4899' } // job 7: $12000
+];
+
 export function PerformanceAnalytics({ compact = false }: PerformanceAnalyticsProps) {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [selectedTeam, setSelectedTeam] = useState('all');
@@ -303,7 +314,7 @@ export function PerformanceAnalytics({ compact = false }: PerformanceAnalyticsPr
         </CardHeader>
 
         <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Monthly Productivity Chart */}
             <Card>
               <CardHeader>
@@ -322,6 +333,48 @@ export function PerformanceAnalytics({ compact = false }: PerformanceAnalyticsPr
                     <Line yAxisId="right" type="monotone" dataKey="efficiency" stroke="hsl(var(--destructive))" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Lead Sources Analytics */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Lead Sources & Revenue</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={leadSourceData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {leadSourceData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: any, name: string) => [`$${value.toLocaleString()}`, 'Revenue']} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="mt-4 space-y-2" data-testid="lead-source-breakdown">
+                  {leadSourceData.map((source, index) => (
+                    <div key={index} className="flex justify-between items-center text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: source.color }}></div>
+                        <span>{source.name}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">${source.value.toLocaleString()}</div>
+                        <div className="text-muted-foreground">{source.jobs} jobs</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
