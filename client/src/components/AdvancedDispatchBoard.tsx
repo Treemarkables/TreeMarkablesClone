@@ -1397,14 +1397,41 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                             </div>
                           </div>
                         )}
-                        {selectedJob.hourlyRate && (
-                          <div>
-                            <Label className="text-sm text-muted-foreground">Hourly Rate</Label>
-                            <div className="font-medium" data-testid="hourly-rate">
-                              ${parseFloat(selectedJob.hourlyRate).toFixed(2)}/hr
+                        {(() => {
+                          // Get current employee hourly rate instead of stale job data
+                          const employees = employeesData?.data || [];
+                          const assignedTeam = selectedJob.assignedTeam || [];
+                          
+                          if (assignedTeam.length > 0 && employees.length > 0) {
+                            // Find the first assigned employee
+                            const primaryEmployee = employees.find((emp: Employee) => 
+                              assignedTeam.some((teamMemberName: string) => 
+                                `${emp.firstName} ${emp.lastName}` === teamMemberName
+                              )
+                            );
+                            
+                            if (primaryEmployee?.hourlyRate) {
+                              return (
+                                <div>
+                                  <Label className="text-sm text-muted-foreground">Hourly Rate</Label>
+                                  <div className="font-medium" data-testid="hourly-rate">
+                                    ${parseFloat(primaryEmployee.hourlyRate.toString()).toFixed(2)}/hr
+                                  </div>
+                                </div>
+                              );
+                            }
+                          }
+                          
+                          // Fallback to job's stored rate if no employee found
+                          return selectedJob.hourlyRate ? (
+                            <div>
+                              <Label className="text-sm text-muted-foreground">Hourly Rate</Label>
+                              <div className="font-medium" data-testid="hourly-rate">
+                                ${parseFloat(selectedJob.hourlyRate).toFixed(2)}/hr
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          ) : null;
+                        })()}
                       </div>
                       {selectedJob.assignedTeam && selectedJob.assignedTeam.length > 0 && (
                         <div className="mt-4">

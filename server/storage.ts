@@ -822,7 +822,7 @@ export class MemStorage implements IStorage {
       id: '4', customerId: '1', title: 'Fruit Tree Pruning', description: 'Seasonal pruning of apple and pear trees to improve fruit production and tree health.',
       status: 'work_order', priority: 'low', scheduledDate: new Date('2024-12-25'), completedDate: null,
       estimatedDuration: 3, actualDuration: null, totalAmount: '450.00', address: '123 Maple Street, Auckland, NZ',
-      serviceType: 'Tree Pruning', leadSource: 'direct', assignedTeam: ['Emma Garcia'],
+      serviceType: 'Tree Pruning', leadSource: 'direct', assignedTeam: ['Jake Morrison'],
       equipment: ['Pruning Shears', 'Ladder', 'Collection Bags'], specialInstructions: 'Focus on shape and health, remove diseased branches',
       weatherDependent: true, permitRequired: false, insuranceClaim: false,
       laborCosts: '300.00', materialsCosts: '50.00', otherCosts: '25.00', costOfGoods: '75.00',
