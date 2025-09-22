@@ -25,7 +25,6 @@ import {
   Trash2,
   Download,
   MoreHorizontal,
-  DragVertical,
   Upload,
   GripVertical,
   Image,
@@ -147,7 +146,7 @@ export function ProposalGeneration({
           description: item.description,
           quantity: item.quantity.toString(),
           unitPrice: item.unitPrice.toString(),
-          totalPrice: (item.quantity * item.unitPrice).toString(), // Compute server-side
+          totalPrice: (parseFloat(item.quantity.toString()) * parseFloat(item.unitPrice.toString())).toString(), // Compute server-side
           unit: item.unit,
           category: item.category,
           notes: item.notes,
@@ -220,9 +219,9 @@ export function ProposalGeneration({
       sourceType: 'template',
       sourceId: template.id,
       description: `${template.name} - ${template.description}`,
-      quantity,
-      unitPrice,
-      totalPrice: quantity * unitPrice,
+      quantity: quantity.toString(),
+      unitPrice: unitPrice.toString(),
+      totalPrice: (quantity * unitPrice).toString(),
       unit: 'hours',
       category: template.category,
       notes: `Estimated duration: ${template.estimatedDuration} hours`,
@@ -244,12 +243,12 @@ export function ProposalGeneration({
       sourceType: 'fixed',
       sourceId: null,
       description: itemData.description,
-      quantity: itemData.quantity,
-      unitPrice: itemData.unitPrice,
-      totalPrice,
+      quantity: itemData.quantity.toString(),
+      unitPrice: itemData.unitPrice.toString(),
+      totalPrice: totalPrice.toString(),
       unit: itemData.unit,
-      category: itemData.category,
-      notes: itemData.notes,
+      category: itemData.category || null,
+      notes: itemData.notes || null,
       sortOrder: selectedLineItems.length + 1,
       isOptional: itemData.isOptional,
       createdAt: new Date(),
@@ -264,7 +263,7 @@ export function ProposalGeneration({
   };
 
   // Calculate totals
-  const subtotal = selectedLineItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  const subtotal = selectedLineItems.reduce((sum, item) => sum + parseFloat(item.totalPrice || '0'), 0);
   const tax = subtotal * 0.15; // 15% GST
   const total = subtotal + tax;
 
@@ -395,7 +394,7 @@ export function ProposalGeneration({
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      {quote?.items?.map((item: any, index: number) => (
+                      {(quote as any)?.items?.map((item: any, index: number) => (
                         <div 
                           key={index} 
                           className="p-3 border rounded-lg hover-elevate cursor-pointer"
@@ -476,8 +475,8 @@ export function ProposalGeneration({
                               <TableRow key={item.id}>
                                 <TableCell className="font-medium">{item.description}</TableCell>
                                 <TableCell>{item.quantity}</TableCell>
-                                <TableCell>${item.unitPrice.toFixed(2)}</TableCell>
-                                <TableCell>${item.totalPrice.toFixed(2)}</TableCell>
+                                <TableCell>${parseFloat(item.unitPrice || '0').toFixed(2)}</TableCell>
+                                <TableCell>${parseFloat(item.totalPrice || '0').toFixed(2)}</TableCell>
                                 <TableCell>
                                   <Badge variant="outline">{item.sourceType}</Badge>
                                 </TableCell>
