@@ -215,6 +215,11 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     queryKey: ['/api/jobs'],
   });
 
+  // Fetch customers data for customer names
+  const { data: customersData } = useQuery({
+    queryKey: ['/api/customers'],
+  });
+
   // Fetch schedule events for conflict detection
   const { data: scheduleEventsData } = useQuery({
     queryKey: ['/api/schedule-events'],
@@ -289,6 +294,13 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       case 'unsuccessful': return 'Unsuccessful';
       default: return status;
     }
+  };
+
+  // Helper function to get customer name by ID
+  const getCustomerName = (customerId: string) => {
+    const customers = (customersData as any)?.data || [];
+    const customer = customers.find((c: any) => c.id === customerId);
+    return customer?.name || 'Unknown Customer';
   };
 
   const getPriorityColor = (priority: string) => {
@@ -369,6 +381,12 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         <div className="flex items-start justify-between mb-1">
           <div className="flex-1 min-w-0">
             <h4 className="font-medium text-xs truncate">{job.title}</h4>
+            {/* Customer Name - prominently displayed */}
+            {job.customerId && (
+              <p className="font-bold text-sm text-gray-900 truncate">
+                {getCustomerName(job.customerId)}
+              </p>
+            )}
             <p className="text-muted-foreground text-xs truncate">{job.address}</p>
           </div>
           {canBeDragged && (
@@ -377,9 +395,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         </div>
         
         <div className="flex items-center justify-between mb-1">
-          <Badge variant="outline" className={getStatusColor(job.status || 'lead')}>
-            {getStatusDisplayName(job.status || 'lead')}
-          </Badge>
           {job.estimatedDuration && (
             <span className="text-muted-foreground">
               {job.estimatedDuration}h
