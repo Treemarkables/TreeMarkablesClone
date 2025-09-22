@@ -41,6 +41,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import type { JobTemplate } from "@shared/schema";
+import { ServiceJobForm } from '@/components/ServiceJobForm';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -353,6 +354,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('teams');
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
+  const [showServiceJobForm, setShowServiceJobForm] = useState(false);
   const [newJobFormData, setNewJobFormData] = useState({
     customerName: '',
     customerPhone: '',
@@ -456,7 +458,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Job Mutations
   const createJobMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest('/api/jobs', { method: 'POST', body: data });
+      const response = await apiRequest('POST', '/api/jobs', data);
       return response.json();
     },
     onSuccess: () => {
@@ -966,7 +968,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <h3 className="font-semibold text-sm text-muted-foreground">JOBS</h3>
                 <Button 
                   size="sm" 
-                  onClick={() => setShowJobCreationModal(true)}
+                  onClick={() => setShowServiceJobForm(true)}
                   data-testid="add-job-btn"
                 >
                   <Plus className="h-4 w-4 mr-1" />
@@ -1302,6 +1304,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ServiceM8-style Job Form */}
+      <ServiceJobForm 
+        isOpen={showServiceJobForm}
+        onClose={() => setShowServiceJobForm(false)}
+        onJobCreated={(job) => {
+          // Refresh jobs data after creation
+          toast({
+            title: "Job Created",
+            description: `${job.title} has been added to the dispatch board.`,
+          });
+        }}
+      />
 
       {/* Job Creation Modal */}
       {showJobCreationModal && (
