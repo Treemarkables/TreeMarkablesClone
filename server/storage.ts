@@ -839,6 +839,14 @@ export class MemStorage implements IStorage {
       // Staff time tracking fields
       staffTimeEntries: [], totalStaffHours: 0, calculatedLaborCost: 0,
       marginMeetsThreshold: false, invoiceBlocked: true, invoiceEligible: false,
+      // Global Job Card fields
+      poNumber: 'PO-2024-001', 
+      checklist: [
+        { id: '1', text: 'Pre-inspection safety check', completed: true },
+        { id: '2', text: 'Equipment setup and testing', completed: false },
+        { id: '3', text: 'Customer walkthrough', completed: false },
+        { id: '4', text: 'Post-job cleanup', completed: false }
+      ],
       createdAt: new Date('2024-12-20'), updatedAt: new Date('2024-12-20')
     };
     

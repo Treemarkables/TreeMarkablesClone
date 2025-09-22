@@ -264,6 +264,10 @@ export const jobs = pgTable("jobs", {
   minimumMarginThreshold: decimal("minimum_margin_threshold", { precision: 5, scale: 2 }).default('25.00'),
   invoiceEligible: boolean("invoice_eligible").default(false),
   
+  // Global Job Card Fields
+  poNumber: text("po_number"), // Purchase order number
+  checklist: jsonb("checklist"), // [{"id": "uuid", "text": "Task description", "completed": false}]
+  
   weatherDependent: boolean("weather_dependent").default(false),
   permitRequired: boolean("permit_required").default(false),
   insuranceClaim: boolean("insurance_claim").default(false),
@@ -572,6 +576,15 @@ export const priceRules = pgTable("price_rules", {
 // INSERT SCHEMAS & TYPES
 // ========================================
 
+// Checklist item schema for jobs
+export const checklistItemSchema = z.object({
+  id: z.string(),
+  text: z.string().min(1, "Checklist item cannot be empty"),
+  completed: z.boolean().default(false),
+});
+
+export type ChecklistItem = z.infer<typeof checklistItemSchema>;
+
 export const insertTeamSchema = createInsertSchema(teams).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCommunicationPreferencesSchema = createInsertSchema(communicationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
@@ -581,7 +594,8 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, cre
 export const insertJobSchema = createInsertSchema(jobs)
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
-    status: JobStatus.optional().default('lead')
+    status: JobStatus.optional().default('lead'),
+    checklist: z.array(checklistItemSchema).optional().default([]),
   });
 export const insertActivitySchema = createInsertSchema(activities).omit({ id: true, createdAt: true });
 export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
