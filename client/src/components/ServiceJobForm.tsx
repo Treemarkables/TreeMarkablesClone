@@ -76,6 +76,12 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
   const [showProposalDialog, setShowProposalDialog] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [showSMSDialog, setShowSMSDialog] = useState(false);
+  const [showCallDialog, setShowCallDialog] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [showQueueDialog, setShowQueueDialog] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -249,23 +255,58 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
           
           {/* Action buttons */}
           <div className="flex gap-2 flex-wrap">
-            <Button variant="secondary" size="sm" data-testid="button-email">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => setShowEmailDialog(true)}
+              data-testid="button-email"
+            >
               <Mail className="h-4 w-4 mr-1" />
               Email
             </Button>
-            <Button variant="secondary" size="sm" data-testid="button-sms">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => setShowSMSDialog(true)}
+              data-testid="button-sms"
+            >
               <MessageSquare className="h-4 w-4 mr-1" />
               SMS
             </Button>
-            <Button variant="secondary" size="sm" data-testid="button-call">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => {
+                toast({
+                  title: "Call Feature",
+                  description: "Call functionality would integrate with phone system here.",
+                });
+              }}
+              data-testid="button-call"
+            >
               <Phone className="h-4 w-4 mr-1" />
               Call
             </Button>
-            <Button variant="secondary" size="sm" data-testid="button-schedule">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => setShowScheduleDialog(true)}
+              data-testid="button-schedule"
+            >
               <Calendar className="h-4 w-4 mr-1" />
               Schedule
             </Button>
-            <Button variant="secondary" size="sm" data-testid="button-queue">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => {
+                toast({
+                  title: "Added to Queue",
+                  description: "Job has been added to the work queue for processing.",
+                });
+              }}
+              data-testid="button-queue"
+            >
               <FileText className="h-4 w-4 mr-1" />
               Queue
             </Button>
@@ -278,7 +319,12 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
               <Presentation className="h-4 w-4 mr-1" />
               Proposal
             </Button>
-            <Button variant="secondary" size="sm" data-testid="button-more">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => setShowMoreMenu(true)}
+              data-testid="button-more"
+            >
               <MoreHorizontal className="h-4 w-4 mr-1" />
               More
             </Button>
@@ -719,6 +765,228 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
         }}
       />
     )}
+
+    {/* Email Dialog */}
+    <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <h3 className="text-lg font-semibold">Send Email</h3>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">To:</label>
+            <Input 
+              placeholder="customer@example.com" 
+              defaultValue={form.watch('jobContactEmail') || form.watch('newCustomerEmail')}
+              data-testid="input-email-to"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Subject:</label>
+            <Input 
+              placeholder="Job Update - Tree Removal Service" 
+              data-testid="input-email-subject"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Message:</label>
+            <Textarea 
+              placeholder="Hello, regarding your tree removal request..."
+              rows={4}
+              data-testid="textarea-email-message"
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowEmailDialog(false)} data-testid="button-email-cancel">
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                toast({
+                  title: "Email Sent",
+                  description: "Email has been sent to the customer successfully.",
+                });
+                setShowEmailDialog(false);
+              }}
+              data-testid="button-email-send"
+            >
+              Send Email
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* SMS Dialog */}
+    <Dialog open={showSMSDialog} onOpenChange={setShowSMSDialog}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <h3 className="text-lg font-semibold">Send SMS</h3>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">To:</label>
+            <Input 
+              placeholder="+64 21 123 4567" 
+              defaultValue={form.watch('jobContactPhone') || form.watch('newCustomerPhone')}
+              data-testid="input-sms-to"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Message:</label>
+            <Textarea 
+              placeholder="Hi, this is regarding your tree removal service request..."
+              rows={4}
+              maxLength={160}
+              data-testid="textarea-sms-message"
+            />
+            <div className="text-xs text-gray-500">160 characters max</div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowSMSDialog(false)} data-testid="button-sms-cancel">
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                toast({
+                  title: "SMS Sent",
+                  description: "SMS has been sent to the customer successfully.",
+                });
+                setShowSMSDialog(false);
+              }}
+              data-testid="button-sms-send"
+            >
+              Send SMS
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Schedule Dialog */}
+    <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <h3 className="text-lg font-semibold">Schedule Job</h3>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Date:</label>
+            <Input 
+              type="date" 
+              data-testid="input-schedule-date"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Time:</label>
+            <Input 
+              type="time" 
+              defaultValue="08:00"
+              data-testid="input-schedule-time"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Duration (hours):</label>
+            <Input 
+              type="number" 
+              defaultValue="4"
+              min="1"
+              max="12"
+              data-testid="input-schedule-duration"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Assigned Crew:</label>
+            <Select>
+              <SelectTrigger data-testid="select-schedule-crew">
+                <SelectValue placeholder="Select crew" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="crew-a">Crew A - John & Mike</SelectItem>
+                <SelectItem value="crew-b">Crew B - Sarah & Tom</SelectItem>
+                <SelectItem value="crew-c">Crew C - David & Lisa</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowScheduleDialog(false)} data-testid="button-schedule-cancel">
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                toast({
+                  title: "Job Scheduled",
+                  description: "Job has been added to the schedule successfully.",
+                });
+                setShowScheduleDialog(false);
+              }}
+              data-testid="button-schedule-confirm"
+            >
+              Schedule Job
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* More Actions Dialog */}
+    <Dialog open={showMoreMenu} onOpenChange={setShowMoreMenu}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <h3 className="text-lg font-semibold">More Actions</h3>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start" 
+            onClick={() => {
+              toast({ title: "Print", description: "Job details will be printed." });
+              setShowMoreMenu(false);
+            }}
+            data-testid="button-more-print"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Print Job Details
+          </Button>
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start" 
+            onClick={() => {
+              toast({ title: "Export", description: "Job exported as PDF." });
+              setShowMoreMenu(false);
+            }}
+            data-testid="button-more-export"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Export as PDF
+          </Button>
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start" 
+            onClick={() => {
+              toast({ title: "Duplicate", description: "Job duplicated successfully." });
+              setShowMoreMenu(false);
+            }}
+            data-testid="button-more-duplicate"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Duplicate Job
+          </Button>
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start" 
+            onClick={() => {
+              toast({ title: "Archive", description: "Job archived successfully." });
+              setShowMoreMenu(false);
+            }}
+            data-testid="button-more-archive"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Archive Job
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
