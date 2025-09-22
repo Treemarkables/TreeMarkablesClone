@@ -183,6 +183,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const isMobile = useIsMobile();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
+  const [editedJobData, setEditedJobData] = useState<any>({});
   const [isNewJobModalOpen, setIsNewJobModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [draggedJob, setDraggedJob] = useState<any | null>(null);
@@ -258,6 +259,43 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       });
     },
   });
+
+  // Mutation for updating job details
+  const updateJobDetailsMutation = useMutation({
+    mutationFn: async (updateData: any) => {
+      return apiRequest('PUT', `/api/jobs/${selectedJob.id}`, updateData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
+      toast({
+        title: "Job Updated",
+        description: "Job details updated successfully",
+      });
+      setSelectedJob(null); // Close modal after save
+      setEditedJobData({}); // Reset edited data
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update job details",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle saving job details
+  const handleSaveJobDetails = () => {
+    if (Object.keys(editedJobData).length > 0) {
+      updateJobDetailsMutation.mutate(editedJobData);
+    }
+  };
+
+  // Reset edited data when opening a new job
+  const handleJobSelect = (job: any) => {
+    setSelectedJob(job);
+    setEditedJobData({}); // Reset any previous edits
+  };
 
   // Utility functions
   const getEmployeeName = (employeeId: string) => {
@@ -366,7 +404,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       // Handle click to open details - works for all jobs
       if (!isDragging) {
         e.stopPropagation();
-        setSelectedJob(job);
+        handleJobSelect(job);
       }
     };
 
@@ -1102,15 +1140,27 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                   {getStatusDisplayName(selectedJob.status)}
                 </Badge>
               </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setSelectedJob(null)}
-                className="text-white hover:bg-orange-600"
-                data-testid="button-close-job-details"
-              >
-                Close
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleSaveJobDetails}
+                  disabled={updateJobDetailsMutation.isPending || Object.keys(editedJobData).length === 0}
+                  className="bg-white text-orange-500 border-white hover:bg-gray-100"
+                  data-testid="button-save-job-details"
+                >
+                  {updateJobDetailsMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setSelectedJob(null)}
+                  className="text-white hover:bg-orange-600"
+                  data-testid="button-close-job-details"
+                >
+                  Close
+                </Button>
+              </div>
             </div>
 
             <div className="flex h-full">
@@ -1160,8 +1210,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                     <div>
                       <Label htmlFor="job-status">Job Status</Label>
                       <Select value={selectedJob.status} onValueChange={(value) => {
-                        // Handle status change
-                        console.log('Status changed to:', value);
+                        // Track status change
+                        setEditedJobData((prev: any) => ({ ...prev, status: value }));
                       }}>
                         <SelectTrigger id="job-status" data-testid="select-job-status">
                           <SelectValue />
@@ -1177,7 +1227,12 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                     </div>
                     <div>
                       <Label htmlFor="job-category">Job Category</Label>
-                      <Input id="job-category" defaultValue="Tree Removal" data-testid="input-job-category" />
+                      <Input 
+                        id="job-category" 
+                        value={editedJobData.serviceType ?? (selectedJob.serviceType || "Tree Removal")}
+                        onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, serviceType: e.target.value }))}
+                        data-testid="input-job-category" 
+                      />
                     </div>
                   </div>
 
@@ -1186,7 +1241,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                     <Label htmlFor="job-description">Job Description</Label>
                     <Textarea 
                       id="job-description" 
-                      defaultValue={selectedJob.description || selectedJob.title}
+                      value={editedJobData.description ?? (selectedJob.description || selectedJob.title || '')}
+                      onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, description: e.target.value }))}
                       className="min-h-[100px]"
                       data-testid="textarea-job-description"
                     />

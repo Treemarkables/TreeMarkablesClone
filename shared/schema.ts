@@ -207,6 +207,7 @@ export const jobs = pgTable("jobs", {
   jobNumber: text("job_number").notNull().unique(),
   title: text("title").notNull(),
   description: text("description"),
+  serviceType: text("service_type"), // tree_removal, hedge_trimming, stump_grinding, etc
   address: text("address").notNull(),
   scheduledDate: timestamp("scheduled_date"),
   completedDate: timestamp("completed_date"),
