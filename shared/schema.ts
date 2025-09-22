@@ -76,6 +76,9 @@ export type InsertLeadSubmission = Omit<LeadSubmission, 'id' | 'createdAt'>;
 export const JobStatus = z.enum(['lead', 'quote', 'work_order', 'completed', 'unsuccessful']);
 export type JobStatusType = z.infer<typeof JobStatus>;
 
+export const LeadSourceType = z.enum(['phone', 'website', 'referral', 'google', 'facebook', 'direct', 'advertisement', 'other']);
+export type LeadSourceTypeType = z.infer<typeof LeadSourceType>;
+
 // Team Management
 export const teams = pgTable("teams", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -208,6 +211,7 @@ export const jobs = pgTable("jobs", {
   title: text("title").notNull(),
   description: text("description"),
   serviceType: text("service_type"), // tree_removal, hedge_trimming, stump_grinding, etc
+  leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
   address: text("address").notNull(),
   scheduledDate: timestamp("scheduled_date"),
   completedDate: timestamp("completed_date"),
