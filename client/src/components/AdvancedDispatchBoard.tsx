@@ -166,7 +166,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           textColor: 'text-blue-700',
           indicatorColor: 'bg-blue-500',
           label: 'Lead',
-          dotColor: 'bg-blue-400'
+          dotColor: 'bg-blue-400',
+          hexColor: '#3b82f6'
         };
       case 'quote':
         return {
@@ -174,7 +175,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           textColor: 'text-purple-700',
           indicatorColor: 'bg-purple-500',
           label: 'Quote',
-          dotColor: 'bg-purple-400'
+          dotColor: 'bg-purple-400',
+          hexColor: '#8b5cf6'
         };
       case 'work_order':
         return {
@@ -182,7 +184,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           textColor: 'text-orange-700',
           indicatorColor: 'bg-orange-500',
           label: 'Work Order',
-          dotColor: 'bg-orange-400'
+          dotColor: 'bg-orange-400',
+          hexColor: '#f59e0b'
         };
       case 'completed':
         return {
@@ -190,7 +193,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           textColor: 'text-green-700',
           indicatorColor: 'bg-green-500',
           label: 'Completed',
-          dotColor: 'bg-green-400'
+          dotColor: 'bg-green-400',
+          hexColor: '#10b981'
         };
       case 'unsuccessful':
         return {
@@ -198,7 +202,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           textColor: 'text-red-700',
           indicatorColor: 'bg-red-500',
           label: 'Unsuccessful',
-          dotColor: 'bg-red-400'
+          dotColor: 'bg-red-400',
+          hexColor: '#ef4444'
         };
       default:
         return {
@@ -206,51 +211,62 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           textColor: 'text-gray-700',
           indicatorColor: 'bg-gray-500',
           label: 'Unknown',
-          dotColor: 'bg-gray-400'
+          dotColor: 'bg-gray-400',
+          hexColor: '#6b7280'
         };
     }
   };
 
-  // Render mini job card for right sidebar
+  // Render mini job card for right sidebar - ServiceM8 style
   const renderJobSidebarCard = (job: any, index: number) => {
     const customer = getCustomerName(job.customerId);
     const styling = getStatusStyling(job.status);
     
+    // ServiceM8-style letter mapping based on status
+    const getStatusLetter = (status: string) => {
+      switch (status) {
+        case 'quote': return 'Q';
+        case 'work_order': return 'W';
+        case 'completed': return 'C';
+        case 'lead': return 'L';
+        case 'unsuccessful': return 'U';
+        default: return 'J';
+      }
+    };
+    
     return (
-      <Button
+      <div
         key={job.id}
-        variant="ghost"
-        className={`border rounded-lg p-2 mb-3 hover:shadow-md transition-shadow ${styling.bgColor} h-auto text-left justify-start w-full min-w-0`}
+        className="flex items-start gap-3 py-3 px-2 hover:bg-gray-50 cursor-pointer transition-colors border-l-4"
+        style={{ borderLeftColor: styling.hexColor }}
         onClick={() => handleJobCardClick(job)}
         data-testid={`job-sidebar-card-${job.id}`}
-        aria-label={`View job for ${customer}`}
       >
-        {/* Header with status and job number */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className={`w-2 h-2 rounded-full ${styling.dotColor} flex-shrink-0`}></div>
-            <span className={`text-xs font-medium ${styling.textColor} uppercase tracking-wide truncate`}>
-              {styling.label}
-            </span>
-          </div>
-          <span className="text-xs text-gray-500 font-mono flex-shrink-0">#{job.id.slice(-4)}</span>
+        {/* Status circle with letter */}
+        <div 
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+          style={{ backgroundColor: styling.hexColor }}
+        >
+          {getStatusLetter(job.status)}
         </div>
         
-        {/* Customer name */}
-        <h4 className="font-semibold text-sm text-gray-900 mb-2 break-words">{customer}</h4>
-        
-        {/* Address section */}
-        <div className="mb-2">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block">Address</span>
-          <p className="text-xs text-gray-700 mt-1 leading-normal break-words hyphens-auto">{job.address}</p>
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          {/* Customer name */}
+          <h4 className="font-semibold text-base text-gray-900 mb-1">{customer}</h4>
+          
+          {/* Address */}
+          <p className="text-sm text-gray-600 mb-2 break-words">{job.address}</p>
+          
+          {/* Job description */}
+          <p className="text-sm text-gray-800 break-words">{job.title}</p>
         </div>
         
-        {/* Job title */}
-        <div className="min-w-0">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block">Service</span>
-          <p className="text-xs text-gray-800 mt-1 font-medium break-words">{job.title}</p>
+        {/* Job number */}
+        <div className="flex-shrink-0">
+          <span className="text-sm text-gray-400 font-mono">#{job.id.slice(-4)}</span>
         </div>
-      </Button>
+      </div>
     );
   };
 
