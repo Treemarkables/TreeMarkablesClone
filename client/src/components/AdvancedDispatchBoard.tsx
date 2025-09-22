@@ -578,7 +578,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
+    console.log('Drag end event:', { active: active.id, over: over?.id });
+    
     if (!over) {
+      console.log('No drop target found');
       setDraggedJob(null);
       return;
     }
@@ -1221,7 +1224,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                       <div className="flex items-center gap-3 mb-3">
                         <Avatar>
                           <AvatarFallback>
-                            {getCustomerName(selectedJob.customerId).split(' ').map(n => n[0]).join('')}
+                            {getCustomerName(selectedJob.customerId).split(' ').map((n: string) => n[0]).join('')}
                           </AvatarFallback>
                         </Avatar>
                         <div>
