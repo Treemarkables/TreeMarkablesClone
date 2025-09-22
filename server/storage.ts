@@ -820,7 +820,7 @@ export class MemStorage implements IStorage {
     
     const job4 = {
       id: '4', customerId: '1', title: 'Fruit Tree Pruning', description: 'Seasonal pruning of apple and pear trees to improve fruit production and tree health.',
-      status: 'work_order', priority: 'low', scheduledDate: new Date('2024-12-25'), completedDate: null,
+      status: 'work_order', priority: 'low', scheduledDate: new Date('2025-09-23'), completedDate: null,
       estimatedDuration: 3, actualDuration: null, totalAmount: '450.00', address: '123 Maple Street, Auckland, NZ',
       serviceType: 'Tree Pruning', leadSource: 'direct', assignedTeam: ['Jake Morrison'],
       equipment: ['Pruning Shears', 'Ladder', 'Collection Bags'], specialInstructions: 'Focus on shape and health, remove diseased branches',
@@ -853,7 +853,7 @@ export class MemStorage implements IStorage {
     // Add some lead jobs for testing drag functionality
     const job5 = {
       id: '5', customerId: '4', title: 'Large Rimu Tree Assessment', description: 'Initial assessment for possible tree removal. Customer concerned about tree stability near property structures.',
-      status: 'lead', priority: 'medium', scheduledDate: null, completedDate: null,
+      status: 'work_order', priority: 'medium', scheduledDate: new Date('2025-09-23'), completedDate: null,
       estimatedDuration: 2, actualDuration: null, totalAmount: null, address: '246 Oak Drive, Hamilton, NZ',
       serviceType: 'Tree Assessment', leadSource: 'google', assignedTeam: [],
       equipment: ['Assessment Tools', 'Measuring Equipment'], specialInstructions: 'Requires power company coordination',
