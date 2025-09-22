@@ -186,7 +186,7 @@ export function ProposalBuilder({
       const response = await fetch(`/api/jobs/${jobId}/photos`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photoUrl, type: 'proposal' }),
+        body: JSON.stringify({ photoUrl, type: 'before' }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Delete failed' }));
@@ -225,7 +225,7 @@ export function ProposalBuilder({
   const { data: existingPhotos } = useQuery({
     queryKey: ['/api/jobs', jobId, 'photos'],
     enabled: !!jobId && isOpen,
-    select: (data) => data?.data?.filter((photo: any) => photo.type === 'proposal') || [],
+    select: (data) => data?.data?.beforePhotos || [],
   });
   
   // Initialize photos when component opens or existing photos load
@@ -276,7 +276,7 @@ export function ProposalBuilder({
               id: `temp_${Date.now()}_${i}`,
               url: e.target?.result as string,
               filename: file.name,
-              type: file.type,
+              type: "before", // Use valid backend type
               category: "documentation",
               capturedAt: new Date().toISOString(),
               notes: ""
@@ -316,8 +316,8 @@ export function ProposalBuilder({
         formData.append("photos", files[i]);
       }
       
-      // Add metadata
-      formData.append("type", "proposal");
+      // Add metadata (backend expects "before" or "after")
+      formData.append("type", "before");
       formData.append("category", "documentation");
       formData.append("capturedBy", "User");
       formData.append("capturedAt", new Date().toISOString());
