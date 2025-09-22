@@ -20,9 +20,18 @@ import {
   Grid3X3,
   List,
   Settings,
-  Edit
+  Edit,
+  Plus,
+  RotateCcw,
+  MessageSquare,
+  FileText,
+  CheckSquare,
+  Phone,
+  Search,
+  CalendarDays,
+  MoreHorizontal
 } from 'lucide-react';
-import { format, addDays, subDays, startOfDay, addHours, isSameDay } from 'date-fns';
+import { format, addDays, subDays, startOfDay, addHours, isSameDay, startOfMonth, endOfMonth, getDaysInMonth } from 'date-fns';
 
 type AdvancedDispatchBoardProps = {
   compact?: boolean;
@@ -35,61 +44,64 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
   const [showGlobalJobCardEdit, setShowGlobalJobCardEdit] = useState(false);
   const [jobToEdit, setJobToEdit] = useState<any | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [draggedJob, setDraggedJob] = useState<any | null>(null);
 
-  // Drag and drop sensors with mobile optimization
+  // Drag and drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: isMobile ? {
-        distance: 12,
-        delay: 100,
-      } : {
+      activationConstraint: {
         distance: 8,
       },
     })
   );
 
-  // Fetch real employee data from API
+  // Fetch real data from APIs
   const { data: employeesData } = useQuery({
     queryKey: ['/api/employees'],
   });
 
-  // Fetch real jobs data from API
   const jobsQuery = useQuery({
     queryKey: ['/api/jobs'],
   });
   const jobsData = jobsQuery.data;
 
-  // Fetch customers data for customer names
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],
   });
 
-  // Time slots from 7 AM to 6 PM (11 hours)
+  // Time slots from 7 AM to 4 PM (9 hours) to match ServiceM8
   const timeSlots = [];
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < 9; i++) {
     const time = addHours(startOfDay(currentDate).setHours(7), i);
     timeSlots.push(time);
   }
 
-  // Get staff members from employees data
-  const staff = (employeesData as any)?.data?.map((emp: any) => ({
+  // Get staff members from employees data (limit to first 5 for display)
+  const staff = (employeesData as any)?.data?.slice(0, 5).map((emp: any) => ({
     id: emp.id,
     name: `${emp.firstName} ${emp.lastName}`,
+    firstName: emp.firstName,
     role: emp.position,
     status: emp.status === 'active' ? 'available' : 'offline',
-    color: '#3B82F6'
+    color: ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'][Math.floor(Math.random() * 5)]
   })) || [];
 
-  // Filter jobs for today
-  const todaysJobs = (jobsData as any)?.data?.filter((job: any) => {
-    if (!job.scheduledDate) return false;
-    const jobDate = new Date(job.scheduledDate);
-    return isSameDay(jobDate, currentDate);
-  }) || [];
+  // Get all jobs (not just today's)
+  const allJobs = (jobsData as any)?.data || [];
 
-  // Handle job card click to edit
+  // Action items for top toolbar
+  const actionItems = [
+    { id: 'new-job', label: 'New job', icon: Plus, color: 'bg-blue-500' },
+    { id: 'recurring', label: 'Recurring job', icon: RotateCcw, color: 'bg-orange-500' },
+    { id: 'follow-up', label: 'Follow up', icon: MessageSquare, color: 'bg-yellow-500' },
+    { id: 'quote-scheduled', label: 'Quote scheduled', icon: CalendarDays, color: 'bg-green-500' },
+    { id: 'quote-followup', label: 'Quote follow up', icon: FileText, color: 'bg-purple-500' },
+    { id: 'needs-schedule', label: 'Job needs need to be...', icon: Clock, color: 'bg-red-500' },
+    { id: 'scheduled', label: 'Scheduled', icon: CheckSquare, color: 'bg-emerald-500' },
+    { id: 'more', label: 'more tim...', icon: MoreHorizontal, color: 'bg-gray-500' },
+  ];
+
+  // Handle job card click
   const handleJobCardClick = (job: any) => {
     setJobToEdit(job);
     setShowGlobalJobCardEdit(true);
@@ -102,44 +114,75 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
   const handleDragEnd = (event: DragEndEvent) => {
     setDraggedJob(null);
-    // Handle job time slot reassignment here
-    // This would update the job's scheduled time
+    // Handle job reassignment here if needed
   };
 
-  // Get customer name for a job
+  // Get customer name
   const getCustomerName = (customerId: string) => {
     const customer = (customersData as any)?.data?.find((c: any) => c.id === customerId);
     return customer?.name || 'Unknown Customer';
   };
 
-  // Render job card
-  const renderJobCard = (job: any) => (
-    <Card 
-      key={job.id} 
-      className="mb-2 cursor-pointer hover:shadow-md transition-shadow"
-      onClick={() => handleJobCardClick(job)}
-      data-testid={`job-card-${job.id}`}
-    >
-      <CardContent className="p-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h4 className="font-medium text-sm text-gray-900">{job.title}</h4>
-            <p className="text-xs text-gray-600 mt-1">{getCustomerName(job.customerId)}</p>
-            <div className="flex items-center gap-1 mt-1">
-              <MapPin className="w-3 h-3 text-gray-400" />
-              <span className="text-xs text-gray-500">{job.address}</span>
-            </div>
-          </div>
-          <Badge 
-            variant={job.priority === 'high' ? 'destructive' : job.priority === 'medium' ? 'default' : 'secondary'}
-            className="text-xs"
-          >
-            {job.priority}
-          </Badge>
+  // Generate calendar days for mini calendar
+  const generateCalendarDays = () => {
+    const start = startOfMonth(currentDate);
+    const end = endOfMonth(currentDate);
+    const daysInMonth = getDaysInMonth(currentDate);
+    const days = [];
+    
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i);
+    }
+    return days;
+  };
+
+  // Render mini job card for right sidebar
+  const renderJobSidebarCard = (job: any, index: number) => {
+    const customer = getCustomerName(job.customerId);
+    const colors = ['bg-orange-100 border-orange-300', 'bg-blue-100 border-blue-300', 'bg-green-100 border-green-300'];
+    const indicators = ['bg-orange-400', 'bg-blue-400', 'bg-green-400'];
+    
+    return (
+      <div 
+        key={job.id}
+        className={`border rounded-lg p-3 mb-3 cursor-pointer hover:shadow-md transition-shadow ${colors[index % 3]}`}
+        onClick={() => handleJobCardClick(job)}
+        data-testid={`job-sidebar-card-${job.id}`}
+      >
+        <div className="flex items-start justify-between mb-2">
+          <div className={`w-3 h-3 rounded-full ${indicators[index % 3]} mt-1`}></div>
+          <span className="text-xs text-gray-500 font-medium">#{job.id.slice(-4)}</span>
         </div>
-      </CardContent>
-    </Card>
-  );
+        <h4 className="font-semibold text-sm text-gray-900 mb-1">{customer}</h4>
+        <p className="text-xs text-gray-600 mb-2">{job.address}</p>
+        <p className="text-xs text-gray-700">{job.title}</p>
+      </div>
+    );
+  };
+
+  // Render job block in time grid
+  const renderJobBlock = (job: any, timeSlot: Date, staffMember: any) => {
+    if (!job.scheduledTime) return null;
+    
+    const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledTime}`);
+    const slotHour = timeSlot.getHours();
+    
+    if (jobTime.getHours() === slotHour && job.assignedTo === staffMember.id) {
+      return (
+        <div 
+          key={job.id}
+          className="bg-blue-500 text-white text-xs p-1 rounded mb-1 cursor-pointer hover:bg-blue-600"
+          onClick={() => handleJobCardClick(job)}
+          style={{ backgroundColor: staffMember.color }}
+        >
+          <div className="font-medium">{jobTime.getHours()}:{jobTime.getMinutes().toString().padStart(2, '0')}</div>
+          <div className="truncate">{getCustomerName(job.customerId)}</div>
+        </div>
+      );
+    }
+    
+    return null;
+  };
 
   return (
     <DndContext
@@ -147,183 +190,191 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="h-full flex flex-col" data-testid="advanced-dispatch-board">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-white">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold">Dispatch Board</h1>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentDate(subDays(currentDate, 1))}
-                data-testid="button-previous-day"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-sm font-medium min-w-[120px] text-center">
-                {format(currentDate, 'MMM dd, yyyy')}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentDate(addDays(currentDate, 1))}
-                data-testid="button-next-day"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant={viewMode === 'grid' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode('grid')}
-              data-testid="button-grid-view"
-            >
-              <Grid3X3 className="w-4 h-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-              data-testid="button-list-view"
-            >
-              <List className="w-4 h-4" />
-            </Button>
+      <div className="h-full flex flex-col bg-gray-50" data-testid="advanced-dispatch-board">
+        {/* Actions Toolbar */}
+        <div className="bg-white border-b p-3">
+          <div className="flex items-center gap-1">
+            <span className="text-sm font-medium text-gray-600 mr-4">Actions</span>
+            {actionItems.map((item) => (
+              <div key={item.id} className="flex flex-col items-center gap-1">
+                <div className={`w-10 h-10 ${item.color} rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity`}>
+                  <item.icon className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xs text-gray-600 text-center leading-tight" style={{ maxWidth: '60px' }}>
+                  {item.label}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Staff Roster Sidebar */}
-          <div className="w-64 border-r bg-gray-50 p-4 overflow-y-auto">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="w-4 h-4" />
-              <h3 className="font-medium">Staff Roster</h3>
-            </div>
+        {/* Staff Members Bar */}
+        <div className="bg-white border-b p-3">
+          <div className="flex items-center gap-1">
+            <span className="text-sm font-medium text-gray-600 mr-4">Staff Members</span>
             {staff.map((member: any) => (
-              <Card key={member.id} className="mb-2" data-testid={`staff-member-${member.id}`}>
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-2">
-                    <Avatar className="w-8 h-8">
-                      <AvatarFallback className="text-xs">
-                        {member.name.split(' ').map((n: string) => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{member.name}</p>
-                      <p className="text-xs text-gray-600">{member.role}</p>
-                    </div>
-                    <Badge 
-                      variant={member.status === 'available' ? 'default' : 'secondary'}
-                      className="text-xs"
-                    >
-                      {member.status}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
+              <div key={member.id} className="flex flex-col items-center gap-1">
+                <Avatar className="w-10 h-10">
+                  <AvatarFallback className="text-sm font-medium">
+                    {member.firstName.charAt(0)}{member.name.split(' ')[1]?.charAt(0) || ''}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-xs text-gray-700 font-medium">{member.firstName}</span>
+              </div>
             ))}
+            <div className="flex flex-col items-center gap-1 ml-2">
+              <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                <Plus className="w-4 h-4 text-gray-500" />
+              </div>
+              <span className="text-xs text-gray-500">2 more</span>
+            </div>
           </div>
+        </div>
 
-          {/* Calendar Grid */}
-          <div className="flex-1 overflow-auto">
-            <div className="min-w-full">
-              {/* Time Grid Header */}
-              <div className="grid grid-cols-12 border-b bg-white sticky top-0 z-10">
-                <div className="p-2 text-sm font-medium border-r">Time</div>
-                {staff.slice(0, 11).map((member: any) => (
-                  <div key={member.id} className="p-2 text-sm font-medium border-r text-center">
-                    {member.name.split(' ')[0]}
+        {/* Main Content Area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Sidebar - Calendar and Incoming Calls */}
+          <div className="w-60 bg-white border-r overflow-y-auto">
+            {/* Mini Calendar */}
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between mb-3">
+                <Button variant="ghost" size="sm" onClick={() => setCurrentDate(subDays(currentDate, 30))}>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-sm font-medium">{format(currentDate, 'MMMM yyyy')}</span>
+                <Button variant="ghost" size="sm" onClick={() => setCurrentDate(addDays(currentDate, 30))}>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-7 gap-1 text-xs">
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
+                  <div key={day} className="text-center font-medium text-gray-500 p-1">{day}</div>
+                ))}
+                {generateCalendarDays().map((day) => (
+                  <div 
+                    key={`day-${day}`} 
+                    className={`text-center p-1 cursor-pointer hover:bg-gray-100 rounded ${
+                      day === currentDate.getDate() ? 'bg-blue-500 text-white' : ''
+                    }`}
+                  >
+                    {day}
                   </div>
                 ))}
               </div>
+            </div>
 
-              {/* Time Slots */}
-              {timeSlots.map((timeSlot) => (
-                <div key={timeSlot.toString()} className="grid grid-cols-12 border-b min-h-[80px]">
-                  {/* Time Label */}
-                  <div className="p-2 border-r bg-gray-50 flex items-start">
-                    <span className="text-sm font-medium">
-                      {format(timeSlot, 'h:mm a')}
-                    </span>
+            {/* Date Navigation */}
+            <div className="p-4 border-b">
+              <div className="text-center text-green-600 font-medium text-sm mb-2">
+                Tuesday, September 23, 2025 — Today <span className="text-xs bg-gray-100 px-1 rounded">10:31am</span>
+              </div>
+            </div>
+
+            {/* Incoming Calls Section */}
+            <div className="p-4">
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                    <Phone className="w-4 h-4 text-white" />
                   </div>
-
-                  {/* Staff Time Slots */}
-                  {staff.slice(0, 11).map((member: any) => (
-                    <div 
-                      key={`${timeSlot}-${member.id}`}
-                      className="border-r p-1 min-h-[80px] hover:bg-gray-50"
-                      data-testid={`time-slot-${member.id}-${format(timeSlot, 'HH:mm')}`}
-                    >
-                      {/* Jobs scheduled for this time slot and staff member */}
-                      {todaysJobs
-                        .filter((job: any) => {
-                          if (!job.scheduledTime) return false;
-                          const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledTime}`);
-                          const slotHour = timeSlot.getHours();
-                          return jobTime.getHours() === slotHour && job.assignedTo === member.id;
-                        })
-                        .map((job: any) => renderJobCard(job))
-                      }
-                    </div>
-                  ))}
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-green-900">Incoming Office Call</div>
+                    <div className="text-xs text-green-700">027 222 0936</div>
+                  </div>
                 </div>
-              ))}
+                
+                <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                    <Phone className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-green-900">Incoming Office Call</div>
+                    <div className="text-xs text-green-700">020 4180 5398</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Job Status Categories Sidebar */}
-          <div className="w-80 border-l bg-white overflow-y-auto">
-            {/* Lead Jobs */}
-            <div className="border-b">
-              <div className="p-3 bg-blue-50 border-b">
-                <h3 className="font-medium text-blue-900">Lead</h3>
-              </div>
-              <div className="p-2 space-y-1 min-h-[120px]">
-                {jobsData?.data?.filter((job: any) => job.status === 'lead').map((job: any) => renderJobCard(job))}
-              </div>
-            </div>
-
-            {/* Work Order Jobs */}
-            <div className="border-b">
-              <div className="p-3 bg-orange-50 border-b">
-                <h3 className="font-medium text-orange-900">Work Order</h3>
-              </div>
-              <div className="p-2 space-y-1 min-h-[120px]">
-                {jobsData?.data?.filter((job: any) => job.status === 'work_order').map((job: any) => renderJobCard(job))}
+          {/* Center - Time Grid */}
+          <div className="flex-1 overflow-auto bg-white">
+            {/* Grid Header */}
+            <div className="sticky top-0 bg-white border-b z-10">
+              <div className="grid" style={{ gridTemplateColumns: '80px repeat(5, 1fr)' }}>
+                <div className="p-2 text-sm font-medium border-r bg-gray-50"></div>
+                {staff.map((member: any) => (
+                  <div key={member.id} className="p-2 text-sm font-medium border-r text-center bg-gray-50">
+                    {member.firstName}
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Done Jobs */}
-            <div className="border-b">
-              <div className="p-3 bg-green-50 border-b">
-                <h3 className="font-medium text-green-900">Done</h3>
+            {/* Time Slots Grid */}
+            {timeSlots.map((timeSlot) => (
+              <div key={timeSlot.toString()} className="grid border-b" style={{ gridTemplateColumns: '80px repeat(5, 1fr)', minHeight: '60px' }}>
+                {/* Time Label */}
+                <div className="p-2 border-r bg-gray-50 flex items-start">
+                  <span className="text-sm font-medium">
+                    {format(timeSlot, 'h:mma').toLowerCase()}
+                  </span>
+                </div>
+
+                {/* Staff Columns */}
+                {staff.map((member: any) => (
+                  <div 
+                    key={`${timeSlot}-${member.id}`}
+                    className="border-r p-2 hover:bg-gray-50 min-h-[60px]"
+                    data-testid={`time-slot-${member.id}-${format(timeSlot, 'HH:mm')}`}
+                  >
+                    {/* Render job blocks for this time slot and staff member */}
+                    {allJobs
+                      .filter((job: any) => {
+                        if (!job.scheduledDate || !job.scheduledTime) return false;
+                        const jobDate = new Date(job.scheduledDate);
+                        const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledTime}`);
+                        const slotHour = timeSlot.getHours();
+                        return isSameDay(jobDate, currentDate) && 
+                               jobTime.getHours() === slotHour && 
+                               job.assignedTo === member.id;
+                      })
+                      .map((job: any) => renderJobBlock(job, timeSlot, member))
+                    }
+                  </div>
+                ))}
               </div>
-              <div className="p-2 space-y-1 min-h-[120px]">
-                {jobsData?.data?.filter((job: any) => job.status === 'done').map((job: any) => renderJobCard(job))}
+            ))}
+          </div>
+
+          {/* Right Sidebar - Jobs List */}
+          <div className="w-72 bg-white border-l overflow-y-auto">
+            {/* Search Bar */}
+            <div className="p-3 border-b">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input 
+                  type="text" 
+                  placeholder="Job Search..." 
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm"
+                />
               </div>
             </div>
 
-            {/* Completed Jobs */}
-            <div className="border-b">
-              <div className="p-3 bg-emerald-50 border-b">
-                <h3 className="font-medium text-emerald-900">Completed</h3>
-              </div>
-              <div className="p-2 space-y-1 min-h-[120px]">
-                {jobsData?.data?.filter((job: any) => job.status === 'completed').map((job: any) => renderJobCard(job))}
+            {/* Jobs Header */}
+            <div className="p-3 border-b bg-gray-50">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">Jobs</span>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" className="text-xs">All Jobs</Button>
+                  <ChevronRight className="w-3 h-3 text-gray-400" />
+                </div>
               </div>
             </div>
 
-            {/* Unsuccessful Jobs */}
-            <div className="border-b">
-              <div className="p-3 bg-red-50 border-b">
-                <h3 className="font-medium text-red-900">Unsuccessful</h3>
-              </div>
-              <div className="p-2 space-y-1 min-h-[120px]">
-                {jobsData?.data?.filter((job: any) => job.status === 'unsuccessful').map((job: any) => renderJobCard(job))}
-              </div>
+            {/* Jobs List */}
+            <div className="p-3 space-y-3">
+              {allJobs.slice(0, 6).map((job: any, index: number) => renderJobSidebarCard(job, index))}
             </div>
           </div>
         </div>
@@ -345,16 +396,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             });
             setShowGlobalJobCardEdit(false);
             setJobToEdit(null);
-            // Refresh the jobs data
             jobsQuery.refetch();
           }}
         />
       </div>
-
-      {/* Drag Overlay */}
-      <DragOverlay>
-        {draggedJob ? renderJobCard(draggedJob) : null}
-      </DragOverlay>
     </DndContext>
   );
 }
