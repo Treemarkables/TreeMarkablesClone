@@ -350,6 +350,25 @@ export const proposalSections = pgTable("proposal_sections", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Proposal Line Items
+export const proposalLineItems = pgTable("proposal_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  proposalId: varchar("proposal_id").references(() => proposals.id, { onDelete: 'cascade' }).notNull(),
+  sourceType: text("source_type", { enum: ['quote', 'template', 'fixed'] }).notNull(),
+  sourceId: varchar("source_id"), // Reference to quote line item or template ID (nullable for fixed items)
+  description: text("description").notNull(),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+  unit: text("unit").default("each"), // each, hours, m2, linear_m, etc.
+  category: text("category"), // labor, materials, equipment, permits, etc.
+  notes: text("notes"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isOptional: boolean("is_optional").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Enhanced Photo Management System
 export const photos = pgTable("photos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1109,6 +1128,39 @@ export const updateProposalSectionSchema = insertProposalSectionSchema.partial()
 export type ProposalSection = typeof proposalSections.$inferSelect;
 export type InsertProposalSection = z.infer<typeof insertProposalSectionSchema>;
 export type UpdateProposalSection = z.infer<typeof updateProposalSectionSchema>;
+
+// Proposal Line Item Schema Exports
+export const insertProposalLineItemSchema = createInsertSchema(proposalLineItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).refine((data) => {
+  // Validate sourceId based on sourceType
+  if (data.sourceType === 'fixed' && data.sourceId) {
+    return false; // Fixed items should not have sourceId
+  }
+  if ((data.sourceType === 'quote' || data.sourceType === 'template') && !data.sourceId) {
+    return false; // Quote/template items must have sourceId
+  }
+  // Validate totalPrice calculation
+  const calculatedTotal = Number(data.quantity) * Number(data.unitPrice);
+  if (Math.abs(calculatedTotal - Number(data.totalPrice)) > 0.01) {
+    return false; // Total must equal quantity × unit price
+  }
+  return true;
+}, {
+  message: "Invalid line item: sourceId/sourceType mismatch or totalPrice calculation error"
+});
+
+export const updateProposalLineItemSchema = createInsertSchema(proposalLineItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export type ProposalLineItem = typeof proposalLineItems.$inferSelect;
+export type InsertProposalLineItem = z.infer<typeof insertProposalLineItemSchema>;
+export type UpdateProposalLineItem = z.infer<typeof updateProposalLineItemSchema>;
 
 // Equipment/Resource Schema
 export const equipment = pgTable("equipment", {

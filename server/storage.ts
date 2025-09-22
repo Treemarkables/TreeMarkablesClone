@@ -39,6 +39,7 @@ import {
   type JobTemplate, type InsertJobTemplate, type UpdateJobTemplate,
   type Proposal, type InsertProposal, type UpdateProposal,
   type ProposalSection, type InsertProposalSection, type UpdateProposalSection,
+  type ProposalLineItem, type InsertProposalLineItem, type UpdateProposalLineItem,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -290,6 +291,14 @@ export interface IStorage {
   getProposalSectionsByProposal(proposalId: string): Promise<ProposalSection[]>;
   deleteProposalSection(id: string): Promise<void>;
   reorderProposalSections(proposalId: string, sectionIds: string[]): Promise<ProposalSection[]>;
+  
+  // Proposal Line Item Management
+  createProposalLineItem(item: InsertProposalLineItem): Promise<ProposalLineItem>;
+  getProposalLineItem(id: string): Promise<ProposalLineItem | undefined>;
+  updateProposalLineItem(id: string, updates: UpdateProposalLineItem): Promise<ProposalLineItem>;
+  getProposalLineItemsByProposal(proposalId: string): Promise<ProposalLineItem[]>;
+  deleteProposalLineItem(id: string): Promise<void>;
+  reorderProposalLineItems(proposalId: string, itemIds: string[]): Promise<ProposalLineItem[]>;
 
   // Equipment Management
   createEquipment(equipment: InsertEquipment): Promise<Equipment>;
@@ -455,6 +464,7 @@ export class MemStorage implements IStorage {
   // Proposal System Storage
   private proposals: Map<string, Proposal>;
   private proposalSections: Map<string, ProposalSection>;
+  private proposalLineItems: Map<string, ProposalLineItem>;
 
   constructor() {
     this.users = new Map();
@@ -497,6 +507,7 @@ export class MemStorage implements IStorage {
     // Proposal System Storage
     this.proposals = new Map();
     this.proposalSections = new Map();
+    this.proposalLineItems = new Map();
     
     // Initialize business settings with defaults
     this.businessSettings = {
@@ -3481,6 +3492,74 @@ export class MemStorage implements IStorage {
     });
 
     return await this.getProposalSectionsByProposal(proposalId);
+  }
+
+  // ========================================
+  // PROPOSAL LINE ITEM MANAGEMENT METHODS
+  // ========================================
+
+  async createProposalLineItem(itemData: InsertProposalLineItem): Promise<ProposalLineItem> {
+    // Auto-assign sortOrder if not provided
+    const existingItems = await this.getProposalLineItemsByProposal(itemData.proposalId);
+    const nextSortOrder = itemData.sortOrder ?? (existingItems.length + 1);
+    
+    const item: ProposalLineItem = {
+      id: randomUUID(),
+      ...itemData,
+      sortOrder: nextSortOrder,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.proposalLineItems.set(item.id, item);
+    return item;
+  }
+
+  async getProposalLineItem(id: string): Promise<ProposalLineItem | undefined> {
+    return this.proposalLineItems.get(id);
+  }
+
+  async updateProposalLineItem(id: string, updates: UpdateProposalLineItem): Promise<ProposalLineItem> {
+    const existing = this.proposalLineItems.get(id);
+    if (!existing) {
+      throw new Error('Proposal line item not found');
+    }
+
+    const updated: ProposalLineItem = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.proposalLineItems.set(id, updated);
+    return updated;
+  }
+
+  async getProposalLineItemsByProposal(proposalId: string): Promise<ProposalLineItem[]> {
+    return Array.from(this.proposalLineItems.values())
+      .filter(item => item.proposalId === proposalId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  async deleteProposalLineItem(id: string): Promise<void> {
+    this.proposalLineItems.delete(id);
+  }
+
+  async reorderProposalLineItems(proposalId: string, itemIds: string[]): Promise<ProposalLineItem[]> {
+    // Update sort order for each item
+    itemIds.forEach((itemId, index) => {
+      const item = this.proposalLineItems.get(itemId);
+      if (item && item.proposalId === proposalId) {
+        const updated = {
+          ...item,
+          sortOrder: index + 1,
+          updatedAt: new Date(),
+        };
+        this.proposalLineItems.set(itemId, updated);
+      }
+    });
+
+    return await this.getProposalLineItemsByProposal(proposalId);
   }
 
   // ========================================
