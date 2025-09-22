@@ -26,7 +26,7 @@ import { CustomerPortal } from "@/pages/CustomerPortal";
 import CommunicationsManagement from "@/pages/CommunicationsManagement";
 import Dispatch from "@/pages/Dispatch";
 import { WorkflowAutomation } from "@/components/WorkflowAutomation";
-import { ServiceJobForm } from "@/components/ServiceJobForm";
+import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useState } from "react";
@@ -35,7 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const [activeTab, setActiveTab] = useState("overview");
-  const [showServiceJobForm, setShowServiceJobForm] = useState(false);
+  const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const { toast } = useToast();
   
   const style = {
@@ -54,7 +54,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
             {/* Global New Job Button */}
             <Button 
               size="sm" 
-              onClick={() => setShowServiceJobForm(true)}
+              onClick={() => setShowGlobalJobCard(true)}
               data-testid="global-new-job-btn"
               className="bg-amber-500 hover:bg-amber-600 text-white"
             >
@@ -67,16 +67,17 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
           </main>
         </div>
         
-        {/* Global ServiceM8-style Job Form */}
-        <ServiceJobForm 
-          isOpen={showServiceJobForm}
-          onClose={() => setShowServiceJobForm(false)}
+        {/* Global Job Card */}
+        <GlobalJobCard 
+          isOpen={showGlobalJobCard}
+          mode="create"
+          onClose={() => setShowGlobalJobCard(false)}
           onJobCreated={(job) => {
             toast({
               title: "Job Created",
               description: `${job.title} has been created successfully.`,
             });
-            setShowServiceJobForm(false);
+            setShowGlobalJobCard(false);
           }}
         />
       </div>

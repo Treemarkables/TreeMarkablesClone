@@ -1,6 +1,3 @@
-import { useToast } from "@/hooks/use-toast";
-import { useIsMobile } from "@/hooks/use-mobile";
-
 export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoardProps) {
   const { toast } = useToast();
   const isMobile = useIsMobile();
