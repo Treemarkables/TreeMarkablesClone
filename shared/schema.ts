@@ -234,6 +234,31 @@ export const jobs = pgTable("jobs", {
   profitMargin: decimal("profit_margin", { precision: 5, scale: 2 }),
   laborHours: decimal("labor_hours", { precision: 8, scale: 2 }),
   hourlyRate: decimal("hourly_rate", { precision: 8, scale: 2 }),
+  
+  // Enhanced Expense Tracking
+  actualLaborCosts: decimal("actual_labor_costs", { precision: 10, scale: 2 }),
+  actualMaterialsCosts: decimal("actual_materials_costs", { precision: 10, scale: 2 }),
+  equipmentCosts: decimal("equipment_costs", { precision: 10, scale: 2 }),
+  subcontractorCosts: decimal("subcontractor_costs", { precision: 10, scale: 2 }),
+  permitCosts: decimal("permit_costs", { precision: 10, scale: 2 }),
+  travelCosts: decimal("travel_costs", { precision: 10, scale: 2 }),
+  disposalCosts: decimal("disposal_costs", { precision: 10, scale: 2 }),
+  miscExpenses: decimal("misc_expenses", { precision: 10, scale: 2 }),
+  
+  // Expense Completion Status
+  laborCostsComplete: boolean("labor_costs_complete").default(false),
+  materialsCostsComplete: boolean("materials_costs_complete").default(false),
+  equipmentCostsComplete: boolean("equipment_costs_complete").default(false),
+  subcontractorCostsComplete: boolean("subcontractor_costs_complete").default(false),
+  otherExpensesComplete: boolean("other_expenses_complete").default(false),
+  allExpensesComplete: boolean("all_expenses_complete").default(false),
+  
+  // Invoice Protection
+  invoiceBlocked: boolean("invoice_blocked").default(true),
+  marginMeetsThreshold: boolean("margin_meets_threshold").default(false),
+  minimumMarginThreshold: decimal("minimum_margin_threshold", { precision: 5, scale: 2 }).default('25.00'),
+  invoiceEligible: boolean("invoice_eligible").default(false),
+  
   weatherDependent: boolean("weather_dependent").default(false),
   permitRequired: boolean("permit_required").default(false),
   insuranceClaim: boolean("insurance_claim").default(false),

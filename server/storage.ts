@@ -1919,6 +1919,77 @@ export class MemStorage implements IStorage {
     return await this.calculateAndUpdateGrossMargin(jobId);
   }
 
+  // Enhanced Expense Tracking Methods
+  async updateJobExpenses(jobId: string, expenseData: {
+    actualLaborCosts?: number;
+    actualMaterialsCosts?: number;
+    equipmentCosts?: number;
+    subcontractorCosts?: number;
+    permitCosts?: number;
+    travelCosts?: number;
+    disposalCosts?: number;
+    miscExpenses?: number;
+  }): Promise<Job> {
+    const existing = this.jobs.get(jobId);
+    if (!existing) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    const updates = {
+      ...expenseData,
+      actualLaborCosts: expenseData.actualLaborCosts?.toString(),
+      actualMaterialsCosts: expenseData.actualMaterialsCosts?.toString(),
+      equipmentCosts: expenseData.equipmentCosts?.toString(),
+      subcontractorCosts: expenseData.subcontractorCosts?.toString(),
+      permitCosts: expenseData.permitCosts?.toString(),
+      travelCosts: expenseData.travelCosts?.toString(),
+      disposalCosts: expenseData.disposalCosts?.toString(),
+      miscExpenses: expenseData.miscExpenses?.toString(),
+      updatedAt: new Date()
+    };
+
+    const updated = { ...existing, ...updates };
+    this.jobs.set(jobId, updated);
+
+    // Automatically calculate gross margin and check invoice eligibility
+    await this.calculateAndUpdateGrossMargin(jobId);
+    return await this.updateInvoiceEligibility(jobId);
+  }
+
+  async updateExpenseCompletionStatus(jobId: string, completionData: {
+    laborCostsComplete?: boolean;
+    materialsCostsComplete?: boolean;
+    equipmentCostsComplete?: boolean;
+    subcontractorCostsComplete?: boolean;
+    otherExpensesComplete?: boolean;
+  }): Promise<Job> {
+    const existing = this.jobs.get(jobId);
+    if (!existing) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    const updates = {
+      ...completionData,
+      updatedAt: new Date()
+    };
+
+    // Calculate if all expenses are complete
+    const allExpensesComplete = 
+      (completionData.laborCostsComplete ?? existing.laborCostsComplete) &&
+      (completionData.materialsCostsComplete ?? existing.materialsCostsComplete) &&
+      (completionData.equipmentCostsComplete ?? existing.equipmentCostsComplete) &&
+      (completionData.subcontractorCostsComplete ?? existing.subcontractorCostsComplete) &&
+      (completionData.otherExpensesComplete ?? existing.otherExpensesComplete);
+
+    updates.allExpensesComplete = allExpensesComplete;
+
+    const updated = { ...existing, ...updates };
+    this.jobs.set(jobId, updated);
+
+    // Update invoice eligibility after changing completion status
+    return await this.updateInvoiceEligibility(jobId);
+  }
+
   async calculateAndUpdateGrossMargin(jobId: string): Promise<Job> {
     const job = this.jobs.get(jobId);
     if (!job) {
@@ -1926,24 +1997,45 @@ export class MemStorage implements IStorage {
     }
 
     const totalAmount = job.totalAmount ? parseFloat(job.totalAmount) : 0;
+    
+    // Enhanced cost calculation including all expense categories
     const laborCosts = job.laborCosts ? parseFloat(job.laborCosts) : 0;
+    const actualLaborCosts = job.actualLaborCosts ? parseFloat(job.actualLaborCosts) : 0;
     const materialsCosts = job.materialsCosts ? parseFloat(job.materialsCosts) : 0;
+    const actualMaterialsCosts = job.actualMaterialsCosts ? parseFloat(job.actualMaterialsCosts) : 0;
+    const equipmentCosts = job.equipmentCosts ? parseFloat(job.equipmentCosts) : 0;
+    const subcontractorCosts = job.subcontractorCosts ? parseFloat(job.subcontractorCosts) : 0;
+    const permitCosts = job.permitCosts ? parseFloat(job.permitCosts) : 0;
+    const travelCosts = job.travelCosts ? parseFloat(job.travelCosts) : 0;
+    const disposalCosts = job.disposalCosts ? parseFloat(job.disposalCosts) : 0;
+    const miscExpenses = job.miscExpenses ? parseFloat(job.miscExpenses) : 0;
     const otherCosts = job.otherCosts ? parseFloat(job.otherCosts) : 0;
     const costOfGoods = job.costOfGoods ? parseFloat(job.costOfGoods) : 0;
 
-    // Total costs = labor + materials + other + cost of goods
-    const totalCosts = laborCosts + materialsCosts + otherCosts + costOfGoods;
+    // Use actual costs when available, otherwise fall back to estimated
+    const finalLaborCosts = actualLaborCosts > 0 ? actualLaborCosts : laborCosts;
+    const finalMaterialsCosts = actualMaterialsCosts > 0 ? actualMaterialsCosts : materialsCosts;
+
+    // Total costs = all direct expenses
+    const totalCosts = finalLaborCosts + finalMaterialsCosts + equipmentCosts + 
+                      subcontractorCosts + permitCosts + travelCosts + 
+                      disposalCosts + miscExpenses + otherCosts + costOfGoods;
     
     // Gross margin calculation: (Revenue - COGS) / Revenue * 100
     const grossMargin = totalAmount > 0 ? ((totalAmount - totalCosts) / totalAmount) * 100 : 0;
     
-    // Check if gross margin calculation is complete
-    const grossMarginCalculated = totalAmount > 0 && (laborCosts > 0 || materialsCosts > 0 || otherCosts > 0);
+    // Check if gross margin calculation is complete (has revenue and some costs)
+    const grossMarginCalculated = totalAmount > 0 && totalCosts > 0;
+    
+    // Check if margin meets threshold
+    const minimumThreshold = job.minimumMarginThreshold ? parseFloat(job.minimumMarginThreshold) : 25.0;
+    const marginMeetsThreshold = grossMargin >= minimumThreshold;
 
     const updated: Job = {
       ...job,
       grossMargin: grossMargin.toFixed(2),
       grossMarginCalculated,
+      marginMeetsThreshold,
       updatedAt: new Date()
     };
 
@@ -1954,7 +2046,47 @@ export class MemStorage implements IStorage {
       totalAmount,
       totalCosts,
       grossMargin: grossMargin.toFixed(2),
+      marginMeetsThreshold,
+      minimumThreshold,
       grossMarginCalculated
+    }));
+
+    return updated;
+  }
+
+  async updateInvoiceEligibility(jobId: string): Promise<Job> {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    // Job is eligible for invoice when:
+    // 1. All expenses are marked complete
+    // 2. Gross margin meets minimum threshold
+    // 3. Job has completed status
+    const allExpensesComplete = job.allExpensesComplete || false;
+    const marginMeetsThreshold = job.marginMeetsThreshold || false;
+    const jobCompleted = job.status === 'completed';
+    
+    const invoiceEligible = allExpensesComplete && marginMeetsThreshold && jobCompleted;
+    const invoiceBlocked = !invoiceEligible;
+
+    const updated: Job = {
+      ...job,
+      invoiceEligible,
+      invoiceBlocked,
+      updatedAt: new Date()
+    };
+
+    this.jobs.set(jobId, updated);
+
+    console.log('INVOICE_ELIGIBILITY_UPDATED', JSON.stringify({
+      jobId,
+      allExpensesComplete,
+      marginMeetsThreshold,
+      jobCompleted,
+      invoiceEligible,
+      invoiceBlocked
     }));
 
     return updated;
