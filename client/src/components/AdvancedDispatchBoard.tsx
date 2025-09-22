@@ -363,8 +363,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     const isUnsuccessful = selectedStatus === 'unsuccessful';
     
     const handleCardClick = (e: React.MouseEvent) => {
-      // Only handle click if not dragging and not clicking on action buttons
-      if (!isDragging && !canBeDragged) {
+      // Handle click to open details - works for all jobs
+      if (!isDragging) {
         e.stopPropagation();
         setSelectedJob(job);
       }
@@ -376,7 +376,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         style={style}
         {...(canBeDragged ? listeners : {})}
         {...(canBeDragged ? attributes : {})}
-        onClick={!canBeDragged ? handleCardClick : undefined}
+        onClick={handleCardClick}
         className={`p-2 bg-white border rounded shadow-sm text-xs ${getPriorityColor(job.priority || 'medium')} border-l-4 ${
           canBeDragged 
             ? `cursor-move ${isDragging ? 'opacity-50 z-50' : 'hover:shadow-md'}` 
@@ -1087,111 +1087,224 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         </Dialog>
       )}
 
-      {/* Job Details Modal */}
+      {/* ServiceM8-Style Job Details Interface */}
       {selectedJob && (
         <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
-          <DialogContent className="max-w-md" data-testid="job-details-modal">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${getPriorityColor(selectedJob.priority || 'medium').replace('border-l-', 'bg-')}`} />
-                Job #{selectedJob.jobNumber || selectedJob.id} Details
-              </DialogTitle>
-            </DialogHeader>
+          <DialogContent className="max-w-6xl h-[90vh] p-0" data-testid="job-details-modal">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b bg-orange-500 text-white">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold">Job #{selectedJob.jobNumber || selectedJob.id}</h2>
+                <Badge className="bg-white text-orange-500 border-white">
+                  {getStatusDisplayName(selectedJob.status)}
+                </Badge>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSelectedJob(null)}
+                className="text-white hover:bg-orange-600"
+                data-testid="button-close-job-details"
+              >
+                Close
+              </Button>
+            </div>
 
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-semibold text-sm mb-2">Job Information</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Title:</span>
-                    <span className="font-medium">{selectedJob.title}</span>
+            <div className="flex h-full">
+              {/* Left Sidebar - Actions */}
+              <div className="w-48 border-r bg-gray-50 p-2">
+                <div className="space-y-1">
+                  <Button variant="outline" size="sm" className="w-full justify-start" data-testid="action-details">
+                    <User className="w-4 h-4 mr-2" />
+                    Details
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start" data-testid="action-email">
+                    <span className="w-4 h-4 mr-2">📧</span>
+                    Email
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start" data-testid="action-sms">
+                    <span className="w-4 h-4 mr-2">💬</span>
+                    SMS
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start" data-testid="action-call">
+                    <span className="w-4 h-4 mr-2">📞</span>
+                    Call
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start" data-testid="action-schedule">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Schedule
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start" data-testid="action-quote">
+                    <span className="w-4 h-4 mr-2">💰</span>
+                    Quote
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start" data-testid="action-forms">
+                    <span className="w-4 h-4 mr-2">📋</span>
+                    Forms
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start" data-testid="action-proposal">
+                    <span className="w-4 h-4 mr-2">📄</span>
+                    Proposal
+                  </Button>
+                </div>
+              </div>
+
+              {/* Main Content */}
+              <div className="flex-1 p-4 overflow-y-auto">
+                <div className="space-y-6">
+                  {/* Job Status & Category */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="job-status">Job Status</Label>
+                      <Select value={selectedJob.status} onValueChange={(value) => {
+                        // Handle status change
+                        console.log('Status changed to:', value);
+                      }}>
+                        <SelectTrigger id="job-status" data-testid="select-job-status">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="lead">Lead</SelectItem>
+                          <SelectItem value="quote">Quote</SelectItem>
+                          <SelectItem value="work_order">Work Order</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="unsuccessful">Unsuccessful</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="job-category">Job Category</Label>
+                      <Input id="job-category" defaultValue="Tree Removal" data-testid="input-job-category" />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Customer:</span>
-                    <span>{getCustomerName(selectedJob.customerId)}</span>
+
+                  {/* Job Description */}
+                  <div>
+                    <Label htmlFor="job-description">Job Description</Label>
+                    <Textarea 
+                      id="job-description" 
+                      defaultValue={selectedJob.description || selectedJob.title}
+                      className="min-h-[100px]"
+                      data-testid="textarea-job-description"
+                    />
                   </div>
-                  <div className="flex items-start justify-between">
-                    <span className="text-muted-foreground">Address:</span>
-                    <span className="text-right max-w-[200px]">{selectedJob.address}</span>
+
+                  {/* Checklist */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <Label>Checklist</Label>
+                      <Button size="sm" variant="outline" data-testid="button-add-checklist-item">
+                        <Plus className="w-4 h-4 mr-1" />
+                        New Item
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 p-2 border rounded">
+                        <input type="checkbox" id="check1" className="rounded" />
+                        <label htmlFor="check1" className="text-sm">Site assessment completed</label>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 border rounded">
+                        <input type="checkbox" id="check2" className="rounded" />
+                        <label htmlFor="check2" className="text-sm">Equipment prepared</label>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 border rounded">
+                        <input type="checkbox" id="check3" className="rounded" />
+                        <label htmlFor="check3" className="text-sm">Safety briefing conducted</label>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Status:</span>
-                    <Badge className={getStatusColor(selectedJob.status)}>{getStatusDisplayName(selectedJob.status)}</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Priority:</span>
-                    <Badge variant="outline">{selectedJob.priority || 'medium'}</Badge>
+
+                  {/* Contacts */}
+                  <div>
+                    <Label className="text-base font-medium">Contacts</Label>
+                    <div className="mt-3 border rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Avatar>
+                          <AvatarFallback>
+                            {getCustomerName(selectedJob.customerId).split(' ').map(n => n[0]).join('')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-medium">Job Contact</div>
+                          <div className="text-sm text-muted-foreground">{getCustomerName(selectedJob.customerId)}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="contact-first-name">First Name</Label>
+                          <Input 
+                            id="contact-first-name" 
+                            defaultValue={getCustomerName(selectedJob.customerId).split(' ')[0]} 
+                            data-testid="input-contact-first-name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="contact-last-name">Last Name</Label>
+                          <Input 
+                            id="contact-last-name" 
+                            defaultValue={getCustomerName(selectedJob.customerId).split(' ').slice(1).join(' ')} 
+                            data-testid="input-contact-last-name"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 mt-3">
+                        <div>
+                          <Label htmlFor="contact-phone">Phone</Label>
+                          <Input id="contact-phone" type="tel" placeholder="Phone number" data-testid="input-contact-phone" />
+                        </div>
+                        <div>
+                          <Label htmlFor="contact-mobile">Mobile</Label>
+                          <Input id="contact-mobile" type="tel" placeholder="Mobile number" data-testid="input-contact-mobile" />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {selectedJob.scheduledDate && (
-                <div>
-                  <h4 className="font-semibold text-sm mb-2">Schedule</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Date:</span>
-                      <span>{format(new Date(selectedJob.scheduledDate), 'MMM dd, yyyy')}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Time:</span>
-                      <span>{format(new Date(selectedJob.scheduledDate), 'h:mm a')}</span>
-                    </div>
-                    {selectedJob.estimatedDuration && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Duration:</span>
-                        <span>{selectedJob.estimatedDuration}h</span>
-                      </div>
-                    )}
-                  </div>
+              {/* Right Sidebar - Activity Feed */}
+              <div className="w-80 border-l bg-gray-50">
+                <div className="p-4 border-b">
+                  <h3 className="font-medium">Activity Feed</h3>
                 </div>
-              )}
-
-              {selectedJob.assignedTeam && selectedJob.assignedTeam.length > 0 && (
-                <div>
-                  <h4 className="font-semibold text-sm mb-2">Assigned Team</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Staff:</span>
-                      <span>{getAssignedStaffNames(selectedJob.assignedTeam)}</span>
+                <div className="p-4 space-y-4">
+                  {/* Activity items */}
+                  <div className="border-l-2 border-blue-500 pl-3">
+                    <div className="text-sm font-medium">Job sent to queue</div>
+                    <div className="text-xs text-muted-foreground">
+                      {selectedJob.scheduledDate ? format(new Date(selectedJob.scheduledDate), 'h:mm a dd/MM/yyyy') : 'No date set'} • by system
                     </div>
                   </div>
-                </div>
-              )}
+                  
+                  <div className="border-l-2 border-green-500 pl-3">
+                    <div className="text-sm font-medium">Job sent to 'Quote sent' queue</div>
+                    <div className="text-xs text-muted-foreground">
+                      {selectedJob.scheduledDate ? format(new Date(selectedJob.scheduledDate), 'h:mm a dd/MM/yyyy') : 'No date set'} • by system
+                    </div>
+                  </div>
+                  
+                  <div className="border-l-2 border-orange-500 pl-3">
+                    <div className="text-sm font-medium">Email</div>
+                    <div className="text-xs text-muted-foreground">
+                      To: customer@email.com<br />
+                      Subject: Quote for Tree Removal
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Quote #3292 for $747.50
+                    </div>
+                  </div>
 
-              {(selectedJob.description || selectedJob.specialInstructions) && (
-                <div>
-                  <h4 className="font-semibold text-sm mb-2">Notes</h4>
-                  <div className="text-sm text-muted-foreground">
-                    {selectedJob.description || selectedJob.specialInstructions}
+                  {/* Textarea for notes */}
+                  <div className="mt-4">
+                    <Textarea 
+                      placeholder="Type a job note here..." 
+                      className="text-sm"
+                      data-testid="textarea-job-notes"
+                    />
                   </div>
                 </div>
-              )}
-
-              {/* Quick Actions */}
-              <div className="flex gap-2 pt-2 border-t">
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => setSelectedJob(null)}
-                  data-testid="button-close-job-details"
-                >
-                  Close
-                </Button>
-                {selectedJob.customerId && (
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => {
-                      // Open customer contact - implement based on your needs
-                      window.open(`tel:${selectedJob.customerPhone || ''}`);
-                    }}
-                    data-testid="button-call-customer"
-                  >
-                    Call
-                  </Button>
-                )}
               </div>
             </div>
           </DialogContent>
