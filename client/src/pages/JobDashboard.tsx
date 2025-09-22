@@ -214,7 +214,6 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
         <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full">
           <TabsList className="flex w-full overflow-x-auto whitespace-nowrap gap-2 md:gap-3 mb-4 md:mb-6 shrink-0 no-scrollbar" data-testid="tabs-dashboard-navigation">
             <TabsTrigger value="overview" data-testid="tab-overview" className="shrink-0"><TrendingUp className="w-4 h-4 mr-2" />Overview</TabsTrigger>
-            <TabsTrigger value="dispatch" data-testid="tab-dispatch" className="shrink-0"><Calendar className="w-4 h-4 mr-2" />Dispatch</TabsTrigger>
             <TabsTrigger value="pipeline" data-testid="tab-pipeline" className="shrink-0"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
             <TabsTrigger value="templates" data-testid="tab-templates" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Templates</TabsTrigger>
             <TabsTrigger value="leads" data-testid="tab-leads" className="shrink-0"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
@@ -338,10 +337,6 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
             </div>
           </TabsContent>
 
-          {/* Dispatch Tab */}
-          <TabsContent value="dispatch" className="flex-1 overflow-hidden">
-            <DispatchBoard />
-          </TabsContent>
 
           {/* Pipeline Tab */}
           <TabsContent value="pipeline" className="flex-1 overflow-auto">
