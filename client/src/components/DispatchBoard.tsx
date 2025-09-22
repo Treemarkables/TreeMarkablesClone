@@ -349,7 +349,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     
     return `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
   };
-  const [selectedDate, setSelectedDate] = useState(new Date('2024-12-20'));
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of day
+    return today;
+  });
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('teams');
@@ -378,7 +382,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   });
 
   // Fetch jobs from backend API
-  const { data: jobsData } = useQuery({
+  const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: ['/api/jobs'],
     queryFn: async () => {
       const response = await fetch('/api/jobs');
@@ -389,11 +393,31 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   // Convert API jobs to DispatchBoard format
   const jobs: JobAssignment[] = (jobsData?.data || []).map((apiJob: any) => {
-    // For now, assign jobs to first team if no assignment data exists
-    // In a real system, this would be stored in the database
-    const defaultAssignment = assignmentMode === 'teams' 
-      ? { teamId: 'team1', staffId: undefined, assignedTeam: ['1', '2'] }
-      : { teamId: undefined, staffId: '1', assignedTeam: [] };
+    // Calculate endTime from scheduledDate + estimatedDuration
+    const startTime = apiJob.scheduledDate || new Date();
+    const estimatedDuration = apiJob.estimatedDuration || 2; // Default 2 hours
+    const endTime = new Date(new Date(startTime).getTime() + (estimatedDuration * 60 * 60 * 1000));
+
+    // Use actual assignedTeam from API, or create assignment from existing teamId/staffId
+    const assignedTeam = apiJob.assignedTeam || [];
+    
+    // Determine teamId and staffId based on assignment mode and existing data
+    let teamId = undefined;
+    let staffId = undefined;
+    
+    if (assignedTeam.length > 0) {
+      // If we have assignedTeam, derive teamId/staffId based on team membership
+      if (assignmentMode === 'teams') {
+        // Find which team contains these staff members
+        const matchingTeam = mockTeams.find(team => 
+          assignedTeam.some(assignedId => team.members.includes(assignedId))
+        );
+        teamId = matchingTeam?.id;
+      } else {
+        // Individual mode - use first assigned team member as staffId
+        staffId = assignedTeam[0];
+      }
+    }
 
     return {
       id: apiJob.id,
@@ -405,10 +429,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       serviceType: apiJob.description,
       status: apiJob.status,
       priority: apiJob.priority,
-      startTime: apiJob.scheduledDate,
-      endTime: apiJob.scheduledDate, // API doesn't have separate endTime
-      notes: apiJob.notes,
-      ...defaultAssignment
+      startTime: startTime,
+      endTime: endTime.toISOString(),
+      estimatedDuration: estimatedDuration,
+      notes: apiJob.specialInstructions || apiJob.notes || '',
+      assignedTeam: assignedTeam,
+      teamId: teamId,
+      staffId: staffId,
+      specialInstructions: apiJob.specialInstructions
     };
   });
 
@@ -691,6 +719,48 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   if (compact) {
+    // Show loading state while fetching jobs
+    if (jobsLoading) {
+      return (
+        <Card data-testid="dispatch-summary-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Dispatch Board
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="animate-pulse space-y-2">
+                <div className="h-4 bg-muted rounded w-1/2"></div>
+                <div className="h-4 bg-muted rounded w-1/3"></div>
+                <div className="h-4 bg-muted rounded w-2/3"></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Show error state if jobs failed to load
+    if (jobsError) {
+      return (
+        <Card data-testid="dispatch-summary-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Dispatch Board
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center text-muted-foreground">
+              Failed to load jobs. Please try again.
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
     const todaysJobs = getTodaysJobs();
     const activeTeams = mockTeams.filter(team => team.status === 'available').length;
     const activeStaff = mockStaffMembers.filter(staff => staff.status === 'available').length;
