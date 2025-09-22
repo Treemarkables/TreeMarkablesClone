@@ -28,7 +28,8 @@ interface StaffTimeEntry {
 
 interface Employee {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   hourlyRate?: number;
   position?: string;
 }
@@ -40,6 +41,8 @@ interface StaffTimeTrackerProps {
 }
 
 export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: StaffTimeTrackerProps) {
+  console.log('StaffTimeTracker rendering with jobId:', jobId, 'compact:', compact);
+  
   const [staffEntries, setStaffEntries] = useState<StaffTimeEntry[]>([]);
   const [newEntry, setNewEntry] = useState({
     employeeId: '',
@@ -61,6 +64,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
   });
 
   const employees: Employee[] = employeesData?.data || [];
+  console.log('Debug StaffTimeTracker employees data:', employeesData, 'employees array:', employees, 'employees length:', employees.length);
 
   // Fetch existing staff time entries for this job
   const { data: staffTimeData, isLoading } = useQuery({
@@ -187,7 +191,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
 
   const getEmployeeName = (employeeId: string) => {
     const employee = employees.find(e => e.id === employeeId);
-    return employee?.name || `Employee ${employeeId}`;
+    return employee ? `${employee.firstName} ${employee.lastName}` : `Employee ${employeeId}`;
   };
 
   const getEmployeePosition = (employeeId: string) => {
@@ -305,7 +309,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
                 <SelectContent>
                   {employees.map(employee => (
                     <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name} {employee.position && `(${employee.position})`}
+                      {employee.firstName} {employee.lastName} {employee.position && `(${employee.position})`}
                     </SelectItem>
                   ))}
                 </SelectContent>

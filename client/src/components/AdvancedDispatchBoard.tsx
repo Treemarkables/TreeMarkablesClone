@@ -51,6 +51,8 @@ import {
 // Import types from shared schema
 import type { Job, JobStatusType } from '@shared/schema';
 import { ServiceJobForm } from '@/components/ServiceJobForm';
+import { GrossMarginCalculator } from '@/components/GrossMarginCalculator';
+import { StaffTimeTracker } from '@/components/StaffTimeTracker';
 
 // Interface for real Employee from API
 interface Employee {
@@ -1636,6 +1638,26 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                         ⚠️ Margin below threshold. Current: {selectedJob.grossMargin}%, Required: {selectedJob.minimumMarginThreshold || '25'}%
                       </div>
                     )}
+                  </div>
+
+                  {/* Cost & Margin Analysis */}
+                  <div>
+                    <h4 className="font-semibold text-base mb-3">Cost & Margin Analysis</h4>
+                    {console.log('Debug AdvancedDispatchBoard selectedJob:', selectedJob, 'selectedJob.id:', selectedJob.id)}
+                    <GrossMarginCalculator 
+                      jobId={selectedJob.id} 
+                      compact={true} 
+                    />
+                  </div>
+                  
+                  {/* Staff Time Tracking */}
+                  <div>
+                    <h4 className="font-semibold text-base mb-3">Staff Time Tracking</h4>
+                    {console.log('Debug: About to render StaffTimeTracker with jobId:', selectedJob.id)}
+                    <StaffTimeTracker 
+                      jobId={selectedJob.id} 
+                      compact={true} 
+                    />
                   </div>
 
                   {/* Checklist */}
