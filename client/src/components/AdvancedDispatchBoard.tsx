@@ -23,9 +23,12 @@ import {
   AlertTriangle,
   Target,
   GripVertical,
-  Plus
+  Plus,
+  CheckCircle,
+  XCircle,
+  Save
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -184,6 +187,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
   const [editedJobData, setEditedJobData] = useState<any>({});
+
   const [isNewJobModalOpen, setIsNewJobModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [draggedJob, setDraggedJob] = useState<any | null>(null);
@@ -211,9 +215,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   });
 
   // Fetch real jobs data from API
-  const { data: jobsData } = useQuery({
+  const jobsQuery = useQuery({
     queryKey: ['/api/jobs'],
   });
+  const jobsData = jobsQuery.data;
 
   // Fetch customers data for customer names
   const { data: customersData } = useQuery({
@@ -228,6 +233,31 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const employees: Employee[] = (employeesData as any)?.data || [];
   const jobs: any[] = (jobsData as any)?.data || [];
   const scheduleEvents: any[] = (scheduleEventsData as any)?.data || [];
+
+  // Initialize editedJobData with selectedJob data when modal opens
+  useEffect(() => {
+    if (selectedJob && jobsData) {
+      // Always get the most current job data from the jobs array
+      const jobsArray = (jobsData as any)?.data || [];
+      const currentJobData = jobsArray.find((job: any) => job.id === selectedJob.id) || selectedJob;
+      
+      setEditedJobData({
+        ...currentJobData,
+        actualLaborCosts: currentJobData.actualLaborCosts || '',
+        actualMaterialsCosts: currentJobData.actualMaterialsCosts || '',
+        equipmentCosts: currentJobData.equipmentCosts || '',
+        subcontractorCosts: currentJobData.subcontractorCosts || '',
+        travelCosts: currentJobData.travelCosts || '',
+        disposalCosts: currentJobData.disposalCosts || '',
+        miscExpenses: currentJobData.miscExpenses || '',
+        laborCostsComplete: currentJobData.laborCostsComplete || false,
+        materialsCostsComplete: currentJobData.materialsCostsComplete || false,
+        equipmentCostsComplete: currentJobData.equipmentCostsComplete || false,
+        subcontractorCostsComplete: currentJobData.subcontractorCostsComplete || false,
+        otherExpensesComplete: currentJobData.otherExpensesComplete || false
+      });
+    }
+  }, [selectedJob, jobsData]);
 
   // Mutation for updating job assignments
   const updateJobAssignmentMutation = useMutation({
@@ -285,9 +315,59 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   });
 
   // Handle saving job details
-  const handleSaveJobDetails = () => {
+  const handleSaveJobDetails = async () => {
     if (Object.keys(editedJobData).length > 0) {
-      updateJobDetailsMutation.mutate(editedJobData);
+      try {
+        // First update general job details
+        updateJobDetailsMutation.mutate(editedJobData);
+        
+        // Check if expense tracking data needs to be updated
+        const hasExpenseData = editedJobData.actualLaborCosts || editedJobData.actualMaterialsCosts || 
+                              editedJobData.equipmentCosts || editedJobData.subcontractorCosts ||
+                              editedJobData.travelCosts || editedJobData.disposalCosts || editedJobData.miscExpenses;
+        
+        const hasCompletionData = editedJobData.laborCostsComplete !== undefined ||
+                                 editedJobData.materialsCostsComplete !== undefined ||
+                                 editedJobData.equipmentCostsComplete !== undefined ||
+                                 editedJobData.subcontractorCostsComplete !== undefined ||
+                                 editedJobData.otherExpensesComplete !== undefined;
+        
+        if (hasExpenseData) {
+          // Update expense amounts
+          await apiRequest('PUT', `/api/jobs/${selectedJob.id}/expenses`, {
+            actualLaborCosts: editedJobData.actualLaborCosts ? parseFloat(editedJobData.actualLaborCosts) : undefined,
+            actualMaterialsCosts: editedJobData.actualMaterialsCosts ? parseFloat(editedJobData.actualMaterialsCosts) : undefined,
+            equipmentCosts: editedJobData.equipmentCosts ? parseFloat(editedJobData.equipmentCosts) : undefined,
+            subcontractorCosts: editedJobData.subcontractorCosts ? parseFloat(editedJobData.subcontractorCosts) : undefined,
+            travelCosts: editedJobData.travelCosts ? parseFloat(editedJobData.travelCosts) : undefined,
+            disposalCosts: editedJobData.disposalCosts ? parseFloat(editedJobData.disposalCosts) : undefined,
+            miscExpenses: editedJobData.miscExpenses ? parseFloat(editedJobData.miscExpenses) : undefined,
+          });
+        }
+        
+        if (hasCompletionData) {
+          // Update completion status
+          await apiRequest('PUT', `/api/jobs/${selectedJob.id}/expense-completion`, {
+            laborCostsComplete: editedJobData.laborCostsComplete,
+            materialsCostsComplete: editedJobData.materialsCostsComplete,
+            equipmentCostsComplete: editedJobData.equipmentCostsComplete,
+            subcontractorCostsComplete: editedJobData.subcontractorCostsComplete,
+            otherExpensesComplete: editedJobData.otherExpensesComplete,
+          });
+        }
+        
+        // Refresh jobs data to get updated calculations and invoice eligibility
+        if (hasExpenseData || hasCompletionData) {
+          await jobsQuery.refetch();
+        }
+      } catch (error) {
+        console.error('Error updating job details with expenses:', error);
+        toast({
+          title: "Error",
+          description: "Failed to update all job details",
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -1346,6 +1426,217 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                       )}
                     </div>
                   )}
+
+                  {/* Expense Tracking Section */}
+                  <div className="border rounded-lg p-4 bg-blue-50" data-testid="expense-tracking">
+                    <div className="flex items-center justify-between mb-3">
+                      <Label className="text-base font-medium">Expense Tracking</Label>
+                      <div className="flex items-center gap-2">
+                        {selectedJob.invoiceEligible ? (
+                          <Badge variant="default" className="bg-green-600" data-testid="invoice-status-eligible">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Ready to Invoice
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" data-testid="invoice-status-blocked">
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Invoice Blocked
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <Label htmlFor="actual-labor-costs" className="text-sm">Actual Labor Costs</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="actual-labor-costs"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={editedJobData.actualLaborCosts || ''}
+                            onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, actualLaborCosts: e.target.value }))}
+                            data-testid="input-actual-labor-costs"
+                          />
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="labor-complete"
+                              checked={editedJobData.laborCostsComplete || false}
+                              onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, laborCostsComplete: e.target.checked }))}
+                              className="rounded"
+                              data-testid="checkbox-labor-complete"
+                            />
+                            <Label htmlFor="labor-complete" className="text-xs ml-1">Complete</Label>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="actual-materials-costs" className="text-sm">Actual Materials</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="actual-materials-costs"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={editedJobData.actualMaterialsCosts || ''}
+                            onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, actualMaterialsCosts: e.target.value }))}
+                            data-testid="input-actual-materials-costs"
+                          />
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="materials-complete"
+                              checked={editedJobData.materialsCostsComplete || false}
+                              onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, materialsCostsComplete: e.target.checked }))}
+                              className="rounded"
+                              data-testid="checkbox-materials-complete"
+                            />
+                            <Label htmlFor="materials-complete" className="text-xs ml-1">Complete</Label>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="equipment-costs" className="text-sm">Equipment Costs</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="equipment-costs"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={editedJobData.equipmentCosts || ''}
+                            onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, equipmentCosts: e.target.value }))}
+                            data-testid="input-equipment-costs"
+                          />
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="equipment-complete"
+                              checked={editedJobData.equipmentCostsComplete || false}
+                              onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, equipmentCostsComplete: e.target.checked }))}
+                              className="rounded"
+                              data-testid="checkbox-equipment-complete"
+                            />
+                            <Label htmlFor="equipment-complete" className="text-xs ml-1">Complete</Label>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="subcontractor-costs" className="text-sm">Subcontractor Costs</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="subcontractor-costs"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={editedJobData.subcontractorCosts || ''}
+                            onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, subcontractorCosts: e.target.value }))}
+                            data-testid="input-subcontractor-costs"
+                          />
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="subcontractor-complete"
+                              checked={editedJobData.subcontractorCostsComplete || false}
+                              onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, subcontractorCostsComplete: e.target.checked }))}
+                              className="rounded"
+                              data-testid="checkbox-subcontractor-complete"
+                            />
+                            <Label htmlFor="subcontractor-complete" className="text-xs ml-1">Complete</Label>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="travel-costs" className="text-sm">Travel & Transport</Label>
+                        <Input
+                          id="travel-costs"
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={editedJobData.travelCosts || ''}
+                          onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, travelCosts: e.target.value }))}
+                          data-testid="input-travel-costs"
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="disposal-costs" className="text-sm">Disposal Costs</Label>
+                        <Input
+                          id="disposal-costs"
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={editedJobData.disposalCosts || ''}
+                          onChange={(e) => setEditedJobData((prev: any) => ({ ...prev, disposalCosts: e.target.value }))}
+                          data-testid="input-disposal-costs"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 mb-3">
+                      <Button 
+                        size="sm" 
+                        onClick={async () => {
+                          // Save expenses and update calculations
+                          try {
+                            // Update expense amounts
+                            await apiRequest('PUT', `/api/jobs/${selectedJob.id}/expenses`, {
+                              actualLaborCosts: editedJobData.actualLaborCosts ? parseFloat(editedJobData.actualLaborCosts) : undefined,
+                              actualMaterialsCosts: editedJobData.actualMaterialsCosts ? parseFloat(editedJobData.actualMaterialsCosts) : undefined,
+                              equipmentCosts: editedJobData.equipmentCosts ? parseFloat(editedJobData.equipmentCosts) : undefined,
+                              subcontractorCosts: editedJobData.subcontractorCosts ? parseFloat(editedJobData.subcontractorCosts) : undefined,
+                              travelCosts: editedJobData.travelCosts ? parseFloat(editedJobData.travelCosts) : undefined,
+                              disposalCosts: editedJobData.disposalCosts ? parseFloat(editedJobData.disposalCosts) : undefined,
+                              miscExpenses: editedJobData.miscExpenses ? parseFloat(editedJobData.miscExpenses) : undefined,
+                            });
+                            
+                            // Update completion status
+                            await apiRequest('PUT', `/api/jobs/${selectedJob.id}/expense-completion`, {
+                              laborCostsComplete: editedJobData.laborCostsComplete,
+                              materialsCostsComplete: editedJobData.materialsCostsComplete,
+                              equipmentCostsComplete: editedJobData.equipmentCostsComplete,
+                              subcontractorCostsComplete: editedJobData.subcontractorCostsComplete,
+                              otherExpensesComplete: editedJobData.otherExpensesComplete,
+                            });
+                            
+                            // Refresh the jobs data to get updated calculations
+                            await jobsQuery.refetch();
+                            
+                            toast({
+                              title: "Success",
+                              description: "Expenses updated successfully"
+                            });
+                          } catch (error) {
+                            console.error('Error updating expenses:', error);
+                            toast({
+                              title: "Error",
+                              description: "Failed to update expenses",
+                              variant: "destructive"
+                            });
+                          }
+                        }}
+                        data-testid="button-save-expenses"
+                      >
+                        <Save className="w-4 h-4 mr-1" />
+                        Save Expenses
+                      </Button>
+                      
+                      <div className="text-sm text-muted-foreground">
+                        Margin Threshold: {selectedJob.minimumMarginThreshold || '25'}%
+                      </div>
+                    </div>
+                    
+                    {!selectedJob.marginMeetsThreshold && (
+                      <div className="p-3 bg-orange-100 border border-orange-300 rounded text-sm text-orange-700" data-testid="margin-warning">
+                        ⚠️ Margin below threshold. Current: {selectedJob.grossMargin}%, Required: {selectedJob.minimumMarginThreshold || '25'}%
+                      </div>
+                    )}
+                  </div>
 
                   {/* Checklist */}
                   <div>
