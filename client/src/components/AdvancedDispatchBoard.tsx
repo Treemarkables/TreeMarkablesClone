@@ -1,5 +1,21 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useSensors, useSensor, PointerSensor } from "@dnd-kit/core";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { GlobalJobCard } from "./GlobalJobCard";
+import type { JobStatusType, Job } from "@shared/schema";
+
+type AdvancedDispatchBoardProps = {
+  compact?: boolean;
+};
+
+type AllocationSuggestion = {
+  id: string;
+  name: string;
+  skills: string[];
+  availability: number;
+};
 
 export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoardProps) {
   const { toast } = useToast();
@@ -83,7 +99,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           setShowGlobalJobCardEdit(false);
           setJobToEdit(null);
         }}
-        onJobUpdated={(updatedJob) => {
+        onJobUpdated={(updatedJob: Job) => {
           toast({
             title: "Job Updated",
             description: `${updatedJob.title} has been updated successfully.`,
