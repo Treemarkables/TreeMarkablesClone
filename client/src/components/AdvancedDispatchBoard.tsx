@@ -157,28 +157,99 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     return days;
   };
 
+  // Get status-specific styling
+  const getStatusStyling = (status: string) => {
+    switch (status) {
+      case 'lead':
+        return {
+          bgColor: 'bg-blue-50 border-blue-200',
+          textColor: 'text-blue-700',
+          indicatorColor: 'bg-blue-500',
+          label: 'Lead',
+          dotColor: 'bg-blue-400'
+        };
+      case 'quote':
+        return {
+          bgColor: 'bg-purple-50 border-purple-200',
+          textColor: 'text-purple-700',
+          indicatorColor: 'bg-purple-500',
+          label: 'Quote',
+          dotColor: 'bg-purple-400'
+        };
+      case 'work_order':
+        return {
+          bgColor: 'bg-orange-50 border-orange-200',
+          textColor: 'text-orange-700',
+          indicatorColor: 'bg-orange-500',
+          label: 'Work Order',
+          dotColor: 'bg-orange-400'
+        };
+      case 'completed':
+        return {
+          bgColor: 'bg-green-50 border-green-200',
+          textColor: 'text-green-700',
+          indicatorColor: 'bg-green-500',
+          label: 'Completed',
+          dotColor: 'bg-green-400'
+        };
+      case 'unsuccessful':
+        return {
+          bgColor: 'bg-red-50 border-red-200',
+          textColor: 'text-red-700',
+          indicatorColor: 'bg-red-500',
+          label: 'Unsuccessful',
+          dotColor: 'bg-red-400'
+        };
+      default:
+        return {
+          bgColor: 'bg-gray-50 border-gray-200',
+          textColor: 'text-gray-700',
+          indicatorColor: 'bg-gray-500',
+          label: 'Unknown',
+          dotColor: 'bg-gray-400'
+        };
+    }
+  };
+
   // Render mini job card for right sidebar
   const renderJobSidebarCard = (job: any, index: number) => {
     const customer = getCustomerName(job.customerId);
-    const colors = ['bg-orange-100 border-orange-300', 'bg-blue-100 border-blue-300', 'bg-green-100 border-green-300'];
-    const indicators = ['bg-orange-400', 'bg-blue-400', 'bg-green-400'];
+    const styling = getStatusStyling(job.status);
     
     return (
       <Button
         key={job.id}
         variant="ghost"
-        className={`border rounded-lg p-3 mb-3 hover:shadow-md transition-shadow ${colors[index % 3]} h-auto text-left justify-start w-full`}
+        className={`border rounded-lg p-3 mb-3 hover:shadow-md transition-shadow ${styling.bgColor} h-auto text-left justify-start w-full`}
         onClick={() => handleJobCardClick(job)}
         data-testid={`job-sidebar-card-${job.id}`}
         aria-label={`View job for ${customer}`}
       >
-        <div className="flex items-start justify-between mb-2">
-          <div className={`w-3 h-3 rounded-full ${indicators[index % 3]} mt-1`}></div>
-          <span className="text-xs text-gray-500 font-medium">#{job.id.slice(-4)}</span>
+        {/* Header with status and job number */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${styling.dotColor}`}></div>
+            <span className={`text-xs font-medium ${styling.textColor} uppercase tracking-wide`}>
+              {styling.label}
+            </span>
+          </div>
+          <span className="text-xs text-gray-500 font-mono">#{job.id.slice(-4)}</span>
         </div>
-        <h4 className="font-semibold text-sm text-gray-900 mb-1">{customer}</h4>
-        <p className="text-xs text-gray-600 mb-2">{job.address}</p>
-        <p className="text-xs text-gray-700">{job.title}</p>
+        
+        {/* Customer name */}
+        <h4 className="font-semibold text-sm text-gray-900 mb-2">{customer}</h4>
+        
+        {/* Address section */}
+        <div className="mb-2">
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Address</span>
+          <p className="text-xs text-gray-700 mt-1 leading-relaxed">{job.address}</p>
+        </div>
+        
+        {/* Job title */}
+        <div>
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Service</span>
+          <p className="text-xs text-gray-800 mt-1 font-medium">{job.title}</p>
+        </div>
       </Button>
     );
   };
