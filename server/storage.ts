@@ -122,6 +122,47 @@ export interface IStorage {
   getJobDiaryEntriesByType(jobId: string, entryType: string): Promise<JobDiaryEntry[]>;
   getAllJobDiaryEntries(): Promise<JobDiaryEntry[]>;
   
+  // Enhanced Expense Tracking
+  updateJobExpenses(jobId: string, expenseData: {
+    actualLaborCosts?: number;
+    actualMaterialsCosts?: number;
+    equipmentCosts?: number;
+    subcontractorCosts?: number;
+    permitCosts?: number;
+    travelCosts?: number;
+    disposalCosts?: number;
+    miscExpenses?: number;
+  }): Promise<Job>;
+  updateExpenseCompletionStatus(jobId: string, completionData: {
+    laborCostsComplete?: boolean;
+    materialsCostsComplete?: boolean;
+    equipmentCostsComplete?: boolean;
+    subcontractorCostsComplete?: boolean;
+    otherExpensesComplete?: boolean;
+  }): Promise<Job>;
+  
+  // Staff Time Tracking
+  updateJobStaffTime(jobId: string, staffTimeEntries: Array<{
+    employeeId: string;
+    hours: number;
+    rate: number;
+    date?: string;
+  }>): Promise<Job>;
+  addStaffTimeEntry(jobId: string, entry: {
+    employeeId: string;
+    hours: number;
+    rate: number;
+    date?: string;
+  }): Promise<Job>;
+  removeStaffTimeEntry(jobId: string, employeeId: string, date?: string): Promise<Job>;
+  calculateLaborCostFromStaffTime(jobId: string): Promise<number>;
+  getJobStaffTimeEntries(jobId: string): Promise<Array<{
+    employeeId: string;
+    hours: number;
+    rate: number;
+    date: string;
+  }>>;
+  
   // Activity Tracking
   createActivity(activity: InsertActivity): Promise<Activity>;
   getActivity(id: string): Promise<Activity | undefined>;
@@ -720,11 +761,13 @@ export class MemStorage implements IStorage {
       quoteId: '1', leadId: null, assignedCrew: null, equipmentRequired: null,
       safetyNotes: null, rescheduledFrom: null, rescheduledReason: null,
       // Expense tracking fields
-      actualLaborCosts: 0, actualMaterialsCosts: 0, equipmentCosts: 0, subcontractorCosts: 0,
-      travelCosts: 0, disposalCosts: 0, miscExpenses: 0,
+      grossMarginCalculated: false, actualLaborCosts: 0, actualMaterialsCosts: 0, equipmentCosts: 0, subcontractorCosts: 0,
+      permitCosts: 0, travelCosts: 0, disposalCosts: 0, miscExpenses: 0,
       laborCostsComplete: false, materialsCostsComplete: false, equipmentCostsComplete: false,
       subcontractorCostsComplete: false, otherExpensesComplete: false, allExpensesComplete: false,
-      marginMeetsThreshold: false, invoiceBlocked: true,
+      // Staff time tracking fields
+      staffTimeEntries: [], totalStaffHours: 0, calculatedLaborCost: 0,
+      marginMeetsThreshold: false, invoiceBlocked: true, invoiceEligible: false,
       createdAt: new Date('2024-12-15'), updatedAt: new Date('2024-12-18')
     };
     const job2 = {
@@ -739,7 +782,16 @@ export class MemStorage implements IStorage {
       notes: 'Completed successfully, permits obtained', beforePhotos: ['/api/photos/storm_before_1.jpg'],
       afterPhotos: ['/api/photos/storm_after_1.jpg'], jobNumber: 'JOB-002', quoteId: '2', leadId: null, assignedCrew: null, equipmentRequired: null,
       safetyNotes: null, rescheduledFrom: null,
-      rescheduledReason: null, createdAt: new Date('2024-12-10'), updatedAt: new Date('2024-12-20')
+      rescheduledReason: null,
+      // Expense tracking fields
+      grossMarginCalculated: false, actualLaborCosts: 0, actualMaterialsCosts: 0, equipmentCosts: 0, subcontractorCosts: 0,
+      permitCosts: 0, travelCosts: 0, disposalCosts: 0, miscExpenses: 0,
+      laborCostsComplete: false, materialsCostsComplete: false, equipmentCostsComplete: false,
+      subcontractorCostsComplete: false, otherExpensesComplete: false, allExpensesComplete: false,
+      // Staff time tracking fields
+      staffTimeEntries: [], totalStaffHours: 0, calculatedLaborCost: 0,
+      marginMeetsThreshold: false, invoiceBlocked: true, invoiceEligible: false,
+      createdAt: new Date('2024-12-10'), updatedAt: new Date('2024-12-20')
     };
     
     const job3 = {
@@ -754,7 +806,16 @@ export class MemStorage implements IStorage {
       notes: 'Regular maintenance contract completed', beforePhotos: ['/api/photos/hedge_before_1.jpg'],
       afterPhotos: ['/api/photos/hedge_after_1.jpg'], jobNumber: 'JOB-003', quoteId: null, leadId: null, assignedCrew: null, equipmentRequired: null,
       safetyNotes: null, rescheduledFrom: null,
-      rescheduledReason: null, createdAt: new Date('2024-12-12'), updatedAt: new Date('2024-12-15')
+      rescheduledReason: null,
+      // Expense tracking fields
+      grossMarginCalculated: false, actualLaborCosts: 0, actualMaterialsCosts: 0, equipmentCosts: 0, subcontractorCosts: 0,
+      permitCosts: 0, travelCosts: 0, disposalCosts: 0, miscExpenses: 0,
+      laborCostsComplete: false, materialsCostsComplete: false, equipmentCostsComplete: false,
+      subcontractorCostsComplete: false, otherExpensesComplete: false, allExpensesComplete: false,
+      // Staff time tracking fields
+      staffTimeEntries: [], totalStaffHours: 0, calculatedLaborCost: 0,
+      marginMeetsThreshold: false, invoiceBlocked: true, invoiceEligible: false,
+      createdAt: new Date('2024-12-12'), updatedAt: new Date('2024-12-15')
     };
     
     const job4 = {
@@ -769,7 +830,16 @@ export class MemStorage implements IStorage {
       notes: 'Scheduled for next week', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-004', 
       quoteId: null, leadId: null, assignedCrew: null, equipmentRequired: null,
       safetyNotes: null, rescheduledFrom: null,
-      rescheduledReason: null, createdAt: new Date('2024-12-20'), updatedAt: new Date('2024-12-20')
+      rescheduledReason: null,
+      // Expense tracking fields
+      grossMarginCalculated: false, actualLaborCosts: 0, actualMaterialsCosts: 0, equipmentCosts: 0, subcontractorCosts: 0,
+      permitCosts: 0, travelCosts: 0, disposalCosts: 0, miscExpenses: 0,
+      laborCostsComplete: false, materialsCostsComplete: false, equipmentCostsComplete: false,
+      subcontractorCostsComplete: false, otherExpensesComplete: false, allExpensesComplete: false,
+      // Staff time tracking fields
+      staffTimeEntries: [], totalStaffHours: 0, calculatedLaborCost: 0,
+      marginMeetsThreshold: false, invoiceBlocked: true, invoiceEligible: false,
+      createdAt: new Date('2024-12-20'), updatedAt: new Date('2024-12-20')
     };
     
     // Add some lead jobs for testing drag functionality
@@ -785,7 +855,16 @@ export class MemStorage implements IStorage {
       notes: 'Customer called about large rimu tree near power lines', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-005',
       quoteId: null, leadId: '1', assignedCrew: null, equipmentRequired: null,
       safetyNotes: 'High voltage lines nearby', rescheduledFrom: null,
-      rescheduledReason: null, createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
+      rescheduledReason: null,
+      // Expense tracking fields
+      grossMarginCalculated: false, actualLaborCosts: 0, actualMaterialsCosts: 0, equipmentCosts: 0, subcontractorCosts: 0,
+      permitCosts: 0, travelCosts: 0, disposalCosts: 0, miscExpenses: 0,
+      laborCostsComplete: false, materialsCostsComplete: false, equipmentCostsComplete: false,
+      subcontractorCostsComplete: false, otherExpensesComplete: false, allExpensesComplete: false,
+      // Staff time tracking fields
+      staffTimeEntries: [], totalStaffHours: 0, calculatedLaborCost: 0,
+      marginMeetsThreshold: false, invoiceBlocked: true, invoiceEligible: false,
+      createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
     };
     
     const job6 = {
@@ -800,7 +879,16 @@ export class MemStorage implements IStorage {
       notes: 'Insurance claim - urgent assessment needed', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-006',
       quoteId: null, leadId: '2', assignedCrew: null, equipmentRequired: null,
       safetyNotes: 'Multiple trees unstable', rescheduledFrom: null,
-      rescheduledReason: null, createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
+      rescheduledReason: null,
+      // Expense tracking fields
+      grossMarginCalculated: false, actualLaborCosts: 0, actualMaterialsCosts: 0, equipmentCosts: 0, subcontractorCosts: 0,
+      permitCosts: 0, travelCosts: 0, disposalCosts: 0, miscExpenses: 0,
+      laborCostsComplete: false, materialsCostsComplete: false, equipmentCostsComplete: false,
+      subcontractorCostsComplete: false, otherExpensesComplete: false, allExpensesComplete: false,
+      // Staff time tracking fields
+      staffTimeEntries: [], totalStaffHours: 0, calculatedLaborCost: 0,
+      marginMeetsThreshold: false, invoiceBlocked: true, invoiceEligible: false,
+      createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
     };
     
     const job7 = {
@@ -815,7 +903,16 @@ export class MemStorage implements IStorage {
       notes: 'Potential high-value maintenance contract', beforePhotos: [], afterPhotos: [], jobNumber: 'JOB-007',
       quoteId: null, leadId: '3', assignedCrew: null, equipmentRequired: null,
       safetyNotes: 'Office hours only', rescheduledFrom: null,
-      rescheduledReason: null, createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
+      rescheduledReason: null,
+      // Expense tracking fields
+      grossMarginCalculated: false, actualLaborCosts: 0, actualMaterialsCosts: 0, equipmentCosts: 0, subcontractorCosts: 0,
+      permitCosts: 0, travelCosts: 0, disposalCosts: 0, miscExpenses: 0,
+      laborCostsComplete: false, materialsCostsComplete: false, equipmentCostsComplete: false,
+      subcontractorCostsComplete: false, otherExpensesComplete: false, allExpensesComplete: false,
+      // Staff time tracking fields
+      staffTimeEntries: [], totalStaffHours: 0, calculatedLaborCost: 0,
+      marginMeetsThreshold: false, invoiceBlocked: true, invoiceEligible: false,
+      createdAt: new Date('2024-12-22'), updatedAt: new Date('2024-12-22')
     };
 
     this.jobs.set('1', job1);
@@ -1994,6 +2091,121 @@ export class MemStorage implements IStorage {
 
     // Update invoice eligibility after changing completion status
     return await this.updateInvoiceEligibility(jobId);
+  }
+
+  // Staff Time Tracking Methods
+  async updateJobStaffTime(jobId: string, staffTimeEntries: Array<{
+    employeeId: string;
+    hours: number;
+    rate: number;
+    date?: string;
+  }>): Promise<Job> {
+    const existing = this.jobs.get(jobId);
+    if (!existing) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    // Add default date if not provided
+    const entriesWithDate = staffTimeEntries.map(entry => ({
+      ...entry,
+      date: entry.date || new Date().toISOString().split('T')[0]
+    }));
+
+    // Calculate totals
+    const totalStaffHours = entriesWithDate.reduce((sum, entry) => sum + entry.hours, 0);
+    const calculatedLaborCost = entriesWithDate.reduce((sum, entry) => sum + (entry.hours * entry.rate), 0);
+
+    const updates = {
+      staffTimeEntries: entriesWithDate,
+      totalStaffHours: totalStaffHours.toString(),
+      calculatedLaborCost: calculatedLaborCost.toString(),
+      actualLaborCosts: calculatedLaborCost.toString(), // Auto-populate actual labor costs
+      updatedAt: new Date()
+    };
+
+    const updated = { ...existing, ...updates };
+    this.jobs.set(jobId, updated);
+
+    // Recalculate gross margin with new labor costs
+    return await this.calculateAndUpdateGrossMargin(jobId);
+  }
+
+  async addStaffTimeEntry(jobId: string, entry: {
+    employeeId: string;
+    hours: number;
+    rate: number;
+    date?: string;
+  }): Promise<Job> {
+    const existing = this.jobs.get(jobId);
+    if (!existing) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    const currentEntries = Array.isArray(existing.staffTimeEntries) ? existing.staffTimeEntries : [];
+    const entryWithDate = {
+      ...entry,
+      date: entry.date || new Date().toISOString().split('T')[0]
+    };
+
+    // Check if entry for this employee and date already exists
+    const existingIndex = currentEntries.findIndex(e => 
+      e.employeeId === entry.employeeId && e.date === entryWithDate.date
+    );
+
+    let updatedEntries;
+    if (existingIndex >= 0) {
+      // Update existing entry
+      updatedEntries = [...currentEntries];
+      updatedEntries[existingIndex] = entryWithDate;
+    } else {
+      // Add new entry
+      updatedEntries = [...currentEntries, entryWithDate];
+    }
+
+    return await this.updateJobStaffTime(jobId, updatedEntries);
+  }
+
+  async removeStaffTimeEntry(jobId: string, employeeId: string, date?: string): Promise<Job> {
+    const existing = this.jobs.get(jobId);
+    if (!existing) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    const currentEntries = Array.isArray(existing.staffTimeEntries) ? existing.staffTimeEntries : [];
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    
+    const updatedEntries = currentEntries.filter(entry => 
+      !(entry.employeeId === employeeId && entry.date === targetDate)
+    );
+
+    return await this.updateJobStaffTime(jobId, updatedEntries);
+  }
+
+  async calculateLaborCostFromStaffTime(jobId: string): Promise<number> {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    if (!Array.isArray(job.staffTimeEntries)) {
+      return 0;
+    }
+
+    return job.staffTimeEntries.reduce((sum, entry) => sum + (entry.hours * entry.rate), 0);
+  }
+
+  async getJobStaffTimeEntries(jobId: string): Promise<Array<{
+    employeeId: string;
+    hours: number;
+    rate: number;
+    date: string;
+  }>> {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      throw new Error(`Job with id ${jobId} not found`);
+    }
+
+    return Array.isArray(job.staffTimeEntries) ? job.staffTimeEntries : [];
   }
 
   async calculateAndUpdateGrossMargin(jobId: string): Promise<Job> {
