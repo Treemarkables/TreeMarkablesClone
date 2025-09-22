@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building } from "lucide-react";
+import { ProposalBuilder } from "./ProposalBuilder";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -85,6 +86,9 @@ export function GlobalJobCard({
   const [activeCustomerTab, setActiveCustomerTab] = useState("existing");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Proposal builder state
+  const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
 
   // Fetch customers for the dropdown
   const { data: customersData } = useQuery({
@@ -279,12 +283,12 @@ export function GlobalJobCard({
   };
 
   const handleProposalClick = () => {
+    console.log('Proposal Generator - Opening proposal builder...');
+    setIsProposalBuilderOpen(true);
     toast({
-      title: "Proposal Generator",
-      description: "Generating proposal document...",
+      title: "Proposal Builder",
+      description: "Opening proposal builder interface...",
     });
-    // TODO: Generate proposal PDF or open proposal editor
-    console.log("Proposal button clicked");
   };
 
   const handleEmailClick = () => {
@@ -548,6 +552,7 @@ export function GlobalJobCard({
                       <FormControl>
                         <Textarea 
                           {...field} 
+                          value={field.value || ""}
                           placeholder="Detailed description of the work to be performed..."
                           rows={3}
                           data-testid="textarea-job-description"
@@ -604,7 +609,7 @@ export function GlobalJobCard({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Priority</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
                           <FormControl>
                             <SelectTrigger data-testid="select-job-priority">
                               <SelectValue />
@@ -686,7 +691,7 @@ export function GlobalJobCard({
                       <FormItem>
                         <FormLabel>PO Number</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="PO-2024-001" data-testid="input-po-number" />
+                          <Input {...field} value={field.value || ""} placeholder="PO-2024-001" data-testid="input-po-number" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -703,6 +708,7 @@ export function GlobalJobCard({
                       <FormControl>
                         <Textarea 
                           {...field} 
+                          value={field.value || ""}
                           placeholder="Any special requirements or notes..."
                           rows={2}
                           data-testid="textarea-special-instructions"
@@ -789,6 +795,15 @@ export function GlobalJobCard({
           </form>
         </Form>
       </DialogContent>
+      
+      {/* Proposal Builder Integration */}
+      <ProposalBuilder
+        isOpen={isProposalBuilderOpen}
+        onClose={() => setIsProposalBuilderOpen(false)}
+        jobId={jobId}
+        customerId={form.watch("customerId") || customerId}
+        mode="create"
+      />
     </Dialog>
   );
 }
