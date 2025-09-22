@@ -1285,7 +1285,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       {/* Job Detail Modal */}
       {selectedJob && (
         <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <div className={`w-3 h-3 rounded-full ${getPriorityColor(selectedJob.priority)}`} />
