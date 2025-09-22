@@ -253,6 +253,11 @@ export const jobs = pgTable("jobs", {
   otherExpensesComplete: boolean("other_expenses_complete").default(false),
   allExpensesComplete: boolean("all_expenses_complete").default(false),
   
+  // Staff Time Tracking
+  staffTimeEntries: jsonb("staff_time_entries"), // [{"employeeId": "123", "hours": 8.5, "rate": 45.00, "date": "2024-12-22"}]
+  totalStaffHours: decimal("total_staff_hours", { precision: 8, scale: 2 }),
+  calculatedLaborCost: decimal("calculated_labor_cost", { precision: 10, scale: 2 }),
+  
   // Invoice Protection
   invoiceBlocked: boolean("invoice_blocked").default(true),
   marginMeetsThreshold: boolean("margin_meets_threshold").default(false),
