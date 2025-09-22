@@ -1467,6 +1467,105 @@ export const insertCommunicationRuleSchema = createInsertSchema(communicationRul
 });
 
 // ========================================
+// CONVERSATION MANAGEMENT SCHEMAS
+// ========================================
+
+// Conversations table for centralized pre-sales communication management
+export const conversations = pgTable("conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Lead/Customer relationship
+  leadId: varchar("lead_id").references(() => leads.id),
+  customerId: varchar("customer_id").references(() => customers.id),
+  
+  // Conversation details
+  title: text("title").notNull(), // Derived from first message or manually set
+  status: text("status").notNull().default("open"), // open, qualified, converted, closed, archived
+  priority: text("priority").default("medium"), // low, medium, high, urgent
+  source: text("source").notNull(), // web_form, phone, email, social, referral, walk_in
+  
+  // Lead qualification
+  serviceType: text("service_type"), // tree_removal, pruning, emergency, etc.
+  estimatedValue: decimal("estimated_value", { precision: 10, scale: 2 }),
+  urgency: text("urgency"), // immediate, within_week, within_month, planning
+  propertyType: text("property_type"), // residential, commercial, council
+  
+  // Conversation state
+  lastMessageAt: timestamp("last_message_at"),
+  lastMessageBy: text("last_message_by"), // customer, staff
+  unreadCount: integer("unread_count").default(0),
+  tags: text("tags").array().default([]), // interested, budget_conscious, emergency, etc.
+  
+  // Assignment and tracking
+  assignedTo: varchar("assigned_to"), // Staff member handling the conversation
+  convertedToQuoteId: varchar("converted_to_quote_id").references(() => quotes.id),
+  conversionDate: timestamp("conversion_date"),
+  
+  // Metadata
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Messages within conversations
+export const conversationMessages = pgTable("conversation_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").references(() => conversations.id, { onDelete: 'cascade' }).notNull(),
+  
+  // Message details
+  type: text("type").notNull(), // message, note, phone_call, email, sms, system
+  content: text("content").notNull(),
+  direction: text("direction").notNull(), // inbound, outbound
+  
+  // Sender/Recipient information
+  fromName: text("from_name"),
+  fromContact: text("from_contact"), // email or phone
+  toName: text("to_name"),
+  toContact: text("to_contact"),
+  
+  // Staff who handled/sent the message
+  staffId: varchar("staff_id"), // For outbound messages or notes
+  
+  // Message metadata
+  subject: text("subject"), // For emails
+  platform: text("platform"), // email, sms, phone, web_form, in_person
+  externalId: text("external_id"), // Reference to external system message ID
+  
+  // Message status and tracking
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  deliveryStatus: text("delivery_status"), // sent, delivered, failed, pending
+  
+  // Attachments and additional data
+  attachments: text("attachments").array().default([]), // File URLs or references
+  metadata: jsonb("metadata"), // Additional platform-specific data
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Conversation insert schemas
+export const insertConversationSchema = createInsertSchema(conversations).omit({
+  id: true,
+  lastMessageAt: true,
+  unreadCount: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const updateConversationSchema = insertConversationSchema.partial();
+
+export const insertConversationMessageSchema = createInsertSchema(conversationMessages).omit({
+  id: true,
+  isRead: true,
+  readAt: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const updateConversationMessageSchema = insertConversationMessageSchema.partial();
+
+// ========================================
 // ENHANCED PHOTO MANAGEMENT SCHEMAS
 // ========================================
 
@@ -1821,3 +1920,11 @@ export type ReportAnalytics = typeof reportAnalytics.$inferSelect;
 export type InsertReportAnalytics = z.infer<typeof insertReportAnalyticsSchema>;
 export type ReportConfiguration = z.infer<typeof reportConfigSchema>;
 export type DashboardWidget = z.infer<typeof dashboardWidgetSchema>;
+
+// Types for Conversation Management
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type UpdateConversation = z.infer<typeof updateConversationSchema>;
+export type ConversationMessage = typeof conversationMessages.$inferSelect;
+export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
+export type UpdateConversationMessage = z.infer<typeof updateConversationMessageSchema>;

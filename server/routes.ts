@@ -3886,6 +3886,245 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   });
 
   // ========================================
+  // CONVERSATION MANAGEMENT API ROUTES
+  // ========================================
+
+  // Get all conversations with filtering
+  app.get('/api/conversations', async (req: Request, res: Response) => {
+    try {
+      const { status, priority, assignedTo, source, serviceType, search, limit, offset } = req.query;
+      
+      const filters: any = {};
+      if (status) filters.status = status as string;
+      if (priority) filters.priority = priority as string;
+      if (assignedTo) filters.assignedTo = assignedTo as string;
+      if (source) filters.source = source as string;
+      if (serviceType) filters.serviceType = serviceType as string;
+      if (search) filters.search = search as string;
+      if (limit) filters.limit = parseInt(limit as string);
+      if (offset) filters.offset = parseInt(offset as string);
+
+      const conversations = await storage.getAllConversations(filters);
+      res.json({ success: true, data: conversations });
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      res.status(500).json({ success: false, message: 'Error fetching conversations' });
+    }
+  });
+
+  // Get specific conversation
+  app.get('/api/conversations/:id', async (req: Request, res: Response) => {
+    try {
+      const conversation = await storage.getConversation(req.params.id);
+      if (!conversation) {
+        return res.status(404).json({ success: false, message: 'Conversation not found' });
+      }
+      res.json({ success: true, data: conversation });
+    } catch (error) {
+      console.error('Error fetching conversation:', error);
+      res.status(500).json({ success: false, message: 'Error fetching conversation' });
+    }
+  });
+
+  // Create new conversation
+  app.post('/api/conversations', async (req: Request, res: Response) => {
+    try {
+      const validation = insertConversationSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid conversation data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const conversation = await storage.createConversation(validation.data);
+      res.json({ success: true, data: conversation });
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      res.status(500).json({ success: false, message: 'Error creating conversation' });
+    }
+  });
+
+  // Update conversation
+  app.patch('/api/conversations/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = updateConversationSchema.safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const conversation = await storage.updateConversation(req.params.id, updates.data);
+      res.json({ success: true, data: conversation });
+    } catch (error) {
+      console.error('Error updating conversation:', error);
+      res.status(500).json({ success: false, message: 'Error updating conversation' });
+    }
+  });
+
+  // Delete conversation
+  app.delete('/api/conversations/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteConversation(req.params.id);
+      res.json({ success: true, message: 'Conversation deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      res.status(500).json({ success: false, message: 'Error deleting conversation' });
+    }
+  });
+
+  // Convert conversation to quote
+  app.patch('/api/conversations/:id/convert', async (req: Request, res: Response) => {
+    try {
+      const { quoteId } = req.body;
+      if (!quoteId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Quote ID is required for conversion' 
+        });
+      }
+
+      const conversation = await storage.convertConversationToQuote(req.params.id, quoteId);
+      res.json({ success: true, data: conversation });
+    } catch (error) {
+      console.error('Error converting conversation to quote:', error);
+      res.status(500).json({ success: false, message: 'Error converting conversation' });
+    }
+  });
+
+  // Get conversations by lead
+  app.get('/api/conversations/lead/:leadId', async (req: Request, res: Response) => {
+    try {
+      const conversations = await storage.getConversationsByLead(req.params.leadId);
+      res.json({ success: true, data: conversations });
+    } catch (error) {
+      console.error('Error fetching conversations by lead:', error);
+      res.status(500).json({ success: false, message: 'Error fetching conversations' });
+    }
+  });
+
+  // Get conversations by customer
+  app.get('/api/conversations/customer/:customerId', async (req: Request, res: Response) => {
+    try {
+      const conversations = await storage.getConversationsByCustomer(req.params.customerId);
+      res.json({ success: true, data: conversations });
+    } catch (error) {
+      console.error('Error fetching conversations by customer:', error);
+      res.status(500).json({ success: false, message: 'Error fetching conversations' });
+    }
+  });
+
+  // ========================================
+  // CONVERSATION MESSAGE API ROUTES
+  // ========================================
+
+  // Get messages for a conversation
+  app.get('/api/conversations/:conversationId/messages', async (req: Request, res: Response) => {
+    try {
+      const messages = await storage.getConversationMessages(req.params.conversationId);
+      res.json({ success: true, data: messages });
+    } catch (error) {
+      console.error('Error fetching conversation messages:', error);
+      res.status(500).json({ success: false, message: 'Error fetching messages' });
+    }
+  });
+
+  // Create new message in conversation
+  app.post('/api/conversations/:conversationId/messages', async (req: Request, res: Response) => {
+    try {
+      const messageData = { ...req.body, conversationId: req.params.conversationId };
+      const validation = insertConversationMessageSchema.safeParse(messageData);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid message data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const message = await storage.createConversationMessage(validation.data);
+      res.json({ success: true, data: message });
+    } catch (error) {
+      console.error('Error creating conversation message:', error);
+      res.status(500).json({ success: false, message: 'Error creating message' });
+    }
+  });
+
+  // Get specific message
+  app.get('/api/messages/:id', async (req: Request, res: Response) => {
+    try {
+      const message = await storage.getConversationMessage(req.params.id);
+      if (!message) {
+        return res.status(404).json({ success: false, message: 'Message not found' });
+      }
+      res.json({ success: true, data: message });
+    } catch (error) {
+      console.error('Error fetching message:', error);
+      res.status(500).json({ success: false, message: 'Error fetching message' });
+    }
+  });
+
+  // Update message
+  app.patch('/api/messages/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = updateConversationMessageSchema.safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const message = await storage.updateConversationMessage(req.params.id, updates.data);
+      res.json({ success: true, data: message });
+    } catch (error) {
+      console.error('Error updating message:', error);
+      res.status(500).json({ success: false, message: 'Error updating message' });
+    }
+  });
+
+  // Delete message
+  app.delete('/api/messages/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteConversationMessage(req.params.id);
+      res.json({ success: true, message: 'Message deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      res.status(500).json({ success: false, message: 'Error deleting message' });
+    }
+  });
+
+  // Mark conversation messages as read
+  app.patch('/api/conversations/:conversationId/messages/read', async (req: Request, res: Response) => {
+    try {
+      const { beforeTimestamp } = req.body;
+      const timestamp = beforeTimestamp ? new Date(beforeTimestamp) : undefined;
+      await storage.markConversationMessagesAsRead(req.params.conversationId, timestamp);
+      res.json({ success: true, message: 'Messages marked as read' });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+      res.status(500).json({ success: false, message: 'Error marking messages as read' });
+    }
+  });
+
+  // Get unread conversation count
+  app.get('/api/conversations/unread-count', async (req: Request, res: Response) => {
+    try {
+      const { conversationId } = req.query;
+      const count = await storage.getUnreadConversationCount(conversationId as string || undefined);
+      res.json({ success: true, data: { unreadCount: count } });
+    } catch (error) {
+      console.error('Error getting unread count:', error);
+      res.status(500).json({ success: false, message: 'Error getting unread count' });
+    }
+  });
+
+  // ========================================
   // CUSTOMER PORTAL API ROUTES  
   // ========================================
 
