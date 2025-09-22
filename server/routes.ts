@@ -1594,7 +1594,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
 
       const updatedJob = await storage.addStaffTimeEntry(id, entry);
-      res.json({ success: true, data: updatedJob });
+      
+      // Automatically update job labor costs from staff time totals
+      const staffEntries = await storage.getJobStaffTimeEntries(id);
+      const totalLaborCost = staffEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      const totalHours = staffEntries.reduce((sum, e) => sum + e.hours, 0);
+      
+      // Update job with computed labor costs
+      await storage.updateJobExpenses(id, { actualLaborCosts: totalLaborCost });
+      
+      // Recalculate gross margin
+      const finalJob = await storage.calculateAndUpdateGrossMargin(id);
+      res.json({ success: true, data: finalJob });
     } catch (error) {
       console.error('Error adding staff time entry:', error);
       if (error instanceof Error && error.message.includes('not found')) {
@@ -1640,7 +1651,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       });
 
       const updatedJob = await storage.updateJobStaffTime(id, validatedEntries);
-      res.json({ success: true, data: updatedJob });
+      
+      // Automatically update job labor costs from staff time totals
+      const totalLaborCost = validatedEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      const totalHours = validatedEntries.reduce((sum, e) => sum + e.hours, 0);
+      
+      // Update job with computed labor costs
+      await storage.updateJobExpenses(id, { actualLaborCosts: totalLaborCost });
+      
+      // Recalculate gross margin
+      const finalJob = await storage.calculateAndUpdateGrossMargin(id);
+      res.json({ success: true, data: finalJob });
     } catch (error) {
       console.error('Error updating staff time entries:', error);
       if (error instanceof Error && error.message.includes('not found')) {
@@ -1658,7 +1679,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const { date } = req.query;
       
       const updatedJob = await storage.removeStaffTimeEntry(id, employeeId, date as string);
-      res.json({ success: true, data: updatedJob });
+      
+      // Automatically update job labor costs from remaining staff time totals
+      const staffEntries = await storage.getJobStaffTimeEntries(id);
+      const totalLaborCost = staffEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      const totalHours = staffEntries.reduce((sum, e) => sum + e.hours, 0);
+      
+      // Update job with computed labor costs
+      await storage.updateJobExpenses(id, { actualLaborCosts: totalLaborCost });
+      
+      // Recalculate gross margin
+      const finalJob = await storage.calculateAndUpdateGrossMargin(id);
+      res.json({ success: true, data: finalJob });
     } catch (error) {
       console.error('Error removing staff time entry:', error);
       if (error instanceof Error && error.message.includes('not found')) {
