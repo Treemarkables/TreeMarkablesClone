@@ -341,8 +341,46 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
         {/* Main Content Area */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Left Sidebar - Jobs List */}
-          <div className="w-72 bg-white border-r overflow-y-auto">
+          {/* Center - Time Grid */}
+          <div className="flex-1 overflow-auto bg-white">
+            {/* Time Slots Grid */}
+            {timeSlots.map((timeSlot) => (
+              <div key={timeSlot.toString()} className="grid border-b" style={{ gridTemplateColumns: `80px repeat(${staff.length}, 1fr)`, minHeight: '60px' }}>
+                {/* Time Label */}
+                <div className="p-2 border-r bg-gray-50 flex items-start">
+                  <span className="text-sm font-medium text-gray-600">
+                    {format(timeSlot, 'haaa').toLowerCase()}
+                  </span>
+                </div>
+
+                {/* Staff Columns */}
+                {staff.map((member: any) => (
+                  <div 
+                    key={`${timeSlot}-${member.id}`}
+                    className="border-r p-2 hover:bg-gray-50 min-h-[60px]"
+                    data-testid={`time-slot-${member.id}-${format(timeSlot, 'HH:mm')}`}
+                  >
+                    {/* Render job blocks for this time slot and staff member */}
+                    {allJobs
+                      .filter((job: any) => {
+                        if (!job.scheduledDate || !job.scheduledTime) return false;
+                        const jobDate = new Date(job.scheduledDate);
+                        const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledTime}`);
+                        const slotHour = timeSlot.getHours();
+                        return isSameDay(jobDate, currentDate) && 
+                               jobTime.getHours() === slotHour && 
+                               job.assignedTo === member.id;
+                      })
+                      .map((job: any) => renderJobBlock(job, timeSlot, member))
+                    }
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Right Sidebar - Jobs List */}
+          <div className="w-72 bg-white border-l overflow-y-auto">
             {/* Search Bar */}
             <div className="p-3 border-b">
               <div className="relative">
@@ -380,44 +418,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             <div className="p-3 space-y-3">
               {allJobs.slice(0, 6).map((job: any, index: number) => renderJobSidebarCard(job, index))}
             </div>
-          </div>
-
-          {/* Center - Time Grid */}
-          <div className="flex-1 overflow-auto bg-white">
-            {/* Time Slots Grid */}
-            {timeSlots.map((timeSlot) => (
-              <div key={timeSlot.toString()} className="grid border-b" style={{ gridTemplateColumns: `80px repeat(${staff.length}, 1fr)`, minHeight: '60px' }}>
-                {/* Time Label */}
-                <div className="p-2 border-r bg-gray-50 flex items-start">
-                  <span className="text-sm font-medium text-gray-600">
-                    {format(timeSlot, 'haaa').toLowerCase()}
-                  </span>
-                </div>
-
-                {/* Staff Columns */}
-                {staff.map((member: any) => (
-                  <div 
-                    key={`${timeSlot}-${member.id}`}
-                    className="border-r p-2 hover:bg-gray-50 min-h-[60px]"
-                    data-testid={`time-slot-${member.id}-${format(timeSlot, 'HH:mm')}`}
-                  >
-                    {/* Render job blocks for this time slot and staff member */}
-                    {allJobs
-                      .filter((job: any) => {
-                        if (!job.scheduledDate || !job.scheduledTime) return false;
-                        const jobDate = new Date(job.scheduledDate);
-                        const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledTime}`);
-                        const slotHour = timeSlot.getHours();
-                        return isSameDay(jobDate, currentDate) && 
-                               jobTime.getHours() === slotHour && 
-                               job.assignedTo === member.id;
-                      })
-                      .map((job: any) => renderJobBlock(job, timeSlot, member))
-                    }
-                  </div>
-                ))}
-              </div>
-            ))}
           </div>
         </div>
 
