@@ -1543,6 +1543,148 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // ========================================
+  // STAFF TIME TRACKING API ROUTES
+  // ========================================
+
+  // Get staff time entries for a job
+  app.get('/api/jobs/:id/staff-time', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const staffTimeEntries = await storage.getJobStaffTimeEntries(id);
+      res.json({ success: true, data: staffTimeEntries });
+    } catch (error) {
+      console.error('Error getting job staff time entries:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error getting staff time entries' });
+      }
+    }
+  });
+
+  // Add or update staff time entry for a job
+  app.post('/api/jobs/:id/staff-time', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const entryData = req.body;
+      
+      // Validate required fields
+      if (!entryData.employeeId || !entryData.hours || !entryData.rate) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Missing required fields: employeeId, hours, and rate are required' 
+        });
+      }
+
+      // Convert strings to numbers
+      const entry = {
+        employeeId: entryData.employeeId,
+        hours: typeof entryData.hours === 'string' ? parseFloat(entryData.hours) : entryData.hours,
+        rate: typeof entryData.rate === 'string' ? parseFloat(entryData.rate) : entryData.rate,
+        date: entryData.date
+      };
+
+      // Validate numeric values
+      if (isNaN(entry.hours) || isNaN(entry.rate) || entry.hours < 0 || entry.rate < 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Hours and rate must be valid positive numbers' 
+        });
+      }
+
+      const updatedJob = await storage.addStaffTimeEntry(id, entry);
+      res.json({ success: true, data: updatedJob });
+    } catch (error) {
+      console.error('Error adding staff time entry:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error adding staff time entry' });
+      }
+    }
+  });
+
+  // Update multiple staff time entries for a job
+  app.put('/api/jobs/:id/staff-time', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { staffTimeEntries } = req.body;
+      
+      if (!Array.isArray(staffTimeEntries)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'staffTimeEntries must be an array' 
+        });
+      }
+
+      // Validate and convert entries
+      const validatedEntries = staffTimeEntries.map((entry, index) => {
+        if (!entry.employeeId || entry.hours === undefined || entry.rate === undefined) {
+          throw new Error(`Entry ${index}: Missing required fields (employeeId, hours, rate)`);
+        }
+
+        const hours = typeof entry.hours === 'string' ? parseFloat(entry.hours) : entry.hours;
+        const rate = typeof entry.rate === 'string' ? parseFloat(entry.rate) : entry.rate;
+
+        if (isNaN(hours) || isNaN(rate) || hours < 0 || rate < 0) {
+          throw new Error(`Entry ${index}: Hours and rate must be valid positive numbers`);
+        }
+
+        return {
+          employeeId: entry.employeeId,
+          hours,
+          rate,
+          date: entry.date
+        };
+      });
+
+      const updatedJob = await storage.updateJobStaffTime(id, validatedEntries);
+      res.json({ success: true, data: updatedJob });
+    } catch (error) {
+      console.error('Error updating staff time entries:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: error.message || 'Error updating staff time entries' });
+      }
+    }
+  });
+
+  // Remove staff time entry for a job
+  app.delete('/api/jobs/:id/staff-time/:employeeId', async (req: Request, res: Response) => {
+    try {
+      const { id, employeeId } = req.params;
+      const { date } = req.query;
+      
+      const updatedJob = await storage.removeStaffTimeEntry(id, employeeId, date as string);
+      res.json({ success: true, data: updatedJob });
+    } catch (error) {
+      console.error('Error removing staff time entry:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error removing staff time entry' });
+      }
+    }
+  });
+
+  // Calculate labor cost from staff time
+  app.get('/api/jobs/:id/staff-time/labor-cost', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const laborCost = await storage.calculateLaborCostFromStaffTime(id);
+      res.json({ success: true, data: { laborCost } });
+    } catch (error) {
+      console.error('Error calculating labor cost from staff time:', error);
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ success: false, message: 'Job not found' });
+      } else {
+        res.status(500).json({ success: false, message: 'Error calculating labor cost' });
+      }
+    }
+  });
+
   app.put('/api/jobs/:id', async (req: Request, res: Response) => {
     try {
       const updates = insertJobSchema.partial().safeParse(req.body);
