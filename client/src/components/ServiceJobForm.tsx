@@ -753,18 +753,18 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
     </Dialog>
 
     {/* Proposal Generation Dialog */}
-    {showProposalDialog && (
-      <ProposalGeneration
-        customerId={isCreatingNewCustomer ? undefined : form.watch('customerId')}
-        onProposalCreated={(proposal) => {
-          toast({
-            title: "Proposal Generated",
-            description: `Proposal for ${proposal.title} has been created successfully.`,
-          });
-          setShowProposalDialog(false);
-        }}
-      />
-    )}
+    <ProposalGeneration
+      customerId={isCreatingNewCustomer ? undefined : form.watch('customerId')}
+      open={showProposalDialog}
+      onOpenChange={setShowProposalDialog}
+      onProposalCreated={(proposal) => {
+        toast({
+          title: "Proposal Generated",
+          description: `Proposal for ${proposal.title} has been created successfully.`,
+        });
+        setShowProposalDialog(false);
+      }}
+    />
 
     {/* Email Dialog */}
     <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>

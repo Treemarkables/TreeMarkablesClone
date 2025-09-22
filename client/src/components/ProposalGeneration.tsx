@@ -69,15 +69,23 @@ interface ProposalGenerationProps {
   quoteId?: string;
   customerId?: string;
   onProposalCreated?: (proposal: Proposal) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function ProposalGeneration({ 
   quoteId, 
   customerId, 
-  onProposalCreated 
+  onProposalCreated,
+  open,
+  onOpenChange
 }: ProposalGenerationProps) {
   const { toast } = useToast();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [internalDialogOpen, setInternalDialogOpen] = useState(false);
+  
+  // Use external control if provided, otherwise use internal state
+  const isDialogOpen = open !== undefined ? open : internalDialogOpen;
+  const setIsDialogOpen = onOpenChange || setInternalDialogOpen;
   const [selectedLineItems, setSelectedLineItems] = useState<ProposalLineItem[]>([]);
   const [proposalSections, setProposalSections] = useState<ProposalSection[]>([]);
   const [activeTab, setActiveTab] = useState('basic');
@@ -273,16 +281,19 @@ export function ProposalGeneration({
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-      <DialogTrigger asChild>
-        <Button 
-          variant="outline" 
-          className="gap-2"
-          data-testid="button-generate-proposal"
-        >
-          <FileText className="h-4 w-4" />
-          Generate Proposal
-        </Button>
-      </DialogTrigger>
+      {/* Only show trigger button when used in standalone mode */}
+      {open === undefined && (
+        <DialogTrigger asChild>
+          <Button 
+            variant="outline" 
+            className="gap-2"
+            data-testid="button-generate-proposal"
+          >
+            <FileText className="h-4 w-4" />
+            Generate Proposal
+          </Button>
+        </DialogTrigger>
+      )}
       
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
