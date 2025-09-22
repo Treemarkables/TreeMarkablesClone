@@ -25,12 +25,12 @@ import { apiRequest } from "@/lib/queryClient";
 
 // Proposal schema for validation
 const proposalSchema = z.object({
-  jobId: z.string().min(1, "Job ID is required"),
+  jobId: z.string().optional(), // Allow empty for draft proposals
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   validUntil: z.string().optional(),
-  totalAmount: z.number().min(0, "Total amount must be positive"),
-  taxRate: z.number().min(0).max(100).default(15),
+  totalAmount: z.number().min(0, "Total amount must be positive").optional(),
+  taxRate: z.preprocess((val) => parseFloat(val as string) || 15, z.number().min(0).max(100).default(15)),
   notes: z.string().optional(),
 });
 
@@ -122,11 +122,7 @@ export function ProposalBuilder({
   // Mutations
   const createProposalMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest(`/api/proposals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const response = await apiRequest('POST', '/api/proposals', data);
       return response;
     },
     onSuccess: () => {
@@ -149,12 +145,16 @@ export function ProposalBuilder({
   // Photo upload mutation
   const uploadPhotoMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const response = await fetch(`/api/jobs/${jobId}/photos`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) throw new Error("Upload failed");
-      return response.json();
+      // Convert FormData to regular object for apiRequest
+      const photoData = {
+        photo: formData.get('photo'),
+        type: formData.get('type'),
+        category: formData.get('category'),
+        capturedBy: formData.get('capturedBy'),
+        capturedAt: formData.get('capturedAt'),
+      };
+      const response = await apiRequest('POST', `/api/jobs/${jobId}/photos`, photoData);
+      return response;
     },
     onSuccess: (data) => {
       setUploadedPhotos(prev => [...prev, data.data]);
@@ -235,15 +235,14 @@ export function ProposalBuilder({
       notes: "",
       isOptional: false,
     });
-
-    // Update total
-    updateTotal();
+    
+    // Don't call updateTotal here - let useEffect handle it
   };
 
   // Remove line item
   const removeLineItem = (id: string) => {
     setLineItems(prev => prev.filter(item => item.id !== id));
-    updateTotal();
+    // Don't call updateTotal here - let useEffect handle it
   };
 
   // Update total amount
@@ -664,8 +663,7 @@ export function ProposalBuilder({
                                   min="0" 
                                   max="100" 
                                   step="0.1"
-                                  value={field.value || 0}
-                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                  onChange={(e) => field.onChange(e.target.value)}
                                   data-testid="input-tax-rate"
                                 />
                               </FormControl>
