@@ -1643,7 +1643,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                   {/* Cost & Margin Analysis */}
                   <div>
                     <h4 className="font-semibold text-base mb-3">Cost & Margin Analysis</h4>
-                    {console.log('Debug AdvancedDispatchBoard selectedJob:', selectedJob, 'selectedJob.id:', selectedJob.id)}
                     <GrossMarginCalculator 
                       jobId={selectedJob.id} 
                       compact={true} 
@@ -1653,10 +1652,9 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                   {/* Staff Time Tracking */}
                   <div>
                     <h4 className="font-semibold text-base mb-3">Staff Time Tracking</h4>
-                    {console.log('Debug: About to render StaffTimeTracker with jobId:', selectedJob.id)}
                     <StaffTimeTracker 
                       jobId={selectedJob.id} 
-                      compact={true} 
+                      compact={false} 
                     />
                   </div>
 
