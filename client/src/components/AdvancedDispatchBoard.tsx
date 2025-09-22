@@ -362,18 +362,27 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     const isCompleted = selectedStatus === 'completed';
     const isUnsuccessful = selectedStatus === 'unsuccessful';
     
+    const handleCardClick = (e: React.MouseEvent) => {
+      // Only handle click if not dragging and not clicking on action buttons
+      if (!isDragging && !canBeDragged) {
+        e.stopPropagation();
+        setSelectedJob(job);
+      }
+    };
+
     return (
       <div
         ref={setNodeRef}
         style={style}
         {...(canBeDragged ? listeners : {})}
         {...(canBeDragged ? attributes : {})}
+        onClick={!canBeDragged ? handleCardClick : undefined}
         className={`p-2 bg-white border rounded shadow-sm text-xs ${getPriorityColor(job.priority || 'medium')} border-l-4 ${
           canBeDragged 
             ? `cursor-move ${isDragging ? 'opacity-50 z-50' : 'hover:shadow-md'}` 
             : isCompleted || isUnsuccessful 
-              ? 'opacity-60' 
-              : 'hover:shadow-sm'
+              ? 'opacity-60 cursor-pointer hover:shadow-sm' 
+              : 'cursor-pointer hover:shadow-sm'
         }`}
         data-testid={`job-card-${job.id}`}
       >
@@ -1073,6 +1082,117 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                   </Button>
                 </div>
               ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Job Details Modal */}
+      {selectedJob && (
+        <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
+          <DialogContent className="max-w-md" data-testid="job-details-modal">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${getPriorityColor(selectedJob.priority || 'medium').replace('border-l-', 'bg-')}`} />
+                Job #{selectedJob.jobNumber || selectedJob.id} Details
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Job Information</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Title:</span>
+                    <span className="font-medium">{selectedJob.title}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Customer:</span>
+                    <span>{getCustomerName(selectedJob.customerId)}</span>
+                  </div>
+                  <div className="flex items-start justify-between">
+                    <span className="text-muted-foreground">Address:</span>
+                    <span className="text-right max-w-[200px]">{selectedJob.address}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Status:</span>
+                    <Badge className={getStatusColor(selectedJob.status)}>{getStatusDisplayName(selectedJob.status)}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Priority:</span>
+                    <Badge variant="outline">{selectedJob.priority || 'medium'}</Badge>
+                  </div>
+                </div>
+              </div>
+
+              {selectedJob.scheduledDate && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-2">Schedule</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Date:</span>
+                      <span>{format(new Date(selectedJob.scheduledDate), 'MMM dd, yyyy')}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Time:</span>
+                      <span>{format(new Date(selectedJob.scheduledDate), 'h:mm a')}</span>
+                    </div>
+                    {selectedJob.estimatedDuration && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Duration:</span>
+                        <span>{selectedJob.estimatedDuration}h</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedJob.assignedTeam && selectedJob.assignedTeam.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-2">Assigned Team</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Staff:</span>
+                      <span>{getAssignedStaffNames(selectedJob.assignedTeam)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(selectedJob.description || selectedJob.specialInstructions) && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-2">Notes</h4>
+                  <div className="text-sm text-muted-foreground">
+                    {selectedJob.description || selectedJob.specialInstructions}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              <div className="flex gap-2 pt-2 border-t">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => setSelectedJob(null)}
+                  data-testid="button-close-job-details"
+                >
+                  Close
+                </Button>
+                {selectedJob.customerId && (
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => {
+                      // Open customer contact - implement based on your needs
+                      window.open(`tel:${selectedJob.customerPhone || ''}`);
+                    }}
+                    data-testid="button-call-customer"
+                  >
+                    Call
+                  </Button>
+                )}
+              </div>
             </div>
           </DialogContent>
         </Dialog>
