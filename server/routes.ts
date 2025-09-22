@@ -27,7 +27,8 @@ import {
   complianceRecordInsertSchema, type InsertComplianceRecord,
   // Proposal Management
   insertProposalSchema, updateProposalSchema,
-  insertProposalSectionSchema, updateProposalSectionSchema
+  insertProposalSectionSchema, updateProposalSectionSchema,
+  insertProposalLineItemSchema, updateProposalLineItemSchema
 } from "@shared/schema";
 import multer from "multer";
 import Papa from "papaparse";
@@ -5046,6 +5047,148 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error reordering proposal sections'
+      });
+    }
+  });
+
+  // ========================================
+  // PROPOSAL LINE ITEM MANAGEMENT ROUTES
+  // ========================================
+
+  // Get proposal line items
+  app.get('/api/proposals/:proposalId/lineitems', async (req: Request, res: Response) => {
+    try {
+      const lineItems = await storage.getProposalLineItemsByProposal(req.params.proposalId);
+      res.json({
+        success: true,
+        data: lineItems,
+        count: lineItems.length
+      });
+    } catch (error) {
+      console.error('Error fetching proposal line items:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching proposal line items'
+      });
+    }
+  });
+
+  // Create proposal line item
+  app.post('/api/proposals/:proposalId/lineitems', async (req: Request, res: Response) => {
+    try {
+      const itemData = {
+        ...req.body,
+        proposalId: req.params.proposalId
+      };
+      
+      // Ensure totalPrice is computed server-side
+      const quantity = parseFloat(itemData.quantity || '1');
+      const unitPrice = parseFloat(itemData.unitPrice || '0');
+      itemData.totalPrice = (quantity * unitPrice).toString();
+      
+      const validatedData = insertProposalLineItemSchema.parse(itemData);
+      const lineItem = await storage.createProposalLineItem(validatedData);
+      
+      res.status(201).json({
+        success: true,
+        data: lineItem,
+        message: 'Proposal line item created successfully'
+      });
+    } catch (error: any) {
+      console.error('Error creating proposal line item:', error);
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid line item data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error creating proposal line item'
+      });
+    }
+  });
+
+  // Update proposal line item
+  app.put('/api/proposals/lineitems/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateProposalLineItemSchema.parse(req.body);
+      const lineItem = await storage.updateProposalLineItem(req.params.id, validatedData);
+      
+      res.json({
+        success: true,
+        data: lineItem,
+        message: 'Proposal line item updated successfully'
+      });
+    } catch (error: any) {
+      console.error('Error updating proposal line item:', error);
+      
+      if (error.message === 'Proposal line item not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal line item not found'
+        });
+      }
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid line item data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error updating proposal line item'
+      });
+    }
+  });
+
+  // Delete proposal line item
+  app.delete('/api/proposals/lineitems/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteProposalLineItem(req.params.id);
+      res.json({
+        success: true,
+        message: 'Proposal line item deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting proposal line item:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting proposal line item'
+      });
+    }
+  });
+
+  // Reorder proposal line items
+  app.put('/api/proposals/:proposalId/lineitems/reorder', async (req: Request, res: Response) => {
+    try {
+      const { itemIds } = req.body;
+      
+      if (!Array.isArray(itemIds)) {
+        return res.status(400).json({
+          success: false,
+          message: 'itemIds must be an array'
+        });
+      }
+      
+      const lineItems = await storage.reorderProposalLineItems(req.params.proposalId, itemIds);
+      
+      res.json({
+        success: true,
+        data: lineItems,
+        message: 'Proposal line items reordered successfully'
+      });
+    } catch (error) {
+      console.error('Error reordering proposal line items:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error reordering proposal line items'
       });
     }
   });
