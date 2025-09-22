@@ -268,6 +268,52 @@ export function GlobalJobCard({
 
   const isLoading = createJobMutation.isPending || updateJobMutation.isPending || createCustomerMutation.isPending;
 
+  // Button click handlers
+  const handleScheduleClick = () => {
+    toast({
+      title: "Schedule Feature",
+      description: "Opening scheduling interface...",
+    });
+    // TODO: Open scheduling modal or redirect to calendar
+    console.log("Schedule button clicked");
+  };
+
+  const handleProposalClick = () => {
+    toast({
+      title: "Proposal Generator",
+      description: "Generating proposal document...",
+    });
+    // TODO: Generate proposal PDF or open proposal editor
+    console.log("Proposal button clicked");
+  };
+
+  const handleEmailClick = () => {
+    toast({
+      title: "Email Customer",
+      description: "Opening email composer...",
+    });
+    // TODO: Open email modal or send email using SendGrid
+    console.log("Email button clicked");
+  };
+
+  const handleSMSClick = () => {
+    toast({
+      title: "Send SMS",
+      description: "Opening SMS composer...",
+    });
+    // TODO: Open SMS modal or send SMS using Twilio
+    console.log("SMS button clicked");
+  };
+
+  const handleCallClick = () => {
+    toast({
+      title: "Initiate Call",
+      description: "Preparing to call customer...",
+    });
+    // TODO: Log call or initiate VoIP call
+    console.log("Call button clicked");
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -291,6 +337,7 @@ export function GlobalJobCard({
                 variant="outline" 
                 size="sm" 
                 className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                onClick={handleScheduleClick}
                 data-testid="button-schedule"
               >
                 <Calendar className="w-4 h-4 mr-1" />
@@ -300,6 +347,7 @@ export function GlobalJobCard({
                 variant="outline" 
                 size="sm" 
                 className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                onClick={handleProposalClick}
                 data-testid="button-proposal"
               >
                 <Presentation className="w-4 h-4 mr-1" />
@@ -310,6 +358,7 @@ export function GlobalJobCard({
                   variant="outline" 
                   size="sm" 
                   className="bg-white/10 border-white/20 text-white hover:bg-white/20 px-2"
+                  onClick={handleEmailClick}
                   data-testid="button-email"
                 >
                   <Mail className="w-4 h-4" />
@@ -318,6 +367,7 @@ export function GlobalJobCard({
                   variant="outline" 
                   size="sm" 
                   className="bg-white/10 border-white/20 text-white hover:bg-white/20 px-2"
+                  onClick={handleSMSClick}
                   data-testid="button-sms"
                 >
                   <MessageSquare className="w-4 h-4" />
@@ -326,6 +376,7 @@ export function GlobalJobCard({
                   variant="outline" 
                   size="sm" 
                   className="bg-white/10 border-white/20 text-white hover:bg-white/20 px-2"
+                  onClick={handleCallClick}
                   data-testid="button-call"
                 >
                   <Phone className="w-4 h-4" />
