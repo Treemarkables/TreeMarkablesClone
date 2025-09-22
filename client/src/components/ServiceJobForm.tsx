@@ -15,9 +15,21 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-// Form schema based on existing job schema
+// Form schema with conditional customer creation fields
 const jobFormSchema = z.object({
-  customerId: z.string().min(1, "Customer is required"),
+  // Customer selection
+  customerId: z.string().optional(),
+  isNewCustomer: z.boolean().optional(),
+  
+  // New customer fields (conditional)
+  newCustomerName: z.string().optional(),
+  newCustomerEmail: z.string().email().optional().or(z.literal("")),
+  newCustomerPhone: z.string().optional(),
+  newCustomerAddress: z.string().optional(),
+  newCustomerCity: z.string().optional(),
+  newCustomerRegion: z.string().optional(),
+  
+  // Job details
   description: z.string().optional(),
   address: z.string().min(1, "Job address is required"),
   status: z.string().min(1, "Job status is required"),
@@ -32,6 +44,15 @@ const jobFormSchema = z.object({
   jobContactPhone: z.string().optional(),
   billingContactPhone: z.string().optional(),
   billingContactMobile: z.string().optional(),
+}).refine((data) => {
+  if (data.isNewCustomer) {
+    return !!data.newCustomerName;
+  } else {
+    return !!data.customerId;
+  }
+}, {
+  message: "Customer name is required when creating new customer",
+  path: ["newCustomerName"]
 });
 
 type JobFormData = z.infer<typeof jobFormSchema>;
@@ -52,6 +73,7 @@ interface ServiceJobFormProps {
 export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: ServiceJobFormProps) {
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [newChecklistItem, setNewChecklistItem] = useState("");
+  const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -65,6 +87,13 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
     resolver: zodResolver(jobFormSchema),
     defaultValues: {
       customerId: customerId || "",
+      isNewCustomer: false,
+      newCustomerName: "",
+      newCustomerEmail: "",
+      newCustomerPhone: "",
+      newCustomerAddress: "",
+      newCustomerCity: "",
+      newCustomerRegion: "",
       description: "",
       address: "",
       status: "work_order",
@@ -101,10 +130,34 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
 
   const createJobMutation = useMutation({
     mutationFn: async (data: JobFormData) => {
+      let finalCustomerId = data.customerId;
+      
+      // Create new customer if needed
+      if (data.isNewCustomer && data.newCustomerName) {
+        const customerData = {
+          name: data.newCustomerName,
+          email: data.newCustomerEmail || "",
+          phone: data.newCustomerPhone || "",
+          address: data.newCustomerAddress || "",
+          city: data.newCustomerCity || "",
+          region: data.newCustomerRegion || "",
+          source: "job_creation"
+        };
+        
+        const customerResponse = await apiRequest('POST', '/api/customers', customerData);
+        const customerResult = await customerResponse.json();
+        
+        if (!customerResult.success) {
+          throw new Error('Failed to create customer');
+        }
+        
+        finalCustomerId = customerResult.data.id;
+      }
+      
       const jobNumber = getNextJobNumber();
       
       const jobData = {
-        customerId: data.customerId,
+        customerId: finalCustomerId,
         jobNumber: `JOB-${Date.now()}`,
         title: `Job #${jobNumber}`,
         description: data.description || "",
@@ -129,10 +182,12 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
           description: `Job ${result.data.title} has been created successfully.`,
         });
         queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
         onJobCreated?.(result.data);
         onClose();
         form.reset();
         setChecklist([]);
+        setIsCreatingNewCustomer(false);
       }
     },
     onError: (error) => {
@@ -228,30 +283,147 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               {/* Customer Selection */}
               <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="customerId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Customer</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={!!customerId}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-customer">
-                            <SelectValue placeholder="Select customer" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {((customersData as any)?.data || []).map((customer: any) => (
-                            <SelectItem key={customer.id} value={customer.id}>
-                              {customer.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
+                {/* Customer Selection Toggle */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      type="button"
+                      variant={!isCreatingNewCustomer ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setIsCreatingNewCustomer(false);
+                        form.setValue('isNewCustomer', false);
+                      }}
+                      data-testid="button-select-existing-customer"
+                    >
+                      Select Existing
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={isCreatingNewCustomer ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setIsCreatingNewCustomer(true);
+                        form.setValue('isNewCustomer', true);
+                        form.setValue('customerId', '');
+                      }}
+                      data-testid="button-create-new-customer"
+                    >
+                      Create New Customer
+                    </Button>
+                  </div>
+
+                  {!isCreatingNewCustomer ? (
+                    <FormField
+                      control={form.control}
+                      name="customerId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Customer</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} disabled={!!customerId}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-customer">
+                                <SelectValue placeholder="Select customer" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {((customersData as any)?.data || []).map((customer: any) => (
+                                <SelectItem key={customer.id} value={customer.id}>
+                                  {customer.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                      <h4 className="font-medium text-sm">New Customer Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="newCustomerName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Customer Name *</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Enter customer name" {...field} data-testid="input-new-customer-name" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="newCustomerEmail"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email</FormLabel>
+                              <FormControl>
+                                <Input type="email" placeholder="customer@email.com" {...field} data-testid="input-new-customer-email" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="newCustomerPhone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Phone</FormLabel>
+                              <FormControl>
+                                <Input placeholder="021234567" {...field} data-testid="input-new-customer-phone" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="newCustomerAddress"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Address</FormLabel>
+                              <FormControl>
+                                <Input placeholder="123 Main Street" {...field} data-testid="input-new-customer-address" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="newCustomerCity"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>City</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Auckland" {...field} data-testid="input-new-customer-city" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="newCustomerRegion"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Region</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Auckland" {...field} data-testid="input-new-customer-region" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
                   )}
-                />
+                </div>
 
                 <FormField
                   control={form.control}
