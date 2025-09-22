@@ -242,7 +242,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         {/* Address section */}
         <div className="mb-2">
           <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Address</span>
-          <p className="text-xs text-gray-700 mt-1 leading-relaxed">{job.address}</p>
+          <p className="text-xs text-gray-700 mt-1 leading-relaxed break-words overflow-wrap-anywhere">{job.address}</p>
         </div>
         
         {/* Job title */}
