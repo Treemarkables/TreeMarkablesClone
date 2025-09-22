@@ -95,17 +95,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   // Get all jobs (not just today's)
   const allJobs = (jobsData as any)?.data || [];
 
-  // Action items for top toolbar
-  const actionItems = [
-    { id: 'new-job', label: 'New job', icon: Plus, color: 'bg-blue-500' },
-    { id: 'recurring', label: 'Recurring job', icon: RotateCcw, color: 'bg-orange-500' },
-    { id: 'follow-up', label: 'Follow up', icon: MessageSquare, color: 'bg-yellow-500' },
-    { id: 'quote-scheduled', label: 'Quote scheduled', icon: CalendarDays, color: 'bg-green-500' },
-    { id: 'quote-followup', label: 'Quote follow up', icon: FileText, color: 'bg-purple-500' },
-    { id: 'needs-schedule', label: 'Job needs need to be...', icon: Clock, color: 'bg-red-500' },
-    { id: 'scheduled', label: 'Scheduled', icon: CheckSquare, color: 'bg-emerald-500' },
-    { id: 'more', label: 'more tim...', icon: MoreHorizontal, color: 'bg-gray-500' },
-  ];
 
   // Handle job card click
   const handleJobCardClick = (job: any) => {
@@ -199,29 +188,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       onDragEnd={handleDragEnd}
     >
       <div className="h-full flex flex-col bg-gray-50" data-testid="advanced-dispatch-board">
-        {/* Actions Toolbar */}
-        <div className="bg-white border-b p-3">
-          <div className="flex items-center gap-1">
-            <span className="text-sm font-medium text-gray-600 mr-4">Actions</span>
-            {actionItems.map((item) => (
-              <div key={item.id} className="flex flex-col items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`w-10 h-10 ${item.color} rounded-lg hover:opacity-80 transition-opacity`}
-                  aria-label={item.label}
-                  data-testid={`action-${item.id}`}
-                >
-                  <item.icon className="w-5 h-5 text-white" />
-                </Button>
-                <span className="text-xs text-gray-600 text-center leading-tight" style={{ maxWidth: '60px' }}>
-                  {item.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Staff Members Bar */}
         <div className="bg-white border-b p-3">
           <div className="flex items-center gap-1">
