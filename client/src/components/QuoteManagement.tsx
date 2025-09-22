@@ -33,6 +33,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import type { Quote } from '@shared/schema';
+import { ProposalGeneration } from '@/components/ProposalGeneration';
 
 // Line item structure for quotes
 interface LineItem {
@@ -554,6 +555,16 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                       ${parseFloat(quote.amount).toLocaleString()}
                     </div>
                     <div className="space-x-2">
+                      <ProposalGeneration 
+                        quoteId={quote.id}
+                        customerId={quote.customerId || undefined}
+                        onProposalCreated={(proposal) => {
+                          toast({
+                            title: "Success",
+                            description: `Proposal ${proposal.proposalNumber} created successfully`,
+                          });
+                        }}
+                      />
                       {quote.status === 'accepted' && (
                         <Button
                           size="sm"
