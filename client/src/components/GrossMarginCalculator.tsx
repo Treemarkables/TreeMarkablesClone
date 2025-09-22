@@ -88,7 +88,9 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   // Update gross margin mutation
   const updateGrossMarginMutation = useMutation({
     mutationFn: async (data: GrossMarginData) => {
-      return await apiRequest('PUT', `/api/jobs/${jobId}/gross-margin`, data);
+      // Don't send laborCosts if staff time entries exist (server will calculate)
+      const payload = hasStaffTimeEntries ? { ...data, laborCosts: undefined } : data;
+      return await apiRequest('PUT', `/api/jobs/${jobId}/gross-margin`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['job', jobId] });
@@ -131,8 +133,13 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   const handleSave = () => {
     const dataToSave = { ...formData };
     
-    // If using hourly calculation mode, use calculated labor costs
-    if (calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate) {
+    // If staff time entries exist, don't include laborCosts (server-calculated)
+    if (hasStaffTimeEntries) {
+      delete dataToSave.laborCosts;
+      delete dataToSave.laborHours;
+      delete dataToSave.hourlyRate;
+    } else if (calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate) {
+      // If using hourly calculation mode, use calculated labor costs
       dataToSave.laborCosts = calculatedLaborCosts;
     }
 
