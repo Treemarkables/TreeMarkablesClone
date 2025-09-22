@@ -36,61 +36,70 @@ interface AppSidebarProps {
 const dashboardItems = [
   {
     title: "Overview",
-    url: "#",
+    url: "/job-dashboard",
     icon: Home,
-    value: "overview"
+    value: "overview",
+    isTab: true
   },
   {
     title: "Pipeline",
-    url: "#",
+    url: "/pipeline",
     icon: GitBranch,
-    value: "pipeline"
+    value: "pipeline",
+    isTab: false
   },
   {
     title: "Leads",
-    url: "#",
+    url: "/job-dashboard", 
     icon: Target,
-    value: "leads"
+    value: "leads",
+    isTab: true
   },
   {
     title: "Customers",
-    url: "#",
+    url: "/job-dashboard",
     icon: Users,
-    value: "customers"
+    value: "customers", 
+    isTab: true
   },
   {
     title: "Analytics",
-    url: "#", 
+    url: "/job-dashboard", 
     icon: BarChart3,
-    value: "analytics"
+    value: "analytics",
+    isTab: true
   }
 ];
 
-// Business management items (tabs within JobDashboard)
+// Business management items
 const businessItems = [
   {
     title: "Quotes",
-    url: "#",
+    url: "/job-dashboard",
     icon: FileText,
-    value: "quotes"
+    value: "quotes",
+    isTab: true
   },
   {
     title: "Equipment",
-    url: "#",
+    url: "/equipment",
     icon: Settings,
-    value: "equipment"
+    value: "equipment",
+    isTab: false
   },
   {
     title: "Communications",
-    url: "#",
+    url: "/communications",
     icon: MessageSquare,
-    value: "communications"
+    value: "communications",
+    isTab: false
   },
   {
     title: "Integrations",
-    url: "#",
+    url: "/integrations",
     icon: Plug,
-    value: "integrations"
+    value: "integrations",
+    isTab: false
   }
 ];
 
@@ -108,14 +117,23 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
             <SidebarMenu>
               {dashboardItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
-                  <SidebarMenuButton 
-                    isActive={activeTab === item.value}
-                    onClick={() => onTabChange(item.value)}
-                    data-testid={`button-tab-${item.value}`}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
+                  {item.isTab ? (
+                    <SidebarMenuButton 
+                      isActive={activeTab === item.value && location === "/job-dashboard"}
+                      onClick={() => onTabChange(item.value)}
+                      data-testid={`button-tab-${item.value}`}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  ) : (
+                    <SidebarMenuButton asChild isActive={location === item.url}>
+                      <Link href={item.url} data-testid={`link-${item.value}`}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
@@ -129,14 +147,23 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
             <SidebarMenu>
               {businessItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
-                  <SidebarMenuButton
-                    isActive={activeTab === item.value}
-                    onClick={() => onTabChange(item.value)}
-                    data-testid={`button-tab-${item.value}`}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
+                  {item.isTab ? (
+                    <SidebarMenuButton
+                      isActive={activeTab === item.value && location === "/job-dashboard"}
+                      onClick={() => onTabChange(item.value)}
+                      data-testid={`button-tab-${item.value}`}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  ) : (
+                    <SidebarMenuButton asChild isActive={location === item.url}>
+                      <Link href={item.url} data-testid={`link-${item.value}`}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
