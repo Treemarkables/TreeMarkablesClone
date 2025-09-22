@@ -40,6 +40,7 @@ Preferred communication style: Simple, everyday language.
 ### Business Features
 - **Job Dashboard**: Central hub at `/job-dashboard` with comprehensive business management tools
 - **Dispatch Board**: ServiceM8-style visual scheduling interface with time-grid (7 AM - 6 PM), staff roster, job assignments, and drag-and-drop scheduling capabilities
+- **ServiceM8-Style Job Creation**: Professional job creation form with orange header design, comprehensive job details, dynamic checklist functionality, contact management, and seamless integration with dispatch boards - fully validates and creates jobs with proper status enum handling
 - **Lead Management**: Pipeline tracking, lead scoring, conversion funnels, and automated follow-up systems
 - **Customer Management**: Complete customer profiles, service history, communication logs, and relationship tracking
 - **Quote Management**: Professional quote generation, analytics, approval workflows, and conversion tracking

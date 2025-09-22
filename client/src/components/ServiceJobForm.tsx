@@ -67,7 +67,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
       customerId: customerId || "",
       description: "",
       address: "",
-      status: "scheduled",
+      status: "work_order",
       category: "tree_removal",
       priority: "medium",
       estimatedDuration: "4",
@@ -101,8 +101,6 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
 
   const createJobMutation = useMutation({
     mutationFn: async (data: JobFormData) => {
-      console.log('Mutation received data:', data);
-      console.log('Mutation data.category:', data.category);
       const jobNumber = getNextJobNumber();
       
       const jobData = {
@@ -121,7 +119,6 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
         specialInstructions: ""
       };
 
-      console.log('Sending jobData to API:', jobData);
       const response = await apiRequest('POST', '/api/jobs', jobData);
       return response.json();
     },
@@ -164,9 +161,6 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
   };
 
   const onSubmit = (data: JobFormData) => {
-    console.log('Form submitted with data:', data);
-    console.log('Form data.category value:', data.category);
-    console.log('Form errors:', form.formState.errors);
     createJobMutation.mutate(data);
   };
 
@@ -287,11 +281,11 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
+                            <SelectItem value="lead">Lead</SelectItem>
                             <SelectItem value="quote">Quote</SelectItem>
-                            <SelectItem value="scheduled">Scheduled</SelectItem>
-                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="work_order">Work Order</SelectItem>
                             <SelectItem value="completed">Completed</SelectItem>
-                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                            <SelectItem value="unsuccessful">Unsuccessful</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
