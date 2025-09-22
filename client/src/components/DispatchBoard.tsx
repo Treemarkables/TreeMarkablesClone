@@ -41,7 +41,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import type { JobTemplate } from "@shared/schema";
-import { ServiceJobForm } from '@/components/ServiceJobForm';
+import { GlobalJobCard } from '@/components/GlobalJobCard';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -359,7 +359,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('teams');
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
-  const [showServiceJobForm, setShowServiceJobForm] = useState(false);
+  const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const [newJobFormData, setNewJobFormData] = useState({
     customerName: '',
     customerPhone: '',
@@ -1155,7 +1155,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <h3 className="font-semibold text-sm text-muted-foreground">JOBS</h3>
                 <Button 
                   size="sm" 
-                  onClick={() => setShowServiceJobForm(true)}
+                  onClick={() => setShowGlobalJobCard(true)}
                   data-testid="add-job-btn"
                 >
                   <Plus className="h-4 w-4 mr-1" />
@@ -1517,10 +1517,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </Dialog>
       )}
 
-      {/* ServiceM8-style Job Form */}
-      <ServiceJobForm 
-        isOpen={showServiceJobForm}
-        onClose={() => setShowServiceJobForm(false)}
+      {/* Global Job Card */}
+      <GlobalJobCard 
+        isOpen={showGlobalJobCard}
+        mode="create"
+        onClose={() => setShowGlobalJobCard(false)}
         onJobCreated={(job) => {
           // Refresh jobs data after creation
           toast({
