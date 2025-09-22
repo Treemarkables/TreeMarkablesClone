@@ -31,6 +31,13 @@ import {
   CalendarDays,
   MoreHorizontal
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, startOfMonth, endOfMonth, getDaysInMonth } from 'date-fns';
 
 type AdvancedDispatchBoardProps = {
@@ -45,6 +52,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const [showGlobalJobCardEdit, setShowGlobalJobCardEdit] = useState(false);
   const [jobToEdit, setJobToEdit] = useState<any | null>(null);
   const [draggedJob, setDraggedJob] = useState<any | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -93,7 +101,25 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   }, [employeesData]);
 
   // Get all jobs (not just today's)
-  const allJobs = (jobsData as any)?.data || [];
+  const allJobsRaw = (jobsData as any)?.data || [];
+  
+  // Filter jobs based on status
+  const allJobs = useMemo(() => {
+    if (statusFilter === 'all') {
+      return allJobsRaw;
+    }
+    return allJobsRaw.filter((job: any) => job.status === statusFilter);
+  }, [allJobsRaw, statusFilter]);
+  
+  // Status options for dropdown
+  const statusOptions = [
+    { value: 'all', label: 'All Categories' },
+    { value: 'lead', label: 'Lead' },
+    { value: 'quote', label: 'Quote' },
+    { value: 'work_order', label: 'Work Order' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'unsuccessful', label: 'Unsuccessful' },
+  ];
 
 
   // Handle job card click
@@ -347,10 +373,18 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             <div className="p-3 border-b bg-gray-50">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">Jobs</span>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" className="text-xs">All Jobs</Button>
-                  <ChevronRight className="w-3 h-3 text-gray-400" />
-                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[140px] h-8 text-xs">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className="text-xs">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
