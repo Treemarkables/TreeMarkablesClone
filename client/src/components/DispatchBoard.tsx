@@ -367,6 +367,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     assignedTo: '' // Will hold teamId or staffId based on mode
   });
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [showSchedulingModal, setShowSchedulingModal] = useState(false);
+  const [jobToSchedule, setJobToSchedule] = useState<JobAssignment | null>(null);
+  const [schedulingData, setSchedulingData] = useState({
+    date: '',
+    startTime: '',
+    endTime: '',
+    assignedTo: '',
+    notes: ''
+  });
 
   // Fetch jobs from backend API
   const { data: jobsData } = useQuery({
@@ -424,14 +433,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const getJobsForTeam = (teamId: string) => {
     return jobs.filter(job => {
-      if (job.teamId !== teamId) return false;
+      // Check if any team member is assigned to this job
+      const teamMembers = getTeamMembers(teamId);
+      const hasTeamMember = job.assignedTeam?.some(assignedId => 
+        teamMembers.some(member => member.id === assignedId)
+      );
+      if (!hasTeamMember && job.teamId !== teamId) return false;
       return isSameDay(new Date(job.startTime), selectedDate);
     });
   };
 
   const getJobsForStaff = (staffId: string) => {
     return jobs.filter(job => {
-      if (job.staffId !== staffId) return false;
+      // Check if staff member is in assigned team or directly assigned
+      const isAssigned = job.assignedTeam?.includes(staffId);
+      if (!isAssigned && job.staffId !== staffId) return false;
       return isSameDay(new Date(job.startTime), selectedDate);
     });
   };
@@ -447,9 +463,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       .filter(job => {
         const isToday = isSameDay(new Date(job.startTime), selectedDate);
         if (assignmentMode === 'teams') {
-          return job.teamId && isToday;
+          // Check if any team member is assigned or fallback to teamId
+          const hasAssignment = job.assignedTeam && job.assignedTeam.length > 0;
+          return (hasAssignment || job.teamId) && isToday;
         } else {
-          return job.staffId && isToday;
+          // Check if staff member is assigned or fallback to staffId
+          const hasAssignment = job.assignedTeam && job.assignedTeam.length > 0;
+          return (hasAssignment || job.staffId) && isToday;
         }
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
@@ -572,6 +592,102 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         description: `Notes added to job`,
       });
     }
+  };
+
+  // Handle scheduling functionality
+  const handleScheduleJob = (job: JobAssignment) => {
+    setJobToSchedule(job);
+    setSchedulingData({
+      date: format(new Date(job.startTime), 'yyyy-MM-dd'),
+      startTime: format(new Date(job.startTime), 'HH:mm'),
+      endTime: format(new Date(job.endTime), 'HH:mm'),
+      assignedTo: job.teamId || job.staffId || '',
+      notes: job.notes || ''
+    });
+    setShowSchedulingModal(true);
+    setSelectedJob(null); // Close job detail modal
+  };
+
+  const saveSchedule = () => {
+    if (!jobToSchedule || !schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || !schedulingData.assignedTo) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required scheduling fields.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Create new start and end times
+    const startDateTime = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
+    const endDateTime = new Date(`${schedulingData.date}T${schedulingData.endTime}`);
+
+    // Validate that end time is after start time
+    if (endDateTime <= startDateTime) {
+      toast({
+        title: "Invalid Time Range",
+        description: "End time must be after start time.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate that scheduling is not in the past
+    if (startDateTime < new Date()) {
+      toast({
+        title: "Invalid Date",
+        description: "Cannot schedule jobs in the past.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Calculate estimated duration in hours
+    const durationMs = endDateTime.getTime() - startDateTime.getTime();
+    const estimatedDuration = Math.round(durationMs / (1000 * 60 * 60)); // Convert to hours
+
+    // Create updates object for backend (aligned with schema)
+    const updates: any = {
+      scheduledDate: startDateTime.toISOString(),
+      estimatedDuration: estimatedDuration,
+      specialInstructions: schedulingData.notes
+    };
+
+    // Handle assignment based on mode (aligned with schema)
+    if (assignmentMode === 'teams') {
+      // assignedTeam is an array of team member IDs
+      const team = mockTeams.find(t => t.id === schedulingData.assignedTo);
+      if (team) {
+        updates.assignedTeam = getTeamMembers(team.id).map(member => member.id);
+      }
+    } else {
+      // Individual staff assignment - use assignedTeam with single member
+      updates.assignedTeam = [schedulingData.assignedTo];
+    }
+
+    // Persist the changes to backend
+    updateJobMutation.mutate({
+      id: jobToSchedule.id,
+      updates
+    }, {
+      onSuccess: () => {
+        toast({
+          title: "Job Scheduled",
+          description: `Job #${jobToSchedule.jobId} has been scheduled for ${format(startDateTime, 'MMM dd, yyyy')} at ${schedulingData.startTime}.`,
+        });
+        setShowSchedulingModal(false);
+        setJobToSchedule(null);
+        // Refresh the jobs data
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      },
+      onError: () => {
+        toast({
+          title: "Scheduling Failed",
+          description: "Failed to schedule the job. Please try again.",
+          variant: "destructive"
+        });
+      }
+    });
   };
 
   if (compact) {
@@ -998,6 +1114,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               className="h-6 w-6 p-0"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                handleScheduleJob(job);
+                              }}
+                              data-testid={`quick-schedule-${job.id}`}
+                            >
+                              <Calendar className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-6 w-6 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 markJobComplete(job.id);
                               }}
                               data-testid={`quick-complete-${job.id}`}
@@ -1260,7 +1388,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 </div>
                 
                 <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" size="sm" data-testid="reschedule-job">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => selectedJob && handleScheduleJob(selectedJob)}
+                    data-testid="reschedule-job"
+                  >
                     <RotateCcw className="h-4 w-4 mr-1" />
                     Reschedule
                   </Button>
@@ -1610,6 +1743,150 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   data-testid="btn-create-job"
                 >
                   Create Job
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Job Scheduling Modal */}
+      {showSchedulingModal && jobToSchedule && (
+        <Dialog open={showSchedulingModal} onOpenChange={setShowSchedulingModal}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                Schedule Job #{jobToSchedule.jobId}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Job Info */}
+              <div className="bg-orange-50 p-3 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className={`w-2 h-2 rounded-full ${getPriorityColor(jobToSchedule.priority)}`} />
+                  <span className="font-medium">{jobToSchedule.customerName}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{jobToSchedule.serviceType}</p>
+                <p className="text-xs text-muted-foreground">{jobToSchedule.address}</p>
+              </div>
+
+              {/* Scheduling Form */}
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="schedule-date">Date</Label>
+                  <Input
+                    id="schedule-date"
+                    type="date"
+                    value={schedulingData.date}
+                    onChange={(e) => setSchedulingData(prev => ({ ...prev, date: e.target.value }))}
+                    data-testid="input-schedule-date"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="schedule-start-time">Start Time</Label>
+                    <Input
+                      id="schedule-start-time"
+                      type="time"
+                      value={schedulingData.startTime}
+                      onChange={(e) => setSchedulingData(prev => ({ ...prev, startTime: e.target.value }))}
+                      data-testid="input-schedule-start-time"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="schedule-end-time">End Time</Label>
+                    <Input
+                      id="schedule-end-time"
+                      type="time"
+                      value={schedulingData.endTime}
+                      onChange={(e) => setSchedulingData(prev => ({ ...prev, endTime: e.target.value }))}
+                      data-testid="input-schedule-end-time"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="schedule-assignment">
+                    {assignmentMode === 'teams' ? 'Assign to Team' : 'Assign to Staff'}
+                  </Label>
+                  <Select 
+                    value={schedulingData.assignedTo} 
+                    onValueChange={(value) => setSchedulingData(prev => ({ ...prev, assignedTo: value }))}
+                  >
+                    <SelectTrigger data-testid="select-schedule-assignment">
+                      <SelectValue placeholder={`Select ${assignmentMode === 'teams' ? 'team' : 'staff member'}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignmentMode === 'teams' ? (
+                        mockTeams.map(team => (
+                          <SelectItem key={team.id} value={team.id}>
+                            <div className="flex items-center gap-2">
+                              <div className={`w-3 h-3 rounded-full ${team.color}`} />
+                              {team.name}
+                              <Badge variant="outline" className="text-xs ml-2">
+                                {getTeamMembers(team.id).length} members
+                              </Badge>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        mockStaffMembers.map(staff => (
+                          <SelectItem key={staff.id} value={staff.id}>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-5 w-5">
+                                <AvatarFallback className={`${staff.color} text-white text-xs`}>
+                                  {staff.name.split(' ').map(n => n[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              {staff.name}
+                              <span className="text-xs text-muted-foreground ml-2">
+                                {staff.role}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="schedule-notes">Notes (Optional)</Label>
+                  <Textarea
+                    id="schedule-notes"
+                    placeholder="Add any scheduling notes..."
+                    value={schedulingData.notes}
+                    onChange={(e) => setSchedulingData(prev => ({ ...prev, notes: e.target.value }))}
+                    rows={3}
+                    data-testid="textarea-schedule-notes"
+                  />
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => {
+                    setShowSchedulingModal(false);
+                    setJobToSchedule(null);
+                  }}
+                  data-testid="btn-cancel-schedule"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  className="flex-1"
+                  onClick={saveSchedule}
+                  disabled={!schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || !schedulingData.assignedTo || updateJobMutation.isPending}
+                  data-testid="btn-save-schedule"
+                >
+                  <Clock className="h-4 w-4 mr-1" />
+                  {updateJobMutation.isPending ? 'Scheduling...' : 'Schedule Job'}
                 </Button>
               </div>
             </div>
