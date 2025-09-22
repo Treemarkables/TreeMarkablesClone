@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { ProposalGeneration } from "@/components/ProposalGeneration";
 
 // Form schema with conditional customer creation fields
 const jobFormSchema = z.object({
@@ -74,6 +75,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
+  const [showProposalDialog, setShowProposalDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -220,7 +222,8 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
         {/* Header with orange background */}
         <div className="bg-amber-500 text-white p-4 rounded-t-lg">
@@ -266,7 +269,12 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
               <FileText className="h-4 w-4 mr-1" />
               Queue
             </Button>
-            <Button variant="secondary" size="sm" data-testid="button-proposal">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => setShowProposalDialog(true)}
+              data-testid="button-proposal"
+            >
               <Presentation className="h-4 w-4 mr-1" />
               Proposal
             </Button>
@@ -697,5 +705,20 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Proposal Generation Dialog */}
+    {showProposalDialog && (
+      <ProposalGeneration
+        customerId={isCreatingNewCustomer ? undefined : form.watch('customerId')}
+        onProposalCreated={(proposal) => {
+          toast({
+            title: "Proposal Generated",
+            description: `Proposal for ${proposal.title} has been created successfully.`,
+          });
+          setShowProposalDialog(false);
+        }}
+      />
+    )}
+    </>
   );
 }
