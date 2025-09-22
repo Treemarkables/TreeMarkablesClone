@@ -274,15 +274,56 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             </div>
           </div>
 
-          {/* Job Details Sidebar */}
-          <div className="w-80 border-l bg-white p-4 overflow-y-auto">
-            <h3 className="font-medium mb-4">Today's Jobs</h3>
-            <div className="space-y-2">
-              {todaysJobs.length > 0 ? (
-                todaysJobs.map((job: any) => renderJobCard(job))
-              ) : (
-                <p className="text-sm text-gray-500">No jobs scheduled for today</p>
-              )}
+          {/* Job Status Categories Sidebar */}
+          <div className="w-80 border-l bg-white overflow-y-auto">
+            {/* Lead Jobs */}
+            <div className="border-b">
+              <div className="p-3 bg-blue-50 border-b">
+                <h3 className="font-medium text-blue-900">Lead</h3>
+              </div>
+              <div className="p-2 space-y-1 min-h-[120px]">
+                {jobsData?.data?.filter((job: any) => job.status === 'lead').map((job: any) => renderJobCard(job))}
+              </div>
+            </div>
+
+            {/* Work Order Jobs */}
+            <div className="border-b">
+              <div className="p-3 bg-orange-50 border-b">
+                <h3 className="font-medium text-orange-900">Work Order</h3>
+              </div>
+              <div className="p-2 space-y-1 min-h-[120px]">
+                {jobsData?.data?.filter((job: any) => job.status === 'work_order').map((job: any) => renderJobCard(job))}
+              </div>
+            </div>
+
+            {/* Done Jobs */}
+            <div className="border-b">
+              <div className="p-3 bg-green-50 border-b">
+                <h3 className="font-medium text-green-900">Done</h3>
+              </div>
+              <div className="p-2 space-y-1 min-h-[120px]">
+                {jobsData?.data?.filter((job: any) => job.status === 'done').map((job: any) => renderJobCard(job))}
+              </div>
+            </div>
+
+            {/* Completed Jobs */}
+            <div className="border-b">
+              <div className="p-3 bg-emerald-50 border-b">
+                <h3 className="font-medium text-emerald-900">Completed</h3>
+              </div>
+              <div className="p-2 space-y-1 min-h-[120px]">
+                {jobsData?.data?.filter((job: any) => job.status === 'completed').map((job: any) => renderJobCard(job))}
+              </div>
+            </div>
+
+            {/* Unsuccessful Jobs */}
+            <div className="border-b">
+              <div className="p-3 bg-red-50 border-b">
+                <h3 className="font-medium text-red-900">Unsuccessful</h3>
+              </div>
+              <div className="p-2 space-y-1 min-h-[120px]">
+                {jobsData?.data?.filter((job: any) => job.status === 'unsuccessful').map((job: any) => renderJobCard(job))}
+              </div>
             </div>
           </div>
         </div>
