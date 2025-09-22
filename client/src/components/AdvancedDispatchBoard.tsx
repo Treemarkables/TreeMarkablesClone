@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSensors, useSensor, PointerSensor, DndContext, DragEndEvent, DragOverlay } from "@dnd-kit/core";
 import { useToast } from "@/hooks/use-toast";
@@ -69,22 +69,28 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     queryKey: ['/api/customers'],
   });
 
-  // Time slots from 7 AM to 4 PM (9 hours) to match ServiceM8
-  const timeSlots = [];
-  for (let i = 0; i < 9; i++) {
-    const time = addHours(startOfDay(currentDate).setHours(7), i);
-    timeSlots.push(time);
-  }
+  // Time slots from 7 AM to 4 PM (10 hours) to match ServiceM8
+  const timeSlots = useMemo(() => {
+    const slots = [];
+    for (let i = 0; i < 10; i++) {
+      const time = addHours(startOfDay(currentDate).setHours(7), i);
+      slots.push(time);
+    }
+    return slots;
+  }, [currentDate]);
 
   // Get staff members from employees data (limit to first 5 for display)
-  const staff = (employeesData as any)?.data?.slice(0, 5).map((emp: any) => ({
-    id: emp.id,
-    name: `${emp.firstName} ${emp.lastName}`,
-    firstName: emp.firstName,
-    role: emp.position,
-    status: emp.status === 'active' ? 'available' : 'offline',
-    color: ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'][Math.floor(Math.random() * 5)]
-  })) || [];
+  const staff = useMemo(() => {
+    const colors = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'];
+    return (employeesData as any)?.data?.slice(0, 5).map((emp: any, index: number) => ({
+      id: emp.id,
+      name: `${emp.firstName} ${emp.lastName}`,
+      firstName: emp.firstName,
+      role: emp.position,
+      status: emp.status === 'active' ? 'available' : 'offline',
+      color: colors[index % colors.length] // Deterministic color based on index
+    })) || [];
+  }, [employeesData]);
 
   // Get all jobs (not just today's)
   const allJobs = (jobsData as any)?.data || [];
@@ -107,15 +113,15 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     setShowGlobalJobCardEdit(true);
   };
 
-  // Handle drag and drop
-  const handleDragStart = (event: any) => {
+  // Handle drag and drop with useCallback to prevent useLayoutEffect warnings
+  const handleDragStart = useCallback((event: any) => {
     setDraggedJob(event.active.data.current);
-  };
+  }, []);
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     setDraggedJob(null);
     // Handle job reassignment here if needed
-  };
+  }, []);
 
   // Get customer name
   const getCustomerName = (customerId: string) => {
@@ -143,11 +149,13 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     const indicators = ['bg-orange-400', 'bg-blue-400', 'bg-green-400'];
     
     return (
-      <div 
+      <Button
         key={job.id}
-        className={`border rounded-lg p-3 mb-3 cursor-pointer hover:shadow-md transition-shadow ${colors[index % 3]}`}
+        variant="ghost"
+        className={`border rounded-lg p-3 mb-3 hover:shadow-md transition-shadow ${colors[index % 3]} h-auto text-left justify-start w-full`}
         onClick={() => handleJobCardClick(job)}
         data-testid={`job-sidebar-card-${job.id}`}
+        aria-label={`View job for ${customer}`}
       >
         <div className="flex items-start justify-between mb-2">
           <div className={`w-3 h-3 rounded-full ${indicators[index % 3]} mt-1`}></div>
@@ -156,7 +164,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         <h4 className="font-semibold text-sm text-gray-900 mb-1">{customer}</h4>
         <p className="text-xs text-gray-600 mb-2">{job.address}</p>
         <p className="text-xs text-gray-700">{job.title}</p>
-      </div>
+      </Button>
     );
   };
 
@@ -197,9 +205,15 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             <span className="text-sm font-medium text-gray-600 mr-4">Actions</span>
             {actionItems.map((item) => (
               <div key={item.id} className="flex flex-col items-center gap-1">
-                <div className={`w-10 h-10 ${item.color} rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity`}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`w-10 h-10 ${item.color} rounded-lg hover:opacity-80 transition-opacity`}
+                  aria-label={item.label}
+                  data-testid={`action-${item.id}`}
+                >
                   <item.icon className="w-5 h-5 text-white" />
-                </div>
+                </Button>
                 <span className="text-xs text-gray-600 text-center leading-tight" style={{ maxWidth: '60px' }}>
                   {item.label}
                 </span>
@@ -248,8 +262,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
               </div>
               
               <div className="grid grid-cols-7 gap-1 text-xs">
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-                  <div key={day} className="text-center font-medium text-gray-500 p-1">{day}</div>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                  <div key={`weekday-${index}`} className="text-center font-medium text-gray-500 p-1">{day}</div>
                 ))}
                 {generateCalendarDays().map((day) => (
                   <div 
@@ -301,7 +315,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           <div className="flex-1 overflow-auto bg-white">
             {/* Grid Header */}
             <div className="sticky top-0 bg-white border-b z-10">
-              <div className="grid" style={{ gridTemplateColumns: '80px repeat(5, 1fr)' }}>
+              <div className="grid" style={{ gridTemplateColumns: `80px repeat(${staff.length}, 1fr)` }}>
                 <div className="p-2 text-sm font-medium border-r bg-gray-50"></div>
                 {staff.map((member: any) => (
                   <div key={member.id} className="p-2 text-sm font-medium border-r text-center bg-gray-50">
@@ -313,7 +327,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
             {/* Time Slots Grid */}
             {timeSlots.map((timeSlot) => (
-              <div key={timeSlot.toString()} className="grid border-b" style={{ gridTemplateColumns: '80px repeat(5, 1fr)', minHeight: '60px' }}>
+              <div key={timeSlot.toString()} className="grid border-b" style={{ gridTemplateColumns: `80px repeat(${staff.length}, 1fr)`, minHeight: '60px' }}>
                 {/* Time Label */}
                 <div className="p-2 border-r bg-gray-50 flex items-start">
                   <span className="text-sm font-medium">
@@ -357,6 +371,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                   type="text" 
                   placeholder="Job Search..." 
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm"
+                  aria-label="Search jobs"
+                  data-testid="input-job-search"
                 />
               </div>
             </div>
