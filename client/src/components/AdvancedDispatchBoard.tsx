@@ -1645,7 +1645,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                     <h4 className="font-semibold text-base mb-3">Cost & Margin Analysis</h4>
                     <GrossMarginCalculator 
                       jobId={selectedJob.id} 
-                      compact={true} 
+                      compact={false} 
                     />
                   </div>
                   
