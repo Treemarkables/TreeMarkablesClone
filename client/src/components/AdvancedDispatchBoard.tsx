@@ -184,7 +184,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
   const [isNewJobModalOpen, setIsNewJobModalOpen] = useState(false);
-  const [showServiceJobForm, setShowServiceJobForm] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [draggedJob, setDraggedJob] = useState<any | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<JobStatusType>('work_order');
@@ -835,33 +834,11 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
-              
-              {/* Add Job Button */}
-              <Button 
-                size="sm" 
-                onClick={() => setShowServiceJobForm(true)}
-                data-testid="add-job-btn"
-                className="ml-2"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Job
-              </Button>
             </>
           )}
         </div>
       </div>
 
-      {/* ServiceM8-style Job Form */}
-      <ServiceJobForm 
-        isOpen={showServiceJobForm}
-        onClose={() => setShowServiceJobForm(false)}
-        onJobCreated={(job) => {
-          toast({
-            title: "Job Created",
-            description: `${job.title} has been added to the dispatch board.`,
-          });
-        }}
-      />
 
       {/* Main Layout - ServiceM8 Style */}
       <DndContext
