@@ -85,6 +85,31 @@
   --chart-4: 214 75% 60%;
   --chart-5: 214 75% 70%;
 
+  /* Enhanced color palette for vibrant UI */
+  --orange: 30 95% 55%;
+  --orange-foreground: 0 0% 98%;
+  --orange-border: 30 95% 45%;
+  
+  --green: 142 76% 36%;
+  --green-foreground: 0 0% 98%;
+  --green-border: 142 76% 26%;
+  
+  --purple: 271 81% 56%;
+  --purple-foreground: 0 0% 98%;
+  --purple-border: 271 81% 46%;
+  
+  --yellow: 48 96% 53%;
+  --yellow-foreground: 0 0% 15%;
+  --yellow-border: 48 96% 43%;
+  
+  --teal: 173 58% 39%;
+  --teal-foreground: 0 0% 98%;
+  --teal-border: 173 58% 29%;
+  
+  --pink: 330 81% 60%;
+  --pink-foreground: 0 0% 98%;
+  --pink-border: 330 81% 50%;
+
   --font-sans: Open Sans, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
@@ -212,6 +237,31 @@
   --chart-3: 214 75% 35%;
   --chart-4: 214 75% 65%;
   --chart-5: 214 75% 75%;
+
+  /* Enhanced color palette for vibrant UI - Dark mode */
+  --orange: 30 95% 60%;
+  --orange-foreground: 0 0% 98%;
+  --orange-border: 30 95% 50%;
+  
+  --green: 142 76% 46%;
+  --green-foreground: 0 0% 98%;
+  --green-border: 142 76% 36%;
+  
+  --purple: 271 81% 66%;
+  --purple-foreground: 0 0% 98%;
+  --purple-border: 271 81% 56%;
+  
+  --yellow: 48 96% 63%;
+  --yellow-foreground: 0 0% 15%;
+  --yellow-border: 48 96% 53%;
+  
+  --teal: 173 58% 49%;
+  --teal-foreground: 0 0% 98%;
+  --teal-border: 173 58% 39%;
+  
+  --pink: 330 81% 70%;
+  --pink-foreground: 0 0% 98%;
+  --pink-border: 330 81% 60%;
 
   --shadow-2xs: 0px 2px 0px 0px hsl(210 10% 5% / 0.2);
   --shadow-xs: 0px 2px 0px 0px hsl(210 10% 5% / 0.3);

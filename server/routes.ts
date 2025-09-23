@@ -1789,6 +1789,90 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Send SMS invoice
+  app.post('/api/sms/send', async (req: Request, res: Response) => {
+    try {
+      const { phone, message, jobId, customerId, invoiceId } = req.body;
+      
+      console.log(`📱 Processing SMS to ${phone}`);
+      
+      // Validate required fields
+      if (!phone || !message) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Phone number and message are required' 
+        });
+      }
+
+      // Validate message length (SMS limit is typically 160 characters)
+      if (message.length > 160) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'SMS message must be 160 characters or less' 
+        });
+      }
+
+      // Get related data for SMS context
+      let job, customer, invoice;
+      if (jobId) {
+        job = await storage.getJob(jobId);
+      }
+      if (customerId) {
+        customer = await storage.getCustomer(customerId);
+      }
+      if (invoiceId) {
+        invoice = await storage.getInvoice(invoiceId);
+      }
+
+      // Send SMS using SMS service
+      const success = await smsService.sendSMS({
+        to: phone,
+        message: message
+      });
+
+      if (!success) {
+        throw new Error('SMS service failed to send message');
+      }
+
+      // Log successful SMS for audit trail
+      console.log(`📱 SMS sent successfully to ${phone}`);
+      console.log(`📱 Message: ${message}`);
+      
+      // Store communication record if customer/job context available
+      if (customerId || jobId) {
+        try {
+          await storage.createCommunication({
+            customerId: customerId || job?.customerId,
+            jobId: jobId,
+            type: 'sms',
+            direction: 'outbound',
+            subject: 'Invoice SMS',
+            content: message,
+            phoneNumber: phone,
+            timestamp: new Date().toISOString(),
+            status: 'sent'
+          });
+        } catch (commError) {
+          console.warn('Failed to log SMS communication:', commError);
+          // Don't fail the SMS send if logging fails
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        message: 'SMS sent successfully',
+        phone: phone
+      });
+      
+    } catch (error: any) {
+      console.error('❌ SMS sending failed:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: error.message || 'Failed to send SMS' 
+      });
+    }
+  });
+
   // Get invoice by ID
   app.get('/api/invoices/:id', async (req: Request, res: Response) => {
     try {

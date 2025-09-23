@@ -12,6 +12,7 @@ import { ExpenseManager } from "./ExpenseManager";
 import { GrossMarginCalculator } from "./GrossMarginCalculator";
 import { ServiceM8TimeRecordingModal } from "./ServiceM8TimeRecordingModal";
 import { EmailComposerModal } from "./EmailComposerModal";
+import { SMSComposerModal } from "./SMSComposerModal";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -101,6 +102,7 @@ export function GlobalJobCard({
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [isServiceM8TimeModalOpen, setIsServiceM8TimeModalOpen] = useState(false);
   const [isEmailComposerOpen, setIsEmailComposerOpen] = useState(false);
+  const [isSMSComposerOpen, setIsSMSComposerOpen] = useState(false);
 
   // Fetch customers for the dropdown
   const { data: customersData } = useQuery({
@@ -461,14 +463,24 @@ export function GlobalJobCard({
     if (!editingJob) return;
     
     try {
-      await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
+      // If job has no invoice yet, create one first
+      let invoiceData = currentInvoiceData;
+      if (!editingJob.invoiceId) {
+        console.log("Creating invoice before opening SMS composer");
+        invoiceData = await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
+        setCurrentInvoiceData(invoiceData);
+        
+        // Invalidate queries to refresh job data
+        await queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+      }
       
       toast({
         title: "SMS Invoice",
-        description: "Invoice created. Opening SMS composer...",
+        description: "Opening SMS composer...",
       });
-      console.log("SMS Invoice - job converted, opening SMS");
-      // TODO: Open SMS modal with invoice link
+      setIsSMSComposerOpen(true);
+      console.log("SMS Invoice - opening SMS composer");
     } catch (error) {
       console.error("Error in handleSMSInvoice:", error);
     }
@@ -647,7 +659,7 @@ export function GlobalJobCard({
                     {(editingJob?.status === 'quote' || editingJob?.status === 'work_order') && (
                       <>
                         <DropdownMenuItem onClick={handleSendInvoice} data-testid="menu-send-invoice">
-                          <Send className="w-4 h-4 mr-2 text-green-600" />
+                          <Send className="w-4 h-4 mr-2" style={{color: 'hsl(var(--green))'}} />
                           <div>
                             <div className="font-medium">Send Invoice</div>
                             <div className="text-sm text-muted-foreground">Draft an email to send the invoice.</div>
@@ -655,7 +667,7 @@ export function GlobalJobCard({
                         </DropdownMenuItem>
                         
                         <DropdownMenuItem onClick={handleSMSInvoice} data-testid="menu-sms-invoice">
-                          <MessageSquare className="w-4 h-4 mr-2 text-blue-600" />
+                          <MessageSquare className="w-4 h-4 mr-2" style={{color: 'hsl(var(--purple))'}} />
                           <div>
                             <div className="font-medium">SMS Invoice</div>
                             <div className="text-sm text-muted-foreground">Draft a text to send the invoice.</div>
@@ -663,7 +675,7 @@ export function GlobalJobCard({
                         </DropdownMenuItem>
                         
                         <DropdownMenuItem onClick={handleAutoInvoice} data-testid="menu-auto-invoice">
-                          <Zap className="w-4 h-4 mr-2 text-green-600" />
+                          <Zap className="w-4 h-4 mr-2" style={{color: 'hsl(var(--yellow))'}} />
                           <div>
                             <div className="font-medium">Auto Invoice</div>
                             <div className="text-sm text-muted-foreground">Auto-draft an invoice description and items/services to charge for.</div>
@@ -671,7 +683,7 @@ export function GlobalJobCard({
                         </DropdownMenuItem>
                         
                         <DropdownMenuItem onClick={handlePartialInvoice} data-testid="menu-partial-invoice">
-                          <Percent className="w-4 h-4 mr-2 text-orange-600" />
+                          <Percent className="w-4 h-4 mr-2" style={{color: 'hsl(var(--orange))'}} />
                           <div>
                             <div className="font-medium">Partial Invoice</div>
                             <div className="text-sm text-muted-foreground">Create a Partial or Progress Invoice for this job.</div>
@@ -679,7 +691,7 @@ export function GlobalJobCard({
                         </DropdownMenuItem>
                         
                         <DropdownMenuItem onClick={handleCustomiseInvoice} data-testid="menu-customise-invoice">
-                          <Settings className="w-4 h-4 mr-2 text-gray-600" />
+                          <Settings className="w-4 h-4 mr-2" style={{color: 'hsl(var(--teal))'}} />
                           <div>
                             <div className="font-medium">Customise Invoice</div>
                             <div className="text-sm text-muted-foreground">Edit the invoice's template and settings.</div>
@@ -692,7 +704,7 @@ export function GlobalJobCard({
                     
                     {/* Payment and Xero options - show for all statuses */}
                     <DropdownMenuItem onClick={handleAddPayment} data-testid="menu-add-payment">
-                      <CreditCard className="w-4 h-4 mr-2 text-blue-600" />
+                      <CreditCard className="w-4 h-4 mr-2" style={{color: 'hsl(var(--blue))'}} />
                       <div>
                         <div className="font-medium">Add Payment</div>
                         <div className="text-sm text-muted-foreground">Record an invoice payment.</div>
@@ -1353,6 +1365,15 @@ export function GlobalJobCard({
       <EmailComposerModal
         isOpen={isEmailComposerOpen}
         onClose={() => setIsEmailComposerOpen(false)}
+        job={editingJob}
+        customer={customers.find((c: any) => c.id === editingJob?.customerId)}
+        invoiceData={currentInvoiceData}
+      />
+
+      {/* SMS Composer Modal */}
+      <SMSComposerModal
+        isOpen={isSMSComposerOpen}
+        onClose={() => setIsSMSComposerOpen(false)}
         job={editingJob}
         customer={customers.find((c: any) => c.id === editingJob?.customerId)}
         invoiceData={currentInvoiceData}
