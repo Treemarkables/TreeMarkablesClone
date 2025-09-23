@@ -3,12 +3,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock } from "lucide-react";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { StaffTimeManager } from "./StaffTimeManager";
 import { ExpenseManager } from "./ExpenseManager";
 import { GrossMarginCalculator } from "./GrossMarginCalculator";
+import { ServiceM8TimeRecordingModal } from "./ServiceM8TimeRecordingModal";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -96,6 +97,7 @@ export function GlobalJobCard({
   // Margin tracker dialog states
   const [isStaffTimeDialogOpen, setIsStaffTimeDialogOpen] = useState(false);
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
+  const [isServiceM8TimeModalOpen, setIsServiceM8TimeModalOpen] = useState(false);
 
   // Fetch customers for the dropdown
   const { data: customersData } = useQuery({
@@ -1210,6 +1212,24 @@ export function GlobalJobCard({
                         <p className="text-sm text-gray-500">Real-time cost tracking and margin analysis</p>
                       </div>
                       
+                      {/* ServiceM8-Style Time Recording */}
+                      <div className="mb-6">
+                        <div className="flex justify-between items-center mb-4">
+                          <div>
+                            <h4 className="text-md font-semibold text-gray-900">Daily Time Entry</h4>
+                            <p className="text-sm text-gray-500">ServiceM8-style time tracking with efficiency calculations</p>
+                          </div>
+                          <Button 
+                            onClick={() => setIsServiceM8TimeModalOpen(true)}
+                            className="bg-amber-500 hover:bg-amber-600 text-white"
+                            data-testid="button-servicem8-time-entry"
+                          >
+                            <Clock className="w-4 h-4 mr-2" />
+                            Record Time
+                          </Button>
+                        </div>
+                      </div>
+
                       {/* Staff Time and Expense Management */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <StaffTimeManager 
@@ -1286,6 +1306,16 @@ export function GlobalJobCard({
         customerId={form.watch("customerId") || customerId}
         mode="create"
       />
+      
+      {/* ServiceM8-Style Time Recording Modal */}
+      {jobId && (
+        <ServiceM8TimeRecordingModal
+          isOpen={isServiceM8TimeModalOpen}
+          onClose={() => setIsServiceM8TimeModalOpen(false)}
+          jobId={jobId}
+          jobNumber={editingJob?.jobNumber || `#${jobId.slice(-4)}`}
+        />
+      )}
     </Dialog>
   );
 }
