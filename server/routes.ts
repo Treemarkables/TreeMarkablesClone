@@ -40,6 +40,8 @@ import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
 import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
+import { smsService } from "./services/smsService";
+import { emailService } from "./services/emailService";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -4114,6 +4116,107 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error creating communication:', error);
       res.status(500).json({ success: false, message: 'Error creating communication' });
+    }
+  });
+
+  // Send SMS from diary
+  app.post('/api/communications/sms', async (req: Request, res: Response) => {
+    try {
+      const { to, message, jobId, customerId } = req.body;
+      
+      if (!to || !message) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Phone number and message are required' 
+        });
+      }
+
+      console.log('📱 Sending SMS via diary:', { to, message: message.substring(0, 50) + '...' });
+      
+      // Send SMS using the service
+      const success = await smsService.sendSMS({ to, message });
+      
+      if (success) {
+        // Create diary entry for sent SMS
+        const diaryEntry = await storage.createDiaryEntry({
+          jobId,
+          entryType: 'sms',
+          content: message,
+          metadata: {
+            recipient: to,
+            status: 'sent',
+            timestamp: new Date().toISOString()
+          }
+        });
+        
+        res.json({ 
+          success: true, 
+          message: 'SMS sent successfully',
+          diaryEntry 
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: 'Failed to send SMS' 
+        });
+      }
+    } catch (error) {
+      console.error('Error sending SMS:', error);
+      res.status(500).json({ success: false, message: 'Error sending SMS' });
+    }
+  });
+
+  // Send email from diary  
+  app.post('/api/communications/email', async (req: Request, res: Response) => {
+    try {
+      const { to, subject, message, jobId, customerId } = req.body;
+      
+      if (!to || !subject || !message) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Email address, subject, and message are required' 
+        });
+      }
+
+      console.log('📧 Sending email via diary:', { to, subject });
+      
+      // Send email using the service
+      const success = await emailService.sendEmail({
+        to,
+        from: 'noreply@treemarkables.co.nz',
+        subject,
+        text: message,
+        html: `<p>${message.replace(/\n/g, '<br>')}</p>`
+      });
+      
+      if (success) {
+        // Create diary entry for sent email
+        const diaryEntry = await storage.createDiaryEntry({
+          jobId,
+          entryType: 'email',
+          content: `Subject: ${subject}\n\n${message}`,
+          metadata: {
+            recipient: to,
+            subject,
+            status: 'sent',
+            timestamp: new Date().toISOString()
+          }
+        });
+        
+        res.json({ 
+          success: true, 
+          message: 'Email sent successfully',
+          diaryEntry 
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: 'Failed to send email' 
+        });
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      res.status(500).json({ success: false, message: 'Error sending email' });
     }
   });
 
