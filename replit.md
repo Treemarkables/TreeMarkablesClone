@@ -52,7 +52,7 @@ Preferred communication style: Simple, everyday language.
 - **Photo Documentation**: Job documentation, before/after photos, and visual progress tracking
 - **Safety Reporting**: Incident tracking, safety protocols, risk assessments, and compliance monitoring
 - **Route Optimization**: Efficient job routing, travel time calculation, and fuel cost optimization
-- **ServiceM8-Style Settings Interface**: Simplified settings management with clean grid layout featuring 8 essential business setting cards (Staff, Materials & Services, Job Categories, Company Info, Security & API, Notifications, Job Templates, Preferences) - removed complex enterprise features (addons, automations, external calendars, custom fields) for streamlined user experience with quick action shortcuts
+- **ServiceM8-Style Settings Interface**: Simplified settings management with clean grid layout featuring 8 essential business setting cards (Staff, Materials & Services, Job Categories, Company Info, Security & API, Notifications, Job Templates, Preferences) - removed complex enterprise features (addons, automations, external calendars, custom fields) for streamlined user experience with quick action shortcuts. All setting cards link to appropriate placeholder pages preventing 404 errors
 
 ## External Dependencies
 
