@@ -1,5 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
+import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
 import fs from "fs";
 import path from "path";
@@ -156,6 +158,12 @@ process.on('unhandledRejection', (reason, promise) => {
       log("Registering API routes...", "startup");
       server = await registerRoutes(app);
       log("API routes registered successfully", "startup");
+      
+      // Register time tracking routes
+      setupTimeTrackingRoutes(app);
+      
+      // Initialize time tracking sample data
+      await timeTrackingService.initializeSampleData();
     } catch (error) {
       const err = error as Error;
       log(`Failed to register routes: ${err.message}`, "error");
