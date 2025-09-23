@@ -93,6 +93,10 @@ export function GlobalJobCard({
   
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
+  
+  // Margin tracker dialog states
+  const [isStaffTimeDialogOpen, setIsStaffTimeDialogOpen] = useState(false);
+  const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
 
   // Fetch customers for the dropdown
   const { data: customersData } = useQuery({
@@ -843,8 +847,18 @@ export function GlobalJobCard({
                 
                 {/* Staff Time and Expense Management */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <StaffTimeManager jobId={jobId} compact={true} />
-                  <ExpenseManager jobId={jobId} compact={true} />
+                  <StaffTimeManager 
+                    jobId={jobId} 
+                    compact={true} 
+                    isAddDialogOpen={isStaffTimeDialogOpen}
+                    setIsAddDialogOpen={setIsStaffTimeDialogOpen}
+                  />
+                  <ExpenseManager 
+                    jobId={jobId} 
+                    compact={true} 
+                    isAddDialogOpen={isExpenseDialogOpen}
+                    setIsAddDialogOpen={setIsExpenseDialogOpen}
+                  />
                 </div>
                 
                 {/* Gross Margin Calculator */}
