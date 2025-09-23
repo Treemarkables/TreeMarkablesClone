@@ -43,31 +43,32 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   const queryClient = useQueryClient();
 
   // Fetch job data to get current gross margin information
-  const { data: job, isLoading } = useQuery({
-    queryKey: ['job', jobId],
-    queryFn: async () => {
-      const response = await fetch(`/api/jobs/${jobId}`);
-      if (!response.ok) throw new Error('Failed to fetch job data');
-      const result = await response.json();
-      return result.data;
-    },
+  const { data: jobResponse, isLoading } = useQuery({
+    queryKey: ['/api/jobs', jobId],
     enabled: !!jobId
   });
+  
+  const job = (jobResponse as any)?.data;
 
   // Fetch staff time entries to check if labor costs should be read-only
   const { data: staffTimeData } = useQuery({
-    queryKey: ['staff-time', jobId],
-    queryFn: async () => {
-      const response = await fetch(`/api/jobs/${jobId}/staff-time`);
-      if (!response.ok) throw new Error('Failed to fetch staff time entries');
-      return response.json();
-    },
+    queryKey: ['/api/jobs', jobId, 'staff-time'],
+    enabled: !!jobId
+  });
+  
+  // Fetch job expenses for complete cost calculation
+  const { data: expensesData } = useQuery({
+    queryKey: ['/api/jobs', jobId, 'expenses'],
     enabled: !!jobId
   });
 
-  const hasStaffTimeEntries = staffTimeData?.data?.length > 0;
-  const staffTimeEntries = staffTimeData?.data || [];
+  const hasStaffTimeEntries = (staffTimeData as any)?.data?.length > 0;
+  const staffTimeEntries = (staffTimeData as any)?.data || [];
   const staffTimeLaborCost = staffTimeEntries.reduce((sum: number, entry: any) => sum + (entry.hours * entry.rate), 0);
+  
+  // Get expenses data
+  const expenses = (expensesData as any)?.data || [];
+  const totalExpenses = expenses.reduce((sum: number, expense: any) => sum + expense.amount, 0);
 
   // Update form data when job data changes
   useEffect(() => {
@@ -93,8 +94,8 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       return await apiRequest('PUT', `/api/jobs/${jobId}/gross-margin`, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       toast({
         title: "Success",
         description: "Gross margin updated successfully"
@@ -115,7 +116,8 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   const materialsCosts = formData.materialsCosts || 0;
   const otherCosts = formData.otherCosts || 0;
   const costOfGoods = job?.costOfGoods ? parseFloat(job.costOfGoods) : 0;
-  const totalCosts = laborCosts + materialsCosts + otherCosts + costOfGoods;
+  // Include tracked expenses in total costs
+  const totalCosts = laborCosts + materialsCosts + otherCosts + costOfGoods + totalExpenses;
   const calculatedLaborCosts = (formData.laborHours || 0) * (formData.hourlyRate || 0);
   
   // Calculate gross margin in real-time
