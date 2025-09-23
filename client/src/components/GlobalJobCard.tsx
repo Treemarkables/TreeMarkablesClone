@@ -810,13 +810,22 @@ export function GlobalJobCard({
           
             {/* Right column - Job Diary (40%) */}
             <div className="w-2/5 flex flex-col">
-              <JobDiarySection 
-                jobId={jobId || ""}
-                customerId={form.getValues("customerId") || customerId}
-                customerEmail={selectedCustomer?.email}
-                customerPhone={selectedCustomer?.phone}
-                className="flex-1"
-              />
+              {jobId ? (
+                <JobDiarySection 
+                  jobId={jobId}
+                  customerId={form.getValues("customerId") || customerId}
+                  customerEmail={selectedCustomer?.email}
+                  customerPhone={selectedCustomer?.phone}
+                  className="flex-1"
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center p-4 text-muted-foreground">
+                  <div className="text-center">
+                    <div className="text-sm">Job Diary</div>
+                    <div className="text-xs mt-1">Available after job is created</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>

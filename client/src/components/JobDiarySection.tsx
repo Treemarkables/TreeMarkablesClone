@@ -110,16 +110,11 @@ export function JobDiarySection({
   const { data: diaryEntries = [], isLoading } = useQuery({
     queryKey: ['/api/jobs', jobId, 'diary-timeline'],
     queryFn: async (): Promise<DiaryEntry[]> => {
-      console.log('🔍 Fetching diary timeline for job:', jobId);
       const [diaryResponse, communicationsResponse, proposalsResponse] = await Promise.all([
         apiRequest('GET', `/api/jobs/${jobId}/diary`),
         apiRequest('GET', `/api/communications?jobId=${jobId}`),
         apiRequest('GET', `/api/proposals?jobId=${jobId}`)
       ]);
-      
-      console.log('📋 Raw diary response:', diaryResponse);
-      console.log('📞 Raw communications response:', communicationsResponse);
-      console.log('📄 Raw proposals response:', proposalsResponse);
       
       const entries: DiaryEntry[] = [];
       
@@ -181,10 +176,7 @@ export function JobDiarySection({
       }
       
       // Sort by timestamp (newest first)
-      const sortedEntries = entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      console.log('✅ Final processed entries:', sortedEntries);
-      console.log('📊 Entry count:', sortedEntries.length);
-      return sortedEntries;
+      return entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     },
   });
 
@@ -351,9 +343,7 @@ export function JobDiarySection({
           </div>
         ) : diaryEntries.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <div className="text-sm text-muted-foreground">
-              No diary entries yet (Debug: jobId={jobId}, entries.length={diaryEntries.length})
-            </div>
+            <div className="text-sm text-muted-foreground">No diary entries yet</div>
           </div>
         ) : (
           <div className="space-y-4">
