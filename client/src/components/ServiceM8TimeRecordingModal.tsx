@@ -309,16 +309,6 @@ export function ServiceM8TimeRecordingModal({
     setTimeEntries(prev => prev.filter(entry => entry.id !== entryId));
   };
 
-  // Auto-populate rate when employee changes
-  const handleEmployeeChange = (employeeId: string) => {
-    entryForm.setValue("employeeId", employeeId);
-    
-    // TODO: Fetch rate from staff rates table based on employee and job service type
-    const employee = employees.find((e: any) => e.id === employeeId);
-    if (employee && employee.hourlyRate) {
-      entryForm.setValue("rate", employee.hourlyRate.toString());
-    }
-  };
 
   // Save all entries
   const saveMutation = useMutation({
@@ -478,36 +468,112 @@ export function ServiceM8TimeRecordingModal({
             <div className="mb-6 p-4 border rounded-lg bg-gray-50">
               <Form {...entryForm}>
                 <form onSubmit={entryForm.handleSubmit(handleAddEntry)} className="space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <FormField
-                      control={entryForm.control}
-                      name="employeeId"
-                      render={({ field }) => (
+                  
+                  {/* Multi-Staff Selection */}
+                  <FormField
+                    control={entryForm.control}
+                    name="selectedStaff"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel className="text-base font-semibold">Select Staff Members</FormLabel>
+                        <div className="grid grid-cols-2 gap-3 mt-2">
+                          {((employeesData as any)?.data || employeesData || []).map((employee: any) => (
+                            <FormField
+                              key={employee.id}
+                              control={entryForm.control}
+                              name="selectedStaff"
+                              render={({ field }) => {
+                                return (
+                                  <FormItem
+                                    key={employee.id}
+                                    className="flex flex-row items-start space-x-3 space-y-0"
+                                  >
+                                    <FormControl>
+                                      <Checkbox
+                                        checked={field.value?.includes(employee.id)}
+                                        onCheckedChange={(checked) => {
+                                          const current = field.value || [];
+                                          if (checked) {
+                                            field.onChange([...current, employee.id]);
+                                          } else {
+                                            field.onChange(current.filter((id: string) => id !== employee.id));
+                                          }
+                                        }}
+                                        data-testid={`checkbox-staff-${employee.id}`}
+                                      />
+                                    </FormControl>
+                                    <div className="space-y-1">
+                                      <FormLabel className="text-sm font-normal cursor-pointer">
+                                        {employee.firstName} {employee.lastName}
+                                      </FormLabel>
+                                      <p className="text-xs text-gray-500">
+                                        {employee.skills?.slice(0, 2).join(", ")} {employee.skills?.length > 2 && "..."}
+                                      </p>
+                                    </div>
+                                  </FormItem>
+                                );
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Service Selection (filtered by staff skills) */}
+                  <FormField
+                    control={entryForm.control}
+                    name="serviceType"
+                    render={({ field }) => {
+                      const selectedStaff = entryForm.watch("selectedStaff") || [];
+                      const availableServices = getAvailableServices(selectedStaff);
+                      
+                      return (
                         <FormItem>
-                          <FormLabel>Staff Member</FormLabel>
-                          <Select onValueChange={handleEmployeeChange} value={field.value}>
+                          <FormLabel>Service Type</FormLabel>
+                          <Select 
+                            onValueChange={(value) => {
+                              const service = serviceOptions.find(s => s.type === value);
+                              field.onChange(value);
+                              entryForm.setValue("serviceName", service?.name || "");
+                            }} 
+                            value={field.value}
+                            disabled={selectedStaff.length === 0}
+                          >
                             <FormControl>
-                              <SelectTrigger data-testid="select-employee">
-                                <SelectValue placeholder="Select staff..." />
+                              <SelectTrigger data-testid="select-service">
+                                <SelectValue placeholder={
+                                  selectedStaff.length === 0 
+                                    ? "Select staff first..." 
+                                    : "Select service..."
+                                } />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {employees.map((employee: any) => (
+                              {availableServices.map((service) => (
                                 <SelectItem 
-                                  key={employee.id} 
-                                  value={employee.id}
-                                  data-testid={`select-employee-${employee.id}`}
+                                  key={service.id} 
+                                  value={service.type}
+                                  data-testid={`select-service-${service.id}`}
                                 >
-                                  {employee.name}
+                                  <div className="flex flex-col">
+                                    <span>{service.name}</span>
+                                    <span className="text-xs text-gray-500">
+                                      ${service.baseRate}/hr • Requires: {service.requiredSkills.join(", ")}
+                                    </span>
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                           <FormMessage />
                         </FormItem>
-                      )}
-                    />
+                      );
+                    }}
+                  />
 
+                  <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={entryForm.control}
                       name="hours"
@@ -521,26 +587,6 @@ export function ServiceM8TimeRecordingModal({
                               type="number" 
                               step="0.25"
                               data-testid="input-hours"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={entryForm.control}
-                      name="rate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Rate ($/hr)</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="45.00" 
-                              type="number" 
-                              step="0.01"
-                              data-testid="input-rate"
                             />
                           </FormControl>
                           <FormMessage />
