@@ -1243,14 +1243,8 @@ export function GlobalJobCard({
                         </div>
                       </div>
 
-                      {/* Staff Time and Expense Management */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <StaffTimeManager 
-                          jobId={jobId} 
-                          compact={true} 
-                          isAddDialogOpen={isStaffTimeDialogOpen}
-                          setIsAddDialogOpen={setIsStaffTimeDialogOpen}
-                        />
+                      {/* Expense Management */}
+                      <div className="grid grid-cols-1 gap-6">
                         <ExpenseManager 
                           jobId={jobId} 
                           compact={true} 
