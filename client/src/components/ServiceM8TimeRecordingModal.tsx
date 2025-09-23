@@ -509,7 +509,7 @@ export function ServiceM8TimeRecordingModal({
                 {/* Available Staff Selection */}
                 {selectedStaffIds.length === 0 && (
                   <div>
-                    <FormLabel className="text-base font-semibold">Select Staff Members</FormLabel>
+                    <div className="text-base font-semibold">Select Staff Members</div>
                     <div className="grid grid-cols-2 gap-3 mt-2">
                       {employees.map((employee: any) => (
                         <Button
@@ -720,7 +720,7 @@ export function ServiceM8TimeRecordingModal({
                     name="totalDayHours"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm">Total Day Hours</FormLabel>
+                        <label className="text-sm font-medium">Total Day Hours</label>
                         <FormControl>
                           <Input {...field} type="number" step="0.25" data-testid="input-total-hours" />
                         </FormControl>
@@ -733,7 +733,7 @@ export function ServiceM8TimeRecordingModal({
                     name="maintenanceHours"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm">Maintenance</FormLabel>
+                        <label className="text-sm font-medium">Maintenance</label>
                         <FormControl>
                           <Input {...field} type="number" step="0.25" data-testid="input-maintenance-hours" />
                         </FormControl>
@@ -746,7 +746,7 @@ export function ServiceM8TimeRecordingModal({
                     name="travelHours"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm">Travel</FormLabel>
+                        <label className="text-sm font-medium">Travel</label>
                         <FormControl>
                           <Input {...field} type="number" step="0.25" data-testid="input-travel-hours" />
                         </FormControl>
@@ -759,7 +759,7 @@ export function ServiceM8TimeRecordingModal({
                     name="adminHours"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm">Admin</FormLabel>
+                        <label className="text-sm font-medium">Admin</label>
                         <FormControl>
                           <Input {...field} type="number" step="0.25" data-testid="input-admin-hours" />
                         </FormControl>
@@ -820,7 +820,7 @@ export function ServiceM8TimeRecordingModal({
                 name="roundingMode"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">Rounding:</FormLabel>
+                    <label className="text-sm font-medium">Rounding:</label>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-rounding">
@@ -843,7 +843,7 @@ export function ServiceM8TimeRecordingModal({
                 name="travelTimeMode"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">Travel Time:</FormLabel>
+                    <label className="text-sm font-medium">Travel Time:</label>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-travel">
