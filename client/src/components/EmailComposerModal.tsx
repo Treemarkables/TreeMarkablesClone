@@ -97,7 +97,12 @@ export function EmailComposerModal({
   const queryClient = useQueryClient();
 
   // Fetch job photos for Smart Attachments
-  const { data: jobPhotos } = useQuery({
+  const { data: jobPhotos } = useQuery<{
+    success: boolean;
+    jobId: string;
+    beforePhotos: string[];
+    afterPhotos: string[];
+  }>({
     queryKey: ['/api/jobs', job?.id, 'photos'],
     enabled: !!job?.id && isOpen,
   });

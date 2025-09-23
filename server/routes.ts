@@ -1680,7 +1680,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
     try {
-      const { to, cc, subject, body, attachments, jobId, customerId, invoiceId } = req.body;
+      const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId } = req.body;
+      
+      console.log(`📧 Processing email to ${to} with ${selectedPhotos.length} selected photos`);
+      console.log('Selected photos:', selectedPhotos);
       
       // Validate required fields
       if (!to || !subject || !body) {
@@ -1705,22 +1708,70 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Prepare email content with any necessary formatting
       const emailHtml = body.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
       
+      // Process photo attachments
+      const emailAttachments = [];
+      if (selectedPhotos && selectedPhotos.length > 0) {
+        for (const photoUrl of selectedPhotos) {
+          try {
+            // Convert relative URL to absolute file path
+            const fileName = path.basename(photoUrl);
+            const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
+            
+            // Check if file exists
+            if (fs.existsSync(filePath)) {
+              // Read file and convert to base64
+              const fileContent = fs.readFileSync(filePath);
+              const base64Content = fileContent.toString('base64');
+              
+              // Determine file type
+              const fileExtension = path.extname(fileName).toLowerCase();
+              const mimeTypes: { [key: string]: string } = {
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.gif': 'image/gif',
+                '.webp': 'image/webp'
+              };
+              const mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
+              
+              emailAttachments.push({
+                content: base64Content,
+                filename: fileName,
+                type: mimeType,
+                disposition: 'attachment'
+              });
+              
+              console.log(`📎 Added photo attachment: ${fileName}`);
+            } else {
+              console.warn(`⚠️ Photo file not found: ${filePath}`);
+            }
+          } catch (photoError) {
+            console.error(`Error processing photo ${photoUrl}:`, photoError);
+          }
+        }
+      }
+      
       // Send email using the emailService
       const emailSent = await emailService.sendEmail({
         to: to,
         from: 'noreply@treemarkables.co.nz',
         subject: subject,
         text: body,
-        html: emailHtml
+        html: emailHtml,
+        ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
       if (emailSent) {
         // Log email activity (you could store this in database for audit trail)
-        console.log(`📧 Invoice email sent to ${to} for job ${job?.jobNumber || jobId}`);
+        console.log(`📧 Invoice email sent to ${to} for job ${job?.jobNumber || jobId}${
+          emailAttachments.length > 0 ? ` with ${emailAttachments.length} photo attachment(s)` : ''
+        }`);
         
         res.json({ 
           success: true, 
-          message: 'Email sent successfully' 
+          message: `Email sent successfully${
+            emailAttachments.length > 0 ? ` with ${emailAttachments.length} photo attachment(s)` : ''
+          }` 
         });
       } else {
         res.status(500).json({ 
