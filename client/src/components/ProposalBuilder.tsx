@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
-  Edit, Copy, Save
+  Edit, Copy, Save, FolderPlus, GripVertical
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-// Removed tabs import for single-page layout
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
@@ -33,7 +32,7 @@ const proposalFormSchema = insertProposalSchema.extend({
   validUntil: z.string().optional(), // UI field that maps to expiryDays
 }).omit({ createdAt: true, updatedAt: true, expiryDays: true }).partial();
 
-// Simplified line item form schema (avoiding complex shared schema for now)
+// Simplified line item form schema
 const lineItemFormSchema = z.object({
   description: z.string().min(1, "Description is required"),
   quantity: z.preprocess((val) => parseFloat(val as string) || 0, z.number().min(0.01, "Quantity must be positive")),
@@ -76,6 +75,15 @@ interface UploadedPhoto {
   capturedAt: string;
 }
 
+interface ProposalSectionData {
+  id: string;
+  title: string;
+  description: string;
+  photos: UploadedPhoto[];
+  lineItems: LineItem[];
+  sortOrder: number;
+}
+
 export function ProposalBuilder({ 
   isOpen, 
   onClose, 
@@ -103,12 +111,20 @@ export function ProposalBuilder({
     },
   });
 
-  // Component state
-  // Removed activeTab state - now using single-page layout
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
+  // Component state - sections-based approach
+  const [sections, setSections] = useState<ProposalSectionData[]>([
+    {
+      id: 'section-1',
+      title: 'Tree Removal Services',
+      description: '',
+      photos: [],
+      lineItems: [],
+      sortOrder: 1
+    }
+  ]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [activeSectionId, setActiveSectionId] = useState('section-1');
 
   // Line item form
   const [currentLineItem, setCurrentLineItem] = useState<Partial<LineItem>>({
@@ -120,6 +136,200 @@ export function ProposalBuilder({
     notes: "",
     isOptional: false,
   });
+
+  // Section management functions
+  const addNewSection = () => {
+    const newSection: ProposalSectionData = {
+      id: `section-${Date.now()}`,
+      title: `Section ${sections.length + 1}`,
+      description: '',
+      photos: [],
+      lineItems: [],
+      sortOrder: sections.length + 1
+    };
+    setSections(prev => [...prev, newSection]);
+    setActiveSectionId(newSection.id);
+    toast({
+      title: "Success",
+      description: "New section added",
+    });
+  };
+
+  const removeSection = (sectionId: string) => {
+    if (sections.length <= 1) {
+      toast({
+        title: "Cannot Remove",
+        description: "At least one section is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    const newSections = sections.filter(s => s.id !== sectionId);
+    setSections(newSections);
+    if (activeSectionId === sectionId) {
+      setActiveSectionId(newSections[0]?.id || "");
+    }
+    toast({
+      title: "Success",
+      description: "Section removed",
+    });
+  };
+
+  const updateSectionTitle = (sectionId: string, title: string) => {
+    setSections(prev => prev.map(section => 
+      section.id === sectionId ? { ...section, title } : section
+    ));
+  };
+
+  const updateSectionDescription = (sectionId: string, description: string) => {
+    setSections(prev => prev.map(section => 
+      section.id === sectionId ? { ...section, description } : section
+    ));
+  };
+
+  // Line item management functions
+  const addLineItemToSection = (sectionId: string) => {
+    if (!currentLineItem.description || !currentLineItem.quantity || !currentLineItem.unitPrice) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const totalPrice = (currentLineItem.quantity || 0) * (currentLineItem.unitPrice || 0);
+    const newItem: LineItem = {
+      id: `item-${Date.now()}`,
+      description: currentLineItem.description || "",
+      quantity: currentLineItem.quantity || 1,
+      unitPrice: currentLineItem.unitPrice || 0,
+      totalPrice,
+      unit: currentLineItem.unit || "each",
+      category: currentLineItem.category,
+      notes: currentLineItem.notes,
+      isOptional: currentLineItem.isOptional || false,
+      selected: true, // Auto-select new items
+    };
+
+    setSections(prev => prev.map(section => 
+      section.id === sectionId 
+        ? { ...section, lineItems: [...section.lineItems, newItem] }
+        : section
+    ));
+    
+    setCurrentLineItem({
+      description: "",
+      quantity: 1,
+      unitPrice: 0,
+      unit: "each",
+      category: "labor",
+      notes: "",
+      isOptional: false,
+    });
+
+    toast({
+      title: "Success",
+      description: "Line item added successfully",
+    });
+  };
+
+  const removeLineItem = (sectionId: string, itemId: string) => {
+    setSections(prev => prev.map(section => 
+      section.id === sectionId 
+        ? { ...section, lineItems: section.lineItems.filter(item => item.id !== itemId) }
+        : section
+    ));
+    toast({
+      title: "Success",
+      description: "Line item removed",
+    });
+  };
+
+  const toggleLineItemSelection = (sectionId: string, itemId: string) => {
+    setSections(prev => prev.map(section => 
+      section.id === sectionId 
+        ? {
+            ...section, 
+            lineItems: section.lineItems.map(item => 
+              item.id === itemId ? { ...item, selected: !item.selected } : item
+            )
+          }
+        : section
+    ));
+  };
+
+  // Calculate totals across all sections
+  const getAllSelectedLineItems = () => {
+    return sections.flatMap(section => section.lineItems.filter(item => item.selected));
+  };
+  
+  const selectedLineItems = getAllSelectedLineItems();
+  const subtotal = selectedLineItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  const taxAmount = subtotal * (form.watch("taxRate") || 0) / 100;
+  const grandTotal = subtotal + taxAmount;
+
+  // Update form total when sections change
+  useEffect(() => {
+    form.setValue("totalAmount", grandTotal);
+  }, [sections, form, grandTotal]);
+
+  // Photo management functions
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>, sectionId: string) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setPhotoUploading(true);
+
+    try {
+      if (jobId) {
+        // Upload to backend if we have a jobId
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+          formData.append('photos', files[i]);
+        }
+        formData.append('type', 'before'); // Fixed photo type
+        formData.append('category', 'documentation');
+
+        const uploadedPhotos = await uploadPhotoMutation.mutateAsync(formData);
+        
+        // Add photos to the specific section
+        setSections(prev => prev.map(section => 
+          section.id === sectionId 
+            ? { ...section, photos: [...section.photos, ...uploadedPhotos] }
+            : section
+        ));
+      } else {
+        // For proposals without jobId, create preview objects
+        const newPhotos: UploadedPhoto[] = Array.from(files).map((file, index) => ({
+          id: `temp-${Date.now()}-${index}`,
+          url: URL.createObjectURL(file),
+          filename: file.name,
+          type: 'before',
+          category: 'documentation',
+          capturedAt: new Date().toISOString(),
+        }));
+
+        setSections(prev => prev.map(section => 
+          section.id === sectionId 
+            ? { ...section, photos: [...section.photos, ...newPhotos] }
+            : section
+        ));
+      }
+    } catch (error) {
+      console.error('Photo upload error:', error);
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const removePhoto = (sectionId: string, photoId: string) => {
+    setSections(prev => prev.map(section => 
+      section.id === sectionId 
+        ? { ...section, photos: section.photos.filter(p => p.id !== photoId) }
+        : section
+    ));
+  };
 
   // Mutations
   const createProposalMutation = useMutation({
@@ -150,10 +360,9 @@ export function ProposalBuilder({
       if (!jobId) {
         throw new Error('Job ID required for photo upload');
       }
-      // Use fetch directly for file uploads to maintain FormData
       const response = await fetch(`/api/jobs/${jobId}/photos`, {
         method: 'POST',
-        body: formData, // Send FormData directly for multipart upload
+        body: formData,
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Upload failed' }));
@@ -162,763 +371,461 @@ export function ProposalBuilder({
       return response.json();
     },
     onSuccess: (data) => {
-      // Photos are added to state in handlePhotoUpload
       toast({
         title: "Success",
         description: "Photos uploaded successfully",
       });
-      // Invalidate photos query
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'photos'] });
     },
     onError: (error: any) => {
       toast({
-        title: "Upload Error", 
-        description: error.message || "Failed to upload photo",
+        title: "Upload Error",
+        description: error.message || "Failed to upload photos",
         variant: "destructive",
       });
     },
   });
-
-  // Delete photo mutation
-  const deletePhotoMutation = useMutation({
-    mutationFn: async ({ photoId, photoUrl }: { photoId: string; photoUrl: string }) => {
-      if (!jobId) {
-        throw new Error('Job ID required for photo deletion');
-      }
-      const response = await fetch(`/api/jobs/${jobId}/photos`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photoUrl, type: 'before' }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Delete failed' }));
-        throw new Error(errorData.message || 'Delete failed');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Photo deleted successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'photos'] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Delete Error",
-        description: error.message || "Failed to delete photo",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Handle photo deletion
-  const handleDeletePhoto = async (photoId: string, photoUrl: string) => {
-    try {
-      await deletePhotoMutation.mutateAsync({ photoId, photoUrl });
-      // Remove from local state
-      setUploadedPhotos(prev => prev.filter(p => p.id !== photoId));
-    } catch (error) {
-      console.error("Delete error:", error);
-    }
-  };
-  
-  // Load existing photos for the job
-  const { data: existingPhotos } = useQuery({
-    queryKey: ['/api/jobs', jobId, 'photos'],
-    enabled: !!jobId && isOpen,
-    select: (data) => data?.data?.beforePhotos || [],
-  });
-  
-  // Initialize photos when component opens or existing photos load
-  useEffect(() => {
-    if (existingPhotos && existingPhotos.length > 0) {
-      setUploadedPhotos(existingPhotos);
-    }
-  }, [existingPhotos]);
-
-  // Handle file upload
-  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    setPhotoUploading(true);
-    
-    // If no jobId, store photos locally until job is created
-    if (!jobId) {
-      try {
-        const newPhotos: UploadedPhoto[] = [];
-        
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          
-          // Validate file type and size
-          if (!file.type.startsWith('image/')) {
-            toast({
-              title: "Upload Error",
-              description: `${file.name} is not a valid image file`,
-              variant: "destructive",
-            });
-            continue;
-          }
-          
-          if (file.size > 10 * 1024 * 1024) { // 10MB limit
-            toast({
-              title: "Upload Error", 
-              description: `${file.name} is too large. Maximum size is 10MB`,
-              variant: "destructive",
-            });
-            continue;
-          }
-          
-          // Create local photo object with data URL for preview
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const localPhoto: UploadedPhoto = {
-              id: `temp_${Date.now()}_${i}`,
-              url: e.target?.result as string,
-              filename: file.name,
-              type: "before", // Use valid backend type
-              category: "documentation",
-              capturedAt: new Date().toISOString(),
-              notes: ""
-            };
-            newPhotos.push(localPhoto);
-            
-            // Add to state when all files are processed
-            if (newPhotos.length === files.length) {
-              setUploadedPhotos(prev => [...prev, ...newPhotos]);
-              toast({
-                title: "Success",
-                description: `${newPhotos.length} photo(s) added. They will be uploaded when the job is saved.`,
-              });
-            }
-          };
-          reader.readAsDataURL(file);
-        }
-      } catch (error) {
-        console.error("Local photo processing error:", error);
-        toast({
-          title: "Upload Error",
-          description: "Failed to process photos",
-          variant: "destructive",
-        });
-      } finally {
-        setPhotoUploading(false);
-        event.target.value = ""; // Reset file input
-      }
-      return;
-    }
-    
-    try {
-      const formData = new FormData();
-      
-      // Append all files with "photos" field name (backend expects this)
-      for (let i = 0; i < files.length; i++) {
-        formData.append("photos", files[i]);
-      }
-      
-      // Add metadata (backend expects "before" or "after")
-      formData.append("type", "before");
-      formData.append("category", "documentation");
-      formData.append("capturedBy", "User");
-      formData.append("capturedAt", new Date().toISOString());
-      
-      const result = await uploadPhotoMutation.mutateAsync(formData);
-      
-      // Add uploaded photos to state
-      if (result.data && Array.isArray(result.data)) {
-        setUploadedPhotos(prev => [...prev, ...result.data]);
-      } else if (result.data) {
-        setUploadedPhotos(prev => [...prev, result.data]);
-      }
-      
-    } catch (error) {
-      console.error("Upload error:", error);
-      // Error toast is handled by mutation onError
-    } finally {
-      setPhotoUploading(false);
-      event.target.value = ""; // Reset file input
-    }
-  };
-
-  // Add line item with validation
-  const addLineItem = () => {
-    // Validate line item using Zod schema
-    const validation = lineItemFormSchema.safeParse(currentLineItem);
-    if (!validation.success) {
-      toast({
-        title: "Validation Error",
-        description: validation.error.errors[0]?.message || "Please fill in all required fields",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const validatedItem = validation.data;
-
-    const totalPrice = validatedItem.quantity * validatedItem.unitPrice;
-    const newItem: LineItem = {
-      id: Math.random().toString(36).substr(2, 9),
-      description: validatedItem.description,
-      quantity: validatedItem.quantity,
-      unitPrice: validatedItem.unitPrice,
-      totalPrice,
-      unit: validatedItem.unit || "each",
-      category: validatedItem.category,
-      notes: validatedItem.notes,
-      isOptional: validatedItem.isOptional || false,
-      selected: lineItems.length === 0, // Auto-select if it's the first/only item
-    };
-
-    setLineItems(prev => [...prev, newItem]);
-    
-    // Reset form
-    setCurrentLineItem({
-      description: "",
-      quantity: 1,
-      unitPrice: 0,
-      unit: "each",
-      category: "labor",
-      notes: "",
-      isOptional: false,
-    });
-    
-    // Don't call updateTotal here - let useEffect handle it
-  };
-
-  // Remove line item
-  const removeLineItem = (id: string) => {
-    setLineItems(prev => prev.filter(item => item.id !== id));
-    // Don't call updateTotal here - let useEffect handle it
-  };
-
-  // Update total amount (only selected items)
-  const updateTotal = () => {
-    const subtotal = lineItems.reduce((sum, item) => 
-      item.selected ? sum + item.totalPrice : sum, 0);
-    const taxRate = form.getValues("taxRate") || 0;
-    const tax = subtotal * (taxRate / 100);
-    const total = subtotal + tax;
-    form.setValue("totalAmount", total);
-  };
-
-  // Toggle line item selection
-  const toggleLineItemSelection = (id: string) => {
-    setLineItems(prev => prev.map(item => 
-      item.id === id ? { ...item, selected: !item.selected } : item
-    ));
-  };
-
-  // Calculate totals (only for selected items)
-  const subtotal = lineItems.reduce((sum, item) => 
-    item.selected ? sum + item.totalPrice : sum, 0);
-  const taxAmount = subtotal * (form.watch("taxRate") || 0) / 100;
-  const grandTotal = subtotal + taxAmount;
 
   // Submit proposal
   const onSubmit = async (data: any) => {
-    // Map form data to backend schema
     const proposalData = {
       customerId: data.customerId || customerId,
+      jobId: data.jobId || jobId,
       title: data.title,
-      description: data.description || "",
-      deliveryMethod: data.deliveryMethod || "email",
-      expiryDays: data.validUntil ? Math.ceil((new Date(data.validUntil).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 30,
+      description: data.description,
+      totalAmount: grandTotal,
+      taxRate: data.taxRate,
+      status: 'draft',
+      deliveryMethod: data.deliveryMethod,
       notes: data.notes,
-      status: "draft",
-      subtotal: subtotal.toString(),
-      taxAmount: taxAmount.toString(), 
-      totalAmount: grandTotal.toString(),
-    };
-    
-    // Normalize line items for backend
-    const normalizedLineItems = lineItems.map(item => ({
-      sourceType: "fixed" as const,
-      description: item.description,
-      quantity: item.quantity.toString(),
-      unitPrice: item.unitPrice.toString(),
-      totalPrice: item.totalPrice.toString(),
-      unit: item.unit,
-      category: item.category,
-      notes: item.notes || "",
-      isOptional: item.isOptional,
-    }));
-
-    const payload = {
-      ...proposalData,
-      lineItems: normalizedLineItems,
-      photos: uploadedPhotos.map(photo => photo.id),
+      createdBy: 'system', // Replace with actual user
     };
 
-    await createProposalMutation.mutateAsync(payload);
+    await createProposalMutation.mutateAsync(proposalData);
   };
 
-  useEffect(() => {
-    updateTotal();
-  }, [lineItems, form.watch("taxRate")]);
+  if (!isOpen) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
-        <DialogHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 -m-6 mb-6 rounded-t-lg">
+      <DialogContent className="max-w-5xl h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0 pb-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                <FileText className="w-4 h-4" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg font-semibold">
-                  {mode === "create" ? "Create Proposal" : "Edit Proposal"}
-                </DialogTitle>
-                <p className="text-orange-100 text-sm">
-                  Build a professional proposal with photos and line items
-                </p>
-              </div>
+            <div>
+              <DialogTitle className="text-2xl font-bold text-primary">
+                {mode === "edit" ? "Edit Proposal" : "Create Proposal"}
+              </DialogTitle>
+              <p className="text-muted-foreground">
+                Build your professional proposal with multiple sections
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                onClick={() => {/* TODO: Preview */}}
-                data-testid="button-preview-proposal"
-              >
-                <Eye className="w-4 h-4 mr-1" />
-                Preview
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="text-white hover:bg-white/10"
-                data-testid="button-close-proposal"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onClose}
+              data-testid="button-close-proposal"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         </DialogHeader>
 
-        {/* ServiceM8-style Single Page Layout */}
-        <div className="space-y-6">
-
+        <div className="flex-1 overflow-auto">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              
               {/* Proposal Information Section */}
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Proposal Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="title"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Proposal Title *</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Tree Removal Service Proposal" data-testid="input-proposal-title" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="validUntil"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Valid Until</FormLabel>
-                            <FormControl>
-                              <Input {...field} type="date" data-testid="input-valid-until" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    
+              <Card>
+                <CardHeader>
+                  <CardTitle>Proposal Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name="description"
+                      name="title"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Description</FormLabel>
+                          <FormLabel>Proposal Title</FormLabel>
                           <FormControl>
-                            <Textarea 
+                            <Input 
+                              placeholder="Tree Removal Proposal"
+                              data-testid="input-proposal-title"
                               {...field} 
-                              placeholder="Describe the work to be performed..."
-                              rows={4}
-                              data-testid="textarea-proposal-description"
                             />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Photos Section */}
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle>Proposal Photos</CardTitle>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          onChange={handlePhotoUpload}
-                          className="hidden"
-                          id="photo-upload"
-                          data-testid="input-photo-upload"
-                        />
-                        <Button
-                          type="button"
-                          onClick={() => document.getElementById("photo-upload")?.click()}
-                          disabled={photoUploading}
-                          data-testid="button-upload-photos"
-                        >
-                          <Upload className="w-4 h-4 mr-2" />
-                          {photoUploading ? "Uploading..." : "Upload Photos"}
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {uploadedPhotos.length === 0 ? (
-                      <div className="text-center py-8 border-2 border-dashed rounded-lg">
-                        <Image className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                        <p className="text-gray-500">No photos uploaded yet</p>
-                        <p className="text-sm text-gray-400">Click "Upload Photos" to add images</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {uploadedPhotos.map((photo) => (
-                          <div key={photo.id} className="relative group">
-                            <img
-                              src={photo.url}
-                              alt={photo.filename}
-                              className="w-full h-32 object-cover rounded-lg"
+                    
+                    <FormField
+                      control={form.control}
+                      name="validUntil"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Valid Until</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="date"
+                              data-testid="input-valid-until"
+                              {...field} 
                             />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleDeletePhoto(photo.id, photo.url)}
-                                data-testid={`button-delete-photo-${photo.id}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                            <Badge className="absolute top-2 left-2 text-xs">
-                              {photo.type}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Proposal Description</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Brief overview of the proposal..."
+                            className="min-h-[100px]"
+                            data-testid="textarea-proposal-description"
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </CardContent>
-                </Card>
-              </div>
+                  />
 
-              {/* Line Items Section */}
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Add Line Item</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium">Description *</label>
-                        <Input
-                          value={currentLineItem.description}
-                          onChange={(e) => setCurrentLineItem(prev => ({...prev, description: e.target.value}))}
-                          placeholder="e.g., Oak tree removal"
-                          data-testid="input-line-item-description"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Category</label>
-                        <Select 
-                          value={currentLineItem.category} 
-                          onValueChange={(value) => setCurrentLineItem(prev => ({...prev, category: value}))}
-                        >
-                          <SelectTrigger data-testid="select-line-item-category">
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="labor">Labor</SelectItem>
-                            <SelectItem value="materials">Materials</SelectItem>
-                            <SelectItem value="equipment">Equipment</SelectItem>
-                            <SelectItem value="permits">Permits</SelectItem>
-                            <SelectItem value="disposal">Disposal</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 gap-4">
-                      <div>
-                        <label className="text-sm font-medium">Quantity *</label>
-                        <Input
-                          type="number"
-                          value={currentLineItem.quantity}
-                          onChange={(e) => setCurrentLineItem(prev => ({...prev, quantity: e.target.value}))}
-                          min="0.01"
-                          step="0.01"
-                          data-testid="input-line-item-quantity"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Unit</label>
-                        <Select 
-                          value={currentLineItem.unit} 
-                          onValueChange={(value) => setCurrentLineItem(prev => ({...prev, unit: value}))}
-                        >
-                          <SelectTrigger data-testid="select-line-item-unit">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="each">Each</SelectItem>
-                            <SelectItem value="hours">Hours</SelectItem>
-                            <SelectItem value="m2">Square meters</SelectItem>
-                            <SelectItem value="linear_m">Linear meters</SelectItem>
-                            <SelectItem value="kg">Kilograms</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Unit Price *</label>
-                        <Input
-                          type="number"
-                          value={currentLineItem.unitPrice}
-                          onChange={(e) => setCurrentLineItem(prev => ({...prev, unitPrice: e.target.value}))}
-                          min="0"
-                          step="0.01"
-                          data-testid="input-line-item-price"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Total</label>
-                        <Input
-                          value={`$${((currentLineItem.quantity || 0) * (currentLineItem.unitPrice || 0)).toFixed(2)}`}
-                          disabled
-                          data-testid="input-line-item-total"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium">Notes</label>
-                      <Textarea
-                        value={currentLineItem.notes}
-                        onChange={(e) => setCurrentLineItem(prev => ({...prev, notes: e.target.value}))}
-                        placeholder="Additional notes for this item..."
-                        rows={2}
-                        data-testid="textarea-line-item-notes"
-                      />
-                    </div>
-                    
-                    <Button 
-                      type="button" 
-                      onClick={addLineItem}
-                      data-testid="button-add-line-item"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Line Item
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                {/* Line Items List */}
-                {lineItems.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Line Items ({lineItems.length})</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {lineItems.map((item) => (
-                          <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                            {/* Selection Checkbox */}
-                            <Checkbox
-                              checked={item.selected}
-                              onCheckedChange={() => toggleLineItemSelection(item.id!)}
-                              data-testid={`checkbox-line-item-${item.id}`}
-                              className="mt-1"
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="taxRate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tax Rate (%)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              data-testid="input-tax-rate"
+                              {...field} 
                             />
-                            
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{item.description}</span>
-                                {item.category && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {item.category}
-                                  </Badge>
-                                )}
-                                {item.isOptional && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Optional
-                                  </Badge>
-                                )}
-                                {item.selected && (
-                                  <Badge variant="default" className="text-xs bg-green-500">
-                                    Selected
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="text-sm text-gray-600">
-                                {item.quantity} {item.unit} × ${item.unitPrice.toFixed(2)} = ${item.totalPrice.toFixed(2)}
-                              </div>
-                              {item.notes && (
-                                <div className="text-xs text-gray-500 mt-1">{item.notes}</div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="deliveryMethod"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Delivery Method</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-delivery-method">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="email">Email</SelectItem>
+                              <SelectItem value="print">Print</SelectItem>
+                              <SelectItem value="portal">Customer Portal</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Sections Management */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Proposal Sections</CardTitle>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addNewSection}
+                      data-testid="button-add-section"
+                    >
+                      <FolderPlus className="h-4 w-4 mr-2" />
+                      Add Section
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {sections.map((section) => (
+                      <Card key={section.id} className="border-l-4 border-l-primary">
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <Input
+                              value={section.title}
+                              onChange={(e) => updateSectionTitle(section.id, e.target.value)}
+                              className="font-semibold text-lg border-none p-0 focus-visible:ring-0"
+                              placeholder="Section title..."
+                              data-testid={`input-section-title-${section.id}`}
+                            />
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">
+                                {section.lineItems.length} items
+                              </Badge>
+                              {sections.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeSection(section.id)}
+                                  data-testid={`button-remove-section-${section.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               )}
                             </div>
-                            
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => removeLineItem(item.id!)}
-                              data-testid={`button-remove-line-item-${item.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
                           </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+                        </CardHeader>
+                        
+                        <CardContent className="space-y-6">
+                          {/* Section Description */}
+                          <div>
+                            <label className="text-sm font-medium mb-2 block">Description</label>
+                            <Textarea
+                              value={section.description}
+                              onChange={(e) => updateSectionDescription(section.id, e.target.value)}
+                              placeholder="Describe this section of work..."
+                              className="min-h-[80px]"
+                              data-testid={`textarea-section-description-${section.id}`}
+                            />
+                          </div>
+
+                          {/* Section Photos */}
+                          <div>
+                            <div className="flex items-center justify-between mb-4">
+                              <label className="text-sm font-medium">Photos</label>
+                              <div>
+                                <input
+                                  type="file"
+                                  multiple
+                                  accept="image/*"
+                                  onChange={(e) => handlePhotoUpload(e, section.id)}
+                                  className="hidden"
+                                  id={`photo-upload-${section.id}`}
+                                />
+                                <label htmlFor={`photo-upload-${section.id}`}>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={photoUploading}
+                                    data-testid={`button-upload-photo-${section.id}`}
+                                    asChild
+                                  >
+                                    <span>
+                                      <Camera className="h-4 w-4 mr-2" />
+                                      {photoUploading ? "Uploading..." : "Add Photos"}
+                                    </span>
+                                  </Button>
+                                </label>
+                              </div>
+                            </div>
+
+                            {section.photos.length > 0 && (
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {section.photos.map((photo) => (
+                                  <div key={photo.id} className="relative group">
+                                    <img
+                                      src={photo.url}
+                                      alt={photo.filename}
+                                      className="w-full h-24 object-cover rounded-lg border"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="icon"
+                                      className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={() => removePhoto(section.id, photo.id)}
+                                      data-testid={`button-remove-photo-${photo.id}`}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Section Line Items */}
+                          <div>
+                            <div className="flex items-center justify-between mb-4">
+                              <label className="text-sm font-medium">Line Items</label>
+                            </div>
+
+                            {/* Add Line Item Form */}
+                            <Card className="mb-4">
+                              <CardHeader>
+                                <CardTitle className="text-base">Add Line Item</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                  <Input
+                                    placeholder="Description"
+                                    value={currentLineItem.description || ""}
+                                    onChange={(e) => setCurrentLineItem(prev => ({ ...prev, description: e.target.value }))}
+                                    data-testid={`input-line-item-description-${section.id}`}
+                                  />
+                                  <Input
+                                    type="number"
+                                    placeholder="Quantity"
+                                    value={currentLineItem.quantity || ""}
+                                    onChange={(e) => setCurrentLineItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                                    data-testid={`input-line-item-quantity-${section.id}`}
+                                  />
+                                  <Input
+                                    type="number"
+                                    placeholder="Unit Price"
+                                    value={currentLineItem.unitPrice || ""}
+                                    onChange={(e) => setCurrentLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
+                                    data-testid={`input-line-item-price-${section.id}`}
+                                  />
+                                </div>
+                                <Button
+                                  type="button"
+                                  onClick={() => addLineItemToSection(section.id)}
+                                  data-testid={`button-add-line-item-${section.id}`}
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add Item
+                                </Button>
+                              </CardContent>
+                            </Card>
+
+                            {/* Line Items List */}
+                            {section.lineItems.length > 0 && (
+                              <div className="space-y-2">
+                                {section.lineItems.map((item) => (
+                                  <Card key={item.id} className="border-l-2 border-l-muted">
+                                    <CardContent className="p-4">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3 flex-1">
+                                          <Checkbox
+                                            checked={item.selected}
+                                            onCheckedChange={() => toggleLineItemSelection(section.id, item.id!)}
+                                            data-testid={`checkbox-line-item-${item.id}`}
+                                          />
+                                          <div className="flex-1">
+                                            <div className="font-medium">{item.description}</div>
+                                            <div className="text-sm text-muted-foreground">
+                                              {item.quantity} × ${item.unitPrice.toFixed(2)} = ${item.totalPrice.toFixed(2)}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => removeLineItem(section.id, item.id!)}
+                                          data-testid={`button-remove-line-item-${item.id}`}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* Summary Section */}
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Cost Summary */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Cost Summary</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {lineItems.length > 0 && (
-                        <div className="text-xs text-gray-500 mb-3 p-2 bg-gray-50 rounded">
-                          💡 Only selected line items are included in pricing. 
-                          {lineItems.filter(item => item.selected).length === 0 && " Select items to see pricing."}
-                          {lineItems.filter(item => item.selected).length > 0 && ` (${lineItems.filter(item => item.selected).length} of ${lineItems.length} items selected)`}
-                        </div>
-                      )}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Proposal Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Cost Summary */}
+                    <div className="space-y-4">
                       <div className="flex justify-between">
                         <span>Subtotal:</span>
-                        <span>${subtotal.toFixed(2)}</span>
+                        <span className="font-semibold" data-testid="text-subtotal">
+                          ${subtotal.toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Tax ({form.watch("taxRate") || 0}%):</span>
-                        <span>${taxAmount.toFixed(2)}</span>
+                        <span className="font-semibold" data-testid="text-tax">
+                          ${taxAmount.toFixed(2)}
+                        </span>
                       </div>
                       <Separator />
-                      <div className="flex justify-between font-semibold text-lg">
+                      <div className="flex justify-between text-lg font-bold">
                         <span>Total:</span>
-                        <span>${grandTotal.toFixed(2)}</span>
+                        <span className="text-primary" data-testid="text-total">
+                          ${grandTotal.toFixed(2)}
+                        </span>
                       </div>
-                      
-                      <div className="mt-4">
-                        <FormField
-                          control={form.control}
-                          name="taxRate"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Tax Rate (%)</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  {...field} 
-                                  type="number" 
-                                  min="0" 
-                                  max="100" 
-                                  step="0.1"
-                                  onChange={(e) => field.onChange(e.target.value)}
-                                  data-testid="input-tax-rate"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
+                    </div>
 
-                  {/* Additional Information */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Additional Information</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <FormField
-                        control={form.control}
-                        name="notes"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Proposal Notes</FormLabel>
-                            <FormControl>
-                              <Textarea 
-                                {...field} 
-                                placeholder="Terms and conditions, payment details, etc..."
-                                rows={6}
-                                data-testid="textarea-proposal-notes"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
+                    {/* Selected Items Summary */}
+                    <div>
+                      <h4 className="font-semibold mb-2">Selected Items ({selectedLineItems.length})</h4>
+                      <div className="max-h-40 overflow-y-auto space-y-1">
+                        {selectedLineItems.map((item) => (
+                          <div key={item.id} className="text-sm flex justify-between">
+                            <span className="truncate">{item.description}</span>
+                            <span>${item.totalPrice.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* Form Actions */}
-              <div className="flex justify-between items-center pt-6 border-t">
-                <div className="text-sm text-gray-600">
-                  {lineItems.length} line items • {uploadedPhotos.length} photos
-                </div>
-                <div className="flex gap-3">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={onClose}
-                    data-testid="button-cancel-proposal"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline"
-                    onClick={() => {/* TODO: Save as draft */}}
-                    data-testid="button-save-draft"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Draft
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={createProposalMutation.isPending || lineItems.length === 0}
-                    data-testid="button-create-proposal"
-                  >
-                    {createProposalMutation.isPending ? "Creating..." : mode === "create" ? "Create Proposal" : "Update Proposal"}
-                  </Button>
-                </div>
+              <div className="flex justify-end space-x-4 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onClose}
+                  data-testid="button-cancel-proposal"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createProposalMutation.isPending}
+                  data-testid="button-save-proposal"
+                >
+                  {createProposalMutation.isPending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      {mode === "edit" ? "Update Proposal" : "Create Proposal"}
+                    </>
+                  )}
+                </Button>
               </div>
+
             </form>
           </Form>
         </div>
