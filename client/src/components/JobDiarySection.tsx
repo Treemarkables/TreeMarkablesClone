@@ -123,13 +123,17 @@ export function JobDiarySection({
         diaryResponse.data.forEach((entry: any) => {
           entries.push({
             id: entry.id,
-            type: entry.entryType === 'note' ? 'note' : 'job_event',
+            type: entry.entryType === 'note' ? 'note' : 
+                  entry.entryType === 'proposal' ? 'proposal' : 'job_event',
             title: entry.title,
             content: entry.description,
             author: entry.authorName || 'System',
             timestamp: entry.createdAt,
             metadata: {
-              eventType: entry.entryType
+              eventType: entry.entryType,
+              // For proposal entries, extract proposal number from title
+              proposalNumber: entry.entryType === 'proposal' ? 
+                entry.title.replace('Proposal Created: ', '') : undefined
             }
           });
         });
