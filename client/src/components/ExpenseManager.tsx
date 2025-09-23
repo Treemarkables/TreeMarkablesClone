@@ -136,7 +136,7 @@ export function ExpenseManager({ jobId, compact = false }: ExpenseManagerProps) 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'expenses'] });
-      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       setIsAddDialogOpen(false);
       setEditingExpense(null);
@@ -162,7 +162,7 @@ export function ExpenseManager({ jobId, compact = false }: ExpenseManagerProps) 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'expenses'] });
-      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       toast({
         title: "Success",

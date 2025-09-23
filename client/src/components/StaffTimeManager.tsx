@@ -106,7 +106,7 @@ export function StaffTimeManager({ jobId, compact = false }: StaffTimeManagerPro
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'staff-time'] });
-      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       setIsAddDialogOpen(false);
       setEditingEntry(null);
@@ -132,7 +132,7 @@ export function StaffTimeManager({ jobId, compact = false }: StaffTimeManagerPro
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'staff-time'] });
-      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       toast({
         title: "Success",
