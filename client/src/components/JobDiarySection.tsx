@@ -32,6 +32,7 @@ import {
   ExternalLink,
   MoreHorizontal
 } from "lucide-react";
+import { ProposalBuilder } from "@/components/ProposalBuilder";
 
 // Types for diary entries
 interface DiaryEntry {
@@ -89,6 +90,8 @@ export function JobDiarySection({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeComposer, setActiveComposer] = useState<'note' | 'sms' | 'email' | null>(null);
+  const [proposalDialogOpen, setProposalDialogOpen] = useState(false);
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   
   // Forms
   const noteForm = useForm<NoteFormData>({
@@ -180,6 +183,32 @@ export function JobDiarySection({
     },
   });
 
+  // Function to handle opening proposals from diary entries
+  const handleOpenProposal = async (proposalNumber: string) => {
+    try {
+      // Fetch all proposals and find the one with matching proposal number
+      const response = await apiRequest('GET', '/api/proposals').then(res => res.json());
+      const proposal = response.data?.find((p: any) => p.proposalNumber === proposalNumber);
+      
+      if (proposal) {
+        setSelectedProposalId(proposal.id);
+        setProposalDialogOpen(true);
+      } else {
+        toast({
+          title: "Error",
+          description: "Proposal not found",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error finding proposal:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to open proposal",
+        variant: "destructive"
+      });
+    }
+  };
 
   // Mutations
   const createNoteMutation = useMutation({
@@ -397,7 +426,13 @@ export function JobDiarySection({
                         <Badge variant="outline" className="text-xs">
                           {entry.metadata?.status || 'draft'}
                         </Badge>
-                        <Button size="sm" variant="ghost" className="text-xs h-6">
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="text-xs h-6"
+                          onClick={() => entry.metadata?.proposalNumber && handleOpenProposal(entry.metadata.proposalNumber)}
+                          data-testid="button-view-proposal"
+                        >
                           <ExternalLink className="w-3 h-3 mr-1" />
                           View Proposal
                         </Button>
@@ -623,6 +658,21 @@ export function JobDiarySection({
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Proposal Builder Dialog */}
+      {selectedProposalId && (
+        <ProposalBuilder
+          isOpen={proposalDialogOpen}
+          onClose={() => {
+            setProposalDialogOpen(false);
+            setSelectedProposalId(null);
+          }}
+          jobId={jobId}
+          customerId={customerId}
+          mode="edit"
+          proposalId={selectedProposalId}
+        />
+      )}
     </div>
   );
 }
