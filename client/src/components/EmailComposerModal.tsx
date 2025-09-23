@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   Send, 
@@ -22,7 +22,9 @@ import {
   ListOrdered,
   AlignLeft,
   AlignCenter,
-  AlignRight
+  AlignRight,
+  Image,
+  Check
 } from "lucide-react";
 
 interface EmailComposerModalProps {
@@ -90,8 +92,15 @@ export function EmailComposerModal({
     selectedTemplate: ""
   });
   const [attachments, setAttachments] = useState<string[]>([]);
+  const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch job photos for Smart Attachments
+  const { data: jobPhotos } = useQuery({
+    queryKey: ['/api/jobs', job?.id, 'photos'],
+    enabled: !!job?.id && isOpen,
+  });
 
   // Pre-populate email data when modal opens
   useEffect(() => {
@@ -127,6 +136,15 @@ export function EmailComposerModal({
       });
     }
   }, [isOpen, job, customer, invoiceData]);
+
+  // Handle photo selection for email attachments
+  const togglePhotoSelection = (photoUrl: string) => {
+    setSelectedPhotos(prev => 
+      prev.includes(photoUrl) 
+        ? prev.filter(url => url !== photoUrl)
+        : [...prev, photoUrl]
+    );
+  };
 
   const sendEmailMutation = useMutation({
     mutationFn: async (emailPayload: any) => {
@@ -202,6 +220,7 @@ export function EmailComposerModal({
       subject: emailData.subject,
       body: emailData.body,
       attachments: attachments,
+      selectedPhotos: selectedPhotos,
       jobId: job?.id,
       customerId: customer?.id,
       invoiceId: invoiceData?.id
@@ -338,6 +357,91 @@ export function EmailComposerModal({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Smart Attachments Section */}
+          <div className="border rounded-lg bg-gray-50 p-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Smart Attachments</h3>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {/* Invoice/Quote PDF */}
+              {invoiceData && (
+                <div 
+                  className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  data-testid="attachment-invoice-pdf"
+                >
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center mb-2">
+                      <FileText className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="text-xs font-medium text-gray-900 mb-1">
+                      Quote #{invoiceData.invoiceNumber}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      for ${invoiceData.amount || '0.00'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Job Photos */}
+              {jobPhotos?.beforePhotos?.map((photoUrl: string, index: number) => (
+                <div
+                  key={`before-${index}`}
+                  className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                    selectedPhotos.includes(photoUrl) 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                  onClick={() => togglePhotoSelection(photoUrl)}
+                  data-testid={`photo-before-${index}`}
+                >
+                  {selectedPhotos.includes(photoUrl) && (
+                    <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                  <img 
+                    src={photoUrl} 
+                    alt={`Before photo ${index + 1}`}
+                    className="w-full h-16 object-cover rounded mb-1"
+                  />
+                  <div className="text-xs text-center text-gray-600">Before {index + 1}</div>
+                </div>
+              ))}
+
+              {jobPhotos?.afterPhotos?.map((photoUrl: string, index: number) => (
+                <div
+                  key={`after-${index}`}
+                  className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                    selectedPhotos.includes(photoUrl) 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                  onClick={() => togglePhotoSelection(photoUrl)}
+                  data-testid={`photo-after-${index}`}
+                >
+                  {selectedPhotos.includes(photoUrl) && (
+                    <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                  <img 
+                    src={photoUrl} 
+                    alt={`After photo ${index + 1}`}
+                    className="w-full h-16 object-cover rounded mb-1"
+                  />
+                  <div className="text-xs text-center text-gray-600">After {index + 1}</div>
+                </div>
+              ))}
+
+              {/* Show message when no photos available */}
+              {(!jobPhotos?.beforePhotos?.length && !jobPhotos?.afterPhotos?.length && !invoiceData) && (
+                <div className="col-span-full text-center py-4 text-gray-500 text-sm">
+                  No attachments available for this job
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Formatting Toolbar */}
