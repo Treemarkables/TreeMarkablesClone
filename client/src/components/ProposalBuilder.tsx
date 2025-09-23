@@ -500,21 +500,33 @@ export function ProposalBuilder({
   // Mutations
   const createProposalMutation = useMutation({
     mutationFn: async (data: any) => {
+      console.log('Creating proposal with data:', data);
       const response = await apiRequest('POST', '/api/proposals', data);
+      console.log('Proposal creation response:', response);
       return response;
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      console.log('Proposal created successfully:', response);
       toast({
         title: "Success",
-        description: "Proposal created successfully",
+        description: `Proposal created successfully! Proposal Number: ${response.data?.proposalNumber || 'N/A'}`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
-      onClose();
+      
+      // Reset form state
+      form.reset();
+      setSections([]);
+      
+      // Close modal with a slight delay to show success toast
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     },
     onError: (error: any) => {
+      console.error('Proposal creation error:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create proposal",
+        description: error.message || "Failed to create proposal. Please try again.",
         variant: "destructive",
       });
     },
@@ -565,23 +577,28 @@ export function ProposalBuilder({
 
   // Submit proposal
   const onSubmit = async (data: any) => {
-    const proposalData = {
-      customerId: data.customerId || customerId,
-      jobId: data.jobId || jobId,
-      quoteId: data.quoteId, // Optional - can be undefined
-      proposalNumber: data.proposalNumber || `PROP-${Date.now()}`, // Auto-generate if not provided
-      title: data.title,
-      description: data.description,
-      totalAmount: grandTotal,
-      taxRate: data.taxRate,
-      status: 'draft',
-      deliveryMethod: data.deliveryMethod,
-      notes: data.notes,
-      createdBy: 'system', // Replace with actual user
-      sections: sections, // Include sections and line items
-    };
+    try {
+      const proposalData = {
+        customerId: data.customerId || customerId,
+        jobId: data.jobId || jobId,
+        quoteId: data.quoteId, // Optional - can be undefined
+        proposalNumber: data.proposalNumber || `PROP-${Date.now()}`, // Auto-generate if not provided
+        title: data.title,
+        description: data.description,
+        totalAmount: grandTotal,
+        taxRate: data.taxRate,
+        status: 'draft',
+        deliveryMethod: data.deliveryMethod,
+        notes: data.notes,
+        createdBy: 'system', // Replace with actual user
+        sections: sections, // Include sections and line items
+      };
 
-    await createProposalMutation.mutateAsync(proposalData);
+      await createProposalMutation.mutateAsync(proposalData);
+    } catch (error) {
+      console.error('Form submission error:', error);
+      // Error handled by mutation's onError callback
+    }
   };
 
   if (!isOpen) return null;
