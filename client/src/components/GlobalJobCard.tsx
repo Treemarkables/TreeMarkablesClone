@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building } from "lucide-react";
 import { ProposalBuilder } from "./ProposalBuilder";
+import { JobDiarySection } from "./JobDiarySection";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -320,8 +321,9 @@ export function GlobalJobCard({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 -m-6 mb-6 rounded-t-lg">
+      <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden p-0">
+        {/* Header spans full width */}
+        <DialogHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-lg flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -399,8 +401,13 @@ export function GlobalJobCard({
           </div>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Two-column layout: Form on left, Diary on right */}
+        <div className="flex h-full overflow-hidden">
+          {/* Left column - Job Form (60%) */}
+          <div className="w-3/5 overflow-y-auto border-r">
+            <div className="p-6">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Customer Section */}
             <Card>
               <CardHeader>
@@ -792,9 +799,23 @@ export function GlobalJobCard({
                 {isLoading ? "Saving..." : mode === "create" ? "Create Job" : "Update Job"}
               </Button>
             </div>
-          </form>
-        </Form>
-      </DialogContent>
+                  </form>
+                </Form>
+              </div>
+            </div>
+          
+            {/* Right column - Job Diary (40%) */}
+            <div className="w-2/5">
+              <JobDiarySection 
+                jobId={jobId || ""}
+                customerId={form.getValues("customerId") || customerId}
+                customerEmail={selectedCustomer?.email}
+                customerPhone={selectedCustomer?.phone}
+                className="h-full"
+              />
+            </div>
+          </div>
+        </DialogContent>
       
       {/* Proposal Builder Integration */}
       <ProposalBuilder
