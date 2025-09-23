@@ -405,6 +405,24 @@ export const proposalLineItems = pgTable("proposal_line_items", {
   notes: text("notes"),
   sortOrder: integer("sort_order").notNull().default(0),
   isOptional: boolean("is_optional").default(false),
+  // New pricing fields
+  pricingType: text("pricing_type", { enum: ['normal', 'choice', 'fixed'] }).notNull().default('normal'),
+  selectedChoiceId: varchar("selected_choice_id").references(() => proposalLineItemChoices.id, { onDelete: 'set null' }), // FK to selected choice
+  fixedPrice: decimal("fixed_price", { precision: 10, scale: 2 }), // For fixed pricing mode
+  selected: boolean("selected").notNull().default(true), // Whether customer has selected this line item
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Proposal Line Item Choices (for multiple choice options)
+export const proposalLineItemChoices = pgTable("proposal_line_item_choices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  lineItemId: varchar("line_item_id").references(() => proposalLineItems.id, { onDelete: 'cascade' }).notNull(),
+  label: text("label").notNull(), // "Basic", "Premium", "Emergency"
+  description: text("description"), // Detailed description of this choice
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(), // Price for this choice option
+  isDefault: boolean("is_default").default(false), // Whether this is the default selection
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1183,7 +1201,7 @@ export type ProposalSection = typeof proposalSections.$inferSelect;
 export type InsertProposalSection = z.infer<typeof insertProposalSectionSchema>;
 export type UpdateProposalSection = z.infer<typeof updateProposalSectionSchema>;
 
-// Proposal Line Item Schema Exports
+// Proposal Line Item Schema Exports with enhanced validation for pricing types
 export const insertProposalLineItemSchema = createInsertSchema(proposalLineItems).omit({
   id: true,
   createdAt: true,
@@ -1196,14 +1214,39 @@ export const insertProposalLineItemSchema = createInsertSchema(proposalLineItems
   if ((data.sourceType === 'quote' || data.sourceType === 'template') && !data.sourceId) {
     return false; // Quote/template items must have sourceId
   }
-  // Validate totalPrice calculation
-  const calculatedTotal = Number(data.quantity) * Number(data.unitPrice);
-  if (Math.abs(calculatedTotal - Number(data.totalPrice)) > 0.01) {
-    return false; // Total must equal quantity × unit price
+  
+  // Validate pricing type constraints
+  if (data.pricingType === 'choice' && !data.selectedChoiceId) {
+    return false; // Choice items must have a selected choice
   }
+  if (data.pricingType === 'fixed') {
+    if (!data.fixedPrice) return false; // Fixed pricing items must have a fixed price
+    if (data.selectedChoiceId) return false; // Fixed pricing should not have selected choices
+  }
+  if (data.pricingType === 'normal') {
+    if (data.selectedChoiceId) return false; // Normal pricing should not have selected choices
+    if (data.fixedPrice) return false; // Normal pricing should not have fixed price
+  }
+  
+  // Validate totalPrice calculation based on pricing type
+  if (data.pricingType === 'fixed') {
+    // Fixed pricing: totalPrice should equal fixedPrice
+    if (Math.abs(Number(data.totalPrice) - Number(data.fixedPrice || 0)) > 0.01) {
+      return false;
+    }
+  } else if (data.pricingType === 'normal') {
+    // Normal pricing: totalPrice should equal quantity × unitPrice
+    const calculatedTotal = Number(data.quantity) * Number(data.unitPrice);
+    if (Math.abs(calculatedTotal - Number(data.totalPrice)) > 0.01) {
+      return false;
+    }
+  }
+  // Choice pricing validation would need the actual choices data to validate totalPrice
+  // This is enforced at the API/service layer where choices are available
+  
   return true;
 }, {
-  message: "Invalid line item: sourceId/sourceType mismatch or totalPrice calculation error"
+  message: "Invalid line item: pricing type constraints or calculation errors"
 });
 
 export const updateProposalLineItemSchema = createInsertSchema(proposalLineItems).omit({
@@ -1215,6 +1258,19 @@ export const updateProposalLineItemSchema = createInsertSchema(proposalLineItems
 export type ProposalLineItem = typeof proposalLineItems.$inferSelect;
 export type InsertProposalLineItem = z.infer<typeof insertProposalLineItemSchema>;
 export type UpdateProposalLineItem = z.infer<typeof updateProposalLineItemSchema>;
+
+// Proposal Line Item Choice Schema Exports
+export const insertProposalLineItemChoiceSchema = createInsertSchema(proposalLineItemChoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateProposalLineItemChoiceSchema = insertProposalLineItemChoiceSchema.partial();
+
+export type ProposalLineItemChoice = typeof proposalLineItemChoices.$inferSelect;
+export type InsertProposalLineItemChoice = z.infer<typeof insertProposalLineItemChoiceSchema>;
+export type UpdateProposalLineItemChoice = z.infer<typeof updateProposalLineItemChoiceSchema>;
 
 // Equipment/Resource Schema
 export const equipment = pgTable("equipment", {

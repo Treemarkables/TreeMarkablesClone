@@ -40,6 +40,7 @@ import {
   type Proposal, type InsertProposal, type UpdateProposal,
   type ProposalSection, type InsertProposalSection, type UpdateProposalSection,
   type ProposalLineItem, type InsertProposalLineItem, type UpdateProposalLineItem,
+  type ProposalLineItemChoice, type InsertProposalLineItemChoice, type UpdateProposalLineItemChoice,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -341,6 +342,14 @@ export interface IStorage {
   deleteProposalLineItem(id: string): Promise<void>;
   reorderProposalLineItems(proposalId: string, itemIds: string[]): Promise<ProposalLineItem[]>;
 
+  // Proposal Line Item Choice Management
+  createProposalLineItemChoice(choice: InsertProposalLineItemChoice): Promise<ProposalLineItemChoice>;
+  getProposalLineItemChoice(id: string): Promise<ProposalLineItemChoice | undefined>;
+  updateProposalLineItemChoice(id: string, updates: UpdateProposalLineItemChoice): Promise<ProposalLineItemChoice>;
+  getProposalLineItemChoicesByLineItem(lineItemId: string): Promise<ProposalLineItemChoice[]>;
+  deleteProposalLineItemChoice(id: string): Promise<void>;
+  deleteProposalLineItemChoicesByLineItem(lineItemId: string): Promise<void>;
+
   // Equipment Management
   createEquipment(equipment: InsertEquipment): Promise<Equipment>;
   getEquipment(id: string): Promise<Equipment | undefined>;
@@ -534,6 +543,7 @@ export class MemStorage implements IStorage {
   private proposals: Map<string, Proposal>;
   private proposalSections: Map<string, ProposalSection>;
   private proposalLineItems: Map<string, ProposalLineItem>;
+  private proposalLineItemChoices: Map<string, ProposalLineItemChoice>;
 
   // Conversation Management Storage
   private conversations: Map<string, Conversation>;
@@ -581,6 +591,7 @@ export class MemStorage implements IStorage {
     this.proposals = new Map();
     this.proposalSections = new Map();
     this.proposalLineItems = new Map();
+    this.proposalLineItemChoices = new Map();
 
     // Conversation Management Storage
     this.conversations = new Map();
@@ -4023,6 +4034,55 @@ export class MemStorage implements IStorage {
     });
 
     return await this.getProposalLineItemsByProposal(proposalId);
+  }
+
+  // PROPOSAL LINE ITEM CHOICE MANAGEMENT METHODS
+
+  async createProposalLineItemChoice(choiceData: InsertProposalLineItemChoice): Promise<ProposalLineItemChoice> {
+    const choice: ProposalLineItemChoice = {
+      id: randomUUID(),
+      ...choiceData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    this.proposalLineItemChoices.set(choice.id, choice);
+    return choice;
+  }
+
+  async getProposalLineItemChoice(id: string): Promise<ProposalLineItemChoice | undefined> {
+    return this.proposalLineItemChoices.get(id);
+  }
+
+  async updateProposalLineItemChoice(id: string, updates: UpdateProposalLineItemChoice): Promise<ProposalLineItemChoice> {
+    const existing = this.proposalLineItemChoices.get(id);
+    if (!existing) {
+      throw new Error('Proposal line item choice not found');
+    }
+
+    const updated: ProposalLineItemChoice = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.proposalLineItemChoices.set(id, updated);
+    return updated;
+  }
+
+  async getProposalLineItemChoicesByLineItem(lineItemId: string): Promise<ProposalLineItemChoice[]> {
+    return Array.from(this.proposalLineItemChoices.values())
+      .filter(choice => choice.lineItemId === lineItemId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  async deleteProposalLineItemChoice(id: string): Promise<void> {
+    this.proposalLineItemChoices.delete(id);
+  }
+
+  async deleteProposalLineItemChoicesByLineItem(lineItemId: string): Promise<void> {
+    const choices = await this.getProposalLineItemChoicesByLineItem(lineItemId);
+    choices.forEach(choice => this.proposalLineItemChoices.delete(choice.id));
   }
 
   // ========================================
