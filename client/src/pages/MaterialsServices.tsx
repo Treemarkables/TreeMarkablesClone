@@ -14,6 +14,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useToast } from "@/hooks/use-toast";
 
 // Form schema for adding materials
 const addMaterialSchema = z.object({
@@ -171,6 +172,7 @@ export default function MaterialsServices() {
   const [sortBy, setSortBy] = useState("name");
   const [materials, setMaterials] = useState(mockMaterials);
   const [showAddMaterialDialog, setShowAddMaterialDialog] = useState(false);
+  const { toast } = useToast();
 
   const form = useForm<AddMaterialFormData>({
     resolver: zodResolver(addMaterialSchema),
@@ -185,18 +187,43 @@ export default function MaterialsServices() {
   });
 
   const onAddMaterial = (data: AddMaterialFormData) => {
-    const newMaterial = {
-      id: (materials.length + 1).toString(),
-      itemNumber: data.itemNumber,
-      name: data.name,
-      price: parseFloat(data.price),
-      priceIncludesTax: data.priceIncludesTax,
-      taxRate: data.taxRate,
-      category: data.category,
-    };
-    setMaterials([...materials, newMaterial]);
-    setShowAddMaterialDialog(false);
-    form.reset();
+    try {
+      console.log("Adding material with data:", data);
+      
+      const newMaterial = {
+        id: Date.now().toString(), // Use timestamp for unique ID
+        itemNumber: data.itemNumber,
+        name: data.name,
+        price: parseFloat(data.price),
+        priceIncludesTax: data.priceIncludesTax,
+        taxRate: data.taxRate,
+        category: data.category,
+      };
+      
+      console.log("New material object:", newMaterial);
+      
+      setMaterials(prevMaterials => {
+        const updatedMaterials = [...prevMaterials, newMaterial];
+        console.log("Updated materials array:", updatedMaterials);
+        return updatedMaterials;
+      });
+      
+      setShowAddMaterialDialog(false);
+      form.reset();
+      
+      toast({
+        title: "Material Added",
+        description: `${data.name} has been added successfully.`,
+      });
+      
+    } catch (error) {
+      console.error("Error adding material:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add material. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRemoveMaterial = (id: string) => {
@@ -280,7 +307,14 @@ export default function MaterialsServices() {
                 <DialogTitle>Add New Material</DialogTitle>
               </DialogHeader>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onAddMaterial)} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onAddMaterial, (errors) => {
+                  console.error("Form validation errors:", errors);
+                  toast({
+                    title: "Validation Error",
+                    description: "Please check all required fields and try again.",
+                    variant: "destructive",
+                  });
+                })} className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
