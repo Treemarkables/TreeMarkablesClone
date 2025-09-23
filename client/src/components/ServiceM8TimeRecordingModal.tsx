@@ -27,9 +27,10 @@ import type { Job, Employee } from "@shared/schema";
 // ServiceM8-style time entry form schema
 const timeEntrySchema = z.object({
   jobId: z.string().min(1, "Job is required"),
-  employeeId: z.string().min(1, "Staff member is required"),
+  selectedStaff: z.array(z.string()).min(1, "At least one staff member is required"),
+  serviceType: z.string().min(1, "Service is required"),
+  serviceName: z.string().min(1, "Service name is required"),
   hours: z.string().min(1, "Hours are required").refine(val => !isNaN(Number(val)) && Number(val) > 0, "Hours must be a positive number"),
-  rate: z.string().min(1, "Rate is required").refine(val => !isNaN(Number(val)) && Number(val) > 0, "Rate must be a positive number"),
   startTime: z.string().optional(),
   billed: z.boolean().default(false),
 });
@@ -62,11 +63,21 @@ interface TimeEntry {
   jobNumber: string;
   employeeId: string;
   employeeName: string;
+  serviceType: string;
+  serviceName: string;
   hours: number;
   rate: number;
   startTime?: string;
   billed: boolean;
   amount: number;
+}
+
+interface ServiceOption {
+  id: string;
+  name: string;
+  type: string;
+  requiredSkills: string[];
+  baseRate: number;
 }
 
 export function ServiceM8TimeRecordingModal({
@@ -87,9 +98,10 @@ export function ServiceM8TimeRecordingModal({
     resolver: zodResolver(timeEntrySchema),
     defaultValues: {
       jobId,
-      employeeId: employeeId || "",
+      selectedStaff: employeeId ? [employeeId] : [],
+      serviceType: "",
+      serviceName: "",
       hours: "",
-      rate: "",
       startTime: "",
       billed: false,
     }
@@ -119,6 +131,60 @@ export function ServiceM8TimeRecordingModal({
     queryKey: ['/api/jobs'],
     enabled: isOpen,
   });
+
+  // Fetch staff rates for service pricing
+  const { data: staffRatesData } = useQuery({
+    queryKey: ['/api/staff-rates'],
+    enabled: isOpen,
+  });
+
+  // Service options with skill requirements
+  const serviceOptions: ServiceOption[] = [
+    { id: "tree_removal", name: "Tree Removal", type: "tree_removal", requiredSkills: ["Tree Climbing", "Chainsaw Operation"], baseRate: 85 },
+    { id: "pruning", name: "Tree Pruning", type: "pruning", requiredSkills: ["Tree Pruning", "Tree Climbing"], baseRate: 75 },
+    { id: "hedge_trimming", name: "Hedge Trimming", type: "hedge_trimming", requiredSkills: ["Hedge Trimming"], baseRate: 65 },
+    { id: "stump_grinding", name: "Stump Grinding", type: "stump_grinding", requiredSkills: ["Heavy Machinery"], baseRate: 90 },
+    { id: "crane_operation", name: "Crane-Assisted Removal", type: "crane_operation", requiredSkills: ["Crane Operation", "Heavy Machinery"], baseRate: 120 },
+    { id: "emergency_service", name: "Emergency Tree Service", type: "emergency_service", requiredSkills: ["Risk Assessment", "Chainsaw Operation"], baseRate: 150 },
+    { id: "ground_support", name: "Ground Support", type: "ground_support", requiredSkills: ["Ground Support", "Basic Tree Care"], baseRate: 45 },
+  ];
+
+  // Filter available services based on selected staff skills
+  const getAvailableServices = (selectedStaffIds: string[]): ServiceOption[] => {
+    if (!selectedStaffIds.length || !employeesData) return [];
+    
+    const employees = (employeesData as any)?.data || employeesData || [];
+    const selectedEmployees = employees.filter((emp: Employee) => 
+      selectedStaffIds.includes(emp.id)
+    );
+    
+    // Get combined skills of all selected staff
+    const combinedSkills = new Set<string>();
+    selectedEmployees.forEach((emp: Employee) => {
+      emp.skills?.forEach(skill => combinedSkills.add(skill));
+    });
+    
+    // Filter services that can be performed by selected staff
+    return serviceOptions.filter(service => 
+      service.requiredSkills.some(reqSkill => combinedSkills.has(reqSkill))
+    );
+  };
+
+  // Get rate for staff member and service type
+  const getStaffServiceRate = (employeeId: string, serviceType: string): number => {
+    if (!staffRatesData) return 0;
+    
+    const rates = (staffRatesData as any)?.data || staffRatesData || [];
+    const staffRate = rates.find((rate: any) => 
+      rate.employeeId === employeeId && rate.serviceType === serviceType && rate.isActive
+    );
+    
+    if (staffRate) return Number(staffRate.hourlyRate);
+    
+    // Fallback to service base rate
+    const service = serviceOptions.find(s => s.type === serviceType);
+    return service?.baseRate || 75;
+  };
 
   // Fetch existing time entries for this job/date
   const { data: existingEntries, isLoading } = useQuery({
@@ -167,49 +233,63 @@ export function ServiceM8TimeRecordingModal({
 
   // Add new time entry
   const handleAddEntry = (data: TimeEntryFormData) => {
-    const employee = employees.find((e: any) => e.id === data.employeeId);
+    const employees = (employeesData as any)?.data || employeesData || [];
+    const jobs = (jobsData as any)?.data || jobsData || [];
     const job = jobs.find((j: any) => j.id === data.jobId);
     
-    if (!employee) {
+    if (data.selectedStaff.length === 0) {
       toast({
         title: "Error",
-        description: "Selected employee not found",
+        description: "Please select at least one staff member",
         variant: "destructive"
       });
       return;
     }
 
     const hours = Number(data.hours);
-    const rate = Number(data.rate);
-    const amount = hours * rate;
+    const newEntries: TimeEntry[] = [];
 
-    const newEntry: TimeEntry = {
-      id: `temp-${Date.now()}`,
-      jobId: data.jobId,
-      jobNumber: job?.jobNumber || jobNumber,
-      employeeId: data.employeeId,
-      employeeName: `${employee.firstName} ${employee.lastName}`,
-      hours,
-      rate,
-      startTime: data.startTime,
-      billed: data.billed,
-      amount
-    };
+    // Create a time entry for each selected staff member
+    data.selectedStaff.forEach(employeeId => {
+      const employee = employees.find((e: any) => e.id === employeeId);
+      if (!employee) return;
 
-    setTimeEntries(prev => [...prev, newEntry]);
+      const rate = getStaffServiceRate(employeeId, data.serviceType);
+      const amount = hours * rate;
+
+      const newEntry: TimeEntry = {
+        id: `temp-${Date.now()}-${employeeId}`,
+        jobId: data.jobId,
+        jobNumber: job?.jobNumber || jobNumber,
+        employeeId,
+        employeeName: `${employee.firstName} ${employee.lastName}`,
+        serviceType: data.serviceType,
+        serviceName: data.serviceName,
+        hours,
+        rate,
+        startTime: data.startTime,
+        billed: data.billed,
+        amount
+      };
+
+      newEntries.push(newEntry);
+    });
+
+    setTimeEntries(prev => [...prev, ...newEntries]);
     setIsAddingEntry(false);
     entryForm.reset({
       jobId,
-      employeeId: "",
+      selectedStaff: [],
+      serviceType: "",
+      serviceName: "",
       hours: "",
-      rate: "",
       startTime: "",
       billed: false,
     });
 
     toast({
-      title: "Time Entry Added",
-      description: `${hours} hours added for ${employee.firstName} ${employee.lastName}`,
+      title: "Time Entries Added",
+      description: `${hours} hours of ${data.serviceName} added for ${newEntries.length} staff member(s)`,
     });
   };
 
@@ -262,6 +342,8 @@ export function ServiceM8TimeRecordingModal({
           jobNumber: entry.jobNumber,
           employeeId: entry.employeeId,
           employeeName: entry.employeeName,
+          serviceType: entry.serviceType,
+          serviceName: entry.serviceName,
           hours: entry.hours,
           rate: entry.rate,
           startTime: entry.startTime,
