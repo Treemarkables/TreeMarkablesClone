@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import { DispatchBoard } from '@/components/DispatchBoard';
 import { JobDiary } from '@/components/JobDiary';
 import { SafetyReporting } from '@/components/SafetyReporting';
 import { JobTemplateManagement } from '@/components/JobTemplateManagement';
+import { GlobalJobCard } from '@/components/GlobalJobCard';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
 
@@ -66,6 +67,20 @@ interface JobDashboardProps {
 }
 
 export default function JobDashboard({ activeTab = "overview", onTabChange }: JobDashboardProps) {
+  // State for job card modal
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [isJobCardOpen, setIsJobCardOpen] = useState(false);
+
+  // Handle job item click
+  const handleJobClick = (jobId: string) => {
+    setSelectedJobId(jobId);
+    setIsJobCardOpen(true);
+  };
+
+  const handleCloseJobCard = () => {
+    setIsJobCardOpen(false);
+    setSelectedJobId(null);
+  };
 
   // Fetch jobs data with proper typing
   const { data: jobsResponse, isLoading: jobsLoading } = useQuery<ApiResponse<Job>>({
@@ -288,7 +303,12 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 <CardContent>
                   <div className="space-y-4">
                     {displayJobs.slice(0, 5).map(job => (
-                      <div key={job.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`job-item-${job.id}`}>
+                      <div 
+                        key={job.id} 
+                        className="flex items-center justify-between p-3 border rounded-lg hover-elevate cursor-pointer" 
+                        data-testid={`job-item-${job.id}`}
+                        onClick={() => handleJobClick(job.id)}
+                      >
                         <div className="flex-1">
                           <h4 className="font-medium" data-testid={`job-title-${job.id}`}>{job.title}</h4>
                           <p className="text-sm text-muted-foreground" data-testid={`job-customer-${job.id}`}>{job.customer}</p>
@@ -505,6 +525,16 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
           </TabsContent>
         </Tabs>
       </div>
+      
+      {/* Job Card Modal for editing existing jobs */}
+      {selectedJobId && (
+        <GlobalJobCard 
+          isOpen={isJobCardOpen}
+          onClose={handleCloseJobCard}
+          mode="edit"
+          jobId={selectedJobId}
+        />
+      )}
     </div>
   );
 }
