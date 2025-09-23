@@ -24,15 +24,23 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Job, Employee } from "@shared/schema";
 
-// ServiceM8-style time entry form schema
-const timeEntrySchema = z.object({
-  jobId: z.string().min(1, "Job is required"),
-  selectedStaff: z.array(z.string()).min(1, "At least one staff member is required"),
-  serviceType: z.string().min(1, "Service is required"),
-  serviceName: z.string().min(1, "Service name is required"),
+// Individual staff assignment schema
+const staffAssignmentSchema = z.object({
+  employeeId: z.string().min(1, "Employee is required"),
+  employeeName: z.string().min(1, "Employee name is required"),
+  lineItemId: z.string().min(1, "Line item is required"),
+  lineItemNumber: z.string().min(1, "Line item number is required"),
+  lineItemName: z.string().min(1, "Line item name is required"),
+  lineItemCategory: z.string().min(1, "Line item category is required"),
   hours: z.string().min(1, "Hours are required").refine(val => !isNaN(Number(val)) && Number(val) > 0, "Hours must be a positive number"),
   startTime: z.string().optional(),
   billed: z.boolean().default(false),
+});
+
+// ServiceM8-style time entry form schema
+const timeEntrySchema = z.object({
+  jobId: z.string().min(1, "Job is required"),
+  staffAssignments: z.array(staffAssignmentSchema).min(1, "At least one staff assignment is required"),
 });
 
 const dailyTimeSchema = z.object({
@@ -46,6 +54,7 @@ const dailyTimeSchema = z.object({
 });
 
 type TimeEntryFormData = z.infer<typeof timeEntrySchema>;
+type StaffAssignment = z.infer<typeof staffAssignmentSchema>;
 type DailyTimeFormData = z.infer<typeof dailyTimeSchema>;
 
 interface ServiceM8TimeRecordingModalProps {
@@ -63,8 +72,10 @@ interface TimeEntry {
   jobNumber: string;
   employeeId: string;
   employeeName: string;
-  serviceType: string;
-  serviceName: string;
+  lineItemId: string;
+  lineItemNumber: string;
+  lineItemName: string;
+  lineItemCategory: string;
   hours: number;
   rate: number;
   startTime?: string;
@@ -72,12 +83,13 @@ interface TimeEntry {
   amount: number;
 }
 
-interface ServiceOption {
+interface MaterialServiceItem {
   id: string;
+  itemNumber: string;
   name: string;
-  type: string;
-  requiredSkills: string[];
-  baseRate: number;
+  price: number;
+  category: string;
+  type: "material" | "service";
 }
 
 export function ServiceM8TimeRecordingModal({
@@ -90,6 +102,9 @@ export function ServiceM8TimeRecordingModal({
 }: ServiceM8TimeRecordingModalProps) {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [isAddingEntry, setIsAddingEntry] = useState(false);
+  const [availableStaff, setAvailableStaff] = useState<Employee[]>([]);
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+  const [employeeLineItems, setEmployeeLineItems] = useState<Record<string, MaterialServiceItem[]>>({});
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -98,12 +113,7 @@ export function ServiceM8TimeRecordingModal({
     resolver: zodResolver(timeEntrySchema),
     defaultValues: {
       jobId,
-      selectedStaff: employeeId ? [employeeId] : [],
-      serviceType: "",
-      serviceName: "",
-      hours: "",
-      startTime: "",
-      billed: false,
+      staffAssignments: [],
     }
   });
 
@@ -132,58 +142,29 @@ export function ServiceM8TimeRecordingModal({
     enabled: isOpen,
   });
 
-  // Fetch staff rates for service pricing
-  const { data: staffRatesData } = useQuery({
-    queryKey: ['/api/staff-rates'],
+  // Fetch Materials & Services line items
+  const { data: materialsServicesData } = useQuery({
+    queryKey: ['/api/materials-services'],
     enabled: isOpen,
   });
 
-  // Service options with skill requirements
-  const serviceOptions: ServiceOption[] = [
-    { id: "tree_removal", name: "Tree Removal", type: "tree_removal", requiredSkills: ["Tree Climbing", "Chainsaw Operation"], baseRate: 85 },
-    { id: "pruning", name: "Tree Pruning", type: "pruning", requiredSkills: ["Tree Pruning", "Tree Climbing"], baseRate: 75 },
-    { id: "hedge_trimming", name: "Hedge Trimming", type: "hedge_trimming", requiredSkills: ["Hedge Trimming"], baseRate: 65 },
-    { id: "stump_grinding", name: "Stump Grinding", type: "stump_grinding", requiredSkills: ["Heavy Machinery"], baseRate: 90 },
-    { id: "crane_operation", name: "Crane-Assisted Removal", type: "crane_operation", requiredSkills: ["Crane Operation", "Heavy Machinery"], baseRate: 120 },
-    { id: "emergency_service", name: "Emergency Tree Service", type: "emergency_service", requiredSkills: ["Risk Assessment", "Chainsaw Operation"], baseRate: 150 },
-    { id: "ground_support", name: "Ground Support", type: "ground_support", requiredSkills: ["Ground Support", "Basic Tree Care"], baseRate: 45 },
-  ];
-
-  // Filter available services based on selected staff skills
-  const getAvailableServices = (selectedStaffIds: string[]): ServiceOption[] => {
-    if (!selectedStaffIds.length || !employeesData) return [];
-    
-    const employees = (employeesData as any)?.data || employeesData || [];
-    const selectedEmployees = employees.filter((emp: Employee) => 
-      selectedStaffIds.includes(emp.id)
-    );
-    
-    // Get combined skills of all selected staff
-    const combinedSkills = new Set<string>();
-    selectedEmployees.forEach((emp: Employee) => {
-      emp.skills?.forEach(skill => combinedSkills.add(skill));
+  // Get filtered line items for specific employees
+  const getFilteredItemsForEmployee = async (employeeId: string): Promise<MaterialServiceItem[]> => {
+    const response = await fetch(`/api/materials-services/filtered/${employeeId}`, {
+      credentials: 'include',
     });
-    
-    // Filter services that can be performed by selected staff
-    return serviceOptions.filter(service => 
-      service.requiredSkills.some(reqSkill => combinedSkills.has(reqSkill))
-    );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch filtered items for employee ${employeeId}: ${response.status} ${response.statusText}`);
+    }
+    const result = await response.json();
+    return result.data || [];
   };
 
-  // Get rate for staff member and service type
-  const getStaffServiceRate = (employeeId: string, serviceType: string): number => {
-    if (!staffRatesData) return 0;
-    
-    const rates = (staffRatesData as any)?.data || staffRatesData || [];
-    const staffRate = rates.find((rate: any) => 
-      rate.employeeId === employeeId && rate.serviceType === serviceType && rate.isActive
-    );
-    
-    if (staffRate) return Number(staffRate.hourlyRate);
-    
-    // Fallback to service base rate
-    const service = serviceOptions.find(s => s.type === serviceType);
-    return service?.baseRate || 75;
+  // Get rate for line item
+  const getLineItemRate = (lineItemId: string): number => {
+    const allItems = materialsServicesData?.data || [];
+    const item = allItems.find((item: MaterialServiceItem) => item.id === lineItemId);
+    return item?.price || 0;
   };
 
   // Fetch existing time entries for this job/date
@@ -203,6 +184,66 @@ export function ServiceM8TimeRecordingModal({
 
   const employees = (employeesData as any)?.data || [];
   const jobs = (jobsData as any)?.data || [];
+  const allLineItems = materialsServicesData?.data || [];
+
+  // Add staff member for assignment with skill-based filtering
+  const addStaffAssignment = async (employeeId: string) => {
+    if (selectedStaffIds.includes(employeeId)) return;
+    
+    const employee = employees.find((e: any) => e.id === employeeId);
+    if (!employee) return;
+    
+    // Fetch filtered line items for this specific employee
+    try {
+      const filteredItems = await getFilteredItemsForEmployee(employeeId);
+      setEmployeeLineItems(prev => ({
+        ...prev,
+        [employeeId]: filteredItems
+      }));
+    } catch (error) {
+      console.error('Failed to load filtered line items for employee:', error);
+      // Fallback to all items if filtering fails
+      setEmployeeLineItems(prev => ({
+        ...prev,
+        [employeeId]: allLineItems
+      }));
+      toast({
+        title: "Warning",
+        description: "Could not load skill-specific items. Showing all items instead.",
+        variant: "destructive"
+      });
+    }
+    
+    setSelectedStaffIds(prev => [...prev, employeeId]);
+    
+    // Add to form staffAssignments
+    const currentAssignments = entryForm.getValues("staffAssignments") || [];
+    entryForm.setValue("staffAssignments", [
+      ...currentAssignments,
+      {
+        employeeId,
+        employeeName: `${employee.firstName} ${employee.lastName}`,
+        lineItemId: "",
+        lineItemNumber: "",
+        lineItemName: "",
+        lineItemCategory: "",
+        hours: "8.0",
+        startTime: "08:00",
+        billed: false,
+      }
+    ]);
+  };
+  
+  // Remove staff assignment
+  const removeStaffAssignment = (index: number) => {
+    const currentAssignments = entryForm.getValues("staffAssignments") || [];
+    const removedAssignment = currentAssignments[index];
+    
+    setSelectedStaffIds(prev => prev.filter(id => id !== removedAssignment.employeeId));
+    
+    const newAssignments = currentAssignments.filter((_, i) => i !== index);
+    entryForm.setValue("staffAssignments", newAssignments);
+  };
 
   // Calculate efficiency metrics
   const calculateEfficiency = () => {
@@ -231,44 +272,42 @@ export function ServiceM8TimeRecordingModal({
 
   const efficiency = calculateEfficiency();
 
-  // Add new time entry
+  // Add new time entries from staff assignments  
   const handleAddEntry = (data: TimeEntryFormData) => {
-    const employees = (employeesData as any)?.data || employeesData || [];
     const jobs = (jobsData as any)?.data || jobsData || [];
     const job = jobs.find((j: any) => j.id === data.jobId);
     
-    if (data.selectedStaff.length === 0) {
+    if (data.staffAssignments.length === 0) {
       toast({
         title: "Error",
-        description: "Please select at least one staff member",
+        description: "Please add at least one staff assignment",
         variant: "destructive"
       });
       return;
     }
 
-    const hours = Number(data.hours);
     const newEntries: TimeEntry[] = [];
 
-    // Create a time entry for each selected staff member
-    data.selectedStaff.forEach(employeeId => {
-      const employee = employees.find((e: any) => e.id === employeeId);
-      if (!employee) return;
-
-      const rate = getStaffServiceRate(employeeId, data.serviceType);
+    // Create a time entry for each staff assignment
+    data.staffAssignments.forEach(assignment => {
+      const hours = Number(assignment.hours);
+      const rate = getLineItemRate(assignment.lineItemId);
       const amount = hours * rate;
 
       const newEntry: TimeEntry = {
-        id: `temp-${Date.now()}-${employeeId}`,
+        id: `temp-${Date.now()}-${assignment.employeeId}`,
         jobId: data.jobId,
         jobNumber: job?.jobNumber || jobNumber,
-        employeeId,
-        employeeName: `${employee.firstName} ${employee.lastName}`,
-        serviceType: data.serviceType,
-        serviceName: data.serviceName,
+        employeeId: assignment.employeeId,
+        employeeName: assignment.employeeName,
+        lineItemId: assignment.lineItemId,
+        lineItemNumber: assignment.lineItemNumber,
+        lineItemName: assignment.lineItemName,
+        lineItemCategory: assignment.lineItemCategory,
         hours,
         rate,
-        startTime: data.startTime,
-        billed: data.billed,
+        startTime: assignment.startTime,
+        billed: assignment.billed,
         amount
       };
 
@@ -279,17 +318,13 @@ export function ServiceM8TimeRecordingModal({
     setIsAddingEntry(false);
     entryForm.reset({
       jobId,
-      selectedStaff: [],
-      serviceType: "",
-      serviceName: "",
-      hours: "",
-      startTime: "",
-      billed: false,
+      staffAssignments: [],
     });
+    setSelectedStaffIds([]);
 
     toast({
-      title: "Time Entries Added",
-      description: `${hours} hours of ${data.serviceName} added for ${newEntries.length} staff member(s)`,
+      title: "Time Entries Added", 
+      description: `Time entries added for ${newEntries.length} staff assignment(s)`,
     });
   };
 
@@ -332,8 +367,10 @@ export function ServiceM8TimeRecordingModal({
           jobNumber: entry.jobNumber,
           employeeId: entry.employeeId,
           employeeName: entry.employeeName,
-          serviceType: entry.serviceType,
-          serviceName: entry.serviceName,
+          lineItemId: entry.lineItemId,
+          lineItemNumber: entry.lineItemNumber,
+          lineItemName: entry.lineItemName,
+          lineItemCategory: entry.lineItemCategory,
           hours: entry.hours,
           rate: entry.rate,
           startTime: entry.startTime,
@@ -421,7 +458,7 @@ export function ServiceM8TimeRecordingModal({
                     {entry.employeeName}
                   </div>
                   <div className="text-sm" data-testid={`entry-rate-${entry.id}`}>
-                    labour ${entry.rate}
+                    {entry.lineItemNumber}
                   </div>
                   <div className="text-sm" data-testid={`entry-start-${entry.id}`}>
                     {entry.startTime || "-"}
@@ -466,190 +503,207 @@ export function ServiceM8TimeRecordingModal({
           {/* Add Time Form */}
           {isAddingEntry && (
             <div className="mb-6 p-4 border rounded-lg bg-gray-50">
-              <Form {...entryForm}>
-                <form onSubmit={entryForm.handleSubmit(handleAddEntry)} className="space-y-4">
-                  
-                  {/* Multi-Staff Selection */}
-                  <FormField
-                    control={entryForm.control}
-                    name="selectedStaff"
-                    render={() => (
-                      <FormItem>
-                        <FormLabel className="text-base font-semibold">Select Staff Members</FormLabel>
-                        <div className="grid grid-cols-2 gap-3 mt-2">
-                          {((employeesData as any)?.data || employeesData || []).map((employee: any) => (
-                            <FormField
-                              key={employee.id}
-                              control={entryForm.control}
-                              name="selectedStaff"
-                              render={({ field }) => {
-                                return (
-                                  <FormItem
-                                    key={employee.id}
-                                    className="flex flex-row items-start space-x-3 space-y-0"
-                                  >
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={field.value?.includes(employee.id)}
-                                        onCheckedChange={(checked) => {
-                                          const current = field.value || [];
-                                          if (checked) {
-                                            field.onChange([...current, employee.id]);
-                                          } else {
-                                            field.onChange(current.filter((id: string) => id !== employee.id));
-                                          }
-                                        }}
-                                        data-testid={`checkbox-staff-${employee.id}`}
-                                      />
-                                    </FormControl>
-                                    <div className="space-y-1">
-                                      <FormLabel className="text-sm font-normal cursor-pointer">
-                                        {employee.firstName} {employee.lastName}
-                                      </FormLabel>
-                                      <p className="text-xs text-gray-500">
-                                        {employee.skills?.slice(0, 2).join(", ")} {employee.skills?.length > 2 && "..."}
-                                      </p>
-                                    </div>
-                                  </FormItem>
-                                );
-                              }}
-                            />
-                          ))}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Add Staff Time Entries</h3>
+                
+                {/* Available Staff Selection */}
+                {selectedStaffIds.length === 0 && (
+                  <div>
+                    <FormLabel className="text-base font-semibold">Select Staff Members</FormLabel>
+                    <div className="grid grid-cols-2 gap-3 mt-2">
+                      {employees.map((employee: any) => (
+                        <Button
+                          key={employee.id}
+                          type="button"
+                          variant="outline"
+                          onClick={() => addStaffAssignment(employee.id)}
+                          className="justify-start"
+                          data-testid={`button-add-staff-${employee.id}`}
+                        >
+                          <User className="w-4 h-4 mr-2" />
+                          {employee.firstName} {employee.lastName}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                  {/* Service Selection (filtered by staff skills) */}
-                  <FormField
-                    control={entryForm.control}
-                    name="serviceType"
-                    render={({ field }) => {
-                      const selectedStaff = entryForm.watch("selectedStaff") || [];
-                      const availableServices = getAvailableServices(selectedStaff);
-                      
-                      return (
-                        <FormItem>
-                          <FormLabel>Service Type</FormLabel>
-                          <Select 
-                            onValueChange={(value) => {
-                              const service = serviceOptions.find(s => s.type === value);
-                              field.onChange(value);
-                              entryForm.setValue("serviceName", service?.name || "");
-                            }} 
-                            value={field.value}
-                            disabled={selectedStaff.length === 0}
+                {/* Individual Staff Assignments */}
+                <Form {...entryForm}>
+                  <form onSubmit={entryForm.handleSubmit(handleAddEntry)} className="space-y-6">
+                    {entryForm.watch("staffAssignments").map((assignment, index) => (
+                      <div key={assignment.employeeId} className="p-4 border rounded-lg bg-white">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-medium flex items-center gap-2">
+                            <User className="w-4 h-4" />
+                            {assignment.employeeName}
+                          </h4>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeStaffAssignment(index)}
+                            className="text-red-600 hover:text-red-700"
                           >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-service">
-                                <SelectValue placeholder={
-                                  selectedStaff.length === 0 
-                                    ? "Select staff first..." 
-                                    : "Select service..."
-                                } />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {availableServices.map((service) => (
-                                <SelectItem 
-                                  key={service.id} 
-                                  value={service.type}
-                                  data-testid={`select-service-${service.id}`}
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Line Item Selection */}
+                          <FormField
+                            control={entryForm.control}
+                            name={`staffAssignments.${index}.lineItemId`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Service/Line Item</FormLabel>
+                                <Select 
+                                  onValueChange={(value) => {
+                                    const item = allLineItems.find((item: MaterialServiceItem) => item.id === value);
+                                    if (item) {
+                                      field.onChange(value);
+                                      entryForm.setValue(`staffAssignments.${index}.lineItemNumber`, item.itemNumber);
+                                      entryForm.setValue(`staffAssignments.${index}.lineItemName`, item.name);
+                                      entryForm.setValue(`staffAssignments.${index}.lineItemCategory`, item.category);
+                                    }
+                                  }}
+                                  value={field.value}
                                 >
-                                  <div className="flex flex-col">
-                                    <span>{service.name}</span>
-                                    <span className="text-xs text-gray-500">
-                                      ${service.baseRate}/hr • Requires: {service.requiredSkills.join(", ")}
-                                    </span>
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      );
-                    }}
-                  />
+                                  <FormControl>
+                                    <SelectTrigger data-testid={`select-line-item-${index}`}>
+                                      <SelectValue placeholder="Select line item" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {(employeeLineItems[assignment.employeeId] || allLineItems).map((item: MaterialServiceItem) => (
+                                      <SelectItem key={item.id} value={item.id}>
+                                        {item.itemNumber} - {item.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={entryForm.control}
-                      name="hours"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Hours</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="8.0" 
-                              type="number" 
-                              step="0.25"
-                              data-testid="input-hours"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                          {/* Hours */}
+                          <FormField
+                            control={entryForm.control}
+                            name={`staffAssignments.${index}.hours`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Hours</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    placeholder="8.0"
+                                    {...field}
+                                    data-testid={`input-hours-${index}`}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
 
-                    <FormField
-                      control={entryForm.control}
-                      name="startTime"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Start Time</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="08:00" 
-                              type="time"
-                              data-testid="input-start-time"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                          {/* Start Time */}
+                          <FormField
+                            control={entryForm.control}
+                            name={`staffAssignments.${index}.startTime`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Start Time</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="time"
+                                    {...field}
+                                    data-testid={`input-start-time-${index}`}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
 
-                  <div className="flex items-center gap-4">
-                    <FormField
-                      control={entryForm.control}
-                      name="billed"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-billed"
-                            />
-                          </FormControl>
-                          <FormLabel className="text-sm font-normal">
-                            Mark as billed
-                          </FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                          {/* Billed */}
+                          <FormField
+                            control={entryForm.control}
+                            name={`staffAssignments.${index}.billed`}
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    data-testid={`checkbox-billed-${index}`}
+                                  />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                  <FormLabel>Billable</FormLabel>
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    ))}
 
-                  <div className="flex gap-2">
-                    <Button type="submit" data-testid="button-save-entry">
-                      Add Entry
-                    </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setIsAddingEntry(false)}
-                      data-testid="button-cancel-entry"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </Form>
+                    {/* Add More Staff Button */}
+                    {selectedStaffIds.length > 0 && selectedStaffIds.length < employees.length && (
+                      <div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            // Show available staff to add
+                            const availableStaff = employees.filter((emp: any) => 
+                              !selectedStaffIds.includes(emp.id)
+                            );
+                            if (availableStaff.length === 1) {
+                              addStaffAssignment(availableStaff[0].id);
+                            }
+                          }}
+                          className="w-full"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Another Staff Member
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Form Actions */}
+                    {selectedStaffIds.length > 0 && (
+                      <div className="flex gap-3 pt-4 border-t">
+                        <Button
+                          type="submit"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          data-testid="button-save-time-entries"
+                        >
+                          Add Time Entries
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setIsAddingEntry(false);
+                            setSelectedStaffIds([]);
+                            entryForm.reset({
+                              jobId,
+                              staffAssignments: [],
+                            });
+                          }}
+                          data-testid="button-cancel-time-entries"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
+                  </form>
+                </Form>
+              </div>
             </div>
           )}
 
