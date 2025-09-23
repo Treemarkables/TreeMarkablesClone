@@ -1026,6 +1026,7 @@ export const employees = pgTable("employees", {
   email: text("email"),
   phone: text("phone"),
   position: text("position").notNull(), // arborist, ground_crew, foreman, driver
+  role: text("role").notNull().default("crew"), // owner, office_staff, crew
   status: text("status").notNull().default("active"), // active, inactive, on_leave
   skillLevel: text("skill_level").notNull().default("beginner"), // beginner, intermediate, expert
   certifications: text("certifications").array().default([]), // ISA, CTSP, etc.
@@ -1033,6 +1034,7 @@ export const employees = pgTable("employees", {
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
   availableHours: text("available_hours"), // JSON: {"mon": "8-17", "tue": "8-17", ...}
   emergencyContact: text("emergency_contact"),
+  emergencyContactPhone: text("emergency_contact_phone"),
   notes: text("notes"),
   hireDate: timestamp("hire_date"),
   isActive: boolean("is_active").notNull().default(true),
