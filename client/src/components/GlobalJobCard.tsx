@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent } from "lucide-react";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { StaffTimeManager } from "./StaffTimeManager";
@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertJobSchema, type ChecklistItem, type Job, type Customer } from "@shared/schema";
@@ -385,6 +386,155 @@ export function GlobalJobCard({
     console.log("Call button clicked");
   };
 
+  // Invoice action handlers
+  const convertToInvoiceMutation = useMutation({
+    mutationFn: async (invoiceData: { invoiceType: 'full' | 'partial'; customData?: any }) => {
+      if (!editingJob?.id) throw new Error("No job selected");
+      return apiRequest('POST', `/api/jobs/${editingJob.id}/convert-to-invoice`, invoiceData);
+    },
+    onSuccess: (response) => {
+      const data = response.json();
+      toast({
+        title: "Invoice Created",
+        description: data.message || "Invoice created successfully",
+      });
+      // Refresh job data
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      console.log("Invoice created:", data);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create invoice",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleSendInvoice = async () => {
+    if (!editingJob) return;
+    
+    try {
+      // First convert to invoice, then handle sending
+      await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
+      
+      toast({
+        title: "Send Invoice",
+        description: "Invoice created. Opening email composer...",
+      });
+      console.log("Send Invoice - job converted, opening email");
+      // TODO: Open email modal with invoice attached
+    } catch (error) {
+      console.error("Error in handleSendInvoice:", error);
+    }
+  };
+
+  const handleSMSInvoice = async () => {
+    if (!editingJob) return;
+    
+    try {
+      await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
+      
+      toast({
+        title: "SMS Invoice",
+        description: "Invoice created. Opening SMS composer...",
+      });
+      console.log("SMS Invoice - job converted, opening SMS");
+      // TODO: Open SMS modal with invoice link
+    } catch (error) {
+      console.error("Error in handleSMSInvoice:", error);
+    }
+  };
+
+  const handleAddPayment = () => {
+    toast({
+      title: "Add Payment",
+      description: "Opening payment recording interface...",
+    });
+    console.log("Add Payment clicked");
+    // TODO: Implement payment recording functionality
+  };
+
+  const handleApproveToXero = async () => {
+    if (!editingJob) return;
+    
+    try {
+      await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
+      
+      toast({
+        title: "Approve to Xero",
+        description: "Invoice created and ready for Xero integration...",
+      });
+      console.log("Approve to Xero - job converted");
+      // TODO: Implement Xero API integration
+    } catch (error) {
+      console.error("Error in handleApproveToXero:", error);
+    }
+  };
+
+  const handleCustomiseInvoice = async () => {
+    if (!editingJob) return;
+    
+    try {
+      await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
+      
+      toast({
+        title: "Customise Invoice",
+        description: "Invoice created. Opening customization interface...",
+      });
+      console.log("Customise Invoice - job converted, opening editor");
+      // TODO: Open invoice customization modal
+    } catch (error) {
+      console.error("Error in handleCustomiseInvoice:", error);
+    }
+  };
+
+  const handleAutoInvoice = async () => {
+    if (!editingJob) return;
+    
+    try {
+      await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
+      
+      toast({
+        title: "Auto Invoice",
+        description: "Invoice auto-generated from job details!",
+      });
+      console.log("Auto Invoice - job converted automatically");
+    } catch (error) {
+      console.error("Error in handleAutoInvoice:", error);
+    }
+  };
+
+  const handlePartialInvoice = async () => {
+    if (!editingJob) return;
+    
+    // TODO: Open modal to get percentage for partial invoice
+    const percentage = prompt("Enter percentage for partial invoice (e.g., 50 for 50%):");
+    if (!percentage || isNaN(Number(percentage))) {
+      toast({
+        title: "Invalid Input",
+        description: "Please enter a valid percentage",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      await convertToInvoiceMutation.mutateAsync({ 
+        invoiceType: 'partial', 
+        customData: { percentage: Number(percentage) } 
+      });
+      
+      toast({
+        title: "Partial Invoice",
+        description: `${percentage}% partial invoice created successfully!`,
+      });
+      console.log(`Partial Invoice - ${percentage}% of job converted`);
+    } catch (error) {
+      console.error("Error in handlePartialInvoice:", error);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-7xl h-[95vh] flex flex-col p-0">
@@ -425,6 +575,84 @@ export function GlobalJobCard({
                 <Presentation className="w-4 h-4 mr-1" />
                 Proposal
               </Button>
+              
+              {/* Invoice Dropdown - only show for quote or work_order jobs */}
+              {editingJob && (editingJob.status === 'quote' || editingJob.status === 'work_order') && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                      data-testid="button-invoice-dropdown"
+                    >
+                      <Receipt className="w-4 h-4 mr-1" />
+                      Send Invoice
+                      <ChevronDown className="w-4 h-4 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-64" align="end">
+                    <DropdownMenuItem onClick={handleSendInvoice} data-testid="menu-send-invoice">
+                      <Send className="w-4 h-4 mr-2 text-green-600" />
+                      <div>
+                        <div className="font-medium">Send Invoice</div>
+                        <div className="text-sm text-muted-foreground">Draft an email to send the invoice.</div>
+                      </div>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem onClick={handleSMSInvoice} data-testid="menu-sms-invoice">
+                      <MessageSquare className="w-4 h-4 mr-2 text-blue-600" />
+                      <div>
+                        <div className="font-medium">SMS Invoice</div>
+                        <div className="text-sm text-muted-foreground">Draft a text to send the invoice.</div>
+                      </div>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem onClick={handleAddPayment} data-testid="menu-add-payment">
+                      <CreditCard className="w-4 h-4 mr-2 text-blue-600" />
+                      <div>
+                        <div className="font-medium">Add Payment</div>
+                        <div className="text-sm text-muted-foreground">Record an invoice payment.</div>
+                      </div>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem onClick={handleApproveToXero} data-testid="menu-approve-xero">
+                      <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                      <div>
+                        <div className="font-medium">Approve to Xero</div>
+                        <div className="text-sm text-muted-foreground">Send the invoice and payment details to Xero</div>
+                      </div>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuSeparator />
+                    
+                    <DropdownMenuItem onClick={handleCustomiseInvoice} data-testid="menu-customise-invoice">
+                      <Settings className="w-4 h-4 mr-2 text-gray-600" />
+                      <div>
+                        <div className="font-medium">Customise Invoice</div>
+                        <div className="text-sm text-muted-foreground">Edit the invoice's template and settings.</div>
+                      </div>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem onClick={handleAutoInvoice} data-testid="menu-auto-invoice">
+                      <Zap className="w-4 h-4 mr-2 text-green-600" />
+                      <div>
+                        <div className="font-medium">Auto Invoice</div>
+                        <div className="text-sm text-muted-foreground">Auto-draft an invoice description and items/services to charge for.</div>
+                      </div>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem onClick={handlePartialInvoice} data-testid="menu-partial-invoice">
+                      <Percent className="w-4 h-4 mr-2 text-orange-600" />
+                      <div>
+                        <div className="font-medium">Partial Invoice</div>
+                        <div className="text-sm text-muted-foreground">Create a Partial or Progress Invoice for this job.</div>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              
               <div className="flex gap-1">
                 <Button 
                   variant="outline" 

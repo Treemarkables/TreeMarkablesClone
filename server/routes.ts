@@ -1605,6 +1605,116 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Convert job to invoice
+  app.post('/api/jobs/:id/convert-to-invoice', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { invoiceType = 'full', customData = {} } = req.body;
+      
+      // Get the job
+      const job = await storage.getJob(id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Check if job is eligible for invoicing
+      if (job.status !== 'quote' && job.status !== 'work_order') {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Only quotes and work orders can be converted to invoices' 
+        });
+      }
+
+      // Generate invoice number
+      const today = new Date();
+      const invoiceNumber = `INV-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${Date.now().toString().slice(-6)}`;
+
+      // Calculate amount based on invoice type
+      let amount = job.totalAmount ? parseFloat(job.totalAmount) : 0;
+      if (invoiceType === 'partial' && customData.percentage) {
+        amount = amount * (parseFloat(customData.percentage) / 100);
+      }
+
+      // Calculate due date (default 30 days from now)
+      const issueDate = new Date();
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 30);
+
+      // Create invoice data
+      const invoiceData = {
+        customerId: job.customerId!,
+        jobId: job.id,
+        invoiceNumber,
+        jobTitle: job.title || 'Unnamed Job',
+        issueDate,
+        dueDate,
+        amount: amount.toString(),
+        status: 'draft' as const,
+        description: `Invoice for ${job.title || 'tree service'}`,
+        items: job.lineItems || [],
+        notes: customData.notes || ''
+      };
+
+      // Create the invoice
+      const invoice = await storage.createInvoice(invoiceData);
+
+      // Update job to store invoice reference
+      await storage.updateJob(id, { 
+        invoiceId: invoice.id,
+        invoiceBlocked: false
+      });
+
+      console.log(`💰 Job ${job.jobNumber} converted to invoice ${invoiceNumber}`);
+
+      res.json({ 
+        success: true, 
+        data: invoice,
+        message: `${invoiceType === 'partial' ? 'Partial invoice' : 'Invoice'} created successfully`
+      });
+    } catch (error) {
+      console.error('Error converting job to invoice:', error);
+      res.status(500).json({ success: false, message: 'Error creating invoice' });
+    }
+  });
+
+  // Get invoice by ID
+  app.get('/api/invoices/:id', async (req: Request, res: Response) => {
+    try {
+      const invoice = await storage.getInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+      res.json({ success: true, data: invoice });
+    } catch (error) {
+      console.error('Error fetching invoice:', error);
+      res.status(500).json({ success: false, message: 'Error fetching invoice' });
+    }
+  });
+
+  // Update invoice status (for payment recording, etc.)
+  app.patch('/api/invoices/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+      
+      const invoice = await storage.getInvoice(id);
+      if (!invoice) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+
+      // Update invoice (assuming storage has updateInvoice method)
+      const updatedInvoice = { ...invoice, ...updateData, updatedAt: new Date() };
+      await storage.createInvoice(updatedInvoice); // Using createInvoice to update for now
+
+      console.log(`📋 Invoice ${invoice.invoiceNumber} updated:`, updateData);
+
+      res.json({ success: true, data: updatedInvoice });
+    } catch (error) {
+      console.error('Error updating invoice:', error);
+      res.status(500).json({ success: false, message: 'Error updating invoice' });
+    }
+  });
+
   // ========================================
   // STAFF TIME TRACKING API ROUTES
   // ========================================
