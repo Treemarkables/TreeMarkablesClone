@@ -228,7 +228,8 @@ export function GlobalJobCard({
   };
   
   const getTotalAmount = () => {
-    return lineItems.reduce((sum, item) => sum + item.total, 0);
+    const total = lineItems.reduce((sum, item) => sum + item.total, 0);
+    return total.toFixed(2); // Convert to string with 2 decimal places for decimal type
   };
 
   const createJobMutation = useMutation({
@@ -300,6 +301,7 @@ export function GlobalJobCard({
 
       const jobData = {
         customerId: finalCustomerId,
+        title: data.title,
         description: data.description,
         address: data.address,
         status: data.status,
@@ -626,6 +628,19 @@ export function GlobalJobCard({
               <CardContent className="space-y-4">
                 <FormField
                   control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Job Title *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Enter job title" data-testid="input-job-title" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="description"
                   render={({ field }) => (
                     <FormItem>
@@ -887,7 +902,7 @@ export function GlobalJobCard({
                   <div className="text-right">
                     <div className="text-sm text-muted-foreground">Total Amount</div>
                     <div className="text-2xl font-bold text-primary">
-                      ${getTotalAmount().toFixed(2)}
+                      ${getTotalAmount()}
                     </div>
                   </div>
                 </div>
@@ -980,6 +995,11 @@ export function GlobalJobCard({
       </Button>
       <Button 
         onClick={() => {
+          console.log('🔧 Save button clicked');
+          console.log('📝 Form errors:', form.formState.errors);
+          console.log('📋 Form values:', form.getValues());
+          console.log('✅ Form is valid:', form.formState.isValid);
+          console.log('🏗️ Line items:', lineItems);
           form.handleSubmit(onSubmit)();
         }}
         disabled={isLoading}

@@ -1500,6 +1500,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // ENHANCED EXPENSE TRACKING API ROUTES
   // ========================================
 
+  // Get job expenses (individual expense entries for ExpenseManager)
+  app.get('/api/jobs/:id/expenses', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const job = await storage.getJob(id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      
+      // Return individual expense entries array (currently empty, but ready for future expansion)
+      // For now, ExpenseManager will show empty state while GrossMarginCalculator gets data from job object
+      const expenseEntries: any[] = [];
+      
+      res.json({ success: true, data: expenseEntries });
+    } catch (error) {
+      console.error('Error fetching job expenses:', error);
+      res.status(500).json({ success: false, message: 'Error fetching job expenses' });
+    }
+  });
+
   // Update job expenses
   app.put('/api/jobs/:id/expenses', async (req: Request, res: Response) => {
     try {

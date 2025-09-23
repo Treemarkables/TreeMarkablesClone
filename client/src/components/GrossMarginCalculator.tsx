@@ -56,19 +56,24 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     enabled: !!jobId
   });
   
-  // Fetch job expenses for complete cost calculation
-  const { data: expensesData } = useQuery({
-    queryKey: ['/api/jobs', jobId, 'expenses'],
-    enabled: !!jobId
-  });
-
   const hasStaffTimeEntries = (staffTimeData as any)?.data?.length > 0;
   const staffTimeEntries = (staffTimeData as any)?.data || [];
   const staffTimeLaborCost = staffTimeEntries.reduce((sum: number, entry: any) => sum + (entry.hours * entry.rate), 0);
   
-  // Get expenses data
-  const expenses = (expensesData as any)?.data || [];
-  const totalExpenses = expenses.reduce((sum: number, expense: any) => sum + expense.amount, 0);
+  // Get bulk expense data from job object (not from /expenses endpoint which is for individual entries)
+  const bulkExpenses = {
+    actualLaborCosts: job?.actualLaborCosts || 0,
+    actualMaterialsCosts: job?.actualMaterialsCosts || 0,
+    equipmentCosts: job?.equipmentCosts || 0,
+    subcontractorCosts: job?.subcontractorCosts || 0,
+    permitCosts: job?.permitCosts || 0,
+    travelCosts: job?.travelCosts || 0,
+    disposalCosts: job?.disposalCosts || 0,
+    miscExpenses: job?.miscExpenses || 0
+  };
+  const totalExpenses = Object.values(bulkExpenses).reduce((sum: number, amount: any) => {
+    return sum + (typeof amount === 'number' ? amount : 0);
+  }, 0);
 
   // Update form data when job data changes
   useEffect(() => {
