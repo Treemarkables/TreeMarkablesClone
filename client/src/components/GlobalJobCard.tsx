@@ -468,7 +468,7 @@ export function GlobalJobCard({
         {/* Tabbed interface */}
         <div className="flex-1 flex flex-col min-h-0">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full" data-form="job-form">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                 <div className="px-6 pt-4 pb-0">
                   <TabsList className="grid w-full grid-cols-3">
@@ -964,27 +964,29 @@ export function GlobalJobCard({
               </TabsContent>
             </div>
           </Tabs>
-          
-          {/* Form Actions - Always visible */}
-          <div className="flex justify-end gap-3 p-6 border-t">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={onClose}
-              data-testid="button-cancel"
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={isLoading}
-              data-testid="button-save-job"
-            >
-              {isLoading ? "Saving..." : mode === "create" ? "Create Job" : "Update Job"}
-            </Button>
-          </div>
         </form>
       </Form>
+    </div>
+    
+    {/* Form Actions - Always visible outside form */}
+    <div className="flex justify-end gap-3 p-6 border-t bg-background">
+      <Button 
+        type="button" 
+        variant="outline" 
+        onClick={onClose}
+        data-testid="button-cancel"
+      >
+        Cancel
+      </Button>
+      <Button 
+        onClick={() => {
+          form.handleSubmit(onSubmit)();
+        }}
+        disabled={isLoading}
+        data-testid="button-save-job"
+      >
+        {isLoading ? "Saving..." : mode === "create" ? "Create Job" : "Update Job"}
+      </Button>
     </div>
   </DialogContent>
       
