@@ -207,8 +207,11 @@ export function GlobalJobCard({
     setLineItems(lineItems.map(item => {
       if (item.id === id) {
         const updated = { ...item, [field]: value };
+        // Always recalculate total when quantity or unitPrice changes
         if (field === 'quantity' || field === 'unitPrice') {
-          updated.total = updated.quantity * updated.unitPrice;
+          const qty = field === 'quantity' ? value : updated.quantity;
+          const price = field === 'unitPrice' ? value : updated.unitPrice;
+          updated.total = (qty || 0) * (price || 0);
         }
         return updated;
       }
@@ -847,8 +850,11 @@ export function GlobalJobCard({
                       <div className="col-span-2">
                         <Input
                           type="number"
-                          value={item.quantity}
-                          onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                          value={item.quantity || ""}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            updateLineItem(item.id, 'quantity', val);
+                          }}
                           placeholder="Qty"
                           min="0"
                           step="0.1"
@@ -858,8 +864,11 @@ export function GlobalJobCard({
                       <div className="col-span-2">
                         <Input
                           type="number"
-                          value={item.unitPrice}
-                          onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                          value={item.unitPrice || ""}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            updateLineItem(item.id, 'unitPrice', val);
+                          }}
                           placeholder="Unit Price"
                           min="0"
                           step="0.01"
