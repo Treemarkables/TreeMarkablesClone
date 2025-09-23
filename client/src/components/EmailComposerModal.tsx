@@ -24,7 +24,8 @@ import {
   AlignCenter,
   AlignRight,
   Image,
-  Check
+  Check,
+  Mail
 } from "lucide-react";
 
 interface EmailComposerModalProps {
@@ -263,11 +264,14 @@ export function EmailComposerModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-        <DialogHeader className="flex-row items-center justify-between space-y-0 pb-4 border-b">
-          <DialogTitle className="text-lg font-semibold">New Email</DialogTitle>
+        <DialogHeader className="flex-row items-center justify-between space-y-0 pb-4 border-b bg-gradient-to-r from-green-500 to-emerald-500 text-white p-4 rounded-t-lg -m-6 mb-4">
+          <div className="flex items-center gap-2">
+            <Mail className="w-5 h-5" />
+            <DialogTitle className="text-lg font-semibold text-white">New Email</DialogTitle>
+          </div>
           <div className="flex items-center gap-2">
             <Select value={emailData.selectedTemplate} onValueChange={handleTemplateSelect}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48 bg-white/10 border-white/20 text-white">
                 <SelectValue placeholder="Email Templates" />
               </SelectTrigger>
               <SelectContent>
@@ -282,6 +286,7 @@ export function EmailComposerModal({
               onClick={() => {}} 
               variant="outline" 
               size="sm"
+              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
               data-testid="button-attach-file"
             >
               <Paperclip className="w-4 h-4 mr-2" />
@@ -290,7 +295,7 @@ export function EmailComposerModal({
             <Button 
               onClick={handleSendEmail}
               disabled={sendEmailMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-white/20 hover:bg-white/30 text-white border border-white/20"
               data-testid="button-send-email"
             >
               <Send className="w-4 h-4 mr-2" />
@@ -300,6 +305,7 @@ export function EmailComposerModal({
               onClick={onClose} 
               variant="ghost" 
               size="sm"
+              className="text-white hover:bg-white/20"
               data-testid="button-close-email"
             >
               <X className="w-4 h-4" />
