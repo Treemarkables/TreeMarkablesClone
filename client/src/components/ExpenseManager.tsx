@@ -55,10 +55,21 @@ interface ExpenseEntry {
 interface ExpenseManagerProps {
   jobId: string;
   compact?: boolean;
+  isAddDialogOpen?: boolean;
+  setIsAddDialogOpen?: (open: boolean) => void;
 }
 
-export function ExpenseManager({ jobId, compact = false }: ExpenseManagerProps) {
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+export function ExpenseManager({ 
+  jobId, 
+  compact = false, 
+  isAddDialogOpen: externalDialogOpen, 
+  setIsAddDialogOpen: setExternalDialogOpen 
+}: ExpenseManagerProps) {
+  const [internalDialogOpen, setInternalDialogOpen] = useState(false);
+  
+  // Use external dialog state for compact mode, internal for full mode
+  const isAddDialogOpen = compact && externalDialogOpen !== undefined ? externalDialogOpen : internalDialogOpen;
+  const setIsAddDialogOpen = compact && setExternalDialogOpen ? setExternalDialogOpen : setInternalDialogOpen;
   const [editingExpense, setEditingExpense] = useState<ExpenseEntry | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const { toast } = useToast();

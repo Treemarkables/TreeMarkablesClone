@@ -38,10 +38,21 @@ interface StaffTimeEntry {
 interface StaffTimeManagerProps {
   jobId: string;
   compact?: boolean;
+  isAddDialogOpen?: boolean;
+  setIsAddDialogOpen?: (open: boolean) => void;
 }
 
-export function StaffTimeManager({ jobId, compact = false }: StaffTimeManagerProps) {
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+export function StaffTimeManager({ 
+  jobId, 
+  compact = false, 
+  isAddDialogOpen: externalDialogOpen, 
+  setIsAddDialogOpen: setExternalDialogOpen 
+}: StaffTimeManagerProps) {
+  const [internalDialogOpen, setInternalDialogOpen] = useState(false);
+  
+  // Use external dialog state for compact mode, internal for full mode
+  const isAddDialogOpen = compact && externalDialogOpen !== undefined ? externalDialogOpen : internalDialogOpen;
+  const setIsAddDialogOpen = compact && setExternalDialogOpen ? setExternalDialogOpen : setInternalDialogOpen;
   const [editingEntry, setEditingEntry] = useState<StaffTimeEntry | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
