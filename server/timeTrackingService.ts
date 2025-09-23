@@ -413,7 +413,7 @@ export class TimeTrackingService {
       jobId: "5",
       employeeId: "d428f28e-95fa-4a85-8c73-9ba123456789",
       employeeName: "Daniel Thompson",
-      entryDate: yesterday,
+      entryDate: today,
       totalDayHours: 8.0,
       timeEntries: [
         { 
