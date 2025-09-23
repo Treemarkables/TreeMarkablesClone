@@ -54,7 +54,7 @@ export function SMSComposerModal({
       
       // Generate default SMS message with invoice link
       if (invoiceData) {
-        const defaultMessage = `Hi ${customer.name || 'there'}, your invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.totalAmount || '0.00'} is ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
+        const defaultMessage = `Hi ${customer.name || 'there'}, invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.totalAmount || '0.00'} ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
         form.setValue("message", defaultMessage);
         setCharacterCount(defaultMessage.length);
       }
