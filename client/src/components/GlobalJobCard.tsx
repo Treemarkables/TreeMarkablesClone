@@ -7,6 +7,7 @@ import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, 
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { StaffTimeManager } from "./StaffTimeManager";
+import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
 import { GrossMarginCalculator } from "./GrossMarginCalculator";
 import { ServiceM8TimeRecordingModal } from "./ServiceM8TimeRecordingModal";
@@ -1227,6 +1228,18 @@ export function GlobalJobCard({
                             <Clock className="w-4 h-4 mr-2" />
                             Record Time
                           </Button>
+                        </div>
+                        
+                        {/* Staff Time (0) Section */}
+                        <div className="mt-4" data-testid="section-staff-time">
+                          <h4 className="text-sm font-medium text-gray-700 mb-3">Staff Time ({editingJob ? 'Loading...' : '0'})</h4>
+                          {editingJob && (
+                            <StaffTimeTracker 
+                              jobId={editingJob.id} 
+                              compact={true} 
+                              data-testid="staff-time-tracker"
+                            />
+                          )}
                         </div>
                       </div>
 

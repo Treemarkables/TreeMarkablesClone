@@ -393,7 +393,7 @@ export function ServiceM8TimeRecordingModal({
         title: "Time Entries Saved",
         description: `Recorded ${timeEntries.length} job entries with ${efficiency.jobEfficiency}% efficiency`,
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/time-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       onClose();
     },

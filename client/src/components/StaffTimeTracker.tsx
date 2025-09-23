@@ -65,11 +65,12 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
 
   const employees: Employee[] = employeesData?.data || [];
 
-  // Fetch existing staff time entries for this job
+  // Fetch existing staff time entries for this job from the new time tracking system
+  const today = new Date().toISOString().split('T')[0];
   const { data: staffTimeData, isLoading } = useQuery({
-    queryKey: ['staff-time', jobId],
+    queryKey: ['time-entries', jobId, today],
     queryFn: async () => {
-      const response = await fetch(`/api/jobs/${jobId}/staff-time`);
+      const response = await fetch(`/api/time-entries/${jobId}/${today}`);
       if (!response.ok) throw new Error('Failed to fetch staff time entries');
       return response.json();
     },
@@ -84,7 +85,8 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
   }, [staffTimeData]);
 
   // Calculate total labor cost and notify parent
-  const totalLaborCost = staffEntries.reduce((sum, entry) => sum + (entry.hours * entry.rate), 0);
+  const totalLaborCost = staffEntries.reduce((sum, entry) => sum + (Number(entry.hours) * Number(entry.rate)), 0);
+  const totalHours = staffEntries.reduce((sum, entry) => sum + Number(entry.hours), 0);
   
   useEffect(() => {
     if (onLaborCostChange) {
@@ -98,7 +100,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
       return await apiRequest('POST', `/api/jobs/${jobId}/staff-time`, entry);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff-time', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
       queryClient.invalidateQueries({ queryKey: ['job', jobId] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       setNewEntry({
@@ -128,7 +130,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
       return await apiRequest('DELETE', url);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff-time', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
       queryClient.invalidateQueries({ queryKey: ['job', jobId] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       toast({
@@ -198,7 +200,6 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
     return employee?.position || '';
   };
 
-  const totalHours = staffEntries.reduce((sum, entry) => sum + entry.hours, 0);
 
   if (compact) {
     return (
