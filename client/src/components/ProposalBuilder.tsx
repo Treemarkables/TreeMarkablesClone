@@ -30,7 +30,7 @@ const proposalFormSchema = insertProposalSchema.extend({
   totalAmount: z.number().min(0, "Total amount must be positive").optional(),
   taxRate: z.preprocess((val) => parseFloat(val as string) || 15, z.number().min(0).max(100).default(15)),
   validUntil: z.string().optional(), // UI field that maps to expiryDays
-}).omit({ createdAt: true, updatedAt: true, expiryDays: true }).partial();
+}).partial();
 
 // Simplified line item form schema
 const lineItemFormSchema = z.object({
@@ -456,10 +456,13 @@ export function ProposalBuilder({
 
         const uploadedPhotos = await uploadPhotoMutation.mutateAsync(formData);
         
+        // Ensure uploadedPhotos is an array before spreading
+        const photosArray = Array.isArray(uploadedPhotos) ? uploadedPhotos : [];
+        
         // Add photos to the specific section
         setSections(prev => prev.map(section => 
           section.id === sectionId 
-            ? { ...section, photos: [...section.photos, ...uploadedPhotos] }
+            ? { ...section, photos: [...section.photos, ...photosArray] }
             : section
         ));
       } else {
