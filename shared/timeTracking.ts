@@ -42,15 +42,21 @@ export const jobTimeEntries = pgTable("job_time_entries", {
   employeeId: varchar("employee_id").notNull(),
   employeeName: text("employee_name").notNull(),
   
-  // Service-based tracking
-  serviceType: text("service_type").notNull(), // tree_removal, pruning, stump_grinding, etc
-  serviceName: text("service_name").notNull(), // Display name like "Tree Removal", "Hedge Trimming"
+  // Materials & Services line item tracking
+  lineItemId: text("line_item_id").notNull(), // Reference to Materials & Services line item
+  lineItemNumber: text("line_item_number").notNull(), // e.g., "34", "29 labour", "41"
+  lineItemName: text("line_item_name").notNull(), // e.g., "Admin Time", "Bandit chipper hire"
+  lineItemCategory: text("line_item_category").notNull(), // "Labour", "Equipment", "Service"
+  
+  // Backward compatibility (deprecated - use line item fields)
+  serviceType: text("service_type"), // tree_removal, pruning, stump_grinding, etc
+  serviceName: text("service_name"), // Display name like "Tree Removal", "Hedge Trimming"
   
   // Time details
   entryDate: text("entry_date").notNull(), // YYYY-MM-DD
   startTime: text("start_time"), // HH:MM format, optional
   hours: decimal("hours", { precision: 4, scale: 2 }).notNull(),
-  rate: decimal("rate", { precision: 6, scale: 2 }).notNull(), // Hourly rate for this service
+  rate: decimal("rate", { precision: 6, scale: 2 }).notNull(), // Hourly rate from line item
   
   // Job line item creation tracking
   serviceLineItemCreated: boolean("service_line_item_created").default(false),
@@ -97,6 +103,16 @@ export const insertJobTimeEntrySchema = createInsertSchema(jobTimeEntries).omit(
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  // Make line item fields required for new entries
+  lineItemId: z.string().min(1, "Line item is required"),
+  lineItemNumber: z.string().min(1, "Line item number is required"),
+  lineItemName: z.string().min(1, "Line item name is required"),
+  lineItemCategory: z.string().min(1, "Line item category is required"),
+  
+  // Make legacy service fields optional
+  serviceType: z.string().optional(),
+  serviceName: z.string().optional(),
 });
 
 export const insertStaffRateSchema = createInsertSchema(staffRates).omit({
