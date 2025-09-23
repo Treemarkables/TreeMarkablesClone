@@ -29,7 +29,7 @@ interface PhotoUploadProps {
 interface UploadResponse {
   success: boolean;
   message: string;
-  photos: string[];
+  photos: (string | { url?: string; filename?: string })[];
 }
 
 interface DeleteResponse {
