@@ -281,6 +281,7 @@ export class TimeTrackingService {
   // ========================================
 
   async saveDailyTimeEntry(data: {
+    jobId: string;
     employeeId: string;
     employeeName: string;
     entryDate: string;
@@ -288,6 +289,12 @@ export class TimeTrackingService {
     timeEntries: Array<{
       jobId: string;
       jobNumber: string;
+      employeeId: string;
+      employeeName: string;
+      lineItemId: string;
+      lineItemNumber: string;
+      lineItemName: string;
+      lineItemCategory: string;
       hours: number;
       rate: number;
       startTime?: string;
@@ -299,6 +306,7 @@ export class TimeTrackingService {
     breakHours: number;
     roundingMode: "none" | "15min" | "30min" | "1hour";
     travelTimeMode: "included" | "excluded" | "separate";
+    efficiency?: any;
   }): Promise<{ dailyEntry: DailyTimeEntry; jobEntries: JobTimeEntry[] }> {
     
     // Calculate totals
@@ -356,6 +364,10 @@ export class TimeTrackingService {
         employeeId: data.employeeId,
         employeeName: data.employeeName,
         entryDate: data.entryDate,
+        lineItemId: timeEntry.lineItemId,
+        lineItemNumber: timeEntry.lineItemNumber,
+        lineItemName: timeEntry.lineItemName,
+        lineItemCategory: timeEntry.lineItemCategory,
         hours: timeEntry.hours.toString(),
         rate: timeEntry.rate.toString(),
         startTime: timeEntry.startTime,
@@ -398,13 +410,40 @@ export class TimeTrackingService {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     await this.saveDailyTimeEntry({
+      jobId: "5",
       employeeId: "d428f28e-95fa-4a85-8c73-9ba123456789",
       employeeName: "Daniel Thompson",
       entryDate: yesterday,
       totalDayHours: 8.0,
       timeEntries: [
-        { jobId: "5", jobNumber: "#3291", hours: 4.5, rate: 45.00, startTime: "08:00", billed: true },
-        { jobId: "6", jobNumber: "#3292", hours: 2.0, rate: 45.00, startTime: "13:00", billed: false },
+        { 
+          jobId: "5", 
+          jobNumber: "#3291", 
+          employeeId: "d428f28e-95fa-4a85-8c73-9ba123456789", 
+          employeeName: "Daniel Thompson",
+          lineItemId: "1",
+          lineItemNumber: "11",
+          lineItemName: "Call out",
+          lineItemCategory: "Labour",
+          hours: 4.5, 
+          rate: 45.00, 
+          startTime: "08:00", 
+          billed: true 
+        },
+        { 
+          jobId: "6", 
+          jobNumber: "#3292", 
+          employeeId: "d428f28e-95fa-4a85-8c73-9ba123456789", 
+          employeeName: "Daniel Thompson",
+          lineItemId: "1",
+          lineItemNumber: "11",
+          lineItemName: "Call out",
+          lineItemCategory: "Labour",
+          hours: 2.0, 
+          rate: 45.00, 
+          startTime: "13:00", 
+          billed: false 
+        },
       ],
       maintenanceHours: 1.0,
       travelHours: 0.5,

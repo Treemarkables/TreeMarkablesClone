@@ -8,6 +8,7 @@ import {
 
 // Request validation schemas
 const saveDailyTimeSchema = z.object({
+  jobId: z.string().min(1, "Job ID is required"),
   employeeId: z.string().min(1, "Employee ID is required"),
   employeeName: z.string().min(1, "Employee name is required"),
   entryDate: z.string().min(1, "Entry date is required"),
@@ -17,8 +18,10 @@ const saveDailyTimeSchema = z.object({
     jobNumber: z.string().min(1, "Job number is required"),
     employeeId: z.string().min(1, "Employee ID is required"),
     employeeName: z.string().min(1, "Employee name is required"),
-    serviceType: z.string().min(1, "Service type is required"),
-    serviceName: z.string().min(1, "Service name is required"),
+    lineItemId: z.string().min(1, "Line item ID is required"),
+    lineItemNumber: z.string().min(1, "Line item number is required"),
+    lineItemName: z.string().min(1, "Line item name is required"),
+    lineItemCategory: z.string().min(1, "Line item category is required"),
     hours: z.number().min(0, "Hours must be positive"),
     rate: z.number().min(0, "Rate must be positive"),
     startTime: z.string().optional(),
@@ -30,6 +33,7 @@ const saveDailyTimeSchema = z.object({
   breakHours: z.number().min(0).default(0),
   roundingMode: z.enum(["none", "15min", "30min", "1hour"]).default("none"),
   travelTimeMode: z.enum(["included", "excluded", "separate"]).default("included"),
+  efficiency: z.any().optional(), // Allow efficiency data to be passed through
 });
 
 /**
