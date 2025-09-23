@@ -182,6 +182,13 @@ export function JobDiarySection({
 
   // Debug logging - temporary
   console.log('JobDiarySection render - jobId:', jobId, 'entries:', diaryEntries, 'loading:', isLoading);
+  
+  // Also debug the raw query data
+  console.log('Raw query data:', {
+    diaryData: diaryQuery.data,
+    communicationsData: communicationsQuery.data,
+    proposalsData: proposalsQuery.data
+  });
 
   // Mutations
   const createNoteMutation = useMutation({
