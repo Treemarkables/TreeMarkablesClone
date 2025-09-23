@@ -11,6 +11,7 @@ import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
 import { GrossMarginCalculator } from "./GrossMarginCalculator";
 import { ServiceM8TimeRecordingModal } from "./ServiceM8TimeRecordingModal";
+import { EmailComposerModal } from "./EmailComposerModal";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -99,6 +100,7 @@ export function GlobalJobCard({
   const [isStaffTimeDialogOpen, setIsStaffTimeDialogOpen] = useState(false);
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [isServiceM8TimeModalOpen, setIsServiceM8TimeModalOpen] = useState(false);
+  const [isEmailComposerOpen, setIsEmailComposerOpen] = useState(false);
 
   // Fetch customers for the dropdown
   const { data: customersData } = useQuery({
@@ -414,19 +416,24 @@ export function GlobalJobCard({
     }
   });
 
+  const [currentInvoiceData, setCurrentInvoiceData] = useState<any>(null);
+
   const handleSendInvoice = async () => {
     if (!editingJob) return;
     
     try {
-      // First convert to invoice, then handle sending
-      await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
+      // First convert to invoice, then handle sending - mutation already returns parsed JSON
+      const invoiceData = await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
       
-      toast({
-        title: "Send Invoice",
-        description: "Invoice created. Opening email composer...",
-      });
-      console.log("Send Invoice - job converted, opening email");
-      // TODO: Open email modal with invoice attached
+      // Store the fresh invoice data for the email modal
+      setCurrentInvoiceData(invoiceData);
+      
+      // Invalidate and refetch job queries to get updated job with invoice reference
+      await queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+      
+      console.log("Send Invoice - job converted, opening email composer");
+      setIsEmailComposerOpen(true);
     } catch (error) {
       console.error("Error in handleSendInvoice:", error);
     }
@@ -1323,6 +1330,15 @@ export function GlobalJobCard({
           jobNumber={editingJob?.jobNumber || `#${jobId.slice(-4)}`}
         />
       )}
+
+      {/* Email Composer Modal */}
+      <EmailComposerModal
+        isOpen={isEmailComposerOpen}
+        onClose={() => setIsEmailComposerOpen(false)}
+        job={editingJob}
+        customer={customers.find((c: any) => c.id === editingJob?.customerId)}
+        invoiceData={currentInvoiceData}
+      />
     </Dialog>
   );
 }

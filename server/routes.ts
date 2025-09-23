@@ -1677,6 +1677,67 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Send invoice email
+  app.post('/api/emails/send', async (req: Request, res: Response) => {
+    try {
+      const { to, cc, subject, body, attachments, jobId, customerId, invoiceId } = req.body;
+      
+      // Validate required fields
+      if (!to || !subject || !body) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Missing required email fields: to, subject, body' 
+        });
+      }
+
+      // Get related data for email context
+      let job, customer, invoice;
+      if (jobId) {
+        job = await storage.getJob(jobId);
+      }
+      if (customerId) {
+        customer = await storage.getCustomer(customerId);
+      }
+      if (invoiceId) {
+        invoice = await storage.getInvoice(invoiceId);
+      }
+
+      // Prepare email content with any necessary formatting
+      const emailHtml = body.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
+      
+      // Send email using the emailService
+      const emailSent = await emailService.sendEmail({
+        to: to,
+        from: 'noreply@treemarkables.co.nz',
+        subject: subject,
+        text: body,
+        html: emailHtml
+      });
+
+      if (emailSent) {
+        // Log email activity (you could store this in database for audit trail)
+        console.log(`📧 Invoice email sent to ${to} for job ${job?.jobNumber || jobId}`);
+        
+        res.json({ 
+          success: true, 
+          message: 'Email sent successfully' 
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: 'Failed to send email' 
+        });
+      }
+
+    } catch (error) {
+      console.error('Error sending email:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error sending email' 
+      });
+    }
+  });
+
   // Get invoice by ID
   app.get('/api/invoices/:id', async (req: Request, res: Response) => {
     try {
