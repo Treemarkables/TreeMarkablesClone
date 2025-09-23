@@ -52,6 +52,16 @@ interface ProposalBuilderProps {
   proposalId?: string;
 }
 
+interface LineItemChoice {
+  id: string;
+  label: string;
+  description: string;
+  price: number;
+  isDefault?: boolean;
+}
+
+type PricingType = 'normal' | 'choice' | 'fixed';
+
 interface LineItem {
   id?: string;
   description: string;
@@ -63,6 +73,11 @@ interface LineItem {
   notes?: string;
   isOptional: boolean;
   selected: boolean; // For customer selection
+  // Pricing configuration
+  pricingType: PricingType;
+  choices: LineItemChoice[];
+  selectedChoiceId?: string;
+  fixedPrice?: number;
 }
 
 interface UploadedPhoto {
@@ -135,6 +150,18 @@ export function ProposalBuilder({
     category: "labor",
     notes: "",
     isOptional: false,
+    pricingType: "normal",
+    choices: [],
+    selectedChoiceId: undefined,
+    fixedPrice: undefined,
+  });
+
+  // Choice management for current line item
+  const [currentChoice, setCurrentChoice] = useState<Partial<LineItemChoice>>({
+    label: "",
+    description: "",
+    price: 0,
+    isDefault: false,
   });
 
   // Section management functions
@@ -187,18 +214,123 @@ export function ProposalBuilder({
     ));
   };
 
-  // Line item management functions
-  const addLineItemToSection = (sectionId: string) => {
-    if (!currentLineItem.description || !currentLineItem.quantity || !currentLineItem.unitPrice) {
+  // Choice management functions
+  const addChoiceToCurrentItem = () => {
+    if (!currentChoice.label || !currentChoice.price) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in choice label and price",
         variant: "destructive",
       });
       return;
     }
 
-    const totalPrice = (currentLineItem.quantity || 0) * (currentLineItem.unitPrice || 0);
+    const newChoice: LineItemChoice = {
+      id: `choice-${Date.now()}`,
+      label: currentChoice.label || "",
+      description: currentChoice.description || "",
+      price: currentChoice.price || 0,
+      isDefault: currentChoice.isDefault || false,
+    };
+
+    setCurrentLineItem(prev => ({
+      ...prev,
+      choices: [...(prev.choices || []), newChoice],
+      pricingType: "choice",
+      selectedChoiceId: newChoice.isDefault ? newChoice.id : prev.selectedChoiceId,
+    }));
+
+    setCurrentChoice({
+      label: "",
+      description: "",
+      price: 0,
+      isDefault: false,
+    });
+
+    toast({
+      title: "Success",
+      description: "Choice option added",
+    });
+  };
+
+  const removeChoiceFromCurrentItem = (choiceId: string) => {
+    setCurrentLineItem(prev => {
+      const newChoices = (prev.choices || []).filter(choice => choice.id !== choiceId);
+      return {
+        ...prev,
+        choices: newChoices,
+        pricingType: newChoices.length > 0 ? "choice" : "normal",
+        selectedChoiceId: prev.selectedChoiceId === choiceId ? newChoices[0]?.id : prev.selectedChoiceId,
+      };
+    });
+  };
+
+  const calculateLineItemTotal = (item: Partial<LineItem>): number => {
+    if (item.pricingType === "fixed" && item.fixedPrice !== undefined) {
+      return item.fixedPrice;
+    }
+    
+    if (item.pricingType === "choice" && item.selectedChoiceId) {
+      const selectedChoice = item.choices?.find(choice => choice.id === item.selectedChoiceId);
+      if (selectedChoice) {
+        return (item.quantity || 1) * selectedChoice.price;
+      }
+    }
+    
+    return (item.quantity || 0) * (item.unitPrice || 0);
+  };
+
+  // Line item management functions
+  const addLineItemToSection = (sectionId: string) => {
+    // Validation logic
+    if (!currentLineItem.description) {
+      toast({
+        title: "Validation Error",
+        description: "Please provide a description",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (currentLineItem.pricingType === "choice" && (!currentLineItem.choices || currentLineItem.choices.length === 0)) {
+      toast({
+        title: "Validation Error",
+        description: "Please add at least one choice option",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (currentLineItem.pricingType === "normal" && (!currentLineItem.quantity || !currentLineItem.unitPrice)) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in quantity and unit price",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (currentLineItem.pricingType === "fixed" && (!currentLineItem.fixedPrice || currentLineItem.fixedPrice <= 0)) {
+      toast({
+        title: "Validation Error",
+        description: "Please provide a valid fixed price",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const defaultChoiceId = currentLineItem.pricingType === "choice" 
+      ? currentLineItem.choices?.find(choice => choice.isDefault)?.id || currentLineItem.choices?.[0]?.id
+      : undefined;
+
+    // Create item with default choice selected
+    const itemWithChoice: Partial<LineItem> = {
+      ...currentLineItem,
+      selectedChoiceId: defaultChoiceId,
+    };
+    
+    const totalPrice = calculateLineItemTotal(itemWithChoice);
+
     const newItem: LineItem = {
       id: `item-${Date.now()}`,
       description: currentLineItem.description || "",
@@ -210,6 +342,10 @@ export function ProposalBuilder({
       notes: currentLineItem.notes,
       isOptional: currentLineItem.isOptional || false,
       selected: true, // Auto-select new items
+      pricingType: currentLineItem.pricingType || "normal",
+      choices: currentLineItem.choices || [],
+      selectedChoiceId: defaultChoiceId,
+      fixedPrice: currentLineItem.fixedPrice,
     };
 
     setSections(prev => prev.map(section => 
@@ -226,6 +362,10 @@ export function ProposalBuilder({
       category: "labor",
       notes: "",
       isOptional: false,
+      pricingType: "normal",
+      choices: [],
+      selectedChoiceId: undefined,
+      fixedPrice: undefined,
     });
 
     toast({
@@ -257,6 +397,29 @@ export function ProposalBuilder({
           }
         : section
     ));
+  };
+
+  const updateLineItemChoice = (sectionId: string, itemId: string, choiceId: string) => {
+    setSections(prev => prev.map(section => 
+      section.id === sectionId 
+        ? {
+            ...section, 
+            lineItems: section.lineItems.map(item => {
+              if (item.id === itemId) {
+                const updatedItem = { ...item, selectedChoiceId: choiceId };
+                updatedItem.totalPrice = calculateLineItemTotal(updatedItem);
+                return updatedItem;
+              }
+              return item;
+            })
+          }
+        : section
+    ));
+    
+    toast({
+      title: "Success",
+      description: "Choice selection updated",
+    });
   };
 
   // Calculate totals across all sections
@@ -674,29 +837,186 @@ export function ProposalBuilder({
                               <CardHeader>
                                 <CardTitle className="text-base">Add Line Item</CardTitle>
                               </CardHeader>
-                              <CardContent>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                              <CardContent className="space-y-4">
+                                {/* Basic Details */}
+                                <div>
                                   <Input
                                     placeholder="Description"
                                     value={currentLineItem.description || ""}
                                     onChange={(e) => setCurrentLineItem(prev => ({ ...prev, description: e.target.value }))}
                                     data-testid={`input-line-item-description-${section.id}`}
                                   />
-                                  <Input
-                                    type="number"
-                                    placeholder="Quantity"
-                                    value={currentLineItem.quantity || ""}
-                                    onChange={(e) => setCurrentLineItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
-                                    data-testid={`input-line-item-quantity-${section.id}`}
-                                  />
-                                  <Input
-                                    type="number"
-                                    placeholder="Unit Price"
-                                    value={currentLineItem.unitPrice || ""}
-                                    onChange={(e) => setCurrentLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
-                                    data-testid={`input-line-item-price-${section.id}`}
-                                  />
                                 </div>
+
+                                {/* Pricing Type Selection */}
+                                <div className="space-y-3">
+                                  <div className="flex items-center space-x-4">
+                                    <label className="flex items-center space-x-2">
+                                      <input
+                                        type="radio"
+                                        checked={currentLineItem.pricingType === "normal"}
+                                        onChange={() => setCurrentLineItem(prev => ({ 
+                                          ...prev, 
+                                          pricingType: "normal",
+                                          choices: [],
+                                          selectedChoiceId: undefined,
+                                          fixedPrice: undefined
+                                        }))}
+                                        data-testid={`radio-normal-pricing-${section.id}`}
+                                      />
+                                      <span className="text-sm">Normal Pricing</span>
+                                    </label>
+                                    <label className="flex items-center space-x-2">
+                                      <input
+                                        type="radio"
+                                        checked={currentLineItem.pricingType === "choice"}
+                                        onChange={() => setCurrentLineItem(prev => ({ 
+                                          ...prev, 
+                                          pricingType: "choice",
+                                          fixedPrice: undefined
+                                        }))}
+                                        data-testid={`radio-multiple-choice-${section.id}`}
+                                      />
+                                      <span className="text-sm">Multiple Choice</span>
+                                    </label>
+                                    <label className="flex items-center space-x-2">
+                                      <input
+                                        type="radio"
+                                        checked={currentLineItem.pricingType === "fixed"}
+                                        onChange={() => setCurrentLineItem(prev => ({ 
+                                          ...prev, 
+                                          pricingType: "fixed",
+                                          choices: [],
+                                          selectedChoiceId: undefined
+                                        }))}
+                                        data-testid={`radio-fixed-price-${section.id}`}
+                                      />
+                                      <span className="text-sm">Fixed Price</span>
+                                    </label>
+                                  </div>
+
+                                  {/* Normal Pricing Fields */}
+                                  {currentLineItem.pricingType === "normal" && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <Input
+                                        type="number"
+                                        placeholder="Quantity"
+                                        value={currentLineItem.quantity || ""}
+                                        onChange={(e) => setCurrentLineItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                                        data-testid={`input-line-item-quantity-${section.id}`}
+                                      />
+                                      <Input
+                                        type="number"
+                                        placeholder="Unit Price"
+                                        value={currentLineItem.unitPrice || ""}
+                                        onChange={(e) => setCurrentLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
+                                        data-testid={`input-line-item-price-${section.id}`}
+                                      />
+                                    </div>
+                                  )}
+
+                                  {/* Fixed Price Field */}
+                                  {currentLineItem.pricingType === "fixed" && (
+                                    <div>
+                                      <Input
+                                        type="number"
+                                        placeholder="Fixed Price"
+                                        value={currentLineItem.fixedPrice || ""}
+                                        onChange={(e) => setCurrentLineItem(prev => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
+                                        data-testid={`input-fixed-price-${section.id}`}
+                                      />
+                                    </div>
+                                  )}
+
+                                  {/* Multiple Choice Options */}
+                                  {currentLineItem.pricingType === "choice" && (
+                                    <div className="space-y-3">
+                                      <div className="border rounded-lg p-3">
+                                        <h5 className="font-medium mb-3">Add Choice Option</h5>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                                          <Input
+                                            placeholder="Choice Label"
+                                            value={currentChoice.label || ""}
+                                            onChange={(e) => setCurrentChoice(prev => ({ ...prev, label: e.target.value }))}
+                                            data-testid={`input-choice-label-${section.id}`}
+                                          />
+                                          <Input
+                                            placeholder="Description"
+                                            value={currentChoice.description || ""}
+                                            onChange={(e) => setCurrentChoice(prev => ({ ...prev, description: e.target.value }))}
+                                            data-testid={`input-choice-description-${section.id}`}
+                                          />
+                                          <Input
+                                            type="number"
+                                            placeholder="Price"
+                                            value={currentChoice.price || ""}
+                                            onChange={(e) => setCurrentChoice(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                                            data-testid={`input-choice-price-${section.id}`}
+                                          />
+                                        </div>
+                                        <div className="flex items-center space-x-2 mb-3">
+                                          <Checkbox
+                                            checked={currentChoice.isDefault || false}
+                                            onCheckedChange={(checked) => setCurrentChoice(prev => ({ ...prev, isDefault: checked as boolean }))}
+                                            data-testid={`checkbox-choice-default-${section.id}`}
+                                          />
+                                          <label className="text-sm">Set as default choice</label>
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={addChoiceToCurrentItem}
+                                          data-testid={`button-add-choice-${section.id}`}
+                                        >
+                                          <Plus className="h-4 w-4 mr-2" />
+                                          Add Choice
+                                        </Button>
+                                      </div>
+
+                                      {/* Current Choice Options */}
+                                      {currentLineItem.choices && currentLineItem.choices.length > 0 && (
+                                        <div>
+                                          <h5 className="font-medium mb-2">Choice Options ({currentLineItem.choices.length})</h5>
+                                          <div className="space-y-2">
+                                            {currentLineItem.choices.map((choice) => (
+                                              <div key={choice.id} className="flex items-center justify-between p-2 border rounded">
+                                                <div>
+                                                  <span className="font-medium">{choice.label}</span>
+                                                  {choice.isDefault && <Badge variant="secondary" className="ml-2">Default</Badge>}
+                                                  <div className="text-sm text-muted-foreground">
+                                                    {choice.description} - ${choice.price.toFixed(2)}
+                                                  </div>
+                                                </div>
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => removeChoiceFromCurrentItem(choice.id)}
+                                                  data-testid={`button-remove-choice-${choice.id}`}
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Quantity for multiple choice */}
+                                      <div>
+                                        <Input
+                                          type="number"
+                                          placeholder="Quantity"
+                                          value={currentLineItem.quantity || ""}
+                                          onChange={(e) => setCurrentLineItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                                          data-testid={`input-choice-quantity-${section.id}`}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
                                 <Button
                                   type="button"
                                   onClick={() => addLineItemToSection(section.id)}
@@ -714,18 +1034,66 @@ export function ProposalBuilder({
                                 {section.lineItems.map((item) => (
                                   <Card key={item.id} className="border-l-2 border-l-muted">
                                     <CardContent className="p-4">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-3 flex-1">
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex items-start space-x-3 flex-1">
                                           <Checkbox
                                             checked={item.selected}
                                             onCheckedChange={() => toggleLineItemSelection(section.id, item.id!)}
                                             data-testid={`checkbox-line-item-${item.id}`}
+                                            className="mt-1"
                                           />
                                           <div className="flex-1">
                                             <div className="font-medium">{item.description}</div>
-                                            <div className="text-sm text-muted-foreground">
-                                              {item.quantity} × ${item.unitPrice.toFixed(2)} = ${item.totalPrice.toFixed(2)}
-                                            </div>
+                                            
+                                            {/* Fixed Price Item */}
+                                            {item.pricingType === "fixed" && (
+                                              <div className="text-sm text-muted-foreground">
+                                                <Badge variant="outline" className="mr-2">Fixed Price</Badge>
+                                                ${item.totalPrice.toFixed(2)}
+                                              </div>
+                                            )}
+
+                                            {/* Multiple Choice Item */}
+                                            {item.pricingType === "choice" && item.choices.length > 0 && (
+                                              <div className="space-y-2 mt-2">
+                                                <div className="flex items-center space-x-2">
+                                                  <Badge variant="outline">Multiple Choice</Badge>
+                                                  <span className="text-sm text-muted-foreground">
+                                                    Qty: {item.quantity}
+                                                  </span>
+                                                </div>
+                                                <Select 
+                                                  value={item.selectedChoiceId || ""} 
+                                                  onValueChange={(value) => updateLineItemChoice(section.id, item.id!, value)}
+                                                >
+                                                  <SelectTrigger className="w-full" data-testid={`select-choice-${item.id}`}>
+                                                    <SelectValue placeholder="Select an option..." />
+                                                  </SelectTrigger>
+                                                  <SelectContent>
+                                                    {item.choices.map((choice) => (
+                                                      <SelectItem key={choice.id} value={choice.id}>
+                                                        <div className="flex flex-col">
+                                                          <span className="font-medium">{choice.label}</span>
+                                                          <span className="text-sm text-muted-foreground">
+                                                            {choice.description} - ${choice.price.toFixed(2)}
+                                                          </span>
+                                                        </div>
+                                                      </SelectItem>
+                                                    ))}
+                                                  </SelectContent>
+                                                </Select>
+                                                <div className="text-sm text-muted-foreground">
+                                                  Total: ${item.totalPrice.toFixed(2)}
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* Normal Item */}
+                                            {item.pricingType === "normal" && (
+                                              <div className="text-sm text-muted-foreground">
+                                                {item.quantity} × ${item.unitPrice.toFixed(2)} = ${item.totalPrice.toFixed(2)}
+                                              </div>
+                                            )}
                                           </div>
                                         </div>
                                         <Button
