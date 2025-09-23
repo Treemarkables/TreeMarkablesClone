@@ -116,6 +116,13 @@ export function JobDiarySection({
         apiRequest('GET', `/api/proposals?jobId=${jobId}`)
       ]);
       
+      // Debug the actual API responses
+      console.log('API Responses Debug:', {
+        diary: diaryResponse,
+        communications: communicationsResponse,
+        proposals: proposalsResponse
+      });
+      
       const entries: DiaryEntry[] = [];
       
       // Add diary entries
@@ -182,13 +189,6 @@ export function JobDiarySection({
 
   // Debug logging - temporary
   console.log('JobDiarySection render - jobId:', jobId, 'entries:', diaryEntries, 'loading:', isLoading);
-  
-  // Also debug the raw query data
-  console.log('Raw query data:', {
-    diaryData: diaryQuery.data,
-    communicationsData: communicationsQuery.data,
-    proposalsData: proposalsQuery.data
-  });
 
   // Mutations
   const createNoteMutation = useMutation({
