@@ -42,11 +42,21 @@ export const jobTimeEntries = pgTable("job_time_entries", {
   employeeId: varchar("employee_id").notNull(),
   employeeName: text("employee_name").notNull(),
   
+  // Service-based tracking
+  serviceType: text("service_type").notNull(), // tree_removal, pruning, stump_grinding, etc
+  serviceName: text("service_name").notNull(), // Display name like "Tree Removal", "Hedge Trimming"
+  
   // Time details
   entryDate: text("entry_date").notNull(), // YYYY-MM-DD
   startTime: text("start_time"), // HH:MM format, optional
   hours: decimal("hours", { precision: 4, scale: 2 }).notNull(),
-  rate: decimal("rate", { precision: 6, scale: 2 }).notNull(), // Hourly rate
+  rate: decimal("rate", { precision: 6, scale: 2 }).notNull(), // Hourly rate for this service
+  
+  // Job line item creation tracking
+  serviceLineItemCreated: boolean("service_line_item_created").default(false),
+  laborLineItemCreated: boolean("labor_line_item_created").default(false),
+  serviceLineItemId: text("service_line_item_id"), // Reference to created service line item
+  laborLineItemId: text("labor_line_item_id"), // Reference to created labor line item
   
   // ServiceM8 features
   billed: boolean("billed").default(false),
@@ -101,6 +111,10 @@ export const dailyTimeFormSchema = z.object({
   jobEntries: z.array(z.object({
     jobId: z.string().min(1, "Job required"),
     jobNumber: z.string().min(1, "Job number required"),
+    employeeId: z.string().min(1, "Employee required"),
+    employeeName: z.string().min(1, "Employee name required"),
+    serviceType: z.string().min(1, "Service type required"),
+    serviceName: z.string().min(1, "Service name required"),
     hours: z.string().min(1, "Hours required"),
     rate: z.string().min(1, "Rate required"),
     startTime: z.string().optional(),

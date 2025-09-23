@@ -17,6 +17,8 @@ const saveDailyTimeSchema = z.object({
     jobNumber: z.string().min(1, "Job number is required"),
     employeeId: z.string().min(1, "Employee ID is required"),
     employeeName: z.string().min(1, "Employee name is required"),
+    serviceType: z.string().min(1, "Service type is required"),
+    serviceName: z.string().min(1, "Service name is required"),
     hours: z.number().min(0, "Hours must be positive"),
     rate: z.number().min(0, "Rate must be positive"),
     startTime: z.string().optional(),
