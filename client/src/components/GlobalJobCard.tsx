@@ -152,6 +152,10 @@ export function GlobalJobCard({
     }
   }, [mode, editingJob, form]);
 
+  // Find the selected customer for diary section (after form is defined)
+  const selectedCustomerId = form.watch("customerId") || customerId;
+  const selectedCustomer = customers.find((customer: any) => customer.id === selectedCustomerId);
+
   const addChecklistItem = () => {
     if (newChecklistItem.trim()) {
       const newItem: ChecklistItem = {
