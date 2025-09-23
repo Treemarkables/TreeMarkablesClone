@@ -6,6 +6,9 @@ import { z } from "zod";
 import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building } from "lucide-react";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
+import { StaffTimeManager } from "./StaffTimeManager";
+import { ExpenseManager } from "./ExpenseManager";
+import { GrossMarginCalculator } from "./GrossMarginCalculator";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -828,6 +831,33 @@ export function GlobalJobCard({
               )}
             </div>
           </div>
+          
+          {/* Margin Tracker Section - spans full width at bottom */}
+          {jobId && (
+            <div className="border-t mt-6 pt-6">
+              <div className="space-y-6">
+                <div className="text-center mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Job Profitability Tracker</h3>
+                  <p className="text-sm text-gray-500">Real-time cost tracking and margin analysis</p>
+                </div>
+                
+                {/* Staff Time and Expense Management */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <StaffTimeManager jobId={jobId} compact={true} />
+                  <ExpenseManager jobId={jobId} compact={true} />
+                </div>
+                
+                {/* Gross Margin Calculator */}
+                <div className="mt-6">
+                  <GrossMarginCalculator 
+                    jobId={jobId} 
+                    jobData={editingJob}
+                    compact={false}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       
       {/* Proposal Builder Integration */}
