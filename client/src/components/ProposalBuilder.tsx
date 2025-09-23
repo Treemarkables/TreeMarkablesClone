@@ -513,6 +513,11 @@ export function ProposalBuilder({
       });
       queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
       
+      // Also invalidate the job diary timeline if this proposal is associated with a job
+      if (jobId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+      }
+      
       // Reset form state
       form.reset();
       setSections([]);
