@@ -180,6 +180,9 @@ export function JobDiarySection({
     },
   });
 
+  // Debug logging - temporary
+  console.log('JobDiarySection render - jobId:', jobId, 'entries:', diaryEntries, 'loading:', isLoading);
+
   // Mutations
   const createNoteMutation = useMutation({
     mutationFn: async (data: NoteFormData) => {
@@ -343,7 +346,11 @@ export function JobDiarySection({
           </div>
         ) : diaryEntries.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <div className="text-sm text-muted-foreground">No diary entries yet</div>
+            <div className="text-sm text-muted-foreground">
+              No diary entries yet
+              <br />
+              <small>Debug: {JSON.stringify({jobId, entriesLength: diaryEntries.length, isLoading})}</small>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
