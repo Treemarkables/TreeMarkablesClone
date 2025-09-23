@@ -26,9 +26,16 @@ import { CustomerPortal } from "@/pages/CustomerPortal";
 import CommunicationsManagement from "@/pages/CommunicationsManagement";
 import Dispatch from "@/pages/Dispatch";
 import { WorkflowAutomation } from "@/components/WorkflowAutomation";
+import History from "@/pages/History";
+import Clients from "@/pages/Clients";
+import MaterialsServices from "@/pages/MaterialsServices";
+import Settings from "@/pages/Settings";
+import Developer from "@/pages/Developer";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code } from "lucide-react";
+import { Link } from "wouter";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -51,16 +58,79 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
           <header className="flex items-center justify-between p-2 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             
-            {/* Global New Job Button */}
-            <Button 
-              size="sm" 
-              onClick={() => setShowGlobalJobCard(true)}
-              data-testid="global-new-job-btn"
-              className="bg-amber-500 hover:bg-amber-600 text-white"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              New Job
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* Account Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-1" data-testid="button-account-dropdown">
+                    Account
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuItem asChild>
+                    <Link href="/history" className="flex items-center w-full" data-testid="menu-history">
+                      <HistoryIcon className="w-4 h-4 mr-3 text-gray-600" />
+                      <div>
+                        <div className="font-medium">History</div>
+                        <div className="text-sm text-muted-foreground">Find any past job, saved forever</div>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem asChild>
+                    <Link href="/clients" className="flex items-center w-full" data-testid="menu-clients">
+                      <Users className="w-4 h-4 mr-3 text-blue-600" />
+                      <div>
+                        <div className="font-medium">Clients</div>
+                        <div className="text-sm text-muted-foreground">Import & manage your customer list</div>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem asChild>
+                    <Link href="/materials-services" className="flex items-center w-full" data-testid="menu-materials-services">
+                      <Package className="w-4 h-4 mr-3 text-orange-600" />
+                      <div>
+                        <div className="font-medium">Materials & Services</div>
+                        <div className="text-sm text-muted-foreground">Import & manage items you sell</div>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings" className="flex items-center w-full" data-testid="menu-settings">
+                      <Settings2 className="w-4 h-4 mr-3 text-gray-600" />
+                      <div>
+                        <div className="font-medium">Settings</div>
+                        <div className="text-sm text-muted-foreground">Add staff & manage your account</div>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem asChild>
+                    <Link href="/developer" className="flex items-center w-full" data-testid="menu-developer">
+                      <Code className="w-4 h-4 mr-3 text-purple-600" />
+                      <div>
+                        <div className="font-medium">Developer</div>
+                        <div className="text-sm text-muted-foreground">API access and integrations</div>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              {/* Global New Job Button */}
+              <Button 
+                size="sm" 
+                onClick={() => setShowGlobalJobCard(true)}
+                data-testid="global-new-job-btn"
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                New Job
+              </Button>
+            </div>
           </header>
           <main className="flex-1 overflow-hidden w-full max-w-full min-w-0">
             {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
@@ -152,6 +222,33 @@ function Router() {
       <Route path="/workflows">
         <SidebarLayout>
           <WorkflowAutomation />
+        </SidebarLayout>
+      </Route>
+      
+      {/* Account dropdown pages */}
+      <Route path="/history">
+        <SidebarLayout>
+          <History />
+        </SidebarLayout>
+      </Route>
+      <Route path="/clients">
+        <SidebarLayout>
+          <Clients />
+        </SidebarLayout>
+      </Route>
+      <Route path="/materials-services">
+        <SidebarLayout>
+          <MaterialsServices />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings">
+        <SidebarLayout>
+          <Settings />
+        </SidebarLayout>
+      </Route>
+      <Route path="/developer">
+        <SidebarLayout>
+          <Developer />
         </SidebarLayout>
       </Route>
       {/* Fallback to 404 */}
