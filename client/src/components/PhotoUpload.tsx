@@ -77,13 +77,19 @@ export default function PhotoUpload({
       return response.json() as Promise<UploadResponse>;
     },
     onSuccess: (data: UploadResponse) => {
-      const newPhotos = [...previewPhotos, ...data.photos];
+      // Ensure data.photos is an array and handle both string URLs and photo objects
+      const photosArray = Array.isArray(data.photos) ? data.photos : [];
+      const photoUrls = photosArray.map(photo => 
+        typeof photo === 'string' ? photo : photo.url || photo.filename || ''
+      ).filter(Boolean);
+      
+      const newPhotos = [...previewPhotos, ...photoUrls];
       setPreviewPhotos(newPhotos);
       onPhotosChange?.(newPhotos);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       toast({
         title: "Photos uploaded successfully!",
-        description: `Added ${data.photos.length} ${type} photo(s)`,
+        description: `Added ${photoUrls.length} ${type} photo(s)`,
       });
     },
     onError: (error: any) => {
