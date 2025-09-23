@@ -123,11 +123,17 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
     }
   });
 
-  // Remove staff time entry mutation
+  // Remove staff time entry mutation  
   const removeStaffTimeMutation = useMutation({
-    mutationFn: async ({ employeeId, date }: { employeeId: string; date?: string }) => {
-      const url = `/api/jobs/${jobId}/staff-time/${employeeId}${date ? `?date=${date}` : ''}`;
-      return await apiRequest('DELETE', url);
+    mutationFn: async ({ entryId, date }: { entryId: string; date?: string }) => {
+      // If entryId looks like a full UUID, use the job time entry endpoint
+      if (entryId.includes('-') && entryId.length > 20) {
+        return await apiRequest('DELETE', `/api/time-entries/job/${entryId}`);
+      } else {
+        // Otherwise use the legacy endpoint
+        const url = `/api/jobs/${jobId}/staff-time/${entryId}${date ? `?date=${date}` : ''}`;
+        return await apiRequest('DELETE', url);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
@@ -186,8 +192,8 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
     });
   };
 
-  const handleRemoveEntry = (employeeId: string, date?: string) => {
-    removeStaffTimeMutation.mutate({ employeeId, date });
+  const handleRemoveEntry = (entryId: string, date?: string) => {
+    removeStaffTimeMutation.mutate({ entryId, date });
   };
 
   const getEmployeeName = (employeeId: string) => {
@@ -237,10 +243,25 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
             </div>
             {staffEntries.length > 0 && (
               <div className="text-xs text-gray-500 mt-2">
-                {staffEntries.map(entry => (
-                  <div key={`${entry.employeeId}-${entry.date}`} className="flex justify-between">
-                    <span>{getEmployeeName(entry.employeeId)}</span>
-                    <span>{entry.hours}h × ${entry.rate}/h</span>
+                {staffEntries.map((entry: any, index: number) => (
+                  <div key={`${entry.employeeId}-${entry.lineItemId || entry.lineItemNumber || index}-${entry.date}`} className="flex justify-between items-center">
+                    <div className="flex flex-col">
+                      <span>{getEmployeeName(entry.employeeId)}</span>
+                      <span className="text-gray-400">{entry.lineItemName || `Employee ${entry.employeeId.slice(-6)}`}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>{entry.hours}h × ${entry.rate}/h</span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => handleRemoveEntry(entry.id || `${entry.employeeId}-${entry.lineItemId || index}`, entry.date)}
+                        disabled={removeStaffTimeMutation.isPending}
+                        data-testid={`button-remove-staff-entry-${entry.employeeId}-${entry.lineItemId || index}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
