@@ -32,6 +32,7 @@ import MaterialsServices from "@/pages/MaterialsServices";
 import Settings from "@/pages/Settings";
 import Developer from "@/pages/Developer";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code } from "lucide-react";
@@ -246,6 +247,65 @@ function Router() {
           <Settings />
         </SidebarLayout>
       </Route>
+      
+      {/* Settings sub-pages - placeholders */}
+      <Route path="/settings/staff">
+        <SidebarLayout>
+          <SettingsPlaceholder 
+            title="Staff Management"
+            description="Manage team members, roles and permissions"
+          />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/categories">
+        <SidebarLayout>
+          <SettingsPlaceholder 
+            title="Job Categories"
+            description="Organize work types and service categories"
+          />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/company">
+        <SidebarLayout>
+          <SettingsPlaceholder 
+            title="Company Info"
+            description="Business details, contact information and branding"
+          />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/security">
+        <SidebarLayout>
+          <SettingsPlaceholder 
+            title="Security & API"
+            description="Password settings, API keys and access control"
+          />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/notifications">
+        <SidebarLayout>
+          <SettingsPlaceholder 
+            title="Notifications"
+            description="Email alerts, SMS settings and reminders"
+          />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/forms">
+        <SidebarLayout>
+          <SettingsPlaceholder 
+            title="Job Templates"
+            description="Create and manage job templates and forms"
+          />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/preferences">
+        <SidebarLayout>
+          <SettingsPlaceholder 
+            title="Preferences"
+            description="Time zones, currency, date formats and defaults"
+          />
+        </SidebarLayout>
+      </Route>
+      
       <Route path="/developer">
         <SidebarLayout>
           <Developer />
