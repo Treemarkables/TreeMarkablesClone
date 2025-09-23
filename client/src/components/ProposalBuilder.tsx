@@ -534,7 +534,18 @@ export function ProposalBuilder({
         const errorData = await response.json().catch(() => ({ message: 'Upload failed' }));
         throw new Error(errorData.message || 'Upload failed');
       }
-      return response.json();
+      
+      const data = await response.json();
+      
+      // Convert job photo URLs to proposal photo format
+      return data.photos?.map((photoUrl: string, index: number) => ({
+        id: `job-photo-${Date.now()}-${index}`,
+        url: photoUrl,
+        filename: photoUrl.split('/').pop() || `photo-${index}`,
+        type: 'before',
+        category: 'documentation',
+        capturedAt: new Date().toISOString(),
+      })) || [];
     },
     onSuccess: (data) => {
       toast({
@@ -557,6 +568,8 @@ export function ProposalBuilder({
     const proposalData = {
       customerId: data.customerId || customerId,
       jobId: data.jobId || jobId,
+      quoteId: data.quoteId, // Optional - can be undefined
+      proposalNumber: data.proposalNumber || `PROP-${Date.now()}`, // Auto-generate if not provided
       title: data.title,
       description: data.description,
       totalAmount: grandTotal,
@@ -565,6 +578,7 @@ export function ProposalBuilder({
       deliveryMethod: data.deliveryMethod,
       notes: data.notes,
       createdBy: 'system', // Replace with actual user
+      sections: sections, // Include sections and line items
     };
 
     await createProposalMutation.mutateAsync(proposalData);

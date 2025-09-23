@@ -1180,6 +1180,8 @@ export const insertProposalSchema = createInsertSchema(proposals).omit({
   expiryDate: z.union([z.date(), z.string()]).transform((val) => 
     typeof val === 'string' ? new Date(val) : val
   ).optional(),
+  quoteId: z.string().optional(), // Make optional for standalone proposals
+  proposalNumber: z.string().optional(), // Auto-generate if not provided
 });
 
 export const updateProposalSchema = insertProposalSchema.partial();
