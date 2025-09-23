@@ -111,17 +111,10 @@ export function JobDiarySection({
     queryKey: ['/api/jobs', jobId, 'diary-timeline'],
     queryFn: async (): Promise<DiaryEntry[]> => {
       const [diaryResponse, communicationsResponse, proposalsResponse] = await Promise.all([
-        apiRequest('GET', `/api/jobs/${jobId}/diary`),
-        apiRequest('GET', `/api/communications?jobId=${jobId}`),
-        apiRequest('GET', `/api/proposals?jobId=${jobId}`)
+        apiRequest('GET', `/api/jobs/${jobId}/diary`).then(res => res.json()),
+        apiRequest('GET', `/api/communications?jobId=${jobId}`).then(res => res.json()),
+        apiRequest('GET', `/api/proposals?jobId=${jobId}`).then(res => res.json())
       ]);
-      
-      // Debug the actual API responses
-      console.log('API Responses Debug:', {
-        diary: diaryResponse,
-        communications: communicationsResponse,
-        proposals: proposalsResponse
-      });
       
       const entries: DiaryEntry[] = [];
       
@@ -187,8 +180,6 @@ export function JobDiarySection({
     },
   });
 
-  // Debug logging - temporary
-  console.log('JobDiarySection render - jobId:', jobId, 'entries:', diaryEntries, 'loading:', isLoading);
 
   // Mutations
   const createNoteMutation = useMutation({
@@ -353,11 +344,7 @@ export function JobDiarySection({
           </div>
         ) : diaryEntries.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <div className="text-sm text-muted-foreground">
-              No diary entries yet
-              <br />
-              <small>Debug: {JSON.stringify({jobId, entriesLength: diaryEntries.length, isLoading})}</small>
-            </div>
+            <div className="text-sm text-muted-foreground">No diary entries yet</div>
           </div>
         ) : (
           <div className="space-y-4">
