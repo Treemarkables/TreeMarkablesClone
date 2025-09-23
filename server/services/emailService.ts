@@ -8,6 +8,12 @@ interface EmailParams {
   html?: string;
   templateId?: string;
   dynamicTemplateData?: Record<string, any>;
+  attachments?: Array<{
+    content: string;
+    filename: string;
+    type: string;
+    disposition: string;
+  }>;
 }
 
 class EmailService {
@@ -58,6 +64,7 @@ class EmailService {
         html: params.html,
         ...(params.templateId && { templateId: params.templateId }),
         ...(params.dynamicTemplateData && { dynamicTemplateData: params.dynamicTemplateData }),
+        ...(params.attachments && { attachments: params.attachments }),
       });
 
       console.log(`📧 Email sent successfully to ${params.to}`);
