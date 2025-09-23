@@ -447,6 +447,10 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
         <div className="bg-gray-50 p-4 rounded-lg">
           <h3 className="font-semibold mb-3">Cost Breakdown</h3>
           <div className="space-y-2 text-sm">
+            <div className="flex justify-between font-semibold text-green-700 border-b pb-2 mb-2">
+              <span>Job Revenue:</span>
+              <span>${totalAmount.toFixed(2)}</span>
+            </div>
             <div className="flex justify-between">
               <span>Labor Costs:</span>
               <span>${(hasStaffTimeEntries ? staffTimeLaborCost : (calculationMode === 'hourly' ? calculatedLaborCosts : laborCosts)).toFixed(2)}</span>
