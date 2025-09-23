@@ -28,7 +28,8 @@ import {
   // Proposal Management
   insertProposalSchema, updateProposalSchema,
   insertProposalSectionSchema, updateProposalSectionSchema,
-  insertProposalLineItemSchema, updateProposalLineItemSchema
+  insertProposalLineItemSchema, updateProposalLineItemSchema,
+  insertProposalLineItemChoiceSchema, updateProposalLineItemChoiceSchema
 } from "@shared/schema";
 import multer from "multer";
 import Papa from "papaparse";
@@ -5730,6 +5731,133 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error reordering proposal line items'
+      });
+    }
+  });
+
+  // ========================================
+  // PROPOSAL LINE ITEM CHOICE MANAGEMENT ROUTES
+  // ========================================
+
+  // Get choices for a line item
+  app.get('/api/proposals/lineitems/:lineItemId/choices', async (req: Request, res: Response) => {
+    try {
+      const choices = await storage.getProposalLineItemChoicesByLineItem(req.params.lineItemId);
+      res.json({
+        success: true,
+        data: choices,
+        count: choices.length,
+        message: 'Line item choices retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error fetching line item choices:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching line item choices'
+      });
+    }
+  });
+
+  // Create choice for a line item
+  app.post('/api/proposals/lineitems/:lineItemId/choices', async (req: Request, res: Response) => {
+    try {
+      const choiceData = {
+        ...req.body,
+        lineItemId: req.params.lineItemId
+      };
+
+      const validatedData = insertProposalLineItemChoiceSchema.parse(choiceData);
+      const choice = await storage.createProposalLineItemChoice(validatedData);
+
+      res.status(201).json({
+        success: true,
+        data: choice,
+        message: 'Line item choice created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating line item choice:', error);
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid choice data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error creating line item choice'
+      });
+    }
+  });
+
+  // Update line item choice
+  app.put('/api/proposals/lineitems/choices/:choiceId', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateProposalLineItemChoiceSchema.parse(req.body);
+      const choice = await storage.updateProposalLineItemChoice(req.params.choiceId, validatedData);
+
+      res.json({
+        success: true,
+        data: choice,
+        message: 'Line item choice updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating line item choice:', error);
+      
+      if (error.message === 'Proposal line item choice not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Line item choice not found'
+        });
+      }
+      
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid choice data',
+          errors: error.errors
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error updating line item choice'
+      });
+    }
+  });
+
+  // Delete line item choice
+  app.delete('/api/proposals/lineitems/choices/:choiceId', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteProposalLineItemChoice(req.params.choiceId);
+      res.json({
+        success: true,
+        message: 'Line item choice deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting line item choice:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting line item choice'
+      });
+    }
+  });
+
+  // Delete all choices for a line item
+  app.delete('/api/proposals/lineitems/:lineItemId/choices', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteProposalLineItemChoicesByLineItem(req.params.lineItemId);
+      res.json({
+        success: true,
+        message: 'All line item choices deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting line item choices:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting line item choices'
       });
     }
   });
