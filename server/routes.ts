@@ -5381,7 +5381,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Create new proposal
   app.post('/api/proposals', async (req: Request, res: Response) => {
     try {
-      const validatedData = insertProposalSchema.parse(req.body);
+      // Auto-generate proposalNumber if not provided
+      const proposalData = {
+        ...req.body,
+        proposalNumber: req.body.proposalNumber || `PROP-${Date.now()}`,
+      };
+      
+      const validatedData = insertProposalSchema.parse(proposalData);
       const proposal = await storage.createProposal(validatedData);
       
       res.status(201).json({
