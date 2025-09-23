@@ -6141,6 +6141,132 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // ========================================
+  // MATERIALS & SERVICES CATALOG API
+  // ========================================
+
+  // Materials & Services mock data (matches MaterialsServices.tsx)
+  const materialsAndServices = [
+    // Materials
+    { id: "1", itemNumber: "VIP", name: "10% discount with VIP membership", price: 0.00, category: "Discount", type: "material" },
+    { id: "2", itemNumber: "Admin Time", name: "Admin Time", price: 0.00, category: "Labour", type: "material" },
+    { id: "3", itemNumber: "41", name: "Bandit chipper hire", price: 500.00, category: "Equipment", type: "material" },
+    { id: "4", itemNumber: "17", name: "Bucket truck", price: 80.00, category: "Equipment", type: "material" },
+    { id: "5", itemNumber: "11", name: "Call out", price: 100.00, category: "Service", type: "material" },
+    { id: "6", itemNumber: "29 labour", name: "Dan labour", price: 0.00, category: "Labour", type: "material" },
+    { id: "7", itemNumber: "SERVICEM8-36", name: "Day 1", price: 0.00, category: "Service", type: "material" },
+    { id: "8", itemNumber: "SERVICEM8-54", name: "Day 1", price: 0.00, category: "Service", type: "material" },
+    { id: "9", itemNumber: "67", name: "Digger and truck", price: 890.00, category: "Equipment", type: "material" },
+    { id: "10", itemNumber: "39", name: "Disposal", price: 250.00, category: "Service", type: "material" },
+    { id: "11", itemNumber: "34", name: "Labour", price: 75.00, category: "Labour", type: "material" },
+    { id: "12", itemNumber: "35", name: "Senior Labour", price: 95.00, category: "Labour", type: "material" },
+    { id: "13", itemNumber: "36", name: "Apprentice Labour", price: 45.00, category: "Labour", type: "material" },
+    
+    // Services  
+    { id: "s1", itemNumber: "TS-001", name: "Tree Removal - Small (under 5m)", price: 250.00, category: "Tree Services", type: "service" },
+    { id: "s2", itemNumber: "TS-002", name: "Tree Removal - Medium (5-10m)", price: 650.00, category: "Tree Services", type: "service" },
+    { id: "s3", itemNumber: "TS-003", name: "Tree Removal - Large (10m+)", price: 1250.00, category: "Tree Services", type: "service" },
+    { id: "s4", itemNumber: "MT-001", name: "Hedge Trimming", price: 85.00, category: "Maintenance", type: "service" },
+    { id: "s5", itemNumber: "TS-004", name: "Stump Grinding", price: 180.00, category: "Tree Services", type: "service" },
+  ];
+
+  // Skills to line item category mapping
+  const skillToCategory = {
+    // Equipment operators
+    'Crane Operation': ['Equipment'],
+    'Cherry Picker': ['Equipment'],
+    'Heavy Machinery': ['Equipment'],
+    'Chipper Operation': ['Equipment'],
+    
+    // Tree service skills
+    'Tree Climbing': ['Tree Services', 'Labour'],
+    'Chainsaw Operation': ['Tree Services', 'Labour'],
+    'Tree Pruning': ['Tree Services', 'Maintenance'],
+    'Hedge Trimming': ['Maintenance'],
+    'Stump Grinding': ['Tree Services'],
+    
+    // General labour
+    'Ground Support': ['Labour', 'Service'],
+    'Customer Service': ['Service'],
+    'Risk Assessment': ['Labour', 'Service'],
+    'Safety Management': ['Labour', 'Service'],
+    'First Aid': ['Labour', 'Service'],
+    'Plant Health': ['Tree Services', 'Maintenance'],
+  };
+
+  // GET /api/materials-services - Get all materials and services
+  app.get('/api/materials-services', async (req: Request, res: Response) => {
+    try {
+      res.json({
+        success: true,
+        data: materialsAndServices
+      });
+    } catch (error) {
+      console.error('Error fetching materials and services:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching materials and services'
+      });
+    }
+  });
+
+  // GET /api/materials-services/filtered/:employeeId - Get line items filtered by employee skills
+  app.get('/api/materials-services/filtered/:employeeId', async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      
+      // Get employee details with skills
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) {
+        return res.status(404).json({
+          success: false,
+          message: 'Employee not found'
+        });
+      }
+
+      // For now, use mock skills data from CrewManagement
+      // In production, this would come from the employee record
+      const mockEmployeeSkills: { [key: string]: string[] } = {
+        '1': ['Tree Climbing', 'Chainsaw Operation', 'Risk Assessment', 'First Aid'],
+        '2': ['Tree Pruning', 'Hedge Trimming', 'Plant Health', 'Customer Service'],
+        '3': ['Crane Operation', 'Cherry Picker', 'Heavy Machinery', 'Safety Management'],
+      };
+
+      const employeeSkills = mockEmployeeSkills[employeeId] || [];
+      
+      // Get categories this employee can work with based on their skills
+      const allowedCategories = new Set<string>();
+      employeeSkills.forEach(skill => {
+        const categories = skillToCategory[skill] || [];
+        categories.forEach(cat => allowedCategories.add(cat));
+      });
+
+      // If no skills mapped, allow Labour and Service as default
+      if (allowedCategories.size === 0) {
+        allowedCategories.add('Labour');
+        allowedCategories.add('Service');
+      }
+
+      // Filter line items to only show those matching employee's skills
+      const filteredItems = materialsAndServices.filter(item => 
+        allowedCategories.has(item.category)
+      );
+
+      res.json({
+        success: true,
+        data: filteredItems,
+        employeeSkills,
+        allowedCategories: Array.from(allowedCategories)
+      });
+    } catch (error) {
+      console.error('Error fetching filtered materials and services:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching filtered materials and services'
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
