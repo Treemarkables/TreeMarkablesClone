@@ -1265,10 +1265,27 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const oldJob = await storage.getJob(req.params.id);
       const oldStatus = oldJob?.status || '';
 
+      // Debug logging for job update
+      console.log('🔍 JOB UPDATE SERVER DEBUG:', {
+        jobId: req.params.id,
+        requestBody: req.body,
+        validatedData: validation.data,
+        hasLineItems: !!validation.data.lineItems,
+        lineItemsCount: validation.data.lineItems ? validation.data.lineItems.length : 0,
+        lineItems: validation.data.lineItems
+      });
+
       const job = await storage.updateJob(req.params.id, validation.data);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
+
+      // Debug logging for updated job
+      console.log('✅ JOB UPDATE RESULT DEBUG:', {
+        jobId: job.id,
+        updatedLineItems: job.lineItems,
+        lineItemsCount: job.lineItems ? job.lineItems.length : 0
+      });
 
       // Trigger automated notifications if status changed
       if (validation.data.status && validation.data.status !== oldStatus) {

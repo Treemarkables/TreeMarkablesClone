@@ -128,14 +128,12 @@ export function GlobalJobCard({
     defaultValues: {
       customerId: customerId || editingJob?.customerId || "",
       isNewCustomer: false,
-      title: editingJob?.title || "",
       description: editingJob?.description || "",
       address: editingJob?.address || "",
       status: editingJob?.status || "lead",
       serviceType: editingJob?.serviceType || "",
       priority: editingJob?.priority || "medium",
       jobNumber: editingJob?.jobNumber || "",
-      specialInstructions: editingJob?.specialInstructions || "",
       leadSource: editingJob?.leadSource || "direct",
       // Contact fields
       jobContactFirstName: "",
@@ -150,20 +148,26 @@ export function GlobalJobCard({
   useEffect(() => {
     if (mode === "edit" && editingJob) {
       setChecklist(Array.isArray(editingJob.checklist) ? editingJob.checklist : []);
+      setLineItems(Array.isArray(editingJob.lineItems) ? editingJob.lineItems : []);
       form.reset({
         customerId: editingJob.customerId || "",
-        title: editingJob.title || "",
         description: editingJob.description || "",
         address: editingJob.address || "",
         status: editingJob.status || "lead",
         serviceType: editingJob.serviceType || "",
         priority: editingJob.priority || "medium",
         jobNumber: editingJob.jobNumber || "",
-        specialInstructions: editingJob.specialInstructions || "",
         leadSource: editingJob.leadSource || "direct",
       });
     }
   }, [mode, editingJob, form]);
+  
+  // Initialize line items from job data when component mounts
+  useEffect(() => {
+    if (editingJob?.lineItems && Array.isArray(editingJob.lineItems)) {
+      setLineItems(editingJob.lineItems);
+    }
+  }, [editingJob?.lineItems]);
 
   // Find the selected customer for diary section (after form is defined)
   const selectedCustomerId = form.watch("customerId") || customerId;
@@ -296,19 +300,26 @@ export function GlobalJobCard({
 
       const jobData = {
         customerId: finalCustomerId,
-        title: data.title,
         description: data.description,
         address: data.address,
         status: data.status,
         serviceType: data.serviceType,
         priority: data.priority,
         leadSource: data.leadSource,
-        estimatedDuration: data.estimatedDuration,
         jobNumber: data.jobNumber,
-        poNumber: data.poNumber,
-        specialInstructions: data.specialInstructions,
         checklist: checklist,
+        totalAmount: getTotalAmount(),
+        lineItems: lineItems,
       };
+
+      // Debug logging for job save
+      console.log('GlobalJobCard SAVE DEBUG:', {
+        mode,
+        jobData,
+        lineItemsCount: lineItems.length,
+        totalAmount: getTotalAmount(),
+        lineItems: lineItems
+      });
 
       if (mode === "create") {
         createJobMutation.mutate(jobData);
@@ -456,34 +467,35 @@ export function GlobalJobCard({
 
         {/* Tabbed interface */}
         <div className="flex-1 flex flex-col min-h-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-            <div className="px-6 pt-4 pb-0">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="details" data-testid="tab-details">
-                  Job Details
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="diary" 
-                  disabled={!jobId}
-                  data-testid="tab-diary"
-                >
-                  Job Diary
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="profit" 
-                  disabled={!jobId}
-                  data-testid="tab-profit"
-                >
-                  Profit Tracking
-                </TabsTrigger>
-              </TabsList>
-            </div>
-            
-            <div className="flex-1 overflow-hidden">
-              <TabsContent value="details" className="h-full m-0">
-                <div className="h-full overflow-y-auto px-6 pb-6">
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+                <div className="px-6 pt-4 pb-0">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="details" data-testid="tab-details">
+                      Job Details
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="diary" 
+                      disabled={!jobId}
+                      data-testid="tab-diary"
+                    >
+                      Job Diary
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="profit" 
+                      disabled={!jobId}
+                      data-testid="tab-profit"
+                    >
+                      Profit Tracking
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+                
+                <div className="flex-1 overflow-hidden">
+                  <TabsContent value="details" className="h-full m-0">
+                    <div className="h-full overflow-y-auto px-6 pb-6">
+                      <div className="space-y-6">
             {/* Customer Section */}
             <Card>
               <CardHeader>
@@ -614,20 +626,6 @@ export function GlobalJobCard({
               <CardContent className="space-y-4">
                 <FormField
                   control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Job Title</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="e.g., Large Oak Tree Removal" data-testid="input-job-title" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="description"
                   render={({ field }) => (
                     <FormItem>
@@ -752,25 +750,6 @@ export function GlobalJobCard({
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="specialInstructions"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Special Instructions</FormLabel>
-                      <FormControl>
-                        <Textarea 
-                          {...field} 
-                          value={field.value || ""}
-                          placeholder="Any special requirements or notes..."
-                          rows={2}
-                          data-testid="textarea-special-instructions"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </CardContent>
             </Card>
 
@@ -914,28 +893,8 @@ export function GlobalJobCard({
                 </div>
               </CardContent>
             </Card>
-
-            {/* Form Actions */}
-            <div className="flex justify-end gap-3 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={onClose}
-                data-testid="button-cancel"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={isLoading}
-                data-testid="button-save-job"
-              >
-                {isLoading ? "Saving..." : mode === "create" ? "Create Job" : "Update Job"}
-              </Button>
-            </div>
-                    </form>
-                  </Form>
-                </div>
+                    </div>
+                  </div>
               </TabsContent>
               
               <TabsContent value="diary" className="h-full m-0">
@@ -1005,8 +964,29 @@ export function GlobalJobCard({
               </TabsContent>
             </div>
           </Tabs>
-        </div>
-      </DialogContent>
+          
+          {/* Form Actions - Always visible */}
+          <div className="flex justify-end gap-3 p-6 border-t">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={onClose}
+              data-testid="button-cancel"
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={isLoading}
+              data-testid="button-save-job"
+            >
+              {isLoading ? "Saving..." : mode === "create" ? "Create Job" : "Update Job"}
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </div>
+  </DialogContent>
       
       {/* Proposal Builder Integration */}
       <ProposalBuilder

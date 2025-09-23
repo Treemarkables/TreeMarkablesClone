@@ -110,8 +110,28 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     }
   });
 
-  // Calculate derived values
-  const totalAmount = job?.totalAmount ? parseFloat(job.totalAmount) : 0;
+  // Calculate derived values - use line items total if available, otherwise fall back to job.totalAmount
+  const calculateLineItemsTotal = (lineItems: any[]): number => {
+    if (!Array.isArray(lineItems)) return 0;
+    return lineItems.reduce((sum, item) => {
+      const quantity = parseFloat(item.quantity || 0);
+      const unitPrice = parseFloat(item.unitPrice || 0);
+      return sum + (quantity * unitPrice);
+    }, 0);
+  };
+  
+  const lineItemsTotal = job?.lineItems ? calculateLineItemsTotal(job.lineItems) : 0;
+  const totalAmount = lineItemsTotal > 0 ? lineItemsTotal : (job?.totalAmount ? parseFloat(job.totalAmount) : 0);
+  
+  // Debug logging
+  console.log('GrossMarginCalculator DEBUG:', {
+    jobId,
+    hasJob: !!job,
+    lineItems: job?.lineItems,
+    lineItemsTotal,
+    jobTotalAmount: job?.totalAmount,
+    finalTotalAmount: totalAmount
+  });
   const laborCosts = hasStaffTimeEntries ? staffTimeLaborCost : (formData.laborCosts || 0);
   const materialsCosts = formData.materialsCosts || 0;
   const otherCosts = formData.otherCosts || 0;
