@@ -1176,6 +1176,8 @@ export const insertProposalSchema = createInsertSchema(proposals).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  quoteId: true, // Remove the required quoteId from base schema
+  proposalNumber: true, // Remove the required proposalNumber from base schema
 }).extend({
   expiryDate: z.union([z.date(), z.string()]).transform((val) => 
     typeof val === 'string' ? new Date(val) : val
