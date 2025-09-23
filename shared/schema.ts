@@ -393,6 +393,7 @@ export const proposalSections = pgTable("proposal_sections", {
 export const proposalLineItems = pgTable("proposal_line_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   proposalId: varchar("proposal_id").references(() => proposals.id, { onDelete: 'cascade' }).notNull(),
+  sectionId: varchar("section_id").references(() => proposalSections.id, { onDelete: 'cascade' }),
   sourceType: text("source_type", { enum: ['quote', 'template', 'fixed'] }).notNull(),
   sourceId: varchar("source_id"), // Reference to quote line item or template ID (nullable for fixed items)
   description: text("description").notNull(),
