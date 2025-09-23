@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign } from "lucide-react";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { StaffTimeManager } from "./StaffTimeManager";
@@ -47,8 +47,6 @@ const globalJobCardSchema = insertJobSchema.extend({
   billingContactPhone: z.string().optional(),
   billingContactMobile: z.string().optional(),
   
-  // Transform string to number for duration
-  estimatedDuration: z.string().transform((val) => val ? parseInt(val) : undefined).optional(),
 }).refine((data) => {
   if (data.isNewCustomer) {
     return !!data.newCustomerName;
@@ -115,6 +113,15 @@ export function GlobalJobCard({
   
   // Tab state management
   const [activeTab, setActiveTab] = useState("details");
+  
+  // Line items state
+  const [lineItems, setLineItems] = useState<Array<{
+    id: string;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>>([]);
 
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
@@ -127,9 +134,7 @@ export function GlobalJobCard({
       status: editingJob?.status || "lead",
       serviceType: editingJob?.serviceType || "",
       priority: editingJob?.priority || "medium",
-      estimatedDuration: editingJob?.estimatedDuration?.toString() || "",
       jobNumber: editingJob?.jobNumber || "",
-      poNumber: editingJob?.poNumber || "",
       specialInstructions: editingJob?.specialInstructions || "",
       leadSource: editingJob?.leadSource || "direct",
       // Contact fields
@@ -153,9 +158,7 @@ export function GlobalJobCard({
         status: editingJob.status || "lead",
         serviceType: editingJob.serviceType || "",
         priority: editingJob.priority || "medium",
-        estimatedDuration: editingJob.estimatedDuration?.toString() || "",
         jobNumber: editingJob.jobNumber || "",
-        poNumber: editingJob.poNumber || "",
         specialInstructions: editingJob.specialInstructions || "",
         leadSource: editingJob.leadSource || "direct",
       });
@@ -186,6 +189,39 @@ export function GlobalJobCard({
 
   const removeChecklistItem = (id: string) => {
     setChecklist(checklist.filter(item => item.id !== id));
+  };
+  
+  // Line item management functions
+  const addLineItem = () => {
+    const newItem = {
+      id: Date.now().toString(),
+      description: "",
+      quantity: 1,
+      unitPrice: 0,
+      total: 0
+    };
+    setLineItems([...lineItems, newItem]);
+  };
+  
+  const updateLineItem = (id: string, field: keyof typeof lineItems[0], value: any) => {
+    setLineItems(lineItems.map(item => {
+      if (item.id === id) {
+        const updated = { ...item, [field]: value };
+        if (field === 'quantity' || field === 'unitPrice') {
+          updated.total = updated.quantity * updated.unitPrice;
+        }
+        return updated;
+      }
+      return item;
+    }));
+  };
+  
+  const removeLineItem = (id: string) => {
+    setLineItems(lineItems.filter(item => item.id !== id));
+  };
+  
+  const getTotalAmount = () => {
+    return lineItems.reduce((sum, item) => sum + item.total, 0);
   };
 
   const createJobMutation = useMutation({
@@ -699,49 +735,19 @@ export function GlobalJobCard({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="estimatedDuration"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estimated Duration (hours)</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="number" placeholder="4" data-testid="input-estimated-duration" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="jobNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Job Number *</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="JOB-2024-001" data-testid="input-job-number" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="poNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>PO Number</FormLabel>
-                        <FormControl>
-                          <Input {...field} value={field.value || ""} placeholder="PO-2024-001" data-testid="input-po-number" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                <FormField
+                  control={form.control}
+                  name="jobNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Job Number *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="JOB-2024-001" data-testid="input-job-number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}
@@ -814,6 +820,88 @@ export function GlobalJobCard({
                   >
                     <Plus className="w-4 h-4" />
                   </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Line Items Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5" />
+                  Pricing & Line Items
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  {lineItems.map((item) => (
+                    <div key={item.id} className="grid grid-cols-12 gap-2 items-center p-3 border rounded-lg">
+                      <div className="col-span-5">
+                        <Input
+                          value={item.description}
+                          onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                          placeholder="Description (e.g., Oak tree removal)"
+                          data-testid={`input-line-item-description-${item.id}`}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                          placeholder="Qty"
+                          min="0"
+                          step="0.1"
+                          data-testid={`input-line-item-quantity-${item.id}`}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          type="number"
+                          value={item.unitPrice}
+                          onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                          placeholder="Unit Price"
+                          min="0"
+                          step="0.01"
+                          data-testid={`input-line-item-price-${item.id}`}
+                        />
+                      </div>
+                      <div className="col-span-2 text-right font-medium">
+                        ${item.total.toFixed(2)}
+                      </div>
+                      <div className="col-span-1 text-right">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeLineItem(item.id)}
+                          className="text-destructive hover:text-destructive"
+                          data-testid={`button-remove-line-item-${item.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex justify-between items-center pt-2">
+                  <Button 
+                    type="button" 
+                    variant="outline"
+                    onClick={addLineItem}
+                    data-testid="button-add-line-item"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Line Item
+                  </Button>
+                  
+                  <div className="text-right">
+                    <div className="text-sm text-muted-foreground">Total Amount</div>
+                    <div className="text-2xl font-bold text-primary">
+                      ${getTotalAmount().toFixed(2)}
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
