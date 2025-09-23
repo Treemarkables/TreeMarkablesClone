@@ -105,6 +105,7 @@ export function ServiceM8TimeRecordingModal({
   const [availableStaff, setAvailableStaff] = useState<Employee[]>([]);
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [employeeLineItems, setEmployeeLineItems] = useState<Record<string, MaterialServiceItem[]>>({});
+  const [showingStaffSelection, setShowingStaffSelection] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -507,24 +508,41 @@ export function ServiceM8TimeRecordingModal({
                 <h3 className="text-lg font-semibold">Add Staff Time Entries</h3>
                 
                 {/* Available Staff Selection */}
-                {selectedStaffIds.length === 0 && (
+                {(selectedStaffIds.length === 0 || showingStaffSelection) && (
                   <div>
-                    <div className="text-base font-semibold">Select Staff Members</div>
-                    <div className="grid grid-cols-2 gap-3 mt-2">
-                      {employees.map((employee: any) => (
-                        <Button
-                          key={employee.id}
-                          type="button"
-                          variant="outline"
-                          onClick={() => addStaffAssignment(employee.id)}
-                          className="justify-start"
-                          data-testid={`button-add-staff-${employee.id}`}
-                        >
-                          <User className="w-4 h-4 mr-2" />
-                          {employee.firstName} {employee.lastName}
-                        </Button>
-                      ))}
+                    <div className="text-base font-semibold">
+                      {selectedStaffIds.length === 0 ? "Select Staff Members" : "Add Another Staff Member"}
                     </div>
+                    <div className="grid grid-cols-2 gap-3 mt-2">
+                      {employees
+                        .filter((employee: any) => !selectedStaffIds.includes(employee.id))
+                        .map((employee: any) => (
+                          <Button
+                            key={employee.id}
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              addStaffAssignment(employee.id);
+                              setShowingStaffSelection(false);
+                            }}
+                            className="justify-start"
+                            data-testid={`button-add-staff-${employee.id}`}
+                          >
+                            <User className="w-4 h-4 mr-2" />
+                            {employee.firstName} {employee.lastName}
+                          </Button>
+                        ))}
+                    </div>
+                    {selectedStaffIds.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setShowingStaffSelection(false)}
+                        className="mt-2"
+                      >
+                        Cancel
+                      </Button>
+                    )}
                   </div>
                 )}
 
@@ -652,21 +670,25 @@ export function ServiceM8TimeRecordingModal({
                     ))}
 
                     {/* Add More Staff Button */}
-                    {selectedStaffIds.length > 0 && selectedStaffIds.length < employees.length && (
+                    {selectedStaffIds.length > 0 && selectedStaffIds.length < employees.length && !showingStaffSelection && (
                       <div>
                         <Button
                           type="button"
                           variant="outline"
                           onClick={() => {
-                            // Show available staff to add
                             const availableStaff = employees.filter((emp: any) => 
                               !selectedStaffIds.includes(emp.id)
                             );
                             if (availableStaff.length === 1) {
+                              // If only one staff left, add them directly
                               addStaffAssignment(availableStaff[0].id);
+                            } else {
+                              // If multiple staff available, show selection interface
+                              setShowingStaffSelection(true);
                             }
                           }}
                           className="w-full"
+                          data-testid="button-add-another-staff"
                         >
                           <Plus className="w-4 h-4 mr-2" />
                           Add Another Staff Member
@@ -690,6 +712,7 @@ export function ServiceM8TimeRecordingModal({
                           onClick={() => {
                             setIsAddingEntry(false);
                             setSelectedStaffIds([]);
+                            setShowingStaffSelection(false);
                             entryForm.reset({
                               jobId,
                               staffAssignments: [],
