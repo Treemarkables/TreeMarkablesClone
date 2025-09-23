@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Removed tabs import for single-page layout
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
@@ -104,7 +104,7 @@ export function ProposalBuilder({
   });
 
   // Component state
-  const [activeTab, setActiveTab] = useState("details");
+  // Removed activeTab state - now using single-page layout
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -500,30 +500,13 @@ export function ProposalBuilder({
           </div>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="details" className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Details
-            </TabsTrigger>
-            <TabsTrigger value="photos" className="flex items-center gap-2">
-              <Camera className="w-4 h-4" />
-              Photos
-            </TabsTrigger>
-            <TabsTrigger value="items" className="flex items-center gap-2">
-              <Package className="w-4 h-4" />
-              Line Items
-            </TabsTrigger>
-            <TabsTrigger value="summary" className="flex items-center gap-2">
-              <Calculator className="w-4 h-4" />
-              Summary
-            </TabsTrigger>
-          </TabsList>
+        {/* ServiceM8-style Single Page Layout */}
+        <div className="space-y-6">
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Details Tab */}
-              <TabsContent value="details" className="space-y-6">
+              {/* Proposal Information Section */}
+              <div className="space-y-6">
                 <Card>
                   <CardHeader>
                     <CardTitle>Proposal Information</CardTitle>
@@ -578,10 +561,10 @@ export function ProposalBuilder({
                     />
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </div>
 
-              {/* Photos Tab */}
-              <TabsContent value="photos" className="space-y-6">
+              {/* Photos Section */}
+              <div className="space-y-6">
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -644,10 +627,10 @@ export function ProposalBuilder({
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </div>
 
-              {/* Line Items Tab */}
-              <TabsContent value="items" className="space-y-6">
+              {/* Line Items Section */}
+              <div className="space-y-6">
                 <Card>
                   <CardHeader>
                     <CardTitle>Add Line Item</CardTitle>
@@ -817,10 +800,10 @@ export function ProposalBuilder({
                     </CardContent>
                   </Card>
                 )}
-              </TabsContent>
+              </div>
 
-              {/* Summary Tab */}
-              <TabsContent value="summary" className="space-y-6">
+              {/* Summary Section */}
+              <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Cost Summary */}
                   <Card>
@@ -902,7 +885,7 @@ export function ProposalBuilder({
                     </CardContent>
                   </Card>
                 </div>
-              </TabsContent>
+              </div>
 
               {/* Form Actions */}
               <div className="flex justify-between items-center pt-6 border-t">
@@ -938,7 +921,7 @@ export function ProposalBuilder({
               </div>
             </form>
           </Form>
-        </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );
