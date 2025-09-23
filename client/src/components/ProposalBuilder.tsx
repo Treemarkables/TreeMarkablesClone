@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -62,6 +63,7 @@ interface LineItem {
   category?: string;
   notes?: string;
   isOptional: boolean;
+  selected: boolean; // For customer selection
 }
 
 interface UploadedPhoto {
@@ -366,6 +368,7 @@ export function ProposalBuilder({
       category: validatedItem.category,
       notes: validatedItem.notes,
       isOptional: validatedItem.isOptional || false,
+      selected: lineItems.length === 0, // Auto-select if it's the first/only item
     };
 
     setLineItems(prev => [...prev, newItem]);
@@ -390,17 +393,26 @@ export function ProposalBuilder({
     // Don't call updateTotal here - let useEffect handle it
   };
 
-  // Update total amount
+  // Update total amount (only selected items)
   const updateTotal = () => {
-    const subtotal = lineItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    const subtotal = lineItems.reduce((sum, item) => 
+      item.selected ? sum + item.totalPrice : sum, 0);
     const taxRate = form.getValues("taxRate") || 0;
     const tax = subtotal * (taxRate / 100);
     const total = subtotal + tax;
     form.setValue("totalAmount", total);
   };
 
-  // Calculate totals
-  const subtotal = lineItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  // Toggle line item selection
+  const toggleLineItemSelection = (id: string) => {
+    setLineItems(prev => prev.map(item => 
+      item.id === id ? { ...item, selected: !item.selected } : item
+    ));
+  };
+
+  // Calculate totals (only for selected items)
+  const subtotal = lineItems.reduce((sum, item) => 
+    item.selected ? sum + item.totalPrice : sum, 0);
   const taxAmount = subtotal * (form.watch("taxRate") || 0) / 100;
   const grandTotal = subtotal + taxAmount;
 
@@ -754,7 +766,15 @@ export function ProposalBuilder({
                     <CardContent>
                       <div className="space-y-2">
                         {lineItems.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                            {/* Selection Checkbox */}
+                            <Checkbox
+                              checked={item.selected}
+                              onCheckedChange={() => toggleLineItemSelection(item.id!)}
+                              data-testid={`checkbox-line-item-${item.id}`}
+                              className="mt-1"
+                            />
+                            
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium">{item.description}</span>
@@ -768,6 +788,11 @@ export function ProposalBuilder({
                                     Optional
                                   </Badge>
                                 )}
+                                {item.selected && (
+                                  <Badge variant="default" className="text-xs bg-green-500">
+                                    Selected
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-sm text-gray-600">
                                 {item.quantity} {item.unit} × ${item.unitPrice.toFixed(2)} = ${item.totalPrice.toFixed(2)}
@@ -776,6 +801,7 @@ export function ProposalBuilder({
                                 <div className="text-xs text-gray-500 mt-1">{item.notes}</div>
                               )}
                             </div>
+                            
                             <Button
                               type="button"
                               variant="destructive"
@@ -802,6 +828,13 @@ export function ProposalBuilder({
                       <CardTitle>Cost Summary</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      {lineItems.length > 0 && (
+                        <div className="text-xs text-gray-500 mb-3 p-2 bg-gray-50 rounded">
+                          💡 Only selected line items are included in pricing. 
+                          {lineItems.filter(item => item.selected).length === 0 && " Select items to see pricing."}
+                          {lineItems.filter(item => item.selected).length > 0 && ` (${lineItems.filter(item => item.selected).length} of ${lineItems.length} items selected)`}
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span>Subtotal:</span>
                         <span>${subtotal.toFixed(2)}</span>
