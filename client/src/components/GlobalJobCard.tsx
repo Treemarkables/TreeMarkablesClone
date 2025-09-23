@@ -110,8 +110,11 @@ export function GlobalJobCard({
     enabled: mode === "edit" && !!jobId && isOpen,
   });
 
-  const customers = customersData?.data || [];
-  const editingJob = mode === "edit" ? (jobData?.data || job) : null;
+  const customers = (customersData as any)?.data || [];
+  const editingJob = mode === "edit" ? ((jobData as any)?.data || job) : null;
+  
+  // Tab state management
+  const [activeTab, setActiveTab] = useState("details");
 
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
@@ -412,13 +415,36 @@ export function GlobalJobCard({
           </div>
         </DialogHeader>
 
-        {/* Two-column layout: Form on left, Diary on right */}
-        <div className="flex flex-1 min-h-0">
-          {/* Left column - Job Form (60%) */}
-          <div className="w-3/5 overflow-y-auto border-r">
-            <div className="p-6">
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Tabbed interface */}
+        <div className="flex-1 flex flex-col min-h-0">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+            <div className="px-6 pt-4 pb-0">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="details" data-testid="tab-details">
+                  Job Details
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="diary" 
+                  disabled={!jobId}
+                  data-testid="tab-diary"
+                >
+                  Job Diary
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="profit" 
+                  disabled={!jobId}
+                  data-testid="tab-profit"
+                >
+                  Profit Tracking
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            
+            <div className="flex-1 overflow-hidden">
+              <TabsContent value="details" className="h-full m-0">
+                <div className="h-full overflow-y-auto px-6 pb-6">
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Customer Section */}
             <Card>
               <CardHeader>
@@ -651,7 +677,7 @@ export function GlobalJobCard({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Service Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
                           <FormControl>
                             <SelectTrigger data-testid="select-service-type">
                               <SelectValue placeholder="Select service..." />
@@ -810,69 +836,80 @@ export function GlobalJobCard({
                 {isLoading ? "Saving..." : mode === "create" ? "Create Job" : "Update Job"}
               </Button>
             </div>
-                  </form>
-                </Form>
-              </div>
+                    </form>
+                  </Form>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="diary" className="h-full m-0">
+                <div className="h-full">
+                  {jobId ? (
+                    <JobDiarySection 
+                      jobId={jobId}
+                      customerId={form.getValues("customerId") || customerId}
+                      customerEmail={selectedCustomer?.email}
+                      customerPhone={selectedCustomer?.phone}
+                      className="h-full"
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                      <div className="text-center">
+                        <div className="text-sm">Job Diary</div>
+                        <div className="text-xs mt-1">Available after job is created</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="profit" className="h-full m-0">
+                <div className="h-full overflow-y-auto px-6 py-6">
+                  {jobId ? (
+                    <div className="space-y-6">
+                      <div className="text-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900">Job Profitability Tracker</h3>
+                        <p className="text-sm text-gray-500">Real-time cost tracking and margin analysis</p>
+                      </div>
+                      
+                      {/* Staff Time and Expense Management */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <StaffTimeManager 
+                          jobId={jobId} 
+                          compact={true} 
+                          isAddDialogOpen={isStaffTimeDialogOpen}
+                          setIsAddDialogOpen={setIsStaffTimeDialogOpen}
+                        />
+                        <ExpenseManager 
+                          jobId={jobId} 
+                          compact={true} 
+                          isAddDialogOpen={isExpenseDialogOpen}
+                          setIsAddDialogOpen={setIsExpenseDialogOpen}
+                        />
+                      </div>
+                      
+                      {/* Gross Margin Calculator */}
+                      <div className="mt-6">
+                        <GrossMarginCalculator 
+                          jobId={jobId} 
+                          jobData={editingJob}
+                          compact={false}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                      <div className="text-center">
+                        <div className="text-sm">Profit Tracking</div>
+                        <div className="text-xs mt-1">Available after job is created</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
             </div>
-          
-            {/* Right column - Job Diary (40%) */}
-            <div className="w-2/5 flex flex-col">
-              {jobId ? (
-                <JobDiarySection 
-                  jobId={jobId}
-                  customerId={form.getValues("customerId") || customerId}
-                  customerEmail={selectedCustomer?.email}
-                  customerPhone={selectedCustomer?.phone}
-                  className="flex-1"
-                />
-              ) : (
-                <div className="flex-1 flex items-center justify-center p-4 text-muted-foreground">
-                  <div className="text-center">
-                    <div className="text-sm">Job Diary</div>
-                    <div className="text-xs mt-1">Available after job is created</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          {/* Margin Tracker Section - spans full width at bottom */}
-          {jobId && (
-            <div className="border-t mt-6 pt-6">
-              <div className="space-y-6">
-                <div className="text-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Job Profitability Tracker</h3>
-                  <p className="text-sm text-gray-500">Real-time cost tracking and margin analysis</p>
-                </div>
-                
-                {/* Staff Time and Expense Management */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <StaffTimeManager 
-                    jobId={jobId} 
-                    compact={true} 
-                    isAddDialogOpen={isStaffTimeDialogOpen}
-                    setIsAddDialogOpen={setIsStaffTimeDialogOpen}
-                  />
-                  <ExpenseManager 
-                    jobId={jobId} 
-                    compact={true} 
-                    isAddDialogOpen={isExpenseDialogOpen}
-                    setIsAddDialogOpen={setIsExpenseDialogOpen}
-                  />
-                </div>
-                
-                {/* Gross Margin Calculator */}
-                <div className="mt-6">
-                  <GrossMarginCalculator 
-                    jobId={jobId} 
-                    jobData={editingJob}
-                    compact={false}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
+          </Tabs>
+        </div>
+      </DialogContent>
       
       {/* Proposal Builder Integration */}
       <ProposalBuilder
