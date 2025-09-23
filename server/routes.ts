@@ -5493,6 +5493,29 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const validatedData = insertProposalSchema.parse(proposalData);
       const proposal = await storage.createProposal(validatedData);
       
+      // If proposal is associated with a job, create a diary entry
+      // Note: jobId is not part of insertProposalSchema, so use original request body
+      if (req.body.jobId) {
+        try {
+          console.log(`Creating diary entry for proposal ${proposal.proposalNumber} in job ${req.body.jobId}`);
+          await storage.createJobDiaryEntry({
+            jobId: req.body.jobId,
+            entryType: 'proposal',
+            title: `Proposal Created: ${proposal.proposalNumber}`,
+            description: `New proposal "${proposal.title}" has been created and is ready for review.`,
+            authorName: proposal.createdBy || 'System',
+            authorRole: 'system',
+            isPrivate: false
+          });
+          console.log(`Successfully created diary entry for proposal ${proposal.proposalNumber}`);
+        } catch (diaryError) {
+          // Log the error but don't fail the proposal creation
+          console.error('Error creating diary entry for proposal:', diaryError);
+        }
+      } else {
+        console.log('No jobId provided - skipping diary entry creation');
+      }
+      
       res.status(201).json({
         success: true,
         data: proposal,
