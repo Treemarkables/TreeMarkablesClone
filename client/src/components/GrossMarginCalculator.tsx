@@ -50,15 +50,25 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   
   const job = (jobResponse as any)?.data;
 
-  // Fetch staff time entries to check if labor costs should be read-only
+  // Fetch staff time entries from the new time tracking system
+  const today = new Date().toISOString().split('T')[0];
   const { data: staffTimeData } = useQuery({
-    queryKey: ['/api/jobs', jobId, 'staff-time'],
+    queryKey: ['time-entries', jobId, today],
+    queryFn: async () => {
+      const response = await fetch(`/api/time-entries/${jobId}/${today}`);
+      if (!response.ok) throw new Error('Failed to fetch staff time entries');
+      return response.json();
+    },
     enabled: !!jobId
   });
   
   const hasStaffTimeEntries = (staffTimeData as any)?.data?.length > 0;
   const staffTimeEntries = (staffTimeData as any)?.data || [];
-  const staffTimeLaborCost = staffTimeEntries.reduce((sum: number, entry: any) => sum + (entry.hours * entry.rate), 0);
+  const staffTimeLaborCost = staffTimeEntries.reduce((sum: number, entry: any) => {
+    const hours = Number(entry.hours) || 0;
+    const rate = Number(entry.rate) || 0;
+    return sum + (hours * rate);
+  }, 0);
   
   // Get bulk expense data from job object (not from /expenses endpoint which is for individual entries)
   const bulkExpenses = {
@@ -334,7 +344,10 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                 Calculated from {staffTimeEntries.length} staff time entries
               </div>
               <div className="text-xs text-blue-600 mt-1">
-                Total Hours: {staffTimeEntries.reduce((sum: number, entry: any) => sum + entry.hours, 0).toFixed(2)}h
+                Total Hours: {staffTimeEntries.reduce((sum: number, entry: any) => {
+                  const hours = Number(entry.hours) || 0;
+                  return sum + hours;
+                }, 0).toFixed(2)}h
               </div>
             </div>
           ) : (

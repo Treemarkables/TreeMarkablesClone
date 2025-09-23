@@ -431,16 +431,16 @@ export class TimeTrackingService {
           billed: true 
         },
         { 
-          jobId: "6", 
-          jobNumber: "#3292", 
+          jobId: "5", 
+          jobNumber: "#3291", 
           employeeId: "d428f28e-95fa-4a85-8c73-9ba123456789", 
           employeeName: "Daniel Thompson",
-          lineItemId: "1",
-          lineItemNumber: "11",
-          lineItemName: "Call out",
+          lineItemId: "2",
+          lineItemNumber: "15",
+          lineItemName: "Tree Pruning",
           lineItemCategory: "Labour",
           hours: 2.0, 
-          rate: 45.00, 
+          rate: 75.00, 
           startTime: "13:00", 
           billed: false 
         },
