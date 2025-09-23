@@ -364,13 +364,31 @@ export function GlobalJobCard({
     });
   };
 
-  const handleEmailClick = () => {
+  const handleEmailClick = async () => {
+    if (!editingJob) return;
+    
     toast({
       title: "Email Customer",
       description: "Opening email composer...",
     });
-    // TODO: Open email modal or send email using SendGrid
-    console.log("Email button clicked");
+    
+    try {
+      // If job has no invoice yet, create one first
+      if (!editingJob.invoiceId) {
+        console.log("Creating invoice before opening email composer");
+        const invoiceData = await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
+        setCurrentInvoiceData(invoiceData);
+        
+        // Invalidate queries to refresh job data
+        await queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+      }
+      
+      setIsEmailComposerOpen(true);
+      console.log("Email button clicked - opening composer");
+    } catch (error) {
+      console.error("Error in handleEmailClick:", error);
+    }
   };
 
   const handleSMSClick = () => {
