@@ -615,6 +615,13 @@ export const insertJobSchema = createInsertSchema(jobs)
   .extend({
     status: JobStatus.optional().default('lead'),
     checklist: z.array(checklistItemSchema).optional().default([]),
+    lineItems: z.array(z.object({
+      id: z.string(),
+      description: z.string(),
+      quantity: z.number(),
+      unitPrice: z.number(),
+      total: z.number()
+    })).optional().default([]),
   });
 export const insertActivitySchema = createInsertSchema(activities).omit({ id: true, createdAt: true });
 export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
