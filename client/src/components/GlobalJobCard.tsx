@@ -325,7 +325,7 @@ export function GlobalJobCard({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden p-0">
+      <DialogContent className="max-w-7xl h-[95vh] flex flex-col p-0">
         {/* Header spans full width */}
         <DialogHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-lg flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -406,7 +406,7 @@ export function GlobalJobCard({
         </DialogHeader>
 
         {/* Two-column layout: Form on left, Diary on right */}
-        <div className="flex h-full overflow-hidden">
+        <div className="flex flex-1 min-h-0">
           {/* Left column - Job Form (60%) */}
           <div className="w-3/5 overflow-y-auto border-r">
             <div className="p-6">
@@ -809,13 +809,13 @@ export function GlobalJobCard({
             </div>
           
             {/* Right column - Job Diary (40%) */}
-            <div className="w-2/5">
+            <div className="w-2/5 flex flex-col">
               <JobDiarySection 
                 jobId={jobId || ""}
                 customerId={form.getValues("customerId") || customerId}
                 customerEmail={selectedCustomer?.email}
                 customerPhone={selectedCustomer?.phone}
-                className="h-full"
+                className="flex-1"
               />
             </div>
           </div>
