@@ -177,9 +177,23 @@ export function GlobalJobCard({
     }
   }, [editingJob?.lineItems]);
 
+  // State for selected customer in form
+  const [formSelectedCustomer, setFormSelectedCustomer] = useState<Customer | null>(null);
+  
   // Find the selected customer for diary section (after form is defined)
   const selectedCustomerId = form.watch("customerId") || customerId;
   const selectedCustomer = customers.find((customer: any) => customer.id === selectedCustomerId);
+  
+  // Update formSelectedCustomer when form changes
+  useEffect(() => {
+    const currentCustomerId = form.getValues("customerId");
+    if (currentCustomerId) {
+      const customer = customers.find((c: Customer) => c.id === currentCustomerId);
+      setFormSelectedCustomer(customer || null);
+    } else {
+      setFormSelectedCustomer(null);
+    }
+  }, [form.watch("customerId"), customers]);
 
   const addChecklistItem = () => {
     if (newChecklistItem.trim()) {
@@ -840,7 +854,7 @@ export function GlobalJobCard({
                               <Mail className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.email || 'Not provided'}
+                                  {formSelectedCustomer?.email || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Email Address</div>
                               </div>
@@ -850,7 +864,7 @@ export function GlobalJobCard({
                               <Phone className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.phone || 'Not provided'}
+                                  {formSelectedCustomer?.phone || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Mobile</div>
                               </div>
@@ -860,7 +874,7 @@ export function GlobalJobCard({
                               <MapPin className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.address || 'Not provided'}
+                                  {formSelectedCustomer?.address || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Address</div>
                               </div>
@@ -870,7 +884,7 @@ export function GlobalJobCard({
                               <Building2 className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.city || 'Not provided'}
+                                  {formSelectedCustomer?.city || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">City</div>
                               </div>
@@ -902,7 +916,7 @@ export function GlobalJobCard({
                               <Phone className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.phone ? 'See Mobile' : 'Not provided'}
+                                  {formSelectedCustomer.phone ? 'See Mobile' : 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Landline</div>
                               </div>
@@ -912,7 +926,7 @@ export function GlobalJobCard({
                               <MapPin className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.region || 'Not provided'}
+                                  {formSelectedCustomer?.region || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Region</div>
                               </div>
@@ -922,7 +936,7 @@ export function GlobalJobCard({
                               <Target className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.source || 'Not specified'}
+                                  {formSelectedCustomer?.source || 'Not specified'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Customer Source</div>
                               </div>
@@ -998,7 +1012,7 @@ export function GlobalJobCard({
                     />
                     
                     {/* Display selected customer details */}
-                    {selectedCustomer && (
+                    {formSelectedCustomer && (
                       <div className="mt-6 p-4 bg-muted/50 rounded-lg">
                         <h4 className="font-medium mb-4 flex items-center gap-2">
                           <User className="w-4 h-4" />
@@ -1011,7 +1025,7 @@ export function GlobalJobCard({
                               <div>
                                 <div className="font-medium">
                                   {(() => {
-                                    const nameParts = selectedCustomer.name?.split(' ') || ['Customer'];
+                                    const nameParts = formSelectedCustomer?.name?.split(' ') || ['Customer'];
                                     return nameParts[0] || '';
                                   })()}
                                 </div>
@@ -1023,7 +1037,7 @@ export function GlobalJobCard({
                               <Mail className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.email || 'Not provided'}
+                                  {formSelectedCustomer?.email || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Email Address</div>
                               </div>
@@ -1033,7 +1047,7 @@ export function GlobalJobCard({
                               <Phone className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.phone || 'Not provided'}
+                                  {formSelectedCustomer?.phone || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Mobile</div>
                               </div>
@@ -1043,7 +1057,7 @@ export function GlobalJobCard({
                               <MapPin className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.address || 'Not provided'}
+                                  {formSelectedCustomer?.address || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Address</div>
                               </div>
@@ -1053,7 +1067,7 @@ export function GlobalJobCard({
                               <Building2 className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.city || 'Not provided'}
+                                  {formSelectedCustomer?.city || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">City</div>
                               </div>
@@ -1066,7 +1080,7 @@ export function GlobalJobCard({
                               <div>
                                 <div className="font-medium">
                                   {(() => {
-                                    const nameParts = selectedCustomer.name?.split(' ') || ['Customer'];
+                                    const nameParts = formSelectedCustomer?.name?.split(' ') || ['Customer'];
                                     return nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
                                   })()}
                                 </div>
@@ -1078,7 +1092,7 @@ export function GlobalJobCard({
                               <Target className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.source || 'Not specified'}
+                                  {formSelectedCustomer?.source || 'Not specified'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Lead Source</div>
                               </div>
@@ -1088,7 +1102,7 @@ export function GlobalJobCard({
                               <Phone className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.phone ? 'See Mobile' : 'Not provided'}
+                                  {formSelectedCustomer.phone ? 'See Mobile' : 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Landline</div>
                               </div>
@@ -1098,7 +1112,7 @@ export function GlobalJobCard({
                               <MapPin className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.region || 'Not provided'}
+                                  {formSelectedCustomer?.region || 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Region</div>
                               </div>
@@ -1108,7 +1122,7 @@ export function GlobalJobCard({
                               <Target className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {selectedCustomer.source || 'Not specified'}
+                                  {formSelectedCustomer?.source || 'Not specified'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Customer Source</div>
                               </div>
