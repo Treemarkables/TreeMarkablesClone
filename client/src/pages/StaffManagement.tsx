@@ -651,7 +651,7 @@ function StaffCard({ staff, onEdit, onDelete }: {
               <UserX className="w-4 h-4 text-red-500" />
             )}
             <span className="text-sm capitalize text-muted-foreground">
-              {staff.status.replace('_', ' ')}
+              {(staff.status || 'active').replace('_', ' ')}
             </span>
           </div>
           
