@@ -103,24 +103,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   const leads = leadsResponse?.data || [];
   const customers = customersResponse?.data || [];
 
-  // Mock data for demonstration when API data is not available
-  const mockJobs: DisplayJob[] = [
-    { id: "1", title: "Large Oak Tree Removal", customerId: "1", status: "scheduled", priority: "high", scheduledDate: "2024-09-23", estimatedValue: 2500, location: "Auckland" },
-    { id: "2", title: "Commercial Hedge Trimming", customerId: "2", status: "in-progress", priority: "medium", scheduledDate: "2024-09-22", estimatedValue: 800, location: "Wellington" },
-    { id: "3", title: "Storm Damage Tree Removal", customerId: "3", status: "completed", priority: "emergency", scheduledDate: "2024-09-21", estimatedValue: 3200, location: "Christchurch" },
-  ];
-
-  const mockLeads: DisplayLead[] = [
-    { id: "1", name: "Green Valley Property", source: "Website", status: "new", estimatedValue: 1500, lastContact: "2024-09-21" },
-    { id: "2", name: "City Council", source: "Referral", status: "quoted", estimatedValue: 5000, lastContact: "2024-09-20" },
-    { id: "3", name: "Park Estate", source: "Google Ads", status: "contacted", estimatedValue: 2200, lastContact: "2024-09-19" },
-  ];
-
-  const mockCustomers: DisplayCustomer[] = [
-    { id: "1", name: "Smith Family", email: "smith@email.com", phone: "021-123-4567", totalJobs: 3, lifetimeValue: "4500.00" },
-    { id: "2", name: "ABC Corporation", email: "contact@abc.co.nz", phone: "09-987-6543", totalJobs: 12, lifetimeValue: "15600.00" },
-    { id: "3", name: "Johnson Residence", email: "johnson@gmail.com", phone: "027-456-7890", totalJobs: 1, lifetimeValue: "3200.00" },
-  ];
+  // No mock data - use real data only
 
   // Initialize customers first to avoid temporal dead zone
   const transformCustomersForDisplay = (apiCustomers: Customer[]): DisplayCustomer[] => {
@@ -135,7 +118,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
     }));
   };
 
-  const displayCustomers: DisplayCustomer[] = customers.length > 0 ? transformCustomersForDisplay(customers) : mockCustomers;
+  const displayCustomers: DisplayCustomer[] = customers.length > 0 ? transformCustomersForDisplay(customers) : [];
 
   // Helper function to get customer name by ID - now safe to use
   const getCustomerName = (customerId: string) => {
@@ -169,8 +152,8 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
     }));
   };
 
-  const displayJobs: DisplayJob[] = jobs.length > 0 ? transformJobsForDisplay(jobs) : mockJobs.map(job => ({...job, customer: getCustomerName(job.customerId)}));
-  const displayLeads: DisplayLead[] = leads.length > 0 ? transformLeadsForDisplay(leads) : mockLeads;
+  const displayJobs: DisplayJob[] = jobs.length > 0 ? transformJobsForDisplay(jobs) : [];
+  const displayLeads: DisplayLead[] = leads.length > 0 ? transformLeadsForDisplay(leads) : [];
 
   // Calculate metrics
   const totalRevenue = displayJobs.reduce((sum, job) => sum + (job.estimatedValue ?? 0), 0);
@@ -422,64 +405,52 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </p>
               </div>
 
-              {/* Featured Job Diary - Using sample job for demonstration */}
-              <Card data-testid="card-featured-job-diary">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2" data-testid="title-featured-job">
-                    <FileText className="w-5 h-5" />
-                    Featured Job: Large Oak Tree Removal
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground" data-testid="text-job-details">
-                    Job #JOB-001 - 123 Maple Street, Auckland, NZ
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <JobDiary 
-                    jobId="1" 
-                    jobTitle="Large Oak Tree Removal" 
-                    compact={false}
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Additional Job Dairy Examples */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card data-testid="card-hedge-trimming-diary">
+              {/* Job Diary will show real job data when available */}
+              {displayJobs.length > 0 && (
+                <Card data-testid="card-featured-job-diary">
                   <CardHeader>
-                    <CardTitle className="text-lg" data-testid="title-hedge-job">
-                      Hedge Trimming & Pruning
+                    <CardTitle className="flex items-center gap-2" data-testid="title-featured-job">
+                      <FileText className="w-5 h-5" />
+                      Featured Job: {displayJobs[0].title}
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground" data-testid="text-hedge-details">
-                      Job #JOB-002 - 456 Pine Avenue, Wellington, NZ
+                    <p className="text-sm text-muted-foreground" data-testid="text-job-details">
+                      {displayJobs[0].customer} - {displayJobs[0].location}
                     </p>
                   </CardHeader>
                   <CardContent>
                     <JobDiary 
-                      jobId="2" 
-                      jobTitle="Hedge Trimming & Pruning" 
-                      compact={true}
+                      jobId={displayJobs[0].id} 
+                      jobTitle={displayJobs[0].title} 
+                      compact={false}
                     />
                   </CardContent>
                 </Card>
+              )}
 
-                <Card data-testid="card-stump-removal-diary">
-                  <CardHeader>
-                    <CardTitle className="text-lg" data-testid="title-stump-job">
-                      Stump Grinding Service
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground" data-testid="text-stump-details">
-                      Job #JOB-003 - 789 Cedar Lane, Christchurch, NZ
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <JobDiary 
-                      jobId="3" 
-                      jobTitle="Stump Grinding Service" 
-                      compact={true}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
+              {/* Additional Job Diaries - Show real jobs when available */}
+              {displayJobs.length > 1 && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {displayJobs.slice(1, 3).map((job) => (
+                    <Card key={job.id} data-testid={`card-job-diary-${job.id}`}>
+                      <CardHeader>
+                        <CardTitle className="text-lg" data-testid={`title-job-${job.id}`}>
+                          {job.title}
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground" data-testid={`text-job-details-${job.id}`}>
+                          {job.customer} - {job.location}
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <JobDiary 
+                          jobId={job.id} 
+                          jobTitle={job.title} 
+                          compact={true}
+                        />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           </TabsContent>
 
