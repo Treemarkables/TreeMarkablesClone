@@ -165,14 +165,15 @@ export function ServiceM8JobImport() {
 
   const importJobsMutation = useMutation({
     mutationFn: async (jobs: ServiceM8Job[]) => {
-      const response = await apiRequest('/api/jobs/import-servicem8', {
+      const response = await fetch('/api/jobs/import-servicem8', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobs })
       });
-      return response;
+      const data = await response.json();
+      return data;
     },
-    onSuccess: (result) => {
+    onSuccess: (result: any) => {
       setImportStats(result.stats);
       setCurrentStep('complete');
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
