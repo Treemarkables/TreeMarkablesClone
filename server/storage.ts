@@ -73,6 +73,24 @@ export interface IStorage {
   getAllCustomers(): Promise<Customer[]>;
   searchCustomers(query: string): Promise<Customer[]>;
   
+  // CSV Import and Bulk Updates
+  bulkUpdateCustomers(updates: Array<{id: string; updates: Partial<InsertCustomer>}>): Promise<{updated: number; failed: number; errors: string[]}>;
+  matchCustomersFromCSV(csvData: any[]): Promise<{
+    matches: Array<{
+      csvRow: number;
+      csvData: any;
+      existingCustomer?: Customer;
+      matchType: 'uuid' | 'email' | 'phone' | 'none';
+      matchConfidence: 'high' | 'medium' | 'low';
+      proposedName: string;
+      willUpdate: boolean;
+    }>;
+    totalRows: number;
+    matchableRows: number;
+    highConfidenceMatches: number;
+    willUpdateCount: number;
+  }>;
+  
   // Communication Preferences Management
   createCommunicationPreferences(preferences: InsertCommunicationPreferences): Promise<CommunicationPreferences>;
   getCommunicationPreferences(customerId: string): Promise<CommunicationPreferences | undefined>;
@@ -558,6 +576,225 @@ class DatabaseStorage implements IStorage {
         sql`${schema.customers.name} ILIKE ${searchTerm} OR ${schema.customers.email} ILIKE ${searchTerm}`
       )
       .orderBy(desc(schema.customers.createdAt));
+  }
+
+  // CSV Import and Bulk Update Methods
+  async bulkUpdateCustomers(updates: Array<{id: string; updates: Partial<InsertCustomer>}>): Promise<{updated: number; failed: number; errors: string[]}> {
+    let updated = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const update of updates) {
+      try {
+        await this.updateCustomer(update.id, update.updates);
+        updated++;
+      } catch (error) {
+        failed++;
+        const errorMsg = `Failed to update customer ${update.id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        errors.push(errorMsg);
+        console.error('❌ Bulk update error:', errorMsg);
+      }
+    }
+
+    return { updated, failed, errors };
+  }
+
+  async matchCustomersFromCSV(csvData: any[]): Promise<{
+    matches: Array<{
+      csvRow: number;
+      csvData: any;
+      existingCustomer?: Customer;
+      matchType: 'uuid' | 'email' | 'phone' | 'none';
+      matchConfidence: 'high' | 'medium' | 'low';
+      proposedName: string;
+      willUpdate: boolean;
+    }>;
+    totalRows: number;
+    matchableRows: number;
+    highConfidenceMatches: number;
+    willUpdateCount: number;
+  }> {
+    const allCustomers = await this.getAllCustomers();
+    const matches: any[] = [];
+    let matchableRows = 0;
+    let highConfidenceMatches = 0;
+    let willUpdateCount = 0;
+
+    for (let i = 0; i < csvData.length; i++) {
+      const row = csvData[i];
+      const csvRow = i + 1; // 1-based row numbering
+      
+      // Normalize field names (handle common variations)
+      const normalizedRow = this.normalizeCSVRow(row);
+      
+      // Skip rows without any useful data
+      if (!this.hasMatchableData(normalizedRow)) {
+        continue;
+      }
+      
+      matchableRows++;
+      
+      // Try to match by different strategies
+      const matchResult = this.findCustomerMatch(normalizedRow, allCustomers);
+      
+      // Generate proposed name
+      const proposedName = this.generateProposedName(normalizedRow);
+      
+      // Determine if we should update this customer
+      const willUpdate = this.shouldUpdateCustomer(matchResult.customer, proposedName);
+      
+      if (willUpdate) {
+        willUpdateCount++;
+      }
+      
+      if (matchResult.matchType !== 'none' && matchResult.confidence === 'high') {
+        highConfidenceMatches++;
+      }
+      
+      matches.push({
+        csvRow,
+        csvData: normalizedRow,
+        existingCustomer: matchResult.customer,
+        matchType: matchResult.matchType,
+        matchConfidence: matchResult.confidence,
+        proposedName,
+        willUpdate
+      });
+    }
+
+    return {
+      matches,
+      totalRows: csvData.length,
+      matchableRows,
+      highConfidenceMatches,
+      willUpdateCount
+    };
+  }
+
+  // Helper methods for CSV matching
+  private normalizeCSVRow(row: any): any {
+    const normalized: any = {};
+    
+    // Map common field variations to standard names
+    const fieldMappings: { [key: string]: string[] } = {
+      'name': ['name', 'customer_name', 'company_name', 'full_name'],
+      'email': ['email', 'email_address', 'contact_email'],
+      'phone': ['phone', 'mobile', 'phone_number', 'contact_phone'],
+      'servicem8Uuid': ['uuid', 'servicem8_uuid', 'servicem8uuid', 'customer_uuid'],
+      'address': ['address', 'address_line1', 'street_address'],
+      'contact_first': ['contact_first', 'first_name', 'firstname'],
+      'contact_last': ['contact_last', 'last_name', 'lastname']
+    };
+
+    for (const [standardField, variations] of Object.entries(fieldMappings)) {
+      for (const variation of variations) {
+        const value = row[variation] || row[variation.toLowerCase()] || row[variation.toUpperCase()];
+        if (value && typeof value === 'string' && value.trim()) {
+          normalized[standardField] = value.trim();
+          break;
+        }
+      }
+    }
+
+    return normalized;
+  }
+
+  private hasMatchableData(row: any): boolean {
+    return !!(row.name || row.email || row.phone || row.servicem8Uuid || row.contact_first || row.contact_last);
+  }
+
+  private findCustomerMatch(csvRow: any, allCustomers: Customer[]): {
+    customer?: Customer;
+    matchType: 'uuid' | 'email' | 'phone' | 'none';
+    confidence: 'high' | 'medium' | 'low';
+  } {
+    // Strategy 1: ServiceM8 UUID (highest priority)
+    if (csvRow.servicem8Uuid) {
+      const match = allCustomers.find(c => c.servicem8Uuid === csvRow.servicem8Uuid);
+      if (match) {
+        return { customer: match, matchType: 'uuid', confidence: 'high' };
+      }
+    }
+
+    // Strategy 2: Email (high confidence)
+    if (csvRow.email) {
+      const match = allCustomers.find(c => 
+        c.email && c.email.toLowerCase() === csvRow.email.toLowerCase()
+      );
+      if (match) {
+        return { customer: match, matchType: 'email', confidence: 'high' };
+      }
+    }
+
+    // Strategy 3: Phone number (medium confidence)
+    if (csvRow.phone) {
+      // Normalize phone numbers for comparison
+      const normalizedCsvPhone = this.normalizePhoneNumber(csvRow.phone);
+      const match = allCustomers.find(c => {
+        if (!c.phone) return false;
+        const normalizedCustomerPhone = this.normalizePhoneNumber(c.phone);
+        return normalizedCsvPhone === normalizedCustomerPhone;
+      });
+      if (match) {
+        return { customer: match, matchType: 'phone', confidence: 'medium' };
+      }
+    }
+
+    return { matchType: 'none', confidence: 'low' };
+  }
+
+  private normalizePhoneNumber(phone: string): string {
+    // Remove all non-digit characters and normalize format
+    return phone.replace(/\D/g, '').replace(/^0/, ''); // Remove leading 0 for NZ numbers
+  }
+
+  private generateProposedName(csvRow: any): string {
+    // Priority 1: Full name if available
+    if (csvRow.name && !csvRow.name.startsWith('Customer-')) {
+      return csvRow.name;
+    }
+
+    // Priority 2: Construct from first/last name
+    if (csvRow.contact_first || csvRow.contact_last) {
+      const firstName = csvRow.contact_first || '';
+      const lastName = csvRow.contact_last || '';
+      const fullName = `${firstName} ${lastName}`.trim();
+      if (fullName) {
+        return fullName;
+      }
+    }
+
+    // Priority 3: Use email username
+    if (csvRow.email && csvRow.email.includes('@')) {
+      const username = csvRow.email.split('@')[0];
+      return username.charAt(0).toUpperCase() + username.slice(1);
+    }
+
+    // Priority 4: Use phone as identifier
+    if (csvRow.phone) {
+      return `Customer (${csvRow.phone})`;
+    }
+
+    // Fallback
+    return 'Customer (Unknown)';
+  }
+
+  private shouldUpdateCustomer(existingCustomer?: Customer, proposedName?: string): boolean {
+    if (!existingCustomer || !proposedName) return false;
+    
+    // Update if current name is a placeholder/generic name
+    if (existingCustomer.name.startsWith('Customer-') || 
+        existingCustomer.name.startsWith('Customer #')) {
+      return true;
+    }
+
+    // Update if the proposed name is significantly better
+    if (proposedName.length > existingCustomer.name.length && 
+        !proposedName.startsWith('Customer')) {
+      return true;
+    }
+
+    return false;
   }
 
   // ========================================

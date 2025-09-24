@@ -836,6 +836,104 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // CSV Upload and Customer Matching endpoints
+  app.post('/api/customers/csv-match', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No CSV file provided' });
+      }
+
+      // Read and parse the CSV file
+      const csvContent = fs.readFileSync(req.file.path, 'utf8');
+      const parsedCsv = Papa.parse(csvContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
+
+      if (parsedCsv.errors.length > 0) {
+        // Clean up uploaded file
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({
+          success: false,
+          message: 'CSV parsing errors',
+          errors: parsedCsv.errors,
+        });
+      }
+
+      // Match customers using the storage layer
+      const matchingResult = await storage.matchCustomersFromCSV(parsedCsv.data);
+
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      res.json({
+        success: true,
+        data: matchingResult,
+        message: `Found ${matchingResult.matchableRows} matchable customers with ${matchingResult.highConfidenceMatches} high-confidence matches`
+      });
+    } catch (error) {
+      // Clean up uploaded file on error
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      console.error('Error processing CSV file:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error processing CSV file',
+      });
+    }
+  });
+
+  app.post('/api/customers/bulk-update', async (req: Request, res: Response) => {
+    try {
+      const { matches } = req.body;
+      
+      if (!matches || !Array.isArray(matches)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid request: matches array is required'
+        });
+      }
+
+      // Filter only matches that should be updated and have existing customers
+      const updatesToApply = matches
+        .filter((match: any) => match.willUpdate && match.existingCustomer)
+        .map((match: any) => ({
+          id: match.existingCustomer.id,
+          updates: { name: match.proposedName }
+        }));
+
+      if (updatesToApply.length === 0) {
+        return res.json({
+          success: true,
+          updated: 0,
+          failed: 0,
+          errors: [],
+          message: 'No customers needed updating'
+        });
+      }
+
+      // Perform bulk update
+      const result = await storage.bulkUpdateCustomers(updatesToApply);
+
+      res.json({
+        success: true,
+        updated: result.updated,
+        failed: result.failed,
+        errors: result.errors,
+        message: `Successfully updated ${result.updated} customers${result.failed > 0 ? `, ${result.failed} failed` : ''}`
+      });
+    } catch (error) {
+      console.error('Error performing bulk customer update:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error performing bulk update',
+      });
+    }
+  });
+
   // ========================================
   // PIPELINE LEAD MANAGEMENT API ROUTES
   // ========================================
