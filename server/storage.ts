@@ -1051,11 +1051,18 @@ class DatabaseStorage implements IStorage {
   async getAllQuotes(): Promise<Quote[]> { return []; }
 
   // Job diary entries
-  async createJobDiaryEntry(entry: InsertJobDiaryEntry): Promise<JobDiaryEntry> { throw new Error("Not implemented"); }
+  async createJobDiaryEntry(entry: InsertJobDiaryEntry): Promise<JobDiaryEntry> {
+    const [diaryEntry] = await db.insert(schema.jobDiaryEntries).values(entry).returning();
+    return diaryEntry;
+  }
   async getJobDiaryEntry(id: string): Promise<JobDiaryEntry | undefined> { return undefined; }
   async updateJobDiaryEntry(id: string, updates: Partial<InsertJobDiaryEntry>): Promise<JobDiaryEntry> { throw new Error("Not implemented"); }
   async deleteJobDiaryEntry(id: string): Promise<boolean> { return false; }
-  async getJobDiaryEntriesByJob(jobId: string): Promise<JobDiaryEntry[]> { return []; }
+  async getJobDiaryEntriesByJob(jobId: string): Promise<JobDiaryEntry[]> {
+    return await db.select().from(schema.jobDiaryEntries)
+      .where(eq(schema.jobDiaryEntries.jobId, jobId))
+      .orderBy(desc(schema.jobDiaryEntries.createdAt));
+  }
   async getJobDiaryEntriesByType(jobId: string, entryType: string): Promise<JobDiaryEntry[]> { return []; }
   async getAllJobDiaryEntries(): Promise<JobDiaryEntry[]> { return []; }
 
