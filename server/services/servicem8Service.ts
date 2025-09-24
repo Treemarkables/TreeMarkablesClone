@@ -108,8 +108,13 @@ class ServiceM8Service {
       for (const company of companies) {
         try {
           // Map ServiceM8 company to our customer schema
+          const customerName = company.company_name?.trim() || 
+                              `${(company.contact_first || '').trim()} ${(company.contact_last || '').trim()}`.trim() ||
+                              company.email?.split('@')[0] ||
+                              `Customer-${company.uuid.slice(-8)}`;
+
           const customer: InsertCustomer = {
-            name: company.company_name || `${company.contact_first || ''} ${company.contact_last || ''}`.trim() || 'Unknown Customer',
+            name: customerName,
             email: company.email || null,
             phone: company.mobile || company.phone || null,
             address: company.address_line1 || null,
@@ -178,11 +183,12 @@ class ServiceM8Service {
           // Map ServiceM8 job to our job schema
           const newJob: InsertJob = {
             customerId: customer.id,
+            jobNumber: job.generated_job_id || `SM8-${job.uuid.slice(-8)}`, // Use ServiceM8 job ID or fallback
             title: job.job_description || `Job ${job.generated_job_id}`,
             description: job.notes || job.job_description || null,
             status: mappedStatus,
             priority: job.priority?.toLowerCase() || 'medium',
-            address: job.job_address || job.job_location || null,
+            address: job.job_address || job.job_location || 'Address not specified',
             estimatedValue: job.total_cost ? parseFloat(job.total_cost) : null,
             createdAt: job.date_created ? new Date(job.date_created) : new Date(),
             updatedAt: job.date_modified ? new Date(job.date_modified) : new Date()
