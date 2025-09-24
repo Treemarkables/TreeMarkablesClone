@@ -104,6 +104,7 @@ export const customers = pgTable("customers", {
   region: text("region"),
   notes: text("notes"),
   source: text("source"), // google, referral, facebook, etc
+  servicem8Uuid: text("servicem8_uuid"), // ServiceM8 company UUID for import mapping
   lifetimeValue: decimal("lifetime_value", { precision: 10, scale: 2 }).default("0"),
   totalJobs: integer("total_jobs").default(0),
   lastContactDate: timestamp("last_contact_date"),
