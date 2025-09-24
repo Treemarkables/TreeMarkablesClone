@@ -419,7 +419,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Convert API jobs to DispatchBoard format
   const jobs: JobAssignment[] = (jobsData?.data || []).map((apiJob: any) => {
     // Calculate endTime from scheduledDate + estimatedDuration
-    const startTime = apiJob.scheduledDate || new Date();
+    // For jobs without scheduled dates, default to today at 9 AM for dispatch board display
+    const startTime = apiJob.scheduledDate || (() => {
+      const today = new Date();
+      today.setHours(9, 0, 0, 0); // Default to 9 AM today for unscheduled jobs
+      return today;
+    })();
     const estimatedDuration = apiJob.estimatedDuration || 2; // Default 2 hours
     const endTime = new Date(new Date(startTime).getTime() + (estimatedDuration * 60 * 60 * 1000));
 
