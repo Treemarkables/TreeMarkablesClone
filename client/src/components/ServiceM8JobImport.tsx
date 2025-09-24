@@ -10,6 +10,7 @@ import { Upload, FileText, CheckCircle, AlertCircle, Users, Calendar, DollarSign
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useMutation } from '@tanstack/react-query';
+import Papa from 'papaparse';
 
 interface ServiceM8Job {
   jobNumber: string;
@@ -59,121 +60,216 @@ export function ServiceM8JobImport() {
   const { toast } = useToast();
 
   const parseServiceM8CSV = (csvContent: string): ServiceM8Job[] => {
-    console.log('Starting CSV parsing...');
+    console.log('🔄 Starting CSV parsing with Papa Parse...');
     console.log('CSV content length:', csvContent.length);
     
     if (!csvContent || csvContent.trim().length === 0) {
-      console.error('CSV content is empty');
+      console.error('❌ CSV content is empty');
       return [];
     }
     
-    const lines = csvContent.split('\n').filter(line => line.trim().length > 0);
-    console.log('Total lines after filtering:', lines.length);
-    
-    if (lines.length < 2) {
-      console.error('CSV has less than 2 lines (header + data)');
-      return [];
-    }
-    
-    const headerLine = lines[0].trim();
-    console.log('Raw header line:', headerLine);
-    
-    // Parse headers more carefully
-    const headers = headerLine.split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
-    console.log('Parsed headers:', headers);
-    
-    // Find column indices by looking for common ServiceM8 field names
-    const findColumnIndex = (possibleNames: string[]) => {
-      for (const name of possibleNames) {
-        const index = headers.findIndex(h => h.includes(name.toLowerCase()));
-        if (index !== -1) return index;
-      }
-      return -1;
-    };
-    
-    const columnIndices = {
-      jobNumber: findColumnIndex(['job', 'job_id', 'jobid', 'jobnumber', 'job_number', 'id']),
-      company: findColumnIndex(['company', 'customer', 'client', 'business']),
-      address: findColumnIndex(['address', 'location', 'site']),
-      status: findColumnIndex(['status', 'state']),
-      description: findColumnIndex(['description', 'details', 'work', 'notes']),
-      amount: findColumnIndex(['amount', 'total', 'cost', 'price', 'invoice']),
-      contact: findColumnIndex(['contact', 'name', 'first', 'fname']),
-      phone: findColumnIndex(['phone', 'mobile', 'tel']),
-      email: findColumnIndex(['email', 'mail']),
-      date: findColumnIndex(['date', 'created', 'completion', 'complete'])
-    };
-    
-    console.log('Column indices found:', columnIndices);
-    
-    const jobs: ServiceM8Job[] = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    try {
+      // Use Papa Parse for robust CSV parsing  
+      const parseResult = Papa.parse(csvContent, {
+        header: true,
+        skipEmptyLines: true,
+        transform: (value: string) => value.trim()
+      }) as Papa.ParseResult<Record<string, string>>;
       
-      // Parse CSV line with proper quote handling
-      const values: string[] = [];
-      let currentValue = '';
-      let inQuotes = false;
-      
-      for (let j = 0; j < line.length; j++) {
-        const char = line[j];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
-          values.push(currentValue.trim().replace(/^"|"$/g, ''));
-          currentValue = '';
-        } else {
-          currentValue += char;
-        }
-      }
-      values.push(currentValue.trim().replace(/^"|"$/g, ''));
-      
-      if (i <= 3) {
-        console.log(`Row ${i} values (${values.length} total):`, values.slice(0, 8));
+      if (parseResult.errors && parseResult.errors.length > 0) {
+        console.warn('⚠️ CSV parsing warnings:', parseResult.errors);
       }
       
-      // Create job object using found column indices
-      const job: ServiceM8Job = {
-        jobNumber: (columnIndices.jobNumber >= 0 ? values[columnIndices.jobNumber] : values[0]) || `job-${i}`,
-        company: (columnIndices.company >= 0 ? values[columnIndices.company] : values[1]) || '',
-        contactFirst: (columnIndices.contact >= 0 ? values[columnIndices.contact] : values[2]) || '',
-        contactLast: '',
-        email: (columnIndices.email >= 0 ? values[columnIndices.email] : '') || '',
-        phone: (columnIndices.phone >= 0 ? values[columnIndices.phone] : '') || '',
-        mobile: '',
-        address: (columnIndices.address >= 0 ? values[columnIndices.address] : values[3]) || '',
-        status: (columnIndices.status >= 0 ? values[columnIndices.status] : values[4]) || 'pending',
-        description: (columnIndices.description >= 0 ? values[columnIndices.description] : '') || '',
-        workCompleted: '',
-        invoiceAmount: (columnIndices.amount >= 0 ? values[columnIndices.amount] : '0') || '0',
-        totalCost: '0',
-        invoiceDate: '',
-        quoteDate: '',
-        workOrderDate: (columnIndices.date >= 0 ? values[columnIndices.date] : '') || '',
-        completionDate: '',
-        paymentMethod: '',
-        completedBy: '',
-        source: 'ServiceM8 Import'
+      const rawData = parseResult.data;
+      console.log(`📊 Papa Parse found ${rawData.length} data rows`);
+      
+      if (rawData.length === 0) {
+        console.error('❌ No data rows found after parsing');
+        return [];
+      }
+      
+      // Log the headers found
+      const headers = Object.keys(rawData[0] || {});
+      console.log('📋 CSV headers found:', headers);
+      
+      // Build header mapping once to prevent column detection issues
+      const buildHeaderMap = (headers: string[]) => {
+        const headerMap: Record<string, string> = {};
+        
+        const mapField = (fieldName: string, patterns: string[]) => {
+          for (const pattern of patterns) {
+            // Try exact match first
+            const exactMatch = headers.find(h => h === pattern);
+            if (exactMatch) {
+              headerMap[fieldName] = exactMatch;
+              return;
+            }
+          }
+          
+          for (const pattern of patterns) {
+            // Try case-insensitive match
+            const caseMatch = headers.find(h => h.toLowerCase() === pattern.toLowerCase());
+            if (caseMatch) {
+              headerMap[fieldName] = caseMatch;
+              return;
+            }
+          }
+          
+          // For job numbers specifically, use anchored regex for safety
+          if (fieldName === 'jobNumber') {
+            for (const pattern of patterns) {
+              const jobNumberRegex = new RegExp(`^${pattern.replace(/\s+/g, '[\\s_#]*')}$`, 'i');
+              const regexMatch = headers.find(h => jobNumberRegex.test(h));
+              if (regexMatch) {
+                headerMap[fieldName] = regexMatch;
+                return;
+              }
+            }
+          } else {
+            // For other fields, use controlled partial matching
+            for (const pattern of patterns) {
+              const partialMatch = headers.find(h => {
+                const headerLower = h.toLowerCase();
+                const patternLower = pattern.toLowerCase();
+                return headerLower.includes(patternLower) && 
+                       !headerLower.includes('description') && 
+                       !headerLower.includes('notes') &&
+                       !headerLower.includes('details') &&
+                       !headerLower.includes('customer') &&
+                       !headerLower.includes('employee');
+              });
+              if (partialMatch) {
+                headerMap[fieldName] = partialMatch;
+                return;
+              }
+            }
+          }
+          
+          headerMap[fieldName] = ''; // No match found
+        };
+        
+        // Map all fields with their possible ServiceM8 header names - COMPLETE job number matching
+        mapField('jobNumber', ['Job Number', 'JobNumber', 'Job_Number', 'Job ID', 'JobID', 'Job_ID', 'Job #', 'Job No.', 'Job No', 'Job']);
+        mapField('company', ['Company', 'Customer', 'Client', 'Business', 'Company Name', 'Customer Name']);
+        mapField('address', ['Address', 'Location', 'Site', 'Site Address', 'Job Address', 'Property Address']);
+        mapField('status', ['Status', 'Job Status', 'State', 'Job State']);
+        mapField('description', ['Description', 'Job Description', 'Details', 'Work', 'Notes']);
+        mapField('contactFirst', ['First Name', 'FirstName', 'Contact First', 'ContactFirst', 'Contact', 'Name']);
+        mapField('contactLast', ['Last Name', 'LastName', 'Contact Last', 'ContactLast', 'Surname']);
+        mapField('email', ['Email', 'Email Address', 'EmailAddress']);
+        mapField('phone', ['Phone', 'Phone Number', 'PhoneNumber', 'Tel', 'Telephone']);
+        mapField('mobile', ['Mobile', 'Cell', 'Mobile Phone', 'MobilePhone']);
+        mapField('invoiceAmount', ['Invoice Amount', 'InvoiceAmount', 'Amount', 'Total', 'Cost', 'Price', 'Value', 'Job Total']);
+        mapField('totalCost', ['Total Cost', 'TotalCost', 'Cost']);
+        mapField('workCompleted', ['Work Completed', 'WorkCompleted', 'Completed Work', 'Work Done']);
+        mapField('invoiceDate', ['Invoice Date', 'InvoiceDate']);
+        mapField('quoteDate', ['Quote Date', 'QuoteDate']);
+        mapField('workOrderDate', ['Work Order Date', 'WorkOrderDate', 'Created', 'Date Created', 'Start Date']);
+        mapField('completionDate', ['Completion Date', 'CompletionDate', 'Completed', 'Date Completed', 'End Date']);
+        mapField('paymentMethod', ['Payment Method', 'PaymentMethod']);
+        mapField('completedBy', ['Completed By', 'CompletedBy', 'Worker', 'Staff']);
+        
+        return headerMap;
       };
       
-      // Very lenient validation - accept any row with job number OR company
-      if (job.jobNumber || job.company) {
-        jobs.push(job);
-        if (jobs.length <= 5) {
-          console.log(`Job ${jobs.length}:`, {
-            jobNumber: job.jobNumber,
-            company: job.company,
-            address: job.address,
-            amount: job.invoiceAmount
-          });
+      const headerMap = buildHeaderMap(headers);
+      console.log('🗺️ Header mapping:', headerMap);
+      
+      // Helper function to safely get field value
+      const getFieldValue = (row: Record<string, string>, fieldName: string): string => {
+        const headerKey = headerMap[fieldName];
+        return headerKey ? (row[headerKey] || '') : '';
+      };
+      
+      // Helper function to parse monetary values while preserving negative indicators
+      const parseMonetaryValue = (value: string): string => {
+        if (!value) return '0';
+        
+        // Check for negative indicators first
+        const isNegative = value.includes('-') || (value.includes('(') && value.includes(')'));
+        
+        // Remove currency symbols, spaces, and thousands separators, but preserve negative indicators
+        let cleaned = value.replace(/[$£€¥₹₦,\s()]/g, '');
+        
+        // Keep only digits, decimal point, and minus sign
+        const numeric = cleaned.replace(/[^\d.-]/g, '');
+        
+        // Validate it's a proper number
+        let parsed = parseFloat(numeric);
+        
+        // Apply negative if indicated by parentheses (accounting format)
+        if (isNegative && parsed > 0) {
+          parsed = -parsed;
+        }
+        
+        return isNaN(parsed) ? '0' : parsed.toString();
+      };
+      
+      const jobs: ServiceM8Job[] = [];
+      
+      for (let i = 0; i < rawData.length; i++) {
+        const row = rawData[i];
+        
+        // Log first few rows for debugging
+        if (i < 3) {
+          console.log(`🔍 Row ${i + 1} sample:`, Object.fromEntries(
+            Object.entries(row).slice(0, 6).map(([k, v]) => [k, v ? v.substring(0, 50) : ''])
+          ));
+        }
+        
+        const job: ServiceM8Job = {
+          // Use safe field extraction with proper header mapping
+          jobNumber: getFieldValue(row, 'jobNumber') || `job-${i + 1}`,
+          company: getFieldValue(row, 'company'),
+          contactFirst: getFieldValue(row, 'contactFirst'),
+          contactLast: getFieldValue(row, 'contactLast'),
+          email: getFieldValue(row, 'email'),
+          phone: getFieldValue(row, 'phone'),
+          mobile: getFieldValue(row, 'mobile'),
+          address: getFieldValue(row, 'address'),
+          status: getFieldValue(row, 'status') || 'pending',
+          description: getFieldValue(row, 'description'),
+          workCompleted: getFieldValue(row, 'workCompleted'),
+          
+          // Financial fields with proper monetary parsing
+          invoiceAmount: parseMonetaryValue(getFieldValue(row, 'invoiceAmount')),
+          totalCost: parseMonetaryValue(getFieldValue(row, 'totalCost')),
+          
+          // Date fields
+          invoiceDate: getFieldValue(row, 'invoiceDate'),
+          quoteDate: getFieldValue(row, 'quoteDate'),
+          workOrderDate: getFieldValue(row, 'workOrderDate'),
+          completionDate: getFieldValue(row, 'completionDate'),
+          
+          // Additional fields
+          paymentMethod: getFieldValue(row, 'paymentMethod'),
+          completedBy: getFieldValue(row, 'completedBy'),
+          source: 'ServiceM8 Import'
+        };
+        
+        // Validation - require either job number or company
+        if (job.jobNumber && job.jobNumber !== `job-${i + 1}` || job.company) {
+          jobs.push(job);
+          
+          // Log first few successful jobs
+          if (jobs.length <= 5) {
+            console.log(`✅ Job ${jobs.length}:`, {
+              jobNumber: job.jobNumber,
+              company: job.company,
+              address: job.address?.substring(0, 50),
+              amount: job.invoiceAmount
+            });
+          }
         }
       }
+      
+      console.log(`🎉 Successfully parsed ${jobs.length} jobs from ${rawData.length} data rows`);
+      return jobs;
+      
+    } catch (error) {
+      console.error('❌ CSV parsing failed:', error);
+      return [];
     }
-    
-    console.log(`✅ Successfully parsed ${jobs.length} jobs from ${lines.length - 1} data rows`);
-    return jobs;
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
