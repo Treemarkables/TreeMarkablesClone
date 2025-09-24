@@ -323,7 +323,7 @@ export function CustomerPortal() {
     {
       id: 'job-001',
       jobNumber: 'TRM-2024-001',
-      title: 'Large Oak Tree Removal',
+      title: 'Tree Removal Service',
       description: 'Remove large oak tree near power lines, includes stump grinding',
       status: 'completed',
       priority: 'high',
@@ -363,7 +363,7 @@ export function CustomerPortal() {
       id: 'inv-001',
       invoiceNumber: 'INV-2024-001',
       jobId: 'job-001',
-      jobTitle: 'Large Oak Tree Removal',
+      jobTitle: 'Tree Removal Service',
       amount: 1250.00,
       status: 'paid',
       issueDate: '2024-12-15',

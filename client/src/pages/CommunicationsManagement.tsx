@@ -39,7 +39,7 @@ export default function CommunicationsManagement() {
           id: '1',
           type: 'email',
           recipient: 'sarah.johnson@email.com',
-          subject: 'Job Status Update: Large Oak Tree Removal',
+          subject: 'Job Status Update: Tree Service Complete',
           status: 'sent (mock)',
           timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString()
         },
