@@ -92,6 +92,7 @@ interface Team {
 interface JobAssignment {
   id: string;
   jobId: string;
+  customerId?: string; // Added for compatibility with GlobalJobCard
   teamId?: string; // Optional for team mode
   staffId?: string; // Optional for individual mode
   assignedTeam: string[]; // Array of staff member IDs (used in team mode)
@@ -105,6 +106,7 @@ interface JobAssignment {
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   notes?: string;
+  specialInstructions?: string; // Added for compatibility with GlobalJobCard
 }
 
 type AssignmentMode = 'teams' | 'individual';
@@ -398,6 +400,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [jobFilter, setJobFilter] = useState<string>('all');
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
+  const [globalJobCardMode, setGlobalJobCardMode] = useState<'create' | 'edit'>('create');
+  const [jobToEdit, setJobToEdit] = useState<JobAssignment | null>(null);
   const [newJobFormData, setNewJobFormData] = useState({
     customerName: '',
     customerPhone: '',
@@ -714,6 +718,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     });
     setShowSchedulingModal(true);
     setSelectedJob(null); // Close job detail modal
+  };
+
+  const handleEditJob = (job: JobAssignment) => {
+    setJobToEdit(job);
+    setGlobalJobCardMode('edit');
+    setShowGlobalJobCard(true);
+    setSelectedJob(null); // Close the job details dialog
+  };
+
+  const handleCreateJob = () => {
+    setJobToEdit(null);
+    setGlobalJobCardMode('create');
+    setShowGlobalJobCard(true);
   };
 
   const saveSchedule = () => {
@@ -1235,7 +1252,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <h3 className="font-semibold text-sm text-muted-foreground">JOBS</h3>
                 <Button 
                   size="sm" 
-                  onClick={() => setShowGlobalJobCard(true)}
+                  onClick={handleCreateJob}
                   data-testid="add-job-btn"
                 >
                   <Plus className="h-4 w-4 mr-1" />
@@ -1595,7 +1612,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               {/* Quick Actions */}
               <div className="space-y-3">
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" data-testid="edit-job">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1" 
+                    onClick={() => selectedJob && handleEditJob(selectedJob)}
+                    data-testid="edit-job"
+                  >
                     <Edit className="h-4 w-4 mr-1" />
                     Edit Job
                   </Button>
@@ -1663,13 +1685,50 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       {/* Global Job Card */}
       <GlobalJobCard 
         isOpen={showGlobalJobCard}
-        mode="create"
-        onClose={() => setShowGlobalJobCard(false)}
+        mode={globalJobCardMode}
+        jobId={jobToEdit?.id || undefined}
+        job={jobToEdit ? {
+          id: jobToEdit.id,
+          customerId: jobToEdit.customerId || '',
+          jobNumber: jobToEdit.jobId || '',
+          title: jobToEdit.customerName || '',
+          address: jobToEdit.address || '',
+          description: jobToEdit.serviceType || '',
+          priority: jobToEdit.priority || 'medium',
+          status: jobToEdit.status || 'scheduled',
+          specialInstructions: jobToEdit.notes || jobToEdit.specialInstructions || '',
+          assignedTeam: jobToEdit.assignedTeam || [],
+          serviceType: jobToEdit.serviceType || '',
+          // Add default values for required fields
+          estimatedDuration: jobToEdit.duration || 2,
+          weatherDependent: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          deletedAt: null,
+          leadSource: 'dispatch_board' as any,
+          checklist: [] as any[],
+          lineItems: [] as any[]
+        } as any : undefined}
+        customerId={jobToEdit?.customerId}
+        onClose={() => {
+          setShowGlobalJobCard(false);
+          setJobToEdit(null);
+          setGlobalJobCardMode('create');
+        }}
         onJobCreated={(job) => {
-          // Refresh jobs data after creation
+          // Refresh jobs data after creation/update
+          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
           toast({
-            title: "Job Created",
-            description: `${job.title} has been added to the dispatch board.`,
+            title: globalJobCardMode === 'edit' ? "Job Updated" : "Job Created",
+            description: `${job.title} has been ${globalJobCardMode === 'edit' ? 'updated' : 'added to'} the dispatch board.`,
+          });
+        }}
+        onJobUpdated={(job) => {
+          // Refresh jobs data after update
+          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+          toast({
+            title: "Job Updated",
+            description: `${job.title} has been updated successfully.`,
           });
         }}
       />
