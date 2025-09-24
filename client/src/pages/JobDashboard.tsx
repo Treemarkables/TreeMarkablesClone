@@ -107,15 +107,38 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
 
   // Initialize customers first to avoid temporal dead zone
   const transformCustomersForDisplay = (apiCustomers: Customer[]): DisplayCustomer[] => {
-    return apiCustomers.map(customer => ({
-      id: customer.id,
-      name: customer.name || 'Unnamed Customer',
-      email: customer.email || '',
-      phone: customer.phone || '',
-      totalJobs: customer.totalJobs || 0,
-      lifetimeValue: customer.lifetimeValue ? String(customer.lifetimeValue) : '0.00',
-      lastContactDate: customer.lastContactDate ? new Date(customer.lastContactDate).toLocaleDateString() : undefined
-    }));
+    return apiCustomers.map((customer, index) => {
+      // Create a more meaningful display name using the same logic as job creation
+      let displayName = customer.name || 'Unnamed Customer';
+      
+      // If it's a generic placeholder name, create a better identifier
+      if (customer.name?.startsWith('Customer-')) {
+        // Extract last 6 characters of UUID for unique identifier
+        const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
+        
+        if (customer.address) {
+          // Extract street name or first part of address
+          const addressParts = customer.address.split(',')[0].split(' ');
+          const streetInfo = addressParts.slice(-2).join(' '); // Last 2 words (e.g., "Beach Road")
+          displayName = `${customer.city || 'Location'} - ${streetInfo}`;
+        } else if (customer.city) {
+          displayName = `${customer.city} Customer #${uniqueId}`;
+        } else {
+          // Fallback to a numbered system based on position
+          displayName = `Customer #${index + 1} (${uniqueId})`;
+        }
+      }
+
+      return {
+        id: customer.id,
+        name: displayName,
+        email: customer.email || '',
+        phone: customer.phone || '',
+        totalJobs: customer.totalJobs || 0,
+        lifetimeValue: customer.lifetimeValue ? String(customer.lifetimeValue) : '0.00',
+        lastContactDate: customer.lastContactDate ? new Date(customer.lastContactDate).toLocaleDateString() : undefined
+      };
+    });
   };
 
   const displayCustomers: DisplayCustomer[] = customers.length > 0 ? transformCustomersForDisplay(customers) : [];
