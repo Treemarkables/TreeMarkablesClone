@@ -591,19 +591,31 @@ export function ServiceM8JobImport() {
                 </span>
               </div>
               
-              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
-                <Button onClick={resetImport} variant="outline" className="flex-1">
-                  Upload Different File
-                </Button>
-                <Button 
-                  onClick={handleImport} 
-                  disabled={!jobs.length || isProcessing}
-                  data-testid="button-import-jobs"
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                  size="lg"
-                >
-                  🚀 Import {jobs.length.toLocaleString()} Jobs
-                </Button>
+              {/* IMPORT ACTIONS - ALWAYS VISIBLE */}
+              <div className="sticky bottom-0 bg-white border-t-2 border-green-200 shadow-lg p-6 mt-6 rounded-t-lg">
+                <div className="max-w-4xl mx-auto">
+                  <div className="text-center mb-4">
+                    <h3 className="text-lg font-bold text-green-700">
+                      📋 Ready to Import {jobs.length.toLocaleString()} Jobs
+                    </h3>
+                    <p className="text-sm text-gray-600">Choose your import action below</p>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <Button onClick={resetImport} variant="outline" className="flex-1" size="lg">
+                      📁 Upload Different File
+                    </Button>
+                    <Button 
+                      onClick={handleImport} 
+                      disabled={!jobs.length || isProcessing}
+                      data-testid="button-import-jobs"
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white text-lg font-bold py-4"
+                      size="lg"
+                    >
+                      🚀 IMPORT {jobs.length.toLocaleString()} JOBS NOW
+                    </Button>
+                  </div>
+                </div>
               </div>
             </TabsContent>
 
