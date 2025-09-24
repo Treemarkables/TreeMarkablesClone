@@ -8,9 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Code, Database, Webhook, Key, Activity, Settings, Copy, ExternalLink, Plus, Eye, EyeOff } from "lucide-react";
+import { Code, Database, Webhook, Key, Activity, Settings, Copy, ExternalLink, Plus, Eye, EyeOff, Upload } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { ServiceM8JobImport } from "@/components/ServiceM8JobImport";
 
 // Mock data for API keys and webhooks
 const mockApiKeys = [
@@ -100,7 +101,7 @@ export default function Developer() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview" data-testid="tab-overview">
             <Activity className="w-4 h-4 mr-2" />
             Overview
@@ -112,6 +113,10 @@ export default function Developer() {
           <TabsTrigger value="webhooks" data-testid="tab-webhooks">
             <Webhook className="w-4 h-4 mr-2" />
             Webhooks
+          </TabsTrigger>
+          <TabsTrigger value="csv-import" data-testid="tab-csv-import">
+            <Upload className="w-4 h-4 mr-2" />
+            CSV Import
           </TabsTrigger>
           <TabsTrigger value="docs" data-testid="tab-docs">
             <Code className="w-4 h-4 mr-2" />
@@ -398,6 +403,18 @@ export default function Developer() {
                   <ExternalLink className="w-4 h-4" />
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* CSV Import */}
+        <TabsContent value="csv-import" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>ServiceM8 Job Import</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ServiceM8JobImport />
             </CardContent>
           </Card>
         </TabsContent>
