@@ -150,6 +150,8 @@ export const servicem8JobSchema = z.object({
 export const servicem8DiaryEntrySchema = z.object({
   uuid: z.string().optional(),
   job_uuid: z.string(),
+  staff_uuid: z.string().optional(), // Staff attribution available in ServiceM8 API
+  object_uuid: z.string().optional(), // Object reference available in ServiceM8 API
   activity_was_scheduled: z.number().optional(),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
@@ -184,7 +186,8 @@ export const servicem8CompanySchema = z.object({
 });
 
 export const servicem8InvoiceSchema = z.object({
-  uuid: z.string(), // ServiceM8 job UUID (jobs are invoices)
+  uuid: z.string(), // ServiceM8 invoice UUID
+  job_uuid: z.string().optional(), // Associated job UUID (available in ServiceM8 API)
   generated_job_id: z.string().optional(),
   job_total: z.number().optional(),
   invoice_date: z.string().optional(),
