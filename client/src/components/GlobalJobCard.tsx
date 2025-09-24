@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Target } from "lucide-react";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { StaffTimeManager } from "./StaffTimeManager";
@@ -31,7 +31,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { insertJobSchema, type ChecklistItem, type Job, type Customer } from "@shared/schema";
 
 // Form validation schema extending the base insertJobSchema
-const globalJobCardSchema = insertJobSchema.extend({
+const globalJobCardSchema = insertJobSchema.omit({ title: true }).extend({
   // Customer selection
   customerId: z.string().optional(),
   isNewCustomer: z.boolean().optional(),
@@ -309,7 +309,6 @@ export function GlobalJobCard({
 
       const jobData = {
         customerId: finalCustomerId,
-        title: data.title,
         description: data.description,
         address: data.address,
         status: data.status,
@@ -856,6 +855,26 @@ export function GlobalJobCard({
                                 <div className="text-sm text-muted-foreground">Mobile</div>
                               </div>
                             </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <MapPin className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.address || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Address</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Building2 className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.city || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">City</div>
+                              </div>
+                            </div>
                           </div>
                           
                           <div className="space-y-4">
@@ -886,6 +905,26 @@ export function GlobalJobCard({
                                   {selectedCustomer.phone ? 'See Mobile' : 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Landline</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <MapPin className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.region || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Region</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Target className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.source || 'Not specified'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Customer Source</div>
                               </div>
                             </div>
                           </div>
@@ -968,7 +1007,7 @@ export function GlobalJobCard({
                           <FormItem>
                             <FormLabel>Customer Name *</FormLabel>
                             <FormControl>
-                              <Input {...field} data-testid="input-new-customer-name" />
+                              <Input {...field} placeholder="John Smith" data-testid="input-new-customer-name" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -979,9 +1018,9 @@ export function GlobalJobCard({
                         name="newCustomerEmail"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Email</FormLabel>
+                            <FormLabel>Email Address</FormLabel>
                             <FormControl>
-                              <Input {...field} type="email" data-testid="input-new-customer-email" />
+                              <Input {...field} type="email" placeholder="john@example.com" data-testid="input-new-customer-email" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -994,9 +1033,9 @@ export function GlobalJobCard({
                         name="newCustomerPhone"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Phone</FormLabel>
+                            <FormLabel>Mobile Phone</FormLabel>
                             <FormControl>
-                              <Input {...field} data-testid="input-new-customer-phone" />
+                              <Input {...field} placeholder="021 123 4567" data-testid="input-new-customer-phone" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1007,9 +1046,37 @@ export function GlobalJobCard({
                         name="newCustomerAddress"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Address</FormLabel>
+                            <FormLabel>Street Address</FormLabel>
                             <FormControl>
-                              <Input {...field} data-testid="input-new-customer-address" />
+                              <Input {...field} placeholder="123 Main Street" data-testid="input-new-customer-address" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="newCustomerCity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>City</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Auckland" data-testid="input-new-customer-city" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="newCustomerRegion"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Region</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Auckland" data-testid="input-new-customer-region" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1030,19 +1097,6 @@ export function GlobalJobCard({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Job Title *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Enter job title" data-testid="input-job-title" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <FormField
                   control={form.control}
                   name="description"
