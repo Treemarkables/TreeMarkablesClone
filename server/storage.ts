@@ -37,6 +37,9 @@ import {
   type ScheduleEvent, type InsertScheduleEvent, type UpdateScheduleEvent,
   // Job Templates and Proposals
   type JobTemplate, type InsertJobTemplate, type UpdateJobTemplate,
+  // Email and SMS Templates
+  type EmailTemplate, type InsertEmailTemplate, type UpdateEmailTemplate,
+  type SmsTemplate, type InsertSmsTemplate, type UpdateSmsTemplate,
   type Proposal, type InsertProposal, type UpdateProposal,
   type ProposalSection, type InsertProposalSection, type UpdateProposalSection,
   type ProposalLineItem, type InsertProposalLineItem, type UpdateProposalLineItem,
@@ -497,6 +500,20 @@ export interface IStorage {
   getAllComplianceRequirements(): Promise<ComplianceRequirement[]>;
   createComplianceRecord(record: InsertComplianceRecord): Promise<ComplianceRecord>;
   getAllComplianceRecords(): Promise<ComplianceRecord[]>;
+  
+  // Email Template Management
+  createEmailTemplate(template: InsertEmailTemplate): Promise<EmailTemplate>;
+  getEmailTemplate(id: string): Promise<EmailTemplate | undefined>;
+  updateEmailTemplate(id: string, updates: UpdateEmailTemplate): Promise<EmailTemplate>;
+  getAllEmailTemplates(): Promise<EmailTemplate[]>;
+  deleteEmailTemplate(id: string): Promise<void>;
+
+  // SMS Template Management
+  createSmsTemplate(template: InsertSmsTemplate): Promise<SmsTemplate>;
+  getSmsTemplate(id: string): Promise<SmsTemplate | undefined>;
+  updateSmsTemplate(id: string, updates: UpdateSmsTemplate): Promise<SmsTemplate>;
+  getAllSmsTemplates(): Promise<SmsTemplate[]>;
+  deleteSmsTemplate(id: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -549,6 +566,10 @@ export class MemStorage implements IStorage {
   private conversations: Map<string, Conversation>;
   private conversationMessages: Map<string, ConversationMessage>;
 
+  // Template Management Storage
+  private emailTemplates: Map<string, EmailTemplate>;
+  private smsTemplates: Map<string, SmsTemplate>;
+
   constructor() {
     this.users = new Map();
     this.leads = [];
@@ -596,6 +617,10 @@ export class MemStorage implements IStorage {
     // Conversation Management Storage
     this.conversations = new Map();
     this.conversationMessages = new Map();
+
+    // Template Management Storage
+    this.emailTemplates = new Map();
+    this.smsTemplates = new Map();
     
     // Initialize business settings with defaults
     this.businessSettings = {
@@ -5300,6 +5325,94 @@ export class MemStorage implements IStorage {
       upcomingRequirements,
       averageComplianceScore
     };
+  }
+
+  // ========================================
+  // EMAIL TEMPLATE MANAGEMENT METHODS
+  // ========================================
+
+  async createEmailTemplate(templateData: InsertEmailTemplate): Promise<EmailTemplate> {
+    const template: EmailTemplate = {
+      id: randomUUID(),
+      ...templateData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.emailTemplates.set(template.id, template);
+    return template;
+  }
+
+  async getEmailTemplate(id: string): Promise<EmailTemplate | undefined> {
+    return this.emailTemplates.get(id);
+  }
+
+  async updateEmailTemplate(id: string, updates: UpdateEmailTemplate): Promise<EmailTemplate> {
+    const existing = this.emailTemplates.get(id);
+    if (!existing) {
+      throw new Error('Email template not found');
+    }
+
+    const updated: EmailTemplate = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.emailTemplates.set(id, updated);
+    return updated;
+  }
+
+  async getAllEmailTemplates(): Promise<EmailTemplate[]> {
+    return Array.from(this.emailTemplates.values());
+  }
+
+  async deleteEmailTemplate(id: string): Promise<void> {
+    this.emailTemplates.delete(id);
+  }
+
+  // ========================================
+  // SMS TEMPLATE MANAGEMENT METHODS
+  // ========================================
+
+  async createSmsTemplate(templateData: InsertSmsTemplate): Promise<SmsTemplate> {
+    const template: SmsTemplate = {
+      id: randomUUID(),
+      ...templateData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.smsTemplates.set(template.id, template);
+    return template;
+  }
+
+  async getSmsTemplate(id: string): Promise<SmsTemplate | undefined> {
+    return this.smsTemplates.get(id);
+  }
+
+  async updateSmsTemplate(id: string, updates: UpdateSmsTemplate): Promise<SmsTemplate> {
+    const existing = this.smsTemplates.get(id);
+    if (!existing) {
+      throw new Error('SMS template not found');
+    }
+
+    const updated: SmsTemplate = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.smsTemplates.set(id, updated);
+    return updated;
+  }
+
+  async getAllSmsTemplates(): Promise<SmsTemplate[]> {
+    return Array.from(this.smsTemplates.values());
+  }
+
+  async deleteSmsTemplate(id: string): Promise<void> {
+    this.smsTemplates.delete(id);
   }
 }
 

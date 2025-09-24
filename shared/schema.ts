@@ -1184,6 +1184,69 @@ export type JobTemplate = typeof jobTemplates.$inferSelect;
 export type InsertJobTemplate = z.infer<typeof insertJobTemplateSchema>;
 export type UpdateJobTemplate = z.infer<typeof updateJobTemplateSchema>;
 
+// ========================================
+// EMAIL TEMPLATE SCHEMAS
+// ========================================
+
+export const emailTemplates = pgTable("email_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  category: text("category").notNull(), // job_status, quote, invoice, reminder, welcome
+  subject: text("subject").notNull(),
+  htmlContent: text("html_content").notNull(),
+  textContent: text("text_content"),
+  variables: text("variables").array().default([]), // customerName, jobTitle, amount, etc.
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateEmailTemplateSchema = insertEmailTemplateSchema.partial();
+
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
+export type UpdateEmailTemplate = z.infer<typeof updateEmailTemplateSchema>;
+
+// ========================================
+// SMS TEMPLATE SCHEMAS
+// ========================================
+
+export const smsTemplates = pgTable("sms_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  category: text("category").notNull(), // job_status, quote, reminder, confirmation
+  message: text("message").notNull(),
+  variables: text("variables").array().default([]), // customerName, jobTitle, amount, etc.
+  description: text("description"),
+  maxLength: integer("max_length").default(160),
+  isActive: boolean("is_active").notNull().default(true),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertSmsTemplateSchema = createInsertSchema(smsTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateSmsTemplateSchema = insertSmsTemplateSchema.partial();
+
+export type SmsTemplate = typeof smsTemplates.$inferSelect;
+export type InsertSmsTemplate = z.infer<typeof insertSmsTemplateSchema>;
+export type UpdateSmsTemplate = z.infer<typeof updateSmsTemplateSchema>;
+
 // Proposal Schema Exports
 export const insertProposalSchema = createInsertSchema(proposals).omit({
   id: true,
