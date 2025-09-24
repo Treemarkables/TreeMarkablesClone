@@ -345,9 +345,9 @@ export function ServiceM8JobImport() {
               </div>
 
               <div className="space-y-4">
-                <h4 className="font-medium">Sample Jobs Preview</h4>
-                <div className="space-y-2">
-                  {jobs.slice(0, 5).map((job, index) => (
+                <h4 className="font-medium">Jobs Preview ({jobs.length} total)</h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto border rounded-lg p-4">
+                  {jobs.map((job, index) => (
                     <Card key={index} className="border-l-4 border-l-blue-500">
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start">
@@ -386,9 +386,6 @@ export function ServiceM8JobImport() {
                     </Card>
                   ))}
                 </div>
-                {jobs.length > 5 && (
-                  <p className="text-sm text-gray-500">...and {jobs.length - 5} more jobs</p>
-                )}
               </div>
 
               <div className="flex gap-4">
