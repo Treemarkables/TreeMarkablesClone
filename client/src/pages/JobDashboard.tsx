@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield, Mail, Phone, Edit2 } from "lucide-react";
+import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield, Mail, Phone, Edit2, Briefcase, Search, Filter } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Pipeline from './Pipeline';
 import { PerformanceAnalytics } from '@/components/PerformanceAnalytics';
@@ -81,6 +81,11 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   // Customer editing state
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [editingCustomerName, setEditingCustomerName] = useState("");
+  
+  // Jobs pagination and search state
+  const [jobSearchQuery, setJobSearchQuery] = useState("");
+  const [currentJobPage, setCurrentJobPage] = useState(1);
+  const [jobsPerPage] = useState(12); // Show 12 jobs per page for good performance
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -219,7 +224,30 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
     }));
   };
 
-  const displayJobs: DisplayJob[] = jobs.length > 0 ? transformJobsForDisplay(jobs) : [];
+  // Transform and filter jobs
+  const allDisplayJobs: DisplayJob[] = jobs.length > 0 ? transformJobsForDisplay(jobs) : [];
+  
+  // Filter jobs based on search query
+  const filteredJobs = allDisplayJobs.filter(job => {
+    if (!jobSearchQuery.trim()) return true;
+    const query = jobSearchQuery.toLowerCase();
+    return (
+      job.title.toLowerCase().includes(query) ||
+      job.customer.toLowerCase().includes(query) ||
+      job.location.toLowerCase().includes(query) ||
+      job.status.toLowerCase().includes(query) ||
+      job.priority.toLowerCase().includes(query)
+    );
+  });
+  
+  // Paginate filtered jobs
+  const totalPages = Math.ceil(filteredJobs.length / jobsPerPage);
+  const startIndex = (currentJobPage - 1) * jobsPerPage;
+  const endIndex = startIndex + jobsPerPage;
+  const paginatedJobs = filteredJobs.slice(startIndex, endIndex);
+  
+  // For overview tab, still show recent jobs (first 5)
+  const displayJobs: DisplayJob[] = allDisplayJobs.slice(0, 5);
   const displayLeads: DisplayLead[] = leads.length > 0 ? transformLeadsForDisplay(leads) : [];
 
   // Calculate metrics
@@ -309,6 +337,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
         <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full">
           <TabsList className="flex w-full overflow-x-auto whitespace-nowrap gap-2 md:gap-3 mb-4 md:mb-6 shrink-0 no-scrollbar" data-testid="tabs-dashboard-navigation">
             <TabsTrigger value="overview" data-testid="tab-overview" className="shrink-0"><TrendingUp className="w-4 h-4 mr-2" />Overview</TabsTrigger>
+            <TabsTrigger value="jobs" data-testid="tab-jobs" className="shrink-0"><Briefcase className="w-4 h-4 mr-2" />All Jobs</TabsTrigger>
             <TabsTrigger value="pipeline" data-testid="tab-pipeline" className="shrink-0"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
             <TabsTrigger value="job-import" data-testid="tab-job-import" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Job Import</TabsTrigger>
             <TabsTrigger value="templates" data-testid="tab-templates" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Templates</TabsTrigger>
@@ -438,6 +467,194 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
             </div>
           </TabsContent>
 
+          {/* All Jobs Tab */}
+          <TabsContent value="jobs" className="flex-1 overflow-auto">
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="heading-all-jobs">
+                    All Jobs ({jobs.length.toLocaleString()})
+                  </h2>
+                  <p className="text-muted-foreground" data-testid="text-jobs-description">
+                    Complete list of all jobs including imported ServiceM8 data
+                  </p>
+                </div>
+                
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1 sm:w-64">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      placeholder="Search jobs..."
+                      className="pl-10"
+                      value={jobSearchQuery}
+                      onChange={(e) => {
+                        setJobSearchQuery(e.target.value);
+                        setCurrentJobPage(1); // Reset to first page when searching
+                      }}
+                      data-testid="input-search-jobs"
+                    />
+                  </div>
+                  <Button variant="outline" size="icon" data-testid="button-filter-jobs">
+                    <Filter className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Jobs Grid */}
+              {jobsLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[...Array(9)].map((_, i) => (
+                    <Card key={i} data-testid={`skeleton-job-${i}`}>
+                      <CardContent className="p-4">
+                        <Skeleton className="h-6 w-3/4 mb-2" />
+                        <Skeleton className="h-4 w-1/2 mb-3" />
+                        <div className="flex gap-2 mb-2">
+                          <Skeleton className="h-5 w-16" />
+                          <Skeleton className="h-5 w-20" />
+                        </div>
+                        <Skeleton className="h-4 w-full mb-1" />
+                        <Skeleton className="h-4 w-2/3" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : paginatedJobs.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <Briefcase className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-muted-foreground mb-2">No Jobs Found</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Start by creating your first job or import from ServiceM8
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {paginatedJobs.map((job) => (
+                    <Card 
+                      key={job.id} 
+                      className="hover-elevate cursor-pointer transition-all duration-200"
+                      onClick={() => handleJobClick(job.id)}
+                      data-testid={`card-job-${job.id}`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between">
+                            <h3 className="font-semibold text-foreground line-clamp-2" data-testid={`text-job-title-${job.id}`}>
+                              {job.title}
+                            </h3>
+                            <div className="text-lg font-bold text-green-600 ml-2" data-testid={`text-job-value-${job.id}`}>
+                              ${job.estimatedValue.toLocaleString()}
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <p className="text-sm text-muted-foreground font-medium" data-testid={`text-job-customer-${job.id}`}>
+                              {job.customer}
+                            </p>
+                            
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <MapPin className="w-3 h-3" />
+                              <span className="line-clamp-1" data-testid={`text-job-location-${job.id}`}>{job.location}</span>
+                            </div>
+                            
+                            {job.scheduledDate && (
+                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                <Calendar className="w-3 h-3" />
+                                <span data-testid={`text-job-date-${job.id}`}>{job.scheduledDate}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex gap-2 flex-wrap">
+                            {getJobStatusBadge(job.status)}
+                            {getPriorityBadge(job.priority)}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+              
+              {/* Pagination info and controls */}
+              {allDisplayJobs.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t">
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground" data-testid="text-jobs-showing">
+                        Showing {startIndex + 1}-{Math.min(endIndex, filteredJobs.length)} of {filteredJobs.length.toLocaleString()} 
+                        {jobSearchQuery ? ' filtered' : ''} jobs
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Total: {allDisplayJobs.length.toLocaleString()} jobs in database
+                      </p>
+                    </div>
+                    
+                    {/* Pagination controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentJobPage(prev => Math.max(prev - 1, 1))}
+                          disabled={currentJobPage === 1}
+                          data-testid="button-prev-page"
+                        >
+                          Previous
+                        </Button>
+                        
+                        <div className="flex items-center gap-1">
+                          {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                            const pageNum = currentJobPage <= 3 ? i + 1 : currentJobPage - 2 + i;
+                            if (pageNum > totalPages) return null;
+                            
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={pageNum === currentJobPage ? "default" : "ghost"}
+                                size="sm"
+                                onClick={() => setCurrentJobPage(pageNum)}
+                                className="w-8"
+                                data-testid={`button-page-${pageNum}`}
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          })}
+                          
+                          {totalPages > 5 && currentJobPage < totalPages - 2 && (
+                            <>
+                              <span className="text-muted-foreground">...</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setCurrentJobPage(totalPages)}
+                                className="w-8"
+                                data-testid={`button-page-${totalPages}`}
+                              >
+                                {totalPages}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentJobPage(prev => Math.min(prev + 1, totalPages))}
+                          disabled={currentJobPage === totalPages}
+                          data-testid="button-next-page"
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
 
           {/* Pipeline Tab */}
           <TabsContent value="pipeline" className="flex-1 overflow-auto">
