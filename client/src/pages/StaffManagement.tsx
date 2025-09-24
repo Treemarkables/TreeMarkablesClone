@@ -767,12 +767,29 @@ export default function StaffManagement() {
   });
 
   const handleAddStaff = (data: StaffFormData) => {
-    createStaffMutation.mutate(data);
+    // Transform form data to match API expectations
+    const apiData = {
+      ...data,
+      // Convert empty hireDate string to undefined, or convert to Date object
+      hireDate: data.hireDate ? new Date(data.hireDate) : undefined,
+      // Convert hourlyRate string to decimal
+      hourlyRate: data.hourlyRate ? parseFloat(data.hourlyRate) : undefined
+    };
+    createStaffMutation.mutate(apiData);
   };
 
   const handleEditStaff = (data: StaffFormData) => {
     if (editingStaff) {
-      updateStaffMutation.mutate({ ...data, id: editingStaff.id });
+      // Transform form data to match API expectations
+      const apiData = {
+        ...data,
+        // Convert empty hireDate string to undefined, or convert to Date object
+        hireDate: data.hireDate ? new Date(data.hireDate) : undefined,
+        // Convert hourlyRate string to decimal
+        hourlyRate: data.hourlyRate ? parseFloat(data.hourlyRate) : undefined,
+        id: editingStaff.id
+      };
+      updateStaffMutation.mutate(apiData);
     }
   };
 

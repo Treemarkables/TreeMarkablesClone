@@ -121,6 +121,7 @@ interface Employee {
   email?: string;
   phone?: string;
   position: string;
+  role: string; // owner, office_staff, crew
   status: string;
   skillLevel: string;
   certifications: string[];
@@ -150,41 +151,45 @@ interface AllocationSuggestion {
   conflicts: ResourceConflict[];
 }
 
-// Mock staff data for dispatch board
-const mockStaffMembers: StaffMember[] = [
-  { 
-    id: '1', 
-    name: 'Jake Morrison', 
-    role: 'foreman', 
-    skills: ['tree_removal', 'safety', 'leadership'],
-    status: 'available', 
-    color: 'bg-blue-500' 
-  },
-  { 
-    id: '2', 
-    name: 'Maria Silva', 
-    role: 'arborist', 
-    skills: ['tree_removal', 'pruning', 'assessment'],
-    status: 'available', 
-    color: 'bg-green-500' 
-  },
-  { 
-    id: '3', 
-    name: 'Tom Bradley', 
-    role: 'ground_crew', 
-    skills: ['cleanup', 'equipment'],
-    status: 'offline', 
-    color: 'bg-orange-500' 
-  },
-];
+// Function to transform Employee data to StaffMember format for dispatch board
+const transformEmployeeToStaffMember = (employee: Employee): StaffMember => {
+  // Map role-based colors
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'owner': return 'bg-purple-500';
+      case 'office_staff': return 'bg-blue-500';
+      case 'crew': return 'bg-green-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  // Map status from employee to dispatch format
+  const getDispatchStatus = (status: string): 'available' | 'busy' | 'offline' => {
+    switch (status) {
+      case 'active': return 'available';
+      case 'inactive': return 'offline';
+      case 'on_leave': return 'offline';
+      default: return 'available';
+    }
+  };
+
+  return {
+    id: employee.id,
+    name: `${employee.firstName} ${employee.lastName}`,
+    role: employee.position || 'crew',
+    skills: employee.skills || [],
+    status: getDispatchStatus(employee.status),
+    color: getRoleColor(employee.role || 'crew')
+  };
+};
 
 const mockTeams: Team[] = [
   {
     id: 'team1',
     name: 'Alpha Crew',
     description: 'Emergency response and hazardous removals',
-    teamLeaderId: '1',
-    members: ['1', '2'],
+    teamLeaderId: JAKE_ID,
+    members: [JAKE_ID, MARIA_ID],
     specialties: ['Crane Operation', 'Hazardous Removal', 'Emergency Response'],
     maxCapacity: 3,
     status: 'busy',
@@ -194,8 +199,8 @@ const mockTeams: Team[] = [
     id: 'team2',
     name: 'Beta Crew',
     description: 'General tree services and maintenance',
-    teamLeaderId: '3',
-    members: ['3', '6'],
+    teamLeaderId: TOM_ID,
+    members: [TOM_ID],
     specialties: ['Tree Pruning', 'Cleanup', 'Customer Service'],
     maxCapacity: 4,
     status: 'available',
@@ -205,8 +210,8 @@ const mockTeams: Team[] = [
     id: 'team3',
     name: 'Equipment Team',
     description: 'Heavy machinery and specialized equipment jobs',
-    teamLeaderId: '4',
-    members: ['4', '5'],
+    teamLeaderId: JAKE_ID,
+    members: [JAKE_ID],
     specialties: ['Heavy Machinery', 'Equipment Operation', 'Maintenance'],
     maxCapacity: 2,
     status: 'available',
@@ -214,12 +219,17 @@ const mockTeams: Team[] = [
   }
 ];
 
+// Real employee IDs from API for proper dispatch integration
+const JAKE_ID = '3e147247-e94d-4f2f-8425-91a13826de93';
+const MARIA_ID = '8ec7a4c0-393c-4b00-964b-2fa596974eaf';
+const TOM_ID = 'd5a24642-8d11-47ae-acd6-7ae466a78992'; // Tom Bradley ID from API
+
 const mockJobAssignments: JobAssignment[] = [
   {
     id: '1',
     jobId: 'J001',
     teamId: 'team1',
-    assignedTeam: ['1', '2'],
+    assignedTeam: [JAKE_ID, MARIA_ID],
     customerName: 'Stephanie Syre',
     customerPhone: '(555) 123-4567',
     address: '123 Norfolk Pine Ave',
@@ -235,7 +245,7 @@ const mockJobAssignments: JobAssignment[] = [
     id: '2',
     jobId: 'J002',
     teamId: 'team1',
-    assignedTeam: ['1', '2'],
+    assignedTeam: [JAKE_ID, MARIA_ID],
     customerName: 'Dave Tarry',
     customerPhone: '(555) 234-5678',
     address: '33 Wellington St, Gisborne',
@@ -249,8 +259,8 @@ const mockJobAssignments: JobAssignment[] = [
   {
     id: '3',
     jobId: 'J003',
-    staffId: '3', // Individual assignment
-    assignedTeam: [],
+    staffId: TOM_ID, // Individual assignment - Tom Bradley
+    assignedTeam: [TOM_ID],
     customerName: 'Johnson, Sarah',
     customerPhone: '(555) 345-6789',
     address: '456 Elm Street',
@@ -265,8 +275,8 @@ const mockJobAssignments: JobAssignment[] = [
   {
     id: '4',
     jobId: 'J004',
-    staffId: '4', // Individual assignment
-    assignedTeam: [],
+    staffId: JAKE_ID, // Individual assignment - Jake Morrison
+    assignedTeam: [JAKE_ID],
     customerName: 'Gray, Alex',
     customerPhone: '(555) 456-7890',
     address: '789 Pine Avenue',
@@ -281,8 +291,8 @@ const mockJobAssignments: JobAssignment[] = [
   {
     id: '5',
     jobId: 'J005',
-    staffId: '6', // Individual assignment
-    assignedTeam: [],
+    staffId: MARIA_ID, // Individual assignment - Maria Silva
+    assignedTeam: [MARIA_ID],
     customerName: 'Baty, Katrina',
     customerPhone: '(555) 567-8901',
     address: '321 Maple Drive',
@@ -302,6 +312,20 @@ const timeSlots = [
 
 export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const { toast } = useToast();
+
+  // Fetch employees from staff management system
+  const { data: employeesData } = useQuery<{ success: boolean; data: Employee[] }>({
+    queryKey: ['/api/employees'],
+  });
+
+  const employees = employeesData?.data || [];
+  
+  // Transform employees to staff members for dispatch board
+  const staffMembers = useMemo(() => {
+    return employees
+      .filter(emp => emp.isActive) // Show all active employees regardless of status
+      .map(transformEmployeeToStaffMember);
+  }, [employees]);
 
   // Fetch job templates for template selection
   const { data: templatesResponse } = useQuery<ApiResponse<JobTemplate>>({
@@ -411,7 +435,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       if (assignmentMode === 'teams') {
         // Find which team contains these staff members
         const matchingTeam = mockTeams.find(team => 
-          assignedTeam.some(assignedId => team.members.includes(assignedId))
+          assignedTeam.some((assignedId: string) => team.members.includes(assignedId))
         );
         teamId = matchingTeam?.id;
       } else {
@@ -764,7 +788,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     const todaysJobs = getTodaysJobs();
     const activeTeams = mockTeams.filter(team => team.status === 'available').length;
-    const activeStaff = mockStaffMembers.filter(staff => staff.status === 'available').length;
+    const activeStaff = staffMembers.filter(staff => staff.status === 'available').length;
     const scheduledJobs = todaysJobs.filter(job => job.status === 'scheduled').length;
 
     return (
@@ -968,7 +992,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   })
                 ) : (
                   // Individual Staff Mode
-                  mockStaffMembers.map((staff) => {
+                  staffMembers.map((staff: StaffMember) => {
                     const staffJobs = getJobsForStaff(staff.id);
                     return (
                       <div
@@ -1083,7 +1107,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     })
                   ) : (
                     // Individual Staff Mode
-                    mockStaffMembers.map((staff) => {
+                    staffMembers.map((staff: StaffMember) => {
                       const staffJobs = getJobsForStaff(staff.id);
                       return (
                         <div key={staff.id} className="relative h-16" data-testid={`staff-row-${staff.id}`}>
@@ -1167,7 +1191,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <div className="space-y-3">
                   {getTodaysJobs().map((job) => {
                     const team = mockTeams.find(t => t.id === job.teamId);
-                    const staff = mockStaffMembers.find(s => s.id === job.staffId);
+                    const staff = staffMembers.find((s: StaffMember) => s.id === job.staffId);
                     const teamMembers = team ? getTeamMembers(team.id) : [];
                     return (
                       <Card
@@ -1359,7 +1383,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   ) : (
                     // Individual Staff Assignment Details
                     (() => {
-                      const staff = mockStaffMembers.find(s => s.id === selectedJob.staffId);
+                      const staff = staffMembers.find((s: StaffMember) => s.id === selectedJob.staffId);
                       return (
                         <div>
                           {staff && (
@@ -1757,7 +1781,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </SelectItem>
                         ))
                       ) : (
-                        mockStaffMembers.map(staff => (
+                        staffMembers.map((staff: StaffMember) => (
                           <SelectItem key={staff.id} value={staff.id}>
                             <div className="flex items-center gap-2">
                               <Avatar className="h-5 w-5">
@@ -1913,7 +1937,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </SelectItem>
                         ))
                       ) : (
-                        mockStaffMembers.map(staff => (
+                        staffMembers.map((staff: StaffMember) => (
                           <SelectItem key={staff.id} value={staff.id}>
                             <div className="flex items-center gap-2">
                               <Avatar className="h-5 w-5">
