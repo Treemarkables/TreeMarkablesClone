@@ -315,7 +315,9 @@ const jobFilterOptions = [
   { value: 'all', label: 'All Jobs', icon: List, description: 'Jobs with a Quote or Work Order status, or recently Completed/Unsuccessful.' },
   { value: 'action_required', label: 'Action Required', icon: AlertTriangle, description: 'Jobs that need to be scheduled, sent to a Queue, or actioned in some way.' },
   { value: 'for_review', label: 'For My Review', icon: Target, description: 'Jobs that specifically need your attention.' },
+  { value: 'leads', label: 'Leads', icon: User, description: 'Potential customers and job inquiries.' },
   { value: 'quotes', label: 'Quotes', icon: MessageSquare, description: 'Jobs with a Quote status.' },
+  { value: 'work_orders', label: 'Work Orders', icon: Settings, description: 'Confirmed jobs with work order status.' },
   { value: 'unscheduled', label: 'Unscheduled Jobs', icon: Calendar, description: 'Jobs without a future booking and not in a Queue.' },
   { value: 'in_progress', label: 'In Progress Jobs', icon: Zap, description: 'Jobs with a future booking.' },
   { value: 'completed', label: 'Completed Jobs', icon: Check, description: 'Jobs recently updated to a Completed or Unsuccessful status.' }
@@ -548,9 +550,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             // Jobs that need review (high priority or specific conditions)
             return job.priority === 'urgent' || job.priority === 'high';
             
+          case 'leads':
+            // Jobs that are potential customers/inquiries (typically low priority or specific status)
+            return job.priority === 'low' || job.serviceType?.toLowerCase().includes('lead') || job.serviceType?.toLowerCase().includes('inquiry') || false;
+            
           case 'quotes':
             // Jobs with Quote in service type
             return job.serviceType?.toLowerCase().includes('quote') || false;
+            
+          case 'work_orders':
+            // Jobs that are confirmed work orders (typically scheduled or in progress, not quotes/leads)
+            return (job.status === 'scheduled' || job.status === 'in_progress') && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
             
           case 'unscheduled':
             // Jobs without proper scheduling or assignment
@@ -1263,7 +1273,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           case 'all': return true;
                           case 'action_required': return !job.assignedTeam?.length || job.status === 'scheduled' && !job.teamId && !job.staffId;
                           case 'for_review': return job.priority === 'urgent' || job.priority === 'high';
+                          case 'leads': return job.priority === 'low' || job.serviceType?.toLowerCase().includes('lead') || job.serviceType?.toLowerCase().includes('inquiry') || false;
                           case 'quotes': return job.serviceType?.toLowerCase().includes('quote') || false;
+                          case 'work_orders': return (job.status === 'scheduled' || job.status === 'in_progress') && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
                           case 'unscheduled':
                             const jobDate = new Date(job.startTime);
                             const isDefaultTime = jobDate.getHours() === 9 && jobDate.getMinutes() === 0;
