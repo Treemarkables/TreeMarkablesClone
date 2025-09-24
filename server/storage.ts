@@ -1641,6 +1641,65 @@ class DatabaseStorage implements IStorage {
   async updateSmsTemplate(id: string, updates: UpdateSmsTemplate): Promise<SmsTemplate> { throw new Error("Not implemented"); }
   async getAllSmsTemplates(): Promise<SmsTemplate[]> { return []; }
   async deleteSmsTemplate(id: string): Promise<void> { }
+
+  // ServiceM8 Integration Management
+  async createServicem8Config(config: InsertServicem8Config): Promise<Servicem8Config> {
+    const [servicem8Config] = await db.insert(schema.servicem8Config).values(config).returning();
+    return servicem8Config;
+  }
+
+  async getServicem8Config(): Promise<Servicem8Config | undefined> {
+    const [config] = await db.select().from(schema.servicem8Config).limit(1);
+    return config || undefined;
+  }
+
+  async updateServicem8Config(id: string, updates: Partial<InsertServicem8Config>): Promise<Servicem8Config> {
+    const [updatedConfig] = await db.update(schema.servicem8Config)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.servicem8Config.id, id))
+      .returning();
+    return updatedConfig;
+  }
+
+  async deleteServicem8Config(id: string): Promise<void> {
+    await db.delete(schema.servicem8Config).where(eq(schema.servicem8Config.id, id));
+  }
+
+  // ServiceM8 Data Import Management - Stub implementations
+  async createServicem8Job(job: InsertServicem8Job): Promise<Servicem8Job> { throw new Error("Not implemented"); }
+  async getServicem8Job(id: string): Promise<Servicem8Job | undefined> { return undefined; }
+  async getServicem8JobByUuid(uuid: string): Promise<Servicem8Job | undefined> { return undefined; }
+  async updateServicem8Job(id: string, updates: Partial<InsertServicem8Job>): Promise<Servicem8Job> { throw new Error("Not implemented"); }
+  async getAllServicem8Jobs(): Promise<Servicem8Job[]> { return []; }
+
+  async createServicem8DiaryEntry(entry: InsertServicem8DiaryEntry): Promise<Servicem8DiaryEntry> { throw new Error("Not implemented"); }
+  async getServicem8DiaryEntry(id: string): Promise<Servicem8DiaryEntry | undefined> { return undefined; }
+  async getServicem8DiaryEntriesByJob(servicem8JobUuid: string): Promise<Servicem8DiaryEntry[]> { return []; }
+  async updateServicem8DiaryEntry(id: string, updates: Partial<InsertServicem8DiaryEntry>): Promise<Servicem8DiaryEntry> { throw new Error("Not implemented"); }
+  async getAllServicem8DiaryEntries(): Promise<Servicem8DiaryEntry[]> { return []; }
+
+  async createServicem8Quote(quote: InsertServicem8Quote): Promise<Servicem8Quote> { throw new Error("Not implemented"); }
+  async getServicem8Quote(id: string): Promise<Servicem8Quote | undefined> { return undefined; }
+  async getServicem8QuoteByUuid(uuid: string): Promise<Servicem8Quote | undefined> { return undefined; }
+  async updateServicem8Quote(id: string, updates: Partial<InsertServicem8Quote>): Promise<Servicem8Quote> { throw new Error("Not implemented"); }
+  async getAllServicem8Quotes(): Promise<Servicem8Quote[]> { return []; }
+
+  async createServicem8Company(company: InsertServicem8Company): Promise<Servicem8Company> { throw new Error("Not implemented"); }
+  async getServicem8Company(id: string): Promise<Servicem8Company | undefined> { return undefined; }
+  async getServicem8CompanyByUuid(uuid: string): Promise<Servicem8Company | undefined> { return undefined; }
+  async updateServicem8Company(id: string, updates: Partial<InsertServicem8Company>): Promise<Servicem8Company> { throw new Error("Not implemented"); }
+  async getAllServicem8Companies(): Promise<Servicem8Company[]> { return []; }
+
+  async createServicem8Invoice(invoice: InsertServicem8Invoice): Promise<Servicem8Invoice> { throw new Error("Not implemented"); }
+  async getServicem8Invoice(id: string): Promise<Servicem8Invoice | undefined> { return undefined; }
+  async getServicem8InvoiceByUuid(uuid: string): Promise<Servicem8Invoice | undefined> { return undefined; }
+  async updateServicem8Invoice(id: string, updates: Partial<InsertServicem8Invoice>): Promise<Servicem8Invoice> { throw new Error("Not implemented"); }
+  async getAllServicem8Invoices(): Promise<Servicem8Invoice[]> { return []; }
+
+  async createServicem8Material(material: InsertServicem8Material): Promise<Servicem8Material> { throw new Error("Not implemented"); }
+  async getServicem8Material(id: string): Promise<Servicem8Material | undefined> { return undefined; }
+  async updateServicem8Material(id: string, updates: Partial<InsertServicem8Material>): Promise<Servicem8Material> { throw new Error("Not implemented"); }
+  async getAllServicem8Materials(): Promise<Servicem8Material[]> { return []; }
 }
 
 export const storage = new DatabaseStorage();

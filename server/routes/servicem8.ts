@@ -429,6 +429,31 @@ export function createServiceM8Routes(storage: IStorage) {
     });
   });
 
+  /**
+   * Get ServiceM8 diary entries for a job
+   * GET /api/servicem8/jobs/:jobId/diary
+   */
+  router.get('/jobs/:jobId/diary', async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      
+      // For now, return empty array until ServiceM8 API integration is fully implemented
+      // In the future, this will fetch diary entries from ServiceM8 API
+      res.json({
+        success: true,
+        data: [],
+        message: 'ServiceM8 diary entries (integration in progress)'
+      });
+    } catch (error) {
+      console.error('ServiceM8 diary fetch error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch ServiceM8 diary entries',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
   return router;
 }
 
