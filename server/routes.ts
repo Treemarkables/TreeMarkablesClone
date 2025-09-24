@@ -6825,6 +6825,121 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // POST /api/jobs/import-servicem8 - Import jobs from ServiceM8 CSV file
+  app.post('/api/jobs/import-servicem8', async (req: Request, res: Response) => {
+    try {
+      const { jobs } = req.body;
+      
+      if (!jobs || !Array.isArray(jobs)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid jobs data provided'
+        });
+      }
+
+      let successfulMatches = 0;
+      let newCustomers = 0;
+      let errors = 0;
+      const errorMessages: string[] = [];
+
+      // Get all existing customers for matching
+      const existingCustomers = await storage.getAllCustomers();
+      const customerMap = new Map(existingCustomers.map(c => [c.name.toLowerCase().trim(), c]));
+
+      for (const csvJob of jobs) {
+        try {
+          // Find or create customer
+          let customer = customerMap.get(csvJob.company.toLowerCase().trim());
+          
+          if (!customer) {
+            // Create new customer from job data
+            const newCustomer = {
+              name: csvJob.company || 'Unknown Customer',
+              email: csvJob.email || null,
+              phone: csvJob.phone || csvJob.mobile || null,
+              address: csvJob.address || null,
+              source: csvJob.source || 'servicem8_import',
+              lifetimeValue: parseFloat(csvJob.invoiceAmount || '0').toString(),
+              totalJobs: 1
+            };
+
+            customer = await storage.createCustomer(newCustomer);
+            customerMap.set(customer.name.toLowerCase().trim(), customer);
+            newCustomers++;
+          } else {
+            // Update customer lifetime value
+            const currentValue = parseFloat(customer.lifetimeValue || '0');
+            const jobValue = parseFloat(csvJob.invoiceAmount || '0');
+            const newValue = currentValue + jobValue;
+            
+            await storage.updateCustomer(customer.id, {
+              lifetimeValue: newValue.toString(),
+              totalJobs: (customer.totalJobs || 0) + 1,
+              lastContactDate: csvJob.completionDate && csvJob.completionDate !== '0000-00-00 00:00:00' ? 
+                new Date(csvJob.completionDate) : customer.lastContactDate
+            });
+          }
+
+          // Create job
+          const jobData = {
+            customerId: customer.id,
+            jobNumber: csvJob.jobNumber,
+            title: csvJob.description ? csvJob.description.substring(0, 100) : `Job #${csvJob.jobNumber}`,
+            description: csvJob.description || csvJob.workCompleted || '',
+            address: csvJob.address || customer.address || '',
+            status: csvJob.status.toLowerCase() === 'completed' ? 'completed' : 
+                   csvJob.status.toLowerCase() === 'unsuccessful' ? 'unsuccessful' : 'work_order',
+            priority: 'medium',
+            leadSource: csvJob.source || 'servicem8_import',
+            estimatedValue: parseFloat(csvJob.invoiceAmount || '0'),
+            actualCost: parseFloat(csvJob.totalCost || '0'),
+            scheduledDate: csvJob.workOrderDate && csvJob.workOrderDate !== '0000-00-00 00:00:00' ? 
+              new Date(csvJob.workOrderDate) : null,
+            completedDate: csvJob.completionDate && csvJob.completionDate !== '0000-00-00 00:00:00' ? 
+              new Date(csvJob.completionDate) : null,
+            assignedTo: csvJob.completedBy || 'Imported Staff',
+            servicem8JobId: csvJob.jobNumber, // Store original ServiceM8 job number
+            paymentMethod: csvJob.paymentMethod
+          };
+
+          await storage.createJob(jobData);
+          successfulMatches++;
+          
+        } catch (jobError) {
+          errors++;
+          console.error(`Error importing job ${csvJob.jobNumber}:`, jobError);
+          errorMessages.push(`Job ${csvJob.jobNumber}: ${(jobError as Error).message}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        stats: {
+          totalJobs: jobs.length,
+          processedJobs: jobs.length,
+          successfulMatches,
+          newCustomers,
+          errors
+        },
+        errorMessages: errorMessages.slice(0, 10) // Limit to first 10 errors
+      });
+      
+    } catch (error) {
+      console.error('ServiceM8 CSV jobs import error:', error);
+      res.status(500).json({
+        success: false,
+        stats: {
+          totalJobs: 0,
+          processedJobs: 0,
+          successfulMatches: 0,
+          newCustomers: 0,
+          errors: 1
+        },
+        message: 'Failed to import jobs from ServiceM8 CSV'
+      });
+    }
+  });
+
   // POST /api/servicem8/import/all - Import all data from ServiceM8
   app.post('/api/servicem8/import/all', async (req: Request, res: Response) => {
     try {
