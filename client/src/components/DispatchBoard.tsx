@@ -501,6 +501,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     });
   };
 
+
   const getJobsForStaff = (staffId: string) => {
     return jobs.filter(job => {
       // Check if staff member is in assigned team or directly assigned
@@ -520,15 +521,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return jobs
       .filter(job => {
         const isToday = isSameDay(new Date(job.startTime), selectedDate);
-        if (assignmentMode === 'teams') {
-          // Check if any team member is assigned or fallback to teamId
-          const hasAssignment = job.assignedTeam && job.assignedTeam.length > 0;
-          return (hasAssignment || job.teamId) && isToday;
-        } else {
-          // Check if staff member is assigned or fallback to staffId
-          const hasAssignment = job.assignedTeam && job.assignedTeam.length > 0;
-          return (hasAssignment || job.staffId) && isToday;
-        }
+        // Show all jobs for today, including unassigned ones
+        return isToday;
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   };
@@ -1026,6 +1020,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     );
                   })
                 )}
+                
               </div>
             </div>
 
@@ -1173,6 +1168,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         </div>
                       );
                     })
+                  ) : (
+                    // Individual Staff Mode - Simplified for now
+                    <div className="h-16 flex items-center justify-center text-muted-foreground">
+                      Individual staff mode - Coming soon
+                    </div>
                   )}
                 </div>
               </div>
