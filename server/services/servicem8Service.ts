@@ -97,6 +97,72 @@ class ServiceM8Service {
     }
   }
 
+  async updateExistingCustomerNames(): Promise<{ success: boolean; updated: number; errors: string[] }> {
+    try {
+      console.log('🔄 Starting ServiceM8 customer name updates...');
+      const companies: ServiceM8Company[] = await this.makeRequest('/company.json');
+      
+      let updated = 0;
+      const errors: string[] = [];
+
+      for (const company of companies) {
+        try {
+          // Find existing customer by ServiceM8 UUID
+          const existingCustomer = await storage.getCustomerByServiceM8Uuid(company.uuid);
+          if (!existingCustomer) {
+            continue; // Skip if customer doesn't exist
+          }
+
+          // Apply improved name mapping logic
+          let newCustomerName = '';
+          
+          if (company.company_name?.trim()) {
+            newCustomerName = company.company_name.trim();
+          }
+          else if (company.contact_first?.trim() || company.contact_last?.trim()) {
+            const firstName = (company.contact_first || '').trim();
+            const lastName = (company.contact_last || '').trim();
+            newCustomerName = `${firstName} ${lastName}`.trim();
+          }
+          else if (company.email?.includes('@')) {
+            newCustomerName = company.email.split('@')[0];
+          }
+          else if (company.mobile?.trim() || company.phone?.trim()) {
+            const phoneNumber = company.mobile?.trim() || company.phone?.trim();
+            newCustomerName = `Customer (${phoneNumber})`;
+          }
+          else if (company.address_line1?.trim()) {
+            newCustomerName = `Customer at ${company.address_line1.trim()}`;
+          }
+          else {
+            newCustomerName = `Customer-${company.uuid.slice(-8)}`;
+          }
+          
+          // Only update if the name actually changed and isn't just UUID fallback
+          if (newCustomerName !== existingCustomer.name && !newCustomerName.startsWith('Customer-')) {
+            await storage.updateCustomer(existingCustomer.id, { name: newCustomerName });
+            updated++;
+            console.log(`✅ Updated customer name: ${existingCustomer.name} → ${newCustomerName}`);
+          }
+        } catch (error) {
+          const errorMsg = `Failed to update customer ${company.company_name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.error('❌', errorMsg);
+          errors.push(errorMsg);
+        }
+      }
+
+      console.log(`🎉 ServiceM8 customer name updates completed: ${updated} updated, ${errors.length} errors`);
+      return { success: true, updated, errors };
+    } catch (error) {
+      console.error('❌ ServiceM8 customer name updates failed:', error);
+      return { 
+        success: false, 
+        updated: 0, 
+        errors: [`Update failed: ${error instanceof Error ? error.message : 'Unknown error'}`] 
+      };
+    }
+  }
+
   async importCustomers(): Promise<{ success: boolean; imported: number; errors: string[] }> {
     try {
       console.log('🚀 Starting ServiceM8 customers import...');
@@ -114,11 +180,47 @@ class ServiceM8Service {
             continue;
           }
 
-          // Map ServiceM8 company to our customer schema
-          const customerName = company.company_name?.trim() || 
-                              `${(company.contact_first || '').trim()} ${(company.contact_last || '').trim()}`.trim() ||
-                              company.email?.split('@')[0] ||
-                              `Customer-${company.uuid.slice(-8)}`;
+          // Map ServiceM8 company to our customer schema with better fallbacks
+          let customerName = '';
+          
+          // Try company name first
+          if (company.company_name?.trim()) {
+            customerName = company.company_name.trim();
+          }
+          // Try contact name
+          else if (company.contact_first?.trim() || company.contact_last?.trim()) {
+            const firstName = (company.contact_first || '').trim();
+            const lastName = (company.contact_last || '').trim();
+            customerName = `${firstName} ${lastName}`.trim();
+          }
+          // Try email username
+          else if (company.email?.includes('@')) {
+            customerName = company.email.split('@')[0];
+          }
+          // Try phone number if available (mobile or landline)
+          else if (company.mobile?.trim() || company.phone?.trim()) {
+            const phoneNumber = company.mobile?.trim() || company.phone?.trim();
+            customerName = `Customer (${phoneNumber})`;
+          }
+          // Use address if available
+          else if (company.address_line1?.trim()) {
+            customerName = `Customer at ${company.address_line1.trim()}`;
+          }
+          // Final fallback to UUID
+          else {
+            customerName = `Customer-${company.uuid.slice(-8)}`;
+          }
+          
+          // Log the data we're getting to help debug
+          console.log(`🔍 ServiceM8 customer data:`, {
+            uuid: company.uuid.slice(-8),
+            company_name: company.company_name,
+            contact_first: company.contact_first,
+            contact_last: company.contact_last,
+            email: company.email,
+            mobile: company.mobile,
+            final_name: customerName
+          });
 
           const customer: InsertCustomer = {
             name: customerName,

@@ -53,8 +53,7 @@ import {
 
 interface Customer {
   id: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   email: string;
   phone: string;
   address: string;
@@ -166,8 +165,7 @@ export function CustomerPortal() {
   // Mock customer data for demo - in real app this would come from authentication
   const mockCustomer: Customer = {
     id: 'cust-001',
-    firstName: 'Sarah',
-    lastName: 'Johnson',
+    name: 'Sarah Johnson',
     email: 'sarah.johnson@email.com',
     phone: '021 555 0123',
     address: '123 Oak Street',
@@ -190,8 +188,7 @@ export function CustomerPortal() {
       const customerData = data.data.customer;
       setCustomer({
         id: customerData.id,
-        firstName: customerData.name.split(' ')[0],
-        lastName: customerData.name.split(' ').slice(1).join(' '),
+        name: customerData.name || 'Customer',
         email: customerData.email,
         phone: customerData.phone,
         address: customerData.address,
@@ -279,14 +276,7 @@ export function CustomerPortal() {
       console.log(`[FRONTEND] Received preferences response:`, result);
       return result;
     },
-    enabled: !!customer?.id,
-    onSuccess: (data) => {
-      console.log(`[FRONTEND] Query onSuccess callback with data:`, data);
-      if (data.success && data.data) {
-        console.log(`[FRONTEND] Updating state with preferences:`, data.data);
-        setCommunicationPreferences(data.data);
-      }
-    }
+    enabled: !!customer?.id
   });
 
   // Update preferences when data is loaded (React Query v5 approach)
@@ -496,7 +486,7 @@ export function CustomerPortal() {
               </div>
               <div>
                 <h1 className="text-lg font-semibold">Treemarkables Portal</h1>
-                <p className="text-sm text-muted-foreground">Welcome back, {customer?.firstName}</p>
+                <p className="text-sm text-muted-foreground">Welcome back, {customer?.name?.split(' ')[0] || 'Customer'}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -1208,7 +1198,7 @@ export function CustomerPortal() {
                 <div className="flex items-center gap-3">
                   <User className="w-5 h-5 text-muted-foreground" />
                   <div>
-                    <div className="font-medium">{customer?.firstName} {customer?.lastName}</div>
+                    <div className="font-medium">{customer?.name || 'Customer'}</div>
                     <div className="text-sm text-muted-foreground">Full Name</div>
                   </div>
                 </div>

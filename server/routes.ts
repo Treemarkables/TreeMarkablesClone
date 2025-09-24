@@ -6697,6 +6697,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // POST /api/servicem8/update/customer-names - Update existing customer names with improved ServiceM8 data
+  app.post('/api/servicem8/update/customer-names', async (req: Request, res: Response) => {
+    try {
+      const result = await servicem8Service.updateExistingCustomerNames();
+      res.json(result);
+    } catch (error) {
+      console.error('ServiceM8 customer names update error:', error);
+      res.status(500).json({
+        success: false,
+        updated: 0,
+        errors: ['Failed to update customer names from ServiceM8']
+      });
+    }
+  });
+
   // POST /api/servicem8/import/jobs - Import jobs from ServiceM8
   app.post('/api/servicem8/import/jobs', async (req: Request, res: Response) => {
     try {
