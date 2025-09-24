@@ -1018,6 +1018,10 @@ export type NotificationSummary = z.infer<typeof notificationSummarySchema>;
 // SCHEDULING & TEAM MANAGEMENT SCHEMAS
 // ========================================
 
+// Staff Role Enum
+export const StaffRole = z.enum(['owner', 'office_staff', 'crew']);
+export type StaffRoleType = z.infer<typeof StaffRole>;
+
 // Employee/Team Member Schema
 export const employees = pgTable("employees", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
