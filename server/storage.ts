@@ -1114,8 +1114,283 @@ class DatabaseStorage implements IStorage {
   }
 
   async getLeadSourceAnalysis(): Promise<any[]> { return []; }
-  async importCustomersFromCsv(csvData: any[]): Promise<CsvImportResult> { throw new Error("Not implemented"); }
-  async importJobsFromCsv(csvData: any[]): Promise<CsvImportResult> { throw new Error("Not implemented"); }
+  async importCustomersFromCsv(csvData: any[]): Promise<CsvImportResult> {
+    console.log('🚀 Starting CSV customer import...', { totalRows: csvData.length });
+    
+    let successfulImports = 0;
+    let failedImports = 0;
+    const errors: Array<{ row: number; error: string; data?: Record<string, any> }> = [];
+    const importedIds: string[] = [];
+    
+    // Header mapping for ServiceM8 CSV exports to our internal schema
+    const headerMap: { [key: string]: string } = {
+      'Company Name': 'name',
+      'company_name': 'name',
+      'name': 'name',
+      'Company': 'name',
+      'Contact First': 'firstName',
+      'contact_first': 'firstName',
+      'first_name': 'firstName',
+      'Contact Last': 'lastName', 
+      'contact_last': 'lastName',
+      'last_name': 'lastName',
+      'Email': 'email',
+      'email': 'email',
+      'Email Address': 'email',
+      'Phone': 'phone',
+      'phone': 'phone',
+      'Mobile': 'mobile',
+      'mobile': 'mobile',
+      'Mobile Phone': 'mobile',
+      'Address': 'address',
+      'address': 'address',
+      'Address Line 1': 'address',
+      'address_line1': 'address',
+      'City': 'city',
+      'city': 'city',
+      'State': 'region',
+      'state': 'region',
+      'region': 'region',
+      'Province': 'region',
+      'Notes': 'notes',
+      'notes': 'notes',
+      'UUID': 'servicem8Uuid',
+      'uuid': 'servicem8Uuid',
+      'Company UUID': 'servicem8Uuid'
+    };
+
+    for (let i = 0; i < csvData.length; i++) {
+      try {
+        const row = csvData[i];
+        
+        // Normalize headers to our expected format
+        const normalizedRow: any = {};
+        for (const [csvKey, value] of Object.entries(row)) {
+          const mappedKey = headerMap[csvKey.trim()] || csvKey.toLowerCase().replace(/\s+/g, '_');
+          normalizedRow[mappedKey] = value && typeof value === 'string' ? value.trim() : value;
+        }
+        
+        console.log(`🔍 Row ${i + 1} normalized data:`, {
+          original: Object.keys(row),
+          normalized: normalizedRow,
+          name: normalizedRow.name,
+          email: normalizedRow.email,
+          phone: normalizedRow.phone || normalizedRow.mobile
+        });
+
+        // Generate customer name with fallback logic
+        let customerName = '';
+        
+        if (normalizedRow.name?.trim()) {
+          customerName = normalizedRow.name.trim();
+        } else if (normalizedRow.firstName?.trim() || normalizedRow.lastName?.trim()) {
+          const firstName = (normalizedRow.firstName || '').trim();
+          const lastName = (normalizedRow.lastName || '').trim();
+          customerName = `${firstName} ${lastName}`.trim();
+        } else if (normalizedRow.email?.includes('@')) {
+          customerName = normalizedRow.email.split('@')[0];
+        } else if (normalizedRow.mobile?.trim() || normalizedRow.phone?.trim()) {
+          const phoneNumber = normalizedRow.mobile?.trim() || normalizedRow.phone?.trim();
+          customerName = `Customer (${phoneNumber})`;
+        } else if (normalizedRow.address?.trim()) {
+          customerName = `Customer at ${normalizedRow.address.trim()}`;
+        } else {
+          customerName = `Customer-${Date.now()}-${i}`;
+        }
+
+        // Check if customer already exists by ServiceM8 UUID or email
+        let existingCustomer;
+        if (normalizedRow.servicem8Uuid) {
+          existingCustomer = await this.getCustomerByServiceM8Uuid(normalizedRow.servicem8Uuid);
+        }
+        if (!existingCustomer && normalizedRow.email) {
+          const customers = await this.getAllCustomers();
+          existingCustomer = customers.find(c => c.email === normalizedRow.email);
+        }
+
+        if (existingCustomer) {
+          console.log(`⏭️ Skipping existing customer: ${existingCustomer.name}`);
+          continue;
+        }
+
+        const customerData: InsertCustomer = {
+          name: customerName,
+          email: normalizedRow.email || null,
+          phone: normalizedRow.mobile || normalizedRow.phone || null,
+          address: normalizedRow.address || null,
+          city: normalizedRow.city || null,
+          region: normalizedRow.region || null,
+          notes: normalizedRow.notes || null,
+          source: 'ServiceM8 Import',
+          servicem8Uuid: normalizedRow.servicem8Uuid || null,
+          isActive: true
+        };
+
+        const customer = await this.createCustomer(customerData);
+        successfulImports++;
+        importedIds.push(customer.id);
+        console.log(`✅ Imported customer: ${customer.name} (email: ${customer.email}, phone: ${customer.phone})`);
+        
+      } catch (error) {
+        failedImports++;
+        const errorMsg = `${error instanceof Error ? error.message : 'Unknown error'}`;
+        console.error('❌ Customer import error:', errorMsg);
+        errors.push({ row: i + 1, error: errorMsg, data: csvData[i] });
+      }
+    }
+
+    console.log(`🎉 CSV customer import completed: ${successfulImports} successful, ${failedImports} failed`);
+    
+    return {
+      success: successfulImports > 0,
+      totalRows: csvData.length,
+      successfulImports,
+      errors,
+      importedIds
+    };
+  }
+
+  async importJobsFromCsv(csvData: any[]): Promise<CsvImportResult> {
+    console.log('🚀 Starting CSV job import...', { totalRows: csvData.length });
+    
+    let successfulImports = 0;
+    let failedImports = 0;
+    const errors: Array<{ row: number; error: string; data?: Record<string, any> }> = [];
+    const importedIds: string[] = [];
+
+    // Header mapping for ServiceM8 CSV exports to our internal schema
+    const headerMap: { [key: string]: string } = {
+      'Job Number': 'jobNumber',
+      'job_number': 'jobNumber',
+      'generated_job_id': 'jobNumber',
+      'Job ID': 'jobNumber',
+      'Job Description': 'description',
+      'job_description': 'description',
+      'description': 'description',
+      'Title': 'description',
+      'Job Address': 'address',
+      'job_address': 'address',
+      'address': 'address',
+      'Location': 'address',
+      'Job Location': 'address',
+      'Status': 'status',
+      'status': 'status',
+      'Priority': 'priority',
+      'priority': 'priority',
+      'Total Cost': 'totalAmount',
+      'total_cost': 'totalAmount',
+      'amount': 'totalAmount',
+      'value': 'totalAmount',
+      'Company UUID': 'companyUuid',
+      'company_uuid': 'companyUuid',
+      'Customer UUID': 'companyUuid',
+      'Date Created': 'dateCreated',
+      'date_created': 'dateCreated',
+      'created_date': 'dateCreated',
+      'Notes': 'notes',
+      'notes': 'notes'
+    };
+
+    // Get all customers for UUID mapping
+    const customers = await this.getAllCustomers();
+
+    for (let i = 0; i < csvData.length; i++) {
+      try {
+        const row = csvData[i];
+        
+        // Normalize headers to our expected format
+        const normalizedRow: any = {};
+        for (const [csvKey, value] of Object.entries(row)) {
+          const mappedKey = headerMap[csvKey.trim()] || csvKey.toLowerCase().replace(/\s+/g, '_');
+          normalizedRow[mappedKey] = value && typeof value === 'string' ? value.trim() : value;
+        }
+
+        console.log(`🔍 Job row ${i + 1} normalized data:`, {
+          jobNumber: normalizedRow.jobNumber,
+          description: normalizedRow.description,
+          address: normalizedRow.address,
+          status: normalizedRow.status,
+          companyUuid: normalizedRow.companyUuid
+        });
+
+        // Find customer by ServiceM8 UUID
+        const customer = customers.find(c => c.servicem8Uuid === normalizedRow.companyUuid);
+        if (!customer) {
+          errors.push({ row: i + 1, error: `No customer found for ServiceM8 UUID ${normalizedRow.companyUuid}`, data: csvData[i] });
+          failedImports++;
+          continue;
+        }
+
+        // Generate job number if missing
+        const jobNumber = normalizedRow.jobNumber || `J-${Date.now()}-${i}`;
+
+        // Check if job already exists
+        const existingJob = await this.getJobByJobNumber(jobNumber);
+        if (existingJob) {
+          console.log(`⏭️ Skipping existing job: ${jobNumber}`);
+          continue;
+        }
+
+        // Map ServiceM8 status to our format
+        const statusMap: { [key: string]: string } = {
+          'Quote': 'quote',
+          'Quoted': 'quote',
+          'Scheduled': 'work_order',
+          'In Progress': 'work_order',
+          'Work Order': 'work_order',
+          'Completed': 'completed',
+          'Cancelled': 'unsuccessful',
+          'Lead': 'lead'
+        };
+        
+        const mappedStatus = statusMap[normalizedRow.status] || 'lead';
+
+        // Parse total amount
+        let totalAmount = null;
+        if (normalizedRow.totalAmount) {
+          const cleanAmount = normalizedRow.totalAmount.toString().replace(/[^0-9.-]/g, '');
+          totalAmount = parseFloat(cleanAmount) || null;
+        }
+
+        const jobData: InsertJob = {
+          customerId: customer.id,
+          jobNumber: jobNumber,
+          title: normalizedRow.description || `Job ${jobNumber}`,
+          description: normalizedRow.notes || normalizedRow.description || null,
+          address: normalizedRow.address || 'Address not specified',
+          status: mappedStatus as any,
+          priority: normalizedRow.priority?.toLowerCase() || 'medium',
+          totalAmount: totalAmount,
+          serviceType: 'Tree Services',
+          leadSource: 'ServiceM8 Import',
+          createdAt: normalizedRow.dateCreated ? new Date(normalizedRow.dateCreated) : new Date(),
+          updatedAt: new Date()
+        };
+
+        const job = await this.createJob(jobData);
+        successfulImports++;
+        importedIds.push(job.id);
+        console.log(`✅ Imported job: ${job.title} for customer ${customer.name}`);
+        
+      } catch (error) {
+        failedImports++;
+        const errorMsg = `${error instanceof Error ? error.message : 'Unknown error'}`;
+        console.error('❌ Job import error:', errorMsg);
+        errors.push({ row: i + 1, error: errorMsg, data: csvData[i] });
+      }
+    }
+
+    console.log(`🎉 CSV job import completed: ${successfulImports} successful, ${failedImports} failed`);
+    
+    return {
+      success: successfulImports > 0,
+      totalRows: csvData.length,
+      successfulImports,
+      errors,
+      importedIds
+    };
+  }
+
   async importQuotesFromCsv(csvData: any[]): Promise<CsvImportResult> { throw new Error("Not implemented"); }
 
   // All remaining methods return empty/default values
