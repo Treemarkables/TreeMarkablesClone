@@ -2912,6 +2912,73 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Import jobs from parsed ServiceM8 data (JSON)
+  app.post('/api/jobs/import-servicem8', async (req: Request, res: Response) => {
+    try {
+      const { jobs } = req.body;
+      
+      if (!jobs || !Array.isArray(jobs)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Jobs array is required' 
+        });
+      }
+
+      // Get all customers for lookup
+      const customers = await storage.getAllCustomers();
+      
+      // Convert ServiceM8 jobs to our internal format
+      const jobData = await Promise.all(jobs.map(async (job: any) => {
+        // Find customer by company name (case-insensitive)
+        const customer = customers.find(c => 
+          c.name.toLowerCase().trim() === (job.company || '').toLowerCase().trim()
+        );
+        
+        return {
+          jobNumber: job.jobNumber || '',
+          customerName: job.company || '',
+          description: job.description || '',
+          address: job.address || '',
+          status: job.status || 'quoted',
+          priority: 'medium',
+          totalCost: job.invoiceAmount || '0',
+          notes: job.workCompleted || '',
+          dateCreated: job.workOrderDate || '',
+          completedDate: job.completionDate || '',
+          invoiceDate: job.invoiceDate || '',
+          quoteDate: job.quoteDate || '',
+          workOrderDate: job.workOrderDate || '',
+          paymentMethod: job.paymentMethod || '',
+          completedBy: job.completedBy || '',
+          // Use the headerMap key that will be normalized to 'companyUuid'
+          'Company UUID': customer ? (customer.servicem8Uuid || customer.id) : undefined
+        };
+      }));
+
+      // Import the data using existing CSV import logic
+      const importResult = await storage.importJobsFromCsv(jobData);
+
+      res.json({
+        success: true,
+        message: `Successfully imported ${importResult.successfulImports} of ${importResult.totalRows} jobs`,
+        stats: {
+          totalJobs: jobs.length,
+          processedJobs: importResult.totalRows,
+          successfulMatches: importResult.successfulImports,
+          newCustomers: 0,
+          errors: importResult.errors?.length || 0
+        },
+        data: importResult,
+      });
+    } catch (error) {
+      console.error('Error importing ServiceM8 jobs:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error importing jobs',
+      });
+    }
+  });
+
   // Import quotes from ServiceM8 CSV export
   app.post('/api/import/quotes', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
