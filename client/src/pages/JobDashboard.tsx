@@ -321,7 +321,8 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   const handleViewCustomerDetails = (customerId: string) => {
     // Navigate to customer details - for now, switch to customers tab and highlight
     onTabChange?.('customers');
-    // TODO: Add customer details modal or navigation
+    
+    // Show user feedback with toast notification
     toast({
       title: "Customer Details",
       description: "Customer details view is not yet implemented. Feature coming soon!",
