@@ -3,14 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +28,7 @@ import {
 } from 'lucide-react';
 import type { JobTemplate, InsertJobTemplate, EmailTemplate, InsertEmailTemplate, SmsTemplate, InsertSmsTemplate } from "@shared/schema";
 import { insertJobTemplateSchema, insertEmailTemplateSchema, insertSmsTemplateSchema } from "@shared/schema";
+import ServiceM8TemplateBuilder from './ServiceM8TemplateBuilder';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -138,75 +136,19 @@ export default function JobTemplateManagement() {
     },
   });
 
-  // Form setup
-  const form = useForm<InsertJobTemplate>({
-    resolver: zodResolver(insertJobTemplateSchema),
-    defaultValues: {
-      name: '',
-      category: 'tree_removal',
-      serviceType: 'tree_removal',
-      defaultTitle: '',
-      createdBy: 'system',
-      description: null,
-      basePrice: null,
-      estimatedDuration: null,
-      crewSize: 2,
-      requiredSkills: [],
-      requiredEquipment: [],
-      safetyRequirements: [],
-      preJobChecklist: [],
-      postJobChecklist: [],
-      riskLevel: 'medium',
-      specialInstructions: null,
-      weatherDependent: true,
-      requiredPermits: false,
-      isActive: true,
-    },
-  });
-
-  // Populate form when editing
-  useEffect(() => {
+  // Handle template save from ServiceM8TemplateBuilder
+  const handleTemplateSave = (data: InsertJobTemplate) => {
     if (editingTemplate) {
-      form.reset({
-        name: editingTemplate.name,
-        category: editingTemplate.category,
-        serviceType: editingTemplate.serviceType,
-        defaultTitle: editingTemplate.defaultTitle,
-        createdBy: editingTemplate.createdBy,
-        description: editingTemplate.description,
-        basePrice: editingTemplate.basePrice,
-        estimatedDuration: editingTemplate.estimatedDuration,
-        crewSize: editingTemplate.crewSize,
-        requiredSkills: editingTemplate.requiredSkills || [],
-        requiredEquipment: editingTemplate.requiredEquipment || [],
-        safetyRequirements: editingTemplate.safetyRequirements || [],
-        preJobChecklist: editingTemplate.preJobChecklist || [],
-        postJobChecklist: editingTemplate.postJobChecklist || [],
-        riskLevel: editingTemplate.riskLevel,
-        specialInstructions: editingTemplate.specialInstructions,
-        weatherDependent: editingTemplate.weatherDependent,
-        requiredPermits: editingTemplate.requiredPermits,
-        isActive: editingTemplate.isActive,
-      });
-    }
-  }, [editingTemplate, form]);
-
-  const onSubmit = (data: InsertJobTemplate) => {
-    // Add required fields that aren't in the form
-    const templateData = {
-      ...data,
-      defaultTitle: data.name, // Use template name as default title
-      serviceType: data.category, // Use category as service type for now
-      basePrice: data.basePrice ? String(data.basePrice) : null, // Ensure basePrice is string
-    };
-    
-    console.log('Submitting template data:', templateData);
-    
-    if (editingTemplate) {
-      updateTemplateMutation.mutate({ id: editingTemplate.id, data: templateData });
+      updateTemplateMutation.mutate({ id: editingTemplate.id, data });
     } else {
-      createTemplateMutation.mutate(templateData);
+      createTemplateMutation.mutate(data);
     }
+  };
+
+  // Handle template builder close
+  const handleTemplateBuilderClose = () => {
+    setIsCreateOpen(false);
+    setEditingTemplate(null);
   };
 
   const handleDeleteTemplate = (templateId: string) => {
@@ -282,203 +224,13 @@ export default function JobTemplateManagement() {
             Manage job workflows, email communications, and SMS messaging templates
           </p>
         </div>
-        <Dialog open={isCreateOpen || !!editingTemplate} onOpenChange={(open) => {
-        if (!open) {
-          setIsCreateOpen(false);
-          setEditingTemplate(null);
-          form.reset();
-        }
-      }}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-template">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Template
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{editingTemplate ? 'Edit Job Template' : 'Create Job Template'}</DialogTitle>
-              <DialogDescription>
-                {editingTemplate 
-                  ? 'Update the job template with new pricing, requirements, and safety specifications.'
-                  : 'Create a new job template with pricing, requirements, and safety specifications.'
-                }
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Template Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Large Tree Removal" {...field} data-testid="input-template-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Category</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-template-category">
-                              <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {categories.slice(1).map((category) => (
-                              <SelectItem key={category.value} value={category.value}>
-                                {category.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea 
-                          placeholder="Describe the template and typical use cases..." 
-                          value={field.value || ''}
-                          onChange={field.onChange}
-                          data-testid="textarea-template-description"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="basePrice"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Base Price ($)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="250" 
-                            value={field.value || ''}
-                            onChange={field.onChange}
-                            data-testid="input-base-price" 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="estimatedDuration"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Duration (hours)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="4" 
-                            value={field.value || ''}
-                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                            data-testid="input-duration" 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="crewSize"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Crew Size</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="2" 
-                            value={field.value || ''}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                            data-testid="input-crew-size"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="riskLevel"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Risk Level</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-risk-level">
-                            <SelectValue placeholder="Select risk level" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {riskLevels.map((risk) => (
-                            <SelectItem key={risk.value} value={risk.value}>
-                              {risk.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex justify-end space-x-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => {
-                      setIsCreateOpen(false);
-                      setEditingTemplate(null);
-                      form.reset();
-                    }}
-                    data-testid="button-cancel-template"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={createTemplateMutation.isPending || updateTemplateMutation.isPending}
-                    data-testid="button-save-template"
-                  >
-                    {editingTemplate 
-                      ? (updateTemplateMutation.isPending ? 'Updating...' : 'Update Template')
-                      : (createTemplateMutation.isPending ? 'Creating...' : 'Create Template')
-                    }
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+        <Button 
+          data-testid="button-create-template"
+          onClick={() => setIsCreateOpen(true)}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Create Template
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -663,6 +415,14 @@ export default function JobTemplateManagement() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* ServiceM8 Template Builder */}
+      <ServiceM8TemplateBuilder
+        isOpen={isCreateOpen || !!editingTemplate}
+        onClose={handleTemplateBuilderClose}
+        onSave={handleTemplateSave}
+        editingTemplate={editingTemplate}
+      />
     </div>
   );
 }
