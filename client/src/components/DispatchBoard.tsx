@@ -322,17 +322,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   
   // Transform employees to staff members for dispatch board
   const staffMembers = useMemo(() => {
-    console.log('DispatchBoard - Raw employees:', employees);
-    console.log('DispatchBoard - Employee count:', employees.length);
-    
-    const activeEmployees = employees; // Remove filter temporarily for debugging
-    console.log('DispatchBoard - Active employees:', activeEmployees);
-    console.log('DispatchBoard - Active employee count:', activeEmployees.length);
-    
-    const staffMembers = activeEmployees.map(transformEmployeeToStaffMember);
-    console.log('DispatchBoard - Transformed staff members:', staffMembers);
-    
-    return staffMembers;
+    return employees
+      .filter(emp => emp.isActive !== false) // Show all employees since API missing isActive field
+      .map(transformEmployeeToStaffMember);
   }, [employees]);
 
   // Fetch job templates for template selection
