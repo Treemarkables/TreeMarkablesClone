@@ -44,6 +44,7 @@ import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
+import { servicem8Service } from "./services/servicem8Service";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -6659,6 +6660,70 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error fetching filtered materials and services'
+      });
+    }
+  });
+
+  // =====================================
+  // ServiceM8 Integration API Routes
+  // =====================================
+
+  // GET /api/servicem8/test - Test ServiceM8 API connection
+  app.get('/api/servicem8/test', async (req: Request, res: Response) => {
+    try {
+      const result = await servicem8Service.testConnection();
+      res.json(result);
+    } catch (error) {
+      console.error('ServiceM8 test connection error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to test ServiceM8 connection'
+      });
+    }
+  });
+
+  // POST /api/servicem8/import/customers - Import customers from ServiceM8
+  app.post('/api/servicem8/import/customers', async (req: Request, res: Response) => {
+    try {
+      const result = await servicem8Service.importCustomers();
+      res.json(result);
+    } catch (error) {
+      console.error('ServiceM8 customers import error:', error);
+      res.status(500).json({
+        success: false,
+        imported: 0,
+        errors: ['Failed to import customers from ServiceM8']
+      });
+    }
+  });
+
+  // POST /api/servicem8/import/jobs - Import jobs from ServiceM8
+  app.post('/api/servicem8/import/jobs', async (req: Request, res: Response) => {
+    try {
+      const result = await servicem8Service.importJobs();
+      res.json(result);
+    } catch (error) {
+      console.error('ServiceM8 jobs import error:', error);
+      res.status(500).json({
+        success: false,
+        imported: 0,
+        errors: ['Failed to import jobs from ServiceM8']
+      });
+    }
+  });
+
+  // POST /api/servicem8/import/all - Import all data from ServiceM8
+  app.post('/api/servicem8/import/all', async (req: Request, res: Response) => {
+    try {
+      const result = await servicem8Service.importAll();
+      res.json(result);
+    } catch (error) {
+      console.error('ServiceM8 full import error:', error);
+      res.status(500).json({
+        success: false,
+        customers: { imported: 0, errors: [] },
+        jobs: { imported: 0, errors: [] },
+        message: 'Failed to import data from ServiceM8'
       });
     }
   });
