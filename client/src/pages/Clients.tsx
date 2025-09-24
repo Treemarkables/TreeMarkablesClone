@@ -113,7 +113,7 @@ export default function Clients() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Revenue</p>
                 <p className="text-2xl font-bold">
-                  ${customers.reduce((sum, customer) => sum + (parseFloat(customer.lifetimeValue) || 0), 0).toLocaleString()}
+                  ${customers.reduce((sum, customer) => sum + (parseFloat(customer.lifetimeValue || '0') || 0), 0).toLocaleString()}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-amber-600" />
@@ -184,7 +184,7 @@ export default function Clients() {
         ) : (
           <div className="grid gap-4">
             {filteredCustomers.map((customer) => {
-              const tier = getCustomerTier(parseFloat(customer.lifetimeValue) || 0);
+              const tier = getCustomerTier(parseFloat(customer.lifetimeValue || '0') || 0);
               
               return (
                 <Card key={customer.id} className="hover-elevate" data-testid={`card-client-${customer.id}`}>
