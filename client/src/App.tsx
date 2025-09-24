@@ -30,6 +30,7 @@ import History from "@/pages/History";
 import Clients from "@/pages/Clients";
 import MaterialsServices from "@/pages/MaterialsServices";
 import Settings from "@/pages/Settings";
+import StaffManagement from "@/pages/StaffManagement";
 import Developer from "@/pages/Developer";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
@@ -250,12 +251,7 @@ function Router() {
       
       {/* Settings sub-pages - placeholders */}
       <Route path="/settings/staff">
-        <SidebarLayout>
-          <SettingsPlaceholder 
-            title="Staff Management"
-            description="Manage team members, roles and permissions"
-          />
-        </SidebarLayout>
+        <StaffManagement />
       </Route>
       <Route path="/settings/categories">
         <SidebarLayout>

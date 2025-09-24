@@ -146,10 +146,12 @@ export default function Settings() {
                 </Button>
               </Link>
               
-              <Button variant="outline" className="w-full justify-start" data-testid="button-quick-staff">
-                <Users className="w-4 h-4 mr-2" />
-                Add Staff Member
-              </Button>
+              <Link href="/settings/staff" className="block">
+                <Button variant="outline" className="w-full justify-start" data-testid="button-quick-staff">
+                  <Users className="w-4 h-4 mr-2" />
+                  Add Staff Member
+                </Button>
+              </Link>
               
               <Button variant="outline" className="w-full justify-start" data-testid="button-quick-security">
                 <Shield className="w-4 h-4 mr-2" />
