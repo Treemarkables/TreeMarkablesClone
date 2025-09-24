@@ -310,6 +310,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
           <TabsList className="flex w-full overflow-x-auto whitespace-nowrap gap-2 md:gap-3 mb-4 md:mb-6 shrink-0 no-scrollbar" data-testid="tabs-dashboard-navigation">
             <TabsTrigger value="overview" data-testid="tab-overview" className="shrink-0"><TrendingUp className="w-4 h-4 mr-2" />Overview</TabsTrigger>
             <TabsTrigger value="pipeline" data-testid="tab-pipeline" className="shrink-0"><CalendarDays className="w-4 h-4 mr-2" />Pipeline</TabsTrigger>
+            <TabsTrigger value="job-import" data-testid="tab-job-import" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Job Import</TabsTrigger>
             <TabsTrigger value="templates" data-testid="tab-templates" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Templates</TabsTrigger>
             <TabsTrigger value="leads" data-testid="tab-leads" className="shrink-0"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
             <TabsTrigger value="customers" data-testid="tab-customers" className="shrink-0"><Users className="w-4 h-4 mr-2" />Customers</TabsTrigger>
@@ -321,7 +322,6 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
             <TabsTrigger value="weather" data-testid="tab-weather" className="shrink-0"><Cloud className="w-4 h-4 mr-2" />Weather</TabsTrigger>
             <TabsTrigger value="safety" data-testid="tab-safety" className="shrink-0"><Shield className="w-4 h-4 mr-2" />Safety</TabsTrigger>
             <TabsTrigger value="integrations" data-testid="tab-integrations" className="shrink-0"><Plug className="w-4 h-4 mr-2" />Integrations</TabsTrigger>
-            <TabsTrigger value="job-import" data-testid="tab-job-import" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Job Import</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
