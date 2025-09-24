@@ -62,6 +62,9 @@ export function ServiceM8JobImport() {
     const lines = csvContent.split('\n');
     const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
     
+    console.log('CSV Headers:', headers);
+    console.log('Total lines:', lines.length);
+    
     const jobs: ServiceM8Job[] = [];
     
     for (let i = 1; i < lines.length; i++) {
@@ -86,36 +89,49 @@ export function ServiceM8JobImport() {
       }
       values.push(currentValue.trim()); // Add last value
       
-      if (values.length >= 10) {
+      // Log first few rows for debugging
+      if (i <= 3) {
+        console.log(`Row ${i} values (${values.length} columns):`, values.slice(0, 10));
+      }
+      
+      // More flexible parsing - try different column positions
+      if (values.length >= 5) {
         const job: ServiceM8Job = {
-          jobNumber: values[0]?.replace(/"/g, '') || '',
-          company: values[3]?.replace(/"/g, '') || '',
+          // Try multiple possible positions for job number
+          jobNumber: values[0]?.replace(/"/g, '') || values[1]?.replace(/"/g, '') || '',
+          // Try multiple possible positions for company
+          company: values[3]?.replace(/"/g, '') || values[2]?.replace(/"/g, '') || values[4]?.replace(/"/g, '') || '',
           contactFirst: values[4]?.replace(/"/g, '') || '',
           contactLast: values[5]?.replace(/"/g, '') || '',
           email: values[6]?.replace(/"/g, '') || '',
           phone: values[7]?.replace(/"/g, '') || '',
           mobile: values[8]?.replace(/"/g, '') || '',
-          address: values[9]?.replace(/"/g, '') || '',
-          status: values[2]?.replace(/"/g, '') || '',
+          address: values[9]?.replace(/"/g, '') || values[10]?.replace(/"/g, '') || '',
+          status: values[2]?.replace(/"/g, '') || values[1]?.replace(/"/g, '') || '',
           invoiceDate: values[10]?.replace(/"/g, '') || '',
           quoteDate: values[11]?.replace(/"/g, '') || '',
           workOrderDate: values[12]?.replace(/"/g, '') || '',
-          completionDate: values[29]?.replace(/"/g, '') || '',
-          description: values[22]?.replace(/"/g, '') || '',
-          workCompleted: values[23]?.replace(/"/g, '') || '',
-          invoiceAmount: values[16]?.replace(/"/g, '') || '0',
-          totalCost: values[19]?.replace(/"/g, '') || '0',
+          completionDate: values[29]?.replace(/"/g, '') || values[20]?.replace(/"/g, '') || '',
+          description: values[22]?.replace(/"/g, '') || values[15]?.replace(/"/g, '') || '',
+          workCompleted: values[23]?.replace(/"/g, '') || values[16]?.replace(/"/g, '') || '',
+          invoiceAmount: values[16]?.replace(/"/g, '') || values[17]?.replace(/"/g, '') || '0',
+          totalCost: values[19]?.replace(/"/g, '') || values[18]?.replace(/"/g, '') || '0',
           paymentMethod: values[26]?.replace(/"/g, '') || '',
-          completedBy: values[28]?.replace(/"/g, '') || '',
-          source: values[20]?.replace(/"/g, '') || ''
+          completedBy: values[28]?.replace(/"/g, '') || values[25]?.replace(/"/g, '') || '',
+          source: values[20]?.replace(/"/g, '') || values[21]?.replace(/"/g, '') || ''
         };
         
-        if (job.jobNumber && job.company) {
+        // More flexible validation - just need something that looks like a job
+        if ((job.jobNumber && job.jobNumber.length > 0) || (job.company && job.company.length > 0)) {
           jobs.push(job);
+          if (jobs.length <= 3) {
+            console.log(`Added job ${jobs.length}:`, job);
+          }
         }
       }
     }
     
+    console.log(`Parsed ${jobs.length} jobs total`);
     return jobs;
   };
 
