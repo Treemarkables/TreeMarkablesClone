@@ -310,6 +310,17 @@ const timeSlots = [
   '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
 ];
 
+// Job filter options similar to ServiceM8
+const jobFilterOptions = [
+  { value: 'all', label: 'All Jobs', icon: List, description: 'Jobs with a Quote or Work Order status, or recently Completed/Unsuccessful.' },
+  { value: 'action_required', label: 'Action Required', icon: AlertTriangle, description: 'Jobs that need to be scheduled, sent to a Queue, or actioned in some way.' },
+  { value: 'for_review', label: 'For My Review', icon: Target, description: 'Jobs that specifically need your attention.' },
+  { value: 'quotes', label: 'Quotes', icon: MessageSquare, description: 'Jobs with a Quote status.' },
+  { value: 'unscheduled', label: 'Unscheduled Jobs', icon: Calendar, description: 'Jobs without a future booking and not in a Queue.' },
+  { value: 'in_progress', label: 'In Progress Jobs', icon: Zap, description: 'Jobs with a future booking.' },
+  { value: 'completed', label: 'Completed Jobs', icon: Check, description: 'Jobs recently updated to a Completed or Unsuccessful status.' }
+];
+
 export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const { toast } = useToast();
 
@@ -382,6 +393,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('teams');
+  const [jobFilter, setJobFilter] = useState<string>('all');
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const [newJobFormData, setNewJobFormData] = useState({
@@ -521,8 +533,42 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return jobs
       .filter(job => {
         const isToday = isSameDay(new Date(job.startTime), selectedDate);
-        // Show all jobs for today, including unassigned ones
-        return isToday;
+        if (!isToday) return false;
+        
+        // Apply job filter based on selected filter option
+        switch (jobFilter) {
+          case 'all':
+            return true; // Show all jobs for today
+            
+          case 'action_required':
+            // Jobs that need scheduling, assignment, or other action
+            return !job.assignedTeam?.length || job.status === 'scheduled' && !job.teamId && !job.staffId;
+            
+          case 'for_review':
+            // Jobs that need review (high priority or specific conditions)
+            return job.priority === 'urgent' || job.priority === 'high';
+            
+          case 'quotes':
+            // Jobs with Quote in service type
+            return job.serviceType?.toLowerCase().includes('quote') || false;
+            
+          case 'unscheduled':
+            // Jobs without proper scheduling or assignment
+            const jobDate = new Date(job.startTime);
+            const isDefaultTime = jobDate.getHours() === 9 && jobDate.getMinutes() === 0; // Default 9 AM
+            return isDefaultTime || (!job.assignedTeam?.length && !job.teamId && !job.staffId);
+            
+          case 'in_progress':
+            // Jobs currently in progress
+            return job.status === 'in_progress' || job.status === 'scheduled';
+            
+          case 'completed':
+            // Recently completed or unsuccessful jobs
+            return job.status === 'completed' || job.status === 'cancelled';
+            
+          default:
+            return true;
+        }
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   };
@@ -1185,6 +1231,67 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   <Plus className="h-4 w-4 mr-1" />
                   Add
                 </Button>
+              </div>
+              
+              {/* Job Filter Dropdown */}
+              <div className="mb-4">
+                <Select value={jobFilter} onValueChange={setJobFilter}>
+                  <SelectTrigger className="w-full" data-testid="job-filter-select">
+                    <SelectValue>
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const selectedFilter = jobFilterOptions.find(f => f.value === jobFilter);
+                          const IconComponent = selectedFilter?.icon || List;
+                          return (
+                            <>
+                              <IconComponent className="h-4 w-4" />
+                              <span>{selectedFilter?.label || 'All Jobs'}</span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jobFilterOptions.map((option) => {
+                      const IconComponent = option.icon;
+                      const filteredCount = jobs.filter(job => {
+                        const isToday = isSameDay(new Date(job.startTime), selectedDate);
+                        if (!isToday) return false;
+                        
+                        switch (option.value) {
+                          case 'all': return true;
+                          case 'action_required': return !job.assignedTeam?.length || job.status === 'scheduled' && !job.teamId && !job.staffId;
+                          case 'for_review': return job.priority === 'urgent' || job.priority === 'high';
+                          case 'quotes': return job.serviceType?.toLowerCase().includes('quote') || false;
+                          case 'unscheduled':
+                            const jobDate = new Date(job.startTime);
+                            const isDefaultTime = jobDate.getHours() === 9 && jobDate.getMinutes() === 0;
+                            return isDefaultTime || (!job.assignedTeam?.length && !job.teamId && !job.staffId);
+                          case 'in_progress': return job.status === 'in_progress' || job.status === 'scheduled';
+                          case 'completed': return job.status === 'completed' || job.status === 'cancelled';
+                          default: return true;
+                        }
+                      }).length;
+                      
+                      return (
+                        <SelectItem key={option.value} value={option.value} data-testid={`filter-option-${option.value}`}>
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2">
+                              <IconComponent className="h-4 w-4" />
+                              <span>{option.label}</span>
+                            </div>
+                            {filteredCount > 0 && (
+                              <Badge variant="secondary" className="ml-2 text-xs">
+                                {filteredCount}
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="h-[540px] overflow-y-auto">
