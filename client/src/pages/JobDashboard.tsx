@@ -18,6 +18,7 @@ import { JobDiary } from '@/components/JobDiary';
 import { SafetyReporting } from '@/components/SafetyReporting';
 import JobTemplateManagement from '@/components/JobTemplateManagement';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
+import { ServiceM8ImportModal } from '@/components/ServiceM8ImportModal';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
 
@@ -218,12 +219,17 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
     <div className="h-full bg-background p-4 md:p-6 overflow-hidden w-full max-w-full min-w-0">
       <div className="w-full max-w-full h-full flex flex-col min-w-0">
         <div className="mb-4 md:mb-6 shrink-0">
-          <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="heading-job-dashboard">
-            Job Dashboard
-          </h1>
-          <p className="text-muted-foreground" data-testid="text-dashboard-description">
-            Comprehensive business management for Treemarkables
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="heading-job-dashboard">
+                Job Dashboard
+              </h1>
+              <p className="text-muted-foreground" data-testid="text-dashboard-description">
+                Comprehensive business management for Treemarkables
+              </p>
+            </div>
+            <ServiceM8ImportModal />
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full">
