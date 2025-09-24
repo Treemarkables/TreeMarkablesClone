@@ -7030,6 +7030,20 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Register ServiceM8 OAuth and API routes
+  // TODO: Fix storage interface compatibility before enabling
+  // const servicem8Routes = createServiceM8Routes(storage);
+  // app.use('/api/servicem8', servicem8Routes);
+
+  // Temporary fallback ServiceM8 diary endpoint
+  app.get('/api/servicem8/jobs/:jobId/diary', async (req: Request, res: Response) => {
+    res.json({
+      success: true,
+      data: [],
+      message: 'ServiceM8 integration is currently being configured. Please check back later.'
+    });
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

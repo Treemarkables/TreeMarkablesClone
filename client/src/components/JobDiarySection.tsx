@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,18 @@ import {
   MoreHorizontal
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
+// ServiceM8 API response types (matches server/services/servicem8-api.ts)
+interface ServiceM8DiaryEntry {
+  id: string;
+  jobUuid: string;
+  staffUuid: string | null;
+  entryType: string | null;
+  note: string | null;
+  objectUuid: string | null;
+  entryDate: Date | null;
+  createdAt: Date | null;
+  active: boolean;
+}
 
 // Types for diary entries
 interface DiaryEntry {
@@ -92,6 +104,7 @@ export function JobDiarySection({
   const [activeComposer, setActiveComposer] = useState<'note' | 'sms' | 'email' | null>(null);
   const [proposalDialogOpen, setProposalDialogOpen] = useState(false);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+  const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   
   // Forms
   const noteForm = useForm<NoteFormData>({
@@ -109,19 +122,25 @@ export function JobDiarySection({
     defaultValues: { to: customerEmail || "", subject: "", message: "" }
   });
 
-  // Fetch diary entries (combining multiple sources)
+  // Fetch diary entries (combining local and ServiceM8 sources)
   const { data: diaryEntries = [], isLoading } = useQuery({
     queryKey: ['/api/jobs', jobId, 'diary-timeline'],
     queryFn: async (): Promise<DiaryEntry[]> => {
-      const [diaryResponse, communicationsResponse, proposalsResponse] = await Promise.all([
-        apiRequest('GET', `/api/jobs/${jobId}/diary`).then(res => res.json()),
-        apiRequest('GET', `/api/communications?jobId=${jobId}`).then(res => res.json()),
-        apiRequest('GET', `/api/proposals?jobId=${jobId}`).then(res => res.json())
+      const [localResponse, servicem8Response] = await Promise.all([
+        // Fetch local diary data (original endpoints)
+        Promise.all([
+          apiRequest('GET', `/api/jobs/${jobId}/diary`).then(res => res.json()),
+          apiRequest('GET', `/api/communications?jobId=${jobId}`).then(res => res.json()),
+          apiRequest('GET', `/api/proposals?jobId=${jobId}`).then(res => res.json())
+        ]),
+        // Fetch ServiceM8 diary data (with error handling)
+        apiRequest('GET', `/api/servicem8/jobs/${jobId}/diary`).then(res => res.json()).catch(() => ({ data: [] }))
       ]);
-      
+
+      const [diaryResponse, communicationsResponse, proposalsResponse] = localResponse;
       const entries: DiaryEntry[] = [];
       
-      // Add diary entries
+      // Add local diary entries
       if (diaryResponse.data) {
         diaryResponse.data.forEach((entry: any) => {
           entries.push({
@@ -134,7 +153,6 @@ export function JobDiarySection({
             timestamp: entry.createdAt,
             metadata: {
               eventType: entry.entryType,
-              // For proposal entries, extract proposal number from title
               proposalNumber: entry.entryType === 'proposal' ? 
                 entry.title.replace('Proposal Created: ', '') : undefined
             }
@@ -142,7 +160,7 @@ export function JobDiarySection({
         });
       }
       
-      // Add communications (placeholder structure)
+      // Add local communications
       if (communicationsResponse.data) {
         communicationsResponse.data.forEach((comm: any) => {
           entries.push({
@@ -160,7 +178,7 @@ export function JobDiarySection({
         });
       }
       
-      // Add proposals
+      // Add local proposals
       if (proposalsResponse.data) {
         proposalsResponse.data.forEach((proposal: any) => {
           entries.push({
@@ -173,6 +191,33 @@ export function JobDiarySection({
             metadata: {
               proposalNumber: proposal.proposalNumber,
               status: proposal.status
+            }
+          });
+        });
+      }
+
+      // Add ServiceM8 diary entries if available
+      if (servicem8Response.data && servicem8Response.data.length > 0) {
+        servicem8Response.data.forEach((entry: ServiceM8DiaryEntry) => {
+          const entryDate = entry.entryDate ? new Date(entry.entryDate) : null;
+          
+          entries.push({
+            id: `servicem8-${entry.id}`, // Prefix to avoid ID conflicts
+            type: entry.entryType === 'Note' ? 'note' : 
+                  entry.entryType === 'Scheduled' ? 'job_event' : 
+                  entry.entryType === 'Completed' ? 'job_event' : 
+                  entry.entryType === 'CallLog' ? 'call' : 'note',
+            title: entry.entryType === 'Note' ? 'ServiceM8 Note' : 
+                   entry.entryType === 'Scheduled' ? 'ServiceM8 Scheduled' :
+                   entry.entryType === 'Completed' ? 'ServiceM8 Completed' : 
+                   entry.entryType === 'CallLog' ? 'ServiceM8 Call' :
+                   'ServiceM8 Entry',
+            content: entry.note || 'No content',
+            author: 'ServiceM8 User',
+            timestamp: entryDate?.toISOString() || (entry.createdAt ? new Date(entry.createdAt).toISOString() : new Date().toISOString()),
+            metadata: {
+              eventType: entry.entryType || undefined,
+              status: entry.active ? 'active' : 'inactive'
             }
           });
         });
@@ -336,6 +381,7 @@ export function JobDiarySection({
           <div className="flex-1 relative">
             <StickyNote className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input 
+              ref={quickNoteInputRef}
               placeholder="Type a job note here..."
               className="pl-10 pr-10"
               onKeyPress={(e) => {
@@ -357,7 +403,17 @@ export function JobDiarySection({
           <Button 
             size="icon"
             variant="ghost"
-            onClick={() => setActiveComposer('note')}
+            onClick={() => {
+              const input = quickNoteInputRef.current;
+              if (input && input.value.trim()) {
+                // Submit the quick note if there's content
+                createNoteMutation.mutate({ content: input.value.trim() });
+                input.value = '';
+              } else {
+                // Open composer modal if no content
+                setActiveComposer('note');
+              }
+            }}
             data-testid="button-add-note"
           >
             <Plus className="w-4 h-4" />
