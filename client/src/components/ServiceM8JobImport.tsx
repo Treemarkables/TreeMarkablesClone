@@ -378,6 +378,15 @@ export function ServiceM8JobImport() {
     setCurrentStep('processing');
     setProgress(0);
     
+    // Initialize accumulated stats
+    let accumulatedStats = {
+      totalJobs: jobs.length,
+      processedJobs: 0,
+      successfulMatches: 0,
+      newCustomers: 0,
+      errors: 0
+    };
+    
     // Process jobs in batches - larger batches for big datasets
     const batchSize = jobs.length > 1000 ? 200 : 100;
     const totalBatches = Math.ceil(jobs.length / batchSize);
@@ -388,7 +397,27 @@ export function ServiceM8JobImport() {
         const endIndex = Math.min(startIndex + batchSize, jobs.length);
         const batch = jobs.slice(startIndex, endIndex);
         
-        await importJobsMutation.mutateAsync(batch);
+        // Import this batch and get its stats
+        const result = await fetch('/api/jobs/import-servicem8', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobs: batch })
+        });
+        const batchResult = await result.json();
+        
+        // Accumulate stats from this batch
+        const batchStats = batchResult.stats || {
+          totalJobs: 0,
+          processedJobs: 0,
+          successfulMatches: 0,
+          newCustomers: 0,
+          errors: 0
+        };
+        
+        accumulatedStats.processedJobs += batchStats.processedJobs || batch.length;
+        accumulatedStats.successfulMatches += batchStats.successfulMatches || 0;
+        accumulatedStats.newCustomers += batchStats.newCustomers || 0;
+        accumulatedStats.errors += batchStats.errors || 0;
         
         const progressPercent = ((i + 1) / totalBatches) * 100;
         setProgress(progressPercent);
@@ -397,8 +426,40 @@ export function ServiceM8JobImport() {
         const delay = jobs.length > 1000 ? 200 : 500;
         await new Promise(resolve => setTimeout(resolve, delay));
       }
+      
+      // Set final accumulated stats and complete
+      setImportStats(accumulatedStats);
+      setCurrentStep('complete');
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      
+      // Show final success message
+      if (accumulatedStats.errors > 0 && accumulatedStats.successfulMatches === 0) {
+        toast({
+          title: "Import failed",
+          description: `All ${accumulatedStats.errors} jobs failed to import. Check for duplicate job numbers.`,
+          variant: "destructive"
+        });
+      } else if (accumulatedStats.errors > 0) {
+        toast({
+          title: "Import partially completed",
+          description: `Imported ${accumulatedStats.successfulMatches} jobs, ${accumulatedStats.errors} failed`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Import completed successfully",
+          description: `Imported ${accumulatedStats.successfulMatches} jobs from ${jobs.length} total`
+        });
+      }
+      
     } catch (error) {
       console.error('Import error:', error);
+      toast({
+        title: "Import failed",
+        description: error.message || "An error occurred during import",
+        variant: "destructive"
+      });
     } finally {
       setIsProcessing(false);
     }
