@@ -59,11 +59,52 @@ export function ServiceM8JobImport() {
   const { toast } = useToast();
 
   const parseServiceM8CSV = (csvContent: string): ServiceM8Job[] => {
-    const lines = csvContent.split('\n');
-    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+    console.log('Starting CSV parsing...');
+    console.log('CSV content length:', csvContent.length);
     
-    console.log('CSV Headers:', headers);
-    console.log('Total lines:', lines.length);
+    if (!csvContent || csvContent.trim().length === 0) {
+      console.error('CSV content is empty');
+      return [];
+    }
+    
+    const lines = csvContent.split('\n').filter(line => line.trim().length > 0);
+    console.log('Total lines after filtering:', lines.length);
+    
+    if (lines.length < 2) {
+      console.error('CSV has less than 2 lines (header + data)');
+      return [];
+    }
+    
+    const headerLine = lines[0].trim();
+    console.log('Raw header line:', headerLine);
+    
+    // Parse headers more carefully
+    const headers = headerLine.split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
+    console.log('Parsed headers:', headers);
+    
+    // Find column indices by looking for common ServiceM8 field names
+    const findColumnIndex = (possibleNames: string[]) => {
+      for (const name of possibleNames) {
+        const index = headers.findIndex(h => h.includes(name.toLowerCase()));
+        if (index !== -1) return index;
+      }
+      return -1;
+    };
+    
+    const columnIndices = {
+      jobNumber: findColumnIndex(['job', 'job_id', 'jobid', 'jobnumber', 'job_number', 'id']),
+      company: findColumnIndex(['company', 'customer', 'client', 'business']),
+      address: findColumnIndex(['address', 'location', 'site']),
+      status: findColumnIndex(['status', 'state']),
+      description: findColumnIndex(['description', 'details', 'work', 'notes']),
+      amount: findColumnIndex(['amount', 'total', 'cost', 'price', 'invoice']),
+      contact: findColumnIndex(['contact', 'name', 'first', 'fname']),
+      phone: findColumnIndex(['phone', 'mobile', 'tel']),
+      email: findColumnIndex(['email', 'mail']),
+      date: findColumnIndex(['date', 'created', 'completion', 'complete'])
+    };
+    
+    console.log('Column indices found:', columnIndices);
     
     const jobs: ServiceM8Job[] = [];
     
@@ -71,7 +112,7 @@ export function ServiceM8JobImport() {
       const line = lines[i].trim();
       if (!line) continue;
       
-      // Handle CSV parsing with quoted fields containing commas
+      // Parse CSV line with proper quote handling
       const values: string[] = [];
       let currentValue = '';
       let inQuotes = false;
@@ -81,57 +122,57 @@ export function ServiceM8JobImport() {
         if (char === '"') {
           inQuotes = !inQuotes;
         } else if (char === ',' && !inQuotes) {
-          values.push(currentValue.trim());
+          values.push(currentValue.trim().replace(/^"|"$/g, ''));
           currentValue = '';
         } else {
           currentValue += char;
         }
       }
-      values.push(currentValue.trim()); // Add last value
+      values.push(currentValue.trim().replace(/^"|"$/g, ''));
       
-      // Log first few rows for debugging
       if (i <= 3) {
-        console.log(`Row ${i} values (${values.length} columns):`, values.slice(0, 10));
+        console.log(`Row ${i} values (${values.length} total):`, values.slice(0, 8));
       }
       
-      // More flexible parsing - try different column positions
-      if (values.length >= 5) {
-        const job: ServiceM8Job = {
-          // Try multiple possible positions for job number
-          jobNumber: values[0]?.replace(/"/g, '') || values[1]?.replace(/"/g, '') || '',
-          // Try multiple possible positions for company
-          company: values[3]?.replace(/"/g, '') || values[2]?.replace(/"/g, '') || values[4]?.replace(/"/g, '') || '',
-          contactFirst: values[4]?.replace(/"/g, '') || '',
-          contactLast: values[5]?.replace(/"/g, '') || '',
-          email: values[6]?.replace(/"/g, '') || '',
-          phone: values[7]?.replace(/"/g, '') || '',
-          mobile: values[8]?.replace(/"/g, '') || '',
-          address: values[9]?.replace(/"/g, '') || values[10]?.replace(/"/g, '') || '',
-          status: values[2]?.replace(/"/g, '') || values[1]?.replace(/"/g, '') || '',
-          invoiceDate: values[10]?.replace(/"/g, '') || '',
-          quoteDate: values[11]?.replace(/"/g, '') || '',
-          workOrderDate: values[12]?.replace(/"/g, '') || '',
-          completionDate: values[29]?.replace(/"/g, '') || values[20]?.replace(/"/g, '') || '',
-          description: values[22]?.replace(/"/g, '') || values[15]?.replace(/"/g, '') || '',
-          workCompleted: values[23]?.replace(/"/g, '') || values[16]?.replace(/"/g, '') || '',
-          invoiceAmount: values[16]?.replace(/"/g, '') || values[17]?.replace(/"/g, '') || '0',
-          totalCost: values[19]?.replace(/"/g, '') || values[18]?.replace(/"/g, '') || '0',
-          paymentMethod: values[26]?.replace(/"/g, '') || '',
-          completedBy: values[28]?.replace(/"/g, '') || values[25]?.replace(/"/g, '') || '',
-          source: values[20]?.replace(/"/g, '') || values[21]?.replace(/"/g, '') || ''
-        };
-        
-        // More flexible validation - just need something that looks like a job
-        if ((job.jobNumber && job.jobNumber.length > 0) || (job.company && job.company.length > 0)) {
-          jobs.push(job);
-          if (jobs.length <= 3) {
-            console.log(`Added job ${jobs.length}:`, job);
-          }
+      // Create job object using found column indices
+      const job: ServiceM8Job = {
+        jobNumber: (columnIndices.jobNumber >= 0 ? values[columnIndices.jobNumber] : values[0]) || `job-${i}`,
+        company: (columnIndices.company >= 0 ? values[columnIndices.company] : values[1]) || '',
+        contactFirst: (columnIndices.contact >= 0 ? values[columnIndices.contact] : values[2]) || '',
+        contactLast: '',
+        email: (columnIndices.email >= 0 ? values[columnIndices.email] : '') || '',
+        phone: (columnIndices.phone >= 0 ? values[columnIndices.phone] : '') || '',
+        mobile: '',
+        address: (columnIndices.address >= 0 ? values[columnIndices.address] : values[3]) || '',
+        status: (columnIndices.status >= 0 ? values[columnIndices.status] : values[4]) || 'pending',
+        description: (columnIndices.description >= 0 ? values[columnIndices.description] : '') || '',
+        workCompleted: '',
+        invoiceAmount: (columnIndices.amount >= 0 ? values[columnIndices.amount] : '0') || '0',
+        totalCost: '0',
+        invoiceDate: '',
+        quoteDate: '',
+        workOrderDate: (columnIndices.date >= 0 ? values[columnIndices.date] : '') || '',
+        completionDate: '',
+        paymentMethod: '',
+        completedBy: '',
+        source: 'ServiceM8 Import'
+      };
+      
+      // Very lenient validation - accept any row with job number OR company
+      if (job.jobNumber || job.company) {
+        jobs.push(job);
+        if (jobs.length <= 5) {
+          console.log(`Job ${jobs.length}:`, {
+            jobNumber: job.jobNumber,
+            company: job.company,
+            address: job.address,
+            amount: job.invoiceAmount
+          });
         }
       }
     }
     
-    console.log(`Parsed ${jobs.length} jobs total`);
+    console.log(`✅ Successfully parsed ${jobs.length} jobs from ${lines.length - 1} data rows`);
     return jobs;
   };
 
