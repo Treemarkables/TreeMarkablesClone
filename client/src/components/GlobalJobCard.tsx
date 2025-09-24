@@ -998,12 +998,35 @@ export function GlobalJobCard({
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {customers.map((customer: Customer) => (
-                                <SelectItem key={customer.id} value={customer.id}>
-                                  {customer.name}
-                                  {customer.email && ` - ${customer.email}`}
-                                </SelectItem>
-                              ))}
+                              {customers.map((customer: Customer, index: number) => {
+                                // Create a more meaningful display name
+                                let displayName = customer.name || 'Unknown Customer';
+                                
+                                // If it's a generic placeholder name, create a better identifier
+                                if (customer.name?.startsWith('Customer-')) {
+                                  // Extract last 6 characters of UUID for unique identifier
+                                  const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
+                                  
+                                  if (customer.address) {
+                                    // Extract street name or first part of address
+                                    const addressParts = customer.address.split(',')[0].split(' ');
+                                    const streetInfo = addressParts.slice(-2).join(' '); // Last 2 words (e.g., "Beach Road")
+                                    displayName = `${customer.city || 'Location'} - ${streetInfo}`;
+                                  } else if (customer.city) {
+                                    displayName = `${customer.city} Customer #${uniqueId}`;
+                                  } else {
+                                    // Fallback to a numbered system based on position
+                                    displayName = `Customer #${index + 1} (${uniqueId})`;
+                                  }
+                                }
+                                
+                                return (
+                                  <SelectItem key={customer.id} value={customer.id}>
+                                    {displayName}
+                                    {customer.email && ` - ${customer.email}`}
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                           <FormMessage />
