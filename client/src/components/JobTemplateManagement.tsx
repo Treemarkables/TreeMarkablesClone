@@ -49,10 +49,21 @@ export default function JobTemplateManagement() {
   const [editingSmsTemplate, setEditingSmsTemplate] = useState<SmsTemplate | null>(null);
   const { toast } = useToast();
 
-  // Fetch job templates with proper category filtering
-  const { data: templatesResponse, isLoading } = useQuery<ApiResponse<JobTemplate>>({
-    queryKey: selectedCategory === 'all' ? ['/api/job-templates'] : ['/api/job-templates', selectedCategory],
+  // Fetch job templates (client-side filtering applied below)
+  const { data: templatesResponse, isLoading, isError, error } = useQuery<ApiResponse<JobTemplate>>({
+    queryKey: ['/api/job-templates'],
   });
+
+  // Show error toast if query fails
+  React.useEffect(() => {
+    if (isError) {
+      toast({
+        title: 'Error Loading Templates',
+        description: 'Failed to load job templates. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [isError, toast]);
 
   const templates = templatesResponse?.data || [];
 
