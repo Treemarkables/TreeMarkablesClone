@@ -806,6 +806,102 @@ export function GlobalJobCard({
                   <TabsContent value="details" className="h-full m-0">
                     <div className="h-full overflow-y-auto px-6 pb-6">
                       <div className="space-y-6">
+            {/* Customer Contact Details (Read-only when editing) */}
+            {mode === "edit" && editingJob && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="w-5 h-5" />
+                    Customer Contact Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const selectedCustomer = customers.find((c: Customer) => c.id === editingJob.customerId);
+                    if (selectedCustomer) {
+                      // Parse name into first and last name
+                      const nameParts = selectedCustomer.name?.split(' ') || ['Customer'];
+                      const firstName = nameParts[0] || '';
+                      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+                      
+                      return (
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                              <User className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {firstName}
+                                </div>
+                                <div className="text-sm text-muted-foreground">First Name</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Mail className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.email || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Email Address</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Phone className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.phone || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Mobile</div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                              <User className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {lastName || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Last Name</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Target className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {editingJob.leadSource || 'Not specified'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Lead Source</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Phone className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.phone ? 'See Mobile' : 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Landline</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="text-center py-4 text-muted-foreground">
+                        No customer selected for this job
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Customer Section */}
             <Card>
               <CardHeader>
