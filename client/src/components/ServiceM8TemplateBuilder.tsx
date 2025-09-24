@@ -78,13 +78,10 @@ type TemplateFormData = {
   jobContactMobile?: string;
 };
 
-const jobStatuses = [
-  { value: 'quote', label: 'Quote' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' }
+const priorityLevels = [
+  { value: 'low', label: 'Low Priority' },
+  { value: 'medium', label: 'Medium Priority' },
+  { value: 'high', label: 'High Priority' }
 ];
 
 const jobCategories = [
@@ -115,9 +112,9 @@ export default function ServiceM8TemplateBuilder({
       serviceType: 'tree_removal',
       defaultTitle: '',
       defaultDescription: '',
-      basePrice: '0',
-      pricePerHour: '0',
-      materialCosts: '0',
+      basePrice: '',
+      pricePerHour: '',
+      materialCosts: '',
       priceModel: 'fixed',
       estimatedDuration: 120,
       crewSize: 2,
@@ -148,9 +145,9 @@ export default function ServiceM8TemplateBuilder({
     if (editingTemplate) {
       const templateData = {
         ...editingTemplate,
-        basePrice: editingTemplate.basePrice?.toString() || '0',
-        pricePerHour: editingTemplate.pricePerHour?.toString() || '0',
-        materialCosts: editingTemplate.materialCosts?.toString() || '0',
+        basePrice: editingTemplate.basePrice?.toString() || '',
+        pricePerHour: editingTemplate.pricePerHour?.toString() || '',
+        materialCosts: editingTemplate.materialCosts?.toString() || '',
         defaultDescription: editingTemplate.defaultDescription || '',
         requiredSkills: editingTemplate.requiredSkills || [],
         requiredEquipment: editingTemplate.requiredEquipment || [],
@@ -185,13 +182,15 @@ export default function ServiceM8TemplateBuilder({
   };
 
   const handleSave = (data: TemplateFormData) => {
-    // Convert string prices back to decimals
+    // Ensure price fields are properly handled as decimals or undefined/null
     const templateData: InsertJobTemplate = {
       ...data,
-      basePrice: data.basePrice ? parseFloat(data.basePrice) : undefined,
-      pricePerHour: data.pricePerHour ? parseFloat(data.pricePerHour) : undefined,
-      materialCosts: data.materialCosts ? parseFloat(data.materialCosts) : undefined,
+      basePrice: data.basePrice && data.basePrice !== '' ? parseFloat(data.basePrice) : undefined,
+      pricePerHour: data.pricePerHour && data.pricePerHour !== '' ? parseFloat(data.pricePerHour) : undefined,
+      materialCosts: data.materialCosts && data.materialCosts !== '' ? parseFloat(data.materialCosts) : undefined,
       preJobChecklist: checklist,
+      defaultTitle: data.name, // Use template name as default title
+      serviceType: data.category, // Use category as service type
     };
     onSave(templateData);
   };
@@ -258,17 +257,17 @@ export default function ServiceM8TemplateBuilder({
                         name="defaultPriority"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Job Status</FormLabel>
+                            <FormLabel>Priority Level</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
-                                <SelectTrigger data-testid="select-job-status">
-                                  <SelectValue placeholder="Select status" />
+                                <SelectTrigger data-testid="select-priority-level">
+                                  <SelectValue placeholder="Select priority" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {jobStatuses.map((status) => (
-                                  <SelectItem key={status.value} value={status.value}>
-                                    {status.label}
+                                {priorityLevels.map((priority) => (
+                                  <SelectItem key={priority.value} value={priority.value}>
+                                    {priority.label}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -519,7 +518,7 @@ export default function ServiceM8TemplateBuilder({
                       </p>
                     </div>
                     <Badge variant="secondary" className="bg-white/20 text-white">
-                      {jobStatuses.find(status => status.value === previewData.defaultPriority)?.label || 'Status'}
+                      {priorityLevels.find(priority => priority.value === previewData.defaultPriority)?.label || 'Priority'}
                     </Badge>
                   </div>
                 </CardHeader>
