@@ -110,6 +110,12 @@ export function GlobalJobCard({
     enabled: isOpen,
   });
 
+  // Fetch all jobs for address lookup
+  const { data: jobsData } = useQuery({
+    queryKey: ['/api/jobs'],
+    enabled: isOpen,
+  });
+
   // Fetch job data if editing
   const { data: jobData } = useQuery({
     queryKey: ['/api/jobs', jobId],
@@ -117,6 +123,7 @@ export function GlobalJobCard({
   });
 
   const customers = (customersData as any)?.data || [];
+  const jobs = (jobsData as any)?.data || [];
   const editingJob = mode === "edit" ? ((jobData as any)?.data || job) : null;
   
   // Tab state management
@@ -998,35 +1005,71 @@ export function GlobalJobCard({
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {customers.map((customer: Customer, index: number) => {
-                                // Create a more meaningful display name
-                                let displayName = customer.name || 'Unknown Customer';
+                              {(() => {
+                                // Get jobs data for address lookup
+                                const jobsData = jobs || [];
                                 
-                                // If it's a generic placeholder name, create a better identifier
-                                if (customer.name?.startsWith('Customer-')) {
-                                  // Extract last 6 characters of UUID for unique identifier
-                                  const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
+                                return customers.map((customer: Customer, index: number) => {
+                                  // Create a more meaningful display name using job address data
+                                  let displayName = customer.name || 'Unknown Customer';
                                   
-                                  if (customer.address) {
-                                    // Extract street name or first part of address
-                                    const addressParts = customer.address.split(',')[0].split(' ');
-                                    const streetInfo = addressParts.slice(-2).join(' '); // Last 2 words (e.g., "Beach Road")
-                                    displayName = `${customer.city || 'Location'} - ${streetInfo}`;
-                                  } else if (customer.city) {
-                                    displayName = `${customer.city} Customer #${uniqueId}`;
-                                  } else {
-                                    // Fallback to a numbered system based on position
-                                    displayName = `Customer #${index + 1} (${uniqueId})`;
+                                  // If it's a generic placeholder name, find job address for this customer
+                                  if (customer.name?.startsWith('Customer-')) {
+                                    // Find first job for this customer to get address
+                                    const customerJob = jobsData.find((job: any) => job.customerId === customer.id);
+                                    
+                                    if (customerJob?.address) {
+                                      // Extract location info from job address
+                                      const address = customerJob.address;
+                                      
+                                      // Try to extract city/area from address
+                                      if (address.includes('Gisborne')) {
+                                        // For Gisborne addresses, try to get area
+                                        const parts = address.split('\n');
+                                        if (parts.length > 1) {
+                                          const area = parts[1].split(',')[0].trim();
+                                          displayName = `${area} Customer`;
+                                        } else {
+                                          displayName = 'Gisborne Customer';
+                                        }
+                                      } else if (address.includes('Auckland')) {
+                                        displayName = 'Auckland Customer';
+                                      } else if (address.includes('Wellington')) {
+                                        displayName = 'Wellington Customer';
+                                      } else if (address.includes('Rukuhia')) {
+                                        displayName = 'Rukuhia Customer';
+                                      } else {
+                                        // Extract first part before comma or newline
+                                        const locationPart = address.split(/[,\n]/)[0];
+                                        const words = locationPart.split(' ');
+                                        if (words.length >= 2) {
+                                          // Use last word which is often the road/street type
+                                          const lastWord = words[words.length - 1];
+                                          if (['Road', 'St', 'Street', 'Ave', 'Avenue', 'Drive', 'Lane'].includes(lastWord)) {
+                                            const streetName = words[words.length - 2];
+                                            displayName = `${streetName} ${lastWord} Customer`;
+                                          } else {
+                                            displayName = `${words.slice(-2).join(' ')} Customer`;
+                                          }
+                                        } else {
+                                          displayName = `${locationPart} Customer`;
+                                        }
+                                      }
+                                    } else {
+                                      // No job address found, use fallback
+                                      const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
+                                      displayName = `Customer #${index + 1} (${uniqueId})`;
+                                    }
                                   }
-                                }
-                                
-                                return (
-                                  <SelectItem key={customer.id} value={customer.id}>
-                                    {displayName}
-                                    {customer.email && ` - ${customer.email}`}
-                                  </SelectItem>
-                                );
-                              })}
+                                  
+                                  return (
+                                    <SelectItem key={customer.id} value={customer.id}>
+                                      {displayName}
+                                      {customer.email && ` - ${customer.email}`}
+                                    </SelectItem>
+                                  );
+                                });
+                              })()}
                             </SelectContent>
                           </Select>
                           <FormMessage />
