@@ -117,6 +117,7 @@ class ServiceM8Service {
             region: company.address_state || null,
             notes: company.notes || null,
             source: 'servicem8_import',
+            servicem8Uuid: company.uuid, // Store ServiceM8 UUID for job mapping
             isActive: true
           };
 
@@ -155,11 +156,11 @@ class ServiceM8Service {
       
       for (const job of jobs) {
         try {
-          // Find the customer by looking for ServiceM8 source
-          const customer = customers.find(c => c.source === 'servicem8_import');
+          // Find the customer by ServiceM8 UUID for correct mapping
+          const customer = customers.find(c => c.servicem8Uuid === job.company_uuid);
           
           if (!customer) {
-            errors.push(`No customer found for job ${job.generated_job_id}`);
+            errors.push(`No customer found for ServiceM8 company UUID ${job.company_uuid} (job ${job.generated_job_id})`);
             continue;
           }
 
