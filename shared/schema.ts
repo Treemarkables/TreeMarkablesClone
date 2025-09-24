@@ -209,7 +209,7 @@ export const jobs = pgTable("jobs", {
   customerId: varchar("customer_id").references(() => customers.id),
   quoteId: varchar("quote_id").references(() => quotes.id),
   jobNumber: text("job_number").notNull().unique(),
-  title: text("title").notNull(),
+  title: text("title"),
   description: text("description"),
   serviceType: text("service_type"), // tree_removal, hedge_trimming, stump_grinding, etc
   leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
