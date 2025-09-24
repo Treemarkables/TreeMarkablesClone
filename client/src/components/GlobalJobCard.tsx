@@ -996,6 +996,127 @@ export function GlobalJobCard({
                         </FormItem>
                       )}
                     />
+                    
+                    {/* Display selected customer details */}
+                    {selectedCustomer && (
+                      <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+                        <h4 className="font-medium mb-4 flex items-center gap-2">
+                          <User className="w-4 h-4" />
+                          Customer Details
+                        </h4>
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                              <User className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {(() => {
+                                    const nameParts = selectedCustomer.name?.split(' ') || ['Customer'];
+                                    return nameParts[0] || '';
+                                  })()}
+                                </div>
+                                <div className="text-sm text-muted-foreground">First Name</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Mail className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.email || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Email Address</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Phone className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.phone || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Mobile</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <MapPin className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.address || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Address</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Building2 className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.city || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">City</div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                              <User className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {(() => {
+                                    const nameParts = selectedCustomer.name?.split(' ') || ['Customer'];
+                                    return nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+                                  })()}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Last Name</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Target className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.source || 'Not specified'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Lead Source</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Phone className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.phone ? 'See Mobile' : 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Landline</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <MapPin className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.region || 'Not provided'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Region</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Target className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {selectedCustomer.source || 'Not specified'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">Customer Source</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </TabsContent>
                   
                   <TabsContent value="new" className="space-y-4">
