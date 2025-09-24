@@ -6826,6 +6826,32 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // POST /api/admin/clear-data - Clear all jobs and customers (for fresh imports)
+  app.post('/api/admin/clear-data', async (req: Request, res: Response) => {
+    try {
+      // Delete all jobs first (due to foreign key constraints)
+      const deletedJobs = await storage.clearAllJobs();
+      
+      // Then delete all customers
+      const deletedCustomers = await storage.clearAllCustomers();
+      
+      res.json({
+        success: true,
+        message: 'All data cleared successfully',
+        deleted: {
+          jobs: deletedJobs,
+          customers: deletedCustomers
+        }
+      });
+    } catch (error) {
+      console.error('Error clearing data:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error clearing data'
+      });
+    }
+  });
+
   // POST /api/jobs/import-servicem8 - Import jobs from ServiceM8 CSV file
   app.post('/api/jobs/import-servicem8', async (req: Request, res: Response) => {
     try {

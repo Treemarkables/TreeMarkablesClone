@@ -331,10 +331,26 @@ export function ServiceM8JobImport() {
       setCurrentStep('complete');
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-      toast({
-        title: "Import completed successfully",
-        description: `Imported ${result.stats.successfulMatches} jobs`
-      });
+      
+      // Show different messages based on import results
+      if (result.stats.errors > 0 && result.stats.successfulMatches === 0) {
+        toast({
+          title: "Import failed",
+          description: `All ${result.stats.errors} jobs failed to import. Check for duplicate job numbers.`,
+          variant: "destructive"
+        });
+      } else if (result.stats.errors > 0) {
+        toast({
+          title: "Import partially completed",
+          description: `Imported ${result.stats.successfulMatches} jobs, ${result.stats.errors} failed`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Import completed successfully",
+          description: `Imported ${result.stats.successfulMatches} jobs`
+        });
+      }
     },
     onError: (error: any) => {
       setErrors([error.message || 'Import failed']);
@@ -548,6 +564,33 @@ export function ServiceM8JobImport() {
                 </div>
               )}
               
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                <h4 className="font-medium text-amber-800 mb-2">⚠️ Important: Duplicate Jobs</h4>
+                <p className="text-sm text-amber-700 mb-3">
+                  Your database already contains jobs. If your CSV has the same job numbers, the import will fail.
+                </p>
+                <Button 
+                  onClick={async () => {
+                    if (confirm('⚠️ This will DELETE ALL existing jobs and customers. Are you sure?')) {
+                      try {
+                        await fetch('/api/admin/clear-data', { method: 'POST' });
+                        toast({ title: "Database cleared", description: "All jobs and customers deleted" });
+                      } catch (error) {
+                        toast({ title: "Clear failed", description: "Could not clear database", variant: "destructive" });
+                      }
+                    }
+                  }}
+                  variant="destructive"
+                  size="sm"
+                  className="mr-2"
+                >
+                  🗑️ Clear All Data First
+                </Button>
+                <span className="text-xs text-amber-600">
+                  Recommended for first-time imports
+                </span>
+              </div>
+              
               <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
                 <Button onClick={resetImport} variant="outline" className="flex-1">
                   Upload Different File
@@ -576,8 +619,28 @@ export function ServiceM8JobImport() {
 
             <TabsContent value="complete" className="space-y-4">
               <div className="text-center py-8">
-                <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-green-800 mb-2">Import Completed Successfully!</h3>
+                {importStats.errors > 0 && importStats.successfulMatches === 0 ? (
+                  <>
+                    <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-red-800 mb-2">Import Failed!</h3>
+                    <p className="text-red-600 mb-4">
+                      All {importStats.errors} jobs failed to import. This usually means duplicate job numbers already exist in your database.
+                    </p>
+                  </>
+                ) : importStats.errors > 0 ? (
+                  <>
+                    <AlertCircle className="w-16 h-16 text-amber-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-amber-800 mb-2">Import Partially Completed</h3>
+                    <p className="text-amber-600 mb-4">
+                      {importStats.successfulMatches} jobs imported successfully, but {importStats.errors} failed (likely duplicates).
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-green-800 mb-2">Import Completed Successfully!</h3>
+                  </>
+                )}
                 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                   <Card>
