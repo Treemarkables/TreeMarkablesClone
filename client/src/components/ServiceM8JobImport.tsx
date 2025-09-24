@@ -153,7 +153,12 @@ export function ServiceM8JobImport() {
         mapField('company', ['Company', 'Customer', 'Client', 'Business', 'Company Name', 'Customer Name']);
         mapField('address', ['Address', 'Location', 'Site', 'Site Address', 'Job Address', 'Property Address']);
         mapField('status', ['Status', 'Job Status', 'State', 'Job State']);
-        mapField('description', ['Description', 'Job Description', 'Details', 'Work', 'Notes']);
+        mapField('description', [
+          'Description', 'Job Description', 'Details', 'Work', 'Notes',
+          'Work Description', 'Job Details', 'Service Description', 'Job Notes',
+          'Work Notes', 'Task Description', 'Service Notes', 'Work Summary',
+          'Job Summary', 'Work Required', 'Tasks', 'Work To Be Done'
+        ]);
         mapField('contactFirst', ['First Name', 'FirstName', 'Contact First', 'ContactFirst', 'Contact', 'Name']);
         mapField('contactLast', ['Last Name', 'LastName', 'Contact Last', 'ContactLast', 'Surname']);
         mapField('email', ['Email', 'Email Address', 'EmailAddress']);
@@ -228,7 +233,7 @@ export function ServiceM8JobImport() {
           mobile: getFieldValue(row, 'mobile'),
           address: getFieldValue(row, 'address'),
           status: getFieldValue(row, 'status') || 'pending',
-          description: getFieldValue(row, 'description'),
+          description: getFieldValue(row, 'description') || getFieldValue(row, 'workCompleted') || '',
           workCompleted: getFieldValue(row, 'workCompleted'),
           
           // Financial fields with proper monetary parsing
