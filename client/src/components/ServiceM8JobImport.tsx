@@ -353,8 +353,8 @@ export function ServiceM8JobImport() {
     setCurrentStep('processing');
     setProgress(0);
     
-    // Process jobs in batches of 100 to avoid overwhelming the server
-    const batchSize = 100;
+    // Process jobs in batches - larger batches for big datasets
+    const batchSize = jobs.length > 1000 ? 200 : 100;
     const totalBatches = Math.ceil(jobs.length / batchSize);
     
     try {
@@ -368,8 +368,9 @@ export function ServiceM8JobImport() {
         const progressPercent = ((i + 1) / totalBatches) * 100;
         setProgress(progressPercent);
         
-        // Small delay between batches
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Shorter delay for large imports
+        const delay = jobs.length > 1000 ? 200 : 500;
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     } catch (error) {
       console.error('Import error:', error);
