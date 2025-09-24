@@ -923,7 +923,7 @@ export function GlobalJobCard({
                               <Phone className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {formSelectedCustomer.phone ? 'See Mobile' : 'Not provided'}
+                                  {formSelectedCustomer?.phone ? 'See Mobile' : 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Landline</div>
                               </div>
@@ -1125,7 +1125,7 @@ export function GlobalJobCard({
                               <Phone className="w-5 h-5 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">
-                                  {formSelectedCustomer.phone ? 'See Mobile' : 'Not provided'}
+                                  {formSelectedCustomer?.phone ? 'See Mobile' : 'Not provided'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">Landline</div>
                               </div>
