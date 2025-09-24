@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield } from "lucide-react";
+import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield, Mail, Phone, Edit2 } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Pipeline from './Pipeline';
 import { PerformanceAnalytics } from '@/components/PerformanceAnalytics';
 import { EquipmentTracker } from '@/components/EquipmentTracker';
@@ -263,6 +264,30 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
     return <Badge variant={config?.variant || "default"} data-testid={`badge-priority-${priority}`}>{config?.label || priority}</Badge>;
   };
 
+  // Helper functions for customer cards
+  const getInitials = (name: string) => {
+    return (name || '')
+      .split(' ')
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const getCustomerTier = (lifetimeValue: number) => {
+    if (lifetimeValue >= 10000) return { label: 'Premium', color: 'bg-purple-100 text-purple-800' };
+    if (lifetimeValue >= 5000) return { label: 'Gold', color: 'bg-yellow-100 text-yellow-800' };
+    if (lifetimeValue >= 1000) return { label: 'Silver', color: 'bg-gray-100 text-gray-800' };
+    return { label: 'Bronze', color: 'bg-orange-100 text-orange-800' };
+  };
+
+  // Handle customer card click for viewing/editing
+  const handleCustomerCardClick = (customerId: string, customerName: string) => {
+    if (editingCustomerId !== customerId) {
+      handleEditCustomerName(customerId, customerName);
+    }
+  };
+
   return (
     <div className="h-full bg-background p-4 md:p-6 overflow-hidden w-full max-w-full min-w-0">
       <div className="w-full max-w-full h-full flex flex-col min-w-0">
@@ -453,74 +478,188 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 {/* CSV Upload Component */}
                 <CustomerCSVUpload />
                 
-                <div className="space-y-4">
-                  {displayCustomers.map(customer => {
-                    const isEditing = editingCustomerId === customer.id;
-                    const needsName = customer.name.startsWith('Customer #');
-                    
-                    return (
-                      <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`customer-card-${customer.id}`}>
-                        <div className="flex-1">
-                          {isEditing ? (
-                            <div className="space-y-2">
-                              <Input
-                                value={editingCustomerName}
-                                onChange={(e) => setEditingCustomerName(e.target.value)}
-                                placeholder="Enter customer name..."
-                                className="font-medium"
-                                data-testid={`input-edit-customer-name-${customer.id}`}
-                              />
-                              <div className="flex space-x-2">
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => handleSaveCustomerName(customer.id)}
-                                  disabled={updateCustomerMutation.isPending}
-                                  data-testid={`button-save-customer-${customer.id}`}
-                                >
-                                  {updateCustomerMutation.isPending ? 'Saving...' : 'Save'}
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  onClick={() => setEditingCustomerId(null)}
-                                  data-testid={`button-cancel-edit-customer-${customer.id}`}
-                                >
-                                  Cancel
-                                </Button>
+                {/* Customer List */}
+                <div className="space-y-4 mt-6">
+                  {customersLoading ? (
+                    <div className="grid gap-4">
+                      {[...Array(3)].map((_, i) => (
+                        <Card key={i}>
+                          <CardContent className="p-6">
+                            <div className="flex items-center gap-4">
+                              <Skeleton className="h-12 w-12 rounded-full" />
+                              <div className="space-y-2 flex-1">
+                                <Skeleton className="h-5 w-1/3" />
+                                <Skeleton className="h-4 w-1/2" />
+                                <Skeleton className="h-4 w-1/4" />
                               </div>
+                              <Skeleton className="h-6 w-16" />
                             </div>
-                          ) : (
-                            <>
-                              <div className="flex items-center space-x-2">
-                                <h4 className={`font-medium ${needsName ? 'text-muted-foreground' : ''}`} data-testid={`customer-name-${customer.id}`}>
-                                  {customer.name}
-                                </h4>
-                                {needsName && (
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    onClick={() => handleEditCustomerName(customer.id, customer.name)}
-                                    data-testid={`button-edit-customer-name-${customer.id}`}
-                                    className="text-xs px-2 py-1 h-auto"
-                                  >
-                                    Add Name
-                                  </Button>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground">{customer.email}</p>
-                              <p className="text-sm text-muted-foreground">{customer.phone}</p>
-                              <p className="text-xs text-muted-foreground">Last service: {customer.lastContactDate || 'N/A'}</p>
-                            </>
-                          )}
-                        </div>
-                        <div className="text-right space-y-1">
-                          <div className="font-medium">${parseFloat(customer.lifetimeValue || "0").toLocaleString()}</div>
-                          <p className="text-sm text-muted-foreground">{customer.totalJobs} jobs</p>
-                          <Button size="sm" variant="outline" data-testid={`button-view-customer-${customer.id}`}>View Details</Button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : displayCustomers.length === 0 ? (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <Users className="w-12 h-12 text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-medium mb-2">No customers found</h3>
+                        <p className="text-muted-foreground text-center max-w-md">
+                          No customers have been added yet. Import customers using the CSV upload above or they will appear here when jobs are created.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid gap-4">
+                      {displayCustomers.map(customer => {
+                        const isEditing = editingCustomerId === customer.id;
+                        const needsName = customer.name.startsWith('Customer #');
+                        const tier = getCustomerTier(parseFloat(customer.lifetimeValue || '0'));
+                        
+                        return (
+                          <Card 
+                            key={customer.id} 
+                            className={`hover-elevate cursor-pointer transition-all ${isEditing ? 'ring-2 ring-primary' : ''}`}
+                            data-testid={`customer-card-${customer.id}`}
+                            onClick={() => !isEditing && handleCustomerCardClick(customer.id, customer.name)}
+                          >
+                            <CardContent className="p-6">
+                              {isEditing ? (
+                                <div className="space-y-4">
+                                  <div className="flex items-center gap-4">
+                                    <Avatar className="h-12 w-12">
+                                      <AvatarFallback className="bg-primary/10 text-primary">
+                                        {getInitials(customer.name)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1">
+                                      <Input
+                                        value={editingCustomerName}
+                                        onChange={(e) => setEditingCustomerName(e.target.value)}
+                                        placeholder="Enter customer name..."
+                                        className="font-medium text-lg"
+                                        data-testid={`input-edit-customer-name-${customer.id}`}
+                                        autoFocus
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex justify-end space-x-2">
+                                    <Button 
+                                      size="sm" 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSaveCustomerName(customer.id);
+                                      }}
+                                      disabled={updateCustomerMutation.isPending}
+                                      data-testid={`button-save-customer-${customer.id}`}
+                                    >
+                                      {updateCustomerMutation.isPending ? 'Saving...' : 'Save'}
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingCustomerId(null);
+                                      }}
+                                      data-testid={`button-cancel-edit-customer-${customer.id}`}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-4">
+                                    <Avatar className="h-12 w-12">
+                                      <AvatarFallback className="bg-primary/10 text-primary">
+                                        {getInitials(customer.name)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-2">
+                                        <h3 className={`text-lg font-semibold ${needsName ? 'text-muted-foreground' : ''}`} data-testid={`customer-name-${customer.id}`}>
+                                          {customer.name}
+                                        </h3>
+                                        <Badge className={tier.color} data-testid={`badge-tier-${customer.id}`}>{tier.label}</Badge>
+                                        {needsName && (
+                                          <Button 
+                                            size="sm" 
+                                            variant="ghost" 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleEditCustomerName(customer.id, customer.name);
+                                            }}
+                                            data-testid={`button-edit-customer-name-${customer.id}`}
+                                            className="text-xs px-2 py-1 h-auto"
+                                          >
+                                            <Edit2 className="w-3 h-3 mr-1" />
+                                            Add Name
+                                          </Button>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                        <div className="flex items-center gap-1">
+                                          <Mail className="w-4 h-4" />
+                                          <span data-testid={`customer-email-${customer.id}`}>{customer.email || 'No email'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Phone className="w-4 h-4" />
+                                          <span data-testid={`customer-phone-${customer.id}`}>{customer.phone || 'No phone'}</span>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                        <div className="flex items-center gap-1">
+                                          <DollarSign className="w-4 h-4" />
+                                          <span data-testid={`customer-lifetime-value-${customer.id}`}>
+                                            Lifetime Value: ${parseFloat(customer.lifetimeValue || '0').toLocaleString()}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Calendar className="w-4 h-4" />
+                                          <span data-testid={`customer-jobs-${customer.id}`}>{customer.totalJobs} jobs</span>
+                                        </div>
+                                      </div>
+                                      
+                                      {customer.lastContactDate && (
+                                        <p className="text-xs text-muted-foreground" data-testid={`customer-last-contact-${customer.id}`}>
+                                          Last service: {customer.lastContactDate}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditCustomerName(customer.id, customer.name);
+                                      }}
+                                      data-testid={`button-edit-${customer.id}`}
+                                    >
+                                      <Edit2 className="w-4 h-4 mr-2" />
+                                      Edit
+                                    </Button>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      data-testid={`button-view-customer-${customer.id}`}
+                                    >
+                                      View Details
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
