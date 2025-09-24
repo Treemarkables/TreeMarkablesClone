@@ -327,28 +327,37 @@ export function ServiceM8JobImport() {
       return data;
     },
     onSuccess: (result: any) => {
-      setImportStats(result.stats);
+      // Provide safe default stats if result.stats is undefined
+      const safeStats = result.stats || {
+        totalJobs: 0,
+        processedJobs: 0,
+        successfulMatches: 0,
+        newCustomers: 0,
+        errors: 0
+      };
+      
+      setImportStats(safeStats);
       setCurrentStep('complete');
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       
       // Show different messages based on import results
-      if (result.stats.errors > 0 && result.stats.successfulMatches === 0) {
+      if (safeStats.errors > 0 && safeStats.successfulMatches === 0) {
         toast({
           title: "Import failed",
-          description: `All ${result.stats.errors} jobs failed to import. Check for duplicate job numbers.`,
+          description: `All ${safeStats.errors} jobs failed to import. Check for duplicate job numbers.`,
           variant: "destructive"
         });
-      } else if (result.stats.errors > 0) {
+      } else if (safeStats.errors > 0) {
         toast({
           title: "Import partially completed",
-          description: `Imported ${result.stats.successfulMatches} jobs, ${result.stats.errors} failed`,
+          description: `Imported ${safeStats.successfulMatches} jobs, ${safeStats.errors} failed`,
           variant: "destructive"
         });
       } else {
         toast({
           title: "Import completed successfully",
-          description: `Imported ${result.stats.successfulMatches} jobs`
+          description: `Imported ${safeStats.successfulMatches} jobs`
         });
       }
     },
@@ -653,20 +662,20 @@ export function ServiceM8JobImport() {
 
             <TabsContent value="complete" className="space-y-4">
               <div className="text-center py-8">
-                {importStats.errors > 0 && importStats.successfulMatches === 0 ? (
+                {importStats && importStats.errors > 0 && importStats.successfulMatches === 0 ? (
                   <>
                     <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-red-800 mb-2">Import Failed!</h3>
                     <p className="text-red-600 mb-4">
-                      All {importStats.errors} jobs failed to import. This usually means duplicate job numbers already exist in your database.
+                      All {importStats?.errors || 0} jobs failed to import. This usually means duplicate job numbers already exist in your database.
                     </p>
                   </>
-                ) : importStats.errors > 0 ? (
+                ) : importStats && importStats.errors > 0 ? (
                   <>
                     <AlertCircle className="w-16 h-16 text-amber-600 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-amber-800 mb-2">Import Partially Completed</h3>
                     <p className="text-amber-600 mb-4">
-                      {importStats.successfulMatches} jobs imported successfully, but {importStats.errors} failed (likely duplicates).
+                      {importStats?.successfulMatches || 0} jobs imported successfully, but {importStats?.errors || 0} failed (likely duplicates).
                     </p>
                   </>
                 ) : (
@@ -679,25 +688,25 @@ export function ServiceM8JobImport() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                   <Card>
                     <CardContent className="p-4 text-center">
-                      <p className="text-2xl font-bold text-blue-600">{importStats.successfulMatches}</p>
+                      <p className="text-2xl font-bold text-blue-600">{importStats?.successfulMatches || 0}</p>
                       <p className="text-sm text-gray-600">Jobs Imported</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardContent className="p-4 text-center">
-                      <p className="text-2xl font-bold text-green-600">{importStats.newCustomers}</p>
+                      <p className="text-2xl font-bold text-green-600">{importStats?.newCustomers || 0}</p>
                       <p className="text-sm text-gray-600">New Customers</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardContent className="p-4 text-center">
-                      <p className="text-2xl font-bold text-purple-600">{importStats.processedJobs}</p>
+                      <p className="text-2xl font-bold text-purple-600">{importStats?.processedJobs || 0}</p>
                       <p className="text-sm text-gray-600">Total Processed</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardContent className="p-4 text-center">
-                      <p className="text-2xl font-bold text-red-600">{importStats.errors}</p>
+                      <p className="text-2xl font-bold text-red-600">{importStats?.errors || 0}</p>
                       <p className="text-sm text-gray-600">Errors</p>
                     </CardContent>
                   </Card>

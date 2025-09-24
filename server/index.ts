@@ -8,8 +8,9 @@ import path from "path";
 import { fileURLToPath } from 'url';
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Increase JSON payload limit for large CSV imports (ServiceM8 data can be huge)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
 // Runtime static file serving with path resolution
 function resolveAndServeStatic(app: express.Express) {
