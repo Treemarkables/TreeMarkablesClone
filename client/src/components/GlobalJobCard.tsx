@@ -1013,53 +1013,10 @@ export function GlobalJobCard({
                                   // Create a more meaningful display name using job address data
                                   let displayName = customer.name || 'Unknown Customer';
                                   
-                                  // If it's a generic placeholder name, find job address for this customer
+                                  // If it's a generic placeholder name, use simple numbering
                                   if (customer.name?.startsWith('Customer-')) {
-                                    // Find first job for this customer to get address
-                                    const customerJob = jobsData.find((job: any) => job.customerId === customer.id);
-                                    
-                                    if (customerJob?.address) {
-                                      // Extract location info from job address
-                                      const address = customerJob.address;
-                                      
-                                      // Try to extract city/area from address
-                                      if (address.includes('Gisborne')) {
-                                        // For Gisborne addresses, try to get area
-                                        const parts = address.split('\n');
-                                        if (parts.length > 1) {
-                                          const area = parts[1].split(',')[0].trim();
-                                          displayName = `${area} Customer`;
-                                        } else {
-                                          displayName = 'Gisborne Customer';
-                                        }
-                                      } else if (address.includes('Auckland')) {
-                                        displayName = 'Auckland Customer';
-                                      } else if (address.includes('Wellington')) {
-                                        displayName = 'Wellington Customer';
-                                      } else if (address.includes('Rukuhia')) {
-                                        displayName = 'Rukuhia Customer';
-                                      } else {
-                                        // Extract first part before comma or newline
-                                        const locationPart = address.split(/[,\n]/)[0];
-                                        const words = locationPart.split(' ');
-                                        if (words.length >= 2) {
-                                          // Use last word which is often the road/street type
-                                          const lastWord = words[words.length - 1];
-                                          if (['Road', 'St', 'Street', 'Ave', 'Avenue', 'Drive', 'Lane'].includes(lastWord)) {
-                                            const streetName = words[words.length - 2];
-                                            displayName = `${streetName} ${lastWord} Customer`;
-                                          } else {
-                                            displayName = `${words.slice(-2).join(' ')} Customer`;
-                                          }
-                                        } else {
-                                          displayName = `${locationPart} Customer`;
-                                        }
-                                      }
-                                    } else {
-                                      // No job address found, use fallback
-                                      const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
-                                      displayName = `Customer #${index + 1} (${uniqueId})`;
-                                    }
+                                    const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
+                                    displayName = `Customer #${index + 1} (${uniqueId})`;
                                   }
                                   
                                   return (
