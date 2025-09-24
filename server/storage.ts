@@ -44,6 +44,14 @@ import {
   type ProposalSection, type InsertProposalSection, type UpdateProposalSection,
   type ProposalLineItem, type InsertProposalLineItem, type UpdateProposalLineItem,
   type ProposalLineItemChoice, type InsertProposalLineItemChoice, type UpdateProposalLineItemChoice,
+  // ServiceM8 Integration types
+  type Servicem8Config, type InsertServicem8Config,
+  type Servicem8Job, type InsertServicem8Job,
+  type Servicem8DiaryEntry, type InsertServicem8DiaryEntry,
+  type Servicem8Quote, type InsertServicem8Quote,
+  type Servicem8Company, type InsertServicem8Company,
+  type Servicem8Invoice, type InsertServicem8Invoice,
+  type Servicem8Material, type InsertServicem8Material,
   servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -517,6 +525,38 @@ export interface IStorage {
   updateSmsTemplate(id: string, updates: UpdateSmsTemplate): Promise<SmsTemplate>;
   getAllSmsTemplates(): Promise<SmsTemplate[]>;
   deleteSmsTemplate(id: string): Promise<void>;
+
+  // ServiceM8 Integration Management
+  createServicem8Config(config: InsertServicem8Config): Promise<Servicem8Config>;
+  getServicem8Config(): Promise<Servicem8Config | undefined>;
+  updateServicem8Config(id: string, updates: Partial<InsertServicem8Config>): Promise<Servicem8Config>;
+  deleteServicem8Config(id: string): Promise<void>;
+
+  // ServiceM8 Data Import Management
+  createServicem8Job(job: InsertServicem8Job): Promise<Servicem8Job>;
+  getServicem8Job(id: string): Promise<Servicem8Job | undefined>;
+  getServicem8JobByUuid(uuid: string): Promise<Servicem8Job | undefined>;
+  updateServicem8Job(id: string, updates: Partial<InsertServicem8Job>): Promise<Servicem8Job>;
+  getAllServicem8Jobs(): Promise<Servicem8Job[]>;
+  
+  createServicem8DiaryEntry(entry: InsertServicem8DiaryEntry): Promise<Servicem8DiaryEntry>;
+  getServicem8DiaryEntry(id: string): Promise<Servicem8DiaryEntry | undefined>;
+  getServicem8DiaryEntriesByJob(jobUuid: string): Promise<Servicem8DiaryEntry[]>;
+  
+  createServicem8Quote(quote: InsertServicem8Quote): Promise<Servicem8Quote>;
+  getServicem8Quote(id: string): Promise<Servicem8Quote | undefined>;
+  getServicem8QuoteByUuid(uuid: string): Promise<Servicem8Quote | undefined>;
+  
+  createServicem8Company(company: InsertServicem8Company): Promise<Servicem8Company>;
+  getServicem8Company(id: string): Promise<Servicem8Company | undefined>;
+  getServicem8CompanyByUuid(uuid: string): Promise<Servicem8Company | undefined>;
+  
+  createServicem8Invoice(invoice: InsertServicem8Invoice): Promise<Servicem8Invoice>;
+  getServicem8Invoice(id: string): Promise<Servicem8Invoice | undefined>;
+  getServicem8InvoiceByJobUuid(jobUuid: string): Promise<Servicem8Invoice | undefined>;
+  
+  createServicem8Material(material: InsertServicem8Material): Promise<Servicem8Material>;
+  getServicem8MaterialsByJob(jobUuid: string): Promise<Servicem8Material[]>;
 }
 
 // Database Storage Implementation
