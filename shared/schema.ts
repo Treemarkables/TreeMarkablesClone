@@ -17,6 +17,207 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// ========================================
+// SERVICEM8 INTEGRATION SCHEMAS
+// ========================================
+
+// ServiceM8 Import Status Tracking
+export const servicem8ImportStatus = pgTable("servicem8_import_status", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  importType: text("import_type").notNull(), // 'jobs', 'customers', 'quotes', 'diary_entries', 'materials'
+  status: text("status").notNull().default('pending'), // 'pending', 'in_progress', 'completed', 'failed'
+  totalRecords: integer("total_records").default(0),
+  processedRecords: integer("processed_records").default(0),
+  successfulRecords: integer("successful_records").default(0),
+  failedRecords: integer("failed_records").default(0),
+  errorDetails: jsonb("error_details"), // Array of error messages
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ServiceM8 Raw Job Data (before mapping to our job system)
+export const servicem8Jobs = pgTable("servicem8_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  servicem8Uuid: text("servicem8_uuid").notNull().unique(), // ServiceM8 job UUID
+  servicem8JobId: text("servicem8_job_id"), // ServiceM8 generated job ID
+  rawData: jsonb("raw_data").notNull(), // Complete ServiceM8 job JSON
+  mappedJobId: varchar("mapped_job_id").references(() => jobs.id), // Our internal job ID after mapping
+  importStatus: text("import_status").default('pending'), // 'pending', 'mapped', 'imported', 'failed'
+  importErrors: text("import_errors").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ServiceM8 Diary/Activity Entries 
+export const servicem8DiaryEntries = pgTable("servicem8_diary_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  servicem8JobUuid: text("servicem8_job_uuid").notNull(), // Links to ServiceM8 job
+  servicem8ActivityUuid: text("servicem8_activity_uuid"), // ServiceM8 activity UUID
+  servicem8NoteUuid: text("servicem8_note_uuid"), // ServiceM8 note UUID if from notes endpoint
+  entryType: text("entry_type").notNull(), // 'activity', 'note', 'status_change', 'booking'
+  rawData: jsonb("raw_data").notNull(), // Complete ServiceM8 diary entry JSON
+  mappedDiaryEntryId: varchar("mapped_diary_entry_id").references(() => jobDiaryEntries.id),
+  importStatus: text("import_status").default('pending'),
+  importErrors: text("import_errors").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ServiceM8 Quotes Data
+export const servicem8Quotes = pgTable("servicem8_quotes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  servicem8Uuid: text("servicem8_uuid").notNull().unique(),
+  servicem8JobUuid: text("servicem8_job_uuid"), // Links to associated job
+  rawData: jsonb("raw_data").notNull(),
+  mappedQuoteId: varchar("mapped_quote_id").references(() => quotes.id),
+  importStatus: text("import_status").default('pending'),
+  importErrors: text("import_errors").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ServiceM8 Companies/Customers
+export const servicem8Companies = pgTable("servicem8_companies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  servicem8Uuid: text("servicem8_uuid").notNull().unique(),
+  rawData: jsonb("raw_data").notNull(),
+  mappedCustomerId: varchar("mapped_customer_id").references(() => customers.id),
+  importStatus: text("import_status").default('pending'),
+  importErrors: text("import_errors").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ServiceM8 Materials/Line Items
+export const servicem8Materials = pgTable("servicem8_materials", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  servicem8Uuid: text("servicem8_uuid").notNull().unique(),
+  servicem8JobUuid: text("servicem8_job_uuid").notNull(),
+  rawData: jsonb("raw_data").notNull(),
+  mappedJobId: varchar("mapped_job_id").references(() => jobs.id),
+  importStatus: text("import_status").default('pending'),
+  importErrors: text("import_errors").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ServiceM8 Invoices (Jobs are invoices in ServiceM8)
+export const servicem8Invoices = pgTable("servicem8_invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  servicem8JobUuid: text("servicem8_job_uuid").notNull().unique(), // ServiceM8 job UUID (jobs = invoices)
+  servicem8InvoiceNumber: text("servicem8_invoice_number"), // Generated invoice number
+  rawData: jsonb("raw_data").notNull(), // Complete ServiceM8 invoice/job JSON
+  mappedJobId: varchar("mapped_job_id").references(() => jobs.id), // Our internal job ID
+  invoiceTotal: decimal("invoice_total", { precision: 10, scale: 2 }),
+  invoiceStatus: text("invoice_status"), // sent, paid, overdue, cancelled
+  sentDate: timestamp("sent_date"),
+  dueDate: timestamp("due_date"),
+  paidDate: timestamp("paid_date"),
+  importStatus: text("import_status").default('pending'),
+  importErrors: text("import_errors").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ServiceM8 API Configuration
+export const servicem8Config = pgTable("servicem8_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: text("client_id").notNull(), // ServiceM8 Application Client ID
+  clientSecretEncrypted: text("client_secret_encrypted").notNull(), // AES-256 encrypted client secret
+  accessTokenEncrypted: text("access_token_encrypted"), // AES-256 encrypted OAuth access token
+  refreshTokenEncrypted: text("refresh_token_encrypted"), // AES-256 encrypted OAuth refresh token
+  encryptionKeyId: text("encryption_key_id").notNull(), // References which encryption key was used
+  tokenExpiresAt: timestamp("token_expires_at"),
+  accountInfo: jsonb("account_info"), // ServiceM8 account details (non-sensitive)
+  lastSyncAt: timestamp("last_sync_at"),
+  syncEnabled: boolean("sync_enabled").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ServiceM8 Import Schemas for Validation
+export const servicem8JobSchema = z.object({
+  uuid: z.string(),
+  generated_job_id: z.string().optional(),
+  status: z.string(),
+  job_description: z.string().optional(),
+  job_address: z.string().optional(),
+  job_contact_first_name: z.string().optional(),
+  job_contact_last_name: z.string().optional(),
+  job_contact_phone: z.string().optional(),
+  job_contact_email: z.string().optional(),
+  active: z.boolean().optional(),
+  created_timestamp: z.string().optional(),
+  last_updated_timestamp: z.string().optional(),
+});
+
+export const servicem8DiaryEntrySchema = z.object({
+  uuid: z.string().optional(),
+  job_uuid: z.string(),
+  activity_was_scheduled: z.number().optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  object_type: z.string().optional(),
+  is_deleted: z.boolean().optional(),
+});
+
+export const servicem8NoteSchema = z.object({
+  uuid: z.string(),
+  job_uuid: z.string(),
+  note: z.string(),
+  created_timestamp: z.string().optional(),
+  staff_uuid: z.string().optional(),
+});
+
+export const servicem8QuoteSchema = z.object({
+  uuid: z.string(),
+  job_uuid: z.string().optional(),
+  quote_number: z.string().optional(),
+  quote_total: z.number().optional(),
+  quote_date: z.string().optional(),
+  active: z.boolean().optional(),
+});
+
+export const servicem8CompanySchema = z.object({
+  uuid: z.string(),
+  name: z.string(),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  active: z.boolean().optional(),
+});
+
+export const servicem8InvoiceSchema = z.object({
+  uuid: z.string(), // ServiceM8 job UUID (jobs are invoices)
+  generated_job_id: z.string().optional(),
+  job_total: z.number().optional(),
+  invoice_date: z.string().optional(),
+  invoice_status: z.string().optional(),
+  active: z.boolean().optional(),
+  created_timestamp: z.string().optional(),
+});
+
+// Create insert schemas for ServiceM8 tables
+export const insertServicem8JobSchema = createInsertSchema(servicem8Jobs);
+export const insertServicem8DiaryEntrySchema = createInsertSchema(servicem8DiaryEntries);
+export const insertServicem8QuoteSchema = createInsertSchema(servicem8Quotes);
+export const insertServicem8CompanySchema = createInsertSchema(servicem8Companies);
+export const insertServicem8InvoiceSchema = createInsertSchema(servicem8Invoices);
+export const insertServicem8MaterialSchema = createInsertSchema(servicem8Materials);
+export const insertServicem8ConfigSchema = createInsertSchema(servicem8Config);
+
+// Export types
+export type Servicem8Job = typeof servicem8Jobs.$inferSelect;
+export type InsertServicem8Job = z.infer<typeof insertServicem8JobSchema>;
+export type Servicem8DiaryEntry = typeof servicem8DiaryEntries.$inferSelect;
+export type InsertServicem8DiaryEntry = z.infer<typeof insertServicem8DiaryEntrySchema>;
+export type Servicem8Quote = typeof servicem8Quotes.$inferSelect;
+export type InsertServicem8Quote = z.infer<typeof insertServicem8QuoteSchema>;
+export type Servicem8Company = typeof servicem8Companies.$inferSelect;
+export type InsertServicem8Company = z.infer<typeof insertServicem8CompanySchema>;
+export type Servicem8Invoice = typeof servicem8Invoices.$inferSelect;
+export type InsertServicem8Invoice = z.infer<typeof insertServicem8InvoiceSchema>;
+export type Servicem8Material = typeof servicem8Materials.$inferSelect;
+export type InsertServicem8Material = z.infer<typeof insertServicem8MaterialSchema>;
+export type Servicem8Config = typeof servicem8Config.$inferSelect;
+export type InsertServicem8Config = z.infer<typeof insertServicem8ConfigSchema>;
+
 // Lead Source Tracking Schema
 export const leadSourceSchema = z.object({
   pagePath: z.string().max(512).optional(),
