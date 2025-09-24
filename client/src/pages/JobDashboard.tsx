@@ -420,6 +420,25 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 <CardDescription>Manage customer relationships and history</CardDescription>
               </CardHeader>
               <CardContent>
+                {/* ServiceM8 Data Diagnostic Warning */}
+                {customers.length > 0 && customers.filter(c => c.name?.startsWith('Customer-')).length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-5 h-5 text-amber-600 mt-0.5">⚠️</div>
+                      <div>
+                        <h3 className="text-amber-800 font-semibold">ServiceM8 Customer Data Issue</h3>
+                        <p className="text-amber-700 text-sm mt-1">
+                          Your ServiceM8 account contains <strong>{customers.filter(c => c.name?.startsWith('Customer-')).length} customers with missing name data</strong>. 
+                          All customer records show as "company_name: null, contact_first: null, contact_last: null" in ServiceM8.
+                        </p>
+                        <p className="text-amber-700 text-sm mt-2">
+                          <strong>Solutions:</strong> 1) Add customer names manually using the "Edit" buttons below, or 2) Update customer names in ServiceM8 then re-import.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="space-y-4">
                   {displayCustomers.map(customer => (
                     <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`customer-card-${customer.id}`}>
