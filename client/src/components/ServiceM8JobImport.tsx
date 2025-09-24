@@ -500,8 +500,8 @@ export function ServiceM8JobImport() {
 
               <div className="space-y-4">
                 <h4 className="font-medium">Jobs Preview ({jobs.length} total)</h4>
-                <div className="space-y-2 max-h-96 overflow-y-auto border rounded-lg p-4">
-                  {jobs.map((job, index) => (
+                <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-4">
+                  {jobs.slice(0, 10).map((job, index) => (
                     <Card key={index} className="border-l-4 border-l-blue-500">
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start">
@@ -542,16 +542,24 @@ export function ServiceM8JobImport() {
                 </div>
               </div>
 
-              <div className="flex gap-4">
-                <Button onClick={resetImport} variant="outline">
+              {jobs.length > 10 && (
+                <div className="text-center py-2 text-sm text-gray-600 bg-blue-50 rounded">
+                  Showing first 10 jobs of {jobs.length} total jobs to import
+                </div>
+              )}
+              
+              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
+                <Button onClick={resetImport} variant="outline" className="flex-1">
                   Upload Different File
                 </Button>
                 <Button 
                   onClick={handleImport} 
                   disabled={!jobs.length || isProcessing}
                   data-testid="button-import-jobs"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  size="lg"
                 >
-                  Import {jobs.length} Jobs
+                  🚀 Import {jobs.length.toLocaleString()} Jobs
                 </Button>
               </div>
             </TabsContent>
