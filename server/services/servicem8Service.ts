@@ -107,6 +107,13 @@ class ServiceM8Service {
 
       for (const company of companies) {
         try {
+          // Check if customer already exists by ServiceM8 UUID
+          const existingCustomer = await storage.getCustomerByServiceM8Uuid(company.uuid);
+          if (existingCustomer) {
+            console.log(`⏭️ Skipping existing customer: ${existingCustomer.name}`);
+            continue;
+          }
+
           // Map ServiceM8 company to our customer schema
           const customerName = company.company_name?.trim() || 
                               `${(company.contact_first || '').trim()} ${(company.contact_last || '').trim()}`.trim() ||
@@ -161,6 +168,15 @@ class ServiceM8Service {
       
       for (const job of jobs) {
         try {
+          const jobNumber = job.generated_job_id || `SM8-${job.uuid.slice(-8)}`;
+          
+          // Check if job already exists by job number
+          const existingJob = await storage.getJobByJobNumber(jobNumber);
+          if (existingJob) {
+            console.log(`⏭️ Skipping existing job: ${jobNumber}`);
+            continue;
+          }
+
           // Find the customer by ServiceM8 UUID for correct mapping
           const customer = customers.find(c => c.servicem8Uuid === job.company_uuid);
           
@@ -183,7 +199,7 @@ class ServiceM8Service {
           // Map ServiceM8 job to our job schema
           const newJob: InsertJob = {
             customerId: customer.id,
-            jobNumber: job.generated_job_id || `SM8-${job.uuid.slice(-8)}`, // Use ServiceM8 job ID or fallback
+            jobNumber: jobNumber, // Use the same job number we checked for
             title: job.job_description || `Job ${job.generated_job_id}`,
             description: job.notes || job.job_description || null,
             status: mappedStatus,

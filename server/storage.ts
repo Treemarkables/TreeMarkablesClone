@@ -68,6 +68,7 @@ export interface IStorage {
   // Customer Management
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getCustomer(id: string): Promise<Customer | undefined>;
+  getCustomerByServiceM8Uuid(uuid: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   getAllCustomers(): Promise<Customer[]>;
   searchCustomers(query: string): Promise<Customer[]>;
@@ -104,6 +105,7 @@ export interface IStorage {
   // Job Management
   createJob(job: InsertJob): Promise<Job>;
   getJob(id: string): Promise<Job | undefined>;
+  getJobByJobNumber(jobNumber: string): Promise<Job | undefined>;
   updateJob(id: string, updates: Partial<InsertJob>): Promise<Job>;
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
@@ -532,6 +534,11 @@ class DatabaseStorage implements IStorage {
     return customer || undefined;
   }
 
+  async getCustomerByServiceM8Uuid(uuid: string): Promise<Customer | undefined> {
+    const [customer] = await db.select().from(schema.customers).where(eq(schema.customers.servicem8Uuid, uuid));
+    return customer || undefined;
+  }
+
   async updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer> {
     const [customer] = await db.update(schema.customers)
       .set({ ...updates, updatedAt: new Date() })
@@ -564,6 +571,11 @@ class DatabaseStorage implements IStorage {
 
   async getJob(id: string): Promise<Job | undefined> {
     const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, id));
+    return job || undefined;
+  }
+
+  async getJobByJobNumber(jobNumber: string): Promise<Job | undefined> {
+    const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.jobNumber, jobNumber));
     return job || undefined;
   }
 
