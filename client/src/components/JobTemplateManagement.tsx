@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -24,10 +25,12 @@ import {
   Edit,
   Trash2,
   Copy,
-  Settings
+  Settings,
+  Mail,
+  MessageSquare
 } from 'lucide-react';
-import type { JobTemplate, InsertJobTemplate } from "@shared/schema";
-import { insertJobTemplateSchema } from "@shared/schema";
+import type { JobTemplate, InsertJobTemplate, EmailTemplate, InsertEmailTemplate, SmsTemplate, InsertSmsTemplate } from "@shared/schema";
+import { insertJobTemplateSchema, insertEmailTemplateSchema, insertSmsTemplateSchema } from "@shared/schema";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -36,11 +39,14 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-export function JobTemplateManagement() {
+export default function JobTemplateManagement() {
+  const [activeTab, setActiveTab] = useState('job-templates');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<JobTemplate | null>(null);
+  const [editingEmailTemplate, setEditingEmailTemplate] = useState<EmailTemplate | null>(null);
+  const [editingSmsTemplate, setEditingSmsTemplate] = useState<SmsTemplate | null>(null);
   const { toast } = useToast();
 
   // Fetch job templates with proper category filtering
@@ -258,11 +264,11 @@ export function JobTemplateManagement() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="heading-job-templates">
-            Job Templates
+          <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="heading-template-management">
+            Template Management
           </h2>
           <p className="text-muted-foreground" data-testid="text-templates-description">
-            Manage ServiceM8-style job templates with pricing, crew requirements, and safety specifications
+            Manage job workflows, email communications, and SMS messaging templates
           </p>
         </div>
         <Dialog open={isCreateOpen || !!editingTemplate} onOpenChange={(open) => {
@@ -464,152 +470,188 @@ export function JobTemplateManagement() {
         </Dialog>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-        <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              placeholder="Search templates..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-              data-testid="input-search-templates"
-            />
-          </div>
-        </div>
-        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className="w-48" data-testid="select-category-filter">
-            <SelectValue placeholder="Select category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((category) => (
-              <SelectItem key={category.value} value={category.value}>
-                {category.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Templates Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTemplates.map((template) => (
-          <Card key={template.id} className="hover-elevate" data-testid={`template-card-${template.id}`}>
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-lg flex items-center gap-2" data-testid={`template-name-${template.id}`}>
-                    <FileText className="w-5 h-5 text-primary" />
-                    {template.name}
-                  </CardTitle>
-                  <CardDescription className="mt-1" data-testid={`template-category-${template.id}`}>
-                    {categories.find(c => c.value === template.category)?.label}
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => {
-                      setEditingTemplate(template);
-                      setIsCreateOpen(false);
-                    }}
-                    data-testid={`button-edit-${template.id}`}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleDeleteTemplate(template.id)}
-                    data-testid={`button-delete-${template.id}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="job-templates" data-testid="tab-job-templates">
+            <FileText className="w-4 h-4 mr-2" />
+            Job Templates
+          </TabsTrigger>
+          <TabsTrigger value="email-templates" data-testid="tab-email-templates">
+            <Mail className="w-4 h-4 mr-2" />
+            Email Templates
+          </TabsTrigger>
+          <TabsTrigger value="sms-templates" data-testid="tab-sms-templates">
+            <MessageSquare className="w-4 h-4 mr-2" />
+            SMS Templates
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="job-templates" className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Search templates..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                  data-testid="input-search-templates"
+                />
               </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4" data-testid={`template-description-${template.id}`}>
-                {template.description || 'No description provided'}
-              </p>
-              
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium" data-testid={`template-price-${template.id}`}>
-                      ${template.basePrice}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm" data-testid={`template-duration-${template.id}`}>
-                      {template.estimatedDuration}h
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm" data-testid={`template-crew-${template.id}`}>
-                      {template.crewSize || 2} crew
-                    </span>
-                  </div>
-                  {getRiskLevelBadge(template.riskLevel)}
-                </div>
+            </div>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="w-48" data-testid="select-category-filter">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.value} value={category.value}>
+                    {category.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-                {template.requiredSkills && template.requiredSkills.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {template.requiredSkills.slice(0, 3).map((skill, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {skill}
-                      </Badge>
-                    ))}
-                    {template.requiredSkills.length > 3 && (
-                      <Badge variant="secondary" className="text-xs">
-                        +{template.requiredSkills.length - 3} more
-                      </Badge>
+          {/* Templates Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredTemplates.map((template) => (
+              <Card key={template.id} className="hover-elevate" data-testid={`template-card-${template.id}`}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg flex items-center gap-2" data-testid={`template-name-${template.id}`}>
+                        <FileText className="w-5 h-5 text-primary" />
+                        {template.name}
+                      </CardTitle>
+                      <CardDescription className="mt-1" data-testid={`template-category-${template.id}`}>
+                        {categories.find(c => c.value === template.category)?.label}
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingTemplate(template);
+                          setIsCreateOpen(false);
+                        }}
+                        data-testid={`button-edit-${template.id}`}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDeleteTemplate(template.id)}
+                        data-testid={`button-delete-${template.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4" data-testid={`template-description-${template.id}`}>
+                    {template.description || 'No description provided'}
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-medium" data-testid={`template-price-${template.id}`}>
+                          ${template.basePrice}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid={`template-duration-${template.id}`}>
+                          {template.estimatedDuration}h
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid={`template-crew-${template.id}`}>
+                          {template.crewSize || 2} crew
+                        </span>
+                      </div>
+                      {getRiskLevelBadge(template.riskLevel)}
+                    </div>
+
+                    {template.requiredSkills && template.requiredSkills.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {template.requiredSkills.slice(0, 3).map((skill, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            {skill}
+                          </Badge>
+                        ))}
+                        {template.requiredSkills.length > 3 && (
+                          <Badge variant="secondary" className="text-xs">
+                            +{template.requiredSkills.length - 3} more
+                          </Badge>
+                        )}
+                      </div>
                     )}
                   </div>
+
+                  <div className="flex gap-2 mt-4">
+                    <Button size="sm" className="flex-1" data-testid={`button-use-template-${template.id}`}>
+                      <Copy className="w-4 h-4 mr-2" />
+                      Use Template
+                    </Button>
+                    <Button size="sm" variant="outline" data-testid={`button-view-template-${template.id}`}>
+                      <Settings className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {filteredTemplates.length === 0 && !isLoading && (
+            <Card className="text-center py-12">
+              <CardContent>
+                <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-muted-foreground mb-2">No templates found</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {searchTerm || selectedCategory !== 'all' 
+                    ? 'Try adjusting your search or filters.' 
+                    : 'Create your first job template to get started.'}
+                </p>
+                {!searchTerm && selectedCategory === 'all' && (
+                  <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-first-template">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Your First Template
+                  </Button>
                 )}
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <Button size="sm" className="flex-1" data-testid={`button-use-template-${template.id}`}>
-                  <Copy className="w-4 h-4 mr-2" />
-                  Use Template
-                </Button>
-                <Button size="sm" variant="outline" data-testid={`button-view-template-${template.id}`}>
-                  <Settings className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredTemplates.length === 0 && !isLoading && (
-        <Card className="text-center py-12">
-          <CardContent>
-            <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-muted-foreground mb-2">No templates found</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {searchTerm || selectedCategory !== 'all' 
-                ? 'Try adjusting your search or filters.' 
-                : 'Create your first job template to get started.'}
-            </p>
-            {!searchTerm && selectedCategory === 'all' && (
-              <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-first-template">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Your First Template
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="email-templates" className="space-y-4">
+          <div className="text-center py-8">
+            <Mail className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Email Templates</h3>
+            <p className="text-muted-foreground mb-4">Coming soon - Manage email communication templates</p>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="sms-templates" className="space-y-4">
+          <div className="text-center py-8">
+            <MessageSquare className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">SMS Templates</h3>
+            <p className="text-muted-foreground mb-4">Coming soon - Manage SMS messaging templates</p>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

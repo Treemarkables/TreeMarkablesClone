@@ -13,6 +13,8 @@ import {
   insertEmployeeSchema, updateEmployeeSchema,
   insertScheduleEventSchema, updateScheduleEventSchema,
   insertJobTemplateSchema, updateJobTemplateSchema,
+  insertEmailTemplateSchema, updateEmailTemplateSchema,
+  insertSmsTemplateSchema, updateSmsTemplateSchema,
   insertEquipmentSchema, updateEquipmentSchema,
   insertInventorySchema, insertEquipmentCheckoutSchema, insertEquipmentMaintenanceSchema,
   insertBusinessSettingsSchema, updateBusinessSettingsSchema,
@@ -3985,6 +3987,204 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error deleting job template'
+      });
+    }
+  });
+
+  // ========================================
+  // EMAIL TEMPLATE MANAGEMENT ROUTES
+  // ========================================
+
+  // Get all email templates
+  app.get('/api/email-templates', async (req: Request, res: Response) => {
+    try {
+      const templates = await storage.getAllEmailTemplates();
+      res.json({
+        success: true,
+        data: templates
+      });
+    } catch (error) {
+      console.error('Error fetching email templates:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching email templates'
+      });
+    }
+  });
+
+  // Get single email template
+  app.get('/api/email-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const template = await storage.getEmailTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: 'Email template not found'
+        });
+      }
+      res.json({
+        success: true,
+        data: template
+      });
+    } catch (error) {
+      console.error('Error fetching email template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching email template'
+      });
+    }
+  });
+
+  // Create new email template
+  app.post('/api/email-templates', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertEmailTemplateSchema.parse(req.body);
+      const template = await storage.createEmailTemplate(validatedData);
+      res.json({
+        success: true,
+        data: template,
+        message: 'Email template created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating email template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating email template'
+      });
+    }
+  });
+
+  // Update email template
+  app.put('/api/email-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateEmailTemplateSchema.parse(req.body);
+      const template = await storage.updateEmailTemplate(req.params.id, validatedData);
+      res.json({
+        success: true,
+        data: template,
+        message: 'Email template updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating email template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating email template'
+      });
+    }
+  });
+
+  // Delete email template
+  app.delete('/api/email-templates/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteEmailTemplate(req.params.id);
+      res.json({
+        success: true,
+        message: 'Email template deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting email template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting email template'
+      });
+    }
+  });
+
+  // ========================================
+  // SMS TEMPLATE MANAGEMENT ROUTES
+  // ========================================
+
+  // Get all SMS templates
+  app.get('/api/sms-templates', async (req: Request, res: Response) => {
+    try {
+      const templates = await storage.getAllSmsTemplates();
+      res.json({
+        success: true,
+        data: templates
+      });
+    } catch (error) {
+      console.error('Error fetching SMS templates:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching SMS templates'
+      });
+    }
+  });
+
+  // Get single SMS template
+  app.get('/api/sms-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const template = await storage.getSmsTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: 'SMS template not found'
+        });
+      }
+      res.json({
+        success: true,
+        data: template
+      });
+    } catch (error) {
+      console.error('Error fetching SMS template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching SMS template'
+      });
+    }
+  });
+
+  // Create new SMS template
+  app.post('/api/sms-templates', async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertSmsTemplateSchema.parse(req.body);
+      const template = await storage.createSmsTemplate(validatedData);
+      res.json({
+        success: true,
+        data: template,
+        message: 'SMS template created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating SMS template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating SMS template'
+      });
+    }
+  });
+
+  // Update SMS template
+  app.put('/api/sms-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateSmsTemplateSchema.parse(req.body);
+      const template = await storage.updateSmsTemplate(req.params.id, validatedData);
+      res.json({
+        success: true,
+        data: template,
+        message: 'SMS template updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating SMS template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating SMS template'
+      });
+    }
+  });
+
+  // Delete SMS template
+  app.delete('/api/sms-templates/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteSmsTemplate(req.params.id);
+      res.json({
+        success: true,
+        message: 'SMS template deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting SMS template:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting SMS template'
       });
     }
   });

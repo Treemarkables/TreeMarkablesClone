@@ -34,6 +34,7 @@ import StaffManagement from "@/pages/StaffManagement";
 import Developer from "@/pages/Developer";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
+import JobTemplateManagement from "@/components/JobTemplateManagement";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code } from "lucide-react";
@@ -287,10 +288,7 @@ function Router() {
       </Route>
       <Route path="/settings/forms">
         <SidebarLayout>
-          <SettingsPlaceholder 
-            title="Job Templates"
-            description="Create and manage job templates and forms"
-          />
+          <JobTemplateManagement />
         </SidebarLayout>
       </Route>
       <Route path="/settings/preferences">

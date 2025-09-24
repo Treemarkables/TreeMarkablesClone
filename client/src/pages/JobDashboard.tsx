@@ -16,7 +16,7 @@ import { LeadEnhancement } from '@/components/LeadEnhancement';
 import { DispatchBoard } from '@/components/DispatchBoard';
 import { JobDiary } from '@/components/JobDiary';
 import { SafetyReporting } from '@/components/SafetyReporting';
-import { JobTemplateManagement } from '@/components/JobTemplateManagement';
+import JobTemplateManagement from '@/components/JobTemplateManagement';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Lead, Customer } from "@shared/schema";
