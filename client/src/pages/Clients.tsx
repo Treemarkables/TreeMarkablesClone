@@ -6,10 +6,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Users, Mail, Phone, Calendar, DollarSign, Search, Filter, ArrowUpDown, Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Users, Mail, Phone, Calendar, DollarSign, Search, Filter, ArrowUpDown, Plus, Upload } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Customer } from "@shared/schema";
+import { CustomerCSVUpload } from "@/components/CustomerCSVUpload";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -21,6 +23,7 @@ interface ApiResponse<T> {
 export default function Clients() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("name");
+  const [activeTab, setActiveTab] = useState("list");
 
   // Fetch customers data
   const { data: customersResponse, isLoading } = useQuery<ApiResponse<Customer>>({
@@ -80,6 +83,22 @@ export default function Clients() {
           Add Client
         </Button>
       </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="list" data-testid="tab-client-list">
+            <Users className="w-4 h-4 mr-2" />
+            Client List
+          </TabsTrigger>
+          <TabsTrigger value="import" data-testid="tab-csv-import">
+            <Upload className="w-4 h-4 mr-2" />
+            CSV Import
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Client List Tab */}
+        <TabsContent value="list" className="space-y-6 mt-6">
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -241,6 +260,13 @@ export default function Clients() {
           </div>
         )}
       </div>
+        </TabsContent>
+
+        {/* CSV Import Tab */}
+        <TabsContent value="import" className="space-y-6 mt-6">
+          <CustomerCSVUpload />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
