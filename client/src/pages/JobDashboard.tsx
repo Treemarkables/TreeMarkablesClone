@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield } from "lucide-react";
 import Pipeline from './Pipeline';
@@ -19,7 +20,9 @@ import { SafetyReporting } from '@/components/SafetyReporting';
 import JobTemplateManagement from '@/components/JobTemplateManagement';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 import { ServiceM8ImportModal } from '@/components/ServiceM8ImportModal';
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { Job, Lead, Customer } from "@shared/schema";
 
 // API Response types
@@ -71,6 +74,56 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   // State for job card modal
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isJobCardOpen, setIsJobCardOpen] = useState(false);
+  
+  // Customer editing state
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
+  const [editingCustomerName, setEditingCustomerName] = useState("");
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Customer update mutation
+  const updateCustomerMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const response = await apiRequest('PUT', `/api/customers/${id}`, { name });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setEditingCustomerId(null);
+      setEditingCustomerName("");
+      toast({
+        title: "Success",
+        description: "Customer name updated successfully"
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to update customer name",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Handle starting customer name edit
+  const handleEditCustomerName = (customerId: string, currentName: string) => {
+    setEditingCustomerId(customerId);
+    setEditingCustomerName(currentName.startsWith('Customer #') ? '' : currentName);
+  };
+
+  // Handle saving customer name
+  const handleSaveCustomerName = (customerId: string) => {
+    if (!editingCustomerName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a customer name",
+        variant: "destructive"
+      });
+      return;
+    }
+    updateCustomerMutation.mutate({ id: customerId, name: editingCustomerName.trim() });
+  };
 
   // Handle job item click
   const handleJobClick = (jobId: string) => {
@@ -111,53 +164,10 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
       // Create a more meaningful display name using job address data
       let displayName = customer.name || 'Unnamed Customer';
       
-      // If it's a generic placeholder name, find the first job for this customer to get address
+      // If it's a generic placeholder name, use simple numbering
       if (customer.name?.startsWith('Customer-')) {
-        // Find first job for this customer to get address
-        const customerJob = jobs.find(job => job.customerId === customer.id);
-        
-        if (customerJob?.address) {
-          // Extract location info from job address
-          const address = customerJob.address;
-          
-          // Try to extract city/area from address
-          if (address.includes('Gisborne')) {
-            // For Gisborne addresses, try to get area
-            const parts = address.split('\n');
-            if (parts.length > 1) {
-              const area = parts[1].split(',')[0].trim();
-              displayName = `${area} Customer`;
-            } else {
-              displayName = 'Gisborne Customer';
-            }
-          } else if (address.includes('Auckland')) {
-            displayName = 'Auckland Customer';
-          } else if (address.includes('Wellington')) {
-            displayName = 'Wellington Customer';
-          } else if (address.includes('Rukuhia')) {
-            displayName = 'Rukuhia Customer';
-          } else {
-            // Extract first part before comma or newline
-            const locationPart = address.split(/[,\n]/)[0];
-            const words = locationPart.split(' ');
-            if (words.length >= 2) {
-              // Use last word which is often the road/street type
-              const lastWord = words[words.length - 1];
-              if (['Road', 'St', 'Street', 'Ave', 'Avenue', 'Drive', 'Lane'].includes(lastWord)) {
-                const streetName = words[words.length - 2];
-                displayName = `${streetName} ${lastWord} Customer`;
-              } else {
-                displayName = `${words.slice(-2).join(' ')} Customer`;
-              }
-            } else {
-              displayName = `${locationPart} Customer`;
-            }
-          }
-        } else {
-          // No job address found, use fallback
-          const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
-          displayName = `Customer #${index + 1} (${uniqueId})`;
-        }
+        const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
+        displayName = `Customer #${index + 1} (${uniqueId})`;
       }
 
       return {
@@ -440,21 +450,73 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 )}
                 
                 <div className="space-y-4">
-                  {displayCustomers.map(customer => (
-                    <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`customer-card-${customer.id}`}>
-                      <div className="flex-1">
-                        <h4 className="font-medium" data-testid={`customer-name-${customer.id}`}>{customer.name}</h4>
-                        <p className="text-sm text-muted-foreground">{customer.email}</p>
-                        <p className="text-sm text-muted-foreground">{customer.phone}</p>
-                        <p className="text-xs text-muted-foreground">Last service: {customer.lastContactDate || 'N/A'}</p>
+                  {displayCustomers.map(customer => {
+                    const isEditing = editingCustomerId === customer.id;
+                    const needsName = customer.name.startsWith('Customer #');
+                    
+                    return (
+                      <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate" data-testid={`customer-card-${customer.id}`}>
+                        <div className="flex-1">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <Input
+                                value={editingCustomerName}
+                                onChange={(e) => setEditingCustomerName(e.target.value)}
+                                placeholder="Enter customer name..."
+                                className="font-medium"
+                                data-testid={`input-edit-customer-name-${customer.id}`}
+                              />
+                              <div className="flex space-x-2">
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => handleSaveCustomerName(customer.id)}
+                                  disabled={updateCustomerMutation.isPending}
+                                  data-testid={`button-save-customer-${customer.id}`}
+                                >
+                                  {updateCustomerMutation.isPending ? 'Saving...' : 'Save'}
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => setEditingCustomerId(null)}
+                                  data-testid={`button-cancel-edit-customer-${customer.id}`}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center space-x-2">
+                                <h4 className={`font-medium ${needsName ? 'text-muted-foreground' : ''}`} data-testid={`customer-name-${customer.id}`}>
+                                  {customer.name}
+                                </h4>
+                                {needsName && (
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    onClick={() => handleEditCustomerName(customer.id, customer.name)}
+                                    data-testid={`button-edit-customer-name-${customer.id}`}
+                                    className="text-xs px-2 py-1 h-auto"
+                                  >
+                                    Add Name
+                                  </Button>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">{customer.email}</p>
+                              <p className="text-sm text-muted-foreground">{customer.phone}</p>
+                              <p className="text-xs text-muted-foreground">Last service: {customer.lastContactDate || 'N/A'}</p>
+                            </>
+                          )}
+                        </div>
+                        <div className="text-right space-y-1">
+                          <div className="font-medium">${parseFloat(customer.lifetimeValue || "0").toLocaleString()}</div>
+                          <p className="text-sm text-muted-foreground">{customer.totalJobs} jobs</p>
+                          <Button size="sm" variant="outline" data-testid={`button-view-customer-${customer.id}`}>View Details</Button>
+                        </div>
                       </div>
-                      <div className="text-right space-y-1">
-                        <div className="font-medium">${parseFloat(customer.lifetimeValue || "0").toLocaleString()}</div>
-                        <p className="text-sm text-muted-foreground">{customer.totalJobs} jobs</p>
-                        <Button size="sm" variant="outline" data-testid={`button-view-customer-${customer.id}`}>View Details</Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
