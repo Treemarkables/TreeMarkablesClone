@@ -675,15 +675,18 @@ class DatabaseStorage implements IStorage {
   private normalizeCSVRow(row: any): any {
     const normalized: any = {};
     
-    // Map common field variations to standard names
+    // Map common field variations to standard names, including exact ServiceM8 headers
     const fieldMappings: { [key: string]: string[] } = {
-      'name': ['name', 'customer_name', 'company_name', 'full_name'],
-      'email': ['email', 'email_address', 'contact_email'],
-      'phone': ['phone', 'mobile', 'phone_number', 'contact_phone'],
+      'name': ['name', 'customer_name', 'company_name', 'full_name', 'Name'],
+      'email': ['email', 'email_address', 'contact_email', 'Email Address'],
+      'phone': ['phone', 'mobile', 'phone_number', 'contact_phone', 'Mobile Number', 'mobile_number'],
       'servicem8Uuid': ['uuid', 'servicem8_uuid', 'servicem8uuid', 'customer_uuid'],
-      'address': ['address', 'address_line1', 'street_address'],
-      'contact_first': ['contact_first', 'first_name', 'firstname'],
-      'contact_last': ['contact_last', 'last_name', 'lastname']
+      'address': ['address', 'address_line1', 'street_address', 'Company Address'],
+      'contact_first': ['contact_first', 'first_name', 'firstname', 'Contact First', 'Billing Contact First'],
+      'contact_last': ['contact_last', 'last_name', 'lastname', 'Contact Last', 'Billing Contact Last'],
+      'billing_email': ['billing_email', 'billing_email_address', 'Billing Email Address'],
+      'telephone': ['telephone', 'telephone_number', 'Telephone Number'],
+      'billing_phone': ['billing_phone', 'billing_mobile', 'Billing Mobile Number']
     };
 
     for (const [standardField, variations] of Object.entries(fieldMappings)) {
@@ -749,9 +752,9 @@ class DatabaseStorage implements IStorage {
   }
 
   private generateProposedName(csvRow: any): string {
-    // Priority 1: Full name if available
-    if (csvRow.name && !csvRow.name.startsWith('Customer-')) {
-      return csvRow.name;
+    // Priority 1: Full name if available and looks like a real name (not phone number or ID)
+    if (csvRow.name && !csvRow.name.startsWith('Customer-') && this.isValidCustomerName(csvRow.name)) {
+      return this.cleanupName(csvRow.name);
     }
 
     // Priority 2: Construct from first/last name
@@ -759,24 +762,77 @@ class DatabaseStorage implements IStorage {
       const firstName = csvRow.contact_first || '';
       const lastName = csvRow.contact_last || '';
       const fullName = `${firstName} ${lastName}`.trim();
-      if (fullName) {
-        return fullName;
+      if (fullName && this.isValidCustomerName(fullName)) {
+        return this.cleanupName(fullName);
       }
     }
 
-    // Priority 3: Use email username
-    if (csvRow.email && csvRow.email.includes('@')) {
-      const username = csvRow.email.split('@')[0];
-      return username.charAt(0).toUpperCase() + username.slice(1);
+    // Priority 3: If name field contains what looks like a phone number, try other fields
+    if (csvRow.name && !this.isValidCustomerName(csvRow.name)) {
+      // Check if there's a better name in other fields
+      if (csvRow.contact_first || csvRow.contact_last) {
+        const firstName = csvRow.contact_first || '';
+        const lastName = csvRow.contact_last || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        if (fullName && this.isValidCustomerName(fullName)) {
+          return this.cleanupName(fullName);
+        }
+      }
     }
 
-    // Priority 4: Use phone as identifier
+    // Priority 4: Use email username if it looks like a name
+    if (csvRow.email && csvRow.email.includes('@')) {
+      const username = csvRow.email.split('@')[0];
+      const cleanUsername = username.replace(/[._-]/g, ' ');
+      if (this.isValidCustomerName(cleanUsername)) {
+        return this.formatNameFromEmail(cleanUsername);
+      }
+    }
+
+    // Priority 5: Use phone as identifier if that's all we have
     if (csvRow.phone) {
       return `Customer (${csvRow.phone})`;
     }
 
+    // Priority 6: Use name field even if it looks like phone/ID (data quality issues)
+    if (csvRow.name) {
+      return csvRow.name;
+    }
+
     // Fallback
     return 'Customer (Unknown)';
+  }
+
+  private isValidCustomerName(name: string): boolean {
+    if (!name || name.trim().length < 2) return false;
+    
+    // Check if it's likely a phone number
+    const phonePattern = /^[\d\s\-\+\(\)]{7,}$/;
+    if (phonePattern.test(name.trim())) return false;
+    
+    // Check if it's likely an ID or UUID
+    const idPattern = /^[\d\-]+\s*DF$/;
+    if (idPattern.test(name.trim())) return false;
+    
+    // Check if it starts with just numbers (likely address or phone)
+    const startsWithNumberPattern = /^\d+\s/;
+    if (startsWithNumberPattern.test(name.trim())) return false;
+    
+    return true;
+  }
+
+  private cleanupName(name: string): string {
+    // Remove extra quotes that might be in ServiceM8 export
+    return name.replace(/^["']+|["']+$/g, '').trim();
+  }
+
+  private formatNameFromEmail(username: string): string {
+    // Convert underscores/dots to spaces and capitalize words
+    return username
+      .replace(/[._]/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
   }
 
   private shouldUpdateCustomer(existingCustomer?: Customer, proposedName?: string): boolean {
