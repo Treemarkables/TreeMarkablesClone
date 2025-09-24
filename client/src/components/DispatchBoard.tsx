@@ -1168,11 +1168,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         </div>
                       );
                     })
-                  ) : (
-                    // Individual Staff Mode - Simplified for now
-                    <div className="h-16 flex items-center justify-center text-muted-foreground">
-                      Individual staff mode - Coming soon
-                    </div>
                   )}
                 </div>
               </div>
