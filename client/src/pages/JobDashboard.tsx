@@ -317,6 +317,28 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
     }
   };
 
+  // Handle View Details button click
+  const handleViewCustomerDetails = (customerId: string) => {
+    // Navigate to customer details - for now, switch to customers tab and highlight
+    onTabChange?.('customers');
+    // TODO: Add customer details modal or navigation
+    toast({
+      title: "Customer Details",
+      description: "Customer details view is not yet implemented. Feature coming soon!",
+    });
+  };
+
+  // Handle job navigation
+  const handleViewCustomerJobs = (customerId: string, customerName: string) => {
+    // Switch to jobs tab and filter by customer
+    onTabChange?.('jobs');
+    setJobSearchQuery(customerName);
+    toast({
+      title: "Customer Jobs",
+      description: `Showing jobs for ${customerName}`,
+    });
+  };
+
   return (
     <div className="h-full bg-background p-4 md:p-6 overflow-hidden w-full max-w-full min-w-0">
       <div className="w-full max-w-full h-full flex flex-col min-w-0">
@@ -866,6 +888,10 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                                     <Button 
                                       variant="outline" 
                                       size="sm" 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewCustomerDetails(customer.id);
+                                      }}
                                       data-testid={`button-view-customer-${customer.id}`}
                                     >
                                       View Details
