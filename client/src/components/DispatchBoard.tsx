@@ -323,7 +323,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Transform employees to staff members for dispatch board
   const staffMembers = useMemo(() => {
     return employees
-      .filter(emp => emp.isActive !== false) // Show all employees since API missing isActive field
+      .filter(emp => emp.isActive === true) // Only show active employees
       .map(transformEmployeeToStaffMember);
   }, [employees]);
 

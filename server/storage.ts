@@ -1124,6 +1124,9 @@ export class MemStorage implements IStorage {
         email: 'jake.morrison@treemarkables.co.nz',
         phone: '(555) 111-2222',
         position: 'foreman',
+        role: 'crew',
+        status: 'active',
+        isActive: true,
         skillLevel: 'expert',
         skills: ['chainsaw', 'climbing', 'bucket_truck', 'safety_management'],
         certifications: ['ISA Certified Arborist', 'CTSP'],
@@ -1137,6 +1140,9 @@ export class MemStorage implements IStorage {
         email: 'maria.silva@treemarkables.co.nz',
         phone: '(555) 333-4444',
         position: 'arborist',
+        role: 'crew',
+        status: 'active',
+        isActive: true,
         skillLevel: 'intermediate',
         skills: ['chainsaw', 'climbing', 'pruning'],
         certifications: ['ISA Certified Arborist'],
@@ -1150,6 +1156,9 @@ export class MemStorage implements IStorage {
         email: 'tom.bradley@treemarkables.co.nz',
         phone: '(555) 555-6666',
         position: 'ground_crew',
+        role: 'crew',
+        status: 'active',
+        isActive: true,
         skillLevel: 'beginner',
         skills: ['chipper_operation', 'cleanup'],
         certifications: [],
@@ -3670,6 +3679,9 @@ export class MemStorage implements IStorage {
   async createEmployee(employeeData: InsertEmployee): Promise<Employee> {
     const employee: Employee = {
       id: randomUUID(),
+      role: 'crew', // Default role
+      status: 'active', // Default status  
+      isActive: true, // Default active state
       ...employeeData,
       createdAt: new Date(),
       updatedAt: new Date(),
