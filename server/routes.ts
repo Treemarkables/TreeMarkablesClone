@@ -2912,72 +2912,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Import jobs from parsed ServiceM8 data (JSON)
-  app.post('/api/jobs/import-servicem8', async (req: Request, res: Response) => {
-    try {
-      const { jobs } = req.body;
-      
-      if (!jobs || !Array.isArray(jobs)) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Jobs array is required' 
-        });
-      }
-
-      // Get all customers for lookup
-      const customers = await storage.getAllCustomers();
-      
-      // Convert ServiceM8 jobs to our internal format
-      const jobData = await Promise.all(jobs.map(async (job: any) => {
-        // Find customer by company name (case-insensitive)
-        const customer = customers.find(c => 
-          c.name.toLowerCase().trim() === (job.company || '').toLowerCase().trim()
-        );
-        
-        return {
-          jobNumber: job.jobNumber || '',
-          customerName: job.company || '',
-          description: job.description || '',
-          address: job.address || '',
-          status: job.status || 'quoted',
-          priority: 'medium',
-          totalCost: job.invoiceAmount || '0',
-          notes: job.workCompleted || '',
-          dateCreated: job.workOrderDate || '',
-          completedDate: job.completionDate || '',
-          invoiceDate: job.invoiceDate || '',
-          quoteDate: job.quoteDate || '',
-          workOrderDate: job.workOrderDate || '',
-          paymentMethod: job.paymentMethod || '',
-          completedBy: job.completedBy || '',
-          // Use the headerMap key that will be normalized to 'companyUuid'
-          'Company UUID': customer ? (customer.servicem8Uuid || customer.id) : undefined
-        };
-      }));
-
-      // Import the data using existing CSV import logic
-      const importResult = await storage.importJobsFromCsv(jobData);
-
-      res.json({
-        success: true,
-        message: `Successfully imported ${importResult.successfulImports} of ${importResult.totalRows} jobs`,
-        stats: {
-          totalJobs: jobs.length,
-          processedJobs: importResult.totalRows,
-          successfulMatches: importResult.successfulImports,
-          newCustomers: 0,
-          errors: importResult.errors?.length || 0
-        },
-        data: importResult,
-      });
-    } catch (error) {
-      console.error('Error importing ServiceM8 jobs:', error);
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : 'Error importing jobs',
-      });
-    }
-  });
 
   // Import quotes from ServiceM8 CSV export
   app.post('/api/import/quotes', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
@@ -6908,15 +6842,44 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       let newCustomers = 0;
       let errors = 0;
       const errorMessages: string[] = [];
+      const importedJobIds: string[] = [];
 
       // Get all existing customers for matching
       const existingCustomers = await storage.getAllCustomers();
-      const customerMap = new Map(existingCustomers.map(c => [c.name.toLowerCase().trim(), c]));
+      
+      // Create maps for efficient lookup by both name and ServiceM8 UUID
+      const customerByName = new Map(existingCustomers.map(c => [c.name.toLowerCase().trim(), c]));
+      const customerByServiceM8Uuid = new Map(
+        existingCustomers
+          .filter(c => c.servicem8Uuid)
+          .map(c => [c.servicem8Uuid!, c])
+      );
 
       for (const csvJob of jobs) {
         try {
-          // Find or create customer
-          let customer = customerMap.get(csvJob.company.toLowerCase().trim());
+          let customer = null;
+          
+          // Extract ServiceM8 UUID from job data (can be in different fields)
+          const servicem8Uuid = csvJob.companyUuid || csvJob['Company UUID'] || csvJob.servicem8Uuid;
+          
+          // First try to find customer by ServiceM8 UUID if available
+          if (servicem8Uuid) {
+            customer = customerByServiceM8Uuid.get(servicem8Uuid);
+          }
+          
+          // If not found by UUID, try to find by company name
+          if (!customer && csvJob.company) {
+            customer = customerByName.get(csvJob.company.toLowerCase().trim());
+            
+            // If found by name but needs ServiceM8 UUID, update it
+            if (customer && servicem8Uuid && !customer.servicem8Uuid) {
+              await storage.updateCustomer(customer.id, {
+                servicem8Uuid: servicem8Uuid
+              });
+              customer.servicem8Uuid = servicem8Uuid;
+              customerByServiceM8Uuid.set(servicem8Uuid, customer);
+            }
+          }
           
           if (!customer) {
             // Create new customer from job data
@@ -6927,14 +6890,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               address: csvJob.address || null,
               source: csvJob.source || 'servicem8_import',
               lifetimeValue: parseFloat(csvJob.invoiceAmount || '0').toString(),
-              totalJobs: 1
+              totalJobs: 1,
+              servicem8Uuid: servicem8Uuid || undefined
             };
 
             customer = await storage.createCustomer(newCustomer);
-            customerMap.set(customer.name.toLowerCase().trim(), customer);
+            customerByName.set(customer.name.toLowerCase().trim(), customer);
+            if (servicem8Uuid) {
+              customerByServiceM8Uuid.set(servicem8Uuid, customer);
+            }
             newCustomers++;
           } else {
-            // Update customer lifetime value
+            // Update customer lifetime value and job count
             const currentValue = parseFloat(customer.lifetimeValue || '0');
             const jobValue = parseFloat(csvJob.invoiceAmount || '0');
             const newValue = currentValue + jobValue;
@@ -6969,7 +6936,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             paymentMethod: csvJob.paymentMethod
           };
 
-          await storage.createJob(jobData);
+          const createdJob = await storage.createJob(jobData);
+          importedJobIds.push(createdJob.id);
           successfulMatches++;
           
         } catch (jobError) {
@@ -6981,12 +6949,24 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       res.json({
         success: true,
+        message: `Successfully imported ${successfulMatches} of ${jobs.length} jobs`,
         stats: {
           totalJobs: jobs.length,
           processedJobs: jobs.length,
           successfulMatches,
           newCustomers,
           errors
+        },
+        data: {
+          success: true,
+          totalRows: jobs.length,
+          successfulImports: successfulMatches,
+          errors: errorMessages.map((msg, index) => ({
+            row: index + 1,
+            error: msg,
+            data: jobs[index]
+          })),
+          importedIds: importedJobIds
         },
         errorMessages: errorMessages.slice(0, 10) // Limit to first 10 errors
       });
