@@ -183,6 +183,11 @@ const transformEmployeeToStaffMember = (employee: Employee): StaffMember => {
   };
 };
 
+// Real employee IDs from API for proper dispatch integration
+const JAKE_ID = '3e147247-e94d-4f2f-8425-91a13826de93';
+const MARIA_ID = '8ec7a4c0-393c-4b00-964b-2fa596974eaf';
+const TOM_ID = 'd5a24642-8d11-47ae-acd6-7ae466a78992'; // Tom Bradley ID from API
+
 const mockTeams: Team[] = [
   {
     id: 'team1',
@@ -218,11 +223,6 @@ const mockTeams: Team[] = [
     color: 'bg-purple-500'
   }
 ];
-
-// Real employee IDs from API for proper dispatch integration
-const JAKE_ID = '3e147247-e94d-4f2f-8425-91a13826de93';
-const MARIA_ID = '8ec7a4c0-393c-4b00-964b-2fa596974eaf';
-const TOM_ID = 'd5a24642-8d11-47ae-acd6-7ae466a78992'; // Tom Bradley ID from API
 
 const mockJobAssignments: JobAssignment[] = [
   {
@@ -322,9 +322,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   
   // Transform employees to staff members for dispatch board
   const staffMembers = useMemo(() => {
-    return employees
-      .filter(emp => emp.isActive) // Show all active employees regardless of status
-      .map(transformEmployeeToStaffMember);
+    console.log('DispatchBoard - Raw employees:', employees);
+    console.log('DispatchBoard - Employee count:', employees.length);
+    
+    const activeEmployees = employees; // Remove filter temporarily for debugging
+    console.log('DispatchBoard - Active employees:', activeEmployees);
+    console.log('DispatchBoard - Active employee count:', activeEmployees.length);
+    
+    const staffMembers = activeEmployees.map(transformEmployeeToStaffMember);
+    console.log('DispatchBoard - Transformed staff members:', staffMembers);
+    
+    return staffMembers;
   }, [employees]);
 
   // Fetch job templates for template selection
