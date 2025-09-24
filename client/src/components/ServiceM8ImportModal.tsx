@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { 
   Download, 
@@ -46,14 +46,16 @@ export function ServiceM8ImportModal() {
   // Import mutations
   const importAllMutation = useMutation({
     mutationFn: async (): Promise<FullImportResult> => {
-      const response = await fetch('/api/servicem8/import/all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+      return await apiRequest('/api/servicem8/import/all', {
+        method: 'POST'
       });
-      return response.json();
     },
     onSuccess: (result: FullImportResult) => {
       if (result.success) {
+        // Invalidate customers and jobs queries to refresh UI
+        queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        
         toast({
           title: "Import Successful!",
           description: result.message,
@@ -78,13 +80,16 @@ export function ServiceM8ImportModal() {
 
   const importCustomersMutation = useMutation({
     mutationFn: async (): Promise<ImportResult> => {
-      const response = await fetch('/api/servicem8/import/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+      return await apiRequest('/api/servicem8/import/customers', {
+        method: 'POST'
       });
-      return response.json();
     },
     onSuccess: (result: ImportResult) => {
+      if (result.success) {
+        // Invalidate customers query to refresh UI
+        queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      }
+      
       toast({
         title: result.success ? "Customers Imported" : "Import Error",
         description: `${result.imported} customers imported. ${result.errors.length} errors.`,
@@ -95,13 +100,16 @@ export function ServiceM8ImportModal() {
 
   const importJobsMutation = useMutation({
     mutationFn: async (): Promise<ImportResult> => {
-      const response = await fetch('/api/servicem8/import/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+      return await apiRequest('/api/servicem8/import/jobs', {
+        method: 'POST'
       });
-      return response.json();
     },
     onSuccess: (result: ImportResult) => {
+      if (result.success) {
+        // Invalidate jobs query to refresh UI
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      }
+      
       toast({
         title: result.success ? "Jobs Imported" : "Import Error", 
         description: `${result.imported} jobs imported. ${result.errors.length} errors.`,
