@@ -45,6 +45,7 @@ import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
 import { servicem8Service } from "./services/servicem8Service";
+import { createServiceM8Routes } from "./routes/servicem8";
 
 // Configure multer for file uploads
 // CSV file upload configuration
