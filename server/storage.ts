@@ -71,6 +71,7 @@ export interface IStorage {
   getCustomerByServiceM8Uuid(uuid: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   getAllCustomers(): Promise<Customer[]>;
+  clearAllCustomers(): Promise<number>;
   searchCustomers(query: string): Promise<Customer[]>;
   
   // CSV Import and Bulk Updates
@@ -128,6 +129,7 @@ export interface IStorage {
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
   getAllJobs(): Promise<Job[]>;
+  clearAllJobs(): Promise<number>;
   
   // Gross Margin Management
   updateJobGrossMargin(jobId: string, grossMarginData: {
@@ -569,6 +571,11 @@ class DatabaseStorage implements IStorage {
     return await db.select().from(schema.customers).orderBy(desc(schema.customers.createdAt));
   }
 
+  async clearAllCustomers(): Promise<number> {
+    const result = await db.delete(schema.customers);
+    return result.rowCount || 0;
+  }
+
   async searchCustomers(query: string): Promise<Customer[]> {
     const searchTerm = `%${query}%`;
     return await db.select().from(schema.customers)
@@ -894,6 +901,11 @@ class DatabaseStorage implements IStorage {
 
   async getAllJobs(): Promise<Job[]> {
     return await db.select().from(schema.jobs).orderBy(desc(schema.jobs.createdAt));
+  }
+
+  async clearAllJobs(): Promise<number> {
+    const result = await db.delete(schema.jobs);
+    return result.rowCount || 0;
   }
 
   // ========================================
