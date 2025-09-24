@@ -22,6 +22,7 @@ import JobTemplateManagement from '@/components/JobTemplateManagement';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 import { ServiceM8ImportModal } from '@/components/ServiceM8ImportModal';
 import { CustomerCSVUpload } from '@/components/CustomerCSVUpload';
+import { ServiceM8JobImport } from '@/components/ServiceM8JobImport';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -320,6 +321,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
             <TabsTrigger value="weather" data-testid="tab-weather" className="shrink-0"><Cloud className="w-4 h-4 mr-2" />Weather</TabsTrigger>
             <TabsTrigger value="safety" data-testid="tab-safety" className="shrink-0"><Shield className="w-4 h-4 mr-2" />Safety</TabsTrigger>
             <TabsTrigger value="integrations" data-testid="tab-integrations" className="shrink-0"><Plug className="w-4 h-4 mr-2" />Integrations</TabsTrigger>
+            <TabsTrigger value="job-import" data-testid="tab-job-import" className="shrink-0"><FileText className="w-4 h-4 mr-2" />Job Import</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -777,6 +779,11 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
           {/* Integrations Tab */}
           <TabsContent value="integrations" className="flex-1 overflow-auto">
             <Integrations />
+          </TabsContent>
+
+          {/* ServiceM8 Job Import Tab */}
+          <TabsContent value="job-import" className="flex-1 overflow-auto">
+            <ServiceM8JobImport />
           </TabsContent>
         </Tabs>
       </div>
