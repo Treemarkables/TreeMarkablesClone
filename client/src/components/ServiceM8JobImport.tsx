@@ -458,6 +458,28 @@ export function ServiceM8JobImport() {
             </TabsContent>
 
             <TabsContent value="preview" className="space-y-4">
+              {/* 🚀 IMPORT BUTTON - TOP OF PAGE - IMPOSSIBLE TO MISS */}
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-xl shadow-xl mb-6 border-4 border-green-400">
+                <div className="text-center">
+                  <h2 className="text-3xl font-bold mb-2">🚀 READY TO IMPORT YOUR SERVICEM8 DATA!</h2>
+                  <p className="text-xl mb-4">Found {jobs.length.toLocaleString()} jobs ready to import</p>
+                  <div className="flex flex-col sm:flex-row gap-4 max-w-2xl mx-auto">
+                    <Button onClick={resetImport} variant="outline" className="flex-1 bg-white text-green-600 hover:bg-gray-50 text-lg font-bold py-3" size="lg">
+                      📁 Upload Different File
+                    </Button>
+                    <Button 
+                      onClick={handleImport} 
+                      disabled={!jobs.length || isProcessing}
+                      data-testid="button-import-jobs"
+                      className="flex-1 bg-yellow-400 text-green-800 hover:bg-yellow-300 text-2xl font-bold py-4 shadow-lg border-2 border-yellow-300"
+                      size="lg"
+                    >
+                      🚀 IMPORT {jobs.length.toLocaleString()} JOBS NOW!
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="p-4">
