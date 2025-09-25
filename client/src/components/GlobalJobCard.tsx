@@ -700,7 +700,7 @@ export function GlobalJobCard({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl h-[95vh] flex flex-col p-0">
+      <DialogContent className="max-w-6xl h-[85vh] flex flex-col p-0">
         {/* ServiceM8-Style Header */}
         <ServiceM8HeaderToolbar
           mode={mode}
@@ -730,7 +730,7 @@ export function GlobalJobCard({
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full" data-form="job-form">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-                <div className="px-6 pt-4 pb-0">
+                <div className="px-4 pt-2 pb-0">
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="details" data-testid="tab-details">
                       Job Details
@@ -754,18 +754,18 @@ export function GlobalJobCard({
                 
                 <div className="flex-1 overflow-hidden">
                   <TabsContent value="details" className="h-full m-0">
-                    <div className="h-full overflow-y-auto px-6 pb-6">
-                      <div className="space-y-6">
+                    <div className="h-full overflow-y-auto px-4 pb-2">
+                      <div className="space-y-2">
             {/* Customer Contact Details (Read-only when editing) */}
             {mode === "edit" && editingJob && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="w-5 h-5" />
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <User className="w-4 h-4" />
                     Customer Contact Details
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-2">
                   {(() => {
                     const selectedCustomer = customers.find((c: Customer) => c.id === editingJob.customerId);
                     if (selectedCustomer) {
@@ -775,8 +775,8 @@ export function GlobalJobCard({
                       const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
                       
                       return (
-                        <div className="grid grid-cols-2 gap-6">
-                          <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
                             <div className="flex items-center gap-3">
                               <User className="w-5 h-5 text-muted-foreground" />
                               <div>
@@ -828,7 +828,7 @@ export function GlobalJobCard({
                             </div>
                           </div>
                           
-                          <div className="space-y-4">
+                          <div className="space-y-2">
                             <div className="flex items-center gap-3">
                               <User className="w-5 h-5 text-muted-foreground" />
                               <div>
@@ -894,13 +894,13 @@ export function GlobalJobCard({
 
             {/* Customer Section */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="w-5 h-5" />
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <User className="w-4 h-4" />
                   Customer Information
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-2">
                 <Tabs value={activeCustomerTab} onValueChange={setActiveCustomerTab}>
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger 
@@ -921,7 +921,7 @@ export function GlobalJobCard({
                     </TabsTrigger>
                   </TabsList>
                   
-                  <TabsContent value="existing" className="space-y-4">
+                  <TabsContent value="existing" className="space-y-2">
                     <FormField
                       control={form.control}
                       name="customerId"
@@ -971,8 +971,8 @@ export function GlobalJobCard({
                           <User className="w-4 h-4" />
                           Customer Details
                         </h4>
-                        <div className="grid grid-cols-2 gap-6">
-                          <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
                             <div className="flex items-center gap-3">
                               <User className="w-5 h-5 text-muted-foreground" />
                               <div>
@@ -1027,7 +1027,7 @@ export function GlobalJobCard({
                             </div>
                           </div>
                           
-                          <div className="space-y-4">
+                          <div className="space-y-2">
                             <div className="flex items-center gap-3">
                               <User className="w-5 h-5 text-muted-foreground" />
                               <div>
@@ -1086,8 +1086,8 @@ export function GlobalJobCard({
                     )}
                   </TabsContent>
                   
-                  <TabsContent value="new" className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                  <TabsContent value="new" className="space-y-2">
+                    <div className="grid grid-cols-2 gap-3">
                       <FormField
                         control={form.control}
                         name="newCustomerName"
@@ -1115,7 +1115,7 @@ export function GlobalJobCard({
                         )}
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                       <FormField
                         control={form.control}
                         name="newCustomerPhone"
@@ -1143,7 +1143,7 @@ export function GlobalJobCard({
                         )}
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                       <FormField
                         control={form.control}
                         name="newCustomerCity"
@@ -1184,7 +1184,7 @@ export function GlobalJobCard({
                   Job Details
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-2">
                 <FormField
                   control={form.control}
                   name="description"
@@ -1322,7 +1322,7 @@ export function GlobalJobCard({
                   Job Checklist
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-2">
                 <div className="space-y-2">
                   {checklist.map((item) => (
                     <div key={item.id} className="flex items-center gap-3 p-2 border rounded-lg">
@@ -1375,7 +1375,7 @@ export function GlobalJobCard({
                   Pricing & Line Items
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-2">
                 <div className="space-y-3">
                   {lineItems.map((item) => (
                     <div key={item.id} className="grid grid-cols-12 gap-2 items-center p-3 border rounded-lg">
@@ -1480,9 +1480,9 @@ export function GlobalJobCard({
               </TabsContent>
               
               <TabsContent value="profit" className="h-full m-0">
-                <div className="h-full overflow-y-auto px-6 py-6">
+                <div className="h-full overflow-y-auto px-4 py-4">
                   {jobId ? (
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                       <div className="text-center mb-4">
                         <h3 className="text-lg font-semibold text-gray-900">Job Profitability Tracker</h3>
                         <p className="text-sm text-gray-500">Real-time cost tracking and margin analysis</p>
@@ -1554,7 +1554,7 @@ export function GlobalJobCard({
     </div>
     
     {/* Form Actions - Always visible outside form */}
-    <div className="flex justify-end gap-3 p-6 border-t bg-background">
+    <div className="flex justify-end gap-3 p-4 border-t bg-background">
       <Button 
         type="button" 
         variant="outline" 
@@ -1676,8 +1676,8 @@ export function GlobalJobCard({
                     <SelectValue placeholder="Select staff member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {employeesData?.data?.length > 0 ? (
-                      employeesData.data.map((employee: any) => (
+                    {(employeesData as any)?.data?.length > 0 ? (
+                      (employeesData as any).data.map((employee: any) => (
                         <SelectItem key={employee.id} value={employee.id}>
                           {employee.name}
                         </SelectItem>

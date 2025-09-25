@@ -1158,7 +1158,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 <div
                                   key={job.id}
                                   className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs p-1 cursor-pointer hover:opacity-80 transition-opacity top-1 bottom-1`}
-                                  onClick={() => setSelectedJob(job)}
+                                  onClick={() => handleEditJob(job)}
                                   data-testid={`job-block-${job.id}`}
                                   style={{
                                     left: `${leftPercent}%`,
@@ -1221,7 +1221,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 <div
                                   key={job.id}
                                   className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs p-1 cursor-pointer hover:opacity-80 transition-opacity top-1 bottom-1`}
-                                  onClick={() => setSelectedJob(job)}
+                                  onClick={() => handleEditJob(job)}
                                   data-testid={`job-block-${job.id}`}
                                   style={{
                                     left: `${leftPercent}%`,
@@ -1338,7 +1338,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         <div
                           key={job.id}
                           className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                          onClick={() => setSelectedJob(job)}
+                          onClick={() => handleEditJob(job)}
                           data-testid={`servicem8-job-card-${job.id}`}
                         >
                           {/* Connection Line Dot */}
@@ -1424,245 +1424,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </CardContent>
       </Card>
 
-      {/* Job Detail Modal */}
-      {selectedJob && (
-        <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
-          <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${getPriorityColor(selectedJob.priority)}`} />
-                Job #{selectedJob.jobId} Details
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-semibold text-sm mb-2">Customer Information</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Name:</span>
-                    <span className="font-medium">{selectedJob.customerName}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Phone:</span>
-                    <span>{selectedJob.customerPhone}</span>
-                  </div>
-                  <div className="flex items-start justify-between">
-                    <span className="text-muted-foreground">Address:</span>
-                    <span className="text-right max-w-[200px]">{selectedJob.address}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-sm mb-2">
-                  {assignmentMode === 'teams' ? 'Team Assignment' : 'Staff Assignment'}
-                </h4>
-                <div className="space-y-2 text-sm">
-                  {assignmentMode === 'teams' ? (
-                    // Team Assignment Details
-                    (() => {
-                      const team = mockTeams.find(t => t.id === selectedJob.teamId);
-                      const teamMembers = team ? getTeamMembers(team.id) : [];
-                      return (
-                        <div>
-                          {team && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Team:</span>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{team.name}</span>
-                                <Badge variant="outline" className="text-xs">
-                                  {teamMembers.length} members
-                                </Badge>
-                              </div>
-                            </div>
-                          )}
-                          <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground">Team Members:</span>
-                            <div className="space-y-1 ml-2">
-                              {teamMembers.map((member) => (
-                                <div key={member.id} className="flex items-center gap-2">
-                                  <Avatar className="h-5 w-5">
-                                    <AvatarFallback className="text-xs">
-                                      {member.name.split(' ').map(n => n[0]).join('')}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <div className="flex-1">
-                                    <span className="text-xs font-medium">{member.name}</span>
-                                    <div className="text-xs text-muted-foreground">{member.role}</div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    // Individual Staff Assignment Details
-                    (() => {
-                      const staff = staffMembers.find((s: StaffMember) => s.id === selectedJob.staffId);
-                      return (
-                        <div>
-                          {staff && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Assigned to:</span>
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-6 w-6">
-                                  <AvatarFallback className={`${staff.color} text-white text-xs`}>
-                                    {staff.name.split(' ').map(n => n[0]).join('')}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="text-right">
-                                  <div className="font-medium">{staff.name}</div>
-                                  <div className="text-xs text-muted-foreground">{staff.role}</div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          {staff && (
-                            <div className="mt-2">
-                              <span className="text-xs text-muted-foreground">Skills:</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {staff.skills.map((skill, index) => (
-                                  <Badge key={index} variant="outline" className="text-xs">
-                                    {skill}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-sm mb-2">Job Details</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Service:</span>
-                    <span className="font-medium">{selectedJob.serviceType}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Duration:</span>
-                    <span>{selectedJob.duration}h</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Priority:</span>
-                    <Badge className={`${getPriorityColor(selectedJob.priority)} text-white text-xs`}>
-                      {selectedJob.priority}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Status:</span>
-                    <Badge variant="outline" className="text-xs">
-                      {selectedJob.status}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-
-              {selectedJob.notes && (
-                <div>
-                  <h4 className="font-semibold text-sm mb-2">Notes</h4>
-                  <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
-                    {selectedJob.notes}
-                  </p>
-                </div>
-              )}
-
-              {/* Gross Margin Calculator */}
-              <div>
-                <h4 className="font-semibold text-sm mb-2">Cost & Margin Analysis</h4>
-                <GrossMarginCalculator 
-                  jobId={selectedJob.id} 
-                  compact={true} 
-                />
-              </div>
-              
-              <div>
-                <h4 className="font-semibold text-sm mb-2">Staff Time Tracking</h4>
-                <StaffTimeTracker 
-                  jobId={selectedJob.id} 
-                  compact={true} 
-                />
-              </div>
-
-              {/* Quick Actions */}
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    className="flex-1" 
-                    onClick={() => selectedJob && handleEditJob(selectedJob)}
-                    data-testid="edit-job"
-                  >
-                    <Edit className="h-4 w-4 mr-1" />
-                    Edit Job
-                  </Button>
-                  <Button 
-                    className="flex-1" 
-                    onClick={() => selectedJob && markJobComplete(selectedJob.id)}
-                    data-testid="complete-job"
-                  >
-                    <Check className="h-4 w-4 mr-1" />
-                    Mark Complete
-                  </Button>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => selectedJob && handleScheduleJob(selectedJob)}
-                    data-testid="reschedule-job"
-                  >
-                    <RotateCcw className="h-4 w-4 mr-1" />
-                    Reschedule
-                  </Button>
-                  <Button variant="outline" size="sm" data-testid="add-notes-job">
-                    <MessageSquare className="h-4 w-4 mr-1" />
-                    Add Notes
-                  </Button>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => window.open(`tel:${selectedJob.customerPhone}`)}
-                    data-testid="call-customer"
-                  >
-                    <Phone className="h-4 w-4 mr-1" />
-                    Call
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(selectedJob.address)}`, '_blank')}
-                    data-testid="view-location"
-                  >
-                    <ExternalLink className="h-4 w-4 mr-1" />
-                    Location
-                  </Button>
-                  <Button 
-                    variant="destructive" 
-                    size="sm" 
-                    onClick={() => selectedJob && cancelJob(selectedJob.id)}
-                    data-testid="cancel-job"
-                  >
-                    <X className="h-4 w-4 mr-1" />
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
 
       {/* Global Job Card */}
       <GlobalJobCard 
