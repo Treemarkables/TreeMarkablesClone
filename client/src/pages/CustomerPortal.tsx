@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -834,9 +835,11 @@ export function CustomerPortal() {
                           <FormItem>
                             <FormLabel>Service Address *</FormLabel>
                             <FormControl>
-                              <Input
-                                {...field}
-                                placeholder={customer?.address}
+                              <AddressAutocomplete
+                                value={field.value || ""}
+                                onChange={field.onChange}
+                                placeholder={customer?.address || "Service address..."}
+                                mode="full"
                                 data-testid="input-service-address"
                               />
                             </FormControl>

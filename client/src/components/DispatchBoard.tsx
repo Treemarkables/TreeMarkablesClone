@@ -43,6 +43,7 @@ import { queryClient, apiRequest } from '@/lib/queryClient';
 import type { JobTemplate } from "@shared/schema";
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 import { CustomerAvatar } from '@/components/CustomerAvatar';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -1713,12 +1714,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <label className="text-xs font-medium text-muted-foreground mb-1 block">
                       Service Address *
                     </label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border rounded-md text-sm"
-                      placeholder="123 Main St, City"
+                    <AddressAutocomplete
                       value={newJobFormData.address}
-                      onChange={(e) => setNewJobFormData(prev => ({ ...prev, address: e.target.value }))}
+                      onChange={(value) => setNewJobFormData(prev => ({ ...prev, address: value }))}
+                      placeholder="123 Main St, City"
+                      mode="full"
+                      className="text-sm"
                       data-testid="input-address"
                     />
                   </div>

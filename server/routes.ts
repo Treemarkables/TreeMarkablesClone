@@ -7733,78 +7733,147 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Address autocomplete endpoint
+  // Rate limiting for address search (simple in-memory store)
+  const addressSearchRateLimit = new Map<string, { count: number; resetTime: number }>();
+  const MAX_REQUESTS_PER_MINUTE = 30;
+  const RATE_LIMIT_WINDOW = 60000; // 1 minute
+
+  // Address autocomplete endpoint with proper security and validation
   app.get('/api/address-search', async (req: Request, res: Response) => {
     try {
+      // Input validation
       const { q: query, limit = 8 } = req.query;
 
-      if (!query || typeof query !== 'string' || query.length < 3) {
+      // Validate query parameter
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Query parameter is required and must be a string'
+        });
+      }
+
+      if (query.length < 2) {
         return res.json({ success: true, addresses: [] });
       }
 
+      if (query.length > 100) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Query too long' 
+        });
+      }
+
+      // Validate limit parameter
+      const limitNum = parseInt(limit as string, 10);
+      if (isNaN(limitNum) || limitNum < 1 || limitNum > 20) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Limit must be between 1 and 20' 
+        });
+      }
+
+      // Rate limiting by IP
+      const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+      const now = Date.now();
+      const rateLimitEntry = addressSearchRateLimit.get(clientIp);
+
+      if (rateLimitEntry) {
+        if (now < rateLimitEntry.resetTime) {
+          if (rateLimitEntry.count >= MAX_REQUESTS_PER_MINUTE) {
+            return res.status(429).json({
+              success: false,
+              message: 'Too many requests. Please try again later.'
+            });
+          }
+          rateLimitEntry.count++;
+        } else {
+          // Reset the rate limit window
+          addressSearchRateLimit.set(clientIp, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+        }
+      } else {
+        addressSearchRateLimit.set(clientIp, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+      }
+
+      // Log request for monitoring
+      console.log(`[Address Search] IP: ${clientIp}, Query: "${query.substring(0, 20)}...", Limit: ${limitNum}`);
+
+      // Sanitize query
+      const sanitizedQuery = query.trim().replace(/[<>]/g, '');
+      
       // Use Addy.co.nz API for New Zealand addresses
       const apiKey = process.env.ADDY_API_KEY;
-      const apiUrl = `https://api.addy.co.nz/address?q=${encodeURIComponent(query)}&limit=${limit}`;
       
-      const headers: Record<string, string> = {
-        'Accept': 'application/json',
-      };
-
       if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`;
-      }
-
-      try {
-        const response = await fetch(apiUrl, { headers });
-
-        if (response.ok) {
-          const data = await response.json();
-          return res.json({ 
-            success: true, 
-            addresses: data.addresses || []
+        try {
+          const apiUrl = `https://api.addy.co.nz/address?q=${encodeURIComponent(sanitizedQuery)}&limit=${limitNum}`;
+          const response = await fetch(apiUrl, {
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+              'User-Agent': 'Treemarkables-Web-App/1.0'
+            },
+            timeout: 5000 // 5 second timeout
           });
-        } else {
-          console.warn(`Addy.co.nz API returned ${response.status}: ${response.statusText}`);
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`[Address Search] API success: ${data.addresses?.length || 0} results`);
+            return res.json({ 
+              success: true, 
+              addresses: data.addresses || []
+            });
+          } else if (response.status === 401) {
+            console.error('[Address Search] API authentication failed - check API key');
+          } else if (response.status === 429) {
+            console.warn('[Address Search] API rate limit exceeded');
+          } else {
+            console.warn(`[Address Search] API error: ${response.status} ${response.statusText}`);
+          }
+        } catch (apiError) {
+          if (apiError instanceof Error) {
+            console.warn(`[Address Search] API request failed: ${apiError.message}`);
+          } else {
+            console.warn('[Address Search] API request failed with unknown error');
+          }
         }
-      } catch (apiError) {
-        console.warn('Address API unavailable:', apiError);
+      } else {
+        console.log('[Address Search] No API key configured, using mock data');
       }
 
-      // Fallback to mock suggestions when API is unavailable
+      // Fallback to mock suggestions with proper NZ address structure
       const mockAddresses = [
-        "123 Queen Street, Auckland Central, Auckland 1010",
-        "456 George Street, Dunedin Central, Dunedin 9016", 
-        "789 Lambton Quay, Wellington Central, Wellington 6011",
-        "321 Manchester Street, Christchurch Central, Christchurch 8011",
-        "654 Devon Street East, New Plymouth Central, New Plymouth 4310",
-        "987 Princes Street, Dunedin Central, Dunedin 9016",
-        "147 Victoria Street, Hamilton Central, Hamilton 3204",
-        "258 High Street, Christchurch Central, Christchurch 8011",
-        "369 Karangahape Road, Auckland Central, Auckland 1010",
-        "741 Cuba Street, Wellington Central, Wellington 6011",
-        "852 Cashel Street, Christchurch Central, Christchurch 8011",
-        "963 Tauranga Road, Mount Maunganui, Tauranga 3116"
+        { a: "123 Queen Street, Auckland Central, Auckland 1010", components: { street: "123 Queen Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
+        { a: "456 George Street, Dunedin Central, Dunedin 9016", components: { street: "456 George Street", suburb: "Dunedin Central", city: "Dunedin", region: "Otago", postcode: "9016" }},
+        { a: "789 Lambton Quay, Wellington Central, Wellington 6011", components: { street: "789 Lambton Quay", suburb: "Wellington Central", city: "Wellington", region: "Wellington", postcode: "6011" }},
+        { a: "321 Manchester Street, Christchurch Central, Christchurch 8011", components: { street: "321 Manchester Street", suburb: "Christchurch Central", city: "Christchurch", region: "Canterbury", postcode: "8011" }},
+        { a: "654 Devon Street East, New Plymouth Central, New Plymouth 4310", components: { street: "654 Devon Street East", suburb: "New Plymouth Central", city: "New Plymouth", region: "Taranaki", postcode: "4310" }},
+        { a: "987 Princes Street, Dunedin Central, Dunedin 9016", components: { street: "987 Princes Street", suburb: "Dunedin Central", city: "Dunedin", region: "Otago", postcode: "9016" }},
+        { a: "147 Victoria Street, Hamilton Central, Hamilton 3204", components: { street: "147 Victoria Street", suburb: "Hamilton Central", city: "Hamilton", region: "Waikato", postcode: "3204" }},
+        { a: "258 High Street, Christchurch Central, Christchurch 8011", components: { street: "258 High Street", suburb: "Christchurch Central", city: "Christchurch", region: "Canterbury", postcode: "8011" }}
       ];
 
       const mockSuggestions = mockAddresses
-        .filter(addr => addr.toLowerCase().includes(query.toLowerCase()))
-        .slice(0, parseInt(limit as string, 10) || 8)
+        .filter(addr => addr.a.toLowerCase().includes(sanitizedQuery.toLowerCase()))
+        .slice(0, limitNum)
         .map((addr, index) => ({
-          a: addr,
+          a: addr.a,
           pxid: `mock-${index}-${Date.now()}`,
-          v: 1
+          v: 1,
+          // Include structured data for proper parsing
+          components: addr.components
         }));
 
+      console.log(`[Address Search] Mock fallback: ${mockSuggestions.length} results`);
       res.json({ 
         success: true, 
         addresses: mockSuggestions 
       });
 
     } catch (error) {
-      console.error('Address search error:', error);
+      console.error('[Address Search] Unexpected error:', error);
       res.status(500).json({ 
         success: false, 
-        message: 'Error searching addresses' 
+        message: 'Internal server error' 
       });
     }
   });
