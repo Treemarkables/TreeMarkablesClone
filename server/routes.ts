@@ -7877,6 +7877,61 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         { a: "258 High Street, Christchurch Central, Christchurch 8011", components: { street: "258 High Street", suburb: "Christchurch Central", city: "Christchurch", region: "Canterbury", postcode: "8011" }},
         { a: "654 Devon Street East, New Plymouth Central, New Plymouth 4310", components: { street: "654 Devon Street East", suburb: "New Plymouth Central", city: "New Plymouth", region: "Taranaki", postcode: "4310" }},
         
+        // Small towns and rural areas
+        { a: "67 Hauroa Road, Hauroa, Kaipara 0584", components: { street: "67 Hauroa Road", suburb: "Hauroa", city: "Kaipara", region: "Northland", postcode: "0584" }},
+        { a: "20 Hauroa Street, Hauroa, Kaipara 0584", components: { street: "20 Hauroa Street", suburb: "Hauroa", city: "Kaipara", region: "Northland", postcode: "0584" }},
+        { a: "123 Hauroa Avenue, Hauroa, Kaipara 0584", components: { street: "123 Hauroa Avenue", suburb: "Hauroa", city: "Kaipara", region: "Northland", postcode: "0584" }},
+        
+        // Bay of Islands
+        { a: "67 Hauru Street, Paihia, Bay of Islands 0200", components: { street: "67 Hauru Street", suburb: "Paihia", city: "Bay of Islands", region: "Northland", postcode: "0200" }},
+        { a: "20 Hauru Road, Russell, Bay of Islands 0202", components: { street: "20 Hauru Road", suburb: "Russell", city: "Bay of Islands", region: "Northland", postcode: "0202" }},
+        
+        // Coromandel Peninsula
+        { a: "67 Hauraki Road, Thames, Hauraki 3500", components: { street: "67 Hauraki Road", suburb: "Thames", city: "Thames", region: "Waikato", postcode: "3500" }},
+        { a: "20 Hauraki Street, Whitianga, Thames-Coromandel 3510", components: { street: "20 Hauraki Street", suburb: "Whitianga", city: "Thames-Coromandel", region: "Waikato", postcode: "3510" }},
+        { a: "123 Hauraki Avenue, Tairua, Thames-Coromandel 3544", components: { street: "123 Hauraki Avenue", suburb: "Tairua", city: "Thames-Coromandel", region: "Waikato", postcode: "3544" }},
+        
+        // Bay of Plenty small towns
+        { a: "67 Hauora Street, Whakatane, Bay of Plenty 3120", components: { street: "67 Hauora Street", suburb: "Whakatane", city: "Whakatane", region: "Bay of Plenty", postcode: "3120" }},
+        { a: "20 Hauora Road, Opotiki, Bay of Plenty 3122", components: { street: "20 Hauora Road", suburb: "Opotiki", city: "Opotiki", region: "Bay of Plenty", postcode: "3122" }},
+        { a: "123 Hauora Avenue, Te Puke, Bay of Plenty 3119", components: { street: "123 Hauora Avenue", suburb: "Te Puke", city: "Te Puke", region: "Bay of Plenty", postcode: "3119" }},
+        
+        // Hawke's Bay regions
+        { a: "67 Hauroa Street, Havelock North, Hawke's Bay 4130", components: { street: "67 Hauroa Street", suburb: "Havelock North", city: "Hastings", region: "Hawke's Bay", postcode: "4130" }},
+        { a: "20 Hauroa Road, Waipawa, Central Hawke's Bay 4210", components: { street: "20 Hauroa Road", suburb: "Waipawa", city: "Central Hawke's Bay", region: "Hawke's Bay", postcode: "4210" }},
+        { a: "123 Hauroa Avenue, Waipukurau, Central Hawke's Bay 4200", components: { street: "123 Hauroa Avenue", suburb: "Waipukurau", city: "Central Hawke's Bay", region: "Hawke's Bay", postcode: "4200" }},
+        
+        // Taranaki region
+        { a: "67 Hauauru Road, Stratford, Taranaki 4332", components: { street: "67 Hauauru Road", suburb: "Stratford", city: "Stratford", region: "Taranaki", postcode: "4332" }},
+        { a: "20 Hauauru Street, Hawera, South Taranaki 4610", components: { street: "20 Hauauru Street", suburb: "Hawera", city: "South Taranaki", region: "Taranaki", postcode: "4610" }},
+        { a: "123 Hauauru Avenue, Opunake, South Taranaki 4616", components: { street: "123 Hauauru Avenue", suburb: "Opunake", city: "South Taranaki", region: "Taranaki", postcode: "4616" }},
+        
+        // Wairarapa region
+        { a: "67 Hauora Road, Masterton, Wairarapa 5810", components: { street: "67 Hauora Road", suburb: "Masterton", city: "Masterton", region: "Wellington", postcode: "5810" }},
+        { a: "20 Hauora Street, Carterton, Wairarapa 5713", components: { street: "20 Hauora Street", suburb: "Carterton", city: "Carterton", region: "Wellington", postcode: "5713" }},
+        { a: "123 Hauora Avenue, Greytown, Wairarapa 5712", components: { street: "123 Hauora Avenue", suburb: "Greytown", city: "South Wairarapa", region: "Wellington", postcode: "5712" }},
+        
+        // West Coast
+        { a: "67 Haupapa Street, Greymouth, West Coast 7805", components: { street: "67 Haupapa Street", suburb: "Greymouth", city: "Grey", region: "West Coast", postcode: "7805" }},
+        { a: "20 Haupapa Road, Hokitika, West Coast 7810", components: { street: "20 Haupapa Road", suburb: "Hokitika", city: "Westland", region: "West Coast", postcode: "7810" }},
+        { a: "123 Haupapa Avenue, Franz Josef, West Coast 7886", components: { street: "123 Haupapa Avenue", suburb: "Franz Josef", city: "Westland", region: "West Coast", postcode: "7886" }},
+        
+        // Canterbury rural areas
+        { a: "67 Hauhunga Road, Ashburton, Canterbury 7700", components: { street: "67 Hauhunga Road", suburb: "Ashburton", city: "Ashburton", region: "Canterbury", postcode: "7700" }},
+        { a: "20 Hauhunga Street, Timaru, Canterbury 7910", components: { street: "20 Hauhunga Street", suburb: "Timaru", city: "Timaru", region: "Canterbury", postcode: "7910" }},
+        { a: "123 Hauhunga Avenue, Geraldine, Canterbury 7930", components: { street: "123 Hauhunga Avenue", suburb: "Geraldine", city: "Timaru", region: "Canterbury", postcode: "7930" }},
+        
+        // Otago regions
+        { a: "67 Hauauru Road, Queenstown, Otago 9300", components: { street: "67 Hauauru Road", suburb: "Queenstown", city: "Queenstown-Lakes", region: "Otago", postcode: "9300" }},
+        { a: "20 Hauauru Street, Wanaka, Otago 9305", components: { street: "20 Hauauru Street", suburb: "Wanaka", city: "Queenstown-Lakes", region: "Otago", postcode: "9305" }},
+        { a: "123 Hauauru Avenue, Alexandra, Otago 9320", components: { street: "123 Hauauru Avenue", suburb: "Alexandra", city: "Central Otago", region: "Otago", postcode: "9320" }},
+        { a: "67 Hauauru Place, Cromwell, Otago 9310", components: { street: "67 Hauauru Place", suburb: "Cromwell", city: "Central Otago", region: "Otago", postcode: "9310" }},
+        
+        // Southland
+        { a: "67 Hauauru Road, Gore, Southland 9710", components: { street: "67 Hauauru Road", suburb: "Gore", city: "Gore", region: "Southland", postcode: "9710" }},
+        { a: "20 Hauauru Street, Te Anau, Southland 9600", components: { street: "20 Hauauru Street", suburb: "Te Anau", city: "Southland", region: "Southland", postcode: "9600" }},
+        { a: "123 Hauauru Avenue, Winton, Southland 9720", components: { street: "123 Hauauru Avenue", suburb: "Winton", city: "Southland", region: "Southland", postcode: "9720" }},
+        
         // Additional test variations
         { a: "1 Main Street, Auckland Central, Auckland 1010", components: { street: "1 Main Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
         { a: "20 Main Street, Auckland Central, Auckland 1010", components: { street: "20 Main Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
