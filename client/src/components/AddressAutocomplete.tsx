@@ -47,7 +47,7 @@ export function AddressAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Function to search addresses using Addy API
+  // Function to search addresses using backend API
   const searchAddresses = async (query: string) => {
     if (query.length < 3) {
       setSuggestions([]);
@@ -57,65 +57,41 @@ export function AddressAutocomplete({
 
     setIsLoading(true);
     try {
-      // Using Addy.co.nz API for New Zealand addresses
-      // Note: In production, you'd want to get an API key from https://www.addy.co.nz/
+      // Use secure backend API endpoint
       const response = await fetch(
-        `https://api.addy.co.nz/address?q=${encodeURIComponent(query)}&limit=8`,
+        `/api/address-search?q=${encodeURIComponent(query)}&limit=8`,
         {
           headers: {
             'Accept': 'application/json',
-            // In production, add your API key here:
-            // 'Authorization': 'Bearer YOUR_API_KEY'
           }
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        setSuggestions(data.addresses || []);
-        setShowSuggestions(true);
-        setSelectedIndex(-1);
+        if (data.success) {
+          setSuggestions(data.addresses || []);
+          setShowSuggestions(true);
+          setSelectedIndex(-1);
+        } else {
+          console.warn('Address search failed:', data.message);
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
       } else {
-        // Fallback to mock suggestions for development
-        const mockSuggestions = generateMockSuggestions(query);
-        setSuggestions(mockSuggestions);
-        setShowSuggestions(true);
-        setSelectedIndex(-1);
+        console.warn('Address API returned error:', response.status);
+        setSuggestions([]);
+        setShowSuggestions(false);
       }
     } catch (error) {
-      console.warn('Address API unavailable, using mock data:', error);
-      // Fallback to mock suggestions
-      const mockSuggestions = generateMockSuggestions(query);
-      setSuggestions(mockSuggestions);
-      setShowSuggestions(true);
-      setSelectedIndex(-1);
+      console.warn('Address API unavailable:', error);
+      setSuggestions([]);
+      setShowSuggestions(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Generate mock suggestions for development/fallback
-  const generateMockSuggestions = (query: string): AddySuggestion[] => {
-    const mockAddresses = [
-      "123 Queen Street, Auckland Central, Auckland 1010",
-      "456 George Street, Dunedin Central, Dunedin 9016",
-      "789 Lambton Quay, Wellington Central, Wellington 6011",
-      "321 Manchester Street, Christchurch Central, Christchurch 8011",
-      "654 Devon Street East, New Plymouth Central, New Plymouth 4310",
-      "987 Princes Street, Dunedin Central, Dunedin 9016",
-      "147 Victoria Street, Hamilton Central, Hamilton 3204",
-      "258 High Street, Christchurch Central, Christchurch 8011"
-    ];
-
-    return mockAddresses
-      .filter(addr => addr.toLowerCase().includes(query.toLowerCase()))
-      .slice(0, 5)
-      .map((addr, index) => ({
-        a: addr,
-        pxid: `mock-${index}`,
-        v: 1
-      }));
-  };
 
   // Parse full address into components
   const parseAddress = (fullAddress: string) => {
