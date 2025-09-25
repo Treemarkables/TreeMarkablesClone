@@ -505,7 +505,7 @@ export const jobs = pgTable("jobs", {
 export const jobDiaryEntries = pgTable("job_diary_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id).notNull(),
-  entryType: text("entry_type").notNull(), // note, progress, issue, milestone, weather, equipment, safety, completion
+  entryType: text("entry_type").notNull(), // note, progress, issue, milestone, weather, equipment, safety, completion, email
   title: text("title").notNull(),
   description: text("description").notNull(),
   authorName: text("author_name").notNull(), // Name of person making entry
