@@ -7842,14 +7842,45 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       // Fallback to mock suggestions with proper NZ address structure
       const mockAddresses = [
+        // Maria Street variations (Auckland)
+        { a: "20 Maria Street, Auckland Central, Auckland 1010", components: { street: "20 Maria Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
+        { a: "20 Maria Avenue, Ponsonby, Auckland 1011", components: { street: "20 Maria Avenue", suburb: "Ponsonby", city: "Auckland", region: "Auckland", postcode: "1011" }},
+        { a: "21 Maria Street, Grey Lynn, Auckland 1021", components: { street: "21 Maria Street", suburb: "Grey Lynn", city: "Auckland", region: "Auckland", postcode: "1021" }},
+        { a: "22 Maria Road, Mount Eden, Auckland 1024", components: { street: "22 Maria Road", suburb: "Mount Eden", city: "Auckland", region: "Auckland", postcode: "1024" }},
+        
+        // Hauro Street variations (Wellington)
+        { a: "67 Hauro Street, Wellington Central, Wellington 6011", components: { street: "67 Hauro Street", suburb: "Wellington Central", city: "Wellington", region: "Wellington", postcode: "6011" }},
+        { a: "67 Hauro Avenue, Newtown, Wellington 6021", components: { street: "67 Hauro Avenue", suburb: "Newtown", city: "Wellington", region: "Wellington", postcode: "6021" }},
+        { a: "68 Hauro Road, Mount Victoria, Wellington 6011", components: { street: "68 Hauro Road", suburb: "Mount Victoria", city: "Wellington", region: "Wellington", postcode: "6011" }},
+        { a: "69 Hauro Place, Kelburn, Wellington 6012", components: { street: "69 Hauro Place", suburb: "Kelburn", city: "Wellington", region: "Wellington", postcode: "6012" }},
+        
+        // Common Auckland streets  
         { a: "123 Queen Street, Auckland Central, Auckland 1010", components: { street: "123 Queen Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
-        { a: "456 George Street, Dunedin Central, Dunedin 9016", components: { street: "456 George Street", suburb: "Dunedin Central", city: "Dunedin", region: "Otago", postcode: "9016" }},
+        { a: "20 Queen Street, Auckland Central, Auckland 1010", components: { street: "20 Queen Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
+        { a: "67 Queen Street, Auckland Central, Auckland 1010", components: { street: "67 Queen Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
+        { a: "456 Ponsonby Road, Ponsonby, Auckland 1011", components: { street: "456 Ponsonby Road", suburb: "Ponsonby", city: "Auckland", region: "Auckland", postcode: "1011" }},
+        { a: "147 Victoria Street, Auckland Central, Auckland 1010", components: { street: "147 Victoria Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
+        
+        // Common Wellington streets
         { a: "789 Lambton Quay, Wellington Central, Wellington 6011", components: { street: "789 Lambton Quay", suburb: "Wellington Central", city: "Wellington", region: "Wellington", postcode: "6011" }},
+        { a: "741 Cuba Street, Wellington Central, Wellington 6011", components: { street: "741 Cuba Street", suburb: "Wellington Central", city: "Wellington", region: "Wellington", postcode: "6011" }},
+        { a: "20 High Street, Wellington Central, Wellington 6011", components: { street: "20 High Street", suburb: "Wellington Central", city: "Wellington", region: "Wellington", postcode: "6011" }},
+        { a: "67 High Street, Wellington Central, Wellington 6011", components: { street: "67 High Street", suburb: "Wellington Central", city: "Wellington", region: "Wellington", postcode: "6011" }},
+        
+        // Other major cities
+        { a: "456 George Street, Dunedin Central, Dunedin 9016", components: { street: "456 George Street", suburb: "Dunedin Central", city: "Dunedin", region: "Otago", postcode: "9016" }},
+        { a: "20 George Street, Dunedin Central, Dunedin 9016", components: { street: "20 George Street", suburb: "Dunedin Central", city: "Dunedin", region: "Otago", postcode: "9016" }},
+        { a: "67 George Street, Dunedin Central, Dunedin 9016", components: { street: "67 George Street", suburb: "Dunedin Central", city: "Dunedin", region: "Otago", postcode: "9016" }},
         { a: "321 Manchester Street, Christchurch Central, Christchurch 8011", components: { street: "321 Manchester Street", suburb: "Christchurch Central", city: "Christchurch", region: "Canterbury", postcode: "8011" }},
-        { a: "654 Devon Street East, New Plymouth Central, New Plymouth 4310", components: { street: "654 Devon Street East", suburb: "New Plymouth Central", city: "New Plymouth", region: "Taranaki", postcode: "4310" }},
         { a: "987 Princes Street, Dunedin Central, Dunedin 9016", components: { street: "987 Princes Street", suburb: "Dunedin Central", city: "Dunedin", region: "Otago", postcode: "9016" }},
         { a: "147 Victoria Street, Hamilton Central, Hamilton 3204", components: { street: "147 Victoria Street", suburb: "Hamilton Central", city: "Hamilton", region: "Waikato", postcode: "3204" }},
-        { a: "258 High Street, Christchurch Central, Christchurch 8011", components: { street: "258 High Street", suburb: "Christchurch Central", city: "Christchurch", region: "Canterbury", postcode: "8011" }}
+        { a: "258 High Street, Christchurch Central, Christchurch 8011", components: { street: "258 High Street", suburb: "Christchurch Central", city: "Christchurch", region: "Canterbury", postcode: "8011" }},
+        { a: "654 Devon Street East, New Plymouth Central, New Plymouth 4310", components: { street: "654 Devon Street East", suburb: "New Plymouth Central", city: "New Plymouth", region: "Taranaki", postcode: "4310" }},
+        
+        // Additional test variations
+        { a: "1 Main Street, Auckland Central, Auckland 1010", components: { street: "1 Main Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
+        { a: "20 Main Street, Auckland Central, Auckland 1010", components: { street: "20 Main Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }},
+        { a: "67 Main Street, Auckland Central, Auckland 1010", components: { street: "67 Main Street", suburb: "Auckland Central", city: "Auckland", region: "Auckland", postcode: "1010" }}
       ];
 
       const mockSuggestions = mockAddresses
