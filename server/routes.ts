@@ -7532,6 +7532,206 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   const servicem8Routes = createServiceM8Routes(storage);
   app.use('/api/servicem8', servicem8Routes);
 
+  // Materials and Services API
+  app.get("/api/materials-services", async (req: Request, res: Response) => {
+    try {
+      // Mock data matching MaterialsServices.tsx
+      const mockMaterials = [
+        {
+          id: "1",
+          itemNumber: "VIP",
+          name: "10% discount with VIP membership",
+          price: 0.00,
+          priceIncludesTax: false,
+          taxRate: "No GST",
+          category: "Discount",
+          type: "material"
+        },
+        {
+          id: "2", 
+          itemNumber: "Admin Time",
+          name: "Admin Time",
+          price: 0.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          category: "Labour",
+          type: "material"
+        },
+        {
+          id: "3",
+          itemNumber: "41",
+          name: "Bandit chipper hire",
+          price: 500.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          category: "Equipment",
+          type: "material"
+        },
+        {
+          id: "4",
+          itemNumber: "17",
+          name: "Bucket truck",
+          price: 80.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          category: "Equipment",
+          type: "material"
+        },
+        {
+          id: "5",
+          itemNumber: "11",
+          name: "Call out",
+          price: 100.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          category: "Service",
+          type: "material"
+        },
+        {
+          id: "6",
+          itemNumber: "29 labour",
+          name: "Dan labour",
+          price: 0.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          category: "Labour",
+          type: "material"
+        },
+        {
+          id: "7",
+          itemNumber: "labour 22",
+          name: "labour Tree care service",
+          price: 250.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          category: "Labour",
+          type: "material"
+        },
+        {
+          id: "8",
+          itemNumber: "67",
+          name: "Digger and truck",
+          price: 890.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          category: "Equipment",
+          type: "material"
+        },
+        {
+          id: "9",
+          itemNumber: "39",
+          name: "Disposal",
+          price: 250.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          category: "Service",
+          type: "material"
+        }
+      ];
+
+      const mockServices = [
+        {
+          id: "service-1",
+          itemNumber: "TR-SM",
+          name: "Tree Removal - Small (under 5m)",
+          category: "Tree Services",
+          price: 250.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          unit: "per tree",
+          description: "Complete removal including stump grinding",
+          type: "service"
+        },
+        {
+          id: "service-2",
+          itemNumber: "TR-MD",
+          name: "Tree Removal - Medium (5-10m)", 
+          category: "Tree Services",
+          price: 650.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          unit: "per tree",
+          description: "Complete removal including stump grinding",
+          type: "service"
+        },
+        {
+          id: "service-3",
+          itemNumber: "TR-LG",
+          name: "Tree Removal - Large (10m+)",
+          category: "Tree Services", 
+          price: 1250.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          unit: "per tree",
+          description: "Complex removal with crane assistance if needed",
+          type: "service"
+        },
+        {
+          id: "service-4",
+          itemNumber: "HT-01",
+          name: "Hedge Trimming",
+          category: "Maintenance",
+          price: 85.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          unit: "per hour",
+          description: "Professional hedge shaping and maintenance",
+          type: "service"
+        },
+        {
+          id: "service-5",
+          itemNumber: "SG-01",
+          name: "Stump Grinding",
+          category: "Tree Services",
+          price: 180.00,
+          priceIncludesTax: false,
+          taxRate: "15% GST on Income",
+          unit: "per stump",
+          description: "Complete stump removal and cleanup",
+          type: "service"
+        }
+      ];
+
+      // Combine materials and services
+      const allItems = [...mockMaterials, ...mockServices];
+
+      // Filter based on query parameters
+      const searchQuery = req.query.search as string;
+      const categoryFilter = req.query.category as string;
+      const typeFilter = req.query.type as string; // 'material' or 'service'
+
+      let filteredItems = allItems;
+
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        filteredItems = filteredItems.filter(item => 
+          item.name.toLowerCase().includes(query) || 
+          item.itemNumber.toLowerCase().includes(query) ||
+          item.category.toLowerCase().includes(query)
+        );
+      }
+
+      if (categoryFilter && categoryFilter !== 'all') {
+        filteredItems = filteredItems.filter(item => item.category === categoryFilter);
+      }
+
+      if (typeFilter && typeFilter !== 'all') {
+        filteredItems = filteredItems.filter(item => item.type === typeFilter);
+      }
+
+      res.json({
+        success: true,
+        data: filteredItems,
+        total: filteredItems.length
+      });
+    } catch (error) {
+      console.error('Error fetching materials and services:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch materials and services' 
+      });
+    }
+  });
 
   const httpServer = createServer(app);
 
