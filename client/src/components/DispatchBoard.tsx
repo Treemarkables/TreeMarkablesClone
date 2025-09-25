@@ -1029,7 +1029,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </CardHeader>
 
         <CardContent>
-          <div className="flex gap-4 h-[600px]">
+          <div className="flex gap-4 h-[700px]">
             {/* Team/Staff Column */}
             <div className="w-48 border-r pr-4">
               <h3 className="font-semibold mb-4 text-sm text-muted-foreground">
@@ -1121,7 +1121,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     mockTeams.map((team) => {
                       const teamJobs = getJobsForTeam(team.id);
                       return (
-                        <div key={team.id} className="relative h-16" data-testid={`team-row-${team.id}`}>
+                        <div key={team.id} className="relative h-11" data-testid={`team-row-${team.id}`}>
                           {/* Time Grid Background */}
                           <div className="grid grid-cols-12 gap-1 h-full absolute inset-0 z-0">
                             {timeSlots.map((time) => (
@@ -1157,19 +1157,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               return (
                                 <div
                                   key={job.id}
-                                  className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs p-1 cursor-pointer hover:opacity-80 transition-opacity top-1 bottom-1`}
+                                  className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs px-1 py-0.5 cursor-pointer hover:opacity-80 transition-opacity top-0.5 bottom-0.5`}
                                   onClick={() => handleEditJob(job)}
                                   data-testid={`job-block-${job.id}`}
                                   style={{
                                     left: `${leftPercent}%`,
                                     width: `${widthPercent}%`,
-                                    minWidth: '80px'
+                                    minWidth: '60px'
                                   }}
                                 >
-                                  <div className="font-medium truncate text-[10px]">
+                                  <div className="font-medium truncate text-[8px]">
                                     {job.customerName}
                                   </div>
-                                  <div className="truncate text-[9px] opacity-90">
+                                  <div className="truncate text-[7px] opacity-90">
                                     {job.serviceType}
                                   </div>
                                 </div>
@@ -1184,7 +1184,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     staffMembers.map((staff: StaffMember) => {
                       const staffJobs = getJobsForStaff(staff.id);
                       return (
-                        <div key={staff.id} className="relative h-16" data-testid={`staff-row-${staff.id}`}>
+                        <div key={staff.id} className="relative h-11" data-testid={`staff-row-${staff.id}`}>
                           {/* Time Grid Background */}
                           <div className="grid grid-cols-12 gap-1 h-full absolute inset-0 z-0">
                             {timeSlots.map((time) => (
@@ -1220,19 +1220,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               return (
                                 <div
                                   key={job.id}
-                                  className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs p-1 cursor-pointer hover:opacity-80 transition-opacity top-1 bottom-1`}
+                                  className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs px-1 py-0.5 cursor-pointer hover:opacity-80 transition-opacity top-0.5 bottom-0.5`}
                                   onClick={() => handleEditJob(job)}
                                   data-testid={`job-block-${job.id}`}
                                   style={{
                                     left: `${leftPercent}%`,
                                     width: `${widthPercent}%`,
-                                    minWidth: '80px'
+                                    minWidth: '60px'
                                   }}
                                 >
-                                  <div className="font-medium truncate text-[10px]">
+                                  <div className="font-medium truncate text-[8px]">
                                     {job.customerName}
                                   </div>
-                                  <div className="truncate text-[9px] opacity-90">
+                                  <div className="truncate text-[7px] opacity-90">
                                     {job.serviceType}
                                   </div>
                                 </div>
@@ -1344,7 +1344,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           {/* Connection Line Dot */}
                           <div className="absolute left-14 top-6 w-2 h-2 bg-blue-400 rounded-full border-2 border-white z-10" />
                           
-                          <div className="flex items-start gap-4 p-4 pl-8">
+                          <div className="flex items-start gap-3 p-3 pl-6">
                             {/* Customer Avatar */}
                             <CustomerAvatar 
                               customerName={customerName}
@@ -1356,15 +1356,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between mb-1">
                                 <div>
-                                  <h3 className="font-semibold text-gray-900 text-base mb-1" data-testid={`servicem8-job-customer-${job.id}`}>
+                                  <h3 className="font-semibold text-gray-900 text-sm mb-1" data-testid={`servicem8-job-customer-${job.id}`}>
                                     {customerName}
                                   </h3>
-                                  <div className="text-sm text-gray-600 mb-2">
+                                  <div className="text-xs text-gray-600 mb-1">
                                     {job.address || 'No address specified'}
                                   </div>
                                 </div>
                                 <div className="text-right flex-shrink-0">
-                                  <div className="text-sm font-medium text-gray-500 mb-1" data-testid={`servicem8-job-number-${job.id}`}>
+                                  <div className="text-xs font-medium text-gray-500 mb-1" data-testid={`servicem8-job-number-${job.id}`}>
                                     #{job.jobId || '0000'}
                                   </div>
                                   {/* Status Indicator */}
@@ -1386,7 +1386,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               </div>
                               
                               {/* Job Description */}
-                              <div className="text-sm text-gray-700 leading-relaxed" data-testid={`servicem8-job-description-${job.id}`}>
+                              <div className="text-xs text-gray-700 leading-relaxed" data-testid={`servicem8-job-description-${job.id}`}>
                                 {job.notes && job.notes !== '0000-00-00 00:00:00' 
                                   ? job.notes.length > 120 
                                     ? `${job.notes.substring(0, 120)}...`
