@@ -940,6 +940,126 @@ class DatabaseStorage implements IStorage {
     return false;
   }
 
+  async importCustomersFromCSV(
+    csvData: any[], 
+    batchId: string, 
+    importSource: string = 'csv_upload'
+  ): Promise<{
+    success: boolean;
+    imported: number;
+    updated: number;
+    skipped: number;
+    errors: string[];
+    totalProcessed: number;
+  }> {
+    let imported = 0;
+    let updated = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    try {
+      console.log(`🚀 Starting CSV import for batch ${batchId}...`);
+      
+      // First, get the matching analysis
+      const matchResults = await this.matchCustomersFromCSV(csvData);
+      
+      // Process each match
+      for (const match of matchResults.matches) {
+        try {
+          if (match.matchType === 'none') {
+            // Create new customer
+            const customerData: InsertCustomer = {
+              name: match.proposedName,
+              email: match.csvData.email || match.csvData.billing_email || null,
+              phone: match.csvData.phone || match.csvData.mobile || match.csvData.telephone || match.csvData.billing_phone || null,
+              address: match.csvData.address || null,
+              source: 'import', // Lead generation source
+              importSource, // Import method
+              importBatchId: batchId, // Track which batch this came from
+              externalId: match.csvData.servicem8Uuid || null, // External system ID
+              servicem8Uuid: match.csvData.servicem8Uuid || null, // ServiceM8 specific
+              isActive: true
+            };
+
+            await this.createCustomer(customerData);
+            imported++;
+            console.log(`✅ Imported new customer: ${customerData.name}`);
+          } else if (match.willUpdate && match.existingCustomer) {
+            // Update existing customer with better data
+            const updates: Partial<InsertCustomer> = {
+              name: match.proposedName,
+              importSource, // Track this update source
+              importBatchId: batchId // Track which batch updated this
+            };
+
+            // Only update fields that have new data
+            if (match.csvData.email && !match.existingCustomer.email) {
+              updates.email = match.csvData.email;
+            }
+            if (match.csvData.phone && !match.existingCustomer.phone) {
+              updates.phone = match.csvData.phone;
+            }
+            if (match.csvData.address && !match.existingCustomer.address) {
+              updates.address = match.csvData.address;
+            }
+
+            await this.updateCustomer(match.existingCustomer.id, updates);
+            updated++;
+            console.log(`🔄 Updated customer: ${match.proposedName}`);
+          } else {
+            // Skip - existing customer with no updates needed
+            skipped++;
+            console.log(`⏭️ Skipped customer: ${match.existingCustomer?.name || match.proposedName}`);
+          }
+        } catch (error) {
+          const errorMsg = `Failed to process customer row ${match.csvRow}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.error('❌', errorMsg);
+          errors.push(errorMsg);
+        }
+      }
+
+      // Update batch status with final results
+      await this.updateCustomerImportBatch(batchId, {
+        status: 'completed',
+        totalRecords: csvData.length,
+        successfulRecords: imported + updated,
+        failedRecords: errors.length,
+        errorDetails: errors.length > 0 ? errors : null,
+        completedAt: new Date()
+      });
+
+      const totalProcessed = imported + updated + skipped;
+      console.log(`🎉 CSV import completed: ${imported} imported, ${updated} updated, ${skipped} skipped, ${errors.length} errors`);
+      
+      return {
+        success: true,
+        imported,
+        updated,
+        skipped,
+        errors,
+        totalProcessed
+      };
+    } catch (error) {
+      console.error('❌ CSV import failed:', error);
+      
+      // Mark batch as failed
+      await this.updateCustomerImportBatch(batchId, {
+        status: 'failed',
+        errorDetails: [`CSV import failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+        completedAt: new Date()
+      });
+
+      return {
+        success: false,
+        imported: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [`CSV import failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+        totalProcessed: 0
+      };
+    }
+  }
+
   // ========================================
   // JOB MANAGEMENT  
   // ========================================

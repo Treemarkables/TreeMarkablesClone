@@ -830,7 +830,8 @@ export const checklistItemSchema = z.object({
 export type ChecklistItem = z.infer<typeof checklistItemSchema>;
 
 export const insertTeamSchema = createInsertSchema(teams).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertCustomerImportBatchSchema = createInsertSchema(customerImportBatches).omit({ id: true, createdAt: true, completedAt: true });
+export const insertCustomerImportBatchSchema = createInsertSchema(customerImportBatches).omit({ id: true, createdAt: true });
+export const updateCustomerImportBatchSchema = createInsertSchema(customerImportBatches).omit({ id: true, createdAt: true }).partial();
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCommunicationPreferencesSchema = createInsertSchema(communicationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
@@ -860,6 +861,8 @@ export const insertJobDiaryEntrySchema = createInsertSchema(jobDiaryEntries).omi
 // Select Types
 export type Team = typeof teams.$inferSelect;
 export type CustomerImportBatch = typeof customerImportBatches.$inferSelect;
+export type InsertCustomerImportBatch = z.infer<typeof insertCustomerImportBatchSchema>;
+export type UpdateCustomerImportBatch = z.infer<typeof updateCustomerImportBatchSchema>;
 export type Customer = typeof customers.$inferSelect;
 export type CommunicationPreferences = typeof communicationPreferences.$inferSelect;
 export type Lead = typeof leads.$inferSelect;
