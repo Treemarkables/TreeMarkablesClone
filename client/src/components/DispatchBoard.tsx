@@ -42,6 +42,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import type { JobTemplate } from "@shared/schema";
 import { GlobalJobCard } from '@/components/GlobalJobCard';
+import { CustomerAvatar } from '@/components/CustomerAvatar';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -1246,24 +1247,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
             </div>
 
-            {/* Jobs Panel */}
-            <div className="w-80 border-l pl-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-sm text-muted-foreground">JOBS</h3>
-                <Button 
-                  size="sm" 
-                  onClick={handleCreateJob}
-                  data-testid="add-job-btn"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add
-                </Button>
-              </div>
-              
-              {/* Job Filter Dropdown */}
-              <div className="mb-4">
+            {/* ServiceM8 Style Jobs Panel */}
+            <div className="w-96 bg-gray-50 border-l">
+              {/* ServiceM8 Header */}
+              <div className="p-4 space-y-3">
+                {/* ServiceM8 Style Filter Dropdown */}
                 <Select value={jobFilter} onValueChange={setJobFilter}>
-                  <SelectTrigger className="w-full" data-testid="job-filter-select">
+                  <SelectTrigger className="w-full bg-white" data-testid="servicem8-job-filter-select">
                     <SelectValue>
                       <div className="flex items-center gap-2">
                         {(() => {
@@ -1321,120 +1311,112 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     })}
                   </SelectContent>
                 </Select>
+                
+                {/* Job Search Field */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Job Search..."
+                    className="pl-10 bg-white"
+                    data-testid="job-search-input"
+                  />
+                </div>
               </div>
 
-              <div className="h-[540px] overflow-y-auto">
-                <div className="space-y-3">
-                  {getTodaysJobs().map((job) => {
-                    const team = mockTeams.find(t => t.id === job.teamId);
-                    const staff = staffMembers.find((s: StaffMember) => s.id === job.staffId);
-                    const teamMembers = team ? getTeamMembers(team.id) : [];
-                    return (
-                      <Card
-                        key={job.id}
-                        className="hover-elevate cursor-pointer relative group"
-                        onClick={() => setSelectedJob(job)}
-                        data-testid={`job-card-${job.id}`}
-                      >
-                        <CardContent className="p-3">
-                          {/* Quick Action Buttons - Show on Hover */}
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1 z-10">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="h-6 w-6 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleScheduleJob(job);
-                              }}
-                              data-testid={`quick-schedule-${job.id}`}
-                            >
-                              <Calendar className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="h-6 w-6 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                markJobComplete(job.id);
-                              }}
-                              data-testid={`quick-complete-${job.id}`}
-                            >
-                              <Check className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="h-6 w-6 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(`tel:${job.customerPhone}`);
-                              }}
-                              data-testid={`quick-call-${job.id}`}
-                            >
-                              <Phone className="h-3 w-3" />
-                            </Button>
-                          </div>
-
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full ${getPriorityColor(job.priority)}`} />
-                              <span className="font-medium text-sm">#{job.jobId}</span>
-                            </div>
-                            <Badge
-                              variant="outline"
-                              className={`text-xs ${job.status === 'in_progress' ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-700'}`}
-                            >
-                              {job.status}
-                            </Badge>
-                          </div>
-
-                          <div className="space-y-1">
-                            <h4 className="font-medium text-sm" data-testid={`job-customer-${job.id}`}>
-                              {job.customerName}
-                            </h4>
-                            <p className="text-xs text-muted-foreground" data-testid={`job-service-${job.id}`}>
-                              {job.serviceType}
-                            </p>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <MapPin className="h-3 w-3" />
-                              <span className="truncate" data-testid={`job-address-${job.id}`}>
-                                {job.address}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Clock className="h-3 w-3" />
-                              <span data-testid={`job-time-${job.id}`}>
-                                {format(new Date(job.startTime), 'HH:mm')} - {format(new Date(job.endTime), 'HH:mm')}
-                              </span>
-                            </div>
-                            {assignmentMode === 'teams' && team ? (
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <Users className="h-3 w-3" />
-                                <span data-testid={`job-team-${job.id}`}>
-                                  {team.name} ({teamMembers.length} members)
-                                </span>
+              {/* ServiceM8 Style Job List */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="relative">
+                  {/* Timeline Line */}
+                  <div className="absolute left-14 top-0 bottom-0 w-px bg-blue-200 z-0" />
+                  
+                  <div className="space-y-0">
+                    {getTodaysJobs().map((job, index) => {
+                      // Get customer from the jobs data or create a display name
+                      const customerName = job.customerName || 'Unknown Customer';
+                      
+                      return (
+                        <div
+                          key={job.id}
+                          className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                          onClick={() => setSelectedJob(job)}
+                          data-testid={`servicem8-job-card-${job.id}`}
+                        >
+                          {/* Connection Line Dot */}
+                          <div className="absolute left-14 top-6 w-2 h-2 bg-blue-400 rounded-full border-2 border-white z-10" />
+                          
+                          <div className="flex items-start gap-4 p-4 pl-8">
+                            {/* Customer Avatar */}
+                            <CustomerAvatar 
+                              customerName={customerName}
+                              size="lg"
+                              className="relative z-10"
+                            />
+                            
+                            {/* Job Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between mb-1">
+                                <div>
+                                  <h3 className="font-semibold text-gray-900 text-base mb-1" data-testid={`servicem8-job-customer-${job.id}`}>
+                                    {customerName}
+                                  </h3>
+                                  <div className="text-sm text-gray-600 mb-2">
+                                    {job.address || 'No address specified'}
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <div className="text-sm font-medium text-gray-500 mb-1" data-testid={`servicem8-job-number-${job.id}`}>
+                                    #{job.jobId || '0000'}
+                                  </div>
+                                  {/* Status Indicator */}
+                                  <div className="flex items-center justify-end gap-1">
+                                    {job.status === 'completed' && (
+                                      <div className="w-2 h-2 bg-green-500 rounded-full" />
+                                    )}
+                                    {job.status === 'in_progress' && (
+                                      <div className="w-2 h-2 bg-yellow-500 rounded-full" />
+                                    )}
+                                    {job.status === 'scheduled' && (
+                                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                                    )}
+                                    {job.priority === 'urgent' && (
+                                      <div className="w-2 h-2 bg-red-500 rounded-full" />
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                            ) : assignmentMode === 'individual' && staff ? (
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <User className="h-3 w-3" />
-                                <span data-testid={`job-staff-${job.id}`}>
-                                  {staff.name}
-                                </span>
+                              
+                              {/* Job Description */}
+                              <div className="text-sm text-gray-700 leading-relaxed" data-testid={`servicem8-job-description-${job.id}`}>
+                                {job.notes && job.notes !== '0000-00-00 00:00:00' 
+                                  ? job.notes.length > 120 
+                                    ? `${job.notes.substring(0, 120)}...`
+                                    : job.notes
+                                  : job.serviceType || 'No description available'
+                                }
                               </div>
-                            ) : null}
+                            </div>
                           </div>
-
-                          {job.notes && (
-                            <p className="text-xs text-muted-foreground mt-2 italic">
-                              {job.notes}
-                            </p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                        </div>
+                      );
+                    })}
+                    
+                    {/* Empty State */}
+                    {getTodaysJobs().length === 0 && (
+                      <div className="p-8 text-center text-gray-500">
+                        <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                        <p className="text-sm">No jobs scheduled for this date</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-3"
+                          onClick={handleCreateJob}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create First Job
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
