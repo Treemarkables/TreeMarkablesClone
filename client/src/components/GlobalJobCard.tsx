@@ -700,7 +700,7 @@ export function GlobalJobCard({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl h-[85vh] flex flex-col p-0">
+      <DialogContent className="max-w-6xl h-[55vh] flex flex-col p-0">
         {/* ServiceM8-Style Header */}
         <ServiceM8HeaderToolbar
           mode={mode}
@@ -754,18 +754,18 @@ export function GlobalJobCard({
                 
                 <div className="flex-1 overflow-hidden">
                   <TabsContent value="details" className="h-full m-0">
-                    <div className="h-full overflow-y-auto px-4 pb-2">
-                      <div className="space-y-2">
+                    <div className="h-full overflow-y-auto px-3 pb-1">
+                      <div className="space-y-1">
             {/* Customer Contact Details (Read-only when editing) */}
             {mode === "edit" && editingJob && (
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <User className="w-4 h-4" />
+                <CardHeader className="pb-1">
+                  <CardTitle className="flex items-center gap-1 text-xs font-medium">
+                    <User className="w-3 h-3" />
                     Customer Contact Details
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-2">
+                <CardContent className="pt-1 text-xs">
                   {(() => {
                     const selectedCustomer = customers.find((c: Customer) => c.id === editingJob.customerId);
                     if (selectedCustomer) {
@@ -775,109 +775,18 @@ export function GlobalJobCard({
                       const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
                       
                       return (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <User className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {firstName}
-                                </div>
-                                <div className="text-sm text-muted-foreground">First Name</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Mail className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.email || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Email Address</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Phone className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.phone || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Mobile</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <MapPin className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.address || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Address</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Building2 className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.city || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">City</div>
-                              </div>
-                            </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <div className="font-medium text-xs">{firstName} {lastName}</div>
+                            <div className="text-muted-foreground text-[10px]">Contact</div>
                           </div>
-                          
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <User className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {lastName || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Last Name</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Target className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {editingJob.leadSource || 'Not specified'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Lead Source</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Phone className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.phone ? 'See Mobile' : 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Landline</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <MapPin className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.region || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Region</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Target className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.source || 'Not specified'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Customer Source</div>
-                              </div>
-                            </div>
+                          <div>
+                            <div className="font-medium text-xs">{formSelectedCustomer?.email || 'N/A'}</div>
+                            <div className="text-muted-foreground text-[10px]">Email</div>
+                          </div>
+                          <div>
+                            <div className="font-medium text-xs">{formSelectedCustomer?.phone || 'N/A'}</div>
+                            <div className="text-muted-foreground text-[10px]">Phone</div>
                           </div>
                         </div>
                       );
@@ -894,21 +803,21 @@ export function GlobalJobCard({
 
             {/* Customer Section */}
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <User className="w-4 h-4" />
+              <CardHeader className="pb-1">
+                <CardTitle className="flex items-center gap-1 text-xs font-medium">
+                  <User className="w-3 h-3" />
                   Customer Information
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-2">
+              <CardContent className="pt-1 text-xs">
                 <Tabs value={activeCustomerTab} onValueChange={setActiveCustomerTab}>
-                  <TabsList className="grid w-full grid-cols-2">
+                  <TabsList className="grid w-full grid-cols-2 h-7">
                     <TabsTrigger 
                       value="existing" 
                       onClick={() => form.setValue("isNewCustomer", false)}
                       data-testid="tab-existing-customer"
                     >
-                      <Building2 className="w-4 h-4 mr-2" />
+                      <Building2 className="w-3 h-3 mr-1" />
                       Existing Customer
                     </TabsTrigger>
                     <TabsTrigger 
@@ -916,21 +825,21 @@ export function GlobalJobCard({
                       onClick={() => form.setValue("isNewCustomer", true)}
                       data-testid="tab-new-customer"
                     >
-                      <Plus className="w-4 h-4 mr-2" />
+                      <Plus className="w-3 h-3 mr-1" />
                       New Customer
                     </TabsTrigger>
                   </TabsList>
                   
-                  <TabsContent value="existing" className="space-y-2">
+                  <TabsContent value="existing" className="space-y-1 mt-1">
                     <FormField
                       control={form.control}
                       name="customerId"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Select Customer</FormLabel>
+                          <FormLabel className="text-xs">Select Customer</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value} disabled={mode === "edit"}>
                             <FormControl>
-                              <SelectTrigger data-testid="select-customer">
+                              <SelectTrigger data-testid="select-customer" className="h-7 text-xs">
                                 <SelectValue placeholder="Choose a customer..." />
                               </SelectTrigger>
                             </FormControl>
@@ -966,45 +875,35 @@ export function GlobalJobCard({
                     
                     {/* Display selected customer details */}
                     {formSelectedCustomer && (
-                      <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                        <h4 className="font-medium mb-4 flex items-center gap-2">
-                          <User className="w-4 h-4" />
+                      <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
+                        <h4 className="font-medium mb-1 flex items-center gap-1 text-xs">
+                          <User className="w-3 h-3" />
                           Customer Details
                         </h4>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <User className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {(() => {
-                                    const nameParts = formSelectedCustomer?.name?.split(' ') || ['Customer'];
-                                    return nameParts[0] || '';
-                                  })()}
-                                </div>
-                                <div className="text-sm text-muted-foreground">First Name</div>
-                              </div>
+                        <div className="grid grid-cols-3 gap-1 text-xs">
+                          <div>
+                            <div className="font-medium text-xs">
+                              {(() => {
+                                const nameParts = formSelectedCustomer?.name?.split(' ') || ['Customer'];
+                                return nameParts[0] || '';
+                              })()}
                             </div>
+                            <div className="text-muted-foreground text-[10px]">First Name</div>
+                          </div>
                             
-                            <div className="flex items-center gap-3">
-                              <Mail className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.email || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Email Address</div>
-                              </div>
+                          <div>
+                            <div className="font-medium text-xs">
+                              {formSelectedCustomer?.email || 'Not provided'}
                             </div>
+                            <div className="text-muted-foreground text-[10px]">Email</div>
+                          </div>
                             
-                            <div className="flex items-center gap-3">
-                              <Phone className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.phone || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Mobile</div>
-                              </div>
+                          <div>
+                            <div className="font-medium text-xs">
+                              {formSelectedCustomer?.phone || 'Not provided'}
                             </div>
+                            <div className="text-muted-foreground text-[10px]">Mobile</div>
+                          </div>
                             
                             <div className="flex items-center gap-3">
                               <MapPin className="w-5 h-5 text-muted-foreground" />
