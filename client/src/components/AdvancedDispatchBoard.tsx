@@ -53,6 +53,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const [jobToEdit, setJobToEdit] = useState<any | null>(null);
   const [draggedJob, setDraggedJob] = useState<any | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -103,13 +104,36 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   // Get all jobs (not just today's)
   const allJobsRaw = (jobsData as any)?.data || [];
   
-  // Filter jobs based on status
+  // Filter jobs based on status and search query
   const allJobs = useMemo(() => {
-    if (statusFilter === 'all') {
-      return allJobsRaw;
+    let filtered = allJobsRaw;
+    
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((job: any) => job.status === statusFilter);
     }
-    return allJobsRaw.filter((job: any) => job.status === statusFilter);
-  }, [allJobsRaw, statusFilter]);
+    
+    // Filter by search query (customer name, job number, address, description)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((job: any) => {
+        const customer = (customersData as any)?.data?.find((c: any) => c.id === job.customerId);
+        const customerName = customer?.name?.toLowerCase() || '';
+        const jobNumber = job.jobNumber?.toLowerCase() || '';
+        const address = job.address?.toLowerCase() || '';
+        const description = job.description?.toLowerCase() || '';
+        const title = job.title?.toLowerCase() || '';
+        
+        return customerName.includes(query) ||
+               jobNumber.includes(query) ||
+               address.includes(query) ||
+               description.includes(query) ||
+               title.includes(query);
+      });
+    }
+    
+    return filtered;
+  }, [allJobsRaw, statusFilter, searchQuery, customersData]);
   
   // Status options for dropdown
   const statusOptions = [
@@ -428,7 +452,9 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input 
                   type="text" 
-                  placeholder="Job Search..." 
+                  placeholder="Search by customer, job #, address..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm"
                   aria-label="Search jobs"
                   data-testid="input-job-search"
