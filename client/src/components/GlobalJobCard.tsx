@@ -1079,7 +1079,26 @@ export function GlobalJobCard({
                                 <FormItem>
                                   <FormLabel>Job Address *</FormLabel>
                                   <FormControl>
-                                    <Input {...field} placeholder="123 Main St, Auckland, NZ" data-testid="input-job-address" />
+                                    <Input 
+                                      {...field} 
+                                      placeholder="123 Main St, Auckland, NZ" 
+                                      data-testid="input-job-address"
+                                      onClick={() => {
+                                        if (selectedCustomer && (selectedCustomer.address || selectedCustomer.city || selectedCustomer.region)) {
+                                          const customerAddress = [
+                                            selectedCustomer.address,
+                                            selectedCustomer.city,
+                                            selectedCustomer.region
+                                          ].filter(Boolean).join(', ');
+                                          if (customerAddress && !field.value) {
+                                            form.setValue('address', customerAddress);
+                                          }
+                                        }
+                                      }}
+                                      title={selectedCustomer && (selectedCustomer.address || selectedCustomer.city || selectedCustomer.region) 
+                                        ? "Click to use customer address" 
+                                        : undefined}
+                                    />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
