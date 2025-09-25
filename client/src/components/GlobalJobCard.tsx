@@ -1066,57 +1066,76 @@ export function GlobalJobCard({
                           <CardContent className="pt-1 space-y-2">
                             {/* Line Items Table */}
                             <div className="border rounded-md">
-                              <div className="grid grid-cols-12 gap-1 p-2 bg-muted/20 border-b text-xs font-medium">
-                                <div className="col-span-4">Service/Item</div>
-                                <div className="col-span-3">Description</div>
-                                <div className="col-span-1">Qty</div>
-                                <div className="col-span-2">Rate</div>
-                                <div className="col-span-2">Amount</div>
+                              <div className="grid grid-cols-7 gap-1 p-2 bg-muted/20 border-b text-xs font-medium">
+                                <div className="col-span-1">Item Code</div>
+                                <div className="col-span-2">Item Name</div>
+                                <div className="col-span-1 text-center">Qty</div>
+                                <div className="col-span-1 text-right">Cost ex GST</div>
+                                <div className="col-span-1 text-center">Markup</div>
+                                <div className="col-span-1 text-right">Total ex GST</div>
                               </div>
                               
                               {/* Existing line items */}
                               {editingJob?.lineItems && editingJob.lineItems.length > 0 ? (
                                 editingJob.lineItems.map((item: any, index: number) => (
-                                  <div key={index} className="grid grid-cols-12 gap-1 p-2 border-b last:border-b-0 text-xs">
-                                    <div className="col-span-4">{item.service || 'Tree Removal'}</div>
-                                    <div className="col-span-3">{item.description || 'Standard tree removal service'}</div>
-                                    <div className="col-span-1">{item.quantity || 1}</div>
-                                    <div className="col-span-2">${item.rate || '250.00'}</div>
-                                    <div className="col-span-2 font-medium">${item.amount || '250.00'}</div>
+                                  <div key={index} className="grid grid-cols-7 gap-1 p-2 border-b last:border-b-0 text-xs">
+                                    <div className="col-span-1">{item.itemCode || 'labour 22'}</div>
+                                    <div className="col-span-2">{item.itemName || 'labour Tree care service'}</div>
+                                    <div className="col-span-1 text-center">{item.quantity || 1}</div>
+                                    <div className="col-span-1 text-right">${item.costExGST || '0.00'}</div>
+                                    <div className="col-span-1 text-center">{item.markup || '—'}</div>
+                                    <div className="col-span-1 text-right font-medium">${item.totalExGST || '250.00'}</div>
                                   </div>
                                 ))
                               ) : (
-                                <div className="grid grid-cols-12 gap-1 p-2 text-xs">
-                                  <div className="col-span-4">Tree Removal Service</div>
-                                  <div className="col-span-3">Large eucalyptus tree removal</div>
-                                  <div className="col-span-1">1</div>
-                                  <div className="col-span-2">$450.00</div>
-                                  <div className="col-span-2 font-medium">$450.00</div>
+                                <div className="grid grid-cols-7 gap-1 p-2 text-xs">
+                                  <div className="col-span-1">labour 22</div>
+                                  <div className="col-span-2">labour Tree care service</div>
+                                  <div className="col-span-1 text-center">1</div>
+                                  <div className="col-span-1 text-right">$0.00</div>
+                                  <div className="col-span-1 text-center">—</div>
+                                  <div className="col-span-1 text-right font-medium">$250.00</div>
                                 </div>
                               )}
+                              
+                              {/* Search or Add New Input */}
+                              <div className="p-2 bg-muted/10 border-t">
+                                <Input 
+                                  placeholder="Search or Add New..."
+                                  className="h-7 text-xs"
+                                  data-testid="input-search-add-item"
+                                />
+                              </div>
                             </div>
 
-                            {/* Add Line Item Button */}
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-7 text-xs"
-                              data-testid="button-add-line-item"
-                            >
-                              <Plus className="w-3 h-3 mr-1" />
-                              Add Line Item
-                            </Button>
+                            {/* Additional Information */}
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                                <span>0 seconds</span>
+                                <span className="text-muted-foreground">Job Time</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                <span>1 min</span>
+                                <span className="text-muted-foreground">Admin Time</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                <span>$250</span>
+                                <span className="text-muted-foreground">Estimated Profit</span>
+                              </div>
+                            </div>
 
-                            {/* Total Section */}
+                            {/* Total Section - Tax Exclusive Format */}
                             <div className="flex justify-end pt-1">
                               <div className="grid grid-cols-2 gap-4 w-64 text-xs">
-                                <div className="text-right">Subtotal:</div>
-                                <div className="font-medium">$450.00</div>
-                                <div className="text-right">GST (15%):</div>
-                                <div className="font-medium">$67.50</div>
-                                <div className="text-right font-medium border-t pt-1">Total:</div>
-                                <div className="font-bold border-t pt-1">$517.50</div>
+                                <div className="text-right font-medium">SUBTOTAL</div>
+                                <div className="font-medium">$250.00</div>
+                                <div className="text-right">GST</div>
+                                <div className="font-medium">$37.50</div>
+                                <div className="text-right font-bold border-t pt-1">Total</div>
+                                <div className="font-bold border-t pt-1">$287.50</div>
                               </div>
                             </div>
                           </CardContent>
