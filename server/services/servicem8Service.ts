@@ -337,6 +337,108 @@ class ServiceM8Service {
     }
   }
 
+  async syncExistingData(): Promise<{
+    success: boolean;
+    customers: { updated: number; errors: string[] };
+    jobs: { updated: number; errors: string[] };
+    message: string;
+  }> {
+    console.log('🔄 Starting ServiceM8 data sync to update existing records...');
+    
+    // Test connection first
+    const connectionTest = await this.testConnection();
+    if (!connectionTest.success) {
+      return {
+        success: false,
+        customers: { updated: 0, errors: [] },
+        jobs: { updated: 0, errors: [] },
+        message: connectionTest.message
+      };
+    }
+
+    // Update existing customers with complete data
+    const customersResult = await this.updateExistingCustomerNames();
+    
+    // Update existing jobs with complete descriptions
+    const jobsResult = await this.updateExistingJobDescriptions();
+
+    const totalUpdated = customersResult.updated + jobsResult.updated;
+    const totalErrors = customersResult.errors.length + jobsResult.errors.length;
+
+    console.log(`🏁 ServiceM8 data sync finished: ${totalUpdated} total items updated, ${totalErrors} total errors`);
+
+    return {
+      success: totalUpdated > 0 || totalErrors === 0,
+      customers: { updated: customersResult.updated, errors: customersResult.errors },
+      jobs: { updated: jobsResult.updated, errors: jobsResult.errors },
+      message: `Sync completed: ${customersResult.updated} customers, ${jobsResult.updated} jobs updated. ${totalErrors} errors.`
+    };
+  }
+
+  async updateExistingJobDescriptions(): Promise<{ success: boolean; updated: number; errors: string[] }> {
+    try {
+      console.log('🔄 Starting ServiceM8 job description updates...');
+      // Request all job fields to get complete job data including job_description  
+      const jobs: ServiceM8Job[] = await this.makeRequest('/job.json?$select=uuid,company_uuid,generated_job_id,status,job_description,job_address,job_location,total_cost,date_created,date_modified,time_created,priority,notes');
+      
+      let updated = 0;
+      const errors: string[] = [];
+
+      for (const job of jobs) {
+        try {
+          const jobNumber = job.generated_job_id || `SM8-${job.uuid.slice(-8)}`;
+          
+          // Find existing job by job number
+          const existingJob = await storage.getJobByJobNumber(jobNumber);
+          if (!existingJob) {
+            continue; // Skip if job doesn't exist
+          }
+
+          // Update description with real ServiceM8 data if available
+          let newDescription = null;
+          let newTitle = existingJob.title;
+          
+          if (job.job_description?.trim()) {
+            newDescription = job.job_description.trim();
+            // Also update title if it's currently generic
+            if (existingJob.title?.startsWith('Job ') || !existingJob.title?.trim()) {
+              newTitle = job.job_description.trim().substring(0, 100); // First 100 chars as title
+            }
+          } else if (job.notes?.trim()) {
+            newDescription = job.notes.trim();
+            if (existingJob.title?.startsWith('Job ') || !existingJob.title?.trim()) {
+              newTitle = job.notes.trim().substring(0, 100);
+            }
+          }
+
+          // Update if we have new description data
+          if (newDescription && (existingJob.description !== newDescription || existingJob.title !== newTitle)) {
+            await storage.updateJob(existingJob.id, { 
+              description: newDescription,
+              title: newTitle 
+            });
+            updated++;
+            console.log(`✅ Updated job description: ${jobNumber} → "${newDescription.substring(0, 50)}..."`);
+          }
+        } catch (error) {
+          const errorMsg = `Failed to update job ${job.generated_job_id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.error('❌', errorMsg);
+          errors.push(errorMsg);
+        }
+      }
+
+      console.log(`🎉 ServiceM8 job description updates completed: ${updated} updated, ${errors.length} errors`);
+      return { success: true, updated, errors };
+    } catch (error) {
+      console.error('❌ ServiceM8 job description updates failed:', error);
+      return { 
+        success: false, 
+        updated: 0, 
+        errors: [`Update failed: ${error instanceof Error ? error.message : 'Unknown error'}`] 
+      };
+    }
+  }
+
   async importAll(): Promise<{
     success: boolean;
     customers: { imported: number; errors: string[] };
