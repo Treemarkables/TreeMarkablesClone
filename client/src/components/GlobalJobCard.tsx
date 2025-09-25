@@ -801,16 +801,17 @@ export function GlobalJobCard({
                           </Card>
                         )}
 
-                        {/* Customer Section */}
-                        <Card>
-                          <CardHeader className="pb-1">
-                            <CardTitle className="flex items-center gap-1 text-xs font-medium">
-                              <User className="w-3 h-3" />
-                              Customer Information
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="pt-1 text-xs">
-                            <Tabs value={activeCustomerTab} onValueChange={setActiveCustomerTab}>
+                        {/* Customer Selection Section - Only for Create Mode */}
+                        {mode === "create" && (
+                          <Card>
+                            <CardHeader className="pb-1">
+                              <CardTitle className="flex items-center gap-1 text-xs font-medium">
+                                <User className="w-3 h-3" />
+                                Customer Information
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-1 text-xs">
+                              <Tabs value={activeCustomerTab} onValueChange={setActiveCustomerTab}>
                               <TabsList className="grid w-full grid-cols-2 h-7">
                                 <TabsTrigger 
                                   value="existing" 
@@ -946,6 +947,7 @@ export function GlobalJobCard({
                             </Tabs>
                           </CardContent>
                         </Card>
+                        )}
 
                         {/* Job Details Section */}
                         <Card>
