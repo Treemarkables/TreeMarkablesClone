@@ -326,6 +326,20 @@ export function GlobalJobCard({
     return total.toFixed(2); // Convert to string with 2 decimal places for decimal type
   };
 
+  // Calculate subtotal, GST, and total for display
+  const getCalculatedTotals = () => {
+    const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+    const gstRate = 0.15; // 15% GST
+    const gst = subtotal * gstRate;
+    const total = subtotal + gst;
+    
+    return {
+      subtotal: subtotal.toFixed(2),
+      gst: gst.toFixed(2), 
+      total: total.toFixed(2)
+    };
+  };
+
   const createJobMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await apiRequest('POST', '/api/jobs', data);
@@ -1223,7 +1237,7 @@ export function GlobalJobCard({
                             </div>
 
                             {/* Additional Information */}
-                            <div className="grid grid-cols-3 gap-2 text-xs">
+                            <div className="grid grid-cols-2 gap-2 text-xs">
                               <div className="flex items-center gap-1">
                                 <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
                                 <span>0 seconds</span>
@@ -1234,22 +1248,17 @@ export function GlobalJobCard({
                                 <span>1 min</span>
                                 <span className="text-muted-foreground">Admin Time</span>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                                <span>$250</span>
-                                <span className="text-muted-foreground">Estimated Profit</span>
-                              </div>
                             </div>
 
                             {/* Total Section - Tax Exclusive Format */}
                             <div className="flex justify-end pt-1">
                               <div className="grid grid-cols-2 gap-4 w-64 text-xs">
                                 <div className="text-right font-medium">SUBTOTAL</div>
-                                <div className="font-medium">$250.00</div>
+                                <div className="font-medium">${getCalculatedTotals().subtotal}</div>
                                 <div className="text-right">GST</div>
-                                <div className="font-medium">$37.50</div>
+                                <div className="font-medium">${getCalculatedTotals().gst}</div>
                                 <div className="text-right font-bold border-t pt-1">Total</div>
-                                <div className="font-bold border-t pt-1">$287.50</div>
+                                <div className="font-bold border-t pt-1">${getCalculatedTotals().total}</div>
                               </div>
                             </div>
                           </CardContent>
