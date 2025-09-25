@@ -297,6 +297,23 @@ export const teams = pgTable("teams", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Customer Import Batches - Track import sessions
+export const customerImportBatches = pgTable("customer_import_batches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  importType: text("import_type").notNull(), // csv_upload, manual_entry, servicem8_sync, api_import
+  fileName: text("file_name"), // Original CSV filename if applicable
+  totalRecords: integer("total_records").default(0),
+  successfulRecords: integer("successful_records").default(0),
+  failedRecords: integer("failed_records").default(0),
+  duplicatesSkipped: integer("duplicates_skipped").default(0),
+  errorDetails: jsonb("error_details"), // Array of error messages and line numbers
+  importSettings: jsonb("import_settings"), // Column mappings, validation rules, etc
+  status: text("status").notNull().default('pending'), // pending, processing, completed, failed
+  createdBy: text("created_by"), // User who initiated the import
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
 // Customer Management
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -307,7 +324,10 @@ export const customers = pgTable("customers", {
   city: text("city"),
   region: text("region"),
   notes: text("notes"),
-  source: text("source"), // google, referral, facebook, etc
+  source: text("source"), // google, referral, facebook, etc - lead generation source
+  importSource: text("import_source").default('manual'), // manual, csv_import, servicem8_sync, api_import
+  importBatchId: varchar("import_batch_id").references(() => customerImportBatches.id), // Which import batch this customer came from
+  externalId: text("external_id"), // External system ID for mapping (ServiceM8 UUID, CRM ID, etc)
   servicem8Uuid: text("servicem8_uuid"), // ServiceM8 company UUID for import mapping
   lifetimeValue: decimal("lifetime_value", { precision: 10, scale: 2 }).default("0"),
   totalJobs: integer("total_jobs").default(0),
@@ -810,6 +830,7 @@ export const checklistItemSchema = z.object({
 export type ChecklistItem = z.infer<typeof checklistItemSchema>;
 
 export const insertTeamSchema = createInsertSchema(teams).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCustomerImportBatchSchema = createInsertSchema(customerImportBatches).omit({ id: true, createdAt: true, completedAt: true });
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCommunicationPreferencesSchema = createInsertSchema(communicationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
@@ -838,6 +859,7 @@ export const insertJobDiaryEntrySchema = createInsertSchema(jobDiaryEntries).omi
 
 // Select Types
 export type Team = typeof teams.$inferSelect;
+export type CustomerImportBatch = typeof customerImportBatches.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type CommunicationPreferences = typeof communicationPreferences.$inferSelect;
 export type Lead = typeof leads.$inferSelect;
@@ -854,6 +876,7 @@ export type PriceRule = typeof priceRules.$inferSelect;
 
 // Insert Types
 export type InsertTeam = z.infer<typeof insertTeamSchema>;
+export type InsertCustomerImportBatch = z.infer<typeof insertCustomerImportBatchSchema>;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 
 // Safety Incident Types & Schemas

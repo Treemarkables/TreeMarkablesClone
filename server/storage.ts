@@ -1,6 +1,7 @@
 import { 
   type User, type InsertUser, type LeadSubmission, type InsertLeadSubmission,
-  type Customer, type InsertCustomer, type CommunicationPreferences, type InsertCommunicationPreferences,
+  type Customer, type InsertCustomer, type CustomerImportBatch, type InsertCustomerImportBatch,
+  type CommunicationPreferences, type InsertCommunicationPreferences,
   type Lead, type InsertLead,
   type Call, type InsertCall, type Quote, type InsertQuote,
   type Job, type InsertJob, type JobDiaryEntry, type InsertJobDiaryEntry,
@@ -81,6 +82,13 @@ export interface IStorage {
   getAllCustomers(): Promise<Customer[]>;
   clearAllCustomers(): Promise<number>;
   searchCustomers(query: string): Promise<Customer[]>;
+  
+  // Customer Import Batch Management
+  createCustomerImportBatch(batch: InsertCustomerImportBatch): Promise<CustomerImportBatch>;
+  getCustomerImportBatch(id: string): Promise<CustomerImportBatch | undefined>;
+  updateCustomerImportBatch(id: string, updates: Partial<InsertCustomerImportBatch>): Promise<CustomerImportBatch>;
+  getAllCustomerImportBatches(): Promise<CustomerImportBatch[]>;
+  getCustomersByImportBatch(batchId: string): Promise<Customer[]>;
   
   // CSV Import and Bulk Updates
   bulkUpdateCustomers(updates: Array<{id: string; updates: Partial<InsertCustomer>}>): Promise<{updated: number; failed: number; errors: string[]}>;
@@ -622,6 +630,38 @@ class DatabaseStorage implements IStorage {
       .where(
         sql`${schema.customers.name} ILIKE ${searchTerm} OR ${schema.customers.email} ILIKE ${searchTerm}`
       )
+      .orderBy(desc(schema.customers.createdAt));
+  }
+
+  // ========================================
+  // CUSTOMER IMPORT BATCH MANAGEMENT
+  // ========================================
+  
+  async createCustomerImportBatch(batch: InsertCustomerImportBatch): Promise<CustomerImportBatch> {
+    const [newBatch] = await db.insert(schema.customerImportBatches).values(batch).returning();
+    return newBatch;
+  }
+
+  async getCustomerImportBatch(id: string): Promise<CustomerImportBatch | undefined> {
+    const [batch] = await db.select().from(schema.customerImportBatches).where(eq(schema.customerImportBatches.id, id));
+    return batch || undefined;
+  }
+
+  async updateCustomerImportBatch(id: string, updates: Partial<InsertCustomerImportBatch>): Promise<CustomerImportBatch> {
+    const [batch] = await db.update(schema.customerImportBatches)
+      .set({ ...updates })
+      .where(eq(schema.customerImportBatches.id, id))
+      .returning();
+    return batch;
+  }
+
+  async getAllCustomerImportBatches(): Promise<CustomerImportBatch[]> {
+    return await db.select().from(schema.customerImportBatches).orderBy(desc(schema.customerImportBatches.createdAt));
+  }
+
+  async getCustomersByImportBatch(batchId: string): Promise<Customer[]> {
+    return await db.select().from(schema.customers)
+      .where(eq(schema.customers.importBatchId, batchId))
       .orderBy(desc(schema.customers.createdAt));
   }
 

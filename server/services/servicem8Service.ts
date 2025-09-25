@@ -1,4 +1,4 @@
-import { type InsertCustomer, type InsertJob, type InsertQuote, type InsertLead } from "@shared/schema";
+import { type InsertCustomer, type InsertCustomerImportBatch } from "@shared/schema";
 import { storage } from "../storage";
 
 interface ServiceM8Config {
@@ -22,21 +22,7 @@ interface ServiceM8Company {
   date_modified: string;
 }
 
-interface ServiceM8Job {
-  uuid: string;
-  company_uuid: string;
-  generated_job_id: string;
-  status: string;
-  job_description: string;
-  job_address: string;
-  job_location: string;
-  total_cost: string;
-  date_created: string;
-  date_modified: string;
-  time_created: string;
-  priority: string;
-  notes: string;
-}
+// Removed ServiceM8Job interface - no longer importing jobs
 
 class ServiceM8Service {
   private config: ServiceM8Config;
@@ -196,9 +182,23 @@ class ServiceM8Service {
     }
   }
 
-  async importCustomers(): Promise<{ success: boolean; imported: number; errors: string[] }> {
+  async importCustomers(batchId?: string): Promise<{ success: boolean; imported: number; errors: string[] }> {
+    let currentBatchId = batchId;
+    
     try {
       console.log('🚀 Starting ServiceM8 customers import...');
+      
+      // Create import batch for tracking if not provided
+      if (!currentBatchId) {
+        const batchData: InsertCustomerImportBatch = {
+          importType: 'servicem8_sync',
+          status: 'processing',
+          createdBy: 'system'
+        };
+        const importBatch = await storage.createCustomerImportBatch(batchData);
+        currentBatchId = importBatch.id;
+      }
+      
       // Request all company fields to get complete customer data including contact names
       const companies: ServiceM8Company[] = await this.makeRequest('/company.json?$select=uuid,company_name,contact_first_name,contact_last_name,email,mobile,phone,address_line1,address_city,address_state,notes,date_created,date_modified');
       
@@ -244,20 +244,6 @@ class ServiceM8Service {
           else {
             customerName = `Customer-${company.uuid.slice(-8)}`;
           }
-          
-          // Log the data we're getting to help debug
-          console.log(`🔍 ServiceM8 customer data:`, {
-            uuid: company.uuid.slice(-8),
-            company_name: company.company_name,
-            contact_first_name: company.contact_first_name,
-            contact_last_name: company.contact_last_name,
-            email: company.email,
-            mobile: company.mobile,
-            phone: company.phone,
-            address_line1: company.address_line1,
-            final_name: customerName,
-            raw_company_keys: Object.keys(company).slice(0, 10) // Show first 10 keys to debug field names
-          });
 
           const customer: InsertCustomer = {
             name: customerName,
@@ -267,8 +253,11 @@ class ServiceM8Service {
             city: company.address_city || null,
             region: company.address_state || null,
             notes: company.notes || null,
-            source: 'servicem8_import',
-            servicem8Uuid: company.uuid, // Store ServiceM8 UUID for job mapping
+            source: 'referral', // Lead generation source
+            importSource: 'servicem8_sync', // Import method
+            importBatchId: currentBatchId, // Track which batch this came from
+            externalId: company.uuid, // ServiceM8 UUID as external ID
+            servicem8Uuid: company.uuid, // Keep for backward compatibility
             isActive: true
           };
 
@@ -282,88 +271,34 @@ class ServiceM8Service {
         }
       }
 
+      // Always update batch status regardless of who created it
+      await storage.updateCustomerImportBatch(currentBatchId!, {
+        status: 'completed',
+        totalRecords: companies.length,
+        successfulRecords: imported,
+        failedRecords: errors.length,
+        errorDetails: errors.length > 0 ? errors : null,
+        completedAt: new Date()
+      });
+
       console.log(`🎉 ServiceM8 customers import completed: ${imported} imported, ${errors.length} errors`);
       return { success: true, imported, errors };
     } catch (error) {
       console.error('❌ ServiceM8 customers import failed:', error);
-      return { 
-        success: false, 
-        imported: 0, 
-        errors: [`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`] 
-      };
-    }
-  }
-
-  async importJobs(): Promise<{ success: boolean; imported: number; errors: string[] }> {
-    try {
-      console.log('🚀 Starting ServiceM8 jobs import...');
-      // Request all job fields to get complete job data including job_description
-      const jobs: ServiceM8Job[] = await this.makeRequest('/job.json?$select=uuid,company_uuid,generated_job_id,status,job_description,job_address,job_location,total_cost,date_created,date_modified,time_created,priority,notes');
       
-      let imported = 0;
-      const errors: string[] = [];
-
-      // Get all customers to map company_uuid to customer IDs
-      const customers = await storage.getAllCustomers();
-      
-      for (const job of jobs) {
+      // Mark batch as failed if we have a batch ID
+      if (currentBatchId) {
         try {
-          const jobNumber = job.generated_job_id || `SM8-${job.uuid.slice(-8)}`;
-          
-          // Check if job already exists by job number
-          const existingJob = await storage.getJobByJobNumber(jobNumber);
-          if (existingJob) {
-            console.log(`⏭️ Skipping existing job: ${jobNumber}`);
-            continue;
-          }
-
-          // Find the customer by ServiceM8 UUID for correct mapping
-          const customer = customers.find(c => c.servicem8Uuid === job.company_uuid);
-          
-          if (!customer) {
-            errors.push(`No customer found for ServiceM8 company UUID ${job.company_uuid} (job ${job.generated_job_id})`);
-            continue;
-          }
-
-          // Map ServiceM8 status to our job status
-          const statusMap: { [key: string]: 'lead' | 'quote' | 'scheduled' | 'work_order' | 'completed' | 'unsuccessful' } = {
-            'Quote': 'quote',
-            'Scheduled': 'scheduled', 
-            'In Progress': 'work_order',
-            'Completed': 'completed',
-            'Cancelled': 'unsuccessful'
-          };
-
-          const mappedStatus = statusMap[job.status] || 'quote';
-
-          // Map ServiceM8 job to our job schema
-          const newJob: InsertJob = {
-            customerId: customer.id,
-            jobNumber: jobNumber, // Use the same job number we checked for
-            title: job.job_description || `Job ${job.generated_job_id}`,
-            description: job.notes || job.job_description || null,
-            status: mappedStatus,
-            priority: job.priority?.toLowerCase() || 'medium',
-            address: job.job_address || job.job_location || 'Address not specified',
-            estimatedValue: job.total_cost ? parseFloat(job.total_cost) : null,
-            createdAt: job.date_created ? new Date(job.date_created) : new Date(),
-            updatedAt: job.date_modified ? new Date(job.date_modified) : new Date()
-          };
-
-          await storage.createJob(newJob);
-          imported++;
-          console.log(`✅ Imported job: ${newJob.title}`);
-        } catch (error) {
-          const errorMsg = `Failed to import job ${job.generated_job_id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-          console.error('❌', errorMsg);
-          errors.push(errorMsg);
+          await storage.updateCustomerImportBatch(currentBatchId, {
+            status: 'failed',
+            errorDetails: [`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+            completedAt: new Date()
+          });
+        } catch (batchUpdateError) {
+          console.error('❌ Failed to update batch status:', batchUpdateError);
         }
       }
-
-      console.log(`🎉 ServiceM8 jobs import completed: ${imported} imported, ${errors.length} errors`);
-      return { success: true, imported, errors };
-    } catch (error) {
-      console.error('❌ ServiceM8 jobs import failed:', error);
+      
       return { 
         success: false, 
         imported: 0, 
@@ -371,14 +306,15 @@ class ServiceM8Service {
       };
     }
   }
+
+  // Job imports removed - focusing on customer list migration instead
 
   async syncExistingData(): Promise<{
     success: boolean;
     customers: { updated: number; errors: string[] };
-    jobs: { updated: number; errors: string[] };
     message: string;
   }> {
-    console.log('🔄 Starting ServiceM8 data sync to update existing records...');
+    console.log('🔄 Starting ServiceM8 customer data sync...');
     
     // Test connection first
     const connectionTest = await this.testConnection();
@@ -386,131 +322,25 @@ class ServiceM8Service {
       return {
         success: false,
         customers: { updated: 0, errors: [] },
-        jobs: { updated: 0, errors: [] },
         message: connectionTest.message
       };
     }
 
     // Update existing customers with complete data
     const customersResult = await this.updateExistingCustomerNames();
-    
-    // Update existing jobs with complete descriptions
-    const jobsResult = await this.updateExistingJobDescriptions();
 
-    const totalUpdated = customersResult.updated + jobsResult.updated;
-    const totalErrors = customersResult.errors.length + jobsResult.errors.length;
-
-    console.log(`🏁 ServiceM8 data sync finished: ${totalUpdated} total items updated, ${totalErrors} total errors`);
+    console.log(`🏁 ServiceM8 customer sync finished: ${customersResult.updated} customers updated, ${customersResult.errors.length} errors`);
 
     return {
-      success: totalUpdated > 0 || totalErrors === 0,
+      success: customersResult.updated > 0 || customersResult.errors.length === 0,
       customers: { updated: customersResult.updated, errors: customersResult.errors },
-      jobs: { updated: jobsResult.updated, errors: jobsResult.errors },
-      message: `Sync completed: ${customersResult.updated} customers, ${jobsResult.updated} jobs updated. ${totalErrors} errors.`
+      message: `Customer sync completed: ${customersResult.updated} customers updated. ${customersResult.errors.length} errors.`
     };
   }
 
-  async updateExistingJobDescriptions(): Promise<{ success: boolean; updated: number; errors: string[] }> {
-    try {
-      console.log('🔄 Starting ServiceM8 job description updates...');
-      // Request all job fields to get complete job data including job_description  
-      const jobs: ServiceM8Job[] = await this.makeRequest('/job.json?$select=uuid,company_uuid,generated_job_id,status,job_description,job_address,job_location,total_cost,date_created,date_modified,time_created,priority,notes');
-      
-      let updated = 0;
-      const errors: string[] = [];
+  // Job description updates removed - no longer managing job imports
 
-      for (const job of jobs) {
-        try {
-          const jobNumber = job.generated_job_id || `SM8-${job.uuid.slice(-8)}`;
-          
-          // Find existing job by job number
-          const existingJob = await storage.getJobByJobNumber(jobNumber);
-          if (!existingJob) {
-            continue; // Skip if job doesn't exist
-          }
-
-          // Update description with real ServiceM8 data if available
-          let newDescription = null;
-          let newTitle = existingJob.title;
-          
-          if (job.job_description?.trim()) {
-            newDescription = job.job_description.trim();
-            // Also update title if it's currently generic
-            if (existingJob.title?.startsWith('Job ') || !existingJob.title?.trim()) {
-              newTitle = job.job_description.trim().substring(0, 100); // First 100 chars as title
-            }
-          } else if (job.notes?.trim()) {
-            newDescription = job.notes.trim();
-            if (existingJob.title?.startsWith('Job ') || !existingJob.title?.trim()) {
-              newTitle = job.notes.trim().substring(0, 100);
-            }
-          }
-
-          // Update if we have new description data
-          if (newDescription && (existingJob.description !== newDescription || existingJob.title !== newTitle)) {
-            await storage.updateJob(existingJob.id, { 
-              description: newDescription,
-              title: newTitle 
-            });
-            updated++;
-            console.log(`✅ Updated job description: ${jobNumber} → "${newDescription.substring(0, 50)}..."`);
-          }
-        } catch (error) {
-          const errorMsg = `Failed to update job ${job.generated_job_id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-          console.error('❌', errorMsg);
-          errors.push(errorMsg);
-        }
-      }
-
-      console.log(`🎉 ServiceM8 job description updates completed: ${updated} updated, ${errors.length} errors`);
-      return { success: true, updated, errors };
-    } catch (error) {
-      console.error('❌ ServiceM8 job description updates failed:', error);
-      return { 
-        success: false, 
-        updated: 0, 
-        errors: [`Update failed: ${error instanceof Error ? error.message : 'Unknown error'}`] 
-      };
-    }
-  }
-
-  async importAll(): Promise<{
-    success: boolean;
-    customers: { imported: number; errors: string[] };
-    jobs: { imported: number; errors: string[] };
-    message: string;
-  }> {
-    console.log('🌟 Starting complete ServiceM8 data import...');
-    
-    // Test connection first
-    const connectionTest = await this.testConnection();
-    if (!connectionTest.success) {
-      return {
-        success: false,
-        customers: { imported: 0, errors: [] },
-        jobs: { imported: 0, errors: [] },
-        message: connectionTest.message
-      };
-    }
-
-    // Import customers first
-    const customersResult = await this.importCustomers();
-    
-    // Then import jobs
-    const jobsResult = await this.importJobs();
-
-    const totalImported = customersResult.imported + jobsResult.imported;
-    const totalErrors = customersResult.errors.length + jobsResult.errors.length;
-
-    console.log(`🏁 ServiceM8 complete import finished: ${totalImported} total items imported, ${totalErrors} total errors`);
-
-    return {
-      success: totalImported > 0,
-      customers: customersResult,
-      jobs: jobsResult,
-      message: `Import completed: ${customersResult.imported} customers, ${jobsResult.imported} jobs imported. ${totalErrors} errors.`
-    };
-  }
+  // Complete import method removed - now focusing only on customer management
 }
 
 export const servicem8Service = new ServiceM8Service();
