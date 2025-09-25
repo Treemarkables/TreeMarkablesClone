@@ -1058,9 +1058,48 @@ export function GlobalJobCard({
                         {/* Line Items Section */}
                         <Card>
                           <CardHeader className="pb-1">
-                            <CardTitle className="flex items-center gap-1 text-xs font-medium">
-                              <Receipt className="w-3 h-3" />
-                              Line Items
+                            <CardTitle className="flex items-center justify-between text-xs font-medium">
+                              <div className="flex items-center gap-1">
+                                <Receipt className="w-3 h-3" />
+                                Line Items
+                              </div>
+                              {/* Line Items Settings Dropdown */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                    <Settings className="w-3 h-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  <div className="p-2 space-y-3">
+                                    {/* Tax Rate Option */}
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox id="tax-rate" />
+                                      <label htmlFor="tax-rate" className="text-sm">Tax Rate</label>
+                                    </div>
+                                    
+                                    {/* Cost & Markup Option */}
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox id="cost-markup" defaultChecked />
+                                      <label htmlFor="cost-markup" className="text-sm">Cost & Markup</label>
+                                    </div>
+                                    
+                                    <DropdownMenuSeparator />
+                                    
+                                    {/* Tax Calculation Options */}
+                                    <div className="space-y-2">
+                                      <div className="flex items-center space-x-2">
+                                        <input type="radio" name="tax-calculation" id="tax-inclusive" className="w-3 h-3" />
+                                        <label htmlFor="tax-inclusive" className="text-sm">Amounts are Tax Inclusive</label>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <input type="radio" name="tax-calculation" id="tax-exclusive" defaultChecked className="w-3 h-3" />
+                                        <label htmlFor="tax-exclusive" className="text-sm">Amounts are Tax Exclusive</label>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="pt-1 space-y-2">
