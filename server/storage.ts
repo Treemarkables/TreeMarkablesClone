@@ -1593,7 +1593,10 @@ class DatabaseStorage implements IStorage {
   }
   async getCustomerInvoices(customerId: string): Promise<Invoice[]> { return []; }
   async getCustomerPhotos(customerId: string, jobId?: string): Promise<Photo[]> { return []; }
-  async createInvoice(invoice: InsertInvoice): Promise<Invoice> { throw new Error("Not implemented"); }
+  async createInvoice(invoice: InsertInvoice): Promise<Invoice> {
+    const [result] = await db.insert(schema.invoices).values(invoice).returning();
+    return result;
+  }
   async getInvoice(id: string): Promise<Invoice | undefined> { return undefined; }
   async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> { throw new Error("Not implemented"); }
   async getServiceRequest(id: string): Promise<ServiceRequest | undefined> { return undefined; }

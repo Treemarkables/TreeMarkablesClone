@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { format } from "date-fns";
 import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Target } from "lucide-react";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
@@ -13,6 +14,8 @@ import { GrossMarginCalculator } from "./GrossMarginCalculator";
 import { ServiceM8TimeRecordingModal } from "./ServiceM8TimeRecordingModal";
 import { EmailComposerModal } from "./EmailComposerModal";
 import { SMSComposerModal } from "./SMSComposerModal";
+import { ServiceM8HeaderToolbar } from "./ServiceM8HeaderToolbar";
+import { ServiceM8ActivityFeed } from "./ServiceM8ActivityFeed";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -103,10 +106,26 @@ export function GlobalJobCard({
   const [isServiceM8TimeModalOpen, setIsServiceM8TimeModalOpen] = useState(false);
   const [isEmailComposerOpen, setIsEmailComposerOpen] = useState(false);
   const [isSMSComposerOpen, setIsSMSComposerOpen] = useState(false);
+  
+  // Scheduling modal state
+  const [isSchedulingModalOpen, setIsSchedulingModalOpen] = useState(false);
+  const [schedulingData, setSchedulingData] = useState({
+    date: '',
+    startTime: '',
+    endTime: '',
+    assignedTo: '',
+    notes: ''
+  });
 
   // Fetch customers for the dropdown
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],
+    enabled: isOpen,
+  });
+  
+  // Fetch employees for scheduling assignment
+  const { data: employeesData } = useQuery({
+    queryKey: ['/api/employees'],
     enabled: isOpen,
   });
 
@@ -369,12 +388,23 @@ export function GlobalJobCard({
 
   // Button click handlers
   const handleScheduleClick = () => {
-    toast({
-      title: "Schedule Feature",
-      description: "Opening scheduling interface...",
+    if (!editingJob) return;
+    
+    // Pre-populate scheduling data with current job information
+    const jobDate = editingJob.scheduledDate || editingJob.serviceDate || new Date().toISOString();
+    const date = new Date(jobDate);
+    
+    setSchedulingData({
+      date: format(date, 'yyyy-MM-dd'),
+      startTime: format(date, 'HH:mm'),
+      endTime: format(new Date(date.getTime() + (editingJob.estimatedDuration || 2) * 60 * 60 * 1000), 'HH:mm'),
+      assignedTo: editingJob.staffId || '',
+      notes: ''
     });
-    // TODO: Open scheduling modal or redirect to calendar
-    console.log("Schedule button clicked");
+    
+    setIsSchedulingModalOpen(true);
+    
+    console.log("Schedule button clicked - opening scheduling modal");
   };
 
   const handleProposalClick = () => {
@@ -618,182 +648,82 @@ export function GlobalJobCard({
     }
   };
 
+  // Save schedule function
+  const saveSchedule = async () => {
+    if (!editingJob || !schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || !schedulingData.assignedTo) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required scheduling fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const scheduledDate = new Date(`${schedulingData.date}T${schedulingData.startTime}:00`);
+      const endDate = new Date(`${schedulingData.date}T${schedulingData.endTime}:00`);
+      
+      const updatedJob = {
+        ...editingJob,
+        scheduledDate: scheduledDate.toISOString(),
+        staffId: schedulingData.assignedTo,
+        status: 'scheduled' as const,
+        notes: schedulingData.notes ? `${editingJob.notes || ''}\nScheduling Notes: ${schedulingData.notes}`.trim() : editingJob.notes
+      };
+
+      await updateJobMutation.mutateAsync(updatedJob);
+      
+      toast({
+        title: "Job Scheduled",
+        description: `Job scheduled for ${format(scheduledDate, 'PPP')} at ${format(scheduledDate, 'p')}`,
+      });
+      
+      setIsSchedulingModalOpen(false);
+      setSchedulingData({
+        date: '',
+        startTime: '',
+        endTime: '',
+        assignedTo: '',
+        notes: ''
+      });
+      
+      console.log("Job scheduled successfully");
+    } catch (error) {
+      console.error("Error scheduling job:", error);
+      toast({
+        title: "Scheduling Error",
+        description: "Failed to schedule job. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-7xl h-[95vh] flex flex-col p-0">
-        {/* Header spans full width */}
-        <DialogHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-lg flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                <FileText className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">
-                  {mode === "create" ? "Create New Job" : "Edit Job"}
-                </h2>
-                <p className="text-orange-100 text-sm">
-                  {mode === "create" ? "Fill in the details to create a new job" : `Job ${editingJob?.jobNumber || ""}`}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                onClick={handleScheduleClick}
-                data-testid="button-schedule"
-              >
-                <Calendar className="w-4 h-4 mr-1" />
-                Schedule
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                onClick={handleProposalClick}
-                data-testid="button-proposal"
-              >
-                <Presentation className="w-4 h-4 mr-1" />
-                Proposal
-              </Button>
-              
-              {/* Invoice Dropdown - show for quote, work_order, or completed jobs */}
-              {editingJob && (editingJob.status === 'quote' || editingJob.status === 'work_order' || editingJob.status === 'completed') && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                      data-testid="button-invoice-dropdown"
-                    >
-                      <Receipt className="w-4 h-4 mr-1" />
-                      Send Invoice
-                      <ChevronDown className="w-4 h-4 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-64" align="end">
-                    {/* Invoice creation options - show for quote and work_order */}
-                    {(editingJob?.status === 'quote' || editingJob?.status === 'work_order') && (
-                      <>
-                        <DropdownMenuItem onClick={handleSendInvoice} data-testid="menu-send-invoice">
-                          <Send className="w-4 h-4 mr-2" style={{color: 'hsl(var(--green))'}} />
-                          <div>
-                            <div className="font-medium">Send Invoice</div>
-                            <div className="text-sm text-muted-foreground">Draft an email to send the invoice.</div>
-                          </div>
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuItem onClick={handleSMSInvoice} data-testid="menu-sms-invoice">
-                          <MessageSquare className="w-4 h-4 mr-2" style={{color: 'hsl(var(--purple))'}} />
-                          <div>
-                            <div className="font-medium">SMS Invoice</div>
-                            <div className="text-sm text-muted-foreground">Draft a text to send the invoice.</div>
-                          </div>
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuItem onClick={handleAutoInvoice} data-testid="menu-auto-invoice">
-                          <Zap className="w-4 h-4 mr-2" style={{color: 'hsl(var(--yellow))'}} />
-                          <div>
-                            <div className="font-medium">Auto Invoice</div>
-                            <div className="text-sm text-muted-foreground">Auto-draft an invoice description and items/services to charge for.</div>
-                          </div>
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuItem onClick={handlePartialInvoice} data-testid="menu-partial-invoice">
-                          <Percent className="w-4 h-4 mr-2" style={{color: 'hsl(var(--orange))'}} />
-                          <div>
-                            <div className="font-medium">Partial Invoice</div>
-                            <div className="text-sm text-muted-foreground">Create a Partial or Progress Invoice for this job.</div>
-                          </div>
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuItem onClick={handleCustomiseInvoice} data-testid="menu-customise-invoice">
-                          <Settings className="w-4 h-4 mr-2" style={{color: 'hsl(var(--teal))'}} />
-                          <div>
-                            <div className="font-medium">Customise Invoice</div>
-                            <div className="text-sm text-muted-foreground">Edit the invoice's template and settings.</div>
-                          </div>
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    
-                    {/* Payment and Xero options - show for all statuses */}
-                    <DropdownMenuItem onClick={handleAddPayment} data-testid="menu-add-payment">
-                      <CreditCard className="w-4 h-4 mr-2" style={{color: 'hsl(var(--blue))'}} />
-                      <div>
-                        <div className="font-medium">Add Payment</div>
-                        <div className="text-sm text-muted-foreground">Record an invoice payment.</div>
-                      </div>
-                    </DropdownMenuItem>
-                    
-                    <DropdownMenuItem 
-                      onClick={handleApproveToXero} 
-                      data-testid="menu-approve-xero"
-                      disabled={editingJob?.status !== 'completed'}
-                    >
-                      <CheckCircle className={`w-4 h-4 mr-2 ${editingJob?.status === 'completed' ? 'text-green-600' : 'text-gray-400'}`} />
-                      <div>
-                        <div className={`font-medium ${editingJob?.status === 'completed' ? '' : 'text-gray-400'}`}>
-                          Approve to Xero
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {editingJob?.status === 'completed' 
-                            ? 'Send the invoice and payment details to Xero'
-                            : 'Complete job first to enable Xero integration'
-                          }
-                        </div>
-                      </div>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              
-              <div className="flex gap-1">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20 px-2"
-                  onClick={handleEmailClick}
-                  data-testid="button-email"
-                >
-                  <Mail className="w-4 h-4" />
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20 px-2"
-                  onClick={handleSMSClick}
-                  data-testid="button-sms"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20 px-2"
-                  onClick={handleCallClick}
-                  data-testid="button-call"
-                >
-                  <Phone className="w-4 h-4" />
-                </Button>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="text-white hover:bg-white/10"
-                data-testid="button-close"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </DialogHeader>
+        {/* ServiceM8-Style Header */}
+        <ServiceM8HeaderToolbar
+          mode={mode}
+          jobNumber={editingJob?.jobNumber}
+          customerName={selectedCustomer?.name}
+          onClose={onClose}
+          onEmailClick={handleEmailClick}
+          onSMSClick={() => setIsSMSComposerOpen(true)}
+          onCallClick={handleCallClick}
+          onScheduleClick={handleScheduleClick}
+          onQueueClick={() => setIsServiceM8TimeModalOpen(true)}
+          onFormClick={() => setActiveTab('details')}
+          onProposalClick={handleProposalClick}
+          onProfitClick={() => setIsStaffTimeDialogOpen(true)}
+          onTrackExpenses={() => setIsExpenseDialogOpen(true)}
+          onSendInvoice={handleSendInvoice}
+          onSMSInvoice={handleSMSInvoice}
+          onAutoInvoice={handleAutoInvoice}
+          onPartialInvoice={handlePartialInvoice}
+          onCustomiseInvoice={handleCustomiseInvoice}
+          onAddPayment={handleAddPayment}
+          onSendToXero={handleApproveToXero}
+        />
 
         {/* Tabbed interface */}
         <div className="flex-1 flex flex-col min-h-0">
@@ -1686,6 +1616,122 @@ export function GlobalJobCard({
         customer={customers.find((c: any) => c.id === editingJob?.customerId)}
         invoiceData={currentInvoiceData}
       />
+      
+      {/* Scheduling Modal */}
+      <Dialog open={isSchedulingModalOpen} onOpenChange={setIsSchedulingModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold">Schedule Job</h2>
+              <p className="text-sm text-muted-foreground">
+                {editingJob ? `Job #${editingJob.jobNumber || 'New'} - ${editingJob.description || 'Untitled'}` : 'Schedule Job'}
+              </p>
+            </div>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="schedule-date" className="text-sm font-medium">Date</label>
+                <Input
+                  id="schedule-date"
+                  type="date"
+                  value={schedulingData.date}
+                  onChange={(e) => setSchedulingData(prev => ({ ...prev, date: e.target.value }))}
+                  data-testid="input-schedule-date"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label htmlFor="schedule-start-time" className="text-sm font-medium">Start Time</label>
+                <Input
+                  id="schedule-start-time"
+                  type="time"
+                  value={schedulingData.startTime}
+                  onChange={(e) => setSchedulingData(prev => ({ ...prev, startTime: e.target.value }))}
+                  data-testid="input-schedule-start-time"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="schedule-end-time" className="text-sm font-medium">End Time</label>
+                <Input
+                  id="schedule-end-time"
+                  type="time"
+                  value={schedulingData.endTime}
+                  onChange={(e) => setSchedulingData(prev => ({ ...prev, endTime: e.target.value }))}
+                  data-testid="input-schedule-end-time"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label htmlFor="schedule-assignment" className="text-sm font-medium">Assign to Staff</label>
+                <Select
+                  value={schedulingData.assignedTo} 
+                  onValueChange={(value) => setSchedulingData(prev => ({ ...prev, assignedTo: value }))}
+                >
+                  <SelectTrigger data-testid="select-schedule-assignment">
+                    <SelectValue placeholder="Select staff member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employeesData?.data?.length > 0 ? (
+                      employeesData.data.map((employee: any) => (
+                        <SelectItem key={employee.id} value={employee.id}>
+                          {employee.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="default-staff">Default Staff</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="schedule-notes" className="text-sm font-medium">Notes (Optional)</label>
+              <Textarea
+                id="schedule-notes"
+                placeholder="Add any scheduling notes..."
+                value={schedulingData.notes}
+                onChange={(e) => setSchedulingData(prev => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+                data-testid="textarea-schedule-notes"
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsSchedulingModalOpen(false);
+                setSchedulingData({
+                  date: '',
+                  startTime: '',
+                  endTime: '',
+                  assignedTo: '',
+                  notes: ''
+                });
+              }}
+              data-testid="btn-cancel-schedule"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={saveSchedule}
+              disabled={!schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || !schedulingData.assignedTo || updateJobMutation.isPending}
+              data-testid="btn-save-schedule"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Clock className="h-4 w-4 mr-2" />
+              {updateJobMutation.isPending ? 'Scheduling...' : 'Schedule Job'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
