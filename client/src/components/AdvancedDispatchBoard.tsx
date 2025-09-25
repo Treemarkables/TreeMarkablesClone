@@ -138,10 +138,36 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     // Handle job reassignment here if needed
   }, []);
 
-  // Get customer name
-  const getCustomerName = (customerId: string) => {
+  // Get customer name with enhanced display logic
+  const getCustomerName = (customerId: string, jobData?: any) => {
     const customer = (customersData as any)?.data?.find((c: any) => c.id === customerId);
-    return customer?.name || 'Unknown Customer';
+    
+    // If customer has a proper name (not generic ServiceM8 import name), use it
+    if (customer?.name && !customer.name.startsWith('Customer-')) {
+      return customer.name;
+    }
+    
+    // Try to find the job for this customer to get address info
+    const job = jobData || (jobsData as any)?.data?.find((j: any) => j.customerId === customerId);
+    
+    if (job?.address) {
+      // Extract meaningful info from address
+      const addressParts = job.address.split(',');
+      if (addressParts.length > 0) {
+        const streetAddress = addressParts[0].trim();
+        // Create a display name from street address
+        if (streetAddress) {
+          return `${streetAddress}`;
+        }
+      }
+    }
+    
+    // Fallback: use customer name without the generic prefix or unknown
+    if (customer?.name) {
+      return customer.name.replace('Customer-', '') + ' (Customer)';
+    }
+    
+    return 'Unknown Customer';
   };
 
   // Generate calendar days for mini calendar
@@ -219,7 +245,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
   // Render mini job card for right sidebar - ServiceM8 style
   const renderJobSidebarCard = (job: any, index: number) => {
-    const customer = getCustomerName(job.customerId);
+    const customer = getCustomerName(job.customerId, job);
     const styling = getStatusStyling(job.status);
     
     // ServiceM8-style letter mapping based on status
@@ -286,7 +312,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           style={{ backgroundColor: staffMember.color }}
         >
           <div className="font-medium">{jobTime.getHours()}:{jobTime.getMinutes().toString().padStart(2, '0')}</div>
-          <div className="truncate">{getCustomerName(job.customerId)}</div>
+          <div className="truncate">{getCustomerName(job.customerId, job)}</div>
         </div>
       );
     }
