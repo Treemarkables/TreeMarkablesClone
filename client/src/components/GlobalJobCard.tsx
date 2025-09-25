@@ -1100,11 +1100,12 @@ export function GlobalJobCard({
                                         </SelectTrigger>
                                       </FormControl>
                                       <SelectContent>
-                                        <SelectItem value="pending">Pending</SelectItem>
-                                        <SelectItem value="in_progress">In Progress</SelectItem>
+                                        <SelectItem value="lead">Lead</SelectItem>
+                                        <SelectItem value="quote">Quote</SelectItem>
+                                        <SelectItem value="scheduled">Scheduled</SelectItem>
+                                        <SelectItem value="work_order">Work Order</SelectItem>
                                         <SelectItem value="completed">Completed</SelectItem>
-                                        <SelectItem value="on_hold">On Hold</SelectItem>
-                                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                                        <SelectItem value="unsuccessful">Unsuccessful</SelectItem>
                                       </SelectContent>
                                     </Select>
                                     <FormMessage />
