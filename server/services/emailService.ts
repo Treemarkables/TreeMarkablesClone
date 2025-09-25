@@ -56,9 +56,13 @@ class EmailService {
         return true;
       }
 
+      const actualFromEmail = params.from || this.fromEmail;
+      console.log(`📧 DEBUG: SendGrid sending with FROM: ${actualFromEmail}, TO: ${params.to}`);
+      console.log(`📧 DEBUG: params.from = ${params.from}, this.fromEmail = ${this.fromEmail}`);
+
       await this.mailService.send({
         to: params.to,
-        from: params.from || this.fromEmail,
+        from: actualFromEmail,
         subject: params.subject,
         text: params.text,
         html: params.html,
