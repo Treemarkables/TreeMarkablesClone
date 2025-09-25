@@ -277,7 +277,7 @@ export type InsertLeadSubmission = Omit<LeadSubmission, 'id' | 'createdAt'>;
 // ========================================
 
 // Job Status Enum
-export const JobStatus = z.enum(['lead', 'quote', 'work_order', 'completed', 'unsuccessful']);
+export const JobStatus = z.enum(['lead', 'quote', 'scheduled', 'work_order', 'completed', 'unsuccessful']);
 export type JobStatusType = z.infer<typeof JobStatus>;
 
 export const LeadSourceType = z.enum(['phone', 'website', 'referral', 'google', 'facebook', 'direct', 'advertisement', 'other']);
@@ -420,7 +420,7 @@ export const jobs = pgTable("jobs", {
   address: text("address").notNull(),
   scheduledDate: timestamp("scheduled_date"),
   completedDate: timestamp("completed_date"),
-  status: text("status").notNull().default('lead'), // lead, quote, work_order, completed, unsuccessful
+  status: text("status").notNull().default('lead'), // lead, quote, scheduled, work_order, completed, unsuccessful
   priority: text("priority"), // low, medium, high, urgent
   assignedTeam: text("assigned_team").array(),
   estimatedDuration: integer("estimated_duration"), // hours
