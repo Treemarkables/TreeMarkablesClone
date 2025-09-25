@@ -2326,7 +2326,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Send email using the emailService
       const emailSent = await emailService.sendEmail({
         to: to,
-        from: 'noreply@treemarkables.co.nz',
         subject: subject,
         text: body,
         html: emailHtml,
