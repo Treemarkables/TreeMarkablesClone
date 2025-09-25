@@ -435,6 +435,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
   });
 
+  // Fetch customers for name lookup
+  const { data: customersData } = useQuery({
+    queryKey: ['/api/customers'],
+    queryFn: async () => {
+      const response = await fetch('/api/customers');
+      if (!response.ok) throw new Error('Failed to fetch customers');
+      return response.json();
+    }
+  });
+
+  // Create customer lookup map
+  const customerMap = useMemo(() => {
+    const map = new Map();
+    if (customersData?.data) {
+      customersData.data.forEach((customer: any) => {
+        map.set(customer.id, customer.name);
+      });
+    }
+    return map;
+  }, [customersData]);
+
   // Convert API jobs to DispatchBoard format
   const jobs: JobAssignment[] = (jobsData?.data || []).map((apiJob: any) => {
     // Calculate endTime from scheduledDate + estimatedDuration
@@ -472,7 +493,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       id: apiJob.id,
       jobId: apiJob.jobNumber,
       customerId: apiJob.customerId,
-      customerName: apiJob.title, // API uses 'title', we use 'customerName'
+      customerName: customerMap.get(apiJob.customerId) || apiJob.title || 'Unknown Customer',
       customerPhone: '', // Not available in API response
       address: apiJob.address,
       serviceType: apiJob.description,
@@ -505,6 +526,53 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       case 'medium': return 'bg-yellow-500';
       case 'low': return 'bg-green-500';
       default: return 'bg-gray-500';
+    }
+  };
+
+  // Get status initials for job circles
+  const getStatusInitials = (job: JobAssignment) => {
+    // Check service type first for leads and quotes
+    const serviceType = job.serviceType?.toLowerCase() || '';
+    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return 'L';
+    if (serviceType.includes('quote') || serviceType.includes('proposal')) return 'Q';
+    
+    // Then check job status
+    switch (job.status) {
+      case 'completed': return 'C';
+      case 'cancelled': return 'U'; // Unsuccessful
+      case 'in_progress':
+      case 'scheduled': return 'WO'; // Work Order
+      default: return 'WO'; // Default to Work Order
+    }
+  };
+
+  // Get status color for job circles
+  const getJobStatusColor = (job: JobAssignment) => {
+    const serviceType = job.serviceType?.toLowerCase() || '';
+    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return 'bg-blue-500';
+    if (serviceType.includes('quote') || serviceType.includes('proposal')) return 'bg-purple-500';
+    
+    switch (job.status) {
+      case 'completed': return 'bg-green-500';
+      case 'cancelled': return 'bg-red-500'; // Unsuccessful
+      case 'in_progress': return 'bg-yellow-500';
+      case 'scheduled': return 'bg-orange-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  // Get actual color values for inline styles
+  const getJobStatusColorValue = (job: JobAssignment) => {
+    const serviceType = job.serviceType?.toLowerCase() || '';
+    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return '#3b82f6'; // blue-500
+    if (serviceType.includes('quote') || serviceType.includes('proposal')) return '#8b5cf6'; // purple-500
+    
+    switch (job.status) {
+      case 'completed': return '#10b981'; // green-500
+      case 'cancelled': return '#ef4444'; // red-500 - Unsuccessful
+      case 'in_progress': return '#eab308'; // yellow-500
+      case 'scheduled': return '#f97316'; // orange-500
+      default: return '#6b7280'; // gray-500
     }
   };
 
@@ -1345,12 +1413,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           <div className="absolute left-14 top-6 w-2 h-2 bg-blue-400 rounded-full border-2 border-white z-10" />
                           
                           <div className="flex items-start gap-3 p-3 pl-6">
-                            {/* Customer Avatar */}
-                            <CustomerAvatar 
-                              customerName={customerName}
-                              size="lg"
-                              className="relative z-10"
-                            />
+                            {/* Status Avatar */}
+                            <div 
+                              className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm relative z-10"
+                              style={{ backgroundColor: getJobStatusColorValue(job) }}
+                            >
+                              {getStatusInitials(job)}
+                            </div>
                             
                             {/* Job Content */}
                             <div className="flex-1 min-w-0">
@@ -1387,11 +1456,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               
                               {/* Job Description */}
                               <div className="text-xs text-gray-700 leading-relaxed" data-testid={`servicem8-job-description-${job.id}`}>
-                                {job.notes && job.notes !== '0000-00-00 00:00:00' 
-                                  ? job.notes.length > 120 
-                                    ? `${job.notes.substring(0, 120)}...`
-                                    : job.notes
-                                  : job.serviceType || 'No description available'
+                                {(() => {
+                                  // Get the description text, filtering out placeholder dates
+                                  const description = job.notes && job.notes !== '0000-00-00 00:00:00' && !job.notes.includes('0000-00-00')
+                                    ? job.notes.length > 120 
+                                      ? `${job.notes.substring(0, 120)}...`
+                                      : job.notes
+                                    : job.serviceType || 'No description available';
+                                  
+                                  // If description contains placeholder date, fall back to service type
+                                  return description.includes('0000-00-00') 
+                                    ? (job.serviceType || 'No description available')
+                                    : description;
+                                })()
                                 }
                               </div>
                             </div>
