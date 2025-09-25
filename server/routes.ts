@@ -7193,6 +7193,22 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // POST /api/servicem8/sync - Sync existing data with complete ServiceM8 information
+  app.post('/api/servicem8/sync', async (req: Request, res: Response) => {
+    try {
+      const result = await servicem8Service.syncExistingData();
+      res.json(result);
+    } catch (error) {
+      console.error('ServiceM8 sync error:', error);
+      res.status(500).json({
+        success: false,
+        customers: { updated: 0, errors: [] },
+        jobs: { updated: 0, errors: [] },
+        message: 'Failed to sync data with ServiceM8'
+      });
+    }
+  });
+
   // Register ServiceM8 OAuth and API routes
   const servicem8Routes = createServiceM8Routes(storage);
   app.use('/api/servicem8', servicem8Routes);
