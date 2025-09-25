@@ -493,7 +493,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       id: apiJob.id,
       jobId: apiJob.jobNumber,
       customerId: apiJob.customerId,
-      customerName: customerMap.get(apiJob.customerId) || apiJob.title || 'Unknown Customer',
+      customerName: customerMap.get(apiJob.customerId) || (() => {
+        // Don't use title if it contains timestamps
+        if (apiJob.title && !apiJob.title.includes('2025-') && !apiJob.title.includes('0000-00-00')) {
+          return apiJob.title;
+        }
+        return 'Unknown Customer';
+      })(),
       customerPhone: '', // Not available in API response
       address: apiJob.address,
       serviceType: apiJob.description,
