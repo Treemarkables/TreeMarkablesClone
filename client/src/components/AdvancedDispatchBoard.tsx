@@ -457,7 +457,16 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
             {/* Jobs List */}
             <div className="p-3 space-y-3">
-              {allJobs.slice(0, 6).map((job: any, index: number) => renderJobSidebarCard(job, index))}
+              {allJobs
+                .sort((a: any, b: any) => {
+                  // Sort by creation date (newest first) - use jobNumber as fallback for newer jobs
+                  const aDate = new Date(a.createdAt || a.id);
+                  const bDate = new Date(b.createdAt || b.id);
+                  return bDate.getTime() - aDate.getTime();
+                })
+                .slice(0, 6)
+                .map((job: any, index: number) => renderJobSidebarCard(job, index))
+              }
             </div>
           </div>
         </div>
