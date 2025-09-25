@@ -1329,9 +1329,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </div>
 
             {/* ServiceM8 Style Jobs Panel */}
-            <div className="w-96 bg-gray-50 border-l">
+            <div className="w-96 bg-gray-50 border-l flex flex-col h-full">
               {/* ServiceM8 Header */}
-              <div className="p-4 space-y-3">
+              <div className="p-4 space-y-3 flex-shrink-0">
                 {/* ServiceM8 Style Filter Dropdown */}
                 <Select value={jobFilter} onValueChange={setJobFilter}>
                   <SelectTrigger className="w-full bg-white" data-testid="servicem8-job-filter-select">
