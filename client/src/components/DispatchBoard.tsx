@@ -1444,6 +1444,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   <div className="text-xs text-gray-600 mb-1">
                                     {job.address || 'No address specified'}
                                   </div>
+                                  {/* Replace date with job description */}
+                                  <div className="text-xs text-gray-500">
+                                    {(() => {
+                                      // Get meaningful job description instead of date
+                                      const description = job.notes && job.notes !== '0000-00-00 00:00:00' && !job.notes.includes('0000-00-00')
+                                        ? job.notes.length > 80 
+                                          ? `${job.notes.substring(0, 80)}...`
+                                          : job.notes
+                                        : job.serviceType || 'Tree removal and arborist services';
+                                      
+                                      // Filter out any date-like content
+                                      return description.includes('0000-00-00') || description.includes('2025-') 
+                                        ? (job.serviceType || 'Tree removal and arborist services')
+                                        : description;
+                                    })()}
+                                  </div>
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                   <div className="text-xs font-medium text-gray-500 mb-1" data-testid={`servicem8-job-number-${job.id}`}>
