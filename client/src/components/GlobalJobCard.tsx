@@ -933,7 +933,7 @@ export function GlobalJobCard({
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormLabel className="text-xs">Select Customer</FormLabel>
-                                      <Select onValueChange={field.onChange} value={field.value || ""} disabled={mode === "edit"}>
+                                      <Select onValueChange={field.onChange} value={field.value || ""} disabled={mode === "edit" && !!editingJob}>
                                         <FormControl>
                                           <SelectTrigger data-testid="select-customer" className="h-7 text-xs">
                                             <SelectValue placeholder="Choose a customer..." />
@@ -1214,7 +1214,7 @@ export function GlobalJobCard({
                                 render={({ field }) => (
                                   <FormItem>
                                     <FormLabel>Priority</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value || ""}>
                                       <FormControl>
                                         <SelectTrigger data-testid="select-job-priority">
                                           <SelectValue placeholder="Select priority" />
@@ -1233,12 +1233,12 @@ export function GlobalJobCard({
                               />
                               <FormField
                                 control={form.control}
-                                name="estimatedHours"
+                                name="serviceType"
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Est. Hours</FormLabel>
+                                    <FormLabel>Service Type</FormLabel>
                                     <FormControl>
-                                      <Input {...field} type="number" placeholder="8" data-testid="input-estimated-hours" />
+                                      <Input {...field} value={field.value || ""} placeholder="Tree Removal" data-testid="input-service-type" />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
