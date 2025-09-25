@@ -49,7 +49,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   const { toast } = useToast();
   
   const style = {
-    "--sidebar-width": "16rem",
+    "--sidebar-width": "12rem",
     "--sidebar-width-icon": "3rem",
   };
 
