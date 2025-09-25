@@ -293,6 +293,7 @@ export function CustomerCSVUpload() {
     setParsedCSV(null);
     setMatchingResult(null);
     setBulkUpdateResult(null);
+    setCSVImportResult(null);
     setUploadProgress(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
