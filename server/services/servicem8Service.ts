@@ -9,8 +9,8 @@ interface ServiceM8Config {
 interface ServiceM8Company {
   uuid: string;
   company_name: string;
-  contact_first: string;
-  contact_last: string;
+  contact_first_name: string;
+  contact_last_name: string;
   email: string;
   mobile: string;
   phone: string;
@@ -100,7 +100,8 @@ class ServiceM8Service {
   async updateExistingCustomerNames(): Promise<{ success: boolean; updated: number; errors: string[] }> {
     try {
       console.log('🔄 Starting ServiceM8 customer name updates...');
-      const companies: ServiceM8Company[] = await this.makeRequest('/company.json');
+      // Request all company fields to get complete customer data including contact names
+      const companies: ServiceM8Company[] = await this.makeRequest('/company.json?$select=uuid,company_name,contact_first_name,contact_last_name,email,mobile,phone,address_line1,address_city,address_state,notes,date_created,date_modified');
       
       let updated = 0;
       const errors: string[] = [];
@@ -119,9 +120,9 @@ class ServiceM8Service {
           if (company.company_name?.trim()) {
             newCustomerName = company.company_name.trim();
           }
-          else if (company.contact_first?.trim() || company.contact_last?.trim()) {
-            const firstName = (company.contact_first || '').trim();
-            const lastName = (company.contact_last || '').trim();
+          else if (company.contact_first_name?.trim() || company.contact_last_name?.trim()) {
+            const firstName = (company.contact_first_name || '').trim();
+            const lastName = (company.contact_last_name || '').trim();
             newCustomerName = `${firstName} ${lastName}`.trim();
           }
           else if (company.email?.includes('@')) {
@@ -166,7 +167,8 @@ class ServiceM8Service {
   async importCustomers(): Promise<{ success: boolean; imported: number; errors: string[] }> {
     try {
       console.log('🚀 Starting ServiceM8 customers import...');
-      const companies: ServiceM8Company[] = await this.makeRequest('/company.json');
+      // Request all company fields to get complete customer data including contact names
+      const companies: ServiceM8Company[] = await this.makeRequest('/company.json?$select=uuid,company_name,contact_first_name,contact_last_name,email,mobile,phone,address_line1,address_city,address_state,notes,date_created,date_modified');
       
       let imported = 0;
       const errors: string[] = [];
@@ -188,9 +190,9 @@ class ServiceM8Service {
             customerName = company.company_name.trim();
           }
           // Try contact name
-          else if (company.contact_first?.trim() || company.contact_last?.trim()) {
-            const firstName = (company.contact_first || '').trim();
-            const lastName = (company.contact_last || '').trim();
+          else if (company.contact_first_name?.trim() || company.contact_last_name?.trim()) {
+            const firstName = (company.contact_first_name || '').trim();
+            const lastName = (company.contact_last_name || '').trim();
             customerName = `${firstName} ${lastName}`.trim();
           }
           // Try email username
@@ -215,8 +217,8 @@ class ServiceM8Service {
           console.log(`🔍 ServiceM8 customer data:`, {
             uuid: company.uuid.slice(-8),
             company_name: company.company_name,
-            contact_first: company.contact_first,
-            contact_last: company.contact_last,
+            contact_first_name: company.contact_first_name,
+            contact_last_name: company.contact_last_name,
             email: company.email,
             mobile: company.mobile,
             final_name: customerName
@@ -260,7 +262,8 @@ class ServiceM8Service {
   async importJobs(): Promise<{ success: boolean; imported: number; errors: string[] }> {
     try {
       console.log('🚀 Starting ServiceM8 jobs import...');
-      const jobs: ServiceM8Job[] = await this.makeRequest('/job.json');
+      // Request all job fields to get complete job data including job_description
+      const jobs: ServiceM8Job[] = await this.makeRequest('/job.json?$select=uuid,company_uuid,generated_job_id,status,job_description,job_address,job_location,total_cost,date_created,date_modified,time_created,priority,notes');
       
       let imported = 0;
       const errors: string[] = [];
