@@ -19,7 +19,7 @@ interface EmailParams {
 class EmailService {
   private mailService: MailService;
   private isConfigured: boolean = false;
-  private fromEmail: string = 'noreply@treemarkables.co.nz';
+  private fromEmail: string = 'info@treemarkables.nz';
 
   constructor() {
     this.mailService = new MailService();
