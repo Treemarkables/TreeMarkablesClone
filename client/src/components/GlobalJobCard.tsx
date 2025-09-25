@@ -520,17 +520,7 @@ export function GlobalJobCard({
     });
     
     try {
-      // If job has no invoice yet, create one first
-      if (!editingJob.invoiceId) {
-        console.log("Creating invoice before opening email composer");
-        const invoiceData = await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
-        setCurrentInvoiceData(invoiceData);
-        
-        // Invalidate queries to refresh job data
-        await queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-        await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
-      }
-      
+      // Open email composer directly - invoice creation is optional
       setIsEmailComposerOpen(true);
       console.log("Email button clicked - opening composer");
     } catch (error) {
