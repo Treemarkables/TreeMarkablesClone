@@ -29,7 +29,7 @@ import {
   type DashboardConfig, type InsertDashboardConfig,
   type ReportAnalytics, type InsertReportAnalytics,
   // Safety Management types
-  type SafetyIncident, type InsertSafetyIncident,
+  type SafetyIncident, type InsertSafeIncident,
   type RiskAssessment, type InsertRiskAssessment,
   type ComplianceRequirement, type InsertComplianceRequirement,
   type ComplianceRecord, type InsertComplianceRecord,
@@ -45,6 +45,9 @@ import {
   type ProposalSection, type InsertProposalSection, type UpdateProposalSection,
   type ProposalLineItem, type InsertProposalLineItem, type UpdateProposalLineItem,
   type ProposalLineItemChoice, type InsertProposalLineItemChoice, type UpdateProposalLineItemChoice,
+  // Conversation Management types
+  type Conversation, type InsertConversation, type UpdateConversation,
+  type ConversationMessage, type InsertConversationMessage, type UpdateConversationMessage,
   // ServiceM8 Integration types
   type Servicem8Config, type InsertServicem8Config,
   type Servicem8Job, type InsertServicem8Job,
