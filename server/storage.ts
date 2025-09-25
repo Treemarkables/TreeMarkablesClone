@@ -29,7 +29,7 @@ import {
   type DashboardConfig, type InsertDashboardConfig,
   type ReportAnalytics, type InsertReportAnalytics,
   // Safety Management types
-  type SafetyIncident, type InsertSafeIncident,
+  type SafetyIncident, type InsertSafetyIncident,
   type RiskAssessment, type InsertRiskAssessment,
   type ComplianceRequirement, type InsertComplianceRequirement,
   type ComplianceRecord, type InsertComplianceRecord,
@@ -1634,10 +1634,9 @@ class DatabaseStorage implements IStorage {
           address: normalizedRow.address || 'Address not specified',
           status: mappedStatus as any,
           priority: normalizedRow.priority?.toLowerCase() || 'medium',
-          totalAmount: totalAmount,
+          totalAmount: totalAmount?.toString() || null,
           serviceType: 'Tree Services',
           leadSource: 'ServiceM8 Import',
-          createdAt: normalizedRow.dateCreated ? new Date(normalizedRow.dateCreated) : new Date(),
           updatedAt: new Date()
         };
 
@@ -1789,6 +1788,180 @@ class DatabaseStorage implements IStorage {
     };
   }
 
+  // ========================================
+  // CONVERSATION MANAGEMENT
+  // ========================================
+  
+  async createConversation(conversation: InsertConversation): Promise<Conversation> {
+    const [newConversation] = await db.insert(schema.conversations).values(conversation).returning();
+    return newConversation;
+  }
+
+  async getConversation(id: string): Promise<Conversation | undefined> {
+    const [conversation] = await db.select().from(schema.conversations).where(eq(schema.conversations.id, id));
+    return conversation || undefined;
+  }
+
+  async updateConversation(id: string, updates: UpdateConversation): Promise<Conversation> {
+    const [conversation] = await db.update(schema.conversations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.conversations.id, id))
+      .returning();
+    return conversation;
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    await db.delete(schema.conversations).where(eq(schema.conversations.id, id));
+  }
+
+  async getAllConversations(filters?: {
+    status?: string;
+    priority?: string;
+    assignedTo?: string;
+    source?: string;
+    serviceType?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Conversation[]> {
+    const conditions: any[] = [];
+    
+    if (filters) {
+      if (filters.status) conditions.push(eq(schema.conversations.status, filters.status));
+      if (filters.priority) conditions.push(eq(schema.conversations.priority, filters.priority));
+      if (filters.assignedTo) conditions.push(eq(schema.conversations.assignedTo, filters.assignedTo));
+      if (filters.source) conditions.push(eq(schema.conversations.source, filters.source));
+      if (filters.serviceType) conditions.push(eq(schema.conversations.serviceType, filters.serviceType));
+      if (filters.search) {
+        conditions.push(
+          sql`${schema.conversations.title} ILIKE ${'%' + filters.search + '%'}`
+        );
+      }
+    }
+    
+    let baseQuery = db.select().from(schema.conversations);
+    
+    if (conditions.length > 0) {
+      baseQuery = baseQuery.where(and(...conditions));
+    }
+    
+    baseQuery = baseQuery.orderBy(desc(schema.conversations.lastMessageAt));
+    
+    if (filters?.limit) {
+      baseQuery = baseQuery.limit(filters.limit);
+    }
+    
+    if (filters?.offset) {
+      baseQuery = baseQuery.offset(filters.offset);
+    }
+    
+    return await baseQuery;
+  }
+
+  async getConversationsByLead(leadId: string): Promise<Conversation[]> {
+    return await db.select().from(schema.conversations)
+      .where(eq(schema.conversations.leadId, leadId))
+      .orderBy(desc(schema.conversations.lastMessageAt));
+  }
+
+  async getConversationsByCustomer(customerId: string): Promise<Conversation[]> {
+    return await db.select().from(schema.conversations)
+      .where(eq(schema.conversations.customerId, customerId))
+      .orderBy(desc(schema.conversations.lastMessageAt));
+  }
+
+  async convertConversationToQuote(id: string, quoteId: string): Promise<Conversation> {
+    const [conversation] = await db.update(schema.conversations)
+      .set({ 
+        convertedToQuoteId: quoteId, 
+        conversionDate: new Date(),
+        status: 'converted',
+        updatedAt: new Date()
+      })
+      .where(eq(schema.conversations.id, id))
+      .returning();
+    return conversation;
+  }
+
+  async getUnreadConversationsCount(userId?: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.conversations)
+      .where(
+        and(
+          sql`${schema.conversations.unreadCount} > 0`,
+          userId ? eq(schema.conversations.assignedTo, userId) : sql`true`
+        )
+      );
+    return result[0]?.count || 0;
+  }
+
+  // ========================================
+  // CONVERSATION MESSAGE MANAGEMENT
+  // ========================================
+  
+  async createConversationMessage(message: InsertConversationMessage): Promise<ConversationMessage> {
+    const [newMessage] = await db.insert(schema.conversationMessages).values(message).returning();
+    
+    // Update conversation's last message info
+    await db.update(schema.conversations)
+      .set({
+        lastMessageAt: new Date(),
+        lastMessageBy: message.direction === 'inbound' ? 'customer' : 'staff',
+        unreadCount: message.direction === 'inbound' ? sql`${schema.conversations.unreadCount} + 1` : schema.conversations.unreadCount,
+        updatedAt: new Date()
+      })
+      .where(eq(schema.conversations.id, message.conversationId));
+    
+    return newMessage;
+  }
+
+  async getConversationMessage(id: string): Promise<ConversationMessage | undefined> {
+    const [message] = await db.select().from(schema.conversationMessages).where(eq(schema.conversationMessages.id, id));
+    return message || undefined;
+  }
+
+  async updateConversationMessage(id: string, updates: UpdateConversationMessage): Promise<ConversationMessage> {
+    const [message] = await db.update(schema.conversationMessages)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.conversationMessages.id, id))
+      .returning();
+    return message;
+  }
+
+  async deleteConversationMessage(id: string): Promise<void> {
+    await db.delete(schema.conversationMessages).where(eq(schema.conversationMessages.id, id));
+  }
+
+  async getConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
+    return await db.select().from(schema.conversationMessages)
+      .where(eq(schema.conversationMessages.conversationId, conversationId))
+      .orderBy(schema.conversationMessages.createdAt);
+  }
+
+  async markConversationMessagesAsRead(conversationId: string, readBy: string): Promise<void> {
+    // Mark all unread messages as read
+    await db.update(schema.conversationMessages)
+      .set({ 
+        isRead: true, 
+        readAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(
+        and(
+          eq(schema.conversationMessages.conversationId, conversationId),
+          eq(schema.conversationMessages.isRead, false)
+        )
+      );
+    
+    // Reset unread count on conversation
+    await db.update(schema.conversations)
+      .set({ 
+        unreadCount: 0,
+        updatedAt: new Date()
+      })
+      .where(eq(schema.conversations.id, conversationId));
+  }
+
   async createPhoto(data: InsertPhoto): Promise<Photo> { throw new Error("Not implemented"); }
   async getPhoto(id: string): Promise<Photo | undefined> { return undefined; }
   async updatePhoto(id: string, updates: UpdatePhoto): Promise<Photo> { throw new Error("Not implemented"); }
@@ -1911,11 +2084,13 @@ class DatabaseStorage implements IStorage {
   async createServicem8Invoice(invoice: InsertServicem8Invoice): Promise<Servicem8Invoice> { throw new Error("Not implemented"); }
   async getServicem8Invoice(id: string): Promise<Servicem8Invoice | undefined> { return undefined; }
   async getServicem8InvoiceByUuid(uuid: string): Promise<Servicem8Invoice | undefined> { return undefined; }
+  async getServicem8InvoiceByJobUuid(jobUuid: string): Promise<Servicem8Invoice | undefined> { return undefined; }
   async updateServicem8Invoice(id: string, updates: Partial<InsertServicem8Invoice>): Promise<Servicem8Invoice> { throw new Error("Not implemented"); }
   async getAllServicem8Invoices(): Promise<Servicem8Invoice[]> { return []; }
 
   async createServicem8Material(material: InsertServicem8Material): Promise<Servicem8Material> { throw new Error("Not implemented"); }
   async getServicem8Material(id: string): Promise<Servicem8Material | undefined> { return undefined; }
+  async getServicem8MaterialsByJob(jobUuid: string): Promise<Servicem8Material[]> { return []; }
   async updateServicem8Material(id: string, updates: Partial<InsertServicem8Material>): Promise<Servicem8Material> { throw new Error("Not implemented"); }
   async getAllServicem8Materials(): Promise<Servicem8Material[]> { return []; }
 }
