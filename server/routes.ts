@@ -1435,6 +1435,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
 
+      // Auto-generate job number if not provided
+      if (!processedBody.jobNumber || processedBody.jobNumber.trim() === '') {
+        processedBody.jobNumber = await storage.getNextJobNumber();
+      }
+
       const validation = insertJobSchema.safeParse(processedBody);
       if (!validation.success) {
         return res.status(400).json({ 
