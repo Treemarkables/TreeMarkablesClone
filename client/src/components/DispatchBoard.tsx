@@ -1138,7 +1138,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         <CardContent>
           <div className="flex gap-4 h-[700px]">
             {/* Team/Staff Column */}
-            <div className="w-48 border-r pr-4">
+            <div className="w-36 border-r pr-4">
               <h3 className="font-semibold mb-4 text-sm text-muted-foreground">
                 {assignmentMode === 'teams' ? 'TEAMS' : 'STAFF'}
               </h3>
