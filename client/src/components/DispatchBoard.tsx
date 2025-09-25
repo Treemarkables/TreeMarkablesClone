@@ -1511,17 +1511,32 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               {/* Job Description */}
                               <div className="text-xs text-gray-700 leading-relaxed" data-testid={`servicem8-job-description-${job.id}`}>
                                 {(() => {
-                                  // Get the description text, filtering out placeholder dates
-                                  const description = job.notes && job.notes !== '0000-00-00 00:00:00' && !job.notes.includes('0000-00-00')
-                                    ? job.notes.length > 120 
-                                      ? `${job.notes.substring(0, 120)}...`
-                                      : job.notes
-                                    : job.serviceType || 'No description available';
+                                  // Try job.description first (API field), then job.notes (fallback)
+                                  const rawDescription = job.description || job.notes;
                                   
-                                  // If description contains placeholder date, fall back to service type
-                                  return description.includes('0000-00-00') 
-                                    ? (job.serviceType || 'No description available')
-                                    : description;
+                                  // Handle null/empty descriptions
+                                  if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
+                                    // For quote/lead jobs, provide contextual message
+                                    if (job.status === 'lead') {
+                                      return 'New lead - details pending';
+                                    }
+                                    if (job.status === 'quote' || job.status === 'quoted') {
+                                      return 'Quote request - description to be added';
+                                    }
+                                    return job.serviceType || 'Description to be added';
+                                  }
+                                  
+                                  // Filter out placeholder dates
+                                  if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
+                                    return job.serviceType || 'Description to be added';
+                                  }
+                                  
+                                  // Truncate long descriptions
+                                  const description = rawDescription.length > 120 
+                                    ? `${rawDescription.substring(0, 120)}...`
+                                    : rawDescription;
+                                  
+                                  return description;
                                 })()
                                 }
                               </div>
