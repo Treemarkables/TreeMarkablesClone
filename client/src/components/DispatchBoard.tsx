@@ -1003,8 +1003,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       <div className="font-medium">{job.customerName}</div>
                       <div className="text-xs text-muted-foreground">
                         {(() => {
-                          // Use available job fields: description, specialInstructions, or serviceType
-                          const description = job.description || job.specialInstructions || job.serviceType;
+                          // Use available job fields: notes, specialInstructions, or serviceType
+                          const description = job.notes || job.specialInstructions || job.serviceType;
                           
                           if (description && description.length > 50) {
                             return `${description.substring(0, 50)}...`;
@@ -1458,8 +1458,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   {/* Replace date with job description */}
                                   <div className="text-xs text-gray-500">
                                     {(() => {
-                                      // Use available job fields: description, specialInstructions, or serviceType
-                                      const description = job.description || job.specialInstructions || job.serviceType;
+                                      // Use available job fields: notes, specialInstructions, or serviceType
+                                      const description = job.notes || job.specialInstructions || job.serviceType;
                                       
                                       if (description && description.length > 80) {
                                         return `${description.substring(0, 80)}...`;
