@@ -399,6 +399,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   });
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('teams');
   const [jobFilter, setJobFilter] = useState<string>('all');
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
@@ -681,6 +682,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           default:
             return true;
         }
+      })
+      .filter(job => {
+        // Apply search filter
+        if (!searchQuery.trim()) return true;
+        
+        const query = searchQuery.toLowerCase().trim();
+        const customerName = job.customerName?.toLowerCase() || '';
+        const address = job.address?.toLowerCase() || '';
+        const serviceType = job.serviceType?.toLowerCase() || '';
+        const description = job.description?.toLowerCase() || '';
+        const jobId = job.id?.toLowerCase() || '';
+        
+        return customerName.includes(query) ||
+               address.includes(query) ||
+               serviceType.includes(query) ||
+               description.includes(query) ||
+               jobId.includes(query);
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   };
@@ -1424,7 +1442,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Job Search..."
+                    placeholder="Search by customer, job #, address..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10 bg-white"
                     data-testid="job-search-input"
                   />
