@@ -4,6 +4,7 @@ import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
 import { storage } from "./storage";
 import { sendContactEmail } from "./email";
+import * as schema from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertLeadSchema, insertCallSchema, insertQuoteSchema,
@@ -932,6 +933,111 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         success: false,
         message: error instanceof Error ? error.message : 'Error performing bulk update',
       });
+    }
+  });
+
+  // CSV Import endpoints
+  app.post('/api/customers/csv-import', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No CSV file provided' });
+      }
+
+      const { importSource = 'csv_upload' } = req.body;
+
+      // Create import batch for tracking
+      const batchData: schema.InsertCustomerImportBatch = {
+        importType: 'csv_upload',
+        status: 'processing',
+        createdBy: 'user',
+        fileName: req.file.originalname
+      };
+      const importBatch = await storage.createCustomerImportBatch(batchData);
+
+      // Read and parse the CSV file
+      const csvContent = fs.readFileSync(req.file.path, 'utf8');
+      const parsedCsv = Papa.parse(csvContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
+
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      if (parsedCsv.errors.length > 0) {
+        await storage.updateCustomerImportBatch(importBatch.id, {
+          status: 'failed',
+          errorDetails: parsedCsv.errors.map(e => e.message),
+          completedAt: new Date()
+        });
+        return res.status(400).json({
+          success: false,
+          message: 'CSV parsing errors',
+          errors: parsedCsv.errors,
+        });
+      }
+
+      // Perform the import
+      const importResult = await storage.importCustomersFromCSV(
+        parsedCsv.data, 
+        importBatch.id, 
+        importSource
+      );
+
+      res.json({
+        success: importResult.success,
+        data: {
+          batchId: importBatch.id,
+          ...importResult
+        },
+        message: `Import completed: ${importResult.imported} imported, ${importResult.updated} updated, ${importResult.skipped} skipped`
+      });
+    } catch (error) {
+      // Clean up uploaded file on error
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      console.error('Error importing CSV file:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error importing CSV file',
+      });
+    }
+  });
+
+  // Customer Import Batch Management endpoints
+  app.get('/api/customer-import-batches', async (req: Request, res: Response) => {
+    try {
+      const batches = await storage.getAllCustomerImportBatches();
+      res.json({ success: true, data: batches });
+    } catch (error) {
+      console.error('Error fetching import batches:', error);
+      res.status(500).json({ success: false, message: 'Error fetching import batches' });
+    }
+  });
+
+  app.get('/api/customer-import-batches/:id', async (req: Request, res: Response) => {
+    try {
+      const batch = await storage.getCustomerImportBatch(req.params.id);
+      if (!batch) {
+        return res.status(404).json({ success: false, message: 'Import batch not found' });
+      }
+      res.json({ success: true, data: batch });
+    } catch (error) {
+      console.error('Error fetching import batch:', error);
+      res.status(500).json({ success: false, message: 'Error fetching import batch' });
+    }
+  });
+
+  app.get('/api/customer-import-batches/:id/customers', async (req: Request, res: Response) => {
+    try {
+      const customers = await storage.getCustomersByImportBatch(req.params.id);
+      res.json({ success: true, data: customers });
+    } catch (error) {
+      console.error('Error fetching batch customers:', error);
+      res.status(500).json({ success: false, message: 'Error fetching batch customers' });
     }
   });
 
