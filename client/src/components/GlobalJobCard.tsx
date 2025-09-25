@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -117,6 +117,22 @@ export function GlobalJobCard({
     notes: ''
   });
 
+  // Line item search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
+  // Debounce search query updates
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 250);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
+
   // Fetch customers for the dropdown
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],
@@ -141,9 +157,27 @@ export function GlobalJobCard({
     enabled: mode === "edit" && !!jobId && isOpen,
   });
 
+  // Fetch materials and services for line item search
+  const { data: materialsServicesData } = useQuery({
+    queryKey: ['/api/materials-services', { search: debouncedSearchQuery }],
+    enabled: debouncedSearchQuery.length > 0 && isOpen,
+  });
+
   const customers = (customersData as any)?.data || [];
   const jobs = (jobsData as any)?.data || [];
   const editingJob = mode === "edit" ? ((jobData as any)?.data || job) : null;
+  const materialsServices = (materialsServicesData as any)?.data || [];
+
+  // Filter search results
+  const searchResults = useMemo(() => {
+    if (!debouncedSearchQuery || !materialsServices.length) return [];
+    
+    return materialsServices.filter((item: any) => 
+      item.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      item.itemNumber.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      item.category.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+    ).slice(0, 5); // Limit to 5 results for dropdown
+  }, [materialsServices, debouncedSearchQuery]);
   
   // Tab state management
   const [activeTab, setActiveTab] = useState("details");
@@ -244,15 +278,28 @@ export function GlobalJobCard({
   };
   
   // Line item management functions
-  const addLineItem = () => {
+  const addLineItem = (materialService?: any) => {
     const newItem = {
       id: Date.now().toString(),
-      description: "",
+      itemCode: materialService?.itemNumber || "",
+      itemName: materialService?.name || "",
+      description: materialService?.name || "",
       quantity: 1,
-      unitPrice: 0,
-      total: 0
+      unitPrice: materialService?.price || 0,
+      total: materialService?.price || 0,
+      category: materialService?.category || "",
+      taxRate: materialService?.taxRate || "15% GST on Income"
     };
     setLineItems([...lineItems, newItem]);
+    
+    // Clear search after adding item
+    setSearchQuery("");
+    setShowSearchResults(false);
+  };
+
+  // Handle search item selection
+  const handleSelectSearchItem = (item: any) => {
+    addLineItem(item);
   };
   
   const updateLineItem = (id: string, field: keyof typeof lineItems[0], value: any) => {
@@ -1117,35 +1164,62 @@ export function GlobalJobCard({
                               </div>
                               
                               {/* Existing line items */}
-                              {editingJob?.lineItems && editingJob.lineItems.length > 0 ? (
-                                editingJob.lineItems.map((item: any, index: number) => (
-                                  <div key={index} className="grid grid-cols-7 gap-1 p-2 border-b last:border-b-0 text-xs">
+                              {lineItems && lineItems.length > 0 ? (
+                                lineItems.map((item: any, index: number) => (
+                                  <div key={item.id} className="grid grid-cols-7 gap-1 p-2 border-b last:border-b-0 text-xs">
                                     <div className="col-span-1">{item.itemCode || 'labour 22'}</div>
                                     <div className="col-span-2">{item.itemName || 'labour Tree care service'}</div>
                                     <div className="col-span-1 text-center">{item.quantity || 1}</div>
-                                    <div className="col-span-1 text-right">${item.costExGST || '0.00'}</div>
+                                    <div className="col-span-1 text-right">${(item.unitPrice || 0).toFixed(2)}</div>
                                     <div className="col-span-1 text-center">{item.markup || '—'}</div>
-                                    <div className="col-span-1 text-right font-medium">${item.totalExGST || '250.00'}</div>
+                                    <div className="col-span-1 text-right font-medium">${(item.total || item.unitPrice || 0).toFixed(2)}</div>
                                   </div>
                                 ))
                               ) : (
-                                <div className="grid grid-cols-7 gap-1 p-2 text-xs">
-                                  <div className="col-span-1">labour 22</div>
-                                  <div className="col-span-2">labour Tree care service</div>
-                                  <div className="col-span-1 text-center">1</div>
-                                  <div className="col-span-1 text-right">$0.00</div>
-                                  <div className="col-span-1 text-center">—</div>
-                                  <div className="col-span-1 text-right font-medium">$250.00</div>
+                                <div className="grid grid-cols-7 gap-1 p-2 text-xs text-muted-foreground">
+                                  <div className="col-span-7 text-center py-2">No line items added yet. Search above to add materials or services.</div>
                                 </div>
                               )}
                               
                               {/* Search or Add New Input */}
-                              <div className="p-2 bg-muted/10 border-t">
+                              <div className="p-2 bg-muted/10 border-t relative">
                                 <Input 
                                   placeholder="Search or Add New..."
                                   className="h-7 text-xs"
                                   data-testid="input-search-add-item"
+                                  value={searchQuery}
+                                  onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setShowSearchResults(true);
+                                  }}
+                                  onFocus={() => setShowSearchResults(true)}
+                                  onBlur={() => {
+                                    // Delay hiding to allow click on results
+                                    setTimeout(() => setShowSearchResults(false), 150);
+                                  }}
                                 />
+                                
+                                {/* Search Results Dropdown */}
+                                {showSearchResults && searchResults.length > 0 && (
+                                  <div className="absolute top-full left-2 right-2 bg-background border rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                                    {searchResults.map((item: any) => (
+                                      <div
+                                        key={item.id}
+                                        className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                                        onClick={() => handleSelectSearchItem(item)}
+                                        data-testid={`search-result-${item.id}`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex-1">
+                                            <div className="text-xs font-medium">{item.itemNumber} - {item.name}</div>
+                                            <div className="text-xs text-muted-foreground">{item.category}</div>
+                                          </div>
+                                          <div className="text-xs font-medium">${item.price.toFixed(2)}</div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
 
