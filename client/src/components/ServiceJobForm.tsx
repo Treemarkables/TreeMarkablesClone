@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -442,7 +443,27 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
                             <FormItem>
                               <FormLabel>Address</FormLabel>
                               <FormControl>
-                                <Input placeholder="123 Main Street" {...field} data-testid="input-new-customer-address" />
+                                <AddressAutocomplete
+                                  value={field.value || ""}
+                                  onChange={field.onChange}
+                                  placeholder="123 Main Street"
+                                  mode="street"
+                                  data-testid="input-new-customer-address"
+                                  onAddressSelect={(address) => {
+                                    // Auto-fill city and region when full address is selected
+                                    if (address.city) {
+                                      form.setValue('newCustomerCity', address.city);
+                                    }
+                                    if (address.region) {
+                                      form.setValue('newCustomerRegion', address.region);
+                                    }
+                                  }}
+                                  onManualEdit={() => {
+                                    // Clear dependent fields when address is manually edited
+                                    form.setValue('newCustomerCity', '');
+                                    form.setValue('newCustomerRegion', '');
+                                  }}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -455,7 +476,13 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
                             <FormItem>
                               <FormLabel>City</FormLabel>
                               <FormControl>
-                                <Input placeholder="Auckland" {...field} data-testid="input-new-customer-city" />
+                                <AddressAutocomplete
+                                  value={field.value || ""}
+                                  onChange={field.onChange}
+                                  placeholder="Auckland"
+                                  mode="city"
+                                  data-testid="input-new-customer-city"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -468,7 +495,13 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
                             <FormItem>
                               <FormLabel>Region</FormLabel>
                               <FormControl>
-                                <Input placeholder="Auckland" {...field} data-testid="input-new-customer-region" />
+                                <AddressAutocomplete
+                                  value={field.value || ""}
+                                  onChange={field.onChange}
+                                  placeholder="Auckland"
+                                  mode="region"
+                                  data-testid="input-new-customer-region"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -486,7 +519,13 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
                     <FormItem>
                       <FormLabel>Job Address</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter job address" {...field} data-testid="input-job-address" />
+                        <AddressAutocomplete
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          placeholder="Enter job address"
+                          mode="full"
+                          data-testid="input-job-address"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

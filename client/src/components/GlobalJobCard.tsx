@@ -1019,6 +1019,11 @@ export function GlobalJobCard({
                                                 form.setValue('newCustomerRegion', address.region);
                                               }
                                             }}
+                                            onManualEdit={() => {
+                                              // Clear dependent fields when address is manually edited
+                                              form.setValue('newCustomerCity', '');
+                                              form.setValue('newCustomerRegion', '');
+                                            }}
                                           />
                                         </FormControl>
                                         <FormMessage />

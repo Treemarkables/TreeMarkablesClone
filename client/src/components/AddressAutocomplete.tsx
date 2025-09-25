@@ -16,6 +16,7 @@ interface AddressAutocompleteProps {
     region?: string;
     postcode?: string;
   }) => void;
+  onManualEdit?: () => void; // Called when user manually types (not selecting from suggestions)
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -27,12 +28,20 @@ interface AddySuggestion {
   a: string; // Full address
   pxid: string; // Unique ID
   v: number; // Version
+  components?: {
+    street?: string;
+    suburb?: string;
+    city?: string;
+    region?: string;
+    postcode?: string;
+  };
 }
 
 export function AddressAutocomplete({
   value,
   onChange,
   onAddressSelect,
+  onManualEdit,
   placeholder = "Start typing an address...",
   className,
   disabled,
@@ -46,6 +55,7 @@ export function AddressAutocomplete({
   const debounceRef = useRef<NodeJS.Timeout>();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isSelectingSuggestionRef = useRef(false);
 
   // Function to search addresses using backend API
   const searchAddresses = async (query: string) => {
@@ -93,23 +103,96 @@ export function AddressAutocomplete({
   };
 
 
-  // Parse full address into components
-  const parseAddress = (fullAddress: string) => {
+  // Parse address using structured data when available, fallback to intelligent parsing
+  const parseAddress = (suggestion: AddySuggestion) => {
+    // Use structured data if available (from our enhanced mock data or real API)
+    if (suggestion.components) {
+      const street = suggestion.components.street || '';
+      const streetParts = street.split(' ');
+      return {
+        fullAddress: suggestion.a,
+        streetNumber: streetParts[0] || '',
+        streetName: streetParts.slice(1).join(' ') || '',
+        suburb: suggestion.components.suburb || '',
+        city: suggestion.components.city || '',
+        region: suggestion.components.region || '',
+        postcode: suggestion.components.postcode || ''
+      };
+    }
+
+    // Fallback to intelligent parsing for older API responses
+    const fullAddress = suggestion.a;
     const parts = fullAddress.split(', ');
+    
+    // Handle common NZ address format: "123 Street Name, Suburb, City PostCode"
+    let streetNumber = '';
+    let streetName = '';
+    let suburb = '';
+    let city = '';
+    let region = '';
+    let postcode = '';
+
+    if (parts.length >= 3) {
+      // Parse street address (first part)
+      const streetParts = parts[0].trim().split(' ');
+      streetNumber = streetParts[0] || '';
+      streetName = streetParts.slice(1).join(' ') || '';
+      
+      // Suburb is second part
+      suburb = parts[1]?.trim() || '';
+      
+      // City and postcode are in the third part
+      const cityPostcodePart = parts[2]?.trim() || '';
+      const cityPostcodeMatch = cityPostcodePart.match(/^(.+?)\s+(\d{4})$/);
+      
+      if (cityPostcodeMatch) {
+        city = cityPostcodeMatch[1].trim();
+        postcode = cityPostcodeMatch[2];
+      } else {
+        city = cityPostcodePart;
+      }
+
+      // Map cities to their regions (NZ-specific)
+      const cityToRegionMap: Record<string, string> = {
+        'Auckland': 'Auckland',
+        'Wellington': 'Wellington',
+        'Christchurch': 'Canterbury',
+        'Hamilton': 'Waikato',
+        'Tauranga': 'Bay of Plenty',
+        'Dunedin': 'Otago',
+        'New Plymouth': 'Taranaki',
+        'Palmerston North': 'Manawatū-Whanganui',
+        'Napier': 'Hawke\'s Bay',
+        'Hastings': 'Hawke\'s Bay',
+        'Rotorua': 'Bay of Plenty',
+        'Whangarei': 'Northland',
+        'Invercargill': 'Southland',
+        'Nelson': 'Nelson',
+        'Queenstown': 'Otago'
+      };
+      
+      region = cityToRegionMap[city] || '';
+    }
+
     return {
       fullAddress,
-      streetNumber: parts[0]?.split(' ')[0] || '',
-      streetName: parts[0]?.split(' ').slice(1).join(' ') || '',
-      suburb: parts[1] || '',
-      city: parts[2]?.split(' ')[0] || '',
-      region: parts[2]?.split(' ')[0] || '', // Same as city for NZ
-      postcode: parts[2]?.split(' ').slice(-1)[0] || ''
+      streetNumber,
+      streetName,
+      suburb,
+      city,
+      region,
+      postcode
     };
   };
 
-  // Handle input change with debounce
+  // Handle input change with debounce and manual edit detection
   const handleInputChange = (newValue: string) => {
     onChange(newValue);
+    
+    // Only notify parent of manual edit if we're not in the middle of selecting a suggestion
+    if (onManualEdit && !isSelectingSuggestionRef.current) {
+      onManualEdit();
+    }
     
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
@@ -122,7 +205,10 @@ export function AddressAutocomplete({
 
   // Handle suggestion selection
   const selectSuggestion = (suggestion: AddySuggestion) => {
-    const parsedAddress = parseAddress(suggestion.a);
+    // Set flag to indicate we're selecting a suggestion (not manual typing)
+    isSelectingSuggestionRef.current = true;
+    
+    const parsedAddress = parseAddress(suggestion);
     
     if (mode === "full") {
       onChange(suggestion.a);
@@ -140,6 +226,11 @@ export function AddressAutocomplete({
 
     setShowSuggestions(false);
     setSelectedIndex(-1);
+    
+    // Reset flag after a brief delay to allow for the onChange to complete
+    setTimeout(() => {
+      isSelectingSuggestionRef.current = false;
+    }, 50);
   };
 
   // Handle keyboard navigation

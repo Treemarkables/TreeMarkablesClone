@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { Calendar, Clock, Users, MapPin, Wrench, Trash2, Save, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import * as z from 'zod';
 
 const scheduleEventFormSchema = z.object({
@@ -371,10 +372,11 @@ export function ScheduleEventModal({
 
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
-              <Input
-                id="address"
-                {...form.register('address')}
+              <AddressAutocomplete
+                value={form.getValues('address') || ''}
+                onChange={(value) => form.setValue('address', value)}
                 placeholder="Full address..."
+                mode="full"
                 data-testid="input-address"
               />
             </div>
