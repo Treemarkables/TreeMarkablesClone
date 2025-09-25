@@ -147,6 +147,9 @@ export interface IStorage {
   getAllJobs(): Promise<Job[]>;
   clearAllJobs(): Promise<number>;
   
+  // Sequential Job Number Management
+  getNextJobNumber(): Promise<string>;
+  
   // Gross Margin Management
   updateJobGrossMargin(jobId: string, grossMarginData: {
     laborCosts?: number;
@@ -1106,6 +1109,27 @@ class DatabaseStorage implements IStorage {
   async clearAllJobs(): Promise<number> {
     const result = await db.delete(schema.jobs);
     return result.rowCount || 0;
+  }
+
+  // Sequential Job Number Generation
+  private static jobNumberCounter: number = 3312;
+  
+  async getNextJobNumber(): Promise<string> {
+    // Get current highest job number from database to ensure consistency
+    const jobs = await db.select({ jobNumber: schema.jobs.jobNumber }).from(schema.jobs);
+    const numericJobNumbers = jobs
+      .map(job => parseInt(job.jobNumber))
+      .filter(num => !isNaN(num));
+    
+    if (numericJobNumbers.length > 0) {
+      const maxJobNumber = Math.max(...numericJobNumbers);
+      // Ensure our counter is at least as high as the maximum in database
+      DatabaseStorage.jobNumberCounter = Math.max(DatabaseStorage.jobNumberCounter, maxJobNumber + 1);
+    }
+    
+    const nextNumber = DatabaseStorage.jobNumberCounter;
+    DatabaseStorage.jobNumberCounter++;
+    return nextNumber.toString();
   }
 
   // ========================================
