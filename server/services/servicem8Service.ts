@@ -326,7 +326,7 @@ class ServiceM8Service {
           }
 
           // Map ServiceM8 status to our job status
-          const statusMap: { [key: string]: string } = {
+          const statusMap: { [key: string]: 'lead' | 'quote' | 'scheduled' | 'work_order' | 'completed' | 'unsuccessful' } = {
             'Quote': 'quote',
             'Scheduled': 'scheduled', 
             'In Progress': 'work_order',
