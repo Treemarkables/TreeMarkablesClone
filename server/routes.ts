@@ -1457,6 +1457,164 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Enhanced tree service description processing
+  function processTreeServiceDescription(sources: string[]): string {
+    // Combine all sources and clean them
+    const combinedText = sources.join(' | ').toLowerCase();
+    
+    // Remove common ServiceM8 artifacts and invalid data
+    let cleaned = combinedText
+      .replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/g, '') // Timestamps
+      .replace(/0000-00-00 00:00:00/g, '') // Invalid dates
+      .replace(/\{\{[^}]*\}\}/g, '') // Template placeholders
+      .replace(/\[.*?\]/g, '') // Bracketed codes
+      .replace(/\b(servicem8|sm8|job|#)\b/gi, '') // ServiceM8 references
+      .replace(/\s+/g, ' ') // Multiple spaces
+      .trim();
+    
+    if (!cleaned || cleaned.length < 5) {
+      return '';
+    }
+    
+    // Tree service standardization patterns
+    const treeServicePatterns = [
+      // Tree removal variations
+      { pattern: /tree\s*remov/i, replacement: 'Tree Removal' },
+      { pattern: /remove\s*tree/i, replacement: 'Tree Removal' },
+      { pattern: /take\s*down\s*tree/i, replacement: 'Tree Removal' },
+      { pattern: /cut\s*down\s*tree/i, replacement: 'Tree Removal' },
+      { pattern: /fell\s*tree/i, replacement: 'Tree Removal' },
+      
+      // Tree trimming/pruning
+      { pattern: /tree\s*trim/i, replacement: 'Tree Trimming' },
+      { pattern: /tree\s*prun/i, replacement: 'Tree Pruning' },
+      { pattern: /prune\s*tree/i, replacement: 'Tree Pruning' },
+      { pattern: /trim\s*tree/i, replacement: 'Tree Trimming' },
+      { pattern: /shape\s*tree/i, replacement: 'Tree Shaping' },
+      
+      // Stump services
+      { pattern: /stump\s*grind/i, replacement: 'Stump Grinding' },
+      { pattern: /grind\s*stump/i, replacement: 'Stump Grinding' },
+      { pattern: /stump\s*remov/i, replacement: 'Stump Removal' },
+      { pattern: /remove\s*stump/i, replacement: 'Stump Removal' },
+      
+      // Emergency services
+      { pattern: /emergency.*tree/i, replacement: 'Emergency Tree Service' },
+      { pattern: /urgent.*tree/i, replacement: 'Emergency Tree Service' },
+      { pattern: /storm.*damage/i, replacement: 'Storm Damage Cleanup' },
+      { pattern: /fallen.*tree/i, replacement: 'Fallen Tree Removal' },
+      
+      // Maintenance services
+      { pattern: /tree\s*maint/i, replacement: 'Tree Maintenance' },
+      { pattern: /hedge\s*trim/i, replacement: 'Hedge Trimming' },
+      { pattern: /garden\s*clean/i, replacement: 'Garden Cleanup' },
+      { pattern: /branch\s*remov/i, replacement: 'Branch Removal' },
+      { pattern: /deadwood/i, replacement: 'Deadwood Removal' },
+      
+      // Specialized services
+      { pattern: /palm\s*clean/i, replacement: 'Palm Tree Cleaning' },
+      { pattern: /palm\s*trim/i, replacement: 'Palm Tree Trimming' },
+      { pattern: /fruit\s*tree/i, replacement: 'Fruit Tree Service' },
+      { pattern: /cable.*brac/i, replacement: 'Tree Cabling & Bracing' },
+    ];
+    
+    // Apply tree service patterns
+    let standardized = cleaned;
+    for (const { pattern, replacement } of treeServicePatterns) {
+      if (pattern.test(standardized)) {
+        standardized = standardized.replace(pattern, replacement);
+        break; // Use first match for primary service type
+      }
+    }
+    
+    // Extract key details and build structured description
+    const details = extractServiceDetails(standardized);
+    const structuredDescription = buildStructuredDescription(details);
+    
+    // Clean up final result
+    return structuredDescription
+      .split('|')[0] // Take first part if multiple services
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split('')
+      .map((char, i) => i === 0 ? char.toUpperCase() : char)
+      .join('')
+      .substring(0, 200); // Reasonable length limit
+  }
+  
+  function extractServiceDetails(text: string): any {
+    const details: any = {
+      serviceType: '',
+      treeCount: null,
+      size: '',
+      location: '',
+      urgency: '',
+      additionalNotes: ''
+    };
+    
+    // Extract tree count
+    const countMatch = text.match(/(\d+)\s*tree/i);
+    if (countMatch) {
+      details.treeCount = parseInt(countMatch[1]);
+    }
+    
+    // Extract size descriptions
+    const sizePatterns = ['large', 'small', 'medium', 'huge', 'massive', 'tall', 'big'];
+    for (const size of sizePatterns) {
+      if (text.includes(size)) {
+        details.size = size;
+        break;
+      }
+    }
+    
+    // Extract location context
+    const locationPatterns = ['front yard', 'back yard', 'backyard', 'driveway', 'near house', 'fence line'];
+    for (const location of locationPatterns) {
+      if (text.includes(location)) {
+        details.location = location;
+        break;
+      }
+    }
+    
+    // Extract urgency
+    if (text.match(/urgent|emergency|asap|immediate/i)) {
+      details.urgency = 'urgent';
+    }
+    
+    return details;
+  }
+  
+  function buildStructuredDescription(details: any): string {
+    let parts = [];
+    
+    // Add count if specified
+    if (details.treeCount && details.treeCount > 1) {
+      parts.push(`${details.treeCount} trees`);
+    } else if (details.treeCount === 1) {
+      parts.push('1 tree');
+    }
+    
+    // Add size description
+    if (details.size) {
+      parts.push(details.size);
+    }
+    
+    // Add location context
+    if (details.location) {
+      parts.push(`in ${details.location}`);
+    }
+    
+    // Build final description
+    let description = parts.length > 0 ? parts.join(' ') : 'Tree service';
+    
+    // Add urgency flag
+    if (details.urgency === 'urgent') {
+      description = `URGENT: ${description}`;
+    }
+    
+    return description;
+  }
+
   // Update existing jobs with ServiceM8 CSV data instead of creating duplicates
   app.post('/api/jobs/update-from-servicem8', csvUpload.single('file'), async (req: Request, res: Response) => {
     try {
@@ -1496,14 +1654,23 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           const existingJob = existingJobs.find(job => job.jobNumber === csvJob['Job Number']);
 
           if (existingJob) {
-            // Clean and validate description from CSV
-            const rawDesc = csvJob.Description || csvJob.Notes || '';
+            // Clean and validate description from CSV with enhanced tree service logic
             let cleanDescription = '';
             
-            // Filter out timestamp patterns and invalid data
-            if (rawDesc && !rawDesc.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/) && 
-                rawDesc !== '0000-00-00 00:00:00' && rawDesc.trim() !== '') {
-              cleanDescription = rawDesc.trim();
+            // Collect all possible description sources from ServiceM8
+            const descriptionSources = [
+              csvJob.Description,
+              csvJob.Notes,
+              csvJob['Work Description'],
+              csvJob['Job Description'],
+              csvJob['Service Description'],
+              csvJob.Comment,
+              csvJob.Details
+            ].filter(Boolean);
+
+            // Process and clean descriptions
+            if (descriptionSources.length > 0) {
+              cleanDescription = processTreeServiceDescription(descriptionSources);
             }
 
             // Update the existing job with real ServiceM8 data
