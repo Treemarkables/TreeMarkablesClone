@@ -936,6 +936,47 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Bulk delete customers endpoint
+  app.delete('/api/customers/bulk-delete', async (req: Request, res: Response) => {
+    try {
+      const { customerIds } = req.body;
+      
+      if (!customerIds || !Array.isArray(customerIds)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid request: customerIds array is required'
+        });
+      }
+
+      if (customerIds.length === 0) {
+        return res.json({
+          success: true,
+          deleted: 0,
+          message: 'No customers to delete'
+        });
+      }
+
+      // Delete customers
+      let deleted = 0;
+      for (const customerId of customerIds) {
+        const success = await storage.deleteCustomer(customerId);
+        if (success) deleted++;
+      }
+
+      res.json({
+        success: true,
+        deleted,
+        message: `Successfully deleted ${deleted} customers`
+      });
+    } catch (error) {
+      console.error('Error performing bulk customer deletion:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error performing bulk deletion',
+      });
+    }
+  });
+
   // CSV Import endpoints
   app.post('/api/customers/csv-import', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
