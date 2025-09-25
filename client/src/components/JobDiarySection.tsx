@@ -540,7 +540,11 @@ export function JobDiarySection({
             <DialogDescription>Add a detailed note to the job diary</DialogDescription>
           </DialogHeader>
           <Form {...noteForm}>
-            <form onSubmit={noteForm.handleSubmit((data) => createNoteMutation.mutate(data))} className="space-y-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              noteForm.handleSubmit((data) => createNoteMutation.mutate(data))(e);
+            }} className="space-y-4">
               <FormField
                 control={noteForm.control}
                 name="content"
@@ -583,7 +587,11 @@ export function JobDiarySection({
             <DialogDescription>Send an SMS message to the customer</DialogDescription>
           </DialogHeader>
           <Form {...smsForm}>
-            <form onSubmit={smsForm.handleSubmit((data) => sendSMSMutation.mutate(data))} className="space-y-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              smsForm.handleSubmit((data) => sendSMSMutation.mutate(data))(e);
+            }} className="space-y-4">
               <FormField
                 control={smsForm.control}
                 name="phoneNumber"
@@ -644,7 +652,11 @@ export function JobDiarySection({
             <DialogDescription>Send an email to the customer</DialogDescription>
           </DialogHeader>
           <Form {...emailForm}>
-            <form onSubmit={emailForm.handleSubmit((data) => sendEmailMutation.mutate(data))} className="space-y-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              emailForm.handleSubmit((data) => sendEmailMutation.mutate(data))(e);
+            }} className="space-y-4">
               <FormField
                 control={emailForm.control}
                 name="to"
