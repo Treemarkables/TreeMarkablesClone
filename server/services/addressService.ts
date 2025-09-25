@@ -49,6 +49,7 @@ class AddressService {
   }
 
   private generateMockSuggestions(query: string): AddySuggestion[] {
+    console.log(`[Mock Data Debug] Query: "${query}"`);
     const mockAddresses = [
       // Auckland addresses - Maria Street variations
       "20 Maria Street, Auckland Central, Auckland 1010",
@@ -124,8 +125,11 @@ class AddressService {
       "67 George Street, Dunedin Central, Dunedin 9016"
     ];
 
-    return mockAddresses
-      .filter(addr => addr.toLowerCase().includes(query.toLowerCase()))
+    const filtered = mockAddresses.filter(addr => addr.toLowerCase().includes(query.toLowerCase()));
+    console.log(`[Mock Data Debug] Found ${filtered.length} matches for "${query}"`);
+    console.log(`[Mock Data Debug] Matches:`, filtered.slice(0, 3));
+    
+    return filtered
       .slice(0, 8)
       .map((addr, index) => ({
         a: addr,
