@@ -35,7 +35,7 @@ import {
   GripVertical,
   Move
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -101,6 +101,7 @@ interface JobAssignment {
   customerPhone: string;
   address: string;
   serviceType: string;
+  description?: string; // Added for proper job descriptions
   startTime: string;
   endTime: string;
   duration: number; // hours
@@ -456,6 +457,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return map;
   }, [customersData]);
 
+  // Force refresh the cache to get corrected data mapping
+  useEffect(() => {
+    // Invalidate jobs cache to force refetch with corrected mapping
+    queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+  }, []); // Only run once on mount
+
   // Convert API jobs to DispatchBoard format
   const jobs: JobAssignment[] = (jobsData?.data || []).map((apiJob: any) => {
     // Calculate endTime from scheduledDate + estimatedDuration
@@ -502,7 +509,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       })(),
       customerPhone: '', // Not available in API response
       address: apiJob.address,
-      serviceType: apiJob.description,
+      serviceType: apiJob.serviceType || '',
+      description: apiJob.description || '',
       status: apiJob.status,
       priority: apiJob.priority,
       startTime: startTime,
@@ -1009,8 +1017,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       <div className="font-medium">{job.customerName}</div>
                       <div className="text-xs text-muted-foreground">
                         {(() => {
-                          // Use available job fields: notes, specialInstructions, or serviceType
-                          const description = job.notes || job.specialInstructions || job.serviceType;
+                          // Use actual job description from API
+                          const description = job.description || job.notes || job.specialInstructions || job.serviceType;
                           
                           if (description && description.length > 50) {
                             return `${description.substring(0, 50)}...`;
@@ -1464,8 +1472,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   {/* Replace date with job description */}
                                   <div className="text-xs text-gray-500">
                                     {(() => {
-                                      // Use available job fields: notes, specialInstructions, or serviceType
-                                      const description = job.notes || job.specialInstructions || job.serviceType;
+                                      // Use actual job description from API
+                                      const description = job.description || job.notes || job.specialInstructions || job.serviceType;
                                       
                                       if (description && description.length > 80) {
                                         return `${description.substring(0, 80)}...`;
