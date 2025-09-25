@@ -114,33 +114,65 @@ class ServiceM8Service {
             continue; // Skip if customer doesn't exist
           }
 
-          // Apply improved name mapping logic
+          // Apply improved name mapping logic with better data extraction
           let newCustomerName = '';
           
+          // 1. Try company name (clean it up safely)
           if (company.company_name?.trim()) {
-            newCustomerName = company.company_name.trim();
+            newCustomerName = company.company_name.trim()
+              .replace(/\s+/g, ' ')  // normalize spaces
+              .trim();
           }
+          // 2. Try contact names (handle various formats)
           else if (company.contact_first_name?.trim() || company.contact_last_name?.trim()) {
             const firstName = (company.contact_first_name || '').trim();
             const lastName = (company.contact_last_name || '').trim();
-            newCustomerName = `${firstName} ${lastName}`.trim();
+            newCustomerName = `${firstName} ${lastName}`.trim().replace(/\s+/g, ' ');
           }
+          // 3. Try email (extract meaningful part)
           else if (company.email?.includes('@')) {
-            newCustomerName = company.email.split('@')[0];
+            const emailUser = company.email.split('@')[0];
+            // Clean up email usernames
+            newCustomerName = emailUser
+              .replace(/[._-]/g, ' ')
+              .replace(/\b\d+\b/g, '') // remove standalone numbers
+              .trim()
+              .replace(/\s+/g, ' ');
+            if (newCustomerName.length < 2) {
+              newCustomerName = `Customer (${company.email})`;
+            }
           }
+          // 4. Try phone with better formatting
           else if (company.mobile?.trim() || company.phone?.trim()) {
-            const phoneNumber = company.mobile?.trim() || company.phone?.trim();
+            const phoneNumber = (company.mobile?.trim() || company.phone?.trim())!;
             newCustomerName = `Customer (${phoneNumber})`;
           }
+          // 5. Try address with better extraction
           else if (company.address_line1?.trim()) {
-            newCustomerName = `Customer at ${company.address_line1.trim()}`;
+            let addressPart = company.address_line1.trim();
+            // Extract house number and street name
+            const match = addressPart.match(/^(\d+[a-z]?\s+)?([\w\s]+)/i);
+            if (match && match[2]) {
+              newCustomerName = `Customer at ${match[2].trim()}`;
+            } else {
+              newCustomerName = `Customer at ${addressPart}`;
+            }
           }
+          // 6. Last resort - use UUID but make it more consistent
           else {
             newCustomerName = `Customer-${company.uuid.slice(-8)}`;
           }
           
-          // Only update if the name actually changed and isn't just UUID fallback
-          if (newCustomerName !== existingCustomer.name && !newCustomerName.startsWith('Customer-')) {
+          // Clean up the final name
+          if (newCustomerName && !newCustomerName.startsWith('Customer-')) {
+            newCustomerName = newCustomerName
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 100); // Limit length
+          }
+          
+          // Update if the name actually changed (including better placeholder names)
+          if (newCustomerName !== existingCustomer.name) {
             await storage.updateCustomer(existingCustomer.id, { name: newCustomerName });
             updated++;
             console.log(`✅ Updated customer name: ${existingCustomer.name} → ${newCustomerName}`);
@@ -295,14 +327,14 @@ class ServiceM8Service {
 
           // Map ServiceM8 status to our job status
           const statusMap: { [key: string]: string } = {
-            'Quote': 'quoted',
+            'Quote': 'quote',
             'Scheduled': 'scheduled', 
-            'In Progress': 'in_progress',
+            'In Progress': 'work_order',
             'Completed': 'completed',
-            'Cancelled': 'cancelled'
+            'Cancelled': 'unsuccessful'
           };
 
-          const mappedStatus = statusMap[job.status] || 'quoted';
+          const mappedStatus = statusMap[job.status] || 'quote';
 
           // Map ServiceM8 job to our job schema
           const newJob: InsertJob = {
