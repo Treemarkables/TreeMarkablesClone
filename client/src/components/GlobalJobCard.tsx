@@ -823,7 +823,16 @@ export function GlobalJobCard({
         {/* Tabbed interface */}
         <div className="flex-1 flex flex-col min-h-0">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full" data-form="job-form">
+            <form 
+              onSubmit={(e) => {
+                console.log('🚫 Job form submission prevented - use Save button instead');
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }} 
+              className="flex flex-col h-full" 
+              data-form="job-form"
+            >
               <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                 <div className="px-4 pt-2 pb-0">
                   <TabsList className="grid w-full grid-cols-3">
