@@ -73,6 +73,16 @@ interface BulkUpdateResult {
   message: string;
 }
 
+interface CSVImportResult {
+  success: boolean;
+  imported: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+  totalProcessed: number;
+  batchId: string;
+}
+
 export function CustomerCSVUpload() {
   const [uploadStep, setUploadStep] = useState<'upload' | 'parsing' | 'preview' | 'updating' | 'complete'>('upload');
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -80,6 +90,8 @@ export function CustomerCSVUpload() {
   const [parsedCSV, setParsedCSV] = useState<ParsedCSV | null>(null);
   const [matchingResult, setMatchingResult] = useState<MatchingResult | null>(null);
   const [bulkUpdateResult, setBulkUpdateResult] = useState<BulkUpdateResult | null>(null);
+  const [csvImportResult, setCSVImportResult] = useState<CSVImportResult | null>(null);
+  const [importMode, setImportMode] = useState<'update' | 'import'>('import');
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -128,8 +140,7 @@ export function CustomerCSVUpload() {
   // Bulk update mutation
   const bulkUpdateMutation = useMutation({
     mutationFn: async (matches: CustomerMatch[]): Promise<BulkUpdateResult> => {
-      const response = await apiRequest('POST', '/api/customers/bulk-update', { matches });
-      return response;
+      return await apiRequest('POST', '/api/customers/bulk-update', { matches });
     },
     onSuccess: (result: BulkUpdateResult) => {
       setBulkUpdateResult(result);
@@ -149,6 +160,50 @@ export function CustomerCSVUpload() {
         description: error.message || "Failed to update customers",
         variant: "destructive"
       });
+    }
+  });
+
+  // CSV Import mutation - for full import with new customers
+  const csvImportMutation = useMutation({
+    mutationFn: async (file: File): Promise<CSVImportResult> => {
+      const formData = new FormData();
+      formData.append('csvFile', file);
+      formData.append('importSource', 'csv_upload');
+      
+      // Use direct fetch for FormData to avoid Content-Type headers
+      const response = await fetch('/api/customers/csv-import', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`${response.status}: ${text}`);
+      }
+      
+      const { data } = await response.json();
+      return data;
+    },
+    onSuccess: (result: CSVImportResult) => {
+      setCSVImportResult(result);
+      setUploadStep('complete');
+      
+      // Invalidate customers cache to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      
+      toast({
+        title: "Import Complete",
+        description: `${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped`
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Import Failed",
+        description: error.message || "Failed to import CSV file",
+        variant: "destructive"
+      });
+      setUploadStep('upload');
     }
   });
 
@@ -223,6 +278,13 @@ export function CustomerCSVUpload() {
     const matchesToUpdate = matchingResult.matches.filter(match => match.willUpdate);
     setUploadStep('updating');
     bulkUpdateMutation.mutate(matchesToUpdate);
+  };
+
+  const handleFullImport = () => {
+    if (!selectedFile) return;
+    
+    setUploadStep('updating');
+    csvImportMutation.mutate(selectedFile);
   };
 
   const resetUpload = () => {
@@ -310,13 +372,51 @@ export function CustomerCSVUpload() {
             />
           </div>
           
-          <div className="mt-6">
-            <h4 className="font-medium mb-2">Supported CSV Formats:</h4>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• ServiceM8 Customer Export (company_name, contact_first, contact_last, email, mobile, uuid)</li>
-              <li>• Custom format with name, email, phone columns</li>
-              <li>• Any CSV with customer identification fields</li>
-            </ul>
+          <div className="mt-6 space-y-4">
+            <div>
+              <h4 className="font-medium mb-2">Import Mode:</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card 
+                  className={`cursor-pointer transition-colors ${importMode === 'import' ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+                  onClick={() => setImportMode('import')}
+                  data-testid="card-import-mode-full"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-3 h-3 rounded-full border-2 ${importMode === 'import' ? 'bg-primary border-primary' : 'border-muted-foreground'}`} />
+                      <div>
+                        <div className="font-medium">Full Import</div>
+                        <div className="text-sm text-muted-foreground">Import new customers and update existing ones</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card 
+                  className={`cursor-pointer transition-colors ${importMode === 'update' ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+                  onClick={() => setImportMode('update')}
+                  data-testid="card-import-mode-update"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-3 h-3 rounded-full border-2 ${importMode === 'update' ? 'bg-primary border-primary' : 'border-muted-foreground'}`} />
+                      <div>
+                        <div className="font-medium">Update Only</div>
+                        <div className="text-sm text-muted-foreground">Update existing customer names only</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">Supported CSV Formats:</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• ServiceM8 Customer Export (company_name, contact_first, contact_last, email, mobile, uuid)</li>
+                <li>• Custom format with name, email, phone columns</li>
+                <li>• Any CSV with customer identification fields</li>
+              </ul>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -456,14 +556,24 @@ export function CustomerCSVUpload() {
               <Button variant="outline" onClick={resetUpload} data-testid="button-start-over">
                 Start Over
               </Button>
-              <Button 
-                onClick={handleBulkUpdate}
-                disabled={matchingResult.willUpdateCount === 0}
-                data-testid="button-apply-updates"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                Apply Updates ({matchingResult.willUpdateCount})
-              </Button>
+              {importMode === 'update' ? (
+                <Button 
+                  onClick={handleBulkUpdate}
+                  disabled={matchingResult.willUpdateCount === 0}
+                  data-testid="button-apply-updates"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Apply Updates ({matchingResult.willUpdateCount})
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleFullImport}
+                  data-testid="button-full-import"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import All Customers ({matchingResult.totalRows})
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
