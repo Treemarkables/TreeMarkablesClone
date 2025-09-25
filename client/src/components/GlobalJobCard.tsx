@@ -157,7 +157,17 @@ export function GlobalJobCard({
     enabled: mode === "edit" && !!jobId && isOpen,
   });
 
-  // Fetch materials and services for line item search
+  // Fetch all materials and services for dropdown when focused
+  const { data: allMaterialsServicesData } = useQuery({
+    queryKey: ['/api/materials-services'],
+    queryFn: async () => {
+      const response = await fetch('/api/materials-services');
+      return response.json();
+    },
+    enabled: isOpen,
+  });
+
+  // Fetch filtered materials and services for search
   const { data: materialsServicesData } = useQuery({
     queryKey: ['/api/materials-services', debouncedSearchQuery],
     queryFn: async () => {
@@ -171,12 +181,17 @@ export function GlobalJobCard({
   const jobs = (jobsData as any)?.data || [];
   const editingJob = mode === "edit" ? ((jobData as any)?.data || job) : null;
   const materialsServices = (materialsServicesData as any)?.data || [];
+  const allMaterialsServices = (allMaterialsServicesData as any)?.data || [];
 
-  // Search results (API already filters, so just use the data directly)
+  // Search results - show all items when no search query, filtered results when searching
   const searchResults = useMemo(() => {
-    if (!debouncedSearchQuery || !materialsServices.length) return [];
-    return materialsServices.slice(0, 5); // Limit to 5 results for dropdown
-  }, [materialsServices, debouncedSearchQuery]);
+    if (!debouncedSearchQuery) {
+      // Show all materials/services when no search query
+      return allMaterialsServices.slice(0, 10); // Limit to 10 for better UX
+    }
+    // Show filtered results when searching
+    return materialsServices.slice(0, 5); // Limit to 5 for search results
+  }, [materialsServices, allMaterialsServices, debouncedSearchQuery]);
   
   // Tab state management
   const [activeTab, setActiveTab] = useState("details");
@@ -189,6 +204,9 @@ export function GlobalJobCard({
     unitPrice: number;
     total: number;
   }>>([]);
+
+  // Tax calculation state
+  const [isTaxInclusive, setIsTaxInclusive] = useState(true); // Default to Tax Inclusive
 
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
@@ -328,16 +346,32 @@ export function GlobalJobCard({
 
   // Calculate subtotal, GST, and total for display
   const getCalculatedTotals = () => {
-    const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+    const lineItemsTotal = lineItems.reduce((sum, item) => sum + item.total, 0);
     const gstRate = 0.15; // 15% GST
-    const gst = subtotal * gstRate;
-    const total = subtotal + gst;
     
-    return {
-      subtotal: subtotal.toFixed(2),
-      gst: gst.toFixed(2), 
-      total: total.toFixed(2)
-    };
+    if (isTaxInclusive) {
+      // When tax inclusive: the line items total includes GST
+      const total = lineItemsTotal;
+      const subtotal = total / (1 + gstRate); // Extract subtotal from inclusive total
+      const gst = total - subtotal;
+      
+      return {
+        subtotal: subtotal.toFixed(2),
+        gst: gst.toFixed(2),
+        total: total.toFixed(2)
+      };
+    } else {
+      // When tax exclusive: the line items total is the subtotal
+      const subtotal = lineItemsTotal;
+      const gst = subtotal * gstRate;
+      const total = subtotal + gst;
+      
+      return {
+        subtotal: subtotal.toFixed(2),
+        gst: gst.toFixed(2),
+        total: total.toFixed(2)
+      };
+    }
   };
 
   const createJobMutation = useMutation({
@@ -1151,11 +1185,25 @@ export function GlobalJobCard({
                                     {/* Tax Calculation Options */}
                                     <div className="space-y-2">
                                       <div className="flex items-center space-x-2">
-                                        <input type="radio" name="tax-calculation" id="tax-inclusive" className="w-3 h-3" />
+                                        <input 
+                                          type="radio" 
+                                          name="tax-calculation" 
+                                          id="tax-inclusive" 
+                                          className="w-3 h-3" 
+                                          checked={isTaxInclusive}
+                                          onChange={() => setIsTaxInclusive(true)}
+                                        />
                                         <label htmlFor="tax-inclusive" className="text-sm">Amounts are Tax Inclusive</label>
                                       </div>
                                       <div className="flex items-center space-x-2">
-                                        <input type="radio" name="tax-calculation" id="tax-exclusive" defaultChecked className="w-3 h-3" />
+                                        <input 
+                                          type="radio" 
+                                          name="tax-calculation" 
+                                          id="tax-exclusive" 
+                                          className="w-3 h-3" 
+                                          checked={!isTaxInclusive}
+                                          onChange={() => setIsTaxInclusive(false)}
+                                        />
                                         <label htmlFor="tax-exclusive" className="text-sm">Amounts are Tax Exclusive</label>
                                       </div>
                                     </div>
@@ -1213,24 +1261,30 @@ export function GlobalJobCard({
                                 />
                                 
                                 {/* Search Results Dropdown */}
-                                {showSearchResults && searchResults.length > 0 && (
+                                {showSearchResults && (
                                   <div className="absolute top-full left-2 right-2 bg-background border rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
-                                    {searchResults.map((item: any) => (
-                                      <div
-                                        key={item.id}
-                                        className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                                        onClick={() => handleSelectSearchItem(item)}
-                                        data-testid={`search-result-${item.id}`}
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex-1">
-                                            <div className="text-xs font-medium">{item.itemNumber} - {item.name}</div>
-                                            <div className="text-xs text-muted-foreground">{item.category}</div>
+                                    {searchResults.length > 0 ? (
+                                      searchResults.map((item: any) => (
+                                        <div
+                                          key={item.id}
+                                          className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                                          onClick={() => handleSelectSearchItem(item)}
+                                          data-testid={`search-result-${item.id}`}
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex-1">
+                                              <div className="text-xs font-medium">{item.itemNumber} - {item.name}</div>
+                                              <div className="text-xs text-muted-foreground">{item.category}</div>
+                                            </div>
+                                            <div className="text-xs font-medium">${item.price.toFixed(2)}</div>
                                           </div>
-                                          <div className="text-xs font-medium">${item.price.toFixed(2)}</div>
                                         </div>
+                                      ))
+                                    ) : (
+                                      <div className="p-2 text-xs text-muted-foreground text-center">
+                                        {debouncedSearchQuery ? 'No items found' : 'No materials or services available'}
                                       </div>
-                                    ))}
+                                    )}
                                   </div>
                                 )}
                               </div>
