@@ -607,8 +607,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const getTodaysJobs = () => {
     return jobs
       .filter(job => {
-        const isToday = isSameDay(new Date(job.startTime), selectedDate);
-        if (!isToday) return false;
+        // For "All Jobs" filter, show jobs from different dates to ensure all jobs are visible
+        const jobDate = new Date(job.startTime);
+        const isValidDate = !isNaN(jobDate.getTime());
+        
+        // If job filter is 'all', be more inclusive with dates
+        if (jobFilter === 'all') {
+          // Show jobs for today, plus any jobs without valid dates or with recent dates
+          const isToday = isValidDate && isSameDay(jobDate, selectedDate);
+          const isRecent = isValidDate && Math.abs(jobDate.getTime() - selectedDate.getTime()) <= 7 * 24 * 60 * 60 * 1000; // Within 7 days
+          if (!isToday && !isRecent && isValidDate) return false;
+        } else {
+          // For other filters, stick to the selected date
+          const isToday = isValidDate && isSameDay(jobDate, selectedDate);
+          if (!isToday && isValidDate) return false;
+        }
         
         // Apply job filter based on selected filter option
         switch (jobFilter) {
