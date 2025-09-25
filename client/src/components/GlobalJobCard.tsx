@@ -755,729 +755,88 @@ export function GlobalJobCard({
                 <div className="flex-1 overflow-hidden">
                   <TabsContent value="details" className="h-full m-0">
                     <div className="h-full overflow-y-auto px-3 pb-1">
-                      <div className="space-y-1">
-            {/* Customer Contact Details (Read-only when editing) */}
-            {mode === "edit" && editingJob && (
-              <Card>
-                <CardHeader className="pb-1">
-                  <CardTitle className="flex items-center gap-1 text-xs font-medium">
-                    <User className="w-3 h-3" />
-                    Customer Contact Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-1 text-xs">
-                  {(() => {
-                    const selectedCustomer = customers.find((c: Customer) => c.id === editingJob.customerId);
-                    if (selectedCustomer) {
-                      // Parse name into first and last name
-                      const nameParts = selectedCustomer.name?.split(' ') || ['Customer'];
-                      const firstName = nameParts[0] || '';
-                      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-                      
-                      return (
-                        <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div>
-                            <div className="font-medium text-xs">{firstName} {lastName}</div>
-                            <div className="text-muted-foreground text-[10px]">Contact</div>
-                          </div>
-                          <div>
-                            <div className="font-medium text-xs">{formSelectedCustomer?.email || 'N/A'}</div>
-                            <div className="text-muted-foreground text-[10px]">Email</div>
-                          </div>
-                          <div>
-                            <div className="font-medium text-xs">{formSelectedCustomer?.phone || 'N/A'}</div>
-                            <div className="text-muted-foreground text-[10px]">Phone</div>
+                      <div className="space-y-4">
+                        {/* Details content will go here */}
+                      </div>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="diary" className="h-full m-0">
+                    <div className="h-full">
+                      {jobId ? (
+                        <JobDiarySection 
+                          jobId={jobId}
+                          customerId={form.getValues("customerId") || customerId}
+                          customerEmail={selectedCustomer?.email}
+                          customerPhone={selectedCustomer?.phone}
+                          className="h-full"
+                        />
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-muted-foreground">
+                          <div className="text-center">
+                            <div className="text-sm">Job Diary</div>
+                            <div className="text-xs mt-1">Available after job is created</div>
                           </div>
                         </div>
-                      );
-                    }
-                    return (
-                      <div className="text-center py-4 text-muted-foreground">
-                        No customer selected for this job
-                      </div>
-                    );
-                  })()}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Customer Section */}
-            <Card>
-              <CardHeader className="pb-1">
-                <CardTitle className="flex items-center gap-1 text-xs font-medium">
-                  <User className="w-3 h-3" />
-                  Customer Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-1 text-xs">
-                <Tabs value={activeCustomerTab} onValueChange={setActiveCustomerTab}>
-                  <TabsList className="grid w-full grid-cols-2 h-7">
-                    <TabsTrigger 
-                      value="existing" 
-                      onClick={() => form.setValue("isNewCustomer", false)}
-                      data-testid="tab-existing-customer"
-                    >
-                      <Building2 className="w-3 h-3 mr-1" />
-                      Existing Customer
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="new" 
-                      onClick={() => form.setValue("isNewCustomer", true)}
-                      data-testid="tab-new-customer"
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      New Customer
-                    </TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="existing" className="space-y-1 mt-1">
-                    <FormField
-                      control={form.control}
-                      name="customerId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Select Customer</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} disabled={mode === "edit"}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-customer" className="h-7 text-xs">
-                                <SelectValue placeholder="Choose a customer..." />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {(() => {
-                                // Get jobs data for address lookup
-                                const jobsData = jobs || [];
-                                
-                                return customers.map((customer: Customer, index: number) => {
-                                  // Create a more meaningful display name using job address data
-                                  let displayName = customer.name || 'Unknown Customer';
-                                  
-                                  // If it's a generic placeholder name, use simple numbering
-                                  if (customer.name?.startsWith('Customer-')) {
-                                    const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
-                                    displayName = `Customer #${index + 1} (${uniqueId})`;
-                                  }
-                                  
-                                  return (
-                                    <SelectItem key={customer.id} value={customer.id}>
-                                      {displayName}
-                                      {customer.email && ` - ${customer.email}`}
-                                    </SelectItem>
-                                  );
-                                });
-                              })()}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
                       )}
-                    />
-                    
-                    {/* Display selected customer details */}
-                    {formSelectedCustomer && (
-                      <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
-                        <h4 className="font-medium mb-1 flex items-center gap-1 text-xs">
-                          <User className="w-3 h-3" />
-                          Customer Details
-                        </h4>
-                        <div className="grid grid-cols-3 gap-1 text-xs">
-                          <div>
-                            <div className="font-medium text-xs">
-                              {(() => {
-                                const nameParts = formSelectedCustomer?.name?.split(' ') || ['Customer'];
-                                return nameParts[0] || '';
-                              })()}
-                            </div>
-                            <div className="text-muted-foreground text-[10px]">First Name</div>
-                          </div>
-                            
-                          <div>
-                            <div className="font-medium text-xs">
-                              {formSelectedCustomer?.email || 'Not provided'}
-                            </div>
-                            <div className="text-muted-foreground text-[10px]">Email</div>
-                          </div>
-                            
-                          <div>
-                            <div className="font-medium text-xs">
-                              {formSelectedCustomer?.phone || 'Not provided'}
-                            </div>
-                            <div className="text-muted-foreground text-[10px]">Mobile</div>
-                          </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <MapPin className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.address || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Address</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Building2 className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.city || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">City</div>
-                              </div>
-                            </div>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="profit" className="h-full m-0">
+                    <div className="h-full overflow-y-auto px-4 py-4">
+                      {jobId ? (
+                        <div className="space-y-4">
+                          <div className="text-center mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Job Profitability Tracker</h3>
+                            <p className="text-sm text-gray-500">Real-time cost tracking and margin analysis</p>
                           </div>
                           
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <User className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {(() => {
-                                    const nameParts = formSelectedCustomer?.name?.split(' ') || ['Customer'];
-                                    return nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-                                  })()}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Last Name</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Target className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.source || 'Not specified'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Lead Source</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Phone className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.phone ? 'See Mobile' : 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Landline</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <MapPin className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.region || 'Not provided'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Region</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Target className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {formSelectedCustomer?.source || 'Not specified'}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Customer Source</div>
-                              </div>
-                            </div>
+                          <StaffTimeManager jobId={jobId} />
+                          <ExpenseManager jobId={jobId} />
+                          <GrossMarginCalculator jobId={jobId} />
+                        </div>
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-muted-foreground">
+                          <div className="text-center">
+                            <div className="text-sm">Profit Tracking</div>
+                            <div className="text-xs mt-1">Available after job is created</div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </TabsContent>
-                  
-                  <TabsContent value="new" className="space-y-2">
-                    <div className="grid grid-cols-2 gap-3">
-                      <FormField
-                        control={form.control}
-                        name="newCustomerName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Customer Name *</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="John Smith" data-testid="input-new-customer-name" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="newCustomerEmail"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Email Address</FormLabel>
-                            <FormControl>
-                              <Input {...field} type="email" placeholder="john@example.com" data-testid="input-new-customer-email" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <FormField
-                        control={form.control}
-                        name="newCustomerPhone"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Mobile Phone</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="021 123 4567" data-testid="input-new-customer-phone" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="newCustomerAddress"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Street Address</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="123 Main Street" data-testid="input-new-customer-address" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <FormField
-                        control={form.control}
-                        name="newCustomerCity"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>City</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Auckland" data-testid="input-new-customer-city" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="newCustomerRegion"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Region</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Auckland" data-testid="input-new-customer-region" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      )}
                     </div>
                   </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-
-            {/* Job Details Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building className="w-5 h-5" />
-                  Job Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea 
-                          {...field} 
-                          value={field.value || ""}
-                          placeholder="Detailed description of the work to be performed..."
-                          rows={3}
-                          data-testid="textarea-job-description"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Job Address *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="123 Main St, Auckland, NZ" data-testid="input-job-address" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-job-status">
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="lead">Lead</SelectItem>
-                            <SelectItem value="quote">Quote</SelectItem>
-                            <SelectItem value="work_order">Work Order</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
-                            <SelectItem value="unsuccessful">Unsuccessful</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="priority"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Priority</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-job-priority">
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="low">Low</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="high">High</SelectItem>
-                            <SelectItem value="urgent">Urgent</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="serviceType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Service Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-service-type">
-                              <SelectValue placeholder="Select service..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Tree Removal">Tree Removal</SelectItem>
-                            <SelectItem value="Tree Pruning">Tree Pruning</SelectItem>
-                            <SelectItem value="Hedge Trimming">Hedge Trimming</SelectItem>
-                            <SelectItem value="Stump Grinding">Stump Grinding</SelectItem>
-                            <SelectItem value="Tree Assessment">Tree Assessment</SelectItem>
-                            <SelectItem value="Storm Damage">Storm Damage</SelectItem>
-                            <SelectItem value="Emergency Service">Emergency Service</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </div>
-
-                <FormField
-                  control={form.control}
-                  name="jobNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Job Number *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="JOB-2024-001" data-testid="input-job-number" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-              </CardContent>
-            </Card>
-
-            {/* Checklist Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Check className="w-5 h-5" />
-                  Job Checklist
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="space-y-2">
-                  {checklist.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 p-2 border rounded-lg">
-                      <Checkbox
-                        checked={item.completed}
-                        onCheckedChange={() => toggleChecklistItem(item.id)}
-                        data-testid={`checkbox-checklist-${item.id}`}
-                      />
-                      <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
-                        {item.text}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeChecklistItem(item.id)}
-                        className="text-destructive hover:text-destructive"
-                        data-testid={`button-remove-checklist-${item.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="flex gap-2">
-                  <Input
-                    value={newChecklistItem}
-                    onChange={(e) => setNewChecklistItem(e.target.value)}
-                    placeholder="Add checklist item..."
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addChecklistItem())}
-                    data-testid="input-new-checklist-item"
-                  />
-                  <Button 
-                    type="button" 
-                    onClick={addChecklistItem}
-                    data-testid="button-add-checklist-item"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Line Items Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />
-                  Pricing & Line Items
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="space-y-3">
-                  {lineItems.map((item) => (
-                    <div key={item.id} className="grid grid-cols-12 gap-2 items-center p-3 border rounded-lg">
-                      <div className="col-span-5">
-                        <Input
-                          value={item.description}
-                          onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                          placeholder="Description (e.g., Oak tree removal)"
-                          data-testid={`input-line-item-description-${item.id}`}
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Input
-                          type="number"
-                          value={item.quantity || ""}
-                          onChange={(e) => {
-                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
-                            updateLineItem(item.id, 'quantity', val);
-                          }}
-                          placeholder="Qty"
-                          min="0"
-                          step="0.1"
-                          data-testid={`input-line-item-quantity-${item.id}`}
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Input
-                          type="number"
-                          value={item.unitPrice || ""}
-                          onChange={(e) => {
-                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
-                            updateLineItem(item.id, 'unitPrice', val);
-                          }}
-                          placeholder="Unit Price"
-                          min="0"
-                          step="0.01"
-                          data-testid={`input-line-item-price-${item.id}`}
-                        />
-                      </div>
-                      <div className="col-span-2 text-right font-medium">
-                        ${item.total.toFixed(2)}
-                      </div>
-                      <div className="col-span-1 text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeLineItem(item.id)}
-                          className="text-destructive hover:text-destructive"
-                          data-testid={`button-remove-line-item-${item.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="flex justify-between items-center pt-2">
-                  <Button 
-                    type="button" 
-                    variant="outline"
-                    onClick={addLineItem}
-                    data-testid="button-add-line-item"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Line Item
-                  </Button>
-                  
-                  <div className="text-right">
-                    <div className="text-sm text-muted-foreground">Total Amount</div>
-                    <div className="text-2xl font-bold text-primary">
-                      ${getTotalAmount()}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-                    </div>
-                  </div>
-              </TabsContent>
-              
-              <TabsContent value="diary" className="h-full m-0">
-                <div className="h-full">
-                  {jobId ? (
-                    <JobDiarySection 
-                      jobId={jobId}
-                      customerId={form.getValues("customerId") || customerId}
-                      customerEmail={selectedCustomer?.email}
-                      customerPhone={selectedCustomer?.phone}
-                      className="h-full"
-                    />
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <div className="text-sm">Job Diary</div>
-                        <div className="text-xs mt-1">Available after job is created</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="profit" className="h-full m-0">
-                <div className="h-full overflow-y-auto px-4 py-4">
-                  {jobId ? (
-                    <div className="space-y-4">
-                      <div className="text-center mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900">Job Profitability Tracker</h3>
-                        <p className="text-sm text-gray-500">Real-time cost tracking and margin analysis</p>
-                      </div>
-                      
-                      {/* ServiceM8-Style Time Recording */}
-                      <div className="mb-6">
-                        <div className="flex justify-between items-center mb-4">
-                          <div>
-                            <h4 className="text-md font-semibold text-gray-900">Daily Time Entry</h4>
-                            <p className="text-sm text-gray-500">ServiceM8-style time tracking with efficiency calculations</p>
-                          </div>
-                          <Button 
-                            onClick={() => setIsServiceM8TimeModalOpen(true)}
-                            className="bg-amber-500 hover:bg-amber-600 text-white"
-                            data-testid="button-servicem8-time-entry"
-                          >
-                            <Clock className="w-4 h-4 mr-2" />
-                            Record Time
-                          </Button>
-                        </div>
-                        
-                        {/* Staff Time (0) Section */}
-                        <div className="mt-4" data-testid="section-staff-time">
-                          <h4 className="text-sm font-medium text-gray-700 mb-3">Staff Time ({editingJob ? 'Loading...' : '0'})</h4>
-                          {editingJob && (
-                            <StaffTimeTracker 
-                              jobId={editingJob.id} 
-                              compact={true} 
-                              data-testid="staff-time-tracker"
-                            />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Expense Management */}
-                      <div className="grid grid-cols-1 gap-6">
-                        <ExpenseManager 
-                          jobId={jobId} 
-                          compact={true} 
-                          isAddDialogOpen={isExpenseDialogOpen}
-                          setIsAddDialogOpen={setIsExpenseDialogOpen}
-                        />
-                      </div>
-                      
-                      {/* Gross Margin Calculator */}
-                      <div className="mt-6">
-                        <GrossMarginCalculator 
-                          jobId={jobId} 
-                          jobData={editingJob}
-                          compact={false}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <div className="text-sm">Profit Tracking</div>
-                        <div className="text-xs mt-1">Available after job is created</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-            </div>
-          </Tabs>
-        </form>
-      </Form>
-    </div>
-    
-    {/* Form Actions - Always visible outside form */}
-    <div className="flex justify-end gap-3 p-4 border-t bg-background">
-      <Button 
-        type="button" 
-        variant="outline" 
-        onClick={onClose}
-        data-testid="button-cancel"
-      >
-        Cancel
-      </Button>
-      <Button 
-        onClick={() => {
-          console.log('🔧 Save button clicked');
-          console.log('📝 Form errors:', form.formState.errors);
-          console.log('📋 Form values:', form.getValues());
-          console.log('✅ Form is valid:', form.formState.isValid);
-          console.log('🏗️ Line items:', lineItems);
-          form.handleSubmit(onSubmit)();
-        }}
-        disabled={isLoading}
-        data-testid="button-save-job"
-      >
-        {isLoading ? "Saving..." : mode === "create" ? "Create Job" : "Update Job"}
-      </Button>
-    </div>
-  </DialogContent>
+              </Tabs>
+            </form>
+          </Form>
+        </div>
+        
+        {/* Form Actions - Always visible outside form */}
+        <div className="flex justify-end gap-3 p-4 border-t bg-background">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={onClose}
+            data-testid="button-cancel"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              console.log('🔧 Save button clicked');
+              console.log('📝 Form errors:', form.formState.errors);
+              console.log('📋 Form values:', form.getValues());
+              console.log('✅ Form is valid:', form.formState.isValid);
+              console.log('🏗️ Line items:', lineItems);
+              form.handleSubmit(onSubmit)();
+            }}
+            disabled={isLoading}
+            data-testid="button-save-job"
+          >
+            {isLoading ? "Saving..." : mode === "create" ? "Create Job" : "Update Job"}
+          </Button>
+        </div>
+      </DialogContent>
       
       {/* Proposal Builder Integration */}
       <ProposalBuilder
@@ -1566,31 +925,24 @@ export function GlobalJobCard({
               </div>
               
               <div className="space-y-2">
-                <label htmlFor="schedule-assignment" className="text-sm font-medium">Assign to Staff</label>
-                <Select
-                  value={schedulingData.assignedTo} 
-                  onValueChange={(value) => setSchedulingData(prev => ({ ...prev, assignedTo: value }))}
-                >
-                  <SelectTrigger data-testid="select-schedule-assignment">
+                <label htmlFor="schedule-assigned-to" className="text-sm font-medium">Assigned To</label>
+                <Select value={schedulingData.assignedTo} onValueChange={(value) => setSchedulingData(prev => ({ ...prev, assignedTo: value }))}>
+                  <SelectTrigger id="schedule-assigned-to" data-testid="select-schedule-assigned-to">
                     <SelectValue placeholder="Select staff member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(employeesData as any)?.data?.length > 0 ? (
-                      (employeesData as any).data.map((employee: any) => (
-                        <SelectItem key={employee.id} value={employee.id}>
-                          {employee.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="default-staff">Default Staff</SelectItem>
-                    )}
+                    {employeesData?.data?.map((employee: any) => (
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             
             <div className="space-y-2">
-              <label htmlFor="schedule-notes" className="text-sm font-medium">Notes (Optional)</label>
+              <label htmlFor="schedule-notes" className="text-sm font-medium">Notes</label>
               <Textarea
                 id="schedule-notes"
                 placeholder="Add any scheduling notes..."
