@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
 import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Target } from "lucide-react";
+import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { StaffTimeManager } from "./StaffTimeManager";
@@ -1002,7 +1003,23 @@ export function GlobalJobCard({
                                       <FormItem>
                                         <FormLabel className="text-xs">Street Address</FormLabel>
                                         <FormControl>
-                                          <Input {...field} value={field.value || ""} placeholder="123 Main St" data-testid="input-new-customer-address" className="h-7 text-xs" />
+                                          <AddressAutocomplete
+                                            value={field.value || ""}
+                                            onChange={field.onChange}
+                                            placeholder="123 Main St"
+                                            mode="street"
+                                            className="h-7 text-xs"
+                                            data-testid="input-new-customer-address"
+                                            onAddressSelect={(address) => {
+                                              // Auto-fill city and region when full address is selected
+                                              if (address.city) {
+                                                form.setValue('newCustomerCity', address.city);
+                                              }
+                                              if (address.region) {
+                                                form.setValue('newCustomerRegion', address.region);
+                                              }
+                                            }}
+                                          />
                                         </FormControl>
                                         <FormMessage />
                                       </FormItem>
@@ -1017,7 +1034,14 @@ export function GlobalJobCard({
                                       <FormItem>
                                         <FormLabel className="text-xs">City</FormLabel>
                                         <FormControl>
-                                          <Input {...field} value={field.value || ""} placeholder="Auckland" data-testid="input-new-customer-city" className="h-7 text-xs" />
+                                          <AddressAutocomplete
+                                            value={field.value || ""}
+                                            onChange={field.onChange}
+                                            placeholder="Auckland"
+                                            mode="city"
+                                            className="h-7 text-xs"
+                                            data-testid="input-new-customer-city"
+                                          />
                                         </FormControl>
                                         <FormMessage />
                                       </FormItem>
@@ -1030,7 +1054,14 @@ export function GlobalJobCard({
                                       <FormItem>
                                         <FormLabel className="text-xs">Region</FormLabel>
                                         <FormControl>
-                                          <Input {...field} value={field.value || ""} placeholder="Auckland" data-testid="input-new-customer-region" className="h-7 text-xs" />
+                                          <AddressAutocomplete
+                                            value={field.value || ""}
+                                            onChange={field.onChange}
+                                            placeholder="Auckland"
+                                            mode="region"
+                                            className="h-7 text-xs"
+                                            data-testid="input-new-customer-region"
+                                          />
                                         </FormControl>
                                         <FormMessage />
                                       </FormItem>
@@ -1079,46 +1110,67 @@ export function GlobalJobCard({
                                 <FormItem>
                                   <FormLabel>Job Address *</FormLabel>
                                   <FormControl>
-                                    <Input 
-                                      {...field} 
-                                      placeholder="123 Main St, Auckland, NZ" 
-                                      data-testid="input-job-address"
-                                      onClick={() => {
-                                        // Check for existing customer address
-                                        if (selectedCustomer && (selectedCustomer.address || selectedCustomer.city || selectedCustomer.region)) {
-                                          const customerAddress = [
-                                            selectedCustomer.address,
-                                            selectedCustomer.city,
-                                            selectedCustomer.region
-                                          ].filter(Boolean).join(', ');
-                                          if (customerAddress && !field.value) {
-                                            form.setValue('address', customerAddress);
-                                          }
-                                        }
-                                        // Check for new customer address being created
-                                        else if (form.watch("isNewCustomer")) {
-                                          const newCustomerAddress = form.watch("newCustomerAddress");
-                                          const newCustomerCity = form.watch("newCustomerCity");
-                                          const newCustomerRegion = form.watch("newCustomerRegion");
-                                          
-                                          if (newCustomerAddress || newCustomerCity || newCustomerRegion) {
+                                    <div className="flex items-center gap-2">
+                                      <AddressAutocomplete
+                                        value={field.value || ""}
+                                        onChange={field.onChange}
+                                        placeholder="Start typing an address..."
+                                        mode="full"
+                                        data-testid="input-job-address"
+                                        onAddressSelect={(address) => {
+                                          // Optionally auto-fill other fields when a full address is selected
+                                          console.log('Selected address details:', address);
+                                        }}
+                                      />
+                                      {selectedCustomer && (selectedCustomer.address || selectedCustomer.city || selectedCustomer.region) && (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 px-2 text-xs"
+                                          onClick={() => {
+                                            const customerAddress = [
+                                              selectedCustomer.address,
+                                              selectedCustomer.city,
+                                              selectedCustomer.region
+                                            ].filter(Boolean).join(', ');
+                                            if (customerAddress) {
+                                              form.setValue('address', customerAddress);
+                                            }
+                                          }}
+                                          data-testid="button-copy-customer-address"
+                                          title="Use customer address"
+                                        >
+                                          <MapPin className="h-3 w-3" />
+                                        </Button>
+                                      )}
+                                      {form.watch("isNewCustomer") && (form.watch("newCustomerAddress") || form.watch("newCustomerCity") || form.watch("newCustomerRegion")) && (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 px-2 text-xs"
+                                          onClick={() => {
+                                            const newCustomerAddress = form.watch("newCustomerAddress");
+                                            const newCustomerCity = form.watch("newCustomerCity");
+                                            const newCustomerRegion = form.watch("newCustomerRegion");
+                                            
                                             const customerAddress = [
                                               newCustomerAddress,
                                               newCustomerCity,
                                               newCustomerRegion
                                             ].filter(Boolean).join(', ');
-                                            if (customerAddress && !field.value) {
+                                            if (customerAddress) {
                                               form.setValue('address', customerAddress);
                                             }
-                                          }
-                                        }
-                                      }}
-                                      title={
-                                        (selectedCustomer && (selectedCustomer.address || selectedCustomer.city || selectedCustomer.region)) ||
-                                        (form.watch("isNewCustomer") && (form.watch("newCustomerAddress") || form.watch("newCustomerCity") || form.watch("newCustomerRegion")))
-                                        ? "Click to use customer address" 
-                                        : undefined}
-                                    />
+                                          }}
+                                          data-testid="button-copy-new-customer-address"
+                                          title="Use new customer address"
+                                        >
+                                          <MapPin className="h-3 w-3" />
+                                        </Button>
+                                      )}
+                                    </div>
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
