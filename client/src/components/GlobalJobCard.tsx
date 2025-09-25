@@ -1054,6 +1054,73 @@ export function GlobalJobCard({
                             </div>
                           </CardContent>
                         </Card>
+
+                        {/* Line Items Section */}
+                        <Card>
+                          <CardHeader className="pb-1">
+                            <CardTitle className="flex items-center gap-1 text-xs font-medium">
+                              <Receipt className="w-3 h-3" />
+                              Line Items
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-1 space-y-2">
+                            {/* Line Items Table */}
+                            <div className="border rounded-md">
+                              <div className="grid grid-cols-12 gap-1 p-2 bg-muted/20 border-b text-xs font-medium">
+                                <div className="col-span-4">Service/Item</div>
+                                <div className="col-span-3">Description</div>
+                                <div className="col-span-1">Qty</div>
+                                <div className="col-span-2">Rate</div>
+                                <div className="col-span-2">Amount</div>
+                              </div>
+                              
+                              {/* Existing line items */}
+                              {editingJob?.lineItems && editingJob.lineItems.length > 0 ? (
+                                editingJob.lineItems.map((item: any, index: number) => (
+                                  <div key={index} className="grid grid-cols-12 gap-1 p-2 border-b last:border-b-0 text-xs">
+                                    <div className="col-span-4">{item.service || 'Tree Removal'}</div>
+                                    <div className="col-span-3">{item.description || 'Standard tree removal service'}</div>
+                                    <div className="col-span-1">{item.quantity || 1}</div>
+                                    <div className="col-span-2">${item.rate || '250.00'}</div>
+                                    <div className="col-span-2 font-medium">${item.amount || '250.00'}</div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="grid grid-cols-12 gap-1 p-2 text-xs">
+                                  <div className="col-span-4">Tree Removal Service</div>
+                                  <div className="col-span-3">Large eucalyptus tree removal</div>
+                                  <div className="col-span-1">1</div>
+                                  <div className="col-span-2">$450.00</div>
+                                  <div className="col-span-2 font-medium">$450.00</div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Add Line Item Button */}
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-7 text-xs"
+                              data-testid="button-add-line-item"
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Add Line Item
+                            </Button>
+
+                            {/* Total Section */}
+                            <div className="flex justify-end pt-1">
+                              <div className="grid grid-cols-2 gap-4 w-64 text-xs">
+                                <div className="text-right">Subtotal:</div>
+                                <div className="font-medium">$450.00</div>
+                                <div className="text-right">GST (15%):</div>
+                                <div className="font-medium">$67.50</div>
+                                <div className="text-right font-medium border-t pt-1">Total:</div>
+                                <div className="font-bold border-t pt-1">$517.50</div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
                       </div>
                     </div>
                   </TabsContent>
