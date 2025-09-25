@@ -1084,6 +1084,7 @@ export function GlobalJobCard({
                                       placeholder="123 Main St, Auckland, NZ" 
                                       data-testid="input-job-address"
                                       onClick={() => {
+                                        // Check for existing customer address
                                         if (selectedCustomer && (selectedCustomer.address || selectedCustomer.city || selectedCustomer.region)) {
                                           const customerAddress = [
                                             selectedCustomer.address,
@@ -1094,8 +1095,27 @@ export function GlobalJobCard({
                                             form.setValue('address', customerAddress);
                                           }
                                         }
+                                        // Check for new customer address being created
+                                        else if (form.watch("isNewCustomer")) {
+                                          const newCustomerAddress = form.watch("newCustomerAddress");
+                                          const newCustomerCity = form.watch("newCustomerCity");
+                                          const newCustomerRegion = form.watch("newCustomerRegion");
+                                          
+                                          if (newCustomerAddress || newCustomerCity || newCustomerRegion) {
+                                            const customerAddress = [
+                                              newCustomerAddress,
+                                              newCustomerCity,
+                                              newCustomerRegion
+                                            ].filter(Boolean).join(', ');
+                                            if (customerAddress && !field.value) {
+                                              form.setValue('address', customerAddress);
+                                            }
+                                          }
+                                        }
                                       }}
-                                      title={selectedCustomer && (selectedCustomer.address || selectedCustomer.city || selectedCustomer.region) 
+                                      title={
+                                        (selectedCustomer && (selectedCustomer.address || selectedCustomer.city || selectedCustomer.region)) ||
+                                        (form.watch("isNewCustomer") && (form.watch("newCustomerAddress") || form.watch("newCustomerCity") || form.watch("newCustomerRegion")))
                                         ? "Click to use customer address" 
                                         : undefined}
                                     />
