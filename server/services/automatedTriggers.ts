@@ -162,7 +162,7 @@ export class AutomatedTriggers {
   // Called when any new job is created
   static async onJobCreated(job: Job): Promise<void> {
     try {
-      console.log(`📝 New job created: ${job.title}`);
+      console.log(`📝 New job created: ${job.title || job.description || job.jobNumber}`);
       
       // Trigger workflow automation for new job creation
       await workflowAutomationService.processWorkflowTrigger('job_created', {
