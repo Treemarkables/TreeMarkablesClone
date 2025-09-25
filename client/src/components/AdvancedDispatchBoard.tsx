@@ -150,21 +150,36 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     // Try to find the job for this customer to get address info
     const job = jobData || (jobsData as any)?.data?.find((j: any) => j.customerId === customerId);
     
-    if (job?.address) {
-      // Extract meaningful info from address
+    // If job has proper address, use street address
+    if (job?.address && job.address !== 'Address not specified' && job.address.trim()) {
       const addressParts = job.address.split(',');
       if (addressParts.length > 0) {
         const streetAddress = addressParts[0].trim();
-        // Create a display name from street address
-        if (streetAddress) {
-          return `${streetAddress}`;
+        if (streetAddress && streetAddress !== 'Address not specified') {
+          return streetAddress;
         }
       }
     }
     
-    // Fallback: use customer name without the generic prefix or unknown
+    // For quote/lead jobs, try to use part of description as identifier
+    if (job?.description && job.description.trim() && job.description !== null) {
+      const desc = job.description.trim();
+      // Extract first meaningful part of description (up to 40 chars)
+      const shortDesc = desc.split('\n')[0].substring(0, 40);
+      if (shortDesc.length > 10) {
+        return `${shortDesc}...`;
+      }
+    }
+    
+    // Check for job status to provide context
+    if (job?.status === 'lead' || job?.status === 'quote') {
+      return `${job.status.charAt(0).toUpperCase() + job.status.slice(1)} #${job.jobNumber || ''}`;
+    }
+    
+    // Fallback: use customer name without the generic prefix
     if (customer?.name) {
-      return customer.name.replace('Customer-', '') + ' (Customer)';
+      const cleanName = customer.name.replace('Customer-', '');
+      return `Customer ${cleanName.substring(0, 8)}`;
     }
     
     return 'Unknown Customer';
