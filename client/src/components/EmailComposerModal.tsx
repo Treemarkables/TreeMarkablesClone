@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,7 +93,9 @@ export function EmailComposerModal({
     selectedTemplate: ""
   });
   const [attachments, setAttachments] = useState<string[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -150,6 +152,49 @@ export function EmailComposerModal({
         ? prev.filter(url => url !== photoUrl)
         : [...prev, photoUrl]
     );
+  };
+
+  // Handle file attachment
+  const handleFileAttachment = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    const fileArray = Array.from(files);
+    const maxFileSize = 10 * 1024 * 1024; // 10MB limit
+    
+    // Validate file sizes
+    const oversizedFiles = fileArray.filter(file => file.size > maxFileSize);
+    if (oversizedFiles.length > 0) {
+      toast({
+        title: "File Too Large",
+        description: `Files must be smaller than 10MB. Please compress: ${oversizedFiles.map(f => f.name).join(', ')}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Add files to state
+    setUploadedFiles(prev => [...prev, ...fileArray]);
+    setAttachments(prev => [...prev, ...fileArray.map(file => file.name)]);
+    
+    toast({
+      title: "Files Attached",
+      description: `${fileArray.length} file(s) attached successfully`,
+    });
+
+    // Clear the input for future selections
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeAttachment = (fileName: string) => {
+    setAttachments(prev => prev.filter(name => name !== fileName));
+    setUploadedFiles(prev => prev.filter(file => file.name !== fileName));
   };
 
   const sendEmailMutation = useMutation({
@@ -283,7 +328,7 @@ export function EmailComposerModal({
               </SelectContent>
             </Select>
             <Button 
-              onClick={() => {}} 
+              onClick={handleFileAttachment} 
               variant="outline" 
               size="sm"
               className="bg-white/10 border-white/20 text-white hover:bg-white/20"
@@ -358,16 +403,30 @@ export function EmailComposerModal({
             {attachments.length > 0 && (
               <div className="grid grid-cols-12 gap-3 items-center">
                 <Label className="col-span-1 text-right">Attached:</Label>
-                <div className="col-span-11 flex gap-2">
+                <div className="col-span-11 flex gap-2 flex-wrap">
                   {attachments.map((attachment, index) => (
                     <Badge key={index} variant="secondary" className="flex items-center gap-1">
                       <FileText className="w-3 h-3" />
                       {attachment}
+                      <X 
+                        className="w-3 h-3 ml-1 cursor-pointer hover:text-red-500" 
+                        onClick={() => removeAttachment(attachment)}
+                      />
                     </Badge>
                   ))}
                 </div>
               </div>
             )}
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt,.zip"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
           </div>
 
           {/* Smart Attachments Section */}
