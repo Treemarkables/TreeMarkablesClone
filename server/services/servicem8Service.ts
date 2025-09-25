@@ -221,7 +221,10 @@ class ServiceM8Service {
             contact_last_name: company.contact_last_name,
             email: company.email,
             mobile: company.mobile,
-            final_name: customerName
+            phone: company.phone,
+            address_line1: company.address_line1,
+            final_name: customerName,
+            raw_company_keys: Object.keys(company).slice(0, 10) // Show first 10 keys to debug field names
           });
 
           const customer: InsertCustomer = {
