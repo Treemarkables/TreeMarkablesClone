@@ -1686,14 +1686,49 @@ class DatabaseStorage implements IStorage {
   }
   async deleteExpiredNotifications(): Promise<void> { }
 
-  async createEmployee(employee: InsertEmployee): Promise<Employee> { throw new Error("Not implemented"); }
-  async getEmployee(id: string): Promise<Employee | undefined> { return undefined; }
-  async updateEmployee(id: string, updates: UpdateEmployee): Promise<Employee> { throw new Error("Not implemented"); }
-  async getAllEmployees(): Promise<Employee[]> { return []; }
-  async getActiveEmployees(): Promise<Employee[]> { return []; }
-  async getEmployeesByPosition(position: string): Promise<Employee[]> { return []; }
-  async getEmployeesBySkill(skill: string): Promise<Employee[]> { return []; }
-  async deleteEmployee(id: string): Promise<void> { }
+  async createEmployee(employee: InsertEmployee): Promise<Employee> {
+    const [newEmployee] = await db.insert(schema.employees).values(employee).returning();
+    return newEmployee;
+  }
+
+  async getEmployee(id: string): Promise<Employee | undefined> {
+    const [employee] = await db.select().from(schema.employees).where(eq(schema.employees.id, id));
+    return employee || undefined;
+  }
+
+  async updateEmployee(id: string, updates: UpdateEmployee): Promise<Employee> {
+    const [updatedEmployee] = await db.update(schema.employees)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.employees.id, id))
+      .returning();
+    return updatedEmployee;
+  }
+
+  async getAllEmployees(): Promise<Employee[]> {
+    return await db.select().from(schema.employees).orderBy(schema.employees.firstName, schema.employees.lastName);
+  }
+
+  async getActiveEmployees(): Promise<Employee[]> {
+    return await db.select().from(schema.employees)
+      .where(eq(schema.employees.status, 'active'))
+      .orderBy(schema.employees.firstName, schema.employees.lastName);
+  }
+
+  async getEmployeesByPosition(position: string): Promise<Employee[]> {
+    return await db.select().from(schema.employees)
+      .where(eq(schema.employees.position, position))
+      .orderBy(schema.employees.firstName, schema.employees.lastName);
+  }
+
+  async getEmployeesBySkill(skill: string): Promise<Employee[]> {
+    return await db.select().from(schema.employees)
+      .where(sql`${schema.employees.skills} @> ${[skill]}`)
+      .orderBy(schema.employees.firstName, schema.employees.lastName);
+  }
+
+  async deleteEmployee(id: string): Promise<void> {
+    await db.delete(schema.employees).where(eq(schema.employees.id, id));
+  }
 
   async createScheduleEvent(event: InsertScheduleEvent): Promise<ScheduleEvent> { throw new Error("Not implemented"); }
   async getScheduleEvent(id: string): Promise<ScheduleEvent | undefined> { return undefined; }

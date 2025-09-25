@@ -1578,9 +1578,9 @@ export function GlobalJobCard({
                     <SelectValue placeholder="Select staff member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.isArray(employeesData) ? employeesData.map((employee: any) => (
+                    {Array.isArray(employeesData?.data) ? employeesData.data.map((employee: any) => (
                       <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name}
+                        {employee.firstName} {employee.lastName}
                       </SelectItem>
                     )) : null}
                   </SelectContent>
