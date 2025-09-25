@@ -2337,6 +2337,27 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         console.log(`📧 Invoice email sent to ${to} for job ${job?.jobNumber || jobId}${
           emailAttachments.length > 0 ? ` with ${emailAttachments.length} photo attachment(s)` : ''
         }`);
+
+        // Create job diary entry for the email
+        if (jobId) {
+          try {
+            await storage.createJobDiaryEntry({
+              jobId: jobId,
+              entryType: 'email',
+              title: `Email sent: ${subject}`,
+              description: `Email sent to ${to}${cc ? ` (CC: ${cc})` : ''}${
+                emailAttachments.length > 0 ? `\n\nAttachments: ${emailAttachments.length} photo(s)` : ''
+              }\n\nMessage:\n${body}`,
+              authorName: 'System',
+              authorRole: 'system',
+              tags: ['communication', 'email', invoiceId ? 'invoice' : ''].filter(Boolean),
+              isPrivate: false
+            });
+            console.log(`📝 Email logged to job diary for job ${job?.jobNumber || jobId}`);
+          } catch (diaryError) {
+            console.error('Error creating job diary entry for email:', diaryError);
+          }
+        }
         
         res.json({ 
           success: true, 
