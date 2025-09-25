@@ -159,7 +159,11 @@ export function GlobalJobCard({
 
   // Fetch materials and services for line item search
   const { data: materialsServicesData } = useQuery({
-    queryKey: ['/api/materials-services', { search: debouncedSearchQuery }],
+    queryKey: ['/api/materials-services', debouncedSearchQuery],
+    queryFn: async () => {
+      const response = await fetch(`/api/materials-services?search=${encodeURIComponent(debouncedSearchQuery)}`);
+      return response.json();
+    },
     enabled: debouncedSearchQuery.length > 0 && isOpen,
   });
 
@@ -168,15 +172,10 @@ export function GlobalJobCard({
   const editingJob = mode === "edit" ? ((jobData as any)?.data || job) : null;
   const materialsServices = (materialsServicesData as any)?.data || [];
 
-  // Filter search results
+  // Search results (API already filters, so just use the data directly)
   const searchResults = useMemo(() => {
     if (!debouncedSearchQuery || !materialsServices.length) return [];
-    
-    return materialsServices.filter((item: any) => 
-      item.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      item.itemNumber.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
-    ).slice(0, 5); // Limit to 5 results for dropdown
+    return materialsServices.slice(0, 5); // Limit to 5 results for dropdown
   }, [materialsServices, debouncedSearchQuery]);
   
   // Tab state management
