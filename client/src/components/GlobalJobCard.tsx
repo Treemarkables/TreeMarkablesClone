@@ -395,6 +395,8 @@ export function GlobalJobCard({
     }
   });
 
+  const [isDiaryOperation, setIsDiaryOperation] = useState(false);
+
   const updateJobMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await apiRequest('PUT', `/api/jobs/${jobId}`, data);
@@ -407,7 +409,14 @@ export function GlobalJobCard({
         queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       }
       onJobUpdated?.(response.data || response);
-      onClose();
+      
+      // Only close the job card if this is not a diary-related operation
+      if (!isDiaryOperation) {
+        onClose();
+      }
+      
+      // Reset the diary operation flag
+      setIsDiaryOperation(false);
     },
     onError: (error: any) => {
       toast({
@@ -415,6 +424,7 @@ export function GlobalJobCard({
         description: error?.message || "Failed to update job",
         variant: "destructive"
       });
+      setIsDiaryOperation(false); // Reset flag on error too
     }
   });
 
