@@ -1002,7 +1002,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <div className="flex-1 truncate">
                       <div className="font-medium">{job.customerName}</div>
                       <div className="text-xs text-muted-foreground">
-                        {format(new Date(job.startTime), 'HH:mm')} - {job.serviceType}
+                        {(() => {
+                          // Use available job fields: description, specialInstructions, or serviceType
+                          const description = job.description || job.specialInstructions || job.serviceType;
+                          
+                          if (description && description.length > 50) {
+                            return `${description.substring(0, 50)}...`;
+                          } else if (description) {
+                            return description;
+                          } else {
+                            return 'Tree removal and maintenance';
+                          }
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1447,17 +1458,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   {/* Replace date with job description */}
                                   <div className="text-xs text-gray-500">
                                     {(() => {
-                                      // Get meaningful job description instead of date
-                                      const description = job.notes && job.notes !== '0000-00-00 00:00:00' && !job.notes.includes('0000-00-00')
-                                        ? job.notes.length > 80 
-                                          ? `${job.notes.substring(0, 80)}...`
-                                          : job.notes
-                                        : job.serviceType || 'Tree removal and arborist services';
+                                      // Use available job fields: description, specialInstructions, or serviceType
+                                      const description = job.description || job.specialInstructions || job.serviceType;
                                       
-                                      // Filter out any date-like content
-                                      return description.includes('0000-00-00') || description.includes('2025-') 
-                                        ? (job.serviceType || 'Tree removal and arborist services')
-                                        : description;
+                                      if (description && description.length > 80) {
+                                        return `${description.substring(0, 80)}...`;
+                                      } else if (description) {
+                                        return description;
+                                      } else {
+                                        return 'Tree removal and arborist services';
+                                      }
                                     })()}
                                   </div>
                                 </div>
