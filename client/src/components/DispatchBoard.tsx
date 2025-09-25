@@ -459,8 +459,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   // Force refresh the cache to get corrected data mapping
   useEffect(() => {
-    // Invalidate jobs cache to force refetch with corrected mapping
+    // Invalidate jobs cache to force refetch with corrected mapping and cleaned descriptions
     queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
   }, []); // Only run once on mount
 
   // Convert API jobs to DispatchBoard format
