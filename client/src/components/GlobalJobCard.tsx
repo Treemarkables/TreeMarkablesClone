@@ -700,7 +700,7 @@ export function GlobalJobCard({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl h-[55vh] flex flex-col p-0">
+      <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0">
         {/* ServiceM8-Style Header */}
         <ServiceM8HeaderToolbar
           mode={mode}
@@ -755,8 +755,305 @@ export function GlobalJobCard({
                 <div className="flex-1 overflow-hidden">
                   <TabsContent value="details" className="h-full m-0">
                     <div className="h-full overflow-y-auto px-3 pb-1">
-                      <div className="space-y-4">
-                        {/* Details content will go here */}
+                      <div className="space-y-2">
+                        {/* Customer Contact Details (Read-only when editing) */}
+                        {mode === "edit" && editingJob && (
+                          <Card>
+                            <CardHeader className="pb-1">
+                              <CardTitle className="flex items-center gap-1 text-xs font-medium">
+                                <User className="w-3 h-3" />
+                                Customer Contact Details
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-1 text-xs">
+                              {(() => {
+                                const selectedCustomer = customers.find((c: Customer) => c.id === editingJob.customerId);
+                                if (selectedCustomer) {
+                                  // Parse name into first and last name
+                                  const nameParts = selectedCustomer.name?.split(' ') || ['Customer'];
+                                  const firstName = nameParts[0] || '';
+                                  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+                                  
+                                  return (
+                                    <div className="grid grid-cols-3 gap-2 text-xs">
+                                      <div>
+                                        <div className="font-medium text-xs">{firstName} {lastName}</div>
+                                        <div className="text-muted-foreground text-[10px]">Contact</div>
+                                      </div>
+                                      <div>
+                                        <div className="font-medium text-xs">{selectedCustomer?.email || 'N/A'}</div>
+                                        <div className="text-muted-foreground text-[10px]">Email</div>
+                                      </div>
+                                      <div>
+                                        <div className="font-medium text-xs">{selectedCustomer?.phone || 'N/A'}</div>
+                                        <div className="text-muted-foreground text-[10px]">Phone</div>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="text-center py-4 text-muted-foreground">
+                                    No customer selected for this job
+                                  </div>
+                                );
+                              })()}
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Customer Section */}
+                        <Card>
+                          <CardHeader className="pb-1">
+                            <CardTitle className="flex items-center gap-1 text-xs font-medium">
+                              <User className="w-3 h-3" />
+                              Customer Information
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-1 text-xs">
+                            <Tabs value={activeCustomerTab} onValueChange={setActiveCustomerTab}>
+                              <TabsList className="grid w-full grid-cols-2 h-7">
+                                <TabsTrigger 
+                                  value="existing" 
+                                  onClick={() => form.setValue("isNewCustomer", false)}
+                                  data-testid="tab-existing-customer"
+                                >
+                                  <Building2 className="w-3 h-3 mr-1" />
+                                  Existing Customer
+                                </TabsTrigger>
+                                <TabsTrigger 
+                                  value="new" 
+                                  onClick={() => form.setValue("isNewCustomer", true)}
+                                  data-testid="tab-new-customer"
+                                >
+                                  <Plus className="w-3 h-3 mr-1" />
+                                  New Customer
+                                </TabsTrigger>
+                              </TabsList>
+                              
+                              <TabsContent value="existing" className="space-y-1 mt-1">
+                                <FormField
+                                  control={form.control}
+                                  name="customerId"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel className="text-xs">Select Customer</FormLabel>
+                                      <Select onValueChange={field.onChange} value={field.value || ""} disabled={mode === "edit"}>
+                                        <FormControl>
+                                          <SelectTrigger data-testid="select-customer" className="h-7 text-xs">
+                                            <SelectValue placeholder="Choose a customer..." />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {customers.map((customer: Customer) => (
+                                            <SelectItem key={customer.id} value={customer.id}>
+                                              {customer.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </TabsContent>
+                              
+                              <TabsContent value="new" className="space-y-1">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <FormField
+                                    control={form.control}
+                                    name="newCustomerName"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel className="text-xs">Customer Name *</FormLabel>
+                                        <FormControl>
+                                          <Input {...field} value={field.value || ""} placeholder="John Smith" data-testid="input-new-customer-name" className="h-7 text-xs" />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  <FormField
+                                    control={form.control}
+                                    name="newCustomerEmail"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel className="text-xs">Email Address</FormLabel>
+                                        <FormControl>
+                                          <Input {...field} value={field.value || ""} type="email" placeholder="john@example.com" data-testid="input-new-customer-email" className="h-7 text-xs" />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <FormField
+                                    control={form.control}
+                                    name="newCustomerPhone"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel className="text-xs">Mobile Phone</FormLabel>
+                                        <FormControl>
+                                          <Input {...field} value={field.value || ""} placeholder="021 123 4567" data-testid="input-new-customer-phone" className="h-7 text-xs" />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  <FormField
+                                    control={form.control}
+                                    name="newCustomerAddress"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel className="text-xs">Street Address</FormLabel>
+                                        <FormControl>
+                                          <Input {...field} value={field.value || ""} placeholder="123 Main St" data-testid="input-new-customer-address" className="h-7 text-xs" />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <FormField
+                                    control={form.control}
+                                    name="newCustomerCity"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel className="text-xs">City</FormLabel>
+                                        <FormControl>
+                                          <Input {...field} value={field.value || ""} placeholder="Auckland" data-testid="input-new-customer-city" className="h-7 text-xs" />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  <FormField
+                                    control={form.control}
+                                    name="newCustomerRegion"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel className="text-xs">Region</FormLabel>
+                                        <FormControl>
+                                          <Input {...field} value={field.value || ""} placeholder="Auckland" data-testid="input-new-customer-region" className="h-7 text-xs" />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                </div>
+                              </TabsContent>
+                            </Tabs>
+                          </CardContent>
+                        </Card>
+
+                        {/* Job Details Section */}
+                        <Card>
+                          <CardHeader className="pb-1">
+                            <CardTitle className="flex items-center gap-1 text-xs font-medium">
+                              <Building className="w-3 h-3" />
+                              Job Details
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-1 space-y-1">
+                            <FormField
+                              control={form.control}
+                              name="description"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Description</FormLabel>
+                                  <FormControl>
+                                    <Textarea 
+                                      {...field} 
+                                      value={field.value || ""}
+                                      placeholder="Detailed description of the work to be performed..."
+                                      rows={2}
+                                      data-testid="textarea-job-description"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name="address"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Job Address *</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="123 Main St, Auckland, NZ" data-testid="input-job-address" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <div className="grid grid-cols-3 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="status"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Status</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                      <FormControl>
+                                        <SelectTrigger data-testid="select-job-status">
+                                          <SelectValue placeholder="Select status" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="pending">Pending</SelectItem>
+                                        <SelectItem value="in_progress">In Progress</SelectItem>
+                                        <SelectItem value="completed">Completed</SelectItem>
+                                        <SelectItem value="on_hold">On Hold</SelectItem>
+                                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="priority"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Priority</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                      <FormControl>
+                                        <SelectTrigger data-testid="select-job-priority">
+                                          <SelectValue placeholder="Select priority" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="low">Low</SelectItem>
+                                        <SelectItem value="medium">Medium</SelectItem>
+                                        <SelectItem value="high">High</SelectItem>
+                                        <SelectItem value="urgent">Urgent</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="estimatedHours"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Est. Hours</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} type="number" placeholder="8" data-testid="input-estimated-hours" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </CardContent>
+                        </Card>
                       </div>
                     </div>
                   </TabsContent>
@@ -931,11 +1228,11 @@ export function GlobalJobCard({
                     <SelectValue placeholder="Select staff member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {employeesData?.data?.map((employee: any) => (
+                    {Array.isArray(employeesData) ? employeesData.map((employee: any) => (
                       <SelectItem key={employee.id} value={employee.id}>
                         {employee.name}
                       </SelectItem>
-                    ))}
+                    )) : null}
                   </SelectContent>
                 </Select>
               </div>
