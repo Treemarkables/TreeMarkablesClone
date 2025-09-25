@@ -469,6 +469,34 @@ export interface IStorage {
     byPriority: { priority: string; count: number }[];
   }>;
 
+  // Conversation Management
+  createConversation(conversation: InsertConversation): Promise<Conversation>;
+  getConversation(id: string): Promise<Conversation | undefined>;
+  updateConversation(id: string, updates: UpdateConversation): Promise<Conversation>;
+  deleteConversation(id: string): Promise<void>;
+  getAllConversations(filters?: {
+    status?: string;
+    priority?: string;
+    assignedTo?: string;
+    source?: string;
+    serviceType?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Conversation[]>;
+  getConversationsByLead(leadId: string): Promise<Conversation[]>;
+  getConversationsByCustomer(customerId: string): Promise<Conversation[]>;
+  convertConversationToQuote(id: string, quoteId: string): Promise<Conversation>;
+  getUnreadConversationsCount(userId?: string): Promise<number>;
+
+  // Conversation Message Management
+  createConversationMessage(message: InsertConversationMessage): Promise<ConversationMessage>;
+  getConversationMessage(id: string): Promise<ConversationMessage | undefined>;
+  updateConversationMessage(id: string, updates: UpdateConversationMessage): Promise<ConversationMessage>;
+  deleteConversationMessage(id: string): Promise<void>;
+  getConversationMessages(conversationId: string): Promise<ConversationMessage[]>;
+  markConversationMessagesAsRead(conversationId: string, readBy: string): Promise<void>;
+
   // Enhanced Photo Management
   createPhoto(data: InsertPhoto): Promise<Photo>;
   getPhoto(id: string): Promise<Photo | undefined>;
