@@ -5547,12 +5547,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           jobId,
           entryType: 'sms',
           title: 'SMS Sent',
-          description: message,
-          metadata: {
-            recipient: to,
-            status: 'sent',
-            timestamp: new Date().toISOString()
-          }
+          description: `SMS sent to ${to}: ${message}`,
+          authorName: 'System'
         });
         
         res.json({ 
@@ -5601,13 +5597,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           jobId,
           entryType: 'email',
           title: `Email: ${subject}`,
-          description: message,
-          metadata: {
-            recipient: to,
-            subject,
-            status: 'sent',
-            timestamp: new Date().toISOString()
-          }
+          description: `Email sent to ${to}: ${message}`,
+          authorName: 'System'
         });
         
         res.json({ 
