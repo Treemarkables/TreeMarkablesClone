@@ -840,6 +840,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  app.delete('/api/customers/:id', async (req: Request, res: Response) => {
+    try {
+      const success = await storage.deleteCustomer(req.params.id);
+      if (!success) {
+        return res.status(404).json({ success: false, message: 'Customer not found' });
+      }
+      res.json({ success: true, message: 'Customer deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting customer:', error);
+      res.status(500).json({ success: false, message: 'Error deleting customer' });
+    }
+  });
+
   // CSV Upload and Customer Matching endpoints
   app.post('/api/customers/csv-match', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {

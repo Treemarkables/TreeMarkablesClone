@@ -7,12 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Mail, Phone, Calendar, DollarSign, Search, Filter, ArrowUpDown, Plus, Upload, Trash2, AlertTriangle } from "lucide-react";
+import { Users, Mail, Phone, Calendar, DollarSign, Search, Filter, ArrowUpDown, Plus, Upload, Trash2, AlertTriangle, Edit, X } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import type { Customer } from "@shared/schema";
 import { CustomerCSVUpload } from "@/components/CustomerCSVUpload";
 
@@ -23,12 +28,21 @@ interface ApiResponse<T> {
   count?: number;
 }
 
+const editCustomerSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  phone: z.string().optional().or(z.literal("")),
+  address: z.string().optional().or(z.literal("")),
+});
+
 export default function Clients() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [activeTab, setActiveTab] = useState("list");
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState<"all" | "customers" | "potential_expenses">("all");
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -56,6 +70,17 @@ export default function Clients() {
     return expenseKeywords.some(keyword => name.includes(keyword));
   };
 
+  // Form for editing customer
+  const editForm = useForm<z.infer<typeof editCustomerSchema>>({
+    resolver: zodResolver(editCustomerSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+    },
+  });
+
   // Bulk delete mutation
   const deleteCustomersMutation = useMutation({
     mutationFn: async (customerIds: string[]) => {
@@ -73,6 +98,51 @@ export default function Clients() {
       toast({
         title: "Delete Failed",
         description: error.message || "Failed to delete customers",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Individual delete mutation
+  const deleteCustomerMutation = useMutation({
+    mutationFn: async (customerId: string) => {
+      return await apiRequest('DELETE', `/api/customers/${customerId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      toast({
+        title: "Customer Deleted",
+        description: "Customer has been successfully deleted"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Failed to delete customer",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Edit customer mutation
+  const editCustomerMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: z.infer<typeof editCustomerSchema> }) => {
+      return await apiRequest('PUT', `/api/customers/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setShowEditDialog(false);
+      setEditingCustomer(null);
+      editForm.reset();
+      toast({
+        title: "Customer Updated",
+        description: "Customer information has been successfully updated"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update customer",
         variant: "destructive"
       });
     }
@@ -100,6 +170,29 @@ export default function Clients() {
   const handleBulkDelete = () => {
     if (selectedCustomers.size === 0) return;
     deleteCustomersMutation.mutate(Array.from(selectedCustomers));
+  };
+
+  // Individual customer handlers
+  const handleEditCustomer = (customer: Customer) => {
+    setEditingCustomer(customer);
+    editForm.reset({
+      name: customer.name,
+      email: customer.email || "",
+      phone: customer.phone || "",
+      address: customer.address || "",
+    });
+    setShowEditDialog(true);
+  };
+
+  const handleDeleteCustomer = (customerId: string) => {
+    if (confirm("Are you sure you want to delete this customer? This action cannot be undone.")) {
+      deleteCustomerMutation.mutate(customerId);
+    }
+  };
+
+  const handleSubmitEdit = (data: z.infer<typeof editCustomerSchema>) => {
+    if (!editingCustomer) return;
+    editCustomerMutation.mutate({ id: editingCustomer.id, data });
   };
 
   // Filter and sort customers
@@ -403,11 +496,27 @@ export default function Clients() {
                       </div>
                       
                       <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleEditCustomer(customer)}
+                          data-testid={`button-edit-${customer.id}`}
+                        >
+                          <Edit className="w-4 h-4 mr-1" />
+                          Edit
+                        </Button>
                         <Button variant="outline" size="sm" data-testid={`button-view-${customer.id}`}>
                           View Details
                         </Button>
-                        <Button variant="outline" size="sm" data-testid={`button-contact-${customer.id}`}>
-                          Contact
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          onClick={() => handleDeleteCustomer(customer.id)}
+                          disabled={deleteCustomerMutation.isPending}
+                          data-testid={`button-delete-${customer.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete
                         </Button>
                       </div>
                     </div>
@@ -426,6 +535,87 @@ export default function Clients() {
           <CustomerCSVUpload />
         </TabsContent>
       </Tabs>
+
+      {/* Edit Customer Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Customer</DialogTitle>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(handleSubmitEdit)} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Customer Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter customer name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={editForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter email address" type="email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={editForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter phone number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={editForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter address" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div className="flex gap-2 pt-4">
+                <Button type="submit" disabled={editCustomerMutation.isPending}>
+                  {editCustomerMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowEditDialog(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
