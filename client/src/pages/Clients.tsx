@@ -330,7 +330,7 @@ export default function Clients() {
             />
           </div>
 
-          <Select value={filterType} onValueChange={setFilterType}>
+          <Select value={filterType} onValueChange={(value) => setFilterType(value as "all" | "customers" | "potential_expenses")}>
             <SelectTrigger className="w-full sm:w-48" data-testid="select-filter">
               <Filter className="w-4 h-4 mr-2" />
               <SelectValue placeholder="Filter by type" />
