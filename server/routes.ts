@@ -7645,12 +7645,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       // Parse CSV file
       const csvContent = req.file.buffer.toString('utf-8');
-      const Papa = require('papaparse');
       
       const parseResult = Papa.parse(csvContent, {
         header: true,
         skipEmptyLines: true,
-        transformHeader: (header: string) => header.trim()
+        transformHeader: (header: string) => header.trim(),
+        dynamicTyping: false,
+        fastMode: false
       });
 
       if (parseResult.errors.length > 0) {
