@@ -12,11 +12,8 @@ import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
 import { GrossMarginCalculator } from "./GrossMarginCalculator";
-import { ServiceM8TimeRecordingModal } from "./ServiceM8TimeRecordingModal";
 import { EmailComposerModal } from "./EmailComposerModal";
 import { SMSComposerModal } from "./SMSComposerModal";
-import { ServiceM8HeaderToolbar } from "./ServiceM8HeaderToolbar";
-import { ServiceM8ActivityFeed } from "./ServiceM8ActivityFeed";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
 
@@ -106,7 +103,6 @@ export function GlobalJobCard({
   // Margin tracker dialog states
   const [isStaffTimeDialogOpen, setIsStaffTimeDialogOpen] = useState(false);
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
-  const [isServiceM8TimeModalOpen, setIsServiceM8TimeModalOpen] = useState(false);
   const [isEmailComposerOpen, setIsEmailComposerOpen] = useState(false);
   const [isSMSComposerOpen, setIsSMSComposerOpen] = useState(false);
   
@@ -1159,32 +1155,45 @@ export function GlobalJobCard({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0">
-        {/* ServiceM8-Style Header */}
-        <ServiceM8HeaderToolbar
-          mode={mode}
-          jobNumber={editingJob?.jobNumber}
-          customerName={selectedCustomer?.name}
-          onClose={onClose}
-          onEmailClick={handleEmailClick}
-          onSMSClick={() => setIsSMSComposerOpen(true)}
-          onCallClick={handleCallClick}
-          onScheduleClick={handleScheduleClick}
-          onQueueClick={() => setIsServiceM8TimeModalOpen(true)}
-          onFormClick={() => setActiveTab('details')}
-          onProposalClick={handleProposalClick}
-          onProfitClick={() => setIsStaffTimeDialogOpen(true)}
-          onTrackExpenses={() => setIsExpenseDialogOpen(true)}
-          onSendInvoice={handleSendInvoice}
-          onSMSInvoice={handleSMSInvoice}
-          onAutoInvoice={handleAutoInvoice}
-          onPartialInvoice={handlePartialInvoice}
-          onCustomiseInvoice={handleCustomiseInvoice}
-          onAddPayment={handleAddPayment}
-          onSendToXero={handleApproveToXero}
-          onGenerateQuote={handleGenerateQuote}
-          onCustomiseQuote={handleCustomiseQuote}
-          onSendQuote={handleSendQuote}
-        />
+        {/* Job Card Header */}
+        <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <FileText className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900" data-testid="text-job-title">
+                  {mode === "create" ? "New Job" : `Job #${editingJob?.jobNumber || ""}`}
+                </h1>
+                <p className="text-sm text-gray-500" data-testid="text-customer-name">
+                  {selectedCustomer?.name || "Job Details"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleEmailClick} data-testid="button-email">
+                <Mail className="w-4 h-4 mr-1" />
+                Email
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setIsSMSComposerOpen(true)} data-testid="button-sms">
+                <MessageSquare className="w-4 h-4 mr-1" />
+                SMS
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleCallClick} data-testid="button-call">
+                <Phone className="w-4 h-4 mr-1" />
+                Call
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleScheduleClick} data-testid="button-schedule">
+                <Calendar className="w-4 h-4 mr-1" />
+                Schedule
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onClose} data-testid="button-close">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
 
         {/* Tabbed interface */}
         <div className="flex-1 flex flex-col min-h-0">
@@ -1861,15 +1870,6 @@ export function GlobalJobCard({
         mode="create"
       />
       
-      {/* ServiceM8-Style Time Recording Modal */}
-      {jobId && (
-        <ServiceM8TimeRecordingModal
-          isOpen={isServiceM8TimeModalOpen}
-          onClose={() => setIsServiceM8TimeModalOpen(false)}
-          jobId={jobId}
-          jobNumber={editingJob?.jobNumber || `#${jobId.slice(-4)}`}
-        />
-      )}
 
       {/* Email Composer Modal */}
       <EmailComposerModal

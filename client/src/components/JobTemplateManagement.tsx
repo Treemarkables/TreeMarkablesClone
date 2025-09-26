@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import type { JobTemplate, InsertJobTemplate, EmailTemplate, InsertEmailTemplate, SmsTemplate, InsertSmsTemplate } from "@shared/schema";
 import { insertJobTemplateSchema, insertEmailTemplateSchema, insertSmsTemplateSchema } from "@shared/schema";
-import ServiceM8TemplateBuilder from './ServiceM8TemplateBuilder';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -136,7 +135,7 @@ export default function JobTemplateManagement() {
     },
   });
 
-  // Handle template save from ServiceM8TemplateBuilder
+  // Handle template save
   const handleTemplateSave = (data: InsertJobTemplate) => {
     if (editingTemplate) {
       updateTemplateMutation.mutate({ id: editingTemplate.id, data });
@@ -416,13 +415,7 @@ export default function JobTemplateManagement() {
         </TabsContent>
       </Tabs>
 
-      {/* ServiceM8 Template Builder */}
-      <ServiceM8TemplateBuilder
-        isOpen={isCreateOpen || !!editingTemplate}
-        onClose={handleTemplateBuilderClose}
-        onSave={handleTemplateSave}
-        editingTemplate={editingTemplate}
-      />
+      {/* Template Builder - ServiceM8 integration removed */}
     </div>
   );
 }
