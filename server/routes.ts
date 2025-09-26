@@ -32,7 +32,9 @@ import {
   insertProposalSchema, updateProposalSchema,
   insertProposalSectionSchema, updateProposalSectionSchema,
   insertProposalLineItemSchema, updateProposalLineItemSchema,
-  insertProposalLineItemChoiceSchema, updateProposalLineItemChoiceSchema
+  insertProposalLineItemChoiceSchema, updateProposalLineItemChoiceSchema,
+  // Document Template Management
+  insertDocumentTemplateSchema
 } from "@shared/schema";
 import multer from "multer";
 import Papa from "papaparse";
@@ -4835,6 +4837,108 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         success: false,
         message: 'Error deleting SMS template'
       });
+    }
+  });
+
+  // ========================================
+  // DOCUMENT TEMPLATE MANAGEMENT ROUTES
+  // ========================================
+
+  // Get all document templates
+  app.get('/api/templates', async (req: Request, res: Response) => {
+    try {
+      const { type } = req.query;
+      let templates;
+      
+      if (type && typeof type === 'string') {
+        templates = await storage.getDocumentTemplatesByType(type);
+      } else {
+        templates = await storage.getAllDocumentTemplates();
+      }
+      
+      res.json({ success: true, data: templates });
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+      res.status(500).json({ success: false, message: 'Error fetching templates' });
+    }
+  });
+
+  // Get single document template
+  app.get('/api/templates/:id', async (req: Request, res: Response) => {
+    try {
+      const template = await storage.getDocumentTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+      res.json({ success: true, data: template });
+    } catch (error) {
+      console.error('Error fetching template:', error);
+      res.status(500).json({ success: false, message: 'Error fetching template' });
+    }
+  });
+
+  // Create document template
+  app.post('/api/templates', async (req: Request, res: Response) => {
+    try {
+      const validation = insertDocumentTemplateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid template data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const template = await storage.createDocumentTemplate(validation.data);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      console.error('Error creating template:', error);
+      res.status(500).json({ success: false, message: 'Error creating template' });
+    }
+  });
+
+  // Update document template
+  app.put('/api/templates/:id', async (req: Request, res: Response) => {
+    try {
+      const updates = insertDocumentTemplateSchema.partial().safeParse(req.body);
+      if (!updates.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: updates.error.errors 
+        });
+      }
+
+      const template = await storage.updateDocumentTemplate(req.params.id, updates.data);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      console.error('Error updating template:', error);
+      res.status(500).json({ success: false, message: 'Error updating template' });
+    }
+  });
+
+  // Delete document template
+  app.delete('/api/templates/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteDocumentTemplate(req.params.id);
+      res.json({ success: true, message: 'Template deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      res.status(500).json({ success: false, message: 'Error deleting template' });
+    }
+  });
+
+  // Get default template for type
+  app.get('/api/templates/default/:type', async (req: Request, res: Response) => {
+    try {
+      const template = await storage.getDefaultTemplate(req.params.type);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'No default template found for this type' });
+      }
+      res.json({ success: true, data: template });
+    } catch (error) {
+      console.error('Error fetching default template:', error);
+      res.status(500).json({ success: false, message: 'Error fetching default template' });
     }
   });
 

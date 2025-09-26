@@ -11,7 +11,8 @@ import {
   Inbox,
   Plug,
   Workflow,
-  FileText
+  FileText,
+  Layout
 } from "lucide-react";
 import {
   Sidebar,
@@ -79,6 +80,13 @@ const businessItems = [
     icon: FileText,
     value: "quotes",
     isTab: true
+  },
+  {
+    title: "Templates",
+    url: "/templates",
+    icon: Layout,
+    value: "templates",
+    isTab: false
   },
   {
     title: "Equipment",

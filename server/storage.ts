@@ -56,7 +56,15 @@ import {
   type Servicem8Company, type InsertServicem8Company,
   type Servicem8Invoice, type InsertServicem8Invoice,
   type Servicem8Material, type InsertServicem8Material,
-  servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema
+  servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema,
+  // Document Template types
+  type DocumentTemplate, type InsertDocumentTemplate,
+  type TemplateSection, type InsertTemplateSection,
+  type TemplateLineItem, type InsertTemplateLineItem,
+  type TemplatePhoto, type InsertTemplatePhoto,
+  type GeneratedDocument, type InsertGeneratedDocument,
+  type GeneratedDocumentLineItem, type InsertGeneratedDocumentLineItem,
+  type GeneratedDocumentPhoto, type InsertGeneratedDocumentPhoto
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
@@ -599,6 +607,64 @@ export interface IStorage {
   
   createServicem8Material(material: InsertServicem8Material): Promise<Servicem8Material>;
   getServicem8MaterialsByJob(jobUuid: string): Promise<Servicem8Material[]>;
+
+  // Document Template Management
+  createDocumentTemplate(template: InsertDocumentTemplate): Promise<DocumentTemplate>;
+  getDocumentTemplate(id: string): Promise<DocumentTemplate | undefined>;
+  updateDocumentTemplate(id: string, updates: Partial<InsertDocumentTemplate>): Promise<DocumentTemplate>;
+  deleteDocumentTemplate(id: string): Promise<void>;
+  getAllDocumentTemplates(): Promise<DocumentTemplate[]>;
+  getDocumentTemplatesByType(type: string): Promise<DocumentTemplate[]>;
+  getDefaultTemplate(type: string): Promise<DocumentTemplate | undefined>;
+  
+  // Template Sections Management
+  createTemplateSection(section: InsertTemplateSection): Promise<TemplateSection>;
+  getTemplateSection(id: string): Promise<TemplateSection | undefined>;
+  updateTemplateSection(id: string, updates: Partial<InsertTemplateSection>): Promise<TemplateSection>;
+  deleteTemplateSection(id: string): Promise<void>;
+  getTemplateSectionsByTemplate(templateId: string): Promise<TemplateSection[]>;
+  
+  // Template Line Items Management
+  createTemplateLineItem(lineItem: InsertTemplateLineItem): Promise<TemplateLineItem>;
+  getTemplateLineItem(id: string): Promise<TemplateLineItem | undefined>;
+  updateTemplateLineItem(id: string, updates: Partial<InsertTemplateLineItem>): Promise<TemplateLineItem>;
+  deleteTemplateLineItem(id: string): Promise<void>;
+  getTemplateLineItemsByTemplate(templateId: string): Promise<TemplateLineItem[]>;
+  getTemplateLineItemsBySection(sectionId: string): Promise<TemplateLineItem[]>;
+  
+  // Template Photos Management
+  createTemplatePhoto(photo: InsertTemplatePhoto): Promise<TemplatePhoto>;
+  getTemplatePhoto(id: string): Promise<TemplatePhoto | undefined>;
+  updateTemplatePhoto(id: string, updates: Partial<InsertTemplatePhoto>): Promise<TemplatePhoto>;
+  deleteTemplatePhoto(id: string): Promise<void>;
+  getTemplatePhotosByTemplate(templateId: string): Promise<TemplatePhoto[]>;
+  getTemplatePhotosBySection(sectionId: string): Promise<TemplatePhoto[]>;
+  
+  // Generated Documents Management
+  createGeneratedDocument(document: InsertGeneratedDocument): Promise<GeneratedDocument>;
+  getGeneratedDocument(id: string): Promise<GeneratedDocument | undefined>;
+  updateGeneratedDocument(id: string, updates: Partial<InsertGeneratedDocument>): Promise<GeneratedDocument>;
+  deleteGeneratedDocument(id: string): Promise<void>;
+  getAllGeneratedDocuments(): Promise<GeneratedDocument[]>;
+  getGeneratedDocumentsByJob(jobId: string): Promise<GeneratedDocument[]>;
+  getGeneratedDocumentsByCustomer(customerId: string): Promise<GeneratedDocument[]>;
+  getGeneratedDocumentsByType(type: string): Promise<GeneratedDocument[]>;
+  getGeneratedDocumentsByStatus(status: string): Promise<GeneratedDocument[]>;
+  generateDocumentNumber(type: string): Promise<string>;
+  
+  // Generated Document Line Items Management
+  createGeneratedDocumentLineItem(lineItem: InsertGeneratedDocumentLineItem): Promise<GeneratedDocumentLineItem>;
+  getGeneratedDocumentLineItem(id: string): Promise<GeneratedDocumentLineItem | undefined>;
+  updateGeneratedDocumentLineItem(id: string, updates: Partial<InsertGeneratedDocumentLineItem>): Promise<GeneratedDocumentLineItem>;
+  deleteGeneratedDocumentLineItem(id: string): Promise<void>;
+  getGeneratedDocumentLineItemsByDocument(documentId: string): Promise<GeneratedDocumentLineItem[]>;
+  
+  // Generated Document Photos Management
+  createGeneratedDocumentPhoto(photo: InsertGeneratedDocumentPhoto): Promise<GeneratedDocumentPhoto>;
+  getGeneratedDocumentPhoto(id: string): Promise<GeneratedDocumentPhoto | undefined>;
+  updateGeneratedDocumentPhoto(id: string, updates: Partial<InsertGeneratedDocumentPhoto>): Promise<GeneratedDocumentPhoto>;
+  deleteGeneratedDocumentPhoto(id: string): Promise<void>;
+  getGeneratedDocumentPhotosByDocument(documentId: string): Promise<GeneratedDocumentPhoto[]>;
 }
 
 // Database Storage Implementation
@@ -2137,6 +2203,287 @@ class DatabaseStorage implements IStorage {
   async getServicem8MaterialsByJob(jobUuid: string): Promise<Servicem8Material[]> { return []; }
   async updateServicem8Material(id: string, updates: Partial<InsertServicem8Material>): Promise<Servicem8Material> { throw new Error("Not implemented"); }
   async getAllServicem8Materials(): Promise<Servicem8Material[]> { return []; }
+
+  // ========================================
+  // DOCUMENT TEMPLATE MANAGEMENT
+  // ========================================
+
+  async createDocumentTemplate(template: InsertDocumentTemplate): Promise<DocumentTemplate> {
+    const [documentTemplate] = await db.insert(schema.documentTemplates).values(template).returning();
+    return documentTemplate;
+  }
+
+  async getDocumentTemplate(id: string): Promise<DocumentTemplate | undefined> {
+    const [documentTemplate] = await db.select().from(schema.documentTemplates).where(eq(schema.documentTemplates.id, id));
+    return documentTemplate;
+  }
+
+  async updateDocumentTemplate(id: string, updates: Partial<InsertDocumentTemplate>): Promise<DocumentTemplate> {
+    const [documentTemplate] = await db
+      .update(schema.documentTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.documentTemplates.id, id))
+      .returning();
+    return documentTemplate;
+  }
+
+  async deleteDocumentTemplate(id: string): Promise<void> {
+    await db.delete(schema.documentTemplates).where(eq(schema.documentTemplates.id, id));
+  }
+
+  async getAllDocumentTemplates(): Promise<DocumentTemplate[]> {
+    return await db.select().from(schema.documentTemplates).orderBy(schema.documentTemplates.type, schema.documentTemplates.name);
+  }
+
+  async getDocumentTemplatesByType(type: string): Promise<DocumentTemplate[]> {
+    return await db.select().from(schema.documentTemplates)
+      .where(and(eq(schema.documentTemplates.type, type), eq(schema.documentTemplates.isActive, true)))
+      .orderBy(schema.documentTemplates.name);
+  }
+
+  async getDefaultTemplate(type: string): Promise<DocumentTemplate | undefined> {
+    const [template] = await db.select().from(schema.documentTemplates)
+      .where(and(
+        eq(schema.documentTemplates.type, type),
+        eq(schema.documentTemplates.isDefault, true),
+        eq(schema.documentTemplates.isActive, true)
+      ));
+    return template;
+  }
+
+  // Template Sections Management
+  async createTemplateSection(section: InsertTemplateSection): Promise<TemplateSection> {
+    const [templateSection] = await db.insert(schema.templateSections).values(section).returning();
+    return templateSection;
+  }
+
+  async getTemplateSection(id: string): Promise<TemplateSection | undefined> {
+    const [templateSection] = await db.select().from(schema.templateSections).where(eq(schema.templateSections.id, id));
+    return templateSection;
+  }
+
+  async updateTemplateSection(id: string, updates: Partial<InsertTemplateSection>): Promise<TemplateSection> {
+    const [templateSection] = await db
+      .update(schema.templateSections)
+      .set(updates)
+      .where(eq(schema.templateSections.id, id))
+      .returning();
+    return templateSection;
+  }
+
+  async deleteTemplateSection(id: string): Promise<void> {
+    await db.delete(schema.templateSections).where(eq(schema.templateSections.id, id));
+  }
+
+  async getTemplateSectionsByTemplate(templateId: string): Promise<TemplateSection[]> {
+    return await db.select().from(schema.templateSections)
+      .where(eq(schema.templateSections.templateId, templateId))
+      .orderBy(schema.templateSections.sortOrder);
+  }
+
+  // Template Line Items Management
+  async createTemplateLineItem(lineItem: InsertTemplateLineItem): Promise<TemplateLineItem> {
+    const [templateLineItem] = await db.insert(schema.templateLineItems).values(lineItem).returning();
+    return templateLineItem;
+  }
+
+  async getTemplateLineItem(id: string): Promise<TemplateLineItem | undefined> {
+    const [templateLineItem] = await db.select().from(schema.templateLineItems).where(eq(schema.templateLineItems.id, id));
+    return templateLineItem;
+  }
+
+  async updateTemplateLineItem(id: string, updates: Partial<InsertTemplateLineItem>): Promise<TemplateLineItem> {
+    const [templateLineItem] = await db
+      .update(schema.templateLineItems)
+      .set(updates)
+      .where(eq(schema.templateLineItems.id, id))
+      .returning();
+    return templateLineItem;
+  }
+
+  async deleteTemplateLineItem(id: string): Promise<void> {
+    await db.delete(schema.templateLineItems).where(eq(schema.templateLineItems.id, id));
+  }
+
+  async getTemplateLineItemsByTemplate(templateId: string): Promise<TemplateLineItem[]> {
+    return await db.select().from(schema.templateLineItems)
+      .where(eq(schema.templateLineItems.templateId, templateId))
+      .orderBy(schema.templateLineItems.sortOrder);
+  }
+
+  async getTemplateLineItemsBySection(sectionId: string): Promise<TemplateLineItem[]> {
+    return await db.select().from(schema.templateLineItems)
+      .where(eq(schema.templateLineItems.sectionId, sectionId))
+      .orderBy(schema.templateLineItems.sortOrder);
+  }
+
+  // Template Photos Management
+  async createTemplatePhoto(photo: InsertTemplatePhoto): Promise<TemplatePhoto> {
+    const [templatePhoto] = await db.insert(schema.templatePhotos).values(photo).returning();
+    return templatePhoto;
+  }
+
+  async getTemplatePhoto(id: string): Promise<TemplatePhoto | undefined> {
+    const [templatePhoto] = await db.select().from(schema.templatePhotos).where(eq(schema.templatePhotos.id, id));
+    return templatePhoto;
+  }
+
+  async updateTemplatePhoto(id: string, updates: Partial<InsertTemplatePhoto>): Promise<TemplatePhoto> {
+    const [templatePhoto] = await db
+      .update(schema.templatePhotos)
+      .set(updates)
+      .where(eq(schema.templatePhotos.id, id))
+      .returning();
+    return templatePhoto;
+  }
+
+  async deleteTemplatePhoto(id: string): Promise<void> {
+    await db.delete(schema.templatePhotos).where(eq(schema.templatePhotos.id, id));
+  }
+
+  async getTemplatePhotosByTemplate(templateId: string): Promise<TemplatePhoto[]> {
+    return await db.select().from(schema.templatePhotos)
+      .where(eq(schema.templatePhotos.templateId, templateId))
+      .orderBy(schema.templatePhotos.sortOrder);
+  }
+
+  async getTemplatePhotosBySection(sectionId: string): Promise<TemplatePhoto[]> {
+    return await db.select().from(schema.templatePhotos)
+      .where(eq(schema.templatePhotos.sectionId, sectionId))
+      .orderBy(schema.templatePhotos.sortOrder);
+  }
+
+  // Generated Documents Management
+  async createGeneratedDocument(document: InsertGeneratedDocument): Promise<GeneratedDocument> {
+    const [generatedDocument] = await db.insert(schema.generatedDocuments).values(document).returning();
+    return generatedDocument;
+  }
+
+  async getGeneratedDocument(id: string): Promise<GeneratedDocument | undefined> {
+    const [generatedDocument] = await db.select().from(schema.generatedDocuments).where(eq(schema.generatedDocuments.id, id));
+    return generatedDocument;
+  }
+
+  async updateGeneratedDocument(id: string, updates: Partial<InsertGeneratedDocument>): Promise<GeneratedDocument> {
+    const [generatedDocument] = await db
+      .update(schema.generatedDocuments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.generatedDocuments.id, id))
+      .returning();
+    return generatedDocument;
+  }
+
+  async deleteGeneratedDocument(id: string): Promise<void> {
+    await db.delete(schema.generatedDocuments).where(eq(schema.generatedDocuments.id, id));
+  }
+
+  async getAllGeneratedDocuments(): Promise<GeneratedDocument[]> {
+    return await db.select().from(schema.generatedDocuments).orderBy(desc(schema.generatedDocuments.createdAt));
+  }
+
+  async getGeneratedDocumentsByJob(jobId: string): Promise<GeneratedDocument[]> {
+    return await db.select().from(schema.generatedDocuments)
+      .where(eq(schema.generatedDocuments.jobId, jobId))
+      .orderBy(desc(schema.generatedDocuments.createdAt));
+  }
+
+  async getGeneratedDocumentsByCustomer(customerId: string): Promise<GeneratedDocument[]> {
+    return await db.select().from(schema.generatedDocuments)
+      .where(eq(schema.generatedDocuments.customerId, customerId))
+      .orderBy(desc(schema.generatedDocuments.createdAt));
+  }
+
+  async getGeneratedDocumentsByType(type: string): Promise<GeneratedDocument[]> {
+    return await db.select().from(schema.generatedDocuments)
+      .where(eq(schema.generatedDocuments.documentType, type))
+      .orderBy(desc(schema.generatedDocuments.createdAt));
+  }
+
+  async getGeneratedDocumentsByStatus(status: string): Promise<GeneratedDocument[]> {
+    return await db.select().from(schema.generatedDocuments)
+      .where(eq(schema.generatedDocuments.status, status))
+      .orderBy(desc(schema.generatedDocuments.createdAt));
+  }
+
+  async generateDocumentNumber(type: string): Promise<string> {
+    // Get the latest document number for this type
+    const [latest] = await db.select({ documentNumber: schema.generatedDocuments.documentNumber })
+      .from(schema.generatedDocuments)
+      .where(ilike(schema.generatedDocuments.documentNumber, `${type.toUpperCase()}%`))
+      .orderBy(desc(schema.generatedDocuments.createdAt))
+      .limit(1);
+
+    if (!latest?.documentNumber) {
+      return `${type.toUpperCase()}#1001`;
+    }
+
+    // Extract number from document number (e.g., "QUOTE#1001" -> 1001)
+    const match = latest.documentNumber.match(/#(\d+)$/);
+    const currentNumber = match ? parseInt(match[1]) : 1000;
+    const nextNumber = currentNumber + 1;
+    
+    return `${type.toUpperCase()}#${nextNumber}`;
+  }
+
+  // Generated Document Line Items Management
+  async createGeneratedDocumentLineItem(lineItem: InsertGeneratedDocumentLineItem): Promise<GeneratedDocumentLineItem> {
+    const [generatedDocumentLineItem] = await db.insert(schema.generatedDocumentLineItems).values(lineItem).returning();
+    return generatedDocumentLineItem;
+  }
+
+  async getGeneratedDocumentLineItem(id: string): Promise<GeneratedDocumentLineItem | undefined> {
+    const [generatedDocumentLineItem] = await db.select().from(schema.generatedDocumentLineItems).where(eq(schema.generatedDocumentLineItems.id, id));
+    return generatedDocumentLineItem;
+  }
+
+  async updateGeneratedDocumentLineItem(id: string, updates: Partial<InsertGeneratedDocumentLineItem>): Promise<GeneratedDocumentLineItem> {
+    const [generatedDocumentLineItem] = await db
+      .update(schema.generatedDocumentLineItems)
+      .set(updates)
+      .where(eq(schema.generatedDocumentLineItems.id, id))
+      .returning();
+    return generatedDocumentLineItem;
+  }
+
+  async deleteGeneratedDocumentLineItem(id: string): Promise<void> {
+    await db.delete(schema.generatedDocumentLineItems).where(eq(schema.generatedDocumentLineItems.id, id));
+  }
+
+  async getGeneratedDocumentLineItemsByDocument(documentId: string): Promise<GeneratedDocumentLineItem[]> {
+    return await db.select().from(schema.generatedDocumentLineItems)
+      .where(eq(schema.generatedDocumentLineItems.generatedDocumentId, documentId))
+      .orderBy(schema.generatedDocumentLineItems.sortOrder);
+  }
+
+  // Generated Document Photos Management
+  async createGeneratedDocumentPhoto(photo: InsertGeneratedDocumentPhoto): Promise<GeneratedDocumentPhoto> {
+    const [generatedDocumentPhoto] = await db.insert(schema.generatedDocumentPhotos).values(photo).returning();
+    return generatedDocumentPhoto;
+  }
+
+  async getGeneratedDocumentPhoto(id: string): Promise<GeneratedDocumentPhoto | undefined> {
+    const [generatedDocumentPhoto] = await db.select().from(schema.generatedDocumentPhotos).where(eq(schema.generatedDocumentPhotos.id, id));
+    return generatedDocumentPhoto;
+  }
+
+  async updateGeneratedDocumentPhoto(id: string, updates: Partial<InsertGeneratedDocumentPhoto>): Promise<GeneratedDocumentPhoto> {
+    const [generatedDocumentPhoto] = await db
+      .update(schema.generatedDocumentPhotos)
+      .set(updates)
+      .where(eq(schema.generatedDocumentPhotos.id, id))
+      .returning();
+    return generatedDocumentPhoto;
+  }
+
+  async deleteGeneratedDocumentPhoto(id: string): Promise<void> {
+    await db.delete(schema.generatedDocumentPhotos).where(eq(schema.generatedDocumentPhotos.id, id));
+  }
+
+  async getGeneratedDocumentPhotosByDocument(documentId: string): Promise<GeneratedDocumentPhoto[]> {
+    return await db.select().from(schema.generatedDocumentPhotos)
+      .where(eq(schema.generatedDocumentPhotos.generatedDocumentId, documentId))
+      .orderBy(schema.generatedDocumentPhotos.sortOrder);
+  }
 }
 
 export const storage = new DatabaseStorage();
