@@ -645,6 +645,32 @@ export function GlobalJobCard({
     console.log("Call button clicked");
   };
 
+  // Quote action handlers
+  const convertToQuoteMutation = useMutation({
+    mutationFn: async (customData?: any) => {
+      if (!editingJob?.id) throw new Error("No job selected");
+      const response = await apiRequest('POST', `/api/jobs/${editingJob.id}/convert-to-quote`, { customData });
+      return response.json(); // Parse JSON once and return typed data
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Quote Created",
+        description: data.message || "Quote created successfully",
+      });
+      // Refresh job data
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      console.log("Quote created:", data);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create quote",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Invoice action handlers
   const convertToInvoiceMutation = useMutation({
     mutationFn: async (invoiceData: { invoiceType: 'full' | 'partial'; customData?: any }) => {
@@ -836,12 +862,13 @@ export function GlobalJobCard({
     if (!editingJob) return;
     
     try {
-      // TODO: Implement quote generation API call similar to convertToInvoiceMutation
-      toast({
-        title: "Quote Generated",
-        description: "Quote has been generated from job details!",
-      });
-      console.log("Generate Quote - job converted to quote");
+      // Convert job to quote using the new API
+      const quoteData = await convertToQuoteMutation.mutateAsync({});
+      
+      // Store the fresh quote data for preview/email functionality
+      setCurrentQuoteData(quoteData);
+      
+      console.log("Generate Quote - job converted to quote:", quoteData);
     } catch (error) {
       console.error("Error in handleGenerateQuote:", error);
     }
@@ -1011,6 +1038,7 @@ export function GlobalJobCard({
       subtotal: 0,
       taxAmount: 0,
       totalAmount: 0,
+      description: editingJob.description || 'Tree removal service', // Add job description to quote
       createdAt: new Date(),
       updatedAt: new Date(),
       customerId: selectedCustomer.id,
