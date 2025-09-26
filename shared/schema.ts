@@ -497,6 +497,11 @@ export const jobs = pgTable("jobs", {
   permitRequired: boolean("permit_required").default(false),
   insuranceClaim: boolean("insurance_claim").default(false),
   rescheduledReason: text("rescheduled_reason"),
+  
+  // Fresh Start Metrics - Only jobs created after implementation count toward business metrics
+  metricsEligible: boolean("metrics_eligible").default(false),
+  metricsStartDate: timestamp("metrics_start_date"), // Date when clean metrics tracking began
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
