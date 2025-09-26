@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Archive, 
   Search, 
@@ -15,11 +16,13 @@ import {
   ChevronRight,
   ChevronUp,
   Hammer,
-  FileText
+  FileText,
+  Upload
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Customer } from "@shared/schema";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { JobCSVUpload } from "@/components/JobCSVUpload";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -40,6 +43,7 @@ export default function History() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isJobCardOpen, setIsJobCardOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("history");
 
   // Fetch all jobs
   const { data: jobsResponse, isLoading: jobsLoading } = useQuery<ApiResponse<Job>>({
