@@ -95,6 +95,19 @@ export interface IStorage {
   clearAllCustomers(): Promise<number>;
   searchCustomers(query: string): Promise<Customer[]>;
   
+  // Complete database wipe methods
+  clearAllQuotes(): Promise<number>;
+  clearAllLeads(): Promise<number>;
+  clearAllCommunications(): Promise<number>;
+  clearAllActivities(): Promise<number>;
+  clearAllJobDiaryEntries(): Promise<number>;
+  clearAllProposals(): Promise<number>;
+  clearAllInvoices(): Promise<number>;
+  clearAllPhotos(): Promise<number>;
+  clearAllCalls(): Promise<number>;
+  clearAllServiceM8Data(): Promise<{ [key: string]: number }>;
+  completeDataWipe(): Promise<{ [key: string]: number }>;
+  
   // Customer Import Batch Management
   createCustomerImportBatch(batch: InsertCustomerImportBatch): Promise<CustomerImportBatch>;
   getCustomerImportBatch(id: string): Promise<CustomerImportBatch | undefined>;
@@ -1223,6 +1236,132 @@ class DatabaseStorage implements IStorage {
   async clearAllJobs(): Promise<number> {
     const result = await db.delete(schema.jobs);
     return result.rowCount || 0;
+  }
+
+  // Complete database wipe methods for Option A
+  async clearAllQuotes(): Promise<number> {
+    const result = await db.delete(schema.quotes);
+    return result.rowCount || 0;
+  }
+
+  async clearAllLeads(): Promise<number> {
+    const result = await db.delete(schema.leads);
+    return result.rowCount || 0;
+  }
+
+  async clearAllCommunications(): Promise<number> {
+    const result = await db.delete(schema.communications);
+    return result.rowCount || 0;
+  }
+
+  async clearAllActivities(): Promise<number> {
+    const result = await db.delete(schema.activities);
+    return result.rowCount || 0;
+  }
+
+  async clearAllJobDiaryEntries(): Promise<number> {
+    const result = await db.delete(schema.jobDiaryEntries);
+    return result.rowCount || 0;
+  }
+
+  async clearAllProposals(): Promise<number> {
+    // Clear related tables first (foreign key constraints)
+    await db.delete(schema.proposalLineItemChoices);
+    await db.delete(schema.proposalLineItems);
+    await db.delete(schema.proposalSections);
+    const result = await db.delete(schema.proposals);
+    return result.rowCount || 0;
+  }
+
+  async clearAllInvoices(): Promise<number> {
+    const result = await db.delete(schema.invoices);
+    return result.rowCount || 0;
+  }
+
+  async clearAllPhotos(): Promise<number> {
+    const result = await db.delete(schema.photos);
+    return result.rowCount || 0;
+  }
+
+  async clearAllCalls(): Promise<number> {
+    const result = await db.delete(schema.calls);
+    return result.rowCount || 0;
+  }
+
+  // ServiceM8 data clearing methods
+  async clearAllServiceM8Data(): Promise<{ [key: string]: number }> {
+    const results = {
+      importStatus: 0,
+      jobs: 0,
+      diaryEntries: 0,
+      quotes: 0,
+      companies: 0,
+      materials: 0,
+      invoices: 0,
+      config: 0
+    };
+
+    try {
+      results.importStatus = (await db.delete(schema.servicem8ImportStatus)).rowCount || 0;
+      results.jobs = (await db.delete(schema.servicem8Jobs)).rowCount || 0;
+      results.diaryEntries = (await db.delete(schema.servicem8DiaryEntries)).rowCount || 0;
+      results.quotes = (await db.delete(schema.servicem8Quotes)).rowCount || 0;
+      results.companies = (await db.delete(schema.servicem8Companies)).rowCount || 0;
+      results.materials = (await db.delete(schema.servicem8Materials)).rowCount || 0;
+      results.invoices = (await db.delete(schema.servicem8Invoices)).rowCount || 0;
+      results.config = (await db.delete(schema.servicem8Config)).rowCount || 0;
+    } catch (error) {
+      console.error('Error clearing ServiceM8 data:', error);
+    }
+
+    return results;
+  }
+
+  // Complete database wipe - Option A implementation
+  async completeDataWipe(): Promise<{ [key: string]: number }> {
+    const results = {
+      serviceM8Data: {},
+      proposals: 0,
+      photos: 0,
+      invoices: 0,
+      calls: 0,
+      jobDiaryEntries: 0,
+      activities: 0,
+      communications: 0,
+      jobs: 0,
+      quotes: 0,
+      leads: 0,
+      customers: 0
+    };
+
+    try {
+      console.log('🧹 Starting complete database wipe (Option A)...');
+      
+      // Clear ServiceM8 data first
+      results.serviceM8Data = await this.clearAllServiceM8Data();
+      console.log('✅ ServiceM8 data cleared');
+
+      // Clear related data in dependency order (foreign key constraints)
+      results.proposals = await this.clearAllProposals();
+      results.photos = await this.clearAllPhotos();
+      results.invoices = await this.clearAllInvoices();
+      results.calls = await this.clearAllCalls();
+      results.jobDiaryEntries = await this.clearAllJobDiaryEntries();
+      results.activities = await this.clearAllActivities();
+      results.communications = await this.clearAllCommunications();
+      
+      // Clear main business data
+      results.jobs = await this.clearAllJobs();
+      results.quotes = await this.clearAllQuotes();
+      results.leads = await this.clearAllLeads();
+      results.customers = await this.clearAllCustomers();
+
+      console.log('🎉 Complete database wipe finished successfully:', results);
+      return results;
+    } catch (error) {
+      console.error('❌ Error during complete database wipe:', error);
+      throw error;
+    }
   }
 
   // Sequential Job Number Generation
