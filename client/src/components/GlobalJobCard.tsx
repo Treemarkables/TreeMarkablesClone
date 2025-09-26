@@ -17,6 +17,7 @@ import { EmailComposerModal } from "./EmailComposerModal";
 import { SMSComposerModal } from "./SMSComposerModal";
 import { ServiceM8HeaderToolbar } from "./ServiceM8HeaderToolbar";
 import { ServiceM8ActivityFeed } from "./ServiceM8ActivityFeed";
+import { InvoiceTemplate } from "./InvoiceTemplate";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -669,6 +670,7 @@ export function GlobalJobCard({
   });
 
   const [currentInvoiceData, setCurrentInvoiceData] = useState<any>(null);
+  const [showInvoicePreview, setShowInvoicePreview] = useState(false);
 
   const handleSendInvoice = async () => {
     if (!editingJob) return;
@@ -773,12 +775,8 @@ export function GlobalJobCard({
     try {
       await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
       
-      toast({
-        title: "Customise Invoice",
-        description: "Invoice created. Opening customization interface...",
-      });
-      console.log("Customise Invoice - job converted, opening editor");
-      // TODO: Open invoice customization modal
+      console.log("Customise Invoice - job converted, opening preview");
+      setShowInvoicePreview(true);
     } catch (error) {
       console.error("Error in handleCustomiseInvoice:", error);
     }
@@ -828,6 +826,98 @@ export function GlobalJobCard({
     } catch (error) {
       console.error("Error in handlePartialInvoice:", error);
     }
+  };
+
+  // Prepare data for invoice preview
+  const getInvoicePreviewData = () => {
+    if (!editingJob || !selectedCustomer) return null;
+    
+    // Mock invoice template data
+    const previewTemplate = {
+      id: 'preview-template',
+      name: 'Invoice Template',
+      type: 'invoice',
+      description: null,
+      isDefault: true,
+      isActive: true,
+      companyName: 'Treemarkables',
+      companyPhone: '+64 6 867 1234',
+      companyEmail: 'info@treemarkables.co.nz',
+      companyAddress: 'Gisborne, New Zealand',
+      paymentTerms: 'Payment due within 7 days',
+      gstNumber: '131-047-592-GST004',
+      headerLayout: null,
+      footerText: null,
+      styles: null,
+      logoUrl: null,
+      logoPosition: null,
+      primaryColor: null,
+      secondaryColor: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Mock invoice data
+    const previewInvoice = {
+      id: 'preview-' + Date.now(),
+      invoiceNumber: editingJob.jobNumber?.replace('JOB-', 'INV-') || 'INV-PREVIEW',
+      status: 'draft',
+      issueDate: new Date().toISOString().split('T')[0],
+      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days from now
+      subtotal: 0,
+      taxAmount: 0,
+      totalAmount: 0,
+      paidAmount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      customerId: selectedCustomer.id,
+      jobId: editingJob.id,
+      templateId: 'preview-template',
+      paymentTerms: 'Payment due within 7 days',
+      notes: editingJob.notes || '',
+      paymentStatus: 'unpaid',
+      currency: 'NZD',
+      taxRate: 15
+    } as any;
+
+    // Convert job line items to invoice line items
+    const previewLineItems = editingJob.lineItems ? editingJob.lineItems.map((item: any, index: number) => ({
+      id: `item-${index}`,
+      description: item.description || 'Tree removal service',
+      quantity: item.quantity || 1,
+      unitPrice: item.unitPrice || 0,
+      total: (item.quantity || 1) * (item.unitPrice || 0), // Use 'total' property for InvoiceTemplate
+      taxable: true,
+      invoiceId: previewInvoice.id,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    })) : [{
+      id: 'item-1',
+      description: editingJob.description || 'Tree removal service',
+      quantity: 1,
+      unitPrice: 500,
+      total: 500, // Use 'total' property for InvoiceTemplate
+      taxable: true,
+      invoiceId: previewInvoice.id,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }];
+
+    // Calculate totals
+    const subtotal = previewLineItems.reduce((sum: number, item: any) => sum + item.total, 0);
+    const taxAmount = subtotal * 0.15; // 15% GST
+    const totalAmount = subtotal + taxAmount;
+
+    previewInvoice.subtotal = subtotal;
+    previewInvoice.taxAmount = taxAmount;
+    previewInvoice.totalAmount = totalAmount;
+
+    return {
+      invoice: previewInvoice,
+      template: previewTemplate,
+      customer: selectedCustomer,
+      lineItems: previewLineItems
+    };
   };
 
   // Save schedule function
@@ -1666,7 +1756,7 @@ export function GlobalJobCard({
                     <SelectValue placeholder="Select staff member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {employeesData && Array.isArray(employeesData.data) ? employeesData.data.map((employee: any) => (
+                    {employeesData && Array.isArray((employeesData as any)?.data) ? (employeesData as any).data.map((employee: any) => (
                       <SelectItem key={employee.id} value={employee.id}>
                         {employee.firstName} {employee.lastName}
                       </SelectItem>
@@ -1718,6 +1808,31 @@ export function GlobalJobCard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Invoice Preview Modal */}
+      {showInvoicePreview && (
+        <Dialog open={showInvoicePreview} onOpenChange={setShowInvoicePreview}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+            <DialogHeader>
+              <h2 className="text-lg font-semibold">Invoice Preview</h2>
+            </DialogHeader>
+            {(() => {
+              const previewData = getInvoicePreviewData();
+              if (!previewData) {
+                return <div className="p-4 text-center text-gray-500">Unable to generate invoice preview</div>;
+              }
+              return (
+                <InvoiceTemplate
+                  invoice={previewData.invoice}
+                  template={previewData.template}
+                  customer={previewData.customer}
+                  lineItems={previewData.lineItems}
+                />
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   );
 }
