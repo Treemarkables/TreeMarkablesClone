@@ -1603,7 +1603,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             />
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
             {getTodaysJobs().map((job, index) => {
               const customerName = job.customerName || 'Unknown Customer';
