@@ -98,6 +98,26 @@ export function CustomerCSVUpload() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Function to toggle willUpdate for individual customer
+  const toggleCustomerUpdate = (index: number) => {
+    if (!matchingResult) return;
+    
+    const updatedMatches = matchingResult.matches.map((match, i) => {
+      if (i === index) {
+        return { ...match, willUpdate: !match.willUpdate };
+      }
+      return match;
+    });
+    
+    const newWillUpdateCount = updatedMatches.filter(match => match.willUpdate).length;
+    
+    setMatchingResult({
+      ...matchingResult,
+      matches: updatedMatches,
+      willUpdateCount: newWillUpdateCount
+    });
+  };
+
   // CSV parsing and matching mutation
   const parseAndMatchMutation = useMutation({
     mutationFn: async (file: File): Promise<MatchingResult> => {
@@ -540,11 +560,19 @@ export function CustomerCSVUpload() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {match.willUpdate ? (
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <X className="w-4 h-4 text-red-500" />
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleCustomerUpdate(index)}
+                            data-testid={`button-toggle-update-${index}`}
+                            className="h-8 w-8 p-0"
+                          >
+                            {match.willUpdate ? (
+                              <CheckCircle className="w-4 h-4 text-green-500" />
+                            ) : (
+                              <X className="w-4 h-4 text-red-500" />
+                            )}
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

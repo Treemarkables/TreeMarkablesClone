@@ -899,10 +899,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       // Read and parse the CSV file
       const csvContent = fs.readFileSync(req.file.path, 'utf8');
+      
+      // Enhanced CSV parsing with better delimiter detection
       const parsedCsv = Papa.parse(csvContent, {
         header: true,
         skipEmptyLines: true,
         transformHeader: (header) => header.trim(),
+        delimiter: "", // Auto-detect delimiter
+        newline: "", // Auto-detect line endings
+        quoteChar: '"',
+        escapeChar: '"',
+        comments: false,
+        skipFirstNLines: 0,
+        delimitersToGuess: [',', '\t', '|', ';', Papa.RECORD_SEP, Papa.UNIT_SEP]
       });
 
       if (parsedCsv.errors.length > 0) {
@@ -7682,9 +7691,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       for (const csvJob of jobs) {
         try {
+          // Type the CSV job data for proper TypeScript handling
+          const jobData = csvJob as any;
+          
           // Find customer by name (or create if needed)
-          const customerName = (csvJob.customerName || csvJob.companyName || csvJob.company || csvJob['Company'] || csvJob['Customer Name'] || csvJob['Company Name'] || 
-                              csvJob.client || csvJob.Client || csvJob.customer || csvJob.Customer || '').trim();
+          const customerName = (jobData.customerName || jobData.companyName || jobData.company || jobData['Company'] || jobData['Customer Name'] || jobData['Company Name'] || 
+                              jobData.client || jobData.Client || jobData.customer || jobData.Customer || '').trim();
           
           let customer = customerByName.get(customerName.toLowerCase());
 
@@ -7692,44 +7704,43 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             // Create new customer if not found
             customer = await storage.createCustomer({
               name: customerName,
-              email: csvJob.customerEmail || csvJob.email || '',
-              phone: csvJob.customerPhone || csvJob.phone || '',
-              address: csvJob.customerAddress || csvJob.address || ''
+              email: jobData.customerEmail || jobData.email || '',
+              phone: jobData.customerPhone || jobData.phone || '',
+              address: jobData.customerAddress || jobData.address || ''
             });
             customerByName.set(customerName.toLowerCase(), customer);
           }
 
           // If still no customer, create a default one based on job info
           if (!customer) {
-            const defaultCustomerName = `Customer for Job ${csvJob.jobNumber || csvJob['Job Number'] || `JOB-${Date.now()}`}`;
+            const defaultCustomerName = `Customer for Job ${jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`}`;
             customer = await storage.createCustomer({
               name: defaultCustomerName,
-              email: csvJob.customerEmail || csvJob.email || '',
-              phone: csvJob.customerPhone || csvJob.phone || '',
-              address: csvJob.customerAddress || csvJob.address || csvJob.location || ''
+              email: jobData.customerEmail || jobData.email || '',
+              phone: jobData.customerPhone || jobData.phone || '',
+              address: jobData.customerAddress || jobData.address || jobData.location || ''
             });
             customerByName.set(defaultCustomerName.toLowerCase(), customer);
           }
 
           // Create job with proper field mapping
           // Ensure address is never null/undefined by explicitly checking and providing fallback
-          const jobAddress = csvJob.location || csvJob.address || csvJob.customerAddress || csvJob.jobAddress || '';
+          const jobAddress = jobData.location || jobData.address || jobData.customerAddress || jobData.jobAddress || '';
           const safeAddress = (jobAddress && jobAddress.trim()) ? jobAddress.trim() : 'Address not specified';
           
           const newJob = await storage.createJob({
-            jobNumber: csvJob.jobNumber || csvJob['Job Number'] || `JOB-${Date.now()}`,
-            title: csvJob.title || csvJob.description || csvJob.Description || 'Imported Job',
-            description: csvJob.description || csvJob.Description || csvJob.notes || '',
+            jobNumber: jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`,
+            title: jobData.title || jobData.description || jobData.Description || 'Imported Job',
+            description: jobData.description || jobData.Description || jobData.notes || '',
             customerId: customer.id,
-            status: csvJob.status || 'pending',
-            priority: csvJob.priority || 'medium',
-            scheduledDate: csvJob.scheduledDate || csvJob['Scheduled Date'] || null,
-            estimatedValue: parseFloat(csvJob.estimatedValue || csvJob.value || '0') || 0,
+            status: jobData.status || 'pending',
+            priority: jobData.priority || 'medium',
+            scheduledDate: jobData.scheduledDate || jobData['Scheduled Date'] || null,
             address: safeAddress,
-            duration: parseInt(csvJob.duration || '60') || 60,
-            teamMembers: csvJob.teamMembers ? csvJob.teamMembers.split(',').map((m: string) => m.trim()) : [],
-            equipment: csvJob.equipment ? csvJob.equipment.split(',').map((e: string) => e.trim()) : [],
-            servicem8Uuid: csvJob.servicem8Uuid || csvJob['ServiceM8 UUID'] || null
+            duration: parseInt(jobData.duration || '60') || 60,
+            assignedTeam: jobData.teamMembers ? jobData.teamMembers.split(',').map((m: string) => m.trim()) : [],
+            equipment: jobData.equipment ? jobData.equipment.split(',').map((e: string) => e.trim()) : [],
+            servicem8Uuid: jobData.servicem8Uuid || jobData['ServiceM8 UUID'] || null
           });
 
           importedJobIds.push(newJob.id);
