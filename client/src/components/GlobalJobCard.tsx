@@ -863,7 +863,12 @@ export function GlobalJobCard({
     if (!editingJob) return;
     
     try {
-      // Generate quote data and open email composer
+      // Generate quote data and set current quote data for email composer
+      const quotePreviewData = getQuotePreviewData();
+      if (quotePreviewData) {
+        setCurrentQuoteData(quotePreviewData.quote);
+      }
+      
       console.log("Send Quote - opening email composer with quote");
       setIsEmailComposerOpen(true);
       toast({
@@ -1830,6 +1835,8 @@ export function GlobalJobCard({
         job={editingJob}
         customer={customers.find((c: any) => c.id === editingJob?.customerId)}
         invoiceData={currentInvoiceData}
+        quoteData={currentQuoteData}
+        templateType={currentInvoiceData ? 'invoice' : currentQuoteData ? 'quote' : undefined}
       />
 
       {/* SMS Composer Modal */}
