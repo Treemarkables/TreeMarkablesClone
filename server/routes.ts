@@ -7674,10 +7674,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const existingCustomers = await storage.getAllCustomers();
       const customerByName = new Map(existingCustomers.map(c => [c.name.toLowerCase().trim(), c]));
 
-      console.log('=== CSV STRUCTURE DEBUG ===');
-      console.log('Available CSV fields:', Object.keys(jobs[0] || {}));
-      console.log('First row sample data:', jobs[0]);
-      console.log('=========================');
+      console.log('\n🔥🔥🔥 CSV IMPORT STARTING 🔥🔥🔥');
+      console.log('📊 Total jobs to import:', jobs.length);
+      console.log('📋 CSV Column Headers:', Object.keys(jobs[0] || {}));
+      console.log('📝 Sample Row Data:', jobs[0]);
+      console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
 
       for (const csvJob of jobs) {
         try {
@@ -7720,7 +7721,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             priority: csvJob.priority || 'medium',
             scheduledDate: csvJob.scheduledDate || csvJob['Scheduled Date'] || null,
             estimatedValue: parseFloat(csvJob.estimatedValue || csvJob.value || '0') || 0,
-            location: csvJob.location || csvJob.address || 'Address not specified',
+            address: csvJob.location || csvJob.address || 'Address not specified',
             duration: parseInt(csvJob.duration || '60') || 60,
             teamMembers: csvJob.teamMembers ? csvJob.teamMembers.split(',').map((m: string) => m.trim()) : [],
             equipment: csvJob.equipment ? csvJob.equipment.split(',').map((e: string) => e.trim()) : [],
