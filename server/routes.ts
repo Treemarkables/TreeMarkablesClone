@@ -7674,6 +7674,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const existingCustomers = await storage.getAllCustomers();
       const customerByName = new Map(existingCustomers.map(c => [c.name.toLowerCase().trim(), c]));
 
+      console.log('Sample CSV row fields:', Object.keys(jobs[0] || {}));
+      console.log('First few CSV rows:', jobs.slice(0, 3));
+
       for (const csvJob of jobs) {
         try {
           // Find customer by name (or create if needed)
