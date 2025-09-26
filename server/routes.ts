@@ -2258,6 +2258,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      // Get default invoice template
+      const defaultTemplate = await storage.getDefaultTemplate('invoice');
+
       // Generate invoice number
       const today = new Date();
       const invoiceNumber = `INV-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${Date.now().toString().slice(-6)}`;
@@ -2268,12 +2271,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         amount = amount * (parseFloat(customData.percentage) / 100);
       }
 
-      // Calculate due date (default 30 days from now)
+      // Calculate due date based on template or default to 30 days
       const issueDate = new Date();
       const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + 30);
+      const defaultDueDays = 30; // fallback to 30 days
+      dueDate.setDate(dueDate.getDate() + defaultDueDays);
 
-      // Create invoice data
+      // Transform job line items to invoice format (unitPrice -> rate, total -> amount)
+      const transformedLineItems = job.lineItems ? job.lineItems.map((item: any) => ({
+        description: item.description,
+        quantity: item.quantity,
+        rate: item.unitPrice || item.rate || 0, // Handle both unitPrice (jobs) and rate (invoices)
+        amount: item.total || item.amount || (item.quantity * (item.unitPrice || item.rate || 0))
+      })) : [];
+
+      // Create invoice data with template integration and job description
       const invoiceData = {
         customerId: job.customerId!,
         jobId: job.id,
@@ -2283,9 +2295,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         dueDate,
         amount: amount.toString(),
         status: 'draft' as const,
-        description: `Invoice for ${job.title || 'tree service'}`,
-        items: job.lineItems || [],
-        notes: customData.notes || ''
+        description: job.description || `Invoice for ${job.title || 'tree service'}`, // Use job description
+        items: transformedLineItems,
+        notes: customData.notes || '',
+        templateId: defaultTemplate?.id || null,
+        paymentTerms: defaultTemplate?.paymentTerms || 'Payment due within 30 days'
       };
 
       // Create the invoice
@@ -2330,6 +2344,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      // Get default quote template
+      const defaultTemplate = await storage.getDefaultTemplate('quote');
+
       // Generate quote number
       const today = new Date();
       const quoteNumber = `Q-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${Date.now().toString().slice(-6)}`;
@@ -2342,14 +2359,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + 30);
 
-      // Create quote data using job description
+      // Transform job line items to quote format (consistent with jobs schema)
+      const transformedLineItems = job.lineItems ? job.lineItems.map((item: any) => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice || item.rate || 0, // Handle both formats
+        total: item.total || item.amount || (item.quantity * (item.unitPrice || item.rate || 0))
+      })) : [];
+
+      // Create quote data using job description and template properties
       const quoteData = {
         customerId: job.customerId!,
         quoteNumber,
         status: 'draft' as const,
         description: job.description || `Quote for ${job.title || 'tree service'}`, // Use job description
         amount: (amount * 1.15).toString(), // Total amount as string (required field)
-        terms: 'Quote valid for 30 days. GST included.'
+        lineItems: transformedLineItems, // Include transformed line items
+        terms: defaultTemplate?.paymentTerms || 'Quote valid for 30 days. GST included.',
+        templateId: defaultTemplate?.id || null
       };
 
       // Create the quote

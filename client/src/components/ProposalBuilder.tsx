@@ -110,6 +110,18 @@ export function ProposalBuilder({
 }: ProposalBuilderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch default proposal template
+  const { data: proposalTemplateData } = useQuery({
+    queryKey: ['/api/templates/default/proposal'],
+    enabled: isOpen,
+  });
+
+  // Fetch job data to inherit job description and line items
+  const { data: jobData } = useQuery({
+    queryKey: ['/api/jobs', jobId],
+    enabled: !!jobId && isOpen,
+  });
   
   // Form state
   const form = useForm({
@@ -126,6 +138,47 @@ export function ProposalBuilder({
       deliveryMethod: "email" as const,
     },
   });
+
+  // Initialize proposal with job data when available
+  useEffect(() => {
+    if (jobData && (jobData as any)?.success && (jobData as any)?.data && isOpen) {
+      const job = (jobData as any).data;
+      
+      // Update form with job information
+      form.setValue('title', job.title || 'Tree Service Proposal');
+      form.setValue('description', job.description || '');
+      form.setValue('customerId', job.customerId || customerId || '');
+      
+      // Initialize sections with job description and line items
+      const initialSection: ProposalSectionData = {
+        id: 'section-1',
+        title: job.serviceType || 'Tree Removal Services',
+        description: job.description || '',
+        photos: [],
+        lineItems: job.lineItems ? job.lineItems.map((item: any, index: number) => ({
+          id: item.id || `job-item-${index}`,
+          description: item.description,
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice || 0,
+          totalPrice: item.total || (item.quantity || 1) * (item.unitPrice || 0),
+          unit: item.unit || 'each',
+          category: item.category || 'service',
+          notes: item.notes || '',
+          isOptional: false,
+          selected: true,
+          pricingType: 'normal' as const,
+          choices: [],
+          selectedChoiceId: undefined,
+          fixedPrice: undefined,
+        })) : [],
+        sortOrder: 1
+      };
+      
+      setSections([initialSection]);
+      
+      console.log('Proposal initialized with job data:', job);
+    }
+  }, [jobData, isOpen, form, customerId]);
 
   // Component state - sections-based approach
   const [sections, setSections] = useState<ProposalSectionData[]>([
@@ -614,8 +667,9 @@ export function ProposalBuilder({
       deliveryMethod: 'email'
     } as any;
 
-    // Mock template data
-    const previewTemplate = {
+    // Use real template data from API, fallback to mock data
+    const defaultProposalTemplate = (proposalTemplateData as any)?.success ? (proposalTemplateData as any).data : null;
+    const previewTemplate = defaultProposalTemplate || {
       id: 'preview-template',
       name: 'Preview Template',
       type: 'proposal',

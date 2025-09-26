@@ -148,6 +148,18 @@ export function GlobalJobCard({
     enabled: isOpen,
   });
 
+  // Fetch default invoice template
+  const { data: invoiceTemplateData } = useQuery({
+    queryKey: ['/api/templates/default/invoice'],
+    enabled: isOpen,
+  });
+
+  // Fetch default quote template
+  const { data: quoteTemplateData } = useQuery({
+    queryKey: ['/api/templates/default/quote'],
+    enabled: isOpen,
+  });
+
   // Fetch all jobs for address lookup
   const { data: jobsData } = useQuery({
     queryKey: ['/api/jobs'],
@@ -911,8 +923,9 @@ export function GlobalJobCard({
   const getInvoicePreviewData = () => {
     if (!editingJob || !selectedCustomer) return null;
     
-    // Mock invoice template data
-    const previewTemplate = {
+    // Use real template data from API, fallback to mock data
+    const defaultInvoiceTemplate = invoiceTemplateData?.data;
+    const previewTemplate = defaultInvoiceTemplate || {
       id: 'preview-template',
       name: 'Invoice Template',
       type: 'invoice',
@@ -936,7 +949,7 @@ export function GlobalJobCard({
       updatedAt: new Date()
     };
 
-    // Mock invoice data
+    // Invoice data with job description integration
     const previewInvoice = {
       id: 'preview-' + Date.now(),
       invoiceNumber: editingJob.jobNumber?.replace('JOB-', 'INV-') || 'INV-PREVIEW',
@@ -951,8 +964,9 @@ export function GlobalJobCard({
       updatedAt: new Date(),
       customerId: selectedCustomer.id,
       jobId: editingJob.id,
-      templateId: 'preview-template',
-      paymentTerms: 'Payment due within 7 days',
+      templateId: previewTemplate.id,
+      paymentTerms: previewTemplate.paymentTerms || 'Payment due within 7 days',
+      description: editingJob.description || 'Tree removal service', // Add job description to invoice
       notes: editingJob.notes || '',
       paymentStatus: 'unpaid',
       currency: 'NZD',
@@ -1003,8 +1017,9 @@ export function GlobalJobCard({
   const getQuotePreviewData = () => {
     if (!editingJob || !selectedCustomer) return null;
     
-    // Mock quote template data
-    const previewTemplate = {
+    // Use real template data from API, fallback to mock data
+    const defaultQuoteTemplate = quoteTemplateData?.data;
+    const previewTemplate = defaultQuoteTemplate || {
       id: 'preview-template',
       name: 'Quote Template',
       type: 'quote',
@@ -1028,7 +1043,7 @@ export function GlobalJobCard({
       updatedAt: new Date()
     };
 
-    // Mock quote data
+    // Quote data with template integration
     const previewQuote = {
       id: 'preview-' + Date.now(),
       quoteNumber: editingJob.jobNumber?.replace('JOB-', 'QTE-') || 'QTE-PREVIEW',
@@ -1043,8 +1058,8 @@ export function GlobalJobCard({
       updatedAt: new Date(),
       customerId: selectedCustomer.id,
       jobId: editingJob.id,
-      templateId: 'preview-template',
-      terms: 'Quote valid for 30 days. GST included.',
+      templateId: previewTemplate.id,
+      terms: previewTemplate.paymentTerms || 'Quote valid for 30 days. GST included.',
       notes: editingJob.notes || '',
       validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     } as any;
