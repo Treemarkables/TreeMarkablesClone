@@ -18,6 +18,7 @@ import { SMSComposerModal } from "./SMSComposerModal";
 import { ServiceM8HeaderToolbar } from "./ServiceM8HeaderToolbar";
 import { ServiceM8ActivityFeed } from "./ServiceM8ActivityFeed";
 import { InvoiceTemplate } from "./InvoiceTemplate";
+import { QuoteTemplate } from "./QuoteTemplate";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -671,6 +672,8 @@ export function GlobalJobCard({
 
   const [currentInvoiceData, setCurrentInvoiceData] = useState<any>(null);
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
+  const [currentQuoteData, setCurrentQuoteData] = useState<any>(null);
+  const [showQuotePreview, setShowQuotePreview] = useState(false);
 
   const handleSendInvoice = async () => {
     if (!editingJob) return;
@@ -828,6 +831,50 @@ export function GlobalJobCard({
     }
   };
 
+  // Quote action handlers
+  const handleGenerateQuote = async () => {
+    if (!editingJob) return;
+    
+    try {
+      // TODO: Implement quote generation API call similar to convertToInvoiceMutation
+      toast({
+        title: "Quote Generated",
+        description: "Quote has been generated from job details!",
+      });
+      console.log("Generate Quote - job converted to quote");
+    } catch (error) {
+      console.error("Error in handleGenerateQuote:", error);
+    }
+  };
+
+  const handleCustomiseQuote = async () => {
+    if (!editingJob) return;
+    
+    try {
+      // Show quote preview directly (no API call needed for preview)
+      console.log("Customise Quote - opening quote preview");
+      setShowQuotePreview(true);
+    } catch (error) {
+      console.error("Error in handleCustomiseQuote:", error);
+    }
+  };
+
+  const handleSendQuote = async () => {
+    if (!editingJob) return;
+    
+    try {
+      // Generate quote data and open email composer
+      console.log("Send Quote - opening email composer with quote");
+      setIsEmailComposerOpen(true);
+      toast({
+        title: "Send Quote",
+        description: "Opening email composer with quote...",
+      });
+    } catch (error) {
+      console.error("Error in handleSendQuote:", error);
+    }
+  };
+
   // Prepare data for invoice preview
   const getInvoicePreviewData = () => {
     if (!editingJob || !selectedCustomer) return null;
@@ -920,6 +967,97 @@ export function GlobalJobCard({
     };
   };
 
+  // Prepare data for quote preview
+  const getQuotePreviewData = () => {
+    if (!editingJob || !selectedCustomer) return null;
+    
+    // Mock quote template data
+    const previewTemplate = {
+      id: 'preview-template',
+      name: 'Quote Template',
+      type: 'quote',
+      description: null,
+      isDefault: true,
+      isActive: true,
+      companyName: 'Treemarkables',
+      companyPhone: '+64 6 867 1234',
+      companyEmail: 'info@treemarkables.co.nz',
+      companyAddress: 'Gisborne, New Zealand',
+      paymentTerms: 'Quote valid for 30 days',
+      gstNumber: '131-047-592-GST004',
+      headerLayout: null,
+      footerText: null,
+      styles: null,
+      logoUrl: null,
+      logoPosition: null,
+      primaryColor: null,
+      secondaryColor: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Mock quote data
+    const previewQuote = {
+      id: 'preview-' + Date.now(),
+      quoteNumber: editingJob.jobNumber?.replace('JOB-', 'QTE-') || 'QTE-PREVIEW',
+      status: 'draft',
+      issueDate: new Date().toISOString().split('T')[0],
+      expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+      subtotal: 0,
+      taxAmount: 0,
+      totalAmount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      customerId: selectedCustomer.id,
+      jobId: editingJob.id,
+      templateId: 'preview-template',
+      terms: 'Quote valid for 30 days. GST included.',
+      notes: editingJob.notes || '',
+      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    } as any;
+
+    // Convert job line items to quote line items
+    const previewLineItems = editingJob.lineItems ? editingJob.lineItems.map((item: any, index: number) => ({
+      id: `item-${index}`,
+      description: item.description || 'Tree removal service',
+      quantity: item.quantity || 1,
+      unitPrice: item.unitPrice || 0,
+      total: (item.quantity || 1) * (item.unitPrice || 0),
+      unit: 'each',
+      category: 'service',
+      quoteId: previewQuote.id,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    })) : [{
+      id: 'item-1',
+      description: editingJob.description || 'Tree removal service',
+      quantity: 1,
+      unitPrice: 500,
+      total: 500,
+      unit: 'each',
+      category: 'service',
+      quoteId: previewQuote.id,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }];
+
+    // Calculate totals
+    const subtotal = previewLineItems.reduce((sum: number, item: any) => sum + item.total, 0);
+    const taxAmount = subtotal * 0.15; // 15% GST
+    const totalAmount = subtotal + taxAmount;
+
+    previewQuote.subtotal = subtotal;
+    previewQuote.taxAmount = taxAmount;
+    previewQuote.totalAmount = totalAmount;
+
+    return {
+      quote: previewQuote,
+      template: previewTemplate,
+      customer: selectedCustomer,
+      lineItems: previewLineItems
+    };
+  };
+
   // Save schedule function
   const saveSchedule = async () => {
     if (!editingJob || !schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || !schedulingData.assignedTo) {
@@ -995,6 +1133,9 @@ export function GlobalJobCard({
           onCustomiseInvoice={handleCustomiseInvoice}
           onAddPayment={handleAddPayment}
           onSendToXero={handleApproveToXero}
+          onGenerateQuote={handleGenerateQuote}
+          onCustomiseQuote={handleCustomiseQuote}
+          onSendQuote={handleSendQuote}
         />
 
         {/* Tabbed interface */}
@@ -1824,6 +1965,31 @@ export function GlobalJobCard({
               return (
                 <InvoiceTemplate
                   invoice={previewData.invoice}
+                  template={previewData.template}
+                  customer={previewData.customer}
+                  lineItems={previewData.lineItems}
+                />
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Quote Preview Modal */}
+      {showQuotePreview && (
+        <Dialog open={showQuotePreview} onOpenChange={setShowQuotePreview}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+            <DialogHeader>
+              <h2 className="text-lg font-semibold">Quote Preview</h2>
+            </DialogHeader>
+            {(() => {
+              const previewData = getQuotePreviewData();
+              if (!previewData) {
+                return <div className="p-4 text-center text-gray-500">Unable to generate quote preview</div>;
+              }
+              return (
+                <QuoteTemplate
+                  quote={previewData.quote}
                   template={previewData.template}
                   customer={previewData.customer}
                   lineItems={previewData.lineItems}
