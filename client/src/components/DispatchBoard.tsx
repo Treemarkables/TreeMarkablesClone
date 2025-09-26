@@ -1221,11 +1221,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             <div className="flex-1 overflow-x-auto">
               <div className="min-w-[800px]">
                 {/* Time Headers */}
-                <div className="grid grid-cols-12 gap-1 mb-2">
+                <div className="grid grid-cols-12 gap-1 mb-2 bg-white">
                   {timeSlots.map((time) => (
                     <div
                       key={time}
-                      className="text-center text-xs font-medium text-muted-foreground p-2 border-b"
+                      className="text-center text-xs font-medium text-gray-600 p-2 border-b border-gray-200 min-w-0"
                       data-testid={`time-slot-${time}`}
                     >
                       {time}
