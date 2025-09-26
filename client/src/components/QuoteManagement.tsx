@@ -32,8 +32,9 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
-import type { Quote } from '@shared/schema';
+import type { Quote, DocumentTemplate, Customer } from '@shared/schema';
 import { ProposalGeneration } from '@/components/ProposalGeneration';
+import { QuoteTemplate } from '@/components/QuoteTemplate';
 
 // Line item structure for quotes
 interface LineItem {
@@ -70,6 +71,7 @@ interface QuoteManagementProps {
 export default function QuoteManagement({ compact = false }: QuoteManagementProps) {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
+  const [previewingQuote, setPreviewingQuote] = useState<Quote | null>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const { toast } = useToast();
 
@@ -102,21 +104,45 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
     }
   });
 
+  // Fetch quote templates
+  const { data: templates } = useQuery({
+    queryKey: ['/api/templates'],
+    queryFn: async () => {
+      const response = await fetch('/api/templates?type=quote');
+      const result = await response.json();
+      return Array.isArray(result.data) ? result.data : [];
+    }
+  });
+
+  // Get default quote template or first available template
+  const defaultTemplate = templates?.find((t: DocumentTemplate) => t.isDefault && t.type === 'quote') || templates?.[0];
+
   // Create quote mutation
   const createQuoteMutation = useMutation({
     mutationFn: async (data: QuoteFormData) => {
+      // Calculate amount from line items if not provided or if line items exist
+      const calculatedAmount = lineItems.length > 0 ? calculateTotal() : parseFloat(data.amount || '0');
+      
       const quoteData = {
         ...data,
         quoteNumber: `Q-${Date.now()}`,
-        amount: parseFloat(data.amount),
+        amount: calculatedAmount.toString(),
         lineItems: lineItems.length > 0 ? lineItems : undefined
       };
+      
       const response = await fetch('/api/quotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(quoteData)
       });
-      return response.json();
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to create quote');
+      }
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
@@ -127,10 +153,11 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
         description: 'Quote created successfully'
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error('Quote creation error:', error);
       toast({
         title: 'Error',
-        description: 'Failed to create quote',
+        description: error.message || 'Failed to create quote',
         variant: 'destructive'
       });
     }
@@ -229,17 +256,17 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      draft: { variant: 'outline' as const, label: 'Draft' },
-      sent: { variant: 'default' as const, label: 'Sent' },
-      viewed: { variant: 'secondary' as const, label: 'Viewed' },
+      draft: { variant: 'outline' as const, label: 'Draft', className: '' },
+      sent: { variant: 'default' as const, label: 'Sent', className: '' },
+      viewed: { variant: 'secondary' as const, label: 'Viewed', className: '' },
       accepted: { variant: 'default' as const, label: 'Accepted', className: 'bg-green-500' },
-      rejected: { variant: 'destructive' as const, label: 'Rejected' },
-      expired: { variant: 'outline' as const, label: 'Expired' }
+      rejected: { variant: 'destructive' as const, label: 'Rejected', className: '' },
+      expired: { variant: 'outline' as const, label: 'Expired', className: '' }
     };
     
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.draft;
     return (
-      <Badge variant={config.variant} className={config.className || ''}>
+      <Badge variant={config.variant} className={config.className}>
         {config.label}
       </Badge>
     );
@@ -580,6 +607,14 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => setPreviewingQuote(quote)}
+                        data-testid={`button-preview-quote-${quote.id}`}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => {
                           setEditingQuote(quote);
                           setIsCreateDialogOpen(true);
@@ -608,6 +643,42 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
           )}
         </CardContent>
       </Card>
+
+      {/* Quote Preview Dialog */}
+      {previewingQuote && defaultTemplate && (
+        <Dialog open={!!previewingQuote} onOpenChange={() => setPreviewingQuote(null)}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Quote Preview - #{previewingQuote.quoteNumber}</DialogTitle>
+            </DialogHeader>
+            <QuoteTemplate
+              template={defaultTemplate}
+              quote={previewingQuote}
+              customer={Array.isArray(customers) ? customers.find((c: Customer) => c.id === previewingQuote.customerId) : undefined}
+              lineItems={previewingQuote.lineItems ? JSON.parse(JSON.stringify(previewingQuote.lineItems)) : []}
+              showActions={true}
+              onEmail={() => {
+                toast({
+                  title: "Email Functionality",
+                  description: "Email functionality will be implemented next.",
+                });
+              }}
+              onDownload={() => {
+                toast({
+                  title: "PDF Generation",
+                  description: "PDF generation functionality will be implemented next.",
+                });
+              }}
+              onCopy={() => {
+                toast({
+                  title: "Quote Copied",
+                  description: "Quote template copied to clipboard.",
+                });
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
