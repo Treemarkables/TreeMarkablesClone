@@ -474,6 +474,9 @@ export function GlobalJobCard({
   });
 
   const [isDiaryOperation, setIsDiaryOperation] = useState(false);
+  
+  // Stable temporary ID for new jobs to prevent data loss
+  const [tempJobId] = useState(() => `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
 
   const updateJobMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -1507,7 +1510,7 @@ export function GlobalJobCard({
                   <TabsContent value="diary" className="h-full m-0">
                     <div className="h-full">
                       <JobDiarySection 
-                        jobId={jobId || `temp-${Date.now()}`} // Use temporary ID for new jobs
+                        jobId={jobId || tempJobId} // Use stable temporary ID for new jobs
                         customerId={form.getValues("customerId") || customerId}
                         customerEmail={selectedCustomer?.email}
                         customerPhone={selectedCustomer?.phone}
@@ -1526,9 +1529,9 @@ export function GlobalJobCard({
                           </p>
                         </div>
                         
-                        <StaffTimeManager jobId={jobId || `temp-${Date.now()}`} />
-                        <ExpenseManager jobId={jobId || `temp-${Date.now()}`} />
-                        <GrossMarginCalculator jobId={jobId || `temp-${Date.now()}`} />
+                        <StaffTimeManager jobId={jobId || tempJobId} />
+                        <ExpenseManager jobId={jobId || tempJobId} />
+                        <GrossMarginCalculator jobId={jobId || tempJobId} />
                       </div>
                     </div>
                   </TabsContent>

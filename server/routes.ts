@@ -1895,6 +1895,29 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      // Handle temporary job IDs for new jobs
+      if (jobId.startsWith('temp-')) {
+        // Initialize temporary storage if needed
+        if (!(global as any).tempDiaryEntries) {
+          (global as any).tempDiaryEntries = new Map();
+        }
+        if (!(global as any).tempDiaryEntries.has(jobId)) {
+          (global as any).tempDiaryEntries.set(jobId, []);
+        }
+        
+        const tempEntry = {
+          id: `diary-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          ...validation.data,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        (global as any).tempDiaryEntries.get(jobId).push(tempEntry);
+        console.log(`📝 Temporary diary entry created for ${jobId}:`, tempEntry.content);
+        res.json({ success: true, data: tempEntry });
+        return;
+      }
+
       const entry = await storage.createJobDiaryEntry(validation.data);
       res.json({ success: true, data: entry });
     } catch (error) {
@@ -1908,6 +1931,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     try {
       const { jobId } = req.params;
       const { entryType } = req.query;
+      
+      // Handle temporary job IDs
+      if (jobId.startsWith('temp-')) {
+        const tempEntries = (global as any).tempDiaryEntries?.get(jobId) || [];
+        console.log(`📖 Fetching temporary diary entries for ${jobId}:`, tempEntries.length);
+        res.json({ success: true, data: tempEntries });
+        return;
+      }
       
       let entries;
       if (entryType && typeof entryType === 'string') {
