@@ -649,10 +649,10 @@ export function GlobalJobCard({
   const convertToInvoiceMutation = useMutation({
     mutationFn: async (invoiceData: { invoiceType: 'full' | 'partial'; customData?: any }) => {
       if (!editingJob?.id) throw new Error("No job selected");
-      return apiRequest('POST', `/api/jobs/${editingJob.id}/convert-to-invoice`, invoiceData);
+      const response = await apiRequest('POST', `/api/jobs/${editingJob.id}/convert-to-invoice`, invoiceData);
+      return response.json(); // Parse JSON once and return typed data
     },
-    onSuccess: async (response) => {
-      const data = await response.json();
+    onSuccess: (data) => {
       toast({
         title: "Invoice Created",
         description: data.message || "Invoice created successfully",
@@ -679,7 +679,7 @@ export function GlobalJobCard({
     if (!editingJob) return;
     
     try {
-      // First convert to invoice, then handle sending - mutation already returns parsed JSON
+      // First convert to invoice, then handle sending
       const invoiceData = await convertToInvoiceMutation.mutateAsync({ invoiceType: 'full' });
       
       // Store the fresh invoice data for the email modal

@@ -2249,11 +2249,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
-      // Check if job is eligible for invoicing
-      if (job.status !== 'quote' && job.status !== 'work_order') {
+      // Check if job is eligible for invoicing  
+      // Allow invoicing for most job types except 'cancelled' and 'lead' (leads should become quotes first)
+      if (job.status === 'cancelled') {
         return res.status(400).json({ 
           success: false, 
-          message: 'Only quotes and work orders can be converted to invoices' 
+          message: 'Cannot create invoices for cancelled jobs' 
         });
       }
 
