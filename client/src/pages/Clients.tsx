@@ -174,6 +174,7 @@ export default function Clients() {
 
   // Individual customer handlers
   const handleEditCustomer = (customer: Customer) => {
+    console.log("Edit customer clicked:", customer);
     setEditingCustomer(customer);
     editForm.reset({
       name: customer.name,
@@ -185,6 +186,7 @@ export default function Clients() {
   };
 
   const handleDeleteCustomer = (customerId: string) => {
+    console.log("Delete customer clicked:", customerId);
     if (confirm("Are you sure you want to delete this customer? This action cannot be undone.")) {
       deleteCustomerMutation.mutate(customerId);
     }
@@ -495,24 +497,47 @@ export default function Clients() {
                         </div>
                       </div>
                       
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 mt-4">
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          onClick={() => handleEditCustomer(customer)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            console.log("Edit button clicked for customer:", customer.id);
+                            handleEditCustomer(customer);
+                          }}
+                          style={{ pointerEvents: 'auto', zIndex: 10 }}
                           data-testid={`button-edit-${customer.id}`}
                         >
                           <Edit className="w-4 h-4 mr-1" />
                           Edit
                         </Button>
-                        <Button variant="outline" size="sm" data-testid={`button-view-${customer.id}`}>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            console.log("View Details clicked");
+                            alert("Customer details feature coming soon!");
+                          }}
+                          style={{ pointerEvents: 'auto', zIndex: 10 }}
+                          data-testid={`button-view-${customer.id}`}
+                        >
                           View Details
                         </Button>
                         <Button 
                           variant="destructive" 
                           size="sm" 
-                          onClick={() => handleDeleteCustomer(customer.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            console.log("Delete button clicked for customer:", customer.id);
+                            handleDeleteCustomer(customer.id);
+                          }}
                           disabled={deleteCustomerMutation.isPending}
+                          style={{ pointerEvents: 'auto', zIndex: 10 }}
                           data-testid={`button-delete-${customer.id}`}
                         >
                           <Trash2 className="w-4 h-4 mr-1" />
