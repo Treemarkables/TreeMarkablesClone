@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Code, Database, Webhook, Key, Activity, Settings, Copy, ExternalLink, Plus, Eye, EyeOff, Upload } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { ServiceM8JobImport } from "@/components/ServiceM8JobImport";
 
 // Mock data for API keys and webhooks
 const mockApiKeys = [
@@ -414,7 +413,9 @@ export default function Developer() {
               <CardTitle>ServiceM8 Job Import</CardTitle>
             </CardHeader>
             <CardContent>
-              <ServiceM8JobImport />
+              <div className="text-center py-8 text-muted-foreground">
+                CSV Import functionality removed - ServiceM8 integration discontinued
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -9,7 +9,6 @@ import {
   type Review, type InsertReview, type Campaign, type InsertCampaign,
   type SocialPlan, type InsertSocialPlan, type CompetitorSignal, type InsertCompetitorSignal,
   type PriceRule, type InsertPriceRule, type CsvImportResult,
-  type ServiceM8CustomerCsv, type ServiceM8JobCsv, type ServiceM8QuoteCsv,
   type Notification, type InsertNotification, type UpdateNotification, type NotificationSummary, type NotificationWithDetails,
   type BusinessSettings, type InsertBusinessSettings, type UpdateBusinessSettings,
   type Communication, type InsertCommunication, type UpdateCommunication,
@@ -48,15 +47,6 @@ import {
   // Conversation Management types
   type Conversation, type InsertConversation, type UpdateConversation,
   type ConversationMessage, type InsertConversationMessage, type UpdateConversationMessage,
-  // ServiceM8 Integration types
-  type Servicem8Config, type InsertServicem8Config,
-  type Servicem8Job, type InsertServicem8Job,
-  type Servicem8DiaryEntry, type InsertServicem8DiaryEntry,
-  type Servicem8Quote, type InsertServicem8Quote,
-  type Servicem8Company, type InsertServicem8Company,
-  type Servicem8Invoice, type InsertServicem8Invoice,
-  type Servicem8Material, type InsertServicem8Material,
-  servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema,
   // Document Template types
   type DocumentTemplate, type InsertDocumentTemplate,
   type TemplateSection, type InsertTemplateSection,
@@ -88,7 +78,6 @@ export interface IStorage {
   // Customer Management
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getCustomer(id: string): Promise<Customer | undefined>;
-  getCustomerByServiceM8Uuid(uuid: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: string): Promise<boolean>;
   getAllCustomers(): Promise<Customer[]>;
@@ -105,7 +94,6 @@ export interface IStorage {
   clearAllInvoices(): Promise<number>;
   clearAllPhotos(): Promise<number>;
   clearAllCalls(): Promise<number>;
-  clearAllServiceM8Data(): Promise<{ [key: string]: number }>;
   completeDataWipe(): Promise<{ [key: string]: number }>;
   
   // Customer Import Batch Management
@@ -716,10 +704,6 @@ class DatabaseStorage implements IStorage {
     return customer || undefined;
   }
 
-  async getCustomerByServiceM8Uuid(uuid: string): Promise<Customer | undefined> {
-    const [customer] = await db.select().from(schema.customers).where(eq(schema.customers.servicem8Uuid, uuid));
-    return customer || undefined;
-  }
 
   async updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer> {
     const [customer] = await db.update(schema.customers)
@@ -1288,39 +1272,10 @@ class DatabaseStorage implements IStorage {
     return result.rowCount || 0;
   }
 
-  // ServiceM8 data clearing methods
-  async clearAllServiceM8Data(): Promise<{ [key: string]: number }> {
-    const results = {
-      importStatus: 0,
-      jobs: 0,
-      diaryEntries: 0,
-      quotes: 0,
-      companies: 0,
-      materials: 0,
-      invoices: 0,
-      config: 0
-    };
-
-    try {
-      results.importStatus = (await db.delete(schema.servicem8ImportStatus)).rowCount || 0;
-      results.jobs = (await db.delete(schema.servicem8Jobs)).rowCount || 0;
-      results.diaryEntries = (await db.delete(schema.servicem8DiaryEntries)).rowCount || 0;
-      results.quotes = (await db.delete(schema.servicem8Quotes)).rowCount || 0;
-      results.companies = (await db.delete(schema.servicem8Companies)).rowCount || 0;
-      results.materials = (await db.delete(schema.servicem8Materials)).rowCount || 0;
-      results.invoices = (await db.delete(schema.servicem8Invoices)).rowCount || 0;
-      results.config = (await db.delete(schema.servicem8Config)).rowCount || 0;
-    } catch (error) {
-      console.error('Error clearing ServiceM8 data:', error);
-    }
-
-    return results;
-  }
 
   // Complete database wipe - Option A implementation
   async completeDataWipe(): Promise<{ [key: string]: number }> {
     const results = {
-      serviceM8Data: {},
       proposals: 0,
       photos: 0,
       invoices: 0,
@@ -1337,9 +1292,7 @@ class DatabaseStorage implements IStorage {
     try {
       console.log('🧹 Starting complete database wipe (Option A)...');
       
-      // Clear ServiceM8 data first
-      results.serviceM8Data = await this.clearAllServiceM8Data();
-      console.log('✅ ServiceM8 data cleared');
+      // Clear business data in dependency order (foreign key constraints)
 
       // Clear related data in dependency order (foreign key constraints)
       results.proposals = await this.clearAllProposals();

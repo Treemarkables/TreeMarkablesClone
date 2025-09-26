@@ -23,7 +23,6 @@ import {
   insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, gpsLocationSchema,
   insertInvoiceSchema, insertServiceRequestSchema, insertCustomerAuthSchema,
   insertCommunicationPreferencesSchema,
-  servicem8CustomerCsvSchema, servicem8JobCsvSchema, servicem8QuoteCsvSchema,
   safetyIncidentInsertSchema, type InsertSafetyIncident,
   riskAssessmentInsertSchema, type InsertRiskAssessment,
   complianceRequirementInsertSchema, type InsertComplianceRequirement,
@@ -47,8 +46,6 @@ import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
-import { servicem8Service } from "./services/servicem8Service";
-import { createServiceM8Routes } from "./routes/servicem8";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -1666,99 +1663,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     return description;
   }
 
-  // Update existing jobs with ServiceM8 CSV data instead of creating duplicates
-  app.post('/api/jobs/update-from-servicem8', csvUpload.single('file'), async (req: Request, res: Response) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ success: false, message: 'No CSV file uploaded' });
-      }
-
-      const csvContent = fs.readFileSync(req.file.path, 'utf-8');
-      const parseResult = Papa.parse(csvContent, {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: (header) => header.trim()
-      });
-
-      if (parseResult.errors.length > 0) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'CSV parsing error',
-          errors: parseResult.errors 
-        });
-      }
-
-      const jobs = parseResult.data as any[];
-      let updatedCount = 0;
-      let errorCount = 0;
-      const errors: string[] = [];
-
-      for (const csvJob of jobs) {
-        try {
-          // Validate required fields
-          if (!csvJob['Job Number'] || !csvJob['Customer Name']) {
-            continue;
-          }
-
-          // Find existing job by job number
-          const existingJobs = await storage.getAllJobs();
-          const existingJob = existingJobs.find(job => job.jobNumber === csvJob['Job Number']);
-
-          if (existingJob) {
-            // Clean and validate description from CSV with enhanced tree service logic
-            let cleanDescription = '';
-            
-            // Collect all possible description sources from ServiceM8
-            const descriptionSources = [
-              csvJob.Description,
-              csvJob.Notes,
-              csvJob['Work Description'],
-              csvJob['Job Description'],
-              csvJob['Service Description'],
-              csvJob.Comment,
-              csvJob.Details
-            ].filter(Boolean);
-
-            // Process and clean descriptions
-            if (descriptionSources.length > 0) {
-              cleanDescription = processTreeServiceDescription(descriptionSources);
-            }
-
-            // Update the existing job with real ServiceM8 data
-            if (cleanDescription) {
-              await storage.updateJob(existingJob.id, {
-                description: cleanDescription,
-                title: cleanDescription.length > 100 ? cleanDescription.substring(0, 100) : cleanDescription
-              });
-              updatedCount++;
-            }
-          }
-        } catch (jobError) {
-          errorCount++;
-          console.error(`Error updating job ${csvJob['Job Number']}:`, jobError);
-          errors.push(`Job ${csvJob['Job Number']}: ${(jobError as Error).message}`);
-        }
-      }
-
-      // Clean up uploaded file
-      fs.unlinkSync(req.file.path);
-
-      res.json({
-        success: true,
-        message: `Successfully updated ${updatedCount} jobs with real ServiceM8 descriptions`,
-        stats: {
-          totalJobs: jobs.length,
-          updatedJobs: updatedCount,
-          errors: errorCount,
-          errorMessages: errors.slice(0, 10) // Limit error messages
-        }
-      });
-
-    } catch (error) {
-      console.error('Error updating jobs from ServiceM8:', error);
-      res.status(500).json({ success: false, message: 'Error processing ServiceM8 update' });
-    }
-  });
 
   // Fix fake job descriptions with real ServiceM8 data
   app.post('/api/jobs/fix-fake-descriptions', async (req: Request, res: Response) => {
@@ -7841,9 +7745,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Register ServiceM8 OAuth and API routes
-  const servicem8Routes = createServiceM8Routes(storage);
-  app.use('/api/servicem8', servicem8Routes);
 
   // Materials and Services API
   app.get("/api/materials-services", async (req: Request, res: Response) => {

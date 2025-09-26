@@ -20,9 +20,7 @@ import { JobDiary } from '@/components/JobDiary';
 import { SafetyReporting } from '@/components/SafetyReporting';
 import JobTemplateManagement from '@/components/JobTemplateManagement';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
-import { ServiceM8ImportModal } from '@/components/ServiceM8ImportModal';
 import { CustomerCSVUpload } from '@/components/CustomerCSVUpload';
-import { ServiceM8JobImport } from '@/components/ServiceM8JobImport';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -353,7 +351,6 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 Comprehensive business management for Treemarkables
               </p>
             </div>
-            <ServiceM8ImportModal />
           </div>
         </div>
 
