@@ -1442,6 +1442,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         processedBody.jobNumber = await storage.getNextJobNumber();
       }
 
+      // Fresh Start Metrics: Mark all new jobs as metrics-eligible for clean business tracking
+      processedBody.metricsEligible = true;
+      processedBody.metricsStartDate = new Date();
+
       const validation = insertJobSchema.safeParse(processedBody);
       if (!validation.success) {
         return res.status(400).json({ 
