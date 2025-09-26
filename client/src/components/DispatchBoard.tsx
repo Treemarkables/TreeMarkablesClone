@@ -682,11 +682,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // Apply job filter based on selected filter option
         switch (jobFilter) {
           case 'all':
-            // Show only active jobs (quotes and work orders) - exclude completed, leads with missing data
-            return (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'work_order' || 
-                   job.serviceType?.toLowerCase().includes('quote')) && 
-                   job.status !== 'completed' && job.status !== 'cancelled' && 
-                   job.customerName && job.customerName.trim() !== '' && job.customerName !== 'Unknown Customer'; // Only jobs with proper customer names
+            // Show active jobs (exclude only completed and cancelled), be more inclusive
+            return job.status !== 'completed' && job.status !== 'cancelled';
             
           case 'action_required':
             // Jobs that need scheduling, assignment, or other action
