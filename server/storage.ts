@@ -1147,20 +1147,17 @@ class DatabaseStorage implements IStorage {
   
   async getNextJobNumber(): Promise<string> {
     try {
-      // More efficient query - get only the highest job number
+      // Query to get the maximum job number using SQL CAST to handle numeric sorting
       const result = await db.select({ 
-        jobNumber: schema.jobs.jobNumber 
+        maxJobNumber: sql<number>`CAST(MAX(CAST(${schema.jobs.jobNumber} AS INTEGER)) AS INTEGER)`
       })
       .from(schema.jobs)
-      .orderBy(desc(schema.jobs.jobNumber))
-      .limit(1);
+      .where(sql`${schema.jobs.jobNumber} ~ '^[0-9]+$'`); // Only numeric job numbers
       
-      if (result.length > 0) {
-        const highestJobNumber = parseInt(result[0].jobNumber);
-        if (!isNaN(highestJobNumber)) {
-          // Ensure our counter is at least as high as the maximum in database
-          DatabaseStorage.jobNumberCounter = Math.max(DatabaseStorage.jobNumberCounter, highestJobNumber + 1);
-        }
+      if (result.length > 0 && result[0].maxJobNumber !== null) {
+        const maxJobNumber = result[0].maxJobNumber;
+        // Ensure our counter is at least as high as the maximum in database
+        DatabaseStorage.jobNumberCounter = Math.max(DatabaseStorage.jobNumberCounter, maxJobNumber + 1);
       }
       
       const nextNumber = DatabaseStorage.jobNumberCounter;
