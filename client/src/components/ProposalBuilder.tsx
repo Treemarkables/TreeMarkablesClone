@@ -23,6 +23,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertProposalSchema, insertProposalLineItemSchema, type ProposalLineItem } from "@shared/schema";
+import { ProposalTemplate } from "@/components/ProposalTemplate";
 
 // Extend shared schemas for form validation  
 const proposalFormSchema = insertProposalSchema.extend({
@@ -140,6 +141,7 @@ export function ProposalBuilder({
   const [photoUploading, setPhotoUploading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [activeSectionId, setActiveSectionId] = useState('section-1');
+  const [showPreview, setShowPreview] = useState(false);
 
   // Line item form
   const [currentLineItem, setCurrentLineItem] = useState<Partial<LineItem>>({
@@ -505,11 +507,11 @@ export function ProposalBuilder({
       console.log('Proposal creation response:', response);
       return response;
     },
-    onSuccess: (response) => {
+    onSuccess: (response: any) => {
       console.log('Proposal created successfully:', response);
       toast({
         title: "Success",
-        description: `Proposal created successfully! Proposal Number: ${response.data?.proposalNumber || 'N/A'}`,
+        description: `Proposal created successfully! Proposal Number: ${response?.proposalNumber || 'N/A'}`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
       
@@ -580,6 +582,107 @@ export function ProposalBuilder({
     },
   });
 
+  // Preview functionality
+  const handlePreview = () => {
+    setShowPreview(true);
+  };
+
+  // Prepare data for preview
+  const getPreviewData = () => {
+    const formData = form.getValues();
+    
+    // Mock proposal data for preview
+    const previewProposal = {
+      id: 'preview-' + Date.now(),
+      proposalNumber: 'PROP-PREVIEW',
+      status: 'draft',
+      introduction: formData.description || '',
+      conclusion: formData.notes || '',
+      expiryDate: formData.validUntil || '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: 'preview-user',
+      customerId: formData.customerId || 'preview-customer',
+      sentDate: null,
+      viewedDate: null,
+      responseDate: null,
+      customerSignature: null,
+      signedDate: null,
+      templateUsed: null,
+      branding: null,
+      title: formData.title || 'Preview Proposal',
+      deliveryMethod: 'email'
+    } as any;
+
+    // Mock template data
+    const previewTemplate = {
+      id: 'preview-template',
+      name: 'Preview Template',
+      type: 'proposal',
+      description: null,
+      isDefault: false,
+      isActive: true,
+      companyName: 'Treemarkables',
+      companyPhone: '+64 6 867 1234',
+      companyEmail: 'info@treemarkables.co.nz', 
+      companyAddress: 'Gisborne, New Zealand',
+      paymentTerms: 'Payment due within 7 days',
+      gstNumber: '131-047-592-GST004',
+      headerLayout: null,
+      footerText: null,
+      styles: null,
+      logoUrl: null,
+      logoPosition: null,
+      primaryColor: null,
+      secondaryColor: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Mock customer data - try to find actual customer or use preview data
+    const previewCustomer = {
+      id: formData.customerId || 'preview-customer',
+      name: 'Preview Customer',
+      email: 'customer@example.com',
+      phone: '+64 21 123 4567',
+      address: 'Customer Address, Gisborne',
+      city: 'Gisborne',
+      region: 'Gisborne',
+      notes: null,
+      source: null,
+      importSource: 'manual',
+      importBatchId: null,
+      externalId: null,
+      servicem8Uuid: null,
+      lifetimeValue: '0',
+      totalJobs: 0,
+      lastContactDate: null,
+      preferredContactMethod: null,
+      tags: null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Convert sections to preview format
+    const previewSections = sections.map(section => ({
+      ...section,
+      photos: section.photos,
+      lineItems: section.lineItems.map(item => ({
+        ...item,
+        id: item.id || `item-${Date.now()}-${Math.random()}`, // Ensure ID is never undefined
+        selected: item.selected !== false, // Default to true if not explicitly false
+      }))
+    }));
+
+    return {
+      proposal: previewProposal,
+      template: previewTemplate,
+      customer: previewCustomer,
+      sections: previewSections
+    };
+  };
+
   // Submit proposal
   const onSubmit = async (data: any) => {
     try {
@@ -609,32 +712,33 @@ export function ProposalBuilder({
   if (!isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader className="flex-shrink-0 pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle className="text-2xl font-bold text-primary">
-                {mode === "edit" ? "Edit Proposal" : "Create Proposal"}
-              </DialogTitle>
-              <p className="text-muted-foreground">
-                Build your professional proposal with multiple sections
-              </p>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-5xl h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0 pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-2xl font-bold text-primary">
+                  {mode === "edit" ? "Edit Proposal" : "Create Proposal"}
+                </DialogTitle>
+                <p className="text-muted-foreground">
+                  Build your professional proposal with multiple sections
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onClose}
+                data-testid="button-close-proposal"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={onClose}
-              data-testid="button-close-proposal"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </DialogHeader>
+          </DialogHeader>
 
-        <div className="flex-1 overflow-auto">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <div className="flex-1 overflow-auto">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               
               {/* Proposal Information Section */}
               <Card>
@@ -1205,15 +1309,26 @@ export function ProposalBuilder({
               </Card>
 
               {/* Form Actions */}
-              <div className="flex justify-end space-x-4 pt-4">
+              <div className="flex justify-between pt-4">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={onClose}
-                  data-testid="button-cancel-proposal"
+                  onClick={handlePreview}
+                  data-testid="button-preview-proposal"
+                  className="flex items-center gap-2"
                 >
-                  Cancel
+                  <Eye className="h-4 w-4" />
+                  Preview
                 </Button>
+                <div className="flex space-x-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={onClose}
+                    data-testid="button-cancel-proposal"
+                  >
+                    Cancel
+                  </Button>
                 <Button
                   type="submit"
                   disabled={createProposalMutation.isPending}
@@ -1231,12 +1346,60 @@ export function ProposalBuilder({
                     </>
                   )}
                 </Button>
+                </div>
               </div>
 
-            </form>
-          </Form>
-        </div>
-      </DialogContent>
-    </Dialog>
+              </form>
+            </Form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Modal */}
+      {showPreview && (
+        <Dialog open={showPreview} onOpenChange={setShowPreview}>
+          <DialogContent className="max-w-6xl h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader className="flex-shrink-0 pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <DialogTitle className="text-2xl font-bold text-primary">
+                    Proposal Preview
+                  </DialogTitle>
+                  <p className="text-muted-foreground">
+                    Preview of your proposal as it will appear to customers
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowPreview(false)}
+                  data-testid="button-close-preview"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-auto">
+              {(() => {
+                const previewData = getPreviewData();
+                return (
+                  <ProposalTemplate
+                    template={previewData.template}
+                    proposal={previewData.proposal}
+                    customer={previewData.customer}
+                    sections={previewData.sections}
+                    showActions={true}
+                    onEmail={() => console.log('Email proposal')}
+                    onDownload={() => console.log('Download proposal')}
+                    onCopy={() => console.log('Copy proposal')}
+                  />
+                );
+              })()}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }
