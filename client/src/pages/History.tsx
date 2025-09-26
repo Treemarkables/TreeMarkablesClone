@@ -1,14 +1,22 @@
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, MapPin, DollarSign, Clock, Search, Filter, ArrowUpDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { 
+  Hammer, 
+  Plus, 
+  Search, 
+  Filter, 
+  MoreHorizontal, 
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import type { Job } from "@shared/schema";
+import type { Job, Customer } from "@shared/schema";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -20,192 +28,309 @@ interface ApiResponse<T> {
 export default function History() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("date");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Fetch jobs data
-  const { data: jobsResponse, isLoading } = useQuery<ApiResponse<Job>>({
+  // Fetch jobs and customers data
+  const { data: jobsResponse, isLoading: jobsLoading } = useQuery<ApiResponse<Job>>({
     queryKey: ['/api/jobs'],
   });
 
+  const { data: customersResponse } = useQuery<ApiResponse<Customer>>({
+    queryKey: ['/api/customers'],
+  });
+
   const jobs = jobsResponse?.data || [];
+  const customers = customersResponse?.data || [];
 
-  // Filter and sort jobs
-  const filteredJobs = jobs
-    .filter(job => {
-      const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (job.address || '').toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'date':
-          const dateA = a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0;
-          const dateB = b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0;
-          return dateB - dateA;
-        case 'value':
-          const valueA = parseFloat(a.totalAmount || '0');
-          const valueB = parseFloat(b.totalAmount || '0');
-          return valueB - valueA;
-        case 'title':
-          return a.title.localeCompare(b.title);
-        default:
-          return 0;
-      }
-    });
+  // Create customer lookup map
+  const customerMap = new Map(customers.map(customer => [customer.id, customer]));
 
-  const getStatusColor = (status: string) => {
+  // Filter jobs
+  const filteredJobs = jobs.filter(job => {
+    const customer = customerMap.get(job.customerId || '');
+    const customerName = customer?.name || '';
+    const jobNumber = job.jobNumber || '';
+    
+    const matchesSearch = 
+      jobNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (job.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (job.address || '').toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || 
+      statusFilter.split(',').includes(job.status || '');
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Sort jobs by date (newest first)
+  const sortedJobs = [...filteredJobs].sort((a, b) => {
+    const dateA = new Date(a.createdAt || 0).getTime();
+    const dateB = new Date(b.createdAt || 0).getTime();
+    return dateB - dateA;
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedJobs = sortedJobs.slice(startIndex, endIndex);
+
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'in-progress': return 'bg-blue-100 text-blue-800';
-      case 'scheduled': return 'bg-yellow-100 text-yellow-800';
-      case 'quote': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'completed':
+        return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
+      case 'work_order':
+        return <Badge className="bg-green-100 text-green-800">Work Order</Badge>;
+      case 'scheduled':
+        return <Badge className="bg-blue-100 text-blue-800">Scheduled</Badge>;
+      case 'quote':
+        return <Badge className="bg-gray-100 text-gray-800">Quote</Badge>;
+      case 'unsuccessful':
+        return <Badge className="bg-red-100 text-red-800">Unsuccessful</Badge>;
+      case 'lead':
+        return <Badge className="bg-yellow-100 text-yellow-800">Lead</Badge>;
+      default:
+        return <Badge className="bg-gray-100 text-gray-800">Quote</Badge>;
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'emergency': return 'bg-red-100 text-red-800';
-      case 'high': return 'bg-orange-100 text-orange-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'low': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB'); // DD/MM/YYYY format like ServiceM8
+  };
+
+  const getCustomerDetails = (customerId: string) => {
+    const customer = customerMap.get(customerId);
+    if (!customer) return { name: '', firstName: '', lastName: '' };
+    
+    const name = customer.name || '';
+    const nameParts = name.split(' ');
+    return {
+      name,
+      firstName: nameParts[0] || '',
+      lastName: nameParts.slice(1).join(' ') || ''
+    };
   };
 
   return (
-    <div className="flex flex-col h-full p-6 space-y-6">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Job History</h1>
-          <p className="text-gray-600">Find any past job, saved forever</p>
+      <div className="flex items-center justify-between p-4 border-b bg-white">
+        <div className="flex items-center gap-2">
+          <Hammer className="h-5 w-5 text-gray-600" />
+          <h1 className="text-xl font-semibold text-gray-900">Jobs</h1>
         </div>
-        <div className="text-sm text-gray-500">
-          {filteredJobs.length} of {jobs.length} jobs
-        </div>
+        
+        <Button 
+          className="bg-green-600 hover:bg-green-700 text-white"
+          data-testid="button-new-job"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New Job
+        </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
+      {/* Search and Filter Bar */}
+      <div className="flex items-center gap-3 p-4 border-b bg-gray-50">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <Input
-            placeholder="Search jobs by title or location..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-            data-testid="input-search-jobs"
+            className="pl-10 bg-white"
+            data-testid="input-search"
           />
         </div>
         
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-48" data-testid="select-status-filter">
-            <Filter className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
-            <SelectItem value="scheduled">Scheduled</SelectItem>
-            <SelectItem value="quote">Quote</SelectItem>
-          </SelectContent>
-        </Select>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="bg-white" data-testid="button-filter">
+              <Filter className="h-4 w-4 mr-2" />
+              Filter
+              <ChevronDown className="h-4 w-4 ml-2" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => setStatusFilter('all')}>
+              All Statuses
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setStatusFilter('work_order,completed,scheduled')}>
+              Work Orders
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setStatusFilter('quote,lead')}>
+              Quotes
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setStatusFilter('unsuccessful')}>
+              Unsuccessful
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="w-full sm:w-48" data-testid="select-sort">
-            <ArrowUpDown className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="date">Date (Newest First)</SelectItem>
-            <SelectItem value="value">Value (Highest First)</SelectItem>
-            <SelectItem value="title">Title (A-Z)</SelectItem>
-          </SelectContent>
-        </Select>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="bg-white" data-testid="button-actions">
+              Actions
+              <ChevronDown className="h-4 w-4 ml-2" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem>Export to CSV</DropdownMenuItem>
+            <DropdownMenuItem>Print List</DropdownMenuItem>
+            <DropdownMenuItem>Email List</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Jobs List */}
+      {/* Jobs Table */}
       <div className="flex-1 overflow-auto">
-        {isLoading ? (
-          <div className="grid gap-4">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i}>
-                <CardContent className="p-6">
-                  <div className="space-y-3">
-                    <Skeleton className="h-6 w-3/4" />
-                    <div className="flex gap-2">
-                      <Skeleton className="h-5 w-20" />
-                      <Skeleton className="h-5 w-20" />
-                    </div>
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-2/3" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : filteredJobs.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Calendar className="w-12 h-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
-              <p className="text-gray-600 text-center max-w-md">
-                {searchQuery || statusFilter !== 'all' 
-                  ? "Try adjusting your search or filter settings to find jobs."
-                  : "No job history available yet. Completed jobs will appear here."
-                }
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4">
-            {filteredJobs.map((job) => (
-              <Card key={job.id} className="hover-elevate" data-testid={`card-job-${job.id}`}>
-                <CardContent className="p-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-lg font-semibold text-gray-900" data-testid={`text-job-title-${job.id}`}>
-                          {job.title}
-                        </h3>
-                        <Badge className={getStatusColor(job.status)} data-testid={`badge-status-${job.id}`}>
-                          {job.status}
-                        </Badge>
-                        <Badge className={getPriorityColor(job.priority)} data-testid={`badge-priority-${job.id}`}>
-                          {job.priority}
-                        </Badge>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-b">
+              <TableHead className="w-24">Date</TableHead>
+              <TableHead className="w-32">Job Number</TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead>Contact First</TableHead>
+              <TableHead>Contact Last</TableHead>
+              <TableHead>Job Status</TableHead>
+              <TableHead className="w-48">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {jobsLoading ? (
+              // Loading skeleton rows
+              [...Array(10)].map((_, i) => (
+                <TableRow key={i} className="border-b">
+                  <TableCell>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : paginatedJobs.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  No jobs found
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginatedJobs.map((job) => {
+                const customer = getCustomerDetails(job.customerId || '');
+                return (
+                  <TableRow key={job.id} className="border-b hover:bg-gray-50" data-testid={`row-job-${job.id}`}>
+                    <TableCell className="text-sm text-gray-600">
+                      {formatDate(job.createdAt ? job.createdAt.toString() : null)}
+                    </TableCell>
+                    <TableCell className="font-medium text-blue-600" data-testid={`text-job-number-${job.id}`}>
+                      {job.jobNumber || ''}
+                    </TableCell>
+                    <TableCell className="text-sm" data-testid={`text-company-${job.id}`}>
+                      {customer.name}
+                    </TableCell>
+                    <TableCell className="text-sm" data-testid={`text-first-name-${job.id}`}>
+                      {customer.firstName}
+                    </TableCell>
+                    <TableCell className="text-sm" data-testid={`text-last-name-${job.id}`}>
+                      {customer.lastName}
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(job.status || '')}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                          data-testid={`button-open-job-${job.id}`}
+                        >
+                          Open Job
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                          data-testid={`button-remove-${job.id}`}
+                        >
+                          Remove
+                        </Button>
                       </div>
-                      
-                      <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          <span>{job.address}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          <span>{job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : 'Not scheduled'}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <DollarSign className="w-4 h-4" />
-                          <span>${parseFloat(job.totalAmount || '0').toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" data-testid={`button-view-${job.id}`}>
-                        View Details
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Pagination Footer */}
+      <div className="flex items-center justify-between p-4 border-t bg-gray-50">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">View</span>
+          <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+            setItemsPerPage(parseInt(value));
+            setCurrentPage(1);
+          }}>
+            <SelectTrigger className="w-20 h-8 bg-white" data-testid="select-items-per-page">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="25">25</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">
+            {startIndex + 1} - {Math.min(endIndex, sortedJobs.length)} of {sortedJobs.length}
+          </span>
+          
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              data-testid="button-prev-page"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              data-testid="button-next-page"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
