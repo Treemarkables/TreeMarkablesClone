@@ -1451,6 +1451,33 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       const job = await storage.createJob(validation.data);
       
+      // Migrate temporary diary entries if they exist
+      const tempJobId = req.body.tempJobId; // Frontend should send this when creating from temp data
+      if (tempJobId && tempJobId.startsWith('temp-') && (global as any).tempDiaryEntries) {
+        const tempEntries = (global as any).tempDiaryEntries.get(tempJobId);
+        if (tempEntries && tempEntries.length > 0) {
+          console.log(`🔄 Migrating ${tempEntries.length} diary entries from ${tempJobId} to ${job.id}`);
+          
+          // Create all temporary diary entries in the real job
+          for (const tempEntry of tempEntries) {
+            try {
+              const entryData = {
+                ...tempEntry,
+                jobId: job.id, // Update to real job ID
+                id: undefined // Let the database generate new ID
+              };
+              await storage.createJobDiaryEntry(entryData);
+            } catch (error) {
+              console.error('Error migrating diary entry:', error);
+            }
+          }
+          
+          // Clean up temporary entries to prevent memory leak
+          (global as any).tempDiaryEntries.delete(tempJobId);
+          console.log(`✅ Migrated diary entries and cleaned up ${tempJobId}`);
+        }
+      }
+      
       // Trigger automated notifications for new job
       AutomatedTriggers.onJobCreated(job)
         .catch(error => console.error('Error triggering new job notification:', error));
