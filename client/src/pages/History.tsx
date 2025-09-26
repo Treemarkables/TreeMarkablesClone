@@ -6,18 +6,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { 
-  Hammer, 
-  Plus, 
+  Archive, 
   Search, 
   Filter, 
   MoreHorizontal, 
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronUp
+  ChevronUp,
+  Users,
+  FileText
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { Job, Customer } from "@shared/schema";
+import type { Customer } from "@shared/schema";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -26,48 +27,39 @@ interface ApiResponse<T> {
   count?: number;
 }
 
-type SortColumn = 'date' | 'jobNumber' | 'company' | 'firstName' | 'lastName' | 'status';
+type SortColumn = 'name' | 'email' | 'source' | 'importDate';
 type SortDirection = 'asc' | 'desc';
 
 export default function History() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [sortColumn, setSortColumn] = useState<SortColumn>('date');
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [sortColumn, setSortColumn] = useState<SortColumn>('importDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
-  // Fetch jobs and customers data
-  const { data: jobsResponse, isLoading: jobsLoading } = useQuery<ApiResponse<Job>>({
-    queryKey: ['/api/jobs'],
+  // Fetch historical customers
+  const { data: customersResponse, isLoading: customersLoading } = useQuery<ApiResponse<Customer>>({
+    queryKey: ['/api/customers/historical'],
   });
 
-  const { data: customersResponse } = useQuery<ApiResponse<Customer>>({
-    queryKey: ['/api/customers'],
-  });
-
-  const jobs = jobsResponse?.data || [];
   const customers = customersResponse?.data || [];
 
-  // Create customer lookup map
-  const customerMap = new Map(customers.map(customer => [customer.id, customer]));
-
-  // Filter jobs
-  const filteredJobs = jobs.filter(job => {
-    const customer = customerMap.get(job.customerId || '');
-    const customerName = customer?.name || '';
-    const jobNumber = job.jobNumber || '';
+  // Filter customers
+  const filteredCustomers = customers.filter(customer => {
+    const name = customer.name || '';
+    const email = customer.email || '';
+    const source = customer.importSource || '';
     
     const matchesSearch = 
-      jobNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (job.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (job.address || '').toLowerCase().includes(searchQuery.toLowerCase());
+      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (customer.address || '').toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesStatus = statusFilter === 'all' || 
-      statusFilter.split(',').includes(job.status || '');
+    const matchesSource = sourceFilter === 'all' || 
+      source === sourceFilter;
     
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesSource;
   });
 
   // Handle column sorting
@@ -81,40 +73,26 @@ export default function History() {
     setCurrentPage(1); // Reset to first page when sorting
   };
 
-  // Sort jobs by selected column and direction
-  const sortedJobs = [...filteredJobs].sort((a, b) => {
+  // Sort customers by selected column and direction
+  const sortedCustomers = [...filteredCustomers].sort((a, b) => {
     let valueA: any, valueB: any;
     
     switch (sortColumn) {
-      case 'date':
+      case 'name':
+        valueA = a.name || '';
+        valueB = b.name || '';
+        break;
+      case 'email':
+        valueA = a.email || '';
+        valueB = b.email || '';
+        break;
+      case 'source':
+        valueA = a.importSource || '';
+        valueB = b.importSource || '';
+        break;
+      case 'importDate':
         valueA = new Date(a.createdAt || 0).getTime();
         valueB = new Date(b.createdAt || 0).getTime();
-        break;
-      case 'jobNumber':
-        valueA = a.jobNumber || '';
-        valueB = b.jobNumber || '';
-        break;
-      case 'company':
-        const customerDetailsA = getCustomerDetails(a.customerId || '');
-        const customerDetailsB = getCustomerDetails(b.customerId || '');
-        valueA = customerDetailsA.name;
-        valueB = customerDetailsB.name;
-        break;
-      case 'firstName':
-        const customerDetailsA2 = getCustomerDetails(a.customerId || '');
-        const customerDetailsB2 = getCustomerDetails(b.customerId || '');
-        valueA = customerDetailsA2.firstName;
-        valueB = customerDetailsB2.firstName;
-        break;
-      case 'lastName':
-        const customerDetailsA3 = getCustomerDetails(a.customerId || '');
-        const customerDetailsB3 = getCustomerDetails(b.customerId || '');
-        valueA = customerDetailsA3.lastName;
-        valueB = customerDetailsB3.lastName;
-        break;
-      case 'status':
-        valueA = a.status || '';
-        valueB = b.status || '';
         break;
       default:
         valueA = '';
@@ -136,27 +114,21 @@ export default function History() {
   });
 
   // Pagination
-  const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedCustomers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedJobs = sortedJobs.slice(startIndex, endIndex);
+  const paginatedCustomers = sortedCustomers.slice(startIndex, endIndex);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
-      case 'work_order':
-        return <Badge className="bg-green-100 text-green-800">Work Order</Badge>;
-      case 'scheduled':
-        return <Badge className="bg-blue-100 text-blue-800">Scheduled</Badge>;
-      case 'quote':
-        return <Badge className="bg-gray-100 text-gray-800">Quote</Badge>;
-      case 'unsuccessful':
-        return <Badge className="bg-red-100 text-red-800">Unsuccessful</Badge>;
-      case 'lead':
-        return <Badge className="bg-yellow-100 text-yellow-800">Lead</Badge>;
+  const getSourceBadge = (source: string) => {
+    switch (source) {
+      case 'csv_upload':
+        return <Badge className="bg-blue-100 text-blue-800">CSV Import</Badge>;
+      case 'servicem8':
+        return <Badge className="bg-orange-100 text-orange-800">ServiceM8</Badge>;
+      case 'manual':
+        return <Badge className="bg-green-100 text-green-800">Manual Entry</Badge>;
       default:
-        return <Badge className="bg-gray-100 text-gray-800">Quote</Badge>;
+        return <Badge className="bg-gray-100 text-gray-800">Import</Badge>;
     }
   };
 
@@ -175,35 +147,28 @@ export default function History() {
       <ChevronDown className="h-4 w-4" />;
   };
 
-  const getCustomerDetails = (customerId: string) => {
-    const customer = customerMap.get(customerId);
-    if (!customer) return { name: '', firstName: '', lastName: '' };
-    
-    const name = customer.name || '';
-    const nameParts = name.split(' ');
-    return {
-      name,
-      firstName: nameParts[0] || '',
-      lastName: nameParts.slice(1).join(' ') || ''
-    };
-  };
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b bg-white">
         <div className="flex items-center gap-2">
-          <Hammer className="h-5 w-5 text-gray-600" />
-          <h1 className="text-xl font-semibold text-gray-900">Jobs</h1>
+          <Archive className="h-5 w-5 text-gray-600" />
+          <h1 className="text-xl font-semibold text-gray-900">Historical Customers</h1>
+          <Badge className="bg-blue-100 text-blue-800 ml-2">
+            {customersResponse?.count || customers.length} records
+          </Badge>
         </div>
         
-        <Button 
-          className="bg-green-600 hover:bg-green-700 text-white"
-          data-testid="button-new-job"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          New Job
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline"
+            className="bg-white"
+            data-testid="button-export-csv"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filter Bar */}
@@ -211,7 +176,7 @@ export default function History() {
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <Input
-            placeholder="Search..."
+            placeholder="Search customers..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 bg-white"
@@ -223,22 +188,22 @@ export default function History() {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="bg-white" data-testid="button-filter">
               <Filter className="h-4 w-4 mr-2" />
-              Filter
+              Filter Source
               <ChevronDown className="h-4 w-4 ml-2" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => setStatusFilter('all')}>
-              All Statuses
+            <DropdownMenuItem onClick={() => setSourceFilter('all')}>
+              All Sources
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setStatusFilter('work_order,completed,scheduled')}>
-              Work Orders
+            <DropdownMenuItem onClick={() => setSourceFilter('csv_upload')}>
+              CSV Import
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setStatusFilter('quote,lead')}>
-              Quotes
+            <DropdownMenuItem onClick={() => setSourceFilter('servicem8')}>
+              ServiceM8
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setStatusFilter('unsuccessful')}>
-              Unsuccessful
+            <DropdownMenuItem onClick={() => setSourceFilter('manual')}>
+              Manual Entry
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -251,86 +216,75 @@ export default function History() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
+            <DropdownMenuItem>Restore Selected</DropdownMenuItem>
             <DropdownMenuItem>Export to CSV</DropdownMenuItem>
             <DropdownMenuItem>Print List</DropdownMenuItem>
-            <DropdownMenuItem>Email List</DropdownMenuItem>
+            <DropdownMenuItem>Delete Permanently</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      {/* Jobs Table */}
+      {/* Customer Table */}
       <div className="flex-1 overflow-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-b">
-              <TableHead className="w-24">
-                <button
-                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
-                  onClick={() => handleSort('date')}
-                  data-testid="header-date"
-                >
-                  Date
-                  {getSortIcon('date')}
-                </button>
+              <TableHead className="w-8">
+                <input type="checkbox" className="rounded" />
               </TableHead>
-              <TableHead className="w-32">
+              <TableHead>
                 <button
                   className="flex items-center gap-1 hover:text-blue-600 font-medium"
-                  onClick={() => handleSort('jobNumber')}
-                  data-testid="header-job-number"
+                  onClick={() => handleSort('name')}
+                  data-testid="header-name"
                 >
-                  Job Number
-                  {getSortIcon('jobNumber')}
+                  Customer Name
+                  {getSortIcon('name')}
                 </button>
               </TableHead>
               <TableHead>
                 <button
                   className="flex items-center gap-1 hover:text-blue-600 font-medium"
-                  onClick={() => handleSort('company')}
-                  data-testid="header-company"
+                  onClick={() => handleSort('email')}
+                  data-testid="header-email"
                 >
-                  Company
-                  {getSortIcon('company')}
+                  Email
+                  {getSortIcon('email')}
+                </button>
+              </TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Address</TableHead>
+              <TableHead>
+                <button
+                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
+                  onClick={() => handleSort('source')}
+                  data-testid="header-source"
+                >
+                  Source
+                  {getSortIcon('source')}
                 </button>
               </TableHead>
               <TableHead>
                 <button
                   className="flex items-center gap-1 hover:text-blue-600 font-medium"
-                  onClick={() => handleSort('firstName')}
-                  data-testid="header-first-name"
+                  onClick={() => handleSort('importDate')}
+                  data-testid="header-import-date"
                 >
-                  Contact First
-                  {getSortIcon('firstName')}
+                  Import Date
+                  {getSortIcon('importDate')}
                 </button>
               </TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
-                  onClick={() => handleSort('lastName')}
-                  data-testid="header-last-name"
-                >
-                  Contact Last
-                  {getSortIcon('lastName')}
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
-                  onClick={() => handleSort('status')}
-                  data-testid="header-status"
-                >
-                  Job Status
-                  {getSortIcon('status')}
-                </button>
-              </TableHead>
-              <TableHead className="w-48">Actions</TableHead>
+              <TableHead className="w-32">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {jobsLoading ? (
+            {customersLoading ? (
               // Loading skeleton rows
               [...Array(10)].map((_, i) => (
                 <TableRow key={i} className="border-b">
+                  <TableCell>
+                    <div className="h-4 w-4 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
                   <TableCell>
                     <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
                   </TableCell>
@@ -354,58 +308,64 @@ export default function History() {
                   </TableCell>
                 </TableRow>
               ))
-            ) : paginatedJobs.length === 0 ? (
+            ) : paginatedCustomers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                  No jobs found
+                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                  <div className="flex flex-col items-center gap-2">
+                    <Users className="h-8 w-8 text-gray-400" />
+                    <span>No historical customers found</span>
+                    {searchQuery && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setSearchQuery('')}
+                      >
+                        Clear search
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedJobs.map((job) => {
-                const customer = getCustomerDetails(job.customerId || '');
-                return (
-                  <TableRow key={job.id} className="border-b hover:bg-gray-50" data-testid={`row-job-${job.id}`}>
-                    <TableCell className="text-sm text-gray-600">
-                      {formatDate(job.createdAt ? job.createdAt.toString() : null)}
-                    </TableCell>
-                    <TableCell className="font-medium text-blue-600" data-testid={`text-job-number-${job.id}`}>
-                      {job.jobNumber || ''}
-                    </TableCell>
-                    <TableCell className="text-sm" data-testid={`text-company-${job.id}`}>
-                      {customer.name}
-                    </TableCell>
-                    <TableCell className="text-sm" data-testid={`text-first-name-${job.id}`}>
-                      {customer.firstName}
-                    </TableCell>
-                    <TableCell className="text-sm" data-testid={`text-last-name-${job.id}`}>
-                      {customer.lastName}
-                    </TableCell>
-                    <TableCell>
-                      {getStatusBadge(job.status || '')}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                          data-testid={`button-open-job-${job.id}`}
-                        >
-                          Open Job
+              paginatedCustomers.map((customer) => (
+                <TableRow key={customer.id} className="border-b hover:bg-gray-50" data-testid={`row-customer-${customer.id}`}>
+                  <TableCell>
+                    <input type="checkbox" className="rounded" />
+                  </TableCell>
+                  <TableCell className="font-medium" data-testid={`text-name-${customer.id}`}>
+                    {customer.name || 'No name'}
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-600" data-testid={`text-email-${customer.id}`}>
+                    {customer.email || '-'}
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-600" data-testid={`text-phone-${customer.id}`}>
+                    {customer.phone || '-'}
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-600 max-w-48 truncate" data-testid={`text-address-${customer.id}`}>
+                    {customer.address || '-'}
+                  </TableCell>
+                  <TableCell>
+                    {getSourceBadge(customer.importSource || 'import')}
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-600">
+                    {formatDate(customer.createdAt ? customer.createdAt.toString() : null)}
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" data-testid={`button-actions-${customer.id}`}>
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="text-red-600 border-red-200 hover:bg-red-50"
-                          data-testid={`button-remove-${job.id}`}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem>View Details</DropdownMenuItem>
+                        <DropdownMenuItem>Restore Customer</DropdownMenuItem>
+                        <DropdownMenuItem className="text-red-600">Delete Permanently</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
             )}
           </TableBody>
         </Table>
@@ -429,11 +389,12 @@ export default function History() {
               <SelectItem value="100">100</SelectItem>
             </SelectContent>
           </Select>
+          <span className="text-sm text-gray-600">per page</span>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">
-            {startIndex + 1} - {Math.min(endIndex, sortedJobs.length)} of {sortedJobs.length}
+            {startIndex + 1} - {Math.min(endIndex, sortedCustomers.length)} of {sortedCustomers.length}
           </span>
           
           <div className="flex items-center gap-1">
