@@ -14,13 +14,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
-  FileText,
   Hammer,
-  Plus
+  FileText
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { GlobalJobCard } from "@/components/GlobalJobCard";
 import type { Job, Customer } from "@shared/schema";
+import { GlobalJobCard } from "@/components/GlobalJobCard";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -29,7 +28,7 @@ interface ApiResponse<T> {
   count?: number;
 }
 
-type SortColumn = 'date' | 'jobNumber' | 'customer' | 'address' | 'status' | 'value';
+type SortColumn = 'date' | 'jobNumber' | 'company' | 'status' | 'amount';
 type SortDirection = 'asc' | 'desc';
 
 export default function History() {
@@ -39,8 +38,6 @@ export default function History() {
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [sortColumn, setSortColumn] = useState<SortColumn>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-
-  // Job card modal state
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isJobCardOpen, setIsJobCardOpen] = useState(false);
 
@@ -49,7 +46,7 @@ export default function History() {
     queryKey: ['/api/jobs'],
   });
 
-  // Fetch customers for job details
+  // Fetch all customers for lookup
   const { data: customersResponse } = useQuery<ApiResponse<Customer>>({
     queryKey: ['/api/customers'],
   });
@@ -65,13 +62,12 @@ export default function History() {
     const customer = customerMap.get(job.customerId || '');
     const customerName = customer?.name || '';
     const jobNumber = job.jobNumber || '';
-    const address = job.address || '';
     
     const matchesSearch = 
       jobNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (job.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      address.toLowerCase().includes(searchQuery.toLowerCase());
+      (job.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (job.address || '').toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || 
       statusFilter.split(',').includes(job.status || '');
@@ -103,23 +99,19 @@ export default function History() {
         valueA = a.jobNumber || '';
         valueB = b.jobNumber || '';
         break;
-      case 'customer':
+      case 'company':
         const customerA = customerMap.get(a.customerId || '');
         const customerB = customerMap.get(b.customerId || '');
         valueA = customerA?.name || '';
         valueB = customerB?.name || '';
         break;
-      case 'address':
-        valueA = a.address || '';
-        valueB = b.address || '';
-        break;
       case 'status':
         valueA = a.status || '';
         valueB = b.status || '';
         break;
-      case 'value':
-        valueA = parseFloat(a.totalAmount as string || '0');
-        valueB = parseFloat(b.totalAmount as string || '0');
+      case 'amount':
+        valueA = parseFloat(a.totalAmount || '0');
+        valueB = parseFloat(b.totalAmount || '0');
         break;
       default:
         valueA = '';
@@ -172,12 +164,11 @@ export default function History() {
   };
 
   const formatCurrency = (amount: string | null) => {
-    if (!amount) return '$0.00';
-    const num = parseFloat(amount);
-    return new Intl.NumberFormat('en-NZ', {
-      style: 'currency',
-      currency: 'NZD'
-    }).format(num);
+    if (!amount) return '';
+    return new Intl.NumberFormat('en-NZ', { 
+      style: 'currency', 
+      currency: 'NZD' 
+    }).format(parseFloat(amount));
   };
 
   const getSortIcon = (column: SortColumn) => {
@@ -189,20 +180,14 @@ export default function History() {
       <ChevronDown className="h-4 w-4" />;
   };
 
-  // Handle job row click
-  const handleJobClick = (job: Job) => {
-    setSelectedJobId(job.id);
+  const handleJobRowClick = (jobId: string) => {
+    setSelectedJobId(jobId);
     setIsJobCardOpen(true);
   };
 
-  const handleCloseJobCard = () => {
+  const handleJobCardClose = () => {
     setIsJobCardOpen(false);
     setSelectedJobId(null);
-  };
-
-  const handleJobUpdated = () => {
-    // Refresh jobs data when a job is updated
-    // TanStack Query will automatically refetch
   };
 
   return (
@@ -213,7 +198,7 @@ export default function History() {
           <Archive className="h-5 w-5 text-gray-600" />
           <h1 className="text-xl font-semibold text-gray-900">Job History</h1>
           <Badge className="bg-blue-100 text-blue-800 ml-2">
-            {jobs.length} total jobs
+            {jobs.length} jobs
           </Badge>
         </div>
         
@@ -254,14 +239,11 @@ export default function History() {
             <DropdownMenuItem onClick={() => setStatusFilter('all')}>
               All Statuses
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setStatusFilter('completed,work_order')}>
-              Completed Jobs
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setStatusFilter('scheduled')}>
-              Scheduled
+            <DropdownMenuItem onClick={() => setStatusFilter('work_order,completed,scheduled')}>
+              Work Orders
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setStatusFilter('quote,lead')}>
-              Quotes & Leads
+              Quotes
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setStatusFilter('unsuccessful')}>
               Unsuccessful
@@ -279,8 +261,7 @@ export default function History() {
           <DropdownMenuContent>
             <DropdownMenuItem>Export to CSV</DropdownMenuItem>
             <DropdownMenuItem>Print List</DropdownMenuItem>
-            <DropdownMenuItem>Email Report</DropdownMenuItem>
-            <DropdownMenuItem>Archive Selected</DropdownMenuItem>
+            <DropdownMenuItem>Email List</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -313,24 +294,15 @@ export default function History() {
               <TableHead>
                 <button
                   className="flex items-center gap-1 hover:text-blue-600 font-medium"
-                  onClick={() => handleSort('customer')}
-                  data-testid="header-customer"
+                  onClick={() => handleSort('company')}
+                  data-testid="header-company"
                 >
                   Customer
-                  {getSortIcon('customer')}
+                  {getSortIcon('company')}
                 </button>
               </TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
-                  onClick={() => handleSort('address')}
-                  data-testid="header-address"
-                >
-                  Address
-                  {getSortIcon('address')}
-                </button>
-              </TableHead>
-              <TableHead>Service Type</TableHead>
+              <TableHead>Job Title</TableHead>
+              <TableHead>Address</TableHead>
               <TableHead>
                 <button
                   className="flex items-center gap-1 hover:text-blue-600 font-medium"
@@ -344,11 +316,11 @@ export default function History() {
               <TableHead>
                 <button
                   className="flex items-center gap-1 hover:text-blue-600 font-medium"
-                  onClick={() => handleSort('value')}
-                  data-testid="header-value"
+                  onClick={() => handleSort('amount')}
+                  data-testid="header-amount"
                 >
-                  Value
-                  {getSortIcon('value')}
+                  Amount
+                  {getSortIcon('amount')}
                 </button>
               </TableHead>
             </TableRow>
@@ -406,8 +378,8 @@ export default function History() {
                   <TableRow 
                     key={job.id} 
                     className="border-b hover:bg-gray-50 cursor-pointer" 
+                    onClick={() => handleJobRowClick(job.id)}
                     data-testid={`row-job-${job.id}`}
-                    onClick={() => handleJobClick(job)}
                   >
                     <TableCell className="text-sm text-gray-600">
                       {formatDate(job.createdAt ? job.createdAt.toString() : null)}
@@ -415,20 +387,20 @@ export default function History() {
                     <TableCell className="font-medium text-blue-600" data-testid={`text-job-number-${job.id}`}>
                       {job.jobNumber || ''}
                     </TableCell>
-                    <TableCell className="text-sm" data-testid={`text-customer-${job.id}`}>
+                    <TableCell className="text-sm font-medium" data-testid={`text-customer-${job.id}`}>
                       {customer?.name || 'Unknown Customer'}
                     </TableCell>
-                    <TableCell className="text-sm max-w-48 truncate" data-testid={`text-address-${job.id}`}>
-                      {job.address || ''}
+                    <TableCell className="text-sm" data-testid={`text-title-${job.id}`}>
+                      {job.title || '-'}
                     </TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {job.serviceType || 'General'}
+                    <TableCell className="text-sm text-gray-600 max-w-48 truncate" data-testid={`text-address-${job.id}`}>
+                      {job.address || '-'}
                     </TableCell>
                     <TableCell>
                       {getStatusBadge(job.status || '')}
                     </TableCell>
-                    <TableCell className="font-medium text-green-600">
-                      {formatCurrency(job.totalAmount as string)}
+                    <TableCell className="text-sm font-medium">
+                      {formatCurrency(job.totalAmount)}
                     </TableCell>
                   </TableRow>
                 );
@@ -488,14 +460,15 @@ export default function History() {
         </div>
       </div>
 
-      {/* Global Job Card Modal */}
-      <GlobalJobCard
-        isOpen={isJobCardOpen}
-        onClose={handleCloseJobCard}
-        mode="edit"
-        jobId={selectedJobId || undefined}
-        onJobUpdated={handleJobUpdated}
-      />
+      {/* Job Card Modal */}
+      {selectedJobId && (
+        <GlobalJobCard
+          jobId={selectedJobId}
+          isOpen={isJobCardOpen}
+          onClose={handleJobCardClose}
+          mode="edit"
+        />
+      )}
     </div>
   );
 }
