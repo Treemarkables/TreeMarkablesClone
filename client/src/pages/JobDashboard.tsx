@@ -231,7 +231,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
     const query = jobSearchQuery.toLowerCase();
     return (
       job.title.toLowerCase().includes(query) ||
-      job.customer.toLowerCase().includes(query) ||
+      job.customer?.toLowerCase().includes(query) ||
       job.location.toLowerCase().includes(query) ||
       job.status.toLowerCase().includes(query) ||
       job.priority.toLowerCase().includes(query)
