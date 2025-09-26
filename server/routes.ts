@@ -7540,6 +7540,120 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // POST /api/jobs/import-csv - Import jobs from CSV file upload
+  app.post('/api/jobs/import-csv', upload.single('csvFile'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'No CSV file provided'
+        });
+      }
+
+      // Parse CSV file
+      const csvContent = req.file.buffer.toString('utf-8');
+      const Papa = require('papaparse');
+      
+      const parseResult = Papa.parse(csvContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim()
+      });
+
+      if (parseResult.errors.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'CSV parsing errors',
+          errors: parseResult.errors.map((e: any) => e.message)
+        });
+      }
+
+      const jobs = parseResult.data;
+      let imported = 0;
+      let updated = 0;
+      let skipped = 0;
+      let errors = 0;
+      const errorMessages: string[] = [];
+      const importedJobIds: string[] = [];
+
+      // Get all existing customers for matching
+      const existingCustomers = await storage.getAllCustomers();
+      const customerByName = new Map(existingCustomers.map(c => [c.name.toLowerCase().trim(), c]));
+
+      for (const csvJob of jobs) {
+        try {
+          // Find customer by name (or create if needed)
+          const customerName = (csvJob.customerName || csvJob.companyName || csvJob['Customer Name'] || csvJob['Company Name'] || '').trim();
+          let customer = customerByName.get(customerName.toLowerCase());
+
+          if (!customer && customerName) {
+            // Create new customer if not found
+            customer = await storage.createCustomer({
+              name: customerName,
+              email: csvJob.customerEmail || '',
+              phone: csvJob.customerPhone || '',
+              address: csvJob.customerAddress || ''
+            });
+            customerByName.set(customerName.toLowerCase(), customer);
+          }
+
+          if (!customer) {
+            skipped++;
+            errorMessages.push(`No customer found for job: ${csvJob.jobNumber || 'Unknown'}`);
+            continue;
+          }
+
+          // Create job with proper field mapping
+          const newJob = await storage.createJob({
+            jobNumber: csvJob.jobNumber || csvJob['Job Number'] || `JOB-${Date.now()}`,
+            title: csvJob.title || csvJob.description || csvJob.Description || 'Imported Job',
+            description: csvJob.description || csvJob.Description || csvJob.notes || '',
+            customerId: customer.id,
+            status: csvJob.status || 'pending',
+            priority: csvJob.priority || 'medium',
+            scheduledDate: csvJob.scheduledDate || csvJob['Scheduled Date'] || null,
+            estimatedValue: parseFloat(csvJob.estimatedValue || csvJob.value || '0') || 0,
+            location: csvJob.location || csvJob.address || '',
+            duration: parseInt(csvJob.duration || '60') || 60,
+            teamMembers: csvJob.teamMembers ? csvJob.teamMembers.split(',').map((m: string) => m.trim()) : [],
+            equipment: csvJob.equipment ? csvJob.equipment.split(',').map((e: string) => e.trim()) : [],
+            servicem8Uuid: csvJob.servicem8Uuid || csvJob['ServiceM8 UUID'] || null
+          });
+
+          importedJobIds.push(newJob.id);
+          imported++;
+
+        } catch (error) {
+          errors++;
+          const errorMsg = `Row ${jobs.indexOf(csvJob) + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errorMessages.push(errorMsg);
+          console.error('Error importing job:', error);
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          imported,
+          updated,
+          skipped,
+          errors: errorMessages.length,
+          totalProcessed: jobs.length,
+          batchId: `import-${Date.now()}`,
+          importedJobIds,
+          errors: errorMessages
+        }
+      });
+
+    } catch (error) {
+      console.error('Error importing jobs from CSV:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error importing jobs'
+      });
+    }
+  });
+
   // POST /api/jobs/import-servicem8 - Import jobs from ServiceM8 CSV file
   app.post('/api/jobs/import-servicem8', async (req: Request, res: Response) => {
     try {
