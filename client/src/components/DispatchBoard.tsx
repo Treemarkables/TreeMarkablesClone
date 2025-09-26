@@ -654,16 +654,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             return job.priority === 'urgent' || job.priority === 'high';
             
           case 'leads':
-            // Jobs that are potential customers/inquiries (typically low priority or specific status)
-            return job.priority === 'low' || job.serviceType?.toLowerCase().includes('lead') || job.serviceType?.toLowerCase().includes('inquiry') || false;
+            // Jobs that are potential customers/inquiries (status = lead OR low priority OR specific service type)
+            return job.status === 'lead' || job.priority === 'low' || job.serviceType?.toLowerCase().includes('lead') || job.serviceType?.toLowerCase().includes('inquiry');
             
           case 'quotes':
             // Jobs with Quote in service type
             return job.serviceType?.toLowerCase().includes('quote') || false;
             
           case 'work_orders':
-            // Jobs that are confirmed work orders (typically scheduled or in progress, not quotes/leads)
-            return (job.status === 'scheduled' || job.status === 'in_progress') && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
+            // Jobs that are confirmed work orders (scheduled/in_progress/work_order status, not quotes/leads)
+            return (job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'work_order') && job.status !== 'lead' && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
             
           case 'unscheduled':
             // Jobs without proper scheduling or assignment
