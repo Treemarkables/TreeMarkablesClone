@@ -5543,10 +5543,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       if (success) {
         // Create diary entry for sent SMS
-        const diaryEntry = await storage.createDiaryEntry({
+        const diaryEntry = await storage.createJobDiaryEntry({
           jobId,
           entryType: 'sms',
-          content: message,
+          title: 'SMS Sent',
+          description: message,
           metadata: {
             recipient: to,
             status: 'sent',
@@ -5596,10 +5597,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       if (success) {
         // Create diary entry for sent email
-        const diaryEntry = await storage.createDiaryEntry({
+        const diaryEntry = await storage.createJobDiaryEntry({
           jobId,
           entryType: 'email',
-          content: `Subject: ${subject}\n\n${message}`,
+          title: `Email: ${subject}`,
+          description: message,
           metadata: {
             recipient: to,
             subject,

@@ -1193,6 +1193,17 @@ class DatabaseStorage implements IStorage {
     return job;
   }
 
+  async updateInvoiceEligibility(jobId: string, eligible: boolean): Promise<Job> {
+    const [job] = await db.update(schema.jobs)
+      .set({ 
+        invoiceEligible: eligible, 
+        updatedAt: new Date() 
+      })
+      .where(eq(schema.jobs.id, jobId))
+      .returning();
+    return job;
+  }
+
   async getJobsByCustomer(customerId: string): Promise<Job[]> {
     return await db.select().from(schema.jobs)
       .where(eq(schema.jobs.customerId, customerId))
