@@ -17,7 +17,10 @@ import {
   Percent,
   CreditCard,
   CheckCircle,
-  X
+  X,
+  Calculator,
+  Eye,
+  FileType
 } from "lucide-react";
 
 interface ServiceM8HeaderToolbarProps {
@@ -42,6 +45,10 @@ interface ServiceM8HeaderToolbarProps {
   onCustomiseInvoice: () => void;
   onAddPayment: () => void;
   onSendToXero: () => void;
+  // Quote actions
+  onGenerateQuote: () => void;
+  onCustomiseQuote: () => void;
+  onSendQuote: () => void;
 }
 
 export function ServiceM8HeaderToolbar({
@@ -65,6 +72,9 @@ export function ServiceM8HeaderToolbar({
   onCustomiseInvoice,
   onAddPayment,
   onSendToXero,
+  onGenerateQuote,
+  onCustomiseQuote,
+  onSendQuote,
 }: ServiceM8HeaderToolbarProps) {
   return (
     <div className="bg-white border-b border-gray-200 p-3 flex-shrink-0">
@@ -203,6 +213,20 @@ export function ServiceM8HeaderToolbar({
               <Receipt className="w-4 h-4 mr-2" />
               Track Expenses
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onGenerateQuote}>
+              <Calculator className="w-4 h-4 mr-2 text-blue-600" />
+              Generate Quote
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onCustomiseQuote}>
+              <Eye className="w-4 h-4 mr-2 text-purple-600" />
+              Customise Quote
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onSendQuote}>
+              <FileType className="w-4 h-4 mr-2 text-indigo-600" />
+              Send Quote
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onSendInvoice}>
               <Send className="w-4 h-4 mr-2 text-green-600" />
               Send Invoice
