@@ -34,6 +34,9 @@ interface EmailComposerModalProps {
   job?: any;
   customer?: any;
   invoiceData?: any;
+  quoteData?: any;
+  proposalData?: any;
+  templateType?: 'invoice' | 'quote' | 'proposal';
 }
 
 interface EmailTemplate {
@@ -75,6 +78,48 @@ If you have any questions, please don't hesitate to contact us.
 
 Best regards,
 {contactName}`
+  },
+  {
+    id: "quote_delivery",
+    name: "Quote Delivery",
+    subject: "Your Quote RE: {jobNumber} {customerAddress}",
+    body: `Hi {customerName},
+
+Thank you for your enquiry. Please find your detailed quote for {jobDescription} attached.
+
+Quote Number: {quoteNumber}
+Valid Until: {quoteExpiry}
+Total Amount: {quoteAmount}
+
+You can view your quote online here: {quoteLink}
+
+We look forward to hearing from you. If you have any questions about this quote, please contact {contactName} on {contactPhone}.
+
+Best regards,
+{contactName}
+{companySignature}`
+  },
+  {
+    id: "proposal_delivery", 
+    name: "Proposal Delivery",
+    subject: "Your Detailed Proposal RE: {jobNumber}",
+    body: `Hi {customerName},
+
+Thank you for considering Treemarkables for your tree service needs. Please find your comprehensive proposal for {jobDescription} attached.
+
+This proposal includes:
+- Detailed scope of work
+- Professional recommendations  
+- Competitive pricing
+- Our certification and insurance details
+
+You can view your proposal online here: {proposalLink}
+
+We would be delighted to discuss this proposal further. Please contact {contactName} on {contactPhone} with any questions.
+
+Kind regards,
+{contactName}
+{companySignature}`
   }
 ];
 
@@ -83,7 +128,10 @@ export function EmailComposerModal({
   onClose, 
   job, 
   customer, 
-  invoiceData 
+  invoiceData,
+  quoteData,
+  proposalData,
+  templateType
 }: EmailComposerModalProps) {
   const [emailData, setEmailData] = useState({
     to: "",
@@ -92,7 +140,14 @@ export function EmailComposerModal({
     body: "",
     selectedTemplate: ""
   });
-  const [attachments, setAttachments] = useState<string[]>([]);
+  interface TypedAttachment {
+    name: string;
+    type: 'invoice' | 'quote' | 'proposal' | 'file' | 'photo';
+    id?: string;
+    url?: string;
+  }
+
+  const [attachments, setAttachments] = useState<TypedAttachment[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -110,19 +165,55 @@ export function EmailComposerModal({
     enabled: !!job?.id && isOpen,
   });
 
+  // Get appropriate template based on context
+  const getDefaultTemplate = () => {
+    if (templateType === 'quote' || quoteData) {
+      return EMAIL_TEMPLATES.find(t => t.id === 'quote_delivery') || EMAIL_TEMPLATES[0];
+    } else if (templateType === 'proposal' || proposalData) {
+      return EMAIL_TEMPLATES.find(t => t.id === 'proposal_delivery') || EMAIL_TEMPLATES[0];
+    } else {
+      return EMAIL_TEMPLATES.find(t => t.id === 'invoice_delivery') || EMAIL_TEMPLATES[0];
+    }
+  };
+
   // Pre-populate email data when modal opens
   useEffect(() => {
     if (isOpen && job && customer) {
       const billingEmail = customer.billingContactEmail || customer.email || customer.jobContactEmail;
       const customerName = customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
       
-      // Auto-attach invoice if available
+      // Auto-attach appropriate document if available
+      const attachmentsList: TypedAttachment[] = [];
       if (invoiceData) {
-        setAttachments([`Treemarkables LTD Invoice ${invoiceData.invoiceNumber}`]);
+        attachmentsList.push({
+          name: `Treemarkables LTD Invoice ${invoiceData.invoiceNumber}`,
+          type: 'invoice',
+          id: invoiceData.id,
+          url: invoiceData.id ? `/api/invoices/${invoiceData.id}/pdf` : undefined
+        });
       }
+      if (quoteData) {
+        attachmentsList.push({
+          name: `Treemarkables LTD Quote ${quoteData.quoteNumber}`,
+          type: 'quote',
+          id: quoteData.id,
+          url: quoteData.id ? `/api/quotes/${quoteData.id}/pdf` : undefined
+        });
+      }
+      if (proposalData) {
+        attachmentsList.push({
+          name: `Treemarkables LTD Proposal ${proposalData.proposalNumber || 'PROP-' + job.jobNumber}`,
+          type: 'proposal',
+          id: proposalData.id,
+          url: proposalData.id ? `/api/proposals/${proposalData.id}/pdf` : undefined
+        });
+      }
+      setAttachments(attachmentsList);
 
-      // Apply default invoice template
-      const template = EMAIL_TEMPLATES[0]; // Invoice delivery template
+      // Apply appropriate template based on context
+      const template = getDefaultTemplate();
+      const documentData = invoiceData || quoteData || proposalData;
+      
       const populatedSubject = template.subject
         .replace("{jobNumber}", job.jobNumber || "")
         .replace("{customerAddress}", job.address || "");
@@ -131,6 +222,15 @@ export function EmailComposerModal({
         .replace("{customerName}", customerName || "Valued Customer")
         .replace("{jobDescription}", job.description || job.title || "tree service")
         .replace("{invoiceLink}", invoiceData?.id ? `${window.location.origin}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
+        .replace("{quoteLink}", quoteData?.id ? `${window.location.origin}/quote/${quoteData.id}` : "View quote in your customer portal")
+        .replace("{proposalLink}", proposalData?.id ? `${window.location.origin}/proposal/${proposalData.id}` : "View proposal in your customer portal")
+        .replace("{quoteNumber}", quoteData?.quoteNumber || "")
+        .replace("{quoteExpiry}", quoteData?.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : "")
+        .replace("{quoteAmount}", quoteData?.totalAmount ? `$${quoteData.totalAmount}` : "$0.00")
+        .replace("{proposalNumber}", proposalData?.proposalNumber || (job?.jobNumber ? `PROP-${job.jobNumber}` : ""))
+        .replace("{invoiceNumber}", invoiceData?.invoiceNumber || "")
+        .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
+        .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "")
         .replace("{contactName}", "Treemarkables Team")
         .replace("{contactPhone}", customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
         .replace("{companySignature}", "\n\nTreemarkables LTD\nCertified Arborists\nGisborne, New Zealand\nPhone: 027-XXX-XXXX\nEmail: info@treemarkables.co.nz");
@@ -143,7 +243,7 @@ export function EmailComposerModal({
         selectedTemplate: template.id
       });
     }
-  }, [isOpen, job, customer, invoiceData]);
+  }, [isOpen, job, customer, invoiceData, quoteData, proposalData, templateType]);
 
   // Handle photo selection for email attachments
   const togglePhotoSelection = (photoUrl: string) => {
@@ -179,7 +279,11 @@ export function EmailComposerModal({
 
     // Add files to state
     setUploadedFiles(prev => [...prev, ...fileArray]);
-    setAttachments(prev => [...prev, ...fileArray.map(file => file.name)]);
+    setAttachments(prev => [...prev, ...fileArray.map(file => ({
+      name: file.name,
+      type: 'file' as const,
+      url: URL.createObjectURL(file)
+    }))]);
     
     toast({
       title: "Files Attached",
@@ -193,7 +297,7 @@ export function EmailComposerModal({
   };
 
   const removeAttachment = (fileName: string) => {
-    setAttachments(prev => prev.filter(name => name !== fileName));
+    setAttachments(prev => prev.filter(attachment => attachment.name !== fileName));
     setUploadedFiles(prev => prev.filter(file => file.name !== fileName));
   };
 
@@ -226,16 +330,24 @@ export function EmailComposerModal({
     const populatedSubject = template.subject
       .replace("{jobNumber}", job?.jobNumber || "")
       .replace("{customerAddress}", job?.address || "")
-      .replace("{invoiceNumber}", invoiceData?.invoiceNumber || "");
+      .replace("{invoiceNumber}", invoiceData?.invoiceNumber || "")
+      .replace("{quoteNumber}", quoteData?.quoteNumber || "")
+      .replace("{proposalNumber}", proposalData?.proposalNumber || "");
     
     const populatedBody = template.body
       .replace("{customerName}", customerName || "Valued Customer")
       .replace("{jobDescription}", job?.description || job?.title || "tree service")
       .replace("{invoiceLink}", invoiceData?.id ? `${window.location.origin}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
+      .replace("{quoteLink}", quoteData?.id ? `${window.location.origin}/quote/${quoteData.id}` : "View quote in your customer portal")
+      .replace("{proposalLink}", proposalData?.id ? `${window.location.origin}/proposal/${proposalData.id}` : "View proposal in your customer portal")
+      .replace("{quoteNumber}", quoteData?.quoteNumber || "")
+      .replace("{quoteExpiry}", quoteData?.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : "")
+      .replace("{quoteAmount}", quoteData?.totalAmount ? `$${quoteData.totalAmount}` : "$0.00")
+      .replace("{proposalNumber}", proposalData?.proposalNumber || (job?.jobNumber ? `PROP-${job.jobNumber}` : ""))
       .replace("{contactName}", "Treemarkables Team")
       .replace("{contactPhone}", customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
       .replace("{companySignature}", "\n\nTreemarkables LTD\nCertified Arborists\nGisborne, New Zealand\nPhone: 027-XXX-XXXX\nEmail: info@treemarkables.co.nz")
-      .replace("{invoiceAmount}", invoiceData?.amount ? `$${invoiceData.amount}` : "$0.00")
+      .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
       .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "");
 
     setEmailData(prev => ({
@@ -270,11 +382,18 @@ export function EmailComposerModal({
       cc: emailData.cc || undefined,
       subject: emailData.subject,
       body: emailData.body,
-      attachments: attachments,
+      attachments: attachments.map(attachment => ({
+        name: attachment.name,
+        type: attachment.type,
+        id: attachment.id,
+        url: attachment.url
+      })),
       selectedPhotos: selectedPhotos,
       jobId: job?.id,
       customerId: customer?.id,
-      invoiceId: invoiceData?.id
+      invoiceId: invoiceData?.id,
+      quoteId: quoteData?.id,
+      proposalId: proposalData?.id
     };
 
     sendEmailMutation.mutate(emailPayload);
@@ -404,16 +523,27 @@ export function EmailComposerModal({
               <div className="grid grid-cols-12 gap-3 items-center">
                 <Label className="col-span-1 text-right">Attached:</Label>
                 <div className="col-span-11 flex gap-2 flex-wrap">
-                  {attachments.map((attachment, index) => (
-                    <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                      <FileText className="w-3 h-3" />
-                      {attachment}
-                      <X 
-                        className="w-3 h-3 ml-1 cursor-pointer hover:text-red-500" 
-                        onClick={() => removeAttachment(attachment)}
-                      />
-                    </Badge>
-                  ))}
+                  {attachments.map((attachment, index) => {
+                    const getAttachmentVariant = (type: string) => {
+                      switch (type) {
+                        case 'invoice': return 'destructive';
+                        case 'quote': return 'default';
+                        case 'proposal': return 'secondary';
+                        default: return 'outline';
+                      }
+                    };
+                    
+                    return (
+                      <Badge key={index} variant={getAttachmentVariant(attachment.type)} className="flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        {attachment.name}
+                        <X 
+                          className="w-3 h-3 ml-1 cursor-pointer hover:text-red-500" 
+                          onClick={() => removeAttachment(attachment.name)}
+                        />
+                      </Badge>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -434,7 +564,7 @@ export function EmailComposerModal({
             <h3 className="text-sm font-medium text-gray-700 mb-3">Smart Attachments</h3>
             
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {/* Invoice/Quote PDF */}
+              {/* Invoice PDF */}
               {invoiceData && (
                 <div 
                   className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
@@ -445,10 +575,53 @@ export function EmailComposerModal({
                       <FileText className="w-4 h-4 text-white" />
                     </div>
                     <div className="text-xs font-medium text-gray-900 mb-1">
-                      Quote #{invoiceData.invoiceNumber}
+                      Invoice #{invoiceData.invoiceNumber}
                     </div>
                     <div className="text-xs text-gray-500">
-                      for ${invoiceData.amount || '0.00'}
+                      for ${invoiceData.totalAmount || invoiceData.amount || '0.00'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Quote PDF */}
+              {quoteData && (
+                <div 
+                  className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  data-testid="attachment-quote-pdf"
+                >
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mb-2">
+                      <FileText className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="text-xs font-medium text-gray-900 mb-1">
+                      Quote #{quoteData.quoteNumber}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      for ${quoteData.totalAmount || '0.00'}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Valid until {quoteData.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Proposal PDF */}
+              {proposalData && (
+                <div 
+                  className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  data-testid="attachment-proposal-pdf"
+                >
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-8 h-8 bg-purple-500 rounded flex items-center justify-center mb-2">
+                      <FileText className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="text-xs font-medium text-gray-900 mb-1">
+                      Proposal #{proposalData.proposalNumber || 'PROP-' + job?.jobNumber}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Professional tree service proposal
                     </div>
                   </div>
                 </div>
@@ -506,7 +679,7 @@ export function EmailComposerModal({
               ))}
 
               {/* Show message when no photos available */}
-              {(!jobPhotos?.beforePhotos?.length && !jobPhotos?.afterPhotos?.length && !invoiceData) && (
+              {(!jobPhotos?.beforePhotos?.length && !jobPhotos?.afterPhotos?.length && !invoiceData && !quoteData && !proposalData) && (
                 <div className="col-span-full text-center py-4 text-gray-500 text-sm">
                   No attachments available for this job
                 </div>
