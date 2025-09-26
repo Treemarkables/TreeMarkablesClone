@@ -7712,6 +7712,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           }
 
           // Create job with proper field mapping
+          // Ensure address is never null/undefined by explicitly checking and providing fallback
+          const jobAddress = csvJob.location || csvJob.address || csvJob.customerAddress || csvJob.jobAddress || '';
+          const safeAddress = (jobAddress && jobAddress.trim()) ? jobAddress.trim() : 'Address not specified';
+          
           const newJob = await storage.createJob({
             jobNumber: csvJob.jobNumber || csvJob['Job Number'] || `JOB-${Date.now()}`,
             title: csvJob.title || csvJob.description || csvJob.Description || 'Imported Job',
@@ -7721,7 +7725,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             priority: csvJob.priority || 'medium',
             scheduledDate: csvJob.scheduledDate || csvJob['Scheduled Date'] || null,
             estimatedValue: parseFloat(csvJob.estimatedValue || csvJob.value || '0') || 0,
-            address: csvJob.location || csvJob.address || 'Address not specified',
+            address: safeAddress,
             duration: parseInt(csvJob.duration || '60') || 60,
             teamMembers: csvJob.teamMembers ? csvJob.teamMembers.split(',').map((m: string) => m.trim()) : [],
             equipment: csvJob.equipment ? csvJob.equipment.split(',').map((e: string) => e.trim()) : [],
