@@ -889,6 +889,20 @@ class DatabaseStorage implements IStorage {
       }
     }
 
+    // Combine first and last names if no company name and name field isn't available
+    if (!normalized.name && !normalized.company_name) {
+      const firstName = normalized.contact_first || '';
+      const lastName = normalized.contact_last || '';
+      if (firstName || lastName) {
+        normalized.name = `${firstName} ${lastName}`.trim();
+      }
+    }
+
+    // Use company_name as name if available and no name is set
+    if (!normalized.name && normalized.company_name) {
+      normalized.name = normalized.company_name;
+    }
+
     return normalized;
   }
 
