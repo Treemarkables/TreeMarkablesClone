@@ -920,14 +920,12 @@ export function GlobalJobCard({
                     </TabsTrigger>
                     <TabsTrigger 
                       value="diary" 
-                      disabled={!jobId}
                       data-testid="tab-diary"
                     >
                       Job Diary
                     </TabsTrigger>
                     <TabsTrigger 
                       value="profit" 
-                      disabled={!jobId}
                       data-testid="tab-profit"
                     >
                       Profit Tracking
@@ -1508,46 +1506,30 @@ export function GlobalJobCard({
                   
                   <TabsContent value="diary" className="h-full m-0">
                     <div className="h-full">
-                      {jobId ? (
-                        <JobDiarySection 
-                          jobId={jobId}
-                          customerId={form.getValues("customerId") || customerId}
-                          customerEmail={selectedCustomer?.email}
-                          customerPhone={selectedCustomer?.phone}
-                          className="h-full"
-                        />
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-muted-foreground">
-                          <div className="text-center">
-                            <div className="text-sm">Job Diary</div>
-                            <div className="text-xs mt-1">Available after job is created</div>
-                          </div>
-                        </div>
-                      )}
+                      <JobDiarySection 
+                        jobId={jobId || `temp-${Date.now()}`} // Use temporary ID for new jobs
+                        customerId={form.getValues("customerId") || customerId}
+                        customerEmail={selectedCustomer?.email}
+                        customerPhone={selectedCustomer?.phone}
+                        className="h-full"
+                      />
                     </div>
                   </TabsContent>
                   
                   <TabsContent value="profit" className="h-full m-0">
                     <div className="h-full overflow-y-auto px-4 py-4">
-                      {jobId ? (
-                        <div className="space-y-4">
-                          <div className="text-center mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900">Job Profitability Tracker</h3>
-                            <p className="text-sm text-gray-500">Real-time cost tracking and margin analysis</p>
-                          </div>
-                          
-                          <StaffTimeManager jobId={jobId} />
-                          <ExpenseManager jobId={jobId} />
-                          <GrossMarginCalculator jobId={jobId} />
+                      <div className="space-y-4">
+                        <div className="text-center mb-4">
+                          <h3 className="text-lg font-semibold text-gray-900">Job Profitability Tracker</h3>
+                          <p className="text-sm text-gray-500">
+                            {jobId ? "Real-time cost tracking and margin analysis" : "Estimated profit analysis based on current job details"}
+                          </p>
                         </div>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-muted-foreground">
-                          <div className="text-center">
-                            <div className="text-sm">Profit Tracking</div>
-                            <div className="text-xs mt-1">Available after job is created</div>
-                          </div>
-                        </div>
-                      )}
+                        
+                        <StaffTimeManager jobId={jobId || `temp-${Date.now()}`} />
+                        <ExpenseManager jobId={jobId || `temp-${Date.now()}`} />
+                        <GrossMarginCalculator jobId={jobId || `temp-${Date.now()}`} />
+                      </div>
                     </div>
                   </TabsContent>
                 </div>
