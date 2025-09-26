@@ -1146,21 +1146,33 @@ class DatabaseStorage implements IStorage {
   private static jobNumberCounter: number = 3312;
   
   async getNextJobNumber(): Promise<string> {
-    // Get current highest job number from database to ensure consistency
-    const jobs = await db.select({ jobNumber: schema.jobs.jobNumber }).from(schema.jobs);
-    const numericJobNumbers = jobs
-      .map(job => parseInt(job.jobNumber))
-      .filter(num => !isNaN(num));
-    
-    if (numericJobNumbers.length > 0) {
-      const maxJobNumber = Math.max(...numericJobNumbers);
-      // Ensure our counter is at least as high as the maximum in database
-      DatabaseStorage.jobNumberCounter = Math.max(DatabaseStorage.jobNumberCounter, maxJobNumber + 1);
+    try {
+      // More efficient query - get only the highest job number
+      const result = await db.select({ 
+        jobNumber: schema.jobs.jobNumber 
+      })
+      .from(schema.jobs)
+      .orderBy(desc(schema.jobs.jobNumber))
+      .limit(1);
+      
+      if (result.length > 0) {
+        const highestJobNumber = parseInt(result[0].jobNumber);
+        if (!isNaN(highestJobNumber)) {
+          // Ensure our counter is at least as high as the maximum in database
+          DatabaseStorage.jobNumberCounter = Math.max(DatabaseStorage.jobNumberCounter, highestJobNumber + 1);
+        }
+      }
+      
+      const nextNumber = DatabaseStorage.jobNumberCounter;
+      DatabaseStorage.jobNumberCounter++;
+      return nextNumber.toString();
+    } catch (error) {
+      // Fallback to counter-only approach if database query fails
+      console.error('Database query failed for job number, using fallback:', error);
+      const nextNumber = DatabaseStorage.jobNumberCounter;
+      DatabaseStorage.jobNumberCounter++;
+      return nextNumber.toString();
     }
-    
-    const nextNumber = DatabaseStorage.jobNumberCounter;
-    DatabaseStorage.jobNumberCounter++;
-    return nextNumber.toString();
   }
 
   // ========================================
