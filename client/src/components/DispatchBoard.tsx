@@ -559,10 +559,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // Handle actual API status values
     switch (job.status) {
       case 'completed': return 'C';
-      case 'cancelled': return 'U'; // Unsuccessful
-      case 'in_progress':
-      case 'scheduled': return 'WO'; // Work Order
-      // Handle actual API status values
+      case 'unsuccessful': return 'U'; // Unsuccessful
+      case 'scheduled': return 'S'; // Scheduled
       case 'work_order': return 'WO'; // Work Order
       case 'quote': return 'Q'; // Quote
       case 'lead': return 'L'; // Lead
@@ -578,9 +576,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     
     switch (job.status) {
       case 'completed': return 'bg-green-500';
-      case 'cancelled': return 'bg-red-500'; // Unsuccessful
-      case 'in_progress': return 'bg-yellow-500';
+      case 'unsuccessful': return 'bg-red-500'; // Unsuccessful
+      case 'work_order': return 'bg-yellow-500';
       case 'scheduled': return 'bg-orange-500';
+      case 'quote': return 'bg-purple-500';
+      case 'lead': return 'bg-blue-500';
       default: return 'bg-gray-500';
     }
   };
@@ -594,11 +594,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // Handle actual API status values
     switch (job.status) {
       case 'completed': return '#10b981'; // green-500
-      case 'cancelled': return '#ef4444'; // red-500 - Unsuccessful
-      case 'in_progress': return '#eab308'; // yellow-500
+      case 'unsuccessful': return '#ef4444'; // red-500 - Unsuccessful
+      case 'work_order': return '#eab308'; // yellow-500
       case 'scheduled': return '#f97316'; // orange-500
-      // Handle actual API status values
-      case 'work_order': return '#f97316'; // orange-500
       case 'quote': return '#8b5cf6'; // purple-500  
       case 'lead': return '#3b82f6'; // blue-500
       default: return '#6b7280'; // gray-500
@@ -711,8 +709,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             return job.serviceType?.toLowerCase().includes('quote') || false;
             
           case 'work_orders':
-            // Jobs that are confirmed work orders (scheduled/in_progress/work_order status, not quotes/leads)
-            return (job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'work_order') && job.status !== 'lead' && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
+            // Jobs that are confirmed work orders (scheduled/work_order status, not quotes/leads)
+            return (job.status === 'scheduled' || job.status === 'work_order') && job.status !== 'lead' && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
             
           case 'unscheduled':
             // Jobs without proper scheduling or assignment
