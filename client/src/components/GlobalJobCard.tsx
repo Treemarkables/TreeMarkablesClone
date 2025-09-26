@@ -383,6 +383,38 @@ export function GlobalJobCard({
     onSuccess: (response) => {
       toast({ title: "Success", description: "Job created successfully" });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      
+      // Reset form to completely empty values
+      form.reset({
+        customerId: "",
+        isNewCustomer: false,
+        description: "",
+        address: "",
+        status: "lead",
+        serviceType: "",
+        priority: "medium",
+        jobNumber: "",
+        leadSource: "direct",
+        jobContactFirstName: "",
+        jobContactLastName: "",
+        jobContactEmail: "",
+        jobContactPhone: "",
+        billingContactPhone: "",
+        billingContactMobile: "",
+        newCustomerName: "",
+        newCustomerEmail: "",
+        newCustomerPhone: "",
+        newCustomerAddress: "",
+        newCustomerCity: "",
+        newCustomerRegion: "",
+        specialInstructions: "",
+      });
+      
+      setLineItems([]); // Clear line items
+      setChecklist([]); // Clear checklist
+      setSearchQuery(''); // Clear search query
+      setActiveCustomerTab("existing"); // Reset to existing customer tab
+      
       onJobCreated?.(response.data || response);
       onClose();
     },
@@ -942,7 +974,7 @@ export function GlobalJobCard({
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormLabel className="text-xs">Select Customer</FormLabel>
-                                      <Select onValueChange={field.onChange} value={field.value || ""} disabled={mode === "edit" && !!editingJob}>
+                                      <Select onValueChange={field.onChange} value={field.value || ""} disabled={mode === "edit"}>
                                         <FormControl>
                                           <SelectTrigger data-testid="select-customer" className="h-7 text-xs">
                                             <SelectValue placeholder="Choose a customer..." />
@@ -1597,7 +1629,7 @@ export function GlobalJobCard({
                     <SelectValue placeholder="Select staff member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.isArray(employeesData?.data) ? employeesData.data.map((employee: any) => (
+                    {employeesData && Array.isArray(employeesData.data) ? employeesData.data.map((employee: any) => (
                       <SelectItem key={employee.id} value={employee.id}>
                         {employee.firstName} {employee.lastName}
                       </SelectItem>
