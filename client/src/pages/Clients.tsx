@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Mail, Phone, Calendar, DollarSign, Search, Filter, ArrowUpDown, Plus, Upload, Trash2, AlertTriangle, Edit, X } from "lucide-react";
+import { Users, Mail, Phone, Calendar, DollarSign, Search, Filter, ArrowUpDown, Plus, Upload, Trash2, AlertTriangle, Edit, X, Archive, Eye } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -40,19 +40,30 @@ export default function Clients() {
   const [sortBy, setSortBy] = useState("name");
   const [activeTab, setActiveTab] = useState("list");
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
-  const [filterType, setFilterType] = useState<"all" | "customers" | "potential_expenses">("all");
+  const [filterType, setFilterType] = useState<"all" | "active" | "historical" | "customers" | "potential_expenses">("all");
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch customers data
-  const { data: customersResponse, isLoading } = useQuery<ApiResponse<Customer>>({
+  // Fetch active customers
+  const { data: activeCustomersResponse, isLoading: activeLoading } = useQuery<ApiResponse<Customer>>({
     queryKey: ['/api/customers'],
   });
 
-  const customers = customersResponse?.data || [];
+  // Fetch historical customers
+  const { data: historicalCustomersResponse, isLoading: historicalLoading } = useQuery<ApiResponse<Customer>>({
+    queryKey: ['/api/customers/historical'],
+  });
+
+  // Combine all customers
+  const activeCustomers = activeCustomersResponse?.data || [];
+  const historicalCustomers = historicalCustomersResponse?.data || [];
+  const allCustomers = [...activeCustomers, ...historicalCustomers];
+  const isLoading = activeLoading || historicalLoading;
 
   // Function to identify potential expense companies
   const isPotentialExpenseCompany = (customer: Customer): boolean => {
@@ -88,6 +99,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
       setSelectedCustomers(new Set());
       toast({
         title: "Customers Deleted",
@@ -110,6 +122,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
       toast({
         title: "Customer Deleted",
         description: "Customer has been successfully deleted"
@@ -131,6 +144,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
       setShowEditDialog(false);
       setEditingCustomer(null);
       editForm.reset();
@@ -195,15 +209,32 @@ export default function Clients() {
     editCustomerMutation.mutate({ id: editingCustomer.id, data });
   };
 
+  const handleCustomerCardClick = (customerId: string) => {
+    setSelectedCustomerId(customerId);
+    setShowCustomerModal(true);
+  };
+
+  const handleCustomerModalClose = () => {
+    setShowCustomerModal(false);
+    setSelectedCustomerId(null);
+  };
+
   // Filter and sort customers
-  const filteredCustomers = customers
+  const filteredCustomers = allCustomers
     .filter(customer => {
       const matchesSearch = customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (customer.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (customer.phone || '').toLowerCase().includes(searchQuery.toLowerCase());
       
+      const isHistorical = customer.isActive === false;
+      const isActive = customer.isActive !== false;
+      
       const matchesFilter = (() => {
         switch (filterType) {
+          case 'active':
+            return isActive;
+          case 'historical':
+            return isHistorical;
           case 'customers':
             return !isPotentialExpenseCompany(customer);
           case 'potential_expenses':
@@ -222,15 +253,14 @@ export default function Clients() {
         case 'email':
           return (a.email || '').localeCompare(b.email || '');
         case 'recent':
-          // Sort by most recent contact if we had that data
-          return b.name.localeCompare(a.name); // fallback to name
+          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
         default:
           return 0;
       }
     });
 
   const getInitials = (name: string) => {
-    return (name || '')
+    return name
       .split(' ')
       .map(word => word.charAt(0))
       .join('')
@@ -245,44 +275,63 @@ export default function Clients() {
     return { label: 'Bronze', color: 'bg-orange-100 text-orange-800' };
   };
 
+  const getCustomerStatusBadge = (customer: Customer) => {
+    const isHistorical = customer.isActive === false;
+    if (isHistorical) {
+      return (
+        <Badge className="bg-orange-100 text-orange-800">
+          <Archive className="w-3 h-3 mr-1" />
+          Historical
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-green-100 text-green-800">
+        Active
+      </Badge>
+    );
+  };
+
+  const selectedCustomerDetails = selectedCustomerId ? 
+    allCustomers.find(c => c.id === selectedCustomerId) : null;
+
   return (
     <div className="flex flex-col h-full p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
-          <p className="text-gray-600">Import & manage your customer list</p>
+          <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
+          <p className="text-gray-600">Manage your customer database</p>
         </div>
-        <Button data-testid="button-add-client">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Client
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setActiveTab("import")} data-testid="button-import-csv">
+            <Upload className="w-4 h-4 mr-2" />
+            Import CSV
+          </Button>
+          <Button data-testid="button-add-customer">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Customer
+          </Button>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="list" data-testid="tab-client-list">
-            <Users className="w-4 h-4 mr-2" />
-            Client List
-          </TabsTrigger>
-          <TabsTrigger value="import" data-testid="tab-csv-import">
-            <Upload className="w-4 h-4 mr-2" />
-            CSV Import
-          </TabsTrigger>
+          <TabsTrigger value="list" data-testid="tab-customer-list">Customer List</TabsTrigger>
+          <TabsTrigger value="import" data-testid="tab-import">Import Data</TabsTrigger>
         </TabsList>
 
         {/* Client List Tab */}
         <TabsContent value="list" className="space-y-6 mt-6">
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Clients</p>
-                <p className="text-2xl font-bold">{customers.length}</p>
+                <p className="text-sm font-medium text-gray-600">Total Customers</p>
+                <p className="text-2xl font-bold">{allCustomers.length}</p>
               </div>
               <Users className="w-8 h-8 text-blue-600" />
             </div>
@@ -293,10 +342,22 @@ export default function Clients() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Active This Month</p>
-                <p className="text-2xl font-bold">{Math.floor(customers.length * 0.3)}</p>
+                <p className="text-sm font-medium text-gray-600">Active Customers</p>
+                <p className="text-2xl font-bold">{activeCustomers.length}</p>
               </div>
-              <Calendar className="w-8 h-8 text-green-600" />
+              <Users className="w-8 h-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Historical</p>
+                <p className="text-2xl font-bold">{historicalCustomers.length}</p>
+              </div>
+              <Archive className="w-8 h-8 text-orange-600" />
             </div>
           </CardContent>
         </Card>
@@ -307,7 +368,7 @@ export default function Clients() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Revenue</p>
                 <p className="text-2xl font-bold">
-                  ${customers.reduce((sum, customer) => sum + (parseFloat(customer.lifetimeValue || '0') || 0), 0).toLocaleString()}
+                  ${allCustomers.reduce((sum, customer) => sum + (parseFloat(customer.lifetimeValue || '0') || 0), 0).toLocaleString()}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-amber-600" />
@@ -322,7 +383,7 @@ export default function Clients() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
-              placeholder="Search clients by name, email, or phone..."
+              placeholder="Search customers by name, email, or phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -330,13 +391,15 @@ export default function Clients() {
             />
           </div>
 
-          <Select value={filterType} onValueChange={(value) => setFilterType(value as "all" | "customers" | "potential_expenses")}>
+          <Select value={filterType} onValueChange={(value) => setFilterType(value as typeof filterType)}>
             <SelectTrigger className="w-full sm:w-48" data-testid="select-filter">
               <Filter className="w-4 h-4 mr-2" />
               <SelectValue placeholder="Filter by type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Entries</SelectItem>
+              <SelectItem value="all">All Customers</SelectItem>
+              <SelectItem value="active">Active Only</SelectItem>
+              <SelectItem value="historical">Historical Only</SelectItem>
               <SelectItem value="customers">Customers Only</SelectItem>
               <SelectItem value="potential_expenses">Potential Expenses</SelectItem>
             </SelectContent>
@@ -409,11 +472,11 @@ export default function Clients() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Users className="w-12 h-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No clients found</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No customers found</h3>
               <p className="text-gray-600 text-center max-w-md">
                 {searchQuery 
-                  ? "Try adjusting your search to find clients."
-                  : "No clients added yet. Start by adding your first client."
+                  ? "Try adjusting your search to find customers."
+                  : "No customers added yet. Start by adding your first customer."
                 }
               </p>
             </CardContent>
@@ -450,7 +513,8 @@ export default function Clients() {
                 return (
                   <Card 
                     key={customer.id} 
-                    className={`hover-elevate transition-colors ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`} 
+                    className={`hover-elevate transition-colors cursor-pointer ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`} 
+                    onClick={() => handleCustomerCardClick(customer.id)}
                     data-testid={`card-client-${customer.id}`}
                   >
                     <CardContent className="p-6">
@@ -459,6 +523,7 @@ export default function Clients() {
                           <Checkbox
                             checked={isSelected}
                             onCheckedChange={(checked) => handleSelectCustomer(customer.id, checked as boolean)}
+                            onClick={(e) => e.stopPropagation()}
                             data-testid={`checkbox-select-${customer.id}`}
                           />
                         <Avatar className="h-12 w-12">
@@ -473,6 +538,7 @@ export default function Clients() {
                               {customer.name}
                             </h3>
                             <Badge className={tier.color}>{tier.label}</Badge>
+                            {getCustomerStatusBadge(customer)}
                           </div>
                           
                           <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -491,6 +557,11 @@ export default function Clients() {
                               <DollarSign className="w-4 h-4" />
                               <span>Lifetime Value: ${parseFloat(customer.lifetimeValue || '0').toLocaleString()}</span>
                             </div>
+                            {customer.importSource && (
+                              <div className="flex items-center gap-1">
+                                <span>Source: {customer.importSource}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -516,11 +587,12 @@ export default function Clients() {
                           onClick={(e) => {
                             e.stopPropagation();
                             e.preventDefault();
-                            alert("Customer details feature coming soon!");
+                            handleCustomerCardClick(customer.id);
                           }}
                           style={{ pointerEvents: 'auto', zIndex: 10 }}
                           data-testid={`button-view-${customer.id}`}
                         >
+                          <Eye className="w-4 h-4 mr-1" />
                           View Details
                         </Button>
                         <Button 
@@ -634,6 +706,105 @@ export default function Clients() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Customer Details Modal */}
+      <Dialog open={showCustomerModal} onOpenChange={setShowCustomerModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Customer Details
+            </DialogTitle>
+          </DialogHeader>
+          {selectedCustomerDetails && (
+            <div className="space-y-6">
+              {/* Customer Header */}
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarFallback className="bg-amber-100 text-amber-800 text-lg">
+                    {getInitials(selectedCustomerDetails.name || '')}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-semibold">{selectedCustomerDetails.name}</h2>
+                    {getCustomerStatusBadge(selectedCustomerDetails)}
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <Mail className="w-4 h-4" />
+                      <span>{selectedCustomerDetails.email || 'No email'}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Phone className="w-4 h-4" />
+                      <span>{selectedCustomerDetails.phone || 'No phone'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Customer Information */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h3 className="font-medium text-gray-900">Contact Information</h3>
+                  <div className="space-y-1 text-sm">
+                    <p><strong>Address:</strong> {selectedCustomerDetails.address || 'No address'}</p>
+                    <p><strong>City:</strong> {selectedCustomerDetails.city || 'No city'}</p>
+                    <p><strong>Region:</strong> {selectedCustomerDetails.region || 'No region'}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="font-medium text-gray-900">Business Information</h3>
+                  <div className="space-y-1 text-sm">
+                    <p><strong>Source:</strong> {selectedCustomerDetails.source || 'Unknown'}</p>
+                    <p><strong>Import Source:</strong> {selectedCustomerDetails.importSource || 'Manual'}</p>
+                    <p><strong>Lifetime Value:</strong> ${parseFloat(selectedCustomerDetails.lifetimeValue || '0').toLocaleString()}</p>
+                    <p><strong>Total Jobs:</strong> {selectedCustomerDetails.totalJobs || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedCustomerDetails.notes && (
+                <div className="space-y-2">
+                  <h3 className="font-medium text-gray-900">Notes</h3>
+                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                    {selectedCustomerDetails.notes}
+                  </p>
+                </div>
+              )}
+
+              {/* Import Information */}
+              {selectedCustomerDetails.importBatchId && (
+                <div className="space-y-2">
+                  <h3 className="font-medium text-gray-900">Import Information</h3>
+                  <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
+                    <p><strong>Import Batch ID:</strong> {selectedCustomerDetails.importBatchId}</p>
+                    <p><strong>Created:</strong> {selectedCustomerDetails.createdAt ? new Date(selectedCustomerDetails.createdAt).toLocaleDateString() : 'Unknown'}</p>
+                    <p><strong>Updated:</strong> {selectedCustomerDetails.updatedAt ? new Date(selectedCustomerDetails.updatedAt).toLocaleDateString() : 'Unknown'}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-4 border-t">
+                <Button 
+                  onClick={() => {
+                    setShowCustomerModal(false);
+                    handleEditCustomer(selectedCustomerDetails);
+                  }}
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit Customer
+                </Button>
+                <Button variant="outline" onClick={handleCustomerModalClose}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
