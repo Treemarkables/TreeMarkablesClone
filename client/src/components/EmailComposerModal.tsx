@@ -25,8 +25,12 @@ import {
   AlignRight,
   Image,
   Check,
-  Mail
+  Mail,
+  Eye
 } from "lucide-react";
+import { InvoiceTemplate } from "./InvoiceTemplate";
+import { QuoteTemplate } from "./QuoteTemplate";
+import { ProposalTemplate } from "./ProposalTemplate";
 
 interface EmailComposerModalProps {
   isOpen: boolean;
@@ -150,6 +154,7 @@ export function EmailComposerModal({
   const [attachments, setAttachments] = useState<TypedAttachment[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+  const [showPreview, setShowPreview] = useState<{ type: 'invoice' | 'quote' | 'proposal' | null; data: any }>({ type: null, data: null });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -252,6 +257,10 @@ export function EmailComposerModal({
         ? prev.filter(url => url !== photoUrl)
         : [...prev, photoUrl]
     );
+  };
+
+  const handleDocumentPreview = (type: 'invoice' | 'quote' | 'proposal', data: any) => {
+    setShowPreview({ type, data });
   };
 
   // Handle file attachment
@@ -477,7 +486,7 @@ export function EmailComposerModal({
           </div>
         </DialogHeader>
 
-        <div className="flex-1 flex flex-col space-y-4 overflow-hidden">
+        <div className="flex-1 flex flex-col space-y-4 overflow-y-auto">
           {/* Email Fields */}
           <div className="space-y-3">
             <div className="grid grid-cols-12 gap-3 items-center">
@@ -568,6 +577,7 @@ export function EmailComposerModal({
               {invoiceData && (
                 <div 
                   className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleDocumentPreview('invoice', invoiceData)}
                   data-testid="attachment-invoice-pdf"
                 >
                   <div className="flex flex-col items-center text-center">
@@ -588,6 +598,7 @@ export function EmailComposerModal({
               {quoteData && (
                 <div 
                   className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleDocumentPreview('quote', quoteData)}
                   data-testid="attachment-quote-pdf"
                 >
                   <div className="flex flex-col items-center text-center">
@@ -611,6 +622,7 @@ export function EmailComposerModal({
               {proposalData && (
                 <div 
                   className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleDocumentPreview('proposal', proposalData)}
                   data-testid="attachment-proposal-pdf"
                 >
                   <div className="flex flex-col items-center text-center">
@@ -750,6 +762,121 @@ export function EmailComposerModal({
           </div>
         </div>
       </DialogContent>
+
+      {/* Document Preview Modal */}
+      {showPreview.type && showPreview.data && (
+        <Dialog open={!!showPreview.type} onOpenChange={() => setShowPreview({ type: null, data: null })}>
+          <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+            <DialogHeader className="flex-row items-center justify-between space-y-0 pb-4 border-b">
+              <div className="flex items-center gap-2">
+                <Eye className="w-5 h-5" />
+                <DialogTitle>
+                  {showPreview.type === 'invoice' && `Invoice Preview - #${showPreview.data.invoiceNumber}`}
+                  {showPreview.type === 'quote' && `Quote Preview - #${showPreview.data.quoteNumber}`}
+                  {showPreview.type === 'proposal' && `Proposal Preview - #${showPreview.data.proposalNumber || 'PROP-' + job?.jobNumber}`}
+                </DialogTitle>
+              </div>
+              <Button 
+                onClick={() => setShowPreview({ type: null, data: null })} 
+                variant="ghost" 
+                size="sm"
+                data-testid="button-close-preview"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+              <div className="max-w-3xl mx-auto bg-white shadow-lg">
+                {showPreview.type === 'invoice' && (
+                  <InvoiceTemplate 
+                    template={{
+                      id: 'default-invoice',
+                      name: 'Default Invoice Template',
+                      type: 'invoice',
+                      description: null,
+                      isDefault: true,
+                      isActive: true,
+                      companyName: 'Treemarkables',
+                      companyAddress: 'Gisborne, New Zealand',
+                      companyEmail: 'info@treemarkables.co.nz',
+                      companyPhone: '+64 6 867 1234',
+                      gstNumber: 'GST123456789',
+                      paymentTerms: '30 days',
+                      primaryColor: '#f97316',
+                      secondaryColor: '#3b82f6',
+                      logoUrl: null,
+                      headerLayout: null,
+                      footerText: null,
+                      createdAt: null,
+                      updatedAt: null
+                    }}
+                    invoice={showPreview.data}
+                    customer={customer}
+                    showActions={false}
+                  />
+                )}
+                {showPreview.type === 'quote' && (
+                  <QuoteTemplate 
+                    template={{
+                      id: 'default-quote',
+                      name: 'Default Quote Template',
+                      type: 'quote',
+                      description: null,
+                      isDefault: true,
+                      isActive: true,
+                      companyName: 'Treemarkables',
+                      companyAddress: 'Hauroa rd\nGisborne, 4010',
+                      companyEmail: 'quotes@treemarkables.nz',
+                      companyPhone: '027 216 6882',
+                      gstNumber: 'GST123456789',
+                      paymentTerms: '30 days',
+                      primaryColor: '#f97316',
+                      secondaryColor: '#3b82f6',
+                      logoUrl: null,
+                      headerLayout: null,
+                      footerText: null,
+                      createdAt: null,
+                      updatedAt: null
+                    }}
+                    quote={showPreview.data}
+                    customer={customer}
+                    showActions={false}
+                  />
+                )}
+                {showPreview.type === 'proposal' && (
+                  <ProposalTemplate 
+                    template={{
+                      id: 'default-proposal',
+                      name: 'Default Proposal Template',
+                      type: 'proposal',
+                      description: null,
+                      isDefault: true,
+                      isActive: true,
+                      companyName: 'Treemarkables',
+                      companyAddress: 'Gisborne, New Zealand',
+                      companyEmail: 'info@treemarkables.co.nz',
+                      companyPhone: '+64 6 867 1234',
+                      gstNumber: 'GST123456789',
+                      paymentTerms: '30 days',
+                      primaryColor: '#f97316',
+                      secondaryColor: '#3b82f6',
+                      logoUrl: null,
+                      headerLayout: null,
+                      footerText: null,
+                      createdAt: null,
+                      updatedAt: null
+                    }}
+                    proposal={showPreview.data}
+                    customer={customer}
+                    showActions={false}
+                  />
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   );
 }
