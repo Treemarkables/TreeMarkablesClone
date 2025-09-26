@@ -1416,7 +1416,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </div>
 
             {/* ServiceM8 Style Jobs Panel */}
-            <div className="w-80 bg-gray-50 border-l flex flex-col h-full min-h-0 hidden md:block">
+            <div className="w-80 bg-gray-50 border-l flex flex-col h-[700px] hidden md:block">
               {/* ServiceM8 Header */}
               <div className="p-4 space-y-3 flex-shrink-0">
                 {/* ServiceM8 Style Filter Dropdown */}
@@ -1538,7 +1538,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
 
               {/* ServiceM8 Style Job List */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-scroll" style={{ maxHeight: '500px' }}>
                 <div className="relative">
                   {/* Timeline Line */}
                   <div className="absolute left-14 top-0 bottom-0 w-px bg-blue-200 z-0" />
