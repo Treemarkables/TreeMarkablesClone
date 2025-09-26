@@ -90,6 +90,7 @@ export interface IStorage {
   getCustomer(id: string): Promise<Customer | undefined>;
   getCustomerByServiceM8Uuid(uuid: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
+  deleteCustomer(id: string): Promise<boolean>;
   getAllCustomers(): Promise<Customer[]>;
   clearAllCustomers(): Promise<number>;
   searchCustomers(query: string): Promise<Customer[]>;
@@ -713,6 +714,11 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.customers.id, id))
       .returning();
     return customer;
+  }
+
+  async deleteCustomer(id: string): Promise<boolean> {
+    const result = await db.delete(schema.customers).where(eq(schema.customers.id, id));
+    return result.rowCount! > 0;
   }
 
   async getAllCustomers(): Promise<Customer[]> {
