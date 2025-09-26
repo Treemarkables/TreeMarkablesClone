@@ -1157,7 +1157,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         <CardContent>
           <div className="flex gap-4 h-[700px]">
             {/* Team/Staff Column */}
-            <div className="w-36 border-r pr-4">
+            <div className="w-36 border-r pr-4 hidden md:block">
               <h3 className="font-semibold mb-4 text-sm text-muted-foreground">
                 {assignmentMode === 'teams' ? 'TEAMS' : 'STAFF'}
               </h3>
@@ -1350,7 +1350,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </div>
 
             {/* ServiceM8 Style Jobs Panel */}
-            <div className="w-80 bg-gray-50 border-l flex flex-col h-full">
+            <div className="w-80 bg-gray-50 border-l flex flex-col h-full hidden md:block">
               {/* ServiceM8 Header */}
               <div className="p-4 space-y-3 flex-shrink-0">
                 {/* ServiceM8 Style Filter Dropdown */}
