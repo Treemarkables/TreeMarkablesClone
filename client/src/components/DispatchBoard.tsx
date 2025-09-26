@@ -33,7 +33,8 @@ import {
   Target,
   Zap,
   GripVertical,
-  Move
+  Move,
+  SearchX
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
@@ -400,6 +401,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isDeepSearchActive, setIsDeepSearchActive] = useState<boolean>(false);
+  const [deepSearchResults, setDeepSearchResults] = useState<JobAssignment[]>([]);
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('teams');
   const [jobFilter, setJobFilter] = useState<string>('all');
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
@@ -621,7 +624,43 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return team.members.map(memberId => ({ id: memberId, name: `Staff ${memberId}`, role: 'Unknown', skills: [], status: 'available', color: 'bg-gray-500' } as StaffMember)).filter(Boolean) as StaffMember[];
   };
 
+  // Deep search function that searches ALL jobs without date/status filtering
+  const performDeepSearch = (query: string) => {
+    if (!query.trim()) {
+      setIsDeepSearchActive(false);
+      setDeepSearchResults([]);
+      return;
+    }
+
+    const searchQuery = query.toLowerCase().trim();
+    const allMatchingJobs = jobs.filter(job => {
+      const customerName = job.customerName?.toLowerCase() || '';
+      const address = job.address?.toLowerCase() || '';
+      const serviceType = job.serviceType?.toLowerCase() || '';
+      const description = job.description?.toLowerCase() || '';
+      const jobId = job.id?.toLowerCase() || '';
+      const notes = job.notes?.toLowerCase() || '';
+      const specialInstructions = job.specialInstructions?.toLowerCase() || '';
+
+      return customerName.includes(searchQuery) ||
+             address.includes(searchQuery) ||
+             serviceType.includes(searchQuery) ||
+             description.includes(searchQuery) ||
+             jobId.includes(searchQuery) ||
+             notes.includes(searchQuery) ||
+             specialInstructions.includes(searchQuery);
+    });
+
+    setIsDeepSearchActive(true);
+    setDeepSearchResults(allMatchingJobs.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())); // Sort by newest first
+  };
+
   const getTodaysJobs = () => {
+    // If deep search is active, return deep search results
+    if (isDeepSearchActive) {
+      return deepSearchResults;
+    }
+
     return jobs
       .filter(job => {
         // For "All Jobs" filter, show jobs from different dates to ensure all jobs are visible
@@ -643,7 +682,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // Apply job filter based on selected filter option
         switch (jobFilter) {
           case 'all':
-            return true; // Show all jobs for today
+            // Show only active jobs (quotes and work orders) - exclude completed, leads with missing data
+            return (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'work_order' || 
+                   job.serviceType?.toLowerCase().includes('quote')) && 
+                   job.status !== 'completed' && job.status !== 'cancelled' && 
+                   job.customerName && job.customerName.trim() !== '' && job.customerName !== 'Unknown Customer'; // Only jobs with proper customer names
             
           case 'action_required':
             // Jobs that need scheduling, assignment, or other action
@@ -1432,15 +1475,59 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 </Select>
                 
                 {/* Job Search Field */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by customer, job #, address..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-white"
-                    data-testid="job-search-input"
-                  />
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder={isDeepSearchActive ? "Deep search results..." : "Search by customer, job #, address..."}
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        if (!isDeepSearchActive) {
+                          // Normal search - let the regular filtering handle it
+                        }
+                      }}
+                      className="pl-10 bg-white"
+                      data-testid="job-search-input"
+                    />
+                    {isDeepSearchActive && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 px-2"
+                        onClick={() => {
+                          setIsDeepSearchActive(false);
+                          setDeepSearchResults([]);
+                          setSearchQuery('');
+                        }}
+                        data-testid="btn-clear-deep-search"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Deep Search Button */}
+                  {searchQuery.trim() && !isDeepSearchActive && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => performDeepSearch(searchQuery)}
+                      data-testid="btn-deep-search"
+                    >
+                      <Search className="h-3 w-3 mr-2" />
+                      Deep Search All Jobs
+                    </Button>
+                  )}
+                  
+                  {/* Deep Search Status */}
+                  {isDeepSearchActive && (
+                    <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                      <SearchX className="h-3 w-3" />
+                      Deep search: {deepSearchResults.length} total jobs found
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1592,15 +1679,59 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             Today's Jobs ({getTodaysJobs().length})
           </CardTitle>
           {/* Job Search Field for Mobile */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by customer, job #, address..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-white"
-              data-testid="mobile-job-search-input"
-            />
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={isDeepSearchActive ? "Deep search results..." : "Search by customer, job #, address..."}
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (!isDeepSearchActive) {
+                    // Normal search - let the regular filtering handle it
+                  }
+                }}
+                className="pl-10 bg-white"
+                data-testid="mobile-job-search-input"
+              />
+              {isDeepSearchActive && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 px-2"
+                  onClick={() => {
+                    setIsDeepSearchActive(false);
+                    setDeepSearchResults([]);
+                    setSearchQuery('');
+                  }}
+                  data-testid="btn-clear-deep-search-mobile"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            
+            {/* Deep Search Button for Mobile */}
+            {searchQuery.trim() && !isDeepSearchActive && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => performDeepSearch(searchQuery)}
+                data-testid="btn-deep-search-mobile"
+              >
+                <Search className="h-3 w-3 mr-2" />
+                Deep Search All Jobs
+              </Button>
+            )}
+            
+            {/* Deep Search Status for Mobile */}
+            {isDeepSearchActive && (
+              <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                <SearchX className="h-3 w-3" />
+                Deep search: {deepSearchResults.length} total jobs found
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent className="max-h-96 overflow-y-auto">
