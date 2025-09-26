@@ -1085,6 +1085,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               Dispatch Board
             </CardTitle>
             <div className="flex items-center gap-2">
+              {/* Mobile Jobs Button - Only visible on mobile when Jobs Panel is hidden */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="md:hidden"
+                onClick={() => {
+                  const jobsPanel = document.getElementById('mobile-jobs-panel');
+                  if (jobsPanel) {
+                    jobsPanel.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+                data-testid="mobile-jobs-btn"
+              >
+                <List className="h-4 w-4 mr-1" />
+                Jobs ({getTodaysJobs().length})
+              </Button>
+              
               <Button
                 variant="outline"
                 size="sm"
@@ -1563,6 +1580,120 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 </div>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Mobile Jobs Panel - Only visible on mobile */}
+      <Card className="md:hidden" id="mobile-jobs-panel">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <List className="h-5 w-5" />
+            Today's Jobs ({getTodaysJobs().length})
+          </CardTitle>
+          {/* Job Search Field for Mobile */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by customer, job #, address..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-white"
+              data-testid="mobile-job-search-input"
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {getTodaysJobs().map((job, index) => {
+              const customerName = job.customerName || 'Unknown Customer';
+              
+              return (
+                <div
+                  key={job.id}
+                  className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => handleEditJob(job)}
+                  data-testid={`mobile-job-card-${job.id}`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900 text-sm" data-testid={`mobile-job-customer-${job.id}`}>
+                      {customerName}
+                    </h3>
+                    <div className="text-xs font-medium text-gray-500" data-testid={`mobile-job-number-${job.id}`}>
+                      #{job.jobId || '0000'}
+                    </div>
+                  </div>
+                  
+                  <div className="text-xs text-gray-600 mb-2">
+                    {job.address || 'No address specified'}
+                  </div>
+                  
+                  <div className="text-xs text-gray-700 leading-relaxed mb-3" data-testid={`mobile-job-description-${job.id}`}>
+                    {(() => {
+                      const rawDescription = job.description || job.notes;
+                      
+                      if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
+                        if (job.status === 'lead') {
+                          return 'New lead - details pending';
+                        }
+                        if (job.status === 'quote' || job.status === 'quoted') {
+                          return 'Quote request - description to be added';
+                        }
+                        return job.serviceType || 'Description to be added';
+                      }
+                      
+                      if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
+                        return job.serviceType || 'Description to be added';
+                      }
+                      
+                      const description = rawDescription.length > 100 
+                        ? `${rawDescription.substring(0, 100)}...`
+                        : rawDescription;
+                      
+                      return description;
+                    })()}
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {job.status === 'completed' && (
+                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      )}
+                      {job.status === 'in_progress' && (
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full" />
+                      )}
+                      {job.status === 'scheduled' && (
+                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                      )}
+                      {job.priority === 'urgent' && (
+                        <div className="w-2 h-2 bg-red-500 rounded-full" />
+                      )}
+                      <span className="text-xs text-gray-500 capitalize">{job.status}</span>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {job.priority}
+                    </Badge>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {/* Empty State for Mobile */}
+            {getTodaysJobs().length === 0 && (
+              <div className="p-8 text-center text-gray-500">
+                <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm">No jobs scheduled for this date</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3"
+                  onClick={handleCreateJob}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create First Job
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
