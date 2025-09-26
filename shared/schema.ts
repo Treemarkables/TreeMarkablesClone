@@ -234,7 +234,7 @@ export const jobs = pgTable("jobs", {
   description: text("description"),
   serviceType: text("service_type"), // tree_removal, hedge_trimming, stump_grinding, etc
   leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
-  address: text("address").notNull(),
+  address: text("address"),
   scheduledDate: timestamp("scheduled_date"),
   completedDate: timestamp("completed_date"),
   status: text("status").notNull().default('lead'), // lead, quote, scheduled, work_order, completed, unsuccessful

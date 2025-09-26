@@ -7680,11 +7680,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           const customerName = (csvJob.customerName || csvJob.companyName || csvJob.company || csvJob['Company'] || csvJob['Customer Name'] || csvJob['Company Name'] || 
                               csvJob.client || csvJob.Client || csvJob.customer || csvJob.Customer || '').trim();
           
-          console.log('Processing job row:', {
-            company: csvJob.company || csvJob['Company'],
-            customerName: customerName,
-            jobNumber: csvJob.jobNumber || csvJob['Job Number']
-          });
           let customer = customerByName.get(customerName.toLowerCase());
 
           if (!customer && customerName) {
@@ -7720,7 +7715,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             priority: csvJob.priority || 'medium',
             scheduledDate: csvJob.scheduledDate || csvJob['Scheduled Date'] || null,
             estimatedValue: parseFloat(csvJob.estimatedValue || csvJob.value || '0') || 0,
-            location: csvJob.location || csvJob.address || '',
+            location: csvJob.location || csvJob.address || 'Address not specified',
             duration: parseInt(csvJob.duration || '60') || 60,
             teamMembers: csvJob.teamMembers ? csvJob.teamMembers.split(',').map((m: string) => m.trim()) : [],
             equipment: csvJob.equipment ? csvJob.equipment.split(',').map((e: string) => e.trim()) : [],
