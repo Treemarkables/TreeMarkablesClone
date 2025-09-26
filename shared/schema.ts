@@ -492,6 +492,8 @@ export const jobs = pgTable("jobs", {
   // Global Job Card Fields
   poNumber: text("po_number"), // Purchase order number
   checklist: jsonb("checklist"), // [{"id": "uuid", "text": "Task description", "completed": false}]
+  notes: text("notes"), // Job notes and comments
+  lineItems: jsonb("line_items"), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number}]
   
   weatherDependent: boolean("weather_dependent").default(false),
   permitRequired: boolean("permit_required").default(false),
@@ -513,6 +515,7 @@ export const jobDiaryEntries = pgTable("job_diary_entries", {
   entryType: text("entry_type").notNull(), // note, progress, issue, milestone, weather, equipment, safety, completion, email
   title: text("title").notNull(),
   description: text("description").notNull(),
+  content: text("content"), // Additional content for diary entries
   authorName: text("author_name").notNull(), // Name of person making entry
   authorRole: text("author_role"), // foreman, technician, supervisor, manager
   photos: text("photos").array(), // URLs/paths to related photos
