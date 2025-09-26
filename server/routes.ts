@@ -2310,6 +2310,69 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Convert job to quote
+  app.post('/api/jobs/:id/convert-to-quote', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { customData = {} } = req.body;
+      
+      // Get the job
+      const job = await storage.getJob(id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Check if job is eligible for quoting  
+      if (job.status === 'cancelled') {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Cannot create quotes for cancelled jobs' 
+        });
+      }
+
+      // Generate quote number
+      const today = new Date();
+      const quoteNumber = `Q-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${Date.now().toString().slice(-6)}`;
+
+      // Calculate amount from job
+      let amount = job.totalAmount ? parseFloat(job.totalAmount) : 0;
+
+      // Calculate expiry date (default 30 days from now)
+      const issueDate = new Date();
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30);
+
+      // Create quote data using job description
+      const quoteData = {
+        customerId: job.customerId!,
+        quoteNumber,
+        status: 'draft' as const,
+        description: job.description || `Quote for ${job.title || 'tree service'}`, // Use job description
+        amount: (amount * 1.15).toString(), // Total amount as string (required field)
+        terms: 'Quote valid for 30 days. GST included.'
+      };
+
+      // Create the quote
+      const quote = await storage.createQuote(quoteData);
+
+      // Update job to store quote reference
+      await storage.updateJob(id, { 
+        quoteId: quote.id
+      });
+
+      console.log(`📋 Job ${job.jobNumber} converted to quote ${quoteNumber}`);
+
+      res.json({ 
+        success: true, 
+        data: quote,
+        message: 'Quote created successfully'
+      });
+    } catch (error) {
+      console.error('Error converting job to quote:', error);
+      res.status(500).json({ success: false, message: 'Error creating quote' });
+    }
+  });
+
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
     try {
