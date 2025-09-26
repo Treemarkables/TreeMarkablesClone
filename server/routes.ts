@@ -809,14 +809,39 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       if (search && typeof search === 'string') {
         customers = await storage.searchCustomers(search);
+        // Filter out inactive customers from search results too
+        customers = customers.filter(customer => customer.isActive !== false);
       } else {
-        customers = await storage.getAllCustomers();
+        const allCustomers = await storage.getAllCustomers();
+        // Only return active customers (not historical)
+        customers = allCustomers.filter(customer => customer.isActive !== false);
       }
       
       res.json({ success: true, data: customers });
     } catch (error) {
       console.error('Error fetching customers:', error);
       res.status(500).json({ success: false, message: 'Error fetching customers' });
+    }
+  });
+
+  // GET /api/customers/historical - Get historical (inactive) customers - MUST come before /:id route
+  app.get('/api/customers/historical', async (req: Request, res: Response) => {
+    try {
+      const allCustomers = await storage.getAllCustomers();
+      const historicalCustomers = allCustomers.filter(customer => !customer.isActive);
+      
+      res.json({
+        success: true,
+        data: historicalCustomers,
+        count: historicalCustomers.length,
+        message: `Retrieved ${historicalCustomers.length} historical customers`
+      });
+    } catch (error) {
+      console.error('Error fetching historical customers:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error fetching historical customers'
+      });
     }
   });
 
@@ -1000,6 +1025,59 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Error performing bulk deletion',
+      });
+    }
+  });
+
+  // POST /api/customers/move-to-history - Move customers to historical status
+  app.post('/api/customers/move-to-history', async (req: Request, res: Response) => {
+    try {
+      const { customerIds, importBatchId } = req.body;
+      
+      if (!customerIds || !Array.isArray(customerIds)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Customer IDs array is required'
+        });
+      }
+
+      let movedCount = 0;
+      
+      if (importBatchId) {
+        // Move all customers from a specific import batch
+        const customers = await storage.getAllCustomers();
+        const batchCustomers = customers.filter(c => c.importBatchId === importBatchId);
+        
+        for (const customer of batchCustomers) {
+          await storage.updateCustomer(customer.id, { isActive: false });
+          movedCount++;
+        }
+      } else {
+        // Move specific customers by ID
+        for (const customerId of customerIds) {
+          try {
+            await storage.updateCustomer(customerId, { isActive: false });
+            movedCount++;
+          } catch (error) {
+            console.error(`Error moving customer ${customerId} to history:`, error);
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Moved ${movedCount} customers to history`,
+        data: {
+          movedCount,
+          customerIds: customerIds.length ? customerIds : 'all from batch'
+        }
+      });
+
+    } catch (error) {
+      console.error('Error moving customers to history:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error moving customers to history'
       });
     }
   });
