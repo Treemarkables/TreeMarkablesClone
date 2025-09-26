@@ -380,9 +380,62 @@ export function GlobalJobCard({
       const response = await apiRequest('POST', '/api/jobs', data);
       return response.json();
     },
+    onMutate: async (newJobData) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['/api/jobs'] });
+      
+      // Snapshot the previous value
+      const previousJobs = queryClient.getQueryData(['/api/jobs']);
+      
+      // Optimistically update to the new value
+      queryClient.setQueryData(['/api/jobs'], (old: any) => {
+        if (!old) return old;
+        
+        // Create optimistic job entry
+        const optimisticJob = {
+          id: `temp-${Date.now()}`, // Temporary ID
+          jobNumber: newJobData.jobNumber || "TBD",
+          customerId: newJobData.customerId,
+          title: newJobData.description || "New Job",
+          description: newJobData.description || "",
+          address: newJobData.address || "",
+          serviceType: newJobData.serviceType || "",
+          status: newJobData.status || "lead",
+          priority: newJobData.priority || "medium",
+          scheduledDate: new Date().toISOString(),
+          estimatedDuration: 2,
+          specialInstructions: newJobData.specialInstructions || "",
+          assignedTeam: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        return {
+          ...old,
+          data: [...(old.data || []), optimisticJob]
+        };
+      });
+      
+      // Return a context object with the snapshotted value
+      return { previousJobs };
+    },
+    onError: (error: any, newJobData: any, context: any) => {
+      // If the mutation fails, use the context returned from onMutate to roll back optimistic update
+      if (context?.previousJobs) {
+        queryClient.setQueryData(['/api/jobs'], context.previousJobs);
+      }
+      
+      // Show error toast
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to create job",
+        variant: "destructive"
+      });
+    },
     onSuccess: (response) => {
       toast({ title: "Success", description: "Job created successfully" });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      // Force immediate refetch to replace optimistic update with real data
+      queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
       
       // Reset form to completely empty values
       form.reset({
@@ -417,13 +470,6 @@ export function GlobalJobCard({
       
       onJobCreated?.(response.data || response);
       onClose();
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to create job",
-        variant: "destructive"
-      });
     }
   });
 
@@ -436,9 +482,10 @@ export function GlobalJobCard({
     },
     onSuccess: (response) => {
       toast({ title: "Success", description: "Job updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      // Force immediate refetch to show updated job in dispatch board
+      queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
       if (jobId) {
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
+        queryClient.refetchQueries({ queryKey: ['/api/jobs', jobId] });
       }
       onJobUpdated?.(response.data || response);
       
