@@ -1615,64 +1615,67 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   onClick={() => handleEditJob(job)}
                   data-testid={`mobile-job-card-${job.id}`}
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900 text-sm" data-testid={`mobile-job-customer-${job.id}`}>
-                      {customerName}
-                    </h3>
-                    <div className="text-xs font-medium text-gray-500" data-testid={`mobile-job-number-${job.id}`}>
-                      #{job.jobId || '0000'}
+                  <div className="flex items-start gap-3 mb-2">
+                    {/* Status Avatar Circle */}
+                    <div 
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
+                      style={{ backgroundColor: getJobStatusColorValue(job) }}
+                    >
+                      {getStatusInitials(job)}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between">
+                        <h3 className="font-semibold text-gray-900 text-sm" data-testid={`mobile-job-customer-${job.id}`}>
+                          {customerName}
+                        </h3>
+                        <div className="text-xs font-medium text-gray-500" data-testid={`mobile-job-number-${job.id}`}>
+                          #{job.jobId || '0000'}
+                        </div>
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="text-xs text-gray-600 mb-2">
-                    {job.address || 'No address specified'}
-                  </div>
                   
-                  <div className="text-xs text-gray-700 leading-relaxed mb-3" data-testid={`mobile-job-description-${job.id}`}>
-                    {(() => {
-                      const rawDescription = job.description || job.notes;
-                      
-                      if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
-                        if (job.status === 'lead') {
-                          return 'New lead - details pending';
-                        }
-                        if (job.status === 'quote' || job.status === 'quoted') {
-                          return 'Quote request - description to be added';
-                        }
-                        return job.serviceType || 'Description to be added';
-                      }
-                      
-                      if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
-                        return job.serviceType || 'Description to be added';
-                      }
-                      
-                      const description = rawDescription.length > 100 
-                        ? `${rawDescription.substring(0, 100)}...`
-                        : rawDescription;
-                      
-                      return description;
-                    })()}
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {job.status === 'completed' && (
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
-                      )}
-                      {job.status === 'in_progress' && (
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full" />
-                      )}
-                      {job.status === 'scheduled' && (
-                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                      )}
-                      {job.priority === 'urgent' && (
-                        <div className="w-2 h-2 bg-red-500 rounded-full" />
-                      )}
-                      <span className="text-xs text-gray-500 capitalize">{job.status}</span>
+                  <div className="ml-13"> {/* Align with content next to avatar */}
+                    <div className="text-xs text-gray-600 mb-2">
+                      {job.address || 'No address specified'}
                     </div>
-                    <Badge variant="secondary" className="text-xs">
-                      {job.priority}
-                    </Badge>
+                    
+                    <div className="text-xs text-gray-700 leading-relaxed mb-3" data-testid={`mobile-job-description-${job.id}`}>
+                      {(() => {
+                        const rawDescription = job.description || job.notes;
+                        
+                        if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
+                          if (job.status === 'lead') {
+                            return 'New lead - details pending';
+                          }
+                          if (job.status === 'quote' || job.status === 'quoted') {
+                            return 'Quote request - description to be added';
+                          }
+                          return job.serviceType || 'Description to be added';
+                        }
+                        
+                        if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
+                          return job.serviceType || 'Description to be added';
+                        }
+                        
+                        const description = rawDescription.length > 100 
+                          ? `${rawDescription.substring(0, 100)}...`
+                          : rawDescription;
+                        
+                        return description;
+                      })()}
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 capitalize">{job.status}</span>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {job.priority}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               );
