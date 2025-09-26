@@ -7677,24 +7677,31 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       for (const csvJob of jobs) {
         try {
           // Find customer by name (or create if needed)
-          const customerName = (csvJob.customerName || csvJob.companyName || csvJob['Customer Name'] || csvJob['Company Name'] || '').trim();
+          const customerName = (csvJob.customerName || csvJob.companyName || csvJob['Customer Name'] || csvJob['Company Name'] || 
+                              csvJob.client || csvJob.Client || csvJob.customer || csvJob.Customer || '').trim();
           let customer = customerByName.get(customerName.toLowerCase());
 
           if (!customer && customerName) {
             // Create new customer if not found
             customer = await storage.createCustomer({
               name: customerName,
-              email: csvJob.customerEmail || '',
-              phone: csvJob.customerPhone || '',
-              address: csvJob.customerAddress || ''
+              email: csvJob.customerEmail || csvJob.email || '',
+              phone: csvJob.customerPhone || csvJob.phone || '',
+              address: csvJob.customerAddress || csvJob.address || ''
             });
             customerByName.set(customerName.toLowerCase(), customer);
           }
 
+          // If still no customer, create a default one based on job info
           if (!customer) {
-            skipped++;
-            errorMessages.push(`No customer found for job: ${csvJob.jobNumber || 'Unknown'}`);
-            continue;
+            const defaultCustomerName = `Customer for Job ${csvJob.jobNumber || csvJob['Job Number'] || `JOB-${Date.now()}`}`;
+            customer = await storage.createCustomer({
+              name: defaultCustomerName,
+              email: csvJob.customerEmail || csvJob.email || '',
+              phone: csvJob.customerPhone || csvJob.phone || '',
+              address: csvJob.customerAddress || csvJob.address || csvJob.location || ''
+            });
+            customerByName.set(defaultCustomerName.toLowerCase(), customer);
           }
 
           // Create job with proper field mapping
