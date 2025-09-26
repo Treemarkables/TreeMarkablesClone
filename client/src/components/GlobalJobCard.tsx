@@ -377,7 +377,12 @@ export function GlobalJobCard({
 
   const createJobMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest('POST', '/api/jobs', data);
+      // Include temporary job ID for diary entry migration
+      const jobDataWithTempId = {
+        ...data,
+        tempJobId: tempJobId // Send temp ID so backend can migrate diary entries
+      };
+      const response = await apiRequest('POST', '/api/jobs', jobDataWithTempId);
       return response.json();
     },
     onMutate: async (newJobData) => {
