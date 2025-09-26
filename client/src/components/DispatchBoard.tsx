@@ -556,12 +556,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     if (serviceType.includes('lead') || serviceType.includes('inquiry')) return 'L';
     if (serviceType.includes('quote') || serviceType.includes('proposal')) return 'Q';
     
-    // Then check job status
+    // Handle actual API status values
     switch (job.status) {
       case 'completed': return 'C';
       case 'cancelled': return 'U'; // Unsuccessful
       case 'in_progress':
       case 'scheduled': return 'WO'; // Work Order
+      // Handle actual API status values
+      case 'work_order': return 'WO'; // Work Order
+      case 'quote': return 'Q'; // Quote
+      case 'lead': return 'L'; // Lead
       default: return 'WO'; // Default to Work Order
     }
   };
@@ -587,11 +591,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     if (serviceType.includes('lead') || serviceType.includes('inquiry')) return '#3b82f6'; // blue-500
     if (serviceType.includes('quote') || serviceType.includes('proposal')) return '#8b5cf6'; // purple-500
     
+    // Handle actual API status values
     switch (job.status) {
       case 'completed': return '#10b981'; // green-500
       case 'cancelled': return '#ef4444'; // red-500 - Unsuccessful
       case 'in_progress': return '#eab308'; // yellow-500
       case 'scheduled': return '#f97316'; // orange-500
+      // Handle actual API status values
+      case 'work_order': return '#f97316'; // orange-500
+      case 'quote': return '#8b5cf6'; // purple-500  
+      case 'lead': return '#3b82f6'; // blue-500
       default: return '#6b7280'; // gray-500
     }
   };
@@ -1407,7 +1416,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </div>
 
             {/* ServiceM8 Style Jobs Panel */}
-            <div className="w-80 bg-gray-50 border-l flex flex-col h-full hidden md:block">
+            <div className="w-80 bg-gray-50 border-l flex flex-col h-full min-h-0 hidden md:block">
               {/* ServiceM8 Header */}
               <div className="p-4 space-y-3 flex-shrink-0">
                 {/* ServiceM8 Style Filter Dropdown */}
