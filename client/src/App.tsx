@@ -31,6 +31,7 @@ import Clients from "@/pages/Clients";
 import MaterialsServices from "@/pages/MaterialsServices";
 import Settings from "@/pages/Settings";
 import StaffManagement from "@/pages/StaffManagement";
+import TemplateManagement from "@/pages/TemplateManagement";
 import Developer from "@/pages/Developer";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
@@ -215,6 +216,11 @@ function Router() {
       <Route path="/equipment">
         <SidebarLayout>
           <Equipment />
+        </SidebarLayout>
+      </Route>
+      <Route path="/templates">
+        <SidebarLayout>
+          <TemplateManagement />
         </SidebarLayout>
       </Route>
       <Route path="/dispatch">

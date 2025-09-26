@@ -2345,3 +2345,232 @@ export type UpdateConversation = z.infer<typeof updateConversationSchema>;
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
 export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
 export type UpdateConversationMessage = z.infer<typeof updateConversationMessageSchema>;
+
+// ========================================
+// DOCUMENT TEMPLATE SCHEMAS
+// ========================================
+
+// Document Templates (Quote, Proposal, Invoice)
+export const documentTemplates = pgTable("document_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(), // "Standard Quote", "Tree Removal Proposal", "Tax Invoice"
+  type: text("type").notNull(), // "quote", "proposal", "invoice"
+  description: text("description"),
+  isDefault: boolean("is_default").default(false), // Default template for this type
+  isActive: boolean("is_active").default(true),
+  
+  // Company Branding
+  companyName: text("company_name").default("Treemarkables LTD"),
+  companyAddress: text("company_address").default("Hauroa rd\nGisborne, 4010"),
+  companyEmail: text("company_email").default("quotes@treemarkables.nz"),
+  companyPhone: text("company_phone").default("027 216 6882"),
+  gstNumber: text("gst_number").default("131-047-592-GST004"),
+  
+  // Layout Configuration
+  headerLayout: jsonb("header_layout"), // Logo position, company info layout
+  footerText: text("footer_text"),
+  paymentTerms: text("payment_terms").default("Payment due within 7 days"),
+  
+  // Template Styling
+  primaryColor: text("primary_color").default("#f97316"), // Orange from Treemarkables brand
+  secondaryColor: text("secondary_color").default("#3b82f6"), // Blue
+  logoUrl: text("logo_url"), // Path to logo file
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Template Sections (for Proposals with multiple options)
+export const templateSections = pgTable("template_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => documentTemplates.id).notNull(),
+  sectionType: text("section_type").notNull(), // "option", "terms", "description"
+  title: text("title").notNull(), // "Option 1", "Option 2", "Terms and Conditions"
+  description: text("description"),
+  sortOrder: integer("sort_order").default(0),
+  isVisible: boolean("is_visible").default(true),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Template Line Items (services, materials, labor)
+export const templateLineItems = pgTable("template_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => documentTemplates.id),
+  sectionId: varchar("section_id").references(() => templateSections.id), // Optional: belongs to specific section
+  itemType: text("item_type").notNull(), // "service", "material", "labor", "equipment"
+  description: text("description").notNull(),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).default("1"),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }),
+  unit: text("unit").default("each"), // "each", "hour", "m²", "tonne"
+  sortOrder: integer("sort_order").default(0),
+  isOptional: boolean("is_optional").default(false),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Template Photos (for Proposals)
+export const templatePhotos = pgTable("template_photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => documentTemplates.id),
+  sectionId: varchar("section_id").references(() => templateSections.id), // Which proposal section
+  photoUrl: text("photo_url").notNull(),
+  caption: text("caption"),
+  altText: text("alt_text"),
+  sortOrder: integer("sort_order").default(0),
+  isVisible: boolean("is_visible").default(true),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Generated Documents (instances created from templates)
+export const generatedDocuments = pgTable("generated_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => documentTemplates.id).notNull(),
+  jobId: varchar("job_id").references(() => jobs.id),
+  customerId: varchar("customer_id").references(() => customers.id),
+  quoteId: varchar("quote_id").references(() => quotes.id),
+  
+  documentType: text("document_type").notNull(), // "quote", "proposal", "invoice"
+  documentNumber: text("document_number").notNull().unique(), // Quote #1234, Proposal #5678
+  status: text("status").default("draft"), // "draft", "sent", "viewed", "accepted", "rejected"
+  
+  // Customer Information (captured at generation time)
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email"),
+  customerPhone: text("customer_phone"),
+  customerAddress: text("customer_address"),
+  
+  // Document Content
+  title: text("title"), // "Tree Removal Proposal for 24 Hauroa Road"
+  description: text("description"),
+  
+  // Financial Totals
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }),
+  gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }),
+  
+  // Generated Files
+  pdfUrl: text("pdf_url"), // Path to generated PDF
+  pdfGenerated: boolean("pdf_generated").default(false),
+  
+  // Tracking
+  sentAt: timestamp("sent_at"),
+  viewedAt: timestamp("viewed_at"),
+  acceptedAt: timestamp("accepted_at"),
+  rejectedAt: timestamp("rejected_at"),
+  
+  // Valid until (for quotes/proposals)
+  validUntil: timestamp("valid_until"),
+  
+  // Notes and follow-up
+  notes: text("notes"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Generated Document Line Items (specific items for this document instance)
+export const generatedDocumentLineItems = pgTable("generated_document_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  generatedDocumentId: varchar("generated_document_id").references(() => generatedDocuments.id).notNull(),
+  sectionTitle: text("section_title"), // "Option 1", "Option 2" for proposals
+  
+  itemType: text("item_type").notNull(), // "service", "material", "labor"
+  description: text("description").notNull(),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).default("1"),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+  unit: text("unit").default("each"),
+  
+  sortOrder: integer("sort_order").default(0),
+  isSelected: boolean("is_selected").default(false), // For proposal options
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Generated Document Photos (photos for specific document instance)
+export const generatedDocumentPhotos = pgTable("generated_document_photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  generatedDocumentId: varchar("generated_document_id").references(() => generatedDocuments.id).notNull(),
+  sectionTitle: text("section_title"), // Which proposal section
+  
+  photoUrl: text("photo_url").notNull(),
+  caption: text("caption"),
+  altText: text("alt_text"),
+  sortOrder: integer("sort_order").default(0),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Zod Schemas for Document Templates
+export const insertDocumentTemplateSchema = createInsertSchema(documentTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTemplateSectionSchema = createInsertSchema(templateSections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTemplateLineItemSchema = createInsertSchema(templateLineItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTemplatePhotoSchema = createInsertSchema(templatePhotos).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGeneratedDocumentSchema = createInsertSchema(generatedDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGeneratedDocumentLineItemSchema = createInsertSchema(generatedDocumentLineItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGeneratedDocumentPhotoSchema = createInsertSchema(generatedDocumentPhotos).omit({
+  id: true,
+  createdAt: true,
+});
+
+// TypeScript Types
+export type InsertDocumentTemplate = z.infer<typeof insertDocumentTemplateSchema>;
+export type DocumentTemplate = typeof documentTemplates.$inferSelect;
+
+export type InsertTemplateSection = z.infer<typeof insertTemplateSectionSchema>;
+export type TemplateSection = typeof templateSections.$inferSelect;
+
+export type InsertTemplateLineItem = z.infer<typeof insertTemplateLineItemSchema>;
+export type TemplateLineItem = typeof templateLineItems.$inferSelect;
+
+export type InsertTemplatePhoto = z.infer<typeof insertTemplatePhotoSchema>;
+export type TemplatePhoto = typeof templatePhotos.$inferSelect;
+
+export type InsertGeneratedDocument = z.infer<typeof insertGeneratedDocumentSchema>;
+export type GeneratedDocument = typeof generatedDocuments.$inferSelect;
+
+export type InsertGeneratedDocumentLineItem = z.infer<typeof insertGeneratedDocumentLineItemSchema>;
+export type GeneratedDocumentLineItem = typeof generatedDocumentLineItems.$inferSelect;
+
+export type InsertGeneratedDocumentPhoto = z.infer<typeof insertGeneratedDocumentPhotoSchema>;
+export type GeneratedDocumentPhoto = typeof generatedDocumentPhotos.$inferSelect;
+
+// Document Type Enums
+export const DocumentType = z.enum(["quote", "proposal", "invoice"]);
+export const DocumentStatus = z.enum(["draft", "sent", "viewed", "accepted", "rejected"]);
+export const SectionType = z.enum(["option", "terms", "description", "summary"]);
+export const ItemType = z.enum(["service", "material", "labor", "equipment", "travel", "disposal"]);
+
+export type DocumentTypeType = z.infer<typeof DocumentType>;
+export type DocumentStatusType = z.infer<typeof DocumentStatus>;
+export type SectionTypeType = z.infer<typeof SectionType>;
+export type ItemTypeType = z.infer<typeof ItemType>;
