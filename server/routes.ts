@@ -7677,8 +7677,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       for (const csvJob of jobs) {
         try {
           // Find customer by name (or create if needed)
-          const customerName = (csvJob.customerName || csvJob.companyName || csvJob.company || csvJob['Customer Name'] || csvJob['Company Name'] || 
+          const customerName = (csvJob.customerName || csvJob.companyName || csvJob.company || csvJob['Company'] || csvJob['Customer Name'] || csvJob['Company Name'] || 
                               csvJob.client || csvJob.Client || csvJob.customer || csvJob.Customer || '').trim();
+          
+          console.log('Processing job row:', {
+            company: csvJob.company || csvJob['Company'],
+            customerName: customerName,
+            jobNumber: csvJob.jobNumber || csvJob['Job Number']
+          });
           let customer = customerByName.get(customerName.toLowerCase());
 
           if (!customer && customerName) {
