@@ -1163,32 +1163,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </h3>
               <div className="space-y-2">
                 {assignmentMode === 'teams' ? (
-                  // Teams Mode
-                  mockTeams.map((team) => {
-                    const teamMembers = getTeamMembers(team.id);
-                    const todaysJobs = getJobsForTeam(team.id);
-                    return (
-                      <div
-                        key={team.id}
-                        className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer"
-                        data-testid={`team-${team.id}`}
-                      >
-                        <div className={`w-3 h-3 rounded-full ${team.color}`} />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{team.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {teamMembers.length} members • {todaysJobs.length} jobs
-                          </div>
-                        </div>
-                        <Badge
-                          variant="secondary"
-                          className={`text-xs ${getStatusColor(team.status)}`}
-                        >
-                          {team.status}
-                        </Badge>
-                      </div>
-                    );
-                  })
+                  // Teams Mode - Section Removed
+                  null
                 ) : (
                   // Individual Staff Mode
                   staffMembers.map((staff: StaffMember) => {
