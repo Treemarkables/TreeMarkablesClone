@@ -1333,12 +1333,40 @@ class DatabaseStorage implements IStorage {
   async getAllCalls(limit?: number): Promise<Call[]> { return []; }
 
   // Quotes
-  async createQuote(quote: InsertQuote): Promise<Quote> { throw new Error("Not implemented"); }
-  async getQuote(id: string): Promise<Quote | undefined> { return undefined; }
-  async updateQuote(id: string, updates: Partial<InsertQuote>): Promise<Quote> { throw new Error("Not implemented"); }
-  async getQuotesByCustomer(customerId: string): Promise<Quote[]> { return []; }
-  async getQuotesByLead(leadId: string): Promise<Quote[]> { return []; }
-  async getAllQuotes(): Promise<Quote[]> { return []; }
+  async createQuote(quote: InsertQuote): Promise<Quote> {
+    const [createdQuote] = await db.insert(schema.quotes).values(quote).returning();
+    return createdQuote;
+  }
+
+  async getQuote(id: string): Promise<Quote | undefined> {
+    const quotes = await db.select().from(schema.quotes).where(eq(schema.quotes.id, id));
+    return quotes[0];
+  }
+
+  async updateQuote(id: string, updates: Partial<InsertQuote>): Promise<Quote> {
+    const [updatedQuote] = await db.update(schema.quotes)
+      .set(updates)
+      .where(eq(schema.quotes.id, id))
+      .returning();
+    return updatedQuote;
+  }
+
+  async getQuotesByCustomer(customerId: string): Promise<Quote[]> {
+    return await db.select().from(schema.quotes)
+      .where(eq(schema.quotes.customerId, customerId))
+      .orderBy(desc(schema.quotes.createdAt));
+  }
+
+  async getQuotesByLead(leadId: string): Promise<Quote[]> {
+    return await db.select().from(schema.quotes)
+      .where(eq(schema.quotes.leadId, leadId))
+      .orderBy(desc(schema.quotes.createdAt));
+  }
+
+  async getAllQuotes(): Promise<Quote[]> {
+    return await db.select().from(schema.quotes)
+      .orderBy(desc(schema.quotes.createdAt));
+  }
 
   // Job diary entries
   async createJobDiaryEntry(entry: InsertJobDiaryEntry): Promise<JobDiaryEntry> {
