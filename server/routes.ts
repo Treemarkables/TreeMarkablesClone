@@ -3473,6 +3473,35 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   });
 
   // ========================================
+  // DATABASE ADMINISTRATION ENDPOINTS
+  // ========================================
+
+  // Complete database wipe - Option A clean slate
+  app.post('/api/admin/complete-wipe', async (req: Request, res: Response) => {
+    try {
+      console.log('🚨 Complete database wipe requested - Option A');
+      
+      // Execute complete data wipe
+      const results = await storage.completeDataWipe();
+      
+      console.log('✅ Complete database wipe successful');
+      res.json({
+        success: true,
+        message: 'Complete database wipe completed successfully',
+        data: results,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('❌ Error during complete database wipe:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error during complete database wipe',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // ========================================
   // CSV IMPORT ENDPOINTS FOR SERVICEM8 MIGRATION
   // ========================================
 
