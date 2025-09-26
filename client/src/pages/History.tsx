@@ -13,7 +13,8 @@ import {
   MoreHorizontal, 
   ChevronDown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronUp
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Customer } from "@shared/schema";
@@ -25,11 +26,16 @@ interface ApiResponse<T> {
   count?: number;
 }
 
+type SortColumn = 'date' | 'jobNumber' | 'company' | 'firstName' | 'lastName' | 'status';
+type SortDirection = 'asc' | 'desc';
+
 export default function History() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortColumn, setSortColumn] = useState<SortColumn>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // Fetch jobs and customers data
   const { data: jobsResponse, isLoading: jobsLoading } = useQuery<ApiResponse<Job>>({
@@ -64,11 +70,69 @@ export default function History() {
     return matchesSearch && matchesStatus;
   });
 
-  // Sort jobs by date (newest first)
+  // Handle column sorting
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1); // Reset to first page when sorting
+  };
+
+  // Sort jobs by selected column and direction
   const sortedJobs = [...filteredJobs].sort((a, b) => {
-    const dateA = new Date(a.createdAt || 0).getTime();
-    const dateB = new Date(b.createdAt || 0).getTime();
-    return dateB - dateA;
+    let valueA: any, valueB: any;
+    
+    switch (sortColumn) {
+      case 'date':
+        valueA = new Date(a.createdAt || 0).getTime();
+        valueB = new Date(b.createdAt || 0).getTime();
+        break;
+      case 'jobNumber':
+        valueA = a.jobNumber || '';
+        valueB = b.jobNumber || '';
+        break;
+      case 'company':
+        const customerDetailsA = getCustomerDetails(a.customerId || '');
+        const customerDetailsB = getCustomerDetails(b.customerId || '');
+        valueA = customerDetailsA.name;
+        valueB = customerDetailsB.name;
+        break;
+      case 'firstName':
+        const customerDetailsA2 = getCustomerDetails(a.customerId || '');
+        const customerDetailsB2 = getCustomerDetails(b.customerId || '');
+        valueA = customerDetailsA2.firstName;
+        valueB = customerDetailsB2.firstName;
+        break;
+      case 'lastName':
+        const customerDetailsA3 = getCustomerDetails(a.customerId || '');
+        const customerDetailsB3 = getCustomerDetails(b.customerId || '');
+        valueA = customerDetailsA3.lastName;
+        valueB = customerDetailsB3.lastName;
+        break;
+      case 'status':
+        valueA = a.status || '';
+        valueB = b.status || '';
+        break;
+      default:
+        valueA = '';
+        valueB = '';
+    }
+
+    // Compare values
+    if (typeof valueA === 'number' && typeof valueB === 'number') {
+      return sortDirection === 'asc' ? valueA - valueB : valueB - valueA;
+    } else {
+      const strA = String(valueA).toLowerCase();
+      const strB = String(valueB).toLowerCase();
+      if (sortDirection === 'asc') {
+        return strA.localeCompare(strB);
+      } else {
+        return strB.localeCompare(strA);
+      }
+    }
   });
 
   // Pagination
@@ -100,6 +164,15 @@ export default function History() {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB'); // DD/MM/YYYY format like ServiceM8
+  };
+
+  const getSortIcon = (column: SortColumn) => {
+    if (sortColumn !== column) {
+      return null;
+    }
+    return sortDirection === 'asc' ? 
+      <ChevronUp className="h-4 w-4" /> : 
+      <ChevronDown className="h-4 w-4" />;
   };
 
   const getCustomerDetails = (customerId: string) => {
@@ -190,12 +263,66 @@ export default function History() {
         <Table>
           <TableHeader>
             <TableRow className="border-b">
-              <TableHead className="w-24">Date</TableHead>
-              <TableHead className="w-32">Job Number</TableHead>
-              <TableHead>Company</TableHead>
-              <TableHead>Contact First</TableHead>
-              <TableHead>Contact Last</TableHead>
-              <TableHead>Job Status</TableHead>
+              <TableHead className="w-24">
+                <button
+                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
+                  onClick={() => handleSort('date')}
+                  data-testid="header-date"
+                >
+                  Date
+                  {getSortIcon('date')}
+                </button>
+              </TableHead>
+              <TableHead className="w-32">
+                <button
+                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
+                  onClick={() => handleSort('jobNumber')}
+                  data-testid="header-job-number"
+                >
+                  Job Number
+                  {getSortIcon('jobNumber')}
+                </button>
+              </TableHead>
+              <TableHead>
+                <button
+                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
+                  onClick={() => handleSort('company')}
+                  data-testid="header-company"
+                >
+                  Company
+                  {getSortIcon('company')}
+                </button>
+              </TableHead>
+              <TableHead>
+                <button
+                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
+                  onClick={() => handleSort('firstName')}
+                  data-testid="header-first-name"
+                >
+                  Contact First
+                  {getSortIcon('firstName')}
+                </button>
+              </TableHead>
+              <TableHead>
+                <button
+                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
+                  onClick={() => handleSort('lastName')}
+                  data-testid="header-last-name"
+                >
+                  Contact Last
+                  {getSortIcon('lastName')}
+                </button>
+              </TableHead>
+              <TableHead>
+                <button
+                  className="flex items-center gap-1 hover:text-blue-600 font-medium"
+                  onClick={() => handleSort('status')}
+                  data-testid="header-status"
+                >
+                  Job Status
+                  {getSortIcon('status')}
+                </button>
+              </TableHead>
               <TableHead className="w-48">Actions</TableHead>
             </TableRow>
           </TableHeader>
