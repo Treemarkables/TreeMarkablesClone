@@ -38,6 +38,21 @@ import {
 import multer from "multer";
 import Papa from "papaparse";
 import path from "path";
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'));
+    }
+  }
+});
 import fs from "fs";
 import { format } from "date-fns";
 import { AutomatedTriggers } from "./services/automatedTriggers";
