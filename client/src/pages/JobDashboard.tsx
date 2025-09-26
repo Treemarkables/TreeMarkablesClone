@@ -1022,9 +1022,42 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
             <Integrations />
           </TabsContent>
 
-          {/* ServiceM8 Job Import Tab */}
+          {/* CSV Data Import Tab */}
           <TabsContent value="job-import" className="flex-1 overflow-auto">
-            <ServiceM8JobImport />
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Data Import</h3>
+              <p className="text-gray-600 mb-6">Import your historical jobs and customer data using CSV files.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-lg border">
+                  <h4 className="font-medium mb-3">Import Jobs</h4>
+                  <p className="text-sm text-gray-600 mb-4">Upload a CSV file containing your job data to migrate historical records.</p>
+                  <Button className="w-full">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Upload Jobs CSV
+                  </Button>
+                </div>
+                
+                <div className="bg-white p-6 rounded-lg border">
+                  <h4 className="font-medium mb-3">Import Customers</h4>
+                  <p className="text-sm text-gray-600 mb-4">Upload a CSV file containing your customer data to migrate contact records.</p>
+                  <Button className="w-full">
+                    <Users className="h-4 w-4 mr-2" />
+                    Upload Customers CSV
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                <h5 className="font-medium text-blue-900 mb-2">CSV Format Guidelines</h5>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Include column headers in the first row</li>
+                  <li>• Use standard date formats (DD/MM/YYYY or YYYY-MM-DD)</li>
+                  <li>• Ensure customer IDs match between jobs and customer files</li>
+                  <li>• Contact support if you need help with data formatting</li>
+                </ul>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
