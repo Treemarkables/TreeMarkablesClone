@@ -782,6 +782,22 @@ export function GlobalJobCard({
         />
       )}
 
+      {/* Profit Tracker */}
+      {isProfitTrackerOpen && editingJob?.id && (
+        <Dialog open={isProfitTrackerOpen} onOpenChange={setIsProfitTrackerOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <h2 className="text-lg font-semibold">Profit Tracking - {editingJob.title}</h2>
+            </DialogHeader>
+            <GrossMarginCalculator
+              jobId={editingJob.id}
+              jobData={editingJob}
+              compact={false}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Scheduling Modal */}
       <Dialog open={isSchedulingModalOpen} onOpenChange={setIsSchedulingModalOpen}>
         <DialogContent className="sm:max-w-md">
