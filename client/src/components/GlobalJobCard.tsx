@@ -127,6 +127,7 @@ export function GlobalJobCard({
 
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [newLineItem, setNewLineItem] = useState({
     description: '',
     quantity: 1,
@@ -178,15 +179,36 @@ export function GlobalJobCard({
   });
 
   // Fetch materials and services catalog for line item integration
-  const { data: materialsServicesData } = useQuery({
-    queryKey: ['/api/materials-services'],
+  const { data: materialsData } = useQuery({
+    queryKey: ['/api/materials'],
+    enabled: isOpen,
+  });
+
+  const { data: servicesData } = useQuery({
+    queryKey: ['/api/services'],
     enabled: isOpen,
   });
 
   const customers: Customer[] = (customersData as any)?.data || [];
   const employees: any[] = (employeesData as any)?.data || [];
   const jobs: Job[] = (jobsData as any)?.data || [];
-  const materialsAndServices = (materialsServicesData as any)?.data || [];
+  
+  // Combine materials and services into a single catalog array
+  const materials = (materialsData as any)?.data || [];
+  const services = (servicesData as any)?.data || [];
+  const materialsAndServices = [
+    ...materials.map((item: any) => ({ 
+      ...item, 
+      type: 'material',
+      displayPrice: item.price || 0 
+    })),
+    ...services.map((item: any) => ({ 
+      ...item, 
+      type: 'service',
+      displayPrice: item.basePrice || 0 
+    }))
+  ];
+  
   const invoiceTemplate = invoiceTemplateData || null;
   const quoteTemplate = quoteTemplateData || null;
 
@@ -239,9 +261,15 @@ export function GlobalJobCard({
 
   const selectFromCatalog = (catalogItem: any) => {
     setNewLineItem({
-      description: catalogItem.name,
+      description: catalogItem.name || catalogItem.itemNumber,
       quantity: 1,
-      unitPrice: parseFloat(catalogItem.basePrice || 0)
+      unitPrice: parseFloat(catalogItem.displayPrice || 0)
+    });
+    setIsCatalogModalOpen(false);
+    
+    toast({
+      title: "Item Selected",
+      description: `${catalogItem.name} added to line item form`,
     });
   };
 
@@ -869,29 +897,19 @@ export function GlobalJobCard({
                         </Button>
                       </div>
                       
-                      {/* Materials & Services Catalog */}
+                      {/* Quick Select from Catalog Button */}
                       {materialsAndServices.length > 0 && (
                         <div>
-                          <label className="text-sm font-medium text-gray-700 mb-2 block">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsCatalogModalOpen(true)}
+                            className="w-full mb-4 flex items-center justify-center gap-2"
+                            data-testid="button-select-from-catalog"
+                          >
+                            <Package className="w-4 h-4" />
                             Quick Select from Catalog
-                          </label>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
-                            {materialsAndServices.map((item: any) => (
-                              <Button
-                                key={item.id}
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => selectFromCatalog(item)}
-                                className="text-xs p-2 h-auto text-left justify-start"
-                              >
-                                <div>
-                                  <div className="font-medium">{item.name}</div>
-                                  <div className="text-gray-500">${parseFloat(item.basePrice || 0).toFixed(2)}</div>
-                                </div>
-                              </Button>
-                            ))}
-                          </div>
+                          </Button>
                         </div>
                       )}
 
@@ -1152,6 +1170,82 @@ export function GlobalJobCard({
           jobNumber={editingJob.jobNumber || "3314"}
         />
       )}
+
+      {/* Catalog Selection Modal */}
+      <Dialog open={isCatalogModalOpen} onOpenChange={setIsCatalogModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Add New Line Item</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsCatalogModalOpen(false)}
+                data-testid="button-close-catalog-modal"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-medium mb-4">Quick Select from Catalog</h3>
+              
+              {materialsAndServices.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {materialsAndServices.map((item: any) => (
+                    <Card 
+                      key={item.id}
+                      className="cursor-pointer hover:shadow-md transition-shadow border border-gray-200 hover:border-gray-300"
+                      onClick={() => selectFromCatalog(item)}
+                      data-testid={`catalog-item-${item.id}`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="space-y-2">
+                          <div className="font-medium text-gray-900 text-sm leading-tight">
+                            {item.name || item.itemNumber}
+                          </div>
+                          <div className="text-lg font-semibold text-gray-600">
+                            ${parseFloat(item.displayPrice || 0).toFixed(2)}
+                          </div>
+                          {item.category && (
+                            <Badge variant="outline" className="text-xs">
+                              {item.category}
+                            </Badge>
+                          )}
+                          {item.type && (
+                            <Badge 
+                              variant={item.type === 'material' ? 'default' : 'secondary'} 
+                              className="text-xs ml-1"
+                            >
+                              {item.type}
+                            </Badge>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No materials or services available in catalog</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open('/materials-services', '_blank')}
+                    className="mt-2"
+                  >
+                    <Settings className="w-4 h-4 mr-1" />
+                    Manage Catalog
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
