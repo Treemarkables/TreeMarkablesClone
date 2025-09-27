@@ -422,7 +422,7 @@ export function GlobalJobCard({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0 bg-gray-50 rounded-xl">
         {/* ServiceM8-style Header */}
-        <div className="bg-orange-500 border-b border-orange-600 px-4 py-2 flex-shrink-0">
+        <div className="bg-orange-500 border-b border-orange-600 px-4 py-2 flex-shrink-0 rounded-t-xl">
           <div className="flex items-center justify-between">
             {/* Left: Job Title */}
             <div className="flex items-center gap-2">
