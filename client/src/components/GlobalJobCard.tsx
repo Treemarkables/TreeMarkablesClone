@@ -2413,42 +2413,117 @@ export function GlobalJobCard({
       )}
 
       {/* Quote Management Modal */}
-      {isQuoteModalOpen && (
+      {isQuoteModalOpen && editingJob && quoteTemplate && (
         <Dialog open={isQuoteModalOpen} onOpenChange={setIsQuoteModalOpen}>
           <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <h2 className="text-lg font-semibold">Quote Management - {editingJob?.title || 'Job'}</h2>
+              <h2 className="text-lg font-semibold">Quote Preview - {editingJob?.title || 'Job'}</h2>
             </DialogHeader>
-            <QuoteManagement compact={true} />
+            <div className="p-6">
+              <QuoteTemplate
+                template={quoteTemplate}
+                quote={{
+                  id: editingJob.id,
+                  amount: formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0,
+                  status: 'draft',
+                  customerId: selectedCustomer?.id || '',
+                  leadId: editingJob.id,
+                  description: editingJob.description || '',
+                  validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+                  terms: quoteTemplate?.paymentTerms || 'Payment due within 30 days',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }}
+                customer={selectedCustomer}
+                lineItems={formData?.lineItems?.map(item => ({
+                  id: item.id,
+                  description: item.description,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  unit: 'each',
+                  total: item.total
+                })) || []}
+                showActions={true}
+                onEmail={() => {
+                  setIsQuoteModalOpen(false);
+                  handleEmailClick();
+                }}
+                onDownload={() => {
+                  toast({
+                    title: "Download Started",
+                    description: "Quote PDF download will be available soon.",
+                  });
+                }}
+                onCopy={() => {
+                  toast({
+                    title: "Copied",
+                    description: "Quote details copied to clipboard.",
+                  });
+                }}
+              />
+            </div>
           </DialogContent>
         </Dialog>
       )}
 
       {/* Invoice Management Modal */}
-      {isInvoiceModalOpen && (
+      {isInvoiceModalOpen && editingJob && invoiceTemplate && (
         <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
           <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <h2 className="text-lg font-semibold">Invoice Management - {editingJob?.title || 'Job'}</h2>
+              <h2 className="text-lg font-semibold">Invoice Preview - {editingJob?.title || 'Job'}</h2>
             </DialogHeader>
             <div className="p-6">
-              <div className="text-center py-8">
-                <CreditCard className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Invoice Management</h3>
-                <p className="text-gray-600">Create and manage invoices for this job. Generate professional invoices with GST/tax calculations.</p>
-                <Button 
-                  className="mt-4" 
-                  onClick={() => {
-                    toast({
-                      title: "Invoice Feature",
-                      description: "Invoice management functionality will be available soon.",
-                    });
-                  }}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Invoice
-                </Button>
-              </div>
+              <InvoiceTemplate
+                template={invoiceTemplate}
+                invoice={{
+                  id: editingJob.id,
+                  invoiceNumber: `INV-${editingJob.jobNumber || '0000'}`,
+                  customerId: selectedCustomer?.id || '',
+                  amount: formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0,
+                  status: 'draft',
+                  dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+                  issueDate: new Date().toISOString(),
+                  paymentTerms: invoiceTemplate?.paymentTerms || 'Payment due within 30 days',
+                  notes: editingJob.notes || '',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }}
+                customer={selectedCustomer}
+                lineItems={formData?.lineItems?.map(item => ({
+                  id: item.id,
+                  description: item.description,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  total: item.total,
+                  unit: 'each',
+                  category: 'service',
+                  taxable: true
+                })) || []}
+                showActions={true}
+                onEmail={() => {
+                  setIsInvoiceModalOpen(false);
+                  handleEmailClick();
+                }}
+                onDownload={() => {
+                  toast({
+                    title: "Download Started",
+                    description: "Invoice PDF download will be available soon.",
+                  });
+                }}
+                onCopy={() => {
+                  toast({
+                    title: "Copied",
+                    description: "Invoice details copied to clipboard.",
+                  });
+                }}
+                onAddPayment={() => {
+                  toast({
+                    title: "Add Payment",
+                    description: "Payment tracking functionality will be available soon.",
+                  });
+                }}
+              />
             </div>
           </DialogContent>
         </Dialog>
