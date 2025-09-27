@@ -12,7 +12,12 @@ import {
   Plug,
   Workflow,
   FileText,
-  Layout
+  Layout,
+  Briefcase,
+  Upload,
+  BookOpen,
+  Cloud,
+  Shield
 } from "lucide-react";
 import {
   Sidebar,
@@ -43,6 +48,13 @@ const dashboardItems = [
     isTab: true
   },
   {
+    title: "All Jobs",
+    url: "/job-dashboard",
+    icon: Briefcase,
+    value: "jobs",
+    isTab: true
+  },
+  {
     title: "Pipeline",
     url: "/pipeline",
     icon: GitBranch,
@@ -61,6 +73,20 @@ const dashboardItems = [
     url: "/job-dashboard",
     icon: Users,
     value: "customers", 
+    isTab: true
+  },
+  {
+    title: "Job Import",
+    url: "/job-dashboard",
+    icon: Upload,
+    value: "job-import",
+    isTab: true
+  },
+  {
+    title: "Job Diary",
+    url: "/job-dashboard",
+    icon: BookOpen,
+    value: "diary",
     isTab: true
   },
   {
@@ -198,6 +224,26 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     <Calendar className="h-4 w-4" />
                     <span>Dispatch Board</span>
                   </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={activeTab === "weather" && location === "/job-dashboard"}
+                  onClick={() => handleTabClick("weather")}
+                  data-testid="button-tab-weather"
+                >
+                  <Cloud className="h-4 w-4" />
+                  <span>Weather</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={activeTab === "safety" && location === "/job-dashboard"}
+                  onClick={() => handleTabClick("safety")}
+                  data-testid="button-tab-safety"
+                >
+                  <Shield className="h-4 w-4" />
+                  <span>Safety</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
