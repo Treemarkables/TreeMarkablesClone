@@ -86,9 +86,16 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     queryKey: ['/api/employees', 'active'],
     enabled: !compact // Only load when showing full calculator
   });
+
+  // Fetch materials and services catalog for line item selection
+  const { data: materialsServicesResponse } = useQuery({
+    queryKey: ['/api/materials-services'],
+    enabled: !compact // Only load when showing full calculator
+  });
   
   const job = (jobResponse as any)?.data;
   const employees = (employeesData as any)?.data || [];
+  const materialsAndServices = (materialsServicesResponse as any)?.data || [];
 
   // Fetch staff time entries from the new time tracking system
   const today = new Date().toISOString().split('T')[0];
@@ -622,6 +629,18 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
               <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p>No line items added yet</p>
               <p className="text-sm">Add line items to track staff costs by specific services</p>
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open('/materials-services', '_blank')}
+                  className="text-xs"
+                  data-testid="button-open-materials-services"
+                >
+                  <Package className="h-3 w-3 mr-1" />
+                  Manage Materials & Services
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -733,19 +752,39 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                                   onValueChange={(value) => updateStaffAssignment(employee.id, 'lineItemId', value === 'none' ? '' : value)}
                                 >
                                   <SelectTrigger className="h-8 text-xs">
-                                    <SelectValue placeholder="Select line item..." />
+                                    <SelectValue placeholder="Select service..." />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="none">No line item</SelectItem>
-                                    {lineItems.length > 0 ? (
-                                      lineItems.map((lineItem: LineItem) => (
-                                        <SelectItem key={lineItem.id} value={lineItem.id}>
-                                          {lineItem.description}
+                                    <SelectItem value="none">No specific service</SelectItem>
+                                    {materialsAndServices.length > 0 ? (
+                                      <>
+                                        {/* Show current job line items first if any */}
+                                        {lineItems.length > 0 && (
+                                          <>
+                                            <SelectItem value="divider-job" disabled className="font-medium text-blue-800">
+                                              — Current Job Line Items —
+                                            </SelectItem>
+                                            {lineItems.map((lineItem: LineItem) => (
+                                              <SelectItem key={lineItem.id} value={lineItem.id}>
+                                                ✓ {lineItem.description}
+                                              </SelectItem>
+                                            ))}
+                                          </>
+                                        )}
+                                        
+                                        {/* Show materials & services catalog */}
+                                        <SelectItem value="divider-catalog" disabled className="font-medium text-green-800">
+                                          — Materials & Services Catalog —
                                         </SelectItem>
-                                      ))
+                                        {materialsAndServices.map((item: any) => (
+                                          <SelectItem key={item.id} value={item.id}>
+                                            {item.name} {item.category && `(${item.category})`}
+                                          </SelectItem>
+                                        ))}
+                                      </>
                                     ) : (
                                       <SelectItem value="general" disabled>
-                                        No line items available - add line items above
+                                        No services available - check Materials & Services settings
                                       </SelectItem>
                                     )}
                                   </SelectContent>
