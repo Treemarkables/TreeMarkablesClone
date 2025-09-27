@@ -15,9 +15,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 
-// Form schema for adding materials
-const addMaterialSchema = z.object({
+// Form schema for adding/editing materials
+const materialSchema = z.object({
   itemNumber: z.string().min(1, "Item number is required"),
   name: z.string().min(1, "Name is required"),
   price: z.string().min(1, "Price is required"),
@@ -26,7 +27,17 @@ const addMaterialSchema = z.object({
   category: z.string().min(1, "Category is required"),
 });
 
-type AddMaterialFormData = z.infer<typeof addMaterialSchema>;
+// Form schema for adding/editing services
+const serviceSchema = z.object({
+  name: z.string().min(1, "Service name is required"),
+  category: z.string().min(1, "Category is required"),
+  basePrice: z.string().min(1, "Base price is required"),
+  unit: z.string().min(1, "Unit is required"),
+  description: z.string().optional(),
+});
+
+type MaterialFormData = z.infer<typeof materialSchema>;
+type ServiceFormData = z.infer<typeof serviceSchema>;
 
 // Mock data for materials matching ServiceM8 screenshot
 const mockMaterials = [
@@ -171,11 +182,17 @@ export default function MaterialsServices() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name");
   const [materials, setMaterials] = useState(mockMaterials);
+  const [services, setServices] = useState(mockServices);
   const [showAddMaterialDialog, setShowAddMaterialDialog] = useState(false);
+  const [showEditMaterialDialog, setShowEditMaterialDialog] = useState(false);
+  const [showAddServiceDialog, setShowAddServiceDialog] = useState(false);
+  const [showEditServiceDialog, setShowEditServiceDialog] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<any>(null);
+  const [editingService, setEditingService] = useState<any>(null);
   const { toast } = useToast();
 
-  const form = useForm<AddMaterialFormData>({
-    resolver: zodResolver(addMaterialSchema),
+  const materialForm = useForm<MaterialFormData>({
+    resolver: zodResolver(materialSchema),
     defaultValues: {
       itemNumber: "",
       name: "",
@@ -186,12 +203,21 @@ export default function MaterialsServices() {
     },
   });
 
-  const onAddMaterial = (data: AddMaterialFormData) => {
+  const serviceForm = useForm<ServiceFormData>({
+    resolver: zodResolver(serviceSchema),
+    defaultValues: {
+      name: "",
+      category: "",
+      basePrice: "",
+      unit: "",
+      description: "",
+    },
+  });
+
+  const onAddMaterial = (data: MaterialFormData) => {
     try {
-      console.log("Adding material with data:", data);
-      
       const newMaterial = {
-        id: Date.now().toString(), // Use timestamp for unique ID
+        id: Date.now().toString(),
         itemNumber: data.itemNumber,
         name: data.name,
         price: parseFloat(data.price),
@@ -200,16 +226,9 @@ export default function MaterialsServices() {
         category: data.category,
       };
       
-      console.log("New material object:", newMaterial);
-      
-      setMaterials(prevMaterials => {
-        const updatedMaterials = [...prevMaterials, newMaterial];
-        console.log("Updated materials array:", updatedMaterials);
-        return updatedMaterials;
-      });
-      
+      setMaterials(prev => [...prev, newMaterial]);
       setShowAddMaterialDialog(false);
-      form.reset();
+      materialForm.reset();
       
       toast({
         title: "Material Added",
@@ -217,7 +236,6 @@ export default function MaterialsServices() {
       });
       
     } catch (error) {
-      console.error("Error adding material:", error);
       toast({
         title: "Error",
         description: "Failed to add material. Please try again.",
@@ -226,8 +244,135 @@ export default function MaterialsServices() {
     }
   };
 
+  const onEditMaterial = (data: MaterialFormData) => {
+    try {
+      const updatedMaterial = {
+        ...editingMaterial,
+        itemNumber: data.itemNumber,
+        name: data.name,
+        price: parseFloat(data.price),
+        priceIncludesTax: data.priceIncludesTax,
+        taxRate: data.taxRate,
+        category: data.category,
+      };
+      
+      setMaterials(prev => prev.map(m => m.id === editingMaterial.id ? updatedMaterial : m));
+      setShowEditMaterialDialog(false);
+      setEditingMaterial(null);
+      materialForm.reset();
+      
+      toast({
+        title: "Material Updated",
+        description: `${data.name} has been updated successfully.`,
+      });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update material. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const onAddService = (data: ServiceFormData) => {
+    try {
+      const newService = {
+        id: Date.now().toString(),
+        name: data.name,
+        category: data.category,
+        basePrice: parseFloat(data.basePrice),
+        unit: data.unit,
+        description: data.description || "",
+      };
+      
+      setServices(prev => [...prev, newService]);
+      setShowAddServiceDialog(false);
+      serviceForm.reset();
+      
+      toast({
+        title: "Service Added",
+        description: `${data.name} has been added successfully.`,
+      });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add service. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const onEditService = (data: ServiceFormData) => {
+    try {
+      const updatedService = {
+        ...editingService,
+        name: data.name,
+        category: data.category,
+        basePrice: parseFloat(data.basePrice),
+        unit: data.unit,
+        description: data.description || "",
+      };
+      
+      setServices(prev => prev.map(s => s.id === editingService.id ? updatedService : s));
+      setShowEditServiceDialog(false);
+      setEditingService(null);
+      serviceForm.reset();
+      
+      toast({
+        title: "Service Updated",
+        description: `${data.name} has been updated successfully.`,
+      });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update service. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleRemoveMaterial = (id: string) => {
     setMaterials(materials.filter(m => m.id !== id));
+    toast({
+      title: "Material Removed",
+      description: "Material has been removed successfully.",
+    });
+  };
+
+  const handleEditMaterial = (material: any) => {
+    setEditingMaterial(material);
+    materialForm.reset({
+      itemNumber: material.itemNumber,
+      name: material.name,
+      price: material.price.toString(),
+      priceIncludesTax: material.priceIncludesTax,
+      taxRate: material.taxRate,
+      category: material.category,
+    });
+    setShowEditMaterialDialog(true);
+  };
+
+  const handleRemoveService = (id: string) => {
+    setServices(services.filter(s => s.id !== id));
+    toast({
+      title: "Service Removed",
+      description: "Service has been removed successfully.",
+    });
+  };
+
+  const handleEditService = (service: any) => {
+    setEditingService(service);
+    serviceForm.reset({
+      name: service.name,
+      category: service.category,
+      basePrice: service.basePrice.toString(),
+      unit: service.unit,
+      description: service.description || "",
+    });
+    setShowEditServiceDialog(true);
   };
 
   const filteredMaterials = materials
@@ -250,7 +395,7 @@ export default function MaterialsServices() {
       }
     });
 
-  const filteredServices = mockServices
+  const filteredServices = services
     .filter(service => {
       const matchesSearch = service.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = categoryFilter === 'all' || service.category === categoryFilter;
@@ -295,19 +440,20 @@ export default function MaterialsServices() {
           <p className="text-gray-600">Import & manage items you sell</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={showAddMaterialDialog} onOpenChange={setShowAddMaterialDialog}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-material">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Material
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
+          {activeTab === "materials" ? (
+            <Dialog open={showAddMaterialDialog} onOpenChange={setShowAddMaterialDialog}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-material">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Material
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
                 <DialogTitle>Add New Material</DialogTitle>
               </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onAddMaterial, (errors) => {
+              <Form {...materialForm}>
+                <form onSubmit={materialForm.handleSubmit(onAddMaterial, (errors) => {
                   console.error("Form validation errors:", errors);
                   toast({
                     title: "Validation Error",
@@ -317,7 +463,7 @@ export default function MaterialsServices() {
                 })} className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
-                      control={form.control}
+                      control={materialForm.control}
                       name="itemNumber"
                       render={({ field }) => (
                         <FormItem>
@@ -330,7 +476,7 @@ export default function MaterialsServices() {
                       )}
                     />
                     <FormField
-                      control={form.control}
+                      control={materialForm.control}
                       name="category"
                       render={({ field }) => (
                         <FormItem>
@@ -356,7 +502,7 @@ export default function MaterialsServices() {
                   </div>
                   
                   <FormField
-                    control={form.control}
+                    control={materialForm.control}
                     name="name"
                     render={({ field }) => (
                       <FormItem>
@@ -371,7 +517,7 @@ export default function MaterialsServices() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
-                      control={form.control}
+                      control={materialForm.control}
                       name="price"
                       render={({ field }) => (
                         <FormItem>
@@ -384,7 +530,7 @@ export default function MaterialsServices() {
                       )}
                     />
                     <FormField
-                      control={form.control}
+                      control={materialForm.control}
                       name="taxRate"
                       render={({ field }) => (
                         <FormItem>
@@ -407,7 +553,7 @@ export default function MaterialsServices() {
                   </div>
                   
                   <FormField
-                    control={form.control}
+                    control={materialForm.control}
                     name="priceIncludesTax"
                     render={({ field }) => (
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0">
@@ -437,6 +583,115 @@ export default function MaterialsServices() {
               </Form>
             </DialogContent>
           </Dialog>
+          ) : (
+            <Dialog open={showAddServiceDialog} onOpenChange={setShowAddServiceDialog}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-service">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Service
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Add New Service</DialogTitle>
+              </DialogHeader>
+              <Form {...serviceForm}>
+                <form onSubmit={serviceForm.handleSubmit(onAddService)} className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={serviceForm.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Service Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., Tree Removal" {...field} data-testid="input-service-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={serviceForm.control}
+                      name="category"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Category</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-service-category">
+                                <SelectValue placeholder="Select category" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="Tree Services">Tree Services</SelectItem>
+                              <SelectItem value="Maintenance">Maintenance</SelectItem>
+                              <SelectItem value="Emergency">Emergency</SelectItem>
+                              <SelectItem value="Consultation">Consultation</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={serviceForm.control}
+                      name="basePrice"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Base Price</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-service-price" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={serviceForm.control}
+                      name="unit"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Unit</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., per tree, per hour" {...field} data-testid="input-service-unit" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <FormField
+                    control={serviceForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Service description..." {...field} data-testid="textarea-service-description" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="flex justify-end space-x-2">
+                    <Button type="button" variant="outline" onClick={() => setShowAddServiceDialog(false)} data-testid="button-cancel-service">
+                      Cancel
+                    </Button>
+                    <Button type="submit" data-testid="button-save-service">
+                      Add Service
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+          )}
           
           <Button variant="outline" data-testid="button-bulk-import">
             <Upload className="w-4 h-4 mr-2" />
@@ -469,7 +724,7 @@ export default function MaterialsServices() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Services</p>
-                <p className="text-2xl font-bold">{mockServices.length}</p>
+                <p className="text-2xl font-bold">{services.length}</p>
               </div>
               <TreePine className="w-8 h-8 text-green-600" />
             </div>
@@ -592,7 +847,12 @@ export default function MaterialsServices() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="outline" size="sm" data-testid={`button-edit-${material.id}`}>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleEditMaterial(material)}
+                          data-testid={`button-edit-${material.id}`}
+                        >
                           <Edit className="w-4 h-4" />
                         </Button>
                         <Button 
