@@ -2080,7 +2080,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Materials
         { id: "material-1", name: "10% discount with VIP membership", type: "material", price: 0.00, category: "Discount" },
         { id: "material-2", name: "Admin Time", type: "material", price: 0.00, category: "Labour" },
-        { id: "material-3", name: "Bandit chipper hire", type: "material", price: 500.00, category: "Equipment" },
+        { id: "material-3", name: "Wood chipper rental", type: "material", price: 400.00, category: "Equipment" },
         { id: "material-4", name: "Bucket truck", type: "material", price: 80.00, category: "Equipment" },
         { id: "material-5", name: "Digger and truck", type: "material", price: 890.00, category: "Equipment" },
         { id: "material-6", name: "Disposal", type: "material", price: 250.00, category: "Service" },
@@ -7470,7 +7470,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     // Materials
     { id: "1", itemNumber: "VIP", name: "10% discount with VIP membership", price: 0.00, category: "Discount", type: "material" },
     { id: "2", itemNumber: "Admin Time", name: "Admin Time", price: 0.00, category: "Labour", type: "material" },
-    { id: "3", itemNumber: "41", name: "Bandit chipper hire", price: 500.00, category: "Equipment", type: "material" },
+    { id: "3", itemNumber: "41", name: "Wood chipper rental", price: 400.00, category: "Equipment", type: "material" },
     { id: "4", itemNumber: "17", name: "Bucket truck", price: 80.00, category: "Equipment", type: "material" },
     { id: "5", itemNumber: "11", name: "Call out", price: 100.00, category: "Service", type: "material" },
     { id: "6", itemNumber: "29 labour", name: "Dan labour", price: 55.00, category: "Labour", type: "material" },
@@ -8063,8 +8063,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         {
           id: "3",
           itemNumber: "41",
-          name: "Bandit chipper hire",
-          price: 500.00,
+          name: "Wood chipper rental",
+          price: 400.00,
           priceIncludesTax: false,
           taxRate: "15% GST on Income",
           category: "Equipment",

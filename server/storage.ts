@@ -2683,9 +2683,9 @@ class DatabaseStorage implements IStorage {
     {
       id: "3",
       itemNumber: "41",
-      name: "Bandit chipper hire",
-      price: "500.00",
-      cost: "350.00",
+      name: "Wood chipper rental",
+      price: "400.00",
+      cost: "280.00",
       priceIncludesTax: false,
       taxRate: "15% GST on Income",
       category: "Equipment",
