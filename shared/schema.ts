@@ -279,6 +279,10 @@ export const jobs = pgTable("jobs", {
   totalStaffHours: decimal("total_staff_hours", { precision: 8, scale: 2 }),
   calculatedLaborCost: decimal("calculated_labor_cost", { precision: 10, scale: 2 }),
   
+  // Staff Assignments for Profit Tracking
+  assignedStaffIds: text("assigned_staff_ids").array(), // ["staff-id-1", "staff-id-2"]
+  staffAssignments: jsonb("staff_assignments"), // [{"staffId": "123", "lineItemId": "abc", "hours": 4.5}]
+  
   // Invoice Protection
   invoiceBlocked: boolean("invoice_blocked").default(true),
   marginMeetsThreshold: boolean("margin_meets_threshold").default(false),

@@ -142,7 +142,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     mutationFn: async (data: GrossMarginData) => {
       // Don't send laborCosts if staff time entries exist (server will calculate)
       const payload = hasStaffTimeEntries ? { ...data, laborCosts: undefined } : data;
-      return await apiRequest('PUT', `/api/jobs/${jobId}/gross-margin`, payload);
+      return await apiRequest('PUT', `/api/jobs/${jobId}`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
@@ -228,6 +228,26 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       staffAssignments: staffAssignments.filter(assignment => selectedStaffIds.includes(assignment.staffId))
     };
     
+    // Convert numeric values to strings for backend schema compatibility
+    if (dataToSave.laborCosts !== undefined) {
+      dataToSave.laborCosts = dataToSave.laborCosts.toString();
+    }
+    if (dataToSave.materialsCosts !== undefined) {
+      dataToSave.materialsCosts = dataToSave.materialsCosts.toString();
+    }
+    if (dataToSave.otherCosts !== undefined) {
+      dataToSave.otherCosts = dataToSave.otherCosts.toString();
+    }
+    if (dataToSave.laborHours !== undefined) {
+      dataToSave.laborHours = dataToSave.laborHours.toString();
+    }
+    if (dataToSave.hourlyRate !== undefined) {
+      dataToSave.hourlyRate = dataToSave.hourlyRate.toString();
+    }
+    if (dataToSave.totalAmount !== undefined) {
+      dataToSave.totalAmount = dataToSave.totalAmount.toString();
+    }
+    
     // If staff time entries exist, don't include laborCosts (server-calculated)
     if (hasStaffTimeEntries) {
       delete dataToSave.laborCosts;
@@ -235,7 +255,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       delete dataToSave.hourlyRate;
     } else if (calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate) {
       // If using hourly calculation mode, use calculated labor costs
-      dataToSave.laborCosts = calculatedLaborCosts;
+      dataToSave.laborCosts = calculatedLaborCosts.toString();
     }
 
     updateGrossMarginMutation.mutate(dataToSave);
@@ -435,14 +455,14 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                               <div>
                                 <Label className="text-xs">Line Item</Label>
                                 <Select 
-                                  value={assignment.lineItemId || ""} 
-                                  onValueChange={(value) => updateStaffAssignment(employee.id, 'lineItemId', value)}
+                                  value={assignment.lineItemId || "none"} 
+                                  onValueChange={(value) => updateStaffAssignment(employee.id, 'lineItemId', value === 'none' ? undefined : value)}
                                 >
                                   <SelectTrigger className="h-8 text-xs">
                                     <SelectValue placeholder="Select line item..." />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="">No line item</SelectItem>
+                                    <SelectItem value="none">No line item</SelectItem>
                                     {job?.lineItems?.map((lineItem: any) => (
                                       <SelectItem key={lineItem.id} value={lineItem.id}>
                                         {lineItem.description || lineItem.title || `Line Item ${lineItem.id}`}
