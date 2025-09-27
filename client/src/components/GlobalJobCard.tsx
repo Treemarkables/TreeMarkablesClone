@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
@@ -240,8 +240,8 @@ export function GlobalJobCard({
       totalCost: newLineItem.quantity * (newLineItem.unitCost || 0)
     };
 
-    const currentLineItems = form.getValues('lineItems') || [];
-    form.setValue('lineItems', [...currentLineItems, lineItem]);
+    // Use useFieldArray helper to properly update the field array
+    appendLineItem(lineItem);
     
     // Reset form
     setNewLineItem({
@@ -253,23 +253,18 @@ export function GlobalJobCard({
     setIsAddingLineItem(false);
     
     // Calculate profit impact for enhanced tracking
-    const updatedLineItems = form.getValues('lineItems') || [];
-    const newJobRevenue = updatedLineItems.reduce((sum, item) => sum + (item.total || 0), 0);
-    const newJobCosts = updatedLineItems.reduce((sum, item) => sum + (item.totalCost || 0), 0);
     const revenueIncrease = lineItem.total;
     const costIncrease = lineItem.totalCost;
-    const profitMargin = newJobRevenue - newJobCosts;
     
     toast({
       title: "Profit Tracking",
-      description: `Added "${lineItem.description}" • Revenue: +$${revenueIncrease.toFixed(2)} • Costs: +$${costIncrease.toFixed(2)} • Job Profit: $${profitMargin.toFixed(2)}`
+      description: `Added "${lineItem.description}" • Revenue: +$${revenueIncrease.toFixed(2)} • Costs: +$${costIncrease.toFixed(2)}`
     });
   };
 
   const removeLineItem = (index: number) => {
-    const currentLineItems = form.getValues('lineItems') || [];
-    const updatedLineItems = currentLineItems.filter((_, i) => i !== index);
-    form.setValue('lineItems', updatedLineItems);
+    // Use useFieldArray helper to properly update the field array
+    removeLineItemField(index);
     
     toast({
       title: "Success",
@@ -318,7 +313,7 @@ export function GlobalJobCard({
     const unitCost = parseFloat(item.cost || item.baseCost || 0);
     const itemName = item.name || item.itemNumber;
     
-    // Create line item with proper pricing
+    // Create line item with proper pricing using form field array
     const lineItem = {
       id: `item-${Date.now()}`,
       description: itemName,
@@ -329,8 +324,8 @@ export function GlobalJobCard({
       totalCost: unitCost * 1 // quantity * unitCost
     };
 
-    const currentLineItems = form.getValues('lineItems') || [];
-    form.setValue('lineItems', [...currentLineItems, lineItem]);
+    // Use appendLineItem from useFieldArray for proper form integration
+    appendLineItem(lineItem);
     
     // Reset search
     setSearchQuery('');
@@ -344,23 +339,6 @@ export function GlobalJobCard({
       title: "Item Added",
       description: `${itemName} • Price: $${unitPrice.toFixed(2)} • Profit: $${margin.toFixed(2)} (${profitPercentage}%)`,
     });
-  };
-
-  // Update line item pricing
-  const updateLineItem = (index: number, field: string, value: any) => {
-    const currentLineItems = form.getValues('lineItems') || [];
-    const updatedItems = [...currentLineItems];
-    
-    if (field === 'unitPrice') {
-      updatedItems[index].unitPrice = parseFloat(value) || 0;
-      updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].unitPrice;
-    } else if (field === 'quantity') {
-      updatedItems[index].quantity = parseFloat(value) || 1;
-      updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].unitPrice;
-      updatedItems[index].totalCost = updatedItems[index].quantity * updatedItems[index].unitCost;
-    }
-    
-    form.setValue('lineItems', updatedItems);
   };
 
   // Add custom item based on search query
@@ -432,6 +410,12 @@ export function GlobalJobCard({
       checklist: [],
       notes: "",
     },
+  });
+
+  // Properly manage line items as form field array
+  const { fields: lineItemFields, append: appendLineItem, remove: removeLineItemField, update: updateLineItemField } = useFieldArray({
+    control: form.control,
+    name: "lineItems"
   });
 
   // Populate form with complete job data when editing an existing job
@@ -1341,7 +1325,7 @@ export function GlobalJobCard({
                         )}
 
                         {/* ServiceM8-Style Line Items Table */}
-                        {form.watch('lineItems')?.length > 0 ? (
+                        {lineItemFields.length > 0 ? (
                           <div className="space-y-4">
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
                               <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
@@ -1364,43 +1348,79 @@ export function GlobalJobCard({
 
                               {/* Table Body */}
                               <div className="bg-white">
-                                {form.watch('lineItems')?.map((item: any, index: number) => {
-                                  const unitCost = item.unitCost || 0;
-                                  const costExGst = (item.quantity || 1) * unitCost;
-                                  const priceExGst = item.unitPrice || 0;
-                                  const totalExGst = (item.quantity || 1) * priceExGst;
+                                {lineItemFields.map((field, index) => {
+                                  const unitCost = field.unitCost || 0;
+                                  const quantity = field.quantity || 1;
+                                  const costExGst = quantity * unitCost;
+                                  const priceExGst = field.unitPrice || 0;
+                                  const totalExGst = quantity * priceExGst;
                                   const markup = priceExGst - unitCost;
                                   const markupPercent = unitCost > 0 ? ((markup / unitCost) * 100).toFixed(0) : '0';
                                   
                                   return (
-                                    <div key={item.id || index} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm">
+                                    <div key={field.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm">
                                       <div className="col-span-2 text-gray-500">—</div>
                                       <div className="col-span-3 font-medium text-gray-900">
                                         <div className="flex items-center gap-2">
                                           <div className="w-4 h-4 bg-gray-200 rounded flex-shrink-0"></div>
-                                          {item.description}
+                                          {field.description}
                                         </div>
                                       </div>
                                       <div className="col-span-1 text-center">
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          step="0.01"
-                                          value={item.quantity || 1}
-                                          onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
-                                          className="w-16 h-8 text-center text-sm border-none bg-transparent p-0"
+                                        <FormField
+                                          control={form.control}
+                                          name={`lineItems.${index}.quantity`}
+                                          render={({ field: quantityField }) => (
+                                            <FormItem>
+                                              <FormControl>
+                                                <Input
+                                                  type="number"
+                                                  min="0"
+                                                  step="0.01"
+                                                  {...quantityField}
+                                                  onChange={(e) => {
+                                                    const newQuantity = parseFloat(e.target.value) || 1;
+                                                    quantityField.onChange(newQuantity);
+                                                    // Update total when quantity changes
+                                                    const currentItems = form.getValues('lineItems');
+                                                    currentItems[index].total = newQuantity * currentItems[index].unitPrice;
+                                                    currentItems[index].totalCost = newQuantity * currentItems[index].unitCost;
+                                                    form.setValue('lineItems', currentItems);
+                                                  }}
+                                                  className="w-16 h-8 text-center text-sm border-none bg-transparent p-0"
+                                                />
+                                              </FormControl>
+                                            </FormItem>
+                                          )}
                                         />
                                       </div>
                                       <div className="col-span-2 text-right font-mono">${costExGst.toFixed(2)}</div>
                                       <div className="col-span-1 text-right text-gray-600">{markupPercent}%</div>
                                       <div className="col-span-2 text-right">
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          step="0.01"
-                                          value={priceExGst.toFixed(2)}
-                                          onChange={(e) => updateLineItem(index, 'unitPrice', e.target.value)}
-                                          className="w-20 h-8 text-right text-sm border-none bg-transparent p-1 font-mono"
+                                        <FormField
+                                          control={form.control}
+                                          name={`lineItems.${index}.unitPrice`}
+                                          render={({ field: priceField }) => (
+                                            <FormItem>
+                                              <FormControl>
+                                                <Input
+                                                  type="number"
+                                                  min="0"
+                                                  step="0.01"
+                                                  {...priceField}
+                                                  onChange={(e) => {
+                                                    const newPrice = parseFloat(e.target.value) || 0;
+                                                    priceField.onChange(newPrice);
+                                                    // Update total when price changes
+                                                    const currentItems = form.getValues('lineItems');
+                                                    currentItems[index].total = currentItems[index].quantity * newPrice;
+                                                    form.setValue('lineItems', currentItems);
+                                                  }}
+                                                  className="w-20 h-8 text-right text-sm border-none bg-transparent p-1 font-mono"
+                                                />
+                                              </FormControl>
+                                            </FormItem>
+                                          )}
                                         />
                                       </div>
                                       <div className="col-span-1 text-right font-mono font-semibold">${totalExGst.toFixed(2)}</div>
@@ -1725,7 +1745,7 @@ export function GlobalJobCard({
                   )}
 
                   {/* ServiceM8-Style Items & Services Table */}
-                  {form.watch('lineItems')?.length > 0 ? (
+                  {lineItemFields.length > 0 ? (
                     <div className="space-y-4">
                       {/* Table Header */}
                       <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 rounded-t-lg">
@@ -1749,21 +1769,21 @@ export function GlobalJobCard({
                             </tr>
                           </thead>
                           <tbody>
-                            {form.watch('lineItems').map((item: any, index: number) => {
-                              const unitPrice = item.unitPrice || 0;
-                              const quantity = item.quantity || 0;
+                            {lineItemFields.map((field, index) => {
+                              const unitPrice = field.unitPrice || 0;
+                              const quantity = field.quantity || 0;
                               const total = quantity * unitPrice;
-                              const unitCost = item.unitCost || 0;
+                              const unitCost = field.unitCost || 0;
                               const totalCost = quantity * unitCost;
                               const markup = total > 0 && totalCost > 0 ? ((total - totalCost) / totalCost * 100) : 0;
                               
                               return (
-                                <tr key={index} className="border-b hover:bg-gray-50">
+                                <tr key={field.id} className="border-b hover:bg-gray-50">
                                   <td className="p-2">
-                                    <span className="text-blue-600 font-mono text-xs">{item.itemCode || '-'}</span>
+                                    <span className="text-blue-600 font-mono text-xs">{field.itemCode || '-'}</span>
                                   </td>
                                   <td className="p-2">
-                                    <div className="font-medium text-gray-900">{item.description}</div>
+                                    <div className="font-medium text-gray-900">{field.description}</div>
                                   </td>
                                   <td className="p-2 text-center">
                                     <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">
@@ -1789,7 +1809,7 @@ export function GlobalJobCard({
                                       type="button"
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => removeLineItem(index)}
+                                      onClick={() => removeLineItemField(index)}
                                       className="h-6 w-6 p-0 hover:bg-red-50 hover:border-red-200"
                                       data-testid={`button-remove-line-item-${index}`}
                                     >
