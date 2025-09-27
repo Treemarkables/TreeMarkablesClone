@@ -1826,7 +1826,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           jobNumber: jobToEdit.jobId || '',
           title: jobToEdit.customerName || '',
           address: jobToEdit.address || '',
-          description: jobToEdit.serviceType || '',
+          description: jobToEdit.description || '',
           priority: jobToEdit.priority || 'medium',
           status: jobToEdit.status || 'scheduled',
           specialInstructions: jobToEdit.notes || jobToEdit.specialInstructions || '',
