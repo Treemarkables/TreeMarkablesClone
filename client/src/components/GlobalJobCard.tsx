@@ -1323,62 +1323,180 @@ export function GlobalJobCard({
                           </div>
                         )}
 
-                        {/* Existing Line Items Table */}
-                        {form.watch('lineItems')?.length > 0 && (
-                          <div className="border border-gray-200 rounded-lg overflow-hidden">
-                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                              <h4 className="font-medium text-gray-800">Items & Services</h4>
-                            </div>
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
-                                <thead className="bg-gray-50 border-b border-gray-200">
-                                  <tr>
-                                    <th className="text-left p-3 font-medium text-gray-600">Item Code</th>
-                                    <th className="text-left p-3 font-medium text-gray-600">Description</th>
-                                    <th className="text-center p-3 font-medium text-gray-600">Qty</th>
-                                    <th className="text-right p-3 font-medium text-gray-600">Unit Price</th>
-                                    <th className="text-right p-3 font-medium text-gray-600">Total</th>
-                                    <th className="text-right p-3 font-medium text-gray-600">Cost</th>
-                                    <th className="text-right p-3 font-medium text-gray-600">Markup</th>
-                                    <th className="text-center p-3 font-medium text-gray-600">Actions</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {form.watch('lineItems')?.map((item: any, index: number) => {
-                                    const markup = (item.total || 0) - (item.totalCost || 0);
-                                    const markupPercent = item.totalCost > 0 ? ((markup / item.totalCost) * 100).toFixed(1) : '0';
+                        {/* ServiceM8-Style Line Items Table */}
+                        {form.watch('lineItems')?.length > 0 ? (
+                          <div className="space-y-4">
+                            <div className="border border-gray-200 rounded-lg overflow-hidden">
+                              <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+                                <h4 className="font-medium text-gray-800">Items & Services</h4>
+                                <div className="text-xs text-gray-500">⋯</div>
+                              </div>
+                              
+                              {/* Table Header */}
+                              <div className="bg-gray-50 border-b border-gray-200">
+                                <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-600">
+                                  <div className="col-span-2">Item Code</div>
+                                  <div className="col-span-3">Item Name</div>
+                                  <div className="col-span-1 text-center">Qty</div>
+                                  <div className="col-span-2 text-right">Cost ex GST</div>
+                                  <div className="col-span-1 text-right">Markup</div>
+                                  <div className="col-span-2 text-right">Price ex GST</div>
+                                  <div className="col-span-1 text-right">Total ex GST</div>
+                                </div>
+                              </div>
+
+                              {/* Table Body */}
+                              <div className="bg-white">
+                                {form.watch('lineItems')?.map((item: any, index: number) => {
+                                  const costExGst = item.totalCost || 0;
+                                  const priceExGst = item.unitPrice || 0;
+                                  const totalExGst = (item.quantity || 0) * priceExGst;
+                                  const markup = priceExGst - costExGst;
+                                  const markupPercent = costExGst > 0 ? ((markup / costExGst) * 100).toFixed(0) : '0';
+                                  
+                                  return (
+                                    <div key={item.id || index} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm">
+                                      <div className="col-span-2 text-gray-500">—</div>
+                                      <div className="col-span-3 font-medium text-gray-900">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-4 h-4 bg-gray-200 rounded flex-shrink-0"></div>
+                                          {item.description}
+                                        </div>
+                                      </div>
+                                      <div className="col-span-1 text-center">{item.quantity || 1}</div>
+                                      <div className="col-span-2 text-right font-mono">${costExGst.toFixed(2)}</div>
+                                      <div className="col-span-1 text-right text-gray-600">{markupPercent}%</div>
+                                      <div className="col-span-2 text-right font-mono">${priceExGst.toFixed(2)}</div>
+                                      <div className="col-span-1 text-right font-mono font-semibold">${totalExGst.toFixed(2)}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Search Row */}
+                              <div className="bg-white border-t border-gray-200">
+                                <div className="p-4">
+                                  <div className="relative">
+                                    <Input
+                                      placeholder="Search or Add New..."
+                                      value={searchQuery}
+                                      onChange={(e) => setSearchQuery(e.target.value)}
+                                      onFocus={() => setShowSearchResults(true)}
+                                      onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                                      className="text-sm"
+                                      data-testid="input-search-items-table"
+                                    />
                                     
-                                    return (
-                                      <tr key={item.id || index} className="border-b border-gray-100 hover:bg-gray-50">
-                                        <td className="p-3 text-gray-500 text-xs">—</td>
-                                        <td className="p-3 font-medium">{item.description}</td>
-                                        <td className="p-3 text-center">{item.quantity}</td>
-                                        <td className="p-3 text-right font-mono">${(item.unitPrice || 0).toFixed(2)}</td>
-                                        <td className="p-3 text-right font-mono font-semibold">${(item.total || 0).toFixed(2)}</td>
-                                        <td className="p-3 text-right font-mono text-gray-600">${(item.totalCost || 0).toFixed(2)}</td>
-                                        <td className="p-3 text-right">
-                                          <span className={`font-mono ${markup >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                            ${markup.toFixed(2)} ({markupPercent}%)
-                                          </span>
-                                        </td>
-                                        <td className="p-3 text-center">
-                                          <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => removeLineItem(index)}
-                                            className="h-6 w-6 p-0 hover:bg-red-50 hover:border-red-200"
-                                            data-testid={`button-remove-line-item-${index}`}
-                                          >
-                                            <Trash2 className="w-3 h-3 text-red-500" />
-                                          </Button>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
+                                    {/* Search Results */}
+                                    {showSearchResults && searchQuery && (
+                                      <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto top-full mt-1">
+                                        {filteredItems.length > 0 ? (
+                                          <div className="py-2">
+                                            {filteredItems.map((item: any) => (
+                                              <div
+                                                key={item.id}
+                                                className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                                onClick={() => selectItemFromSearch(item)}
+                                                data-testid={`search-result-${item.id}`}
+                                              >
+                                                <div>
+                                                  <div className="font-medium text-sm">{item.name}</div>
+                                                  <div className="text-xs text-gray-500">{item.category}</div>
+                                                </div>
+                                                <div className="text-sm font-semibold text-green-600">
+                                                  ${parseFloat(item.displayPrice || item.price || 0).toFixed(2)}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div className="p-4 text-center">
+                                            <div className="text-sm text-gray-500 mb-2">No items found</div>
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => addCustomItem(searchQuery)}
+                                              className="flex items-center gap-2"
+                                              data-testid="button-add-custom-item"
+                                            >
+                                              <Plus className="w-3 h-3" />
+                                              Add "{searchQuery}" as custom item
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
+
+                            {/* ServiceM8-Style Financial Summary */}
+                            <div className="grid grid-cols-2 gap-6">
+                              <div></div> {/* Left side spacer */}
+                              <div className="space-y-2 text-sm">
+                                {(() => {
+                                  const lineItems = form.watch('lineItems') || [];
+                                  const taxMode = form.watch('taxMode') || 'tax_exclusive';
+                                  const gstRate = 0.15; // 15% GST for New Zealand
+                                  const paidAmount = parseFloat(form.watch('paidAmount') || '0');
+                                  
+                                  const lineItemTotal = lineItems.reduce((sum: number, item: any) => {
+                                    const quantity = item.quantity || 1;
+                                    const unitPrice = item.unitPrice || 0;
+                                    return sum + (quantity * unitPrice);
+                                  }, 0);
+                                  
+                                  let subtotal: number;
+                                  let gstAmount: number;
+                                  let totalIncGst: number;
+                                  
+                                  if (taxMode === 'tax_inclusive') {
+                                    totalIncGst = lineItemTotal;
+                                    subtotal = totalIncGst / (1 + gstRate);
+                                    gstAmount = totalIncGst - subtotal;
+                                  } else {
+                                    subtotal = lineItemTotal;
+                                    gstAmount = subtotal * gstRate;
+                                    totalIncGst = subtotal + gstAmount;
+                                  }
+                                  
+                                  const balanceDue = totalIncGst - paidAmount;
+                                  
+                                  return (
+                                    <>
+                                      <div className="flex justify-between py-1">
+                                        <span className="text-gray-600 uppercase text-xs font-medium">SUBTOTAL</span>
+                                        <span className="font-mono">${subtotal.toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex justify-between py-1">
+                                        <span className="text-gray-600 uppercase text-xs font-medium">GST</span>
+                                        <span className="font-mono">${gstAmount.toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex justify-between py-1 font-semibold">
+                                        <span className="text-gray-900 uppercase text-xs font-medium">Total</span>
+                                        <span className="font-mono">${totalIncGst.toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex justify-between py-1">
+                                        <span className="text-green-600 uppercase text-xs font-medium">Paid</span>
+                                        <span className="font-mono text-green-600">${paidAmount.toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex justify-between py-1 font-semibold">
+                                        <span className="text-orange-600 uppercase text-xs font-medium">Balance Due</span>
+                                        <span className="font-mono text-orange-600">${balanceDue.toFixed(2)}</span>
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-12 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                            <DollarSign className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                            <p className="text-lg font-medium">No items added yet</p>
+                            <p className="text-sm text-gray-400">Search for items above to start building your quote</p>
                           </div>
                         )}
                       </div>
