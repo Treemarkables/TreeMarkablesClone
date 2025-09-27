@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search } from "lucide-react";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
@@ -297,6 +297,70 @@ export function GlobalJobCard({
     toast({
       title: "Item Selected from Catalog",
       description: `${itemName} ($${unitPrice.toFixed(2)}) - Profit margin: $${profitImpact.toFixed(2)} (${margin > 0 ? ((margin / unitPrice) * 100).toFixed(1) + '%' : '0%'})`,
+    });
+  };
+
+  // Filter materials and services based on search query
+  const filteredItems = useMemo(() => {
+    if (!debouncedSearchQuery) return [];
+    
+    const query = debouncedSearchQuery.toLowerCase();
+    return materialsAndServices.filter((item: any) => 
+      item.name?.toLowerCase().includes(query) ||
+      item.itemNumber?.toLowerCase().includes(query) ||
+      item.category?.toLowerCase().includes(query)
+    );
+  }, [debouncedSearchQuery, materialsAndServices]);
+
+  // Select item from search results and add to line items
+  const selectItemFromSearch = (item: any) => {
+    const unitPrice = parseFloat(item.displayPrice || item.price || 0);
+    const unitCost = parseFloat(item.cost || item.baseCost || 0);
+    const itemName = item.name || item.itemNumber;
+    
+    // Create line item directly
+    const lineItem = {
+      id: `item-${Date.now()}`,
+      description: itemName,
+      quantity: 1,
+      unitPrice: unitPrice,
+      unitCost: unitCost,
+      total: unitPrice,
+      totalCost: unitCost
+    };
+
+    const currentLineItems = form.getValues('lineItems') || [];
+    form.setValue('lineItems', [...currentLineItems, lineItem]);
+    
+    // Reset search
+    setSearchQuery('');
+    setShowSearchResults(false);
+    
+    // Calculate profit margin
+    const margin = unitPrice - unitCost;
+    const profitPercentage = unitPrice > 0 ? ((margin / unitPrice) * 100).toFixed(1) : '0';
+    
+    toast({
+      title: "Item Added",
+      description: `${itemName} • Price: $${unitPrice.toFixed(2)} • Profit: $${margin.toFixed(2)} (${profitPercentage}%)`,
+    });
+  };
+
+  // Add custom item based on search query
+  const addCustomItem = (itemName: string) => {
+    setNewLineItem({
+      description: itemName,
+      quantity: 1,
+      unitPrice: 0,
+      unitCost: 0
+    });
+    setIsAddingLineItem(true);
+    setSearchQuery('');
+    setShowSearchResults(false);
+    
+    toast({
+      title: "Custom Item",
+      description: `Creating custom item: "${itemName}". Please set price and cost.`,
     });
   };
 
@@ -1134,37 +1198,81 @@ export function GlobalJobCard({
                       <DollarSign className="w-5 h-5" />
                       Line Items & Pricing
                     </h3>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open('/materials-services', '_blank')}
-                        className="text-xs"
-                        data-testid="button-manage-catalog"
-                      >
-                        <Settings className="w-3 h-3 mr-1" />
-                        Manage Catalog
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsAddingLineItem(true)}
-                        className="flex items-center gap-1"
-                        data-testid="button-add-line-item"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add Item
-                      </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open('/materials-services', '_blank')}
+                      className="text-xs"
+                      data-testid="button-manage-catalog"
+                    >
+                      <Settings className="w-3 h-3 mr-1" />
+                      Manage Catalog
+                    </Button>
                   </div>
 
-                  {/* Add Line Item Form */}
+                  {/* Search or Add New Line Item Interface */}
+                  <div className="relative space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Input
+                        placeholder="Search or add new item..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onFocus={() => setShowSearchResults(true)}
+                        onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                        className="pl-10 text-sm"
+                        data-testid="input-search-items"
+                      />
+                    </div>
+
+                    {/* Search Results */}
+                    {showSearchResults && searchQuery && (
+                      <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto top-full mt-1">
+                        {filteredItems.length > 0 ? (
+                          <div className="py-2">
+                            {filteredItems.map((item: any) => (
+                              <div
+                                key={item.id}
+                                className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                onClick={() => selectItemFromSearch(item)}
+                                data-testid={`search-result-${item.id}`}
+                              >
+                                <div>
+                                  <div className="font-medium text-sm">{item.name}</div>
+                                  <div className="text-xs text-gray-500">{item.category}</div>
+                                </div>
+                                <div className="text-sm font-semibold text-green-600">
+                                  ${parseFloat(item.displayPrice || item.price || 0).toFixed(2)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-4 text-center">
+                            <div className="text-sm text-gray-500 mb-2">No items found</div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => addCustomItem(searchQuery)}
+                              className="flex items-center gap-2"
+                              data-testid="button-add-custom-item"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Add "{searchQuery}" as custom item
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual Add Line Item Form */}
                   {isAddingLineItem && (
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-medium">Add New Line Item</h4>
+                        <h4 className="font-medium">Add Custom Line Item</h4>
                         <Button
                           type="button"
                           variant="ghost"
@@ -1177,22 +1285,6 @@ export function GlobalJobCard({
                           ✕
                         </Button>
                       </div>
-                      
-                      {/* Quick Select from Catalog Button */}
-                      {materialsAndServices.length > 0 && (
-                        <div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setIsCatalogModalOpen(true)}
-                            className="w-full mb-4 flex items-center justify-center gap-2"
-                            data-testid="button-select-from-catalog"
-                          >
-                            <Package className="w-4 h-4" />
-                            Quick Select from Catalog
-                          </Button>
-                        </div>
-                      )}
 
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <div className="col-span-2">
