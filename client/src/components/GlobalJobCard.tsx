@@ -1094,6 +1094,61 @@ export function GlobalJobCard({
                           </div>
                         </div>
 
+                        {/* Job Address */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-blue-600" />
+                            <label className="text-xs font-medium text-gray-600">Job Address</label>
+                          </div>
+                          <FormField
+                            control={form.control}
+                            name="address"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input 
+                                    {...field}
+                                    className="h-8 text-sm" 
+                                    placeholder="Job site address"
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                          <div className="grid grid-cols-2 gap-3">
+                            <FormField
+                              control={form.control}
+                              name="city"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input 
+                                      {...field}
+                                      className="h-8 text-sm" 
+                                      placeholder="City"
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="region"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input 
+                                      {...field}
+                                      className="h-8 text-sm" 
+                                      placeholder="Region"
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+
                         {/* Job Description */}
                         <div>
                           <label className="text-xs font-medium text-gray-600 mb-1 block">Job Description</label>
