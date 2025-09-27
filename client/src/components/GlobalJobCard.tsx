@@ -314,19 +314,19 @@ export function GlobalJobCard({
 
   // Select item from search results and add to line items
   const selectItemFromSearch = (item: any) => {
-    const unitPrice = parseFloat(item.displayPrice || item.price || 0);
+    const unitPrice = parseFloat(item.displayPrice || item.price || item.basePrice || 0);
     const unitCost = parseFloat(item.cost || item.baseCost || 0);
     const itemName = item.name || item.itemNumber;
     
-    // Create line item directly
+    // Create line item with proper pricing
     const lineItem = {
       id: `item-${Date.now()}`,
       description: itemName,
       quantity: 1,
       unitPrice: unitPrice,
       unitCost: unitCost,
-      total: unitPrice,
-      totalCost: unitCost
+      total: unitPrice * 1, // quantity * unitPrice
+      totalCost: unitCost * 1 // quantity * unitCost
     };
 
     const currentLineItems = form.getValues('lineItems') || [];
@@ -344,6 +344,23 @@ export function GlobalJobCard({
       title: "Item Added",
       description: `${itemName} • Price: $${unitPrice.toFixed(2)} • Profit: $${margin.toFixed(2)} (${profitPercentage}%)`,
     });
+  };
+
+  // Update line item pricing
+  const updateLineItem = (index: number, field: string, value: any) => {
+    const currentLineItems = form.getValues('lineItems') || [];
+    const updatedItems = [...currentLineItems];
+    
+    if (field === 'unitPrice') {
+      updatedItems[index].unitPrice = parseFloat(value) || 0;
+      updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].unitPrice;
+    } else if (field === 'quantity') {
+      updatedItems[index].quantity = parseFloat(value) || 1;
+      updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].unitPrice;
+      updatedItems[index].totalCost = updatedItems[index].quantity * updatedItems[index].unitCost;
+    }
+    
+    form.setValue('lineItems', updatedItems);
   };
 
   // Add custom item based on search query
@@ -1348,11 +1365,12 @@ export function GlobalJobCard({
                               {/* Table Body */}
                               <div className="bg-white">
                                 {form.watch('lineItems')?.map((item: any, index: number) => {
-                                  const costExGst = item.totalCost || 0;
+                                  const unitCost = item.unitCost || 0;
+                                  const costExGst = (item.quantity || 1) * unitCost;
                                   const priceExGst = item.unitPrice || 0;
-                                  const totalExGst = (item.quantity || 0) * priceExGst;
-                                  const markup = priceExGst - costExGst;
-                                  const markupPercent = costExGst > 0 ? ((markup / costExGst) * 100).toFixed(0) : '0';
+                                  const totalExGst = (item.quantity || 1) * priceExGst;
+                                  const markup = priceExGst - unitCost;
+                                  const markupPercent = unitCost > 0 ? ((markup / unitCost) * 100).toFixed(0) : '0';
                                   
                                   return (
                                     <div key={item.id || index} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm">
@@ -1363,10 +1381,28 @@ export function GlobalJobCard({
                                           {item.description}
                                         </div>
                                       </div>
-                                      <div className="col-span-1 text-center">{item.quantity || 1}</div>
+                                      <div className="col-span-1 text-center">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          value={item.quantity || 1}
+                                          onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
+                                          className="w-16 h-8 text-center text-sm border-none bg-transparent p-0"
+                                        />
+                                      </div>
                                       <div className="col-span-2 text-right font-mono">${costExGst.toFixed(2)}</div>
                                       <div className="col-span-1 text-right text-gray-600">{markupPercent}%</div>
-                                      <div className="col-span-2 text-right font-mono">${priceExGst.toFixed(2)}</div>
+                                      <div className="col-span-2 text-right">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          value={priceExGst.toFixed(2)}
+                                          onChange={(e) => updateLineItem(index, 'unitPrice', e.target.value)}
+                                          className="w-20 h-8 text-right text-sm border-none bg-transparent p-1 font-mono"
+                                        />
+                                      </div>
                                       <div className="col-span-1 text-right font-mono font-semibold">${totalExGst.toFixed(2)}</div>
                                     </div>
                                   );
