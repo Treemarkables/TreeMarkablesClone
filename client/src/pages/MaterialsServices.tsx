@@ -1105,7 +1105,7 @@ export default function MaterialsServices() {
                       {material.name}
                     </TableCell>
                     <TableCell data-testid={`text-price-${material.id}`}>
-                      ${material.price.toFixed(2)}
+                      ${parseFloat(material.price || 0).toFixed(2)}
                     </TableCell>
                     <TableCell data-testid={`text-price-includes-tax-${material.id}`}>
                       {material.priceIncludesTax ? "Yes" : "No"}
