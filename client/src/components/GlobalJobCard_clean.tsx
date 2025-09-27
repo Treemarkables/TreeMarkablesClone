@@ -164,9 +164,9 @@ export function GlobalJobCard({
     enabled: isOpen,
   });
 
-  const customers: Customer[] = (customersData as any)?.data || [];
-  const employees: any[] = (employeesData as any)?.data || [];
-  const jobs: Job[] = (jobsData as any)?.data || [];
+  const customers: Customer[] = Array.isArray(customersData) ? customersData : [];
+  const employees: any[] = Array.isArray(employeesData) ? employeesData : [];
+  const jobs: Job[] = Array.isArray(jobsData) ? jobsData : [];
   const invoiceTemplate = invoiceTemplateData || null;
   const quoteTemplate = quoteTemplateData || null;
 
@@ -186,16 +186,13 @@ export function GlobalJobCard({
     return null;
   }, [mode, editingJob, customers]);
 
-  // Get customer data for the editing job
-  const editingJobCustomer = editingJob ? customers.find(c => c.id === editingJob.customerId) : null;
-
   // Form setup
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
     defaultValues: {
       title: "",
       description: "",
-      status: "work_order",
+      status: "pending",
       priority: "medium",
       customerId: "",
       isNewCustomer: false,
@@ -211,131 +208,15 @@ export function GlobalJobCard({
       jobContactPhone: "",
       billingContactPhone: "",
       billingContactMobile: "",
-      totalAmount: "0",
-      paidAmount: "0",
+      totalAmount: 0,
+      paidAmount: 0,
       lineItems: [],
       checklist: [],
       notes: "",
     },
   });
 
-  // Populate form with complete job data when editing an existing job
-  useEffect(() => {
-    if (editingJob) {
-      // Split customer name into first and last name for form fields
-      const nameParts = editingJobCustomer?.name?.split(' ') || [];
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
-      
-      form.reset({
-        // Core job data
-        title: editingJob.title || '',
-        description: editingJob.description || '',
-        status: editingJob.status || 'work_order',
-        priority: editingJob.priority || 'medium',
-        customerId: editingJob.customerId || '',
-        category: editingJob.category || '',
-        poNumber: editingJob.poNumber || '',
-        address: editingJob.address || '',
-        city: editingJob.city || '',
-        region: editingJob.region || '',
-        totalAmount: editingJob.totalAmount || '0',
-        paidAmount: editingJob.paidAmount || '0',
-        notes: editingJob.notes || '',
-        // Contact fields from customer data
-        jobContactFirstName: firstName,
-        jobContactLastName: lastName,
-        jobContactEmail: editingJobCustomer?.email || '',
-        jobContactPhone: editingJobCustomer?.phone || '',
-        billingContactPhone: editingJob.billingContactPhone || '',
-        billingContactMobile: editingJob.billingContactMobile || '',
-        // Arrays
-        lineItems: editingJob.lineItems || [],
-        checklist: editingJob.checklist || [],
-      });
-    }
-  }, [editingJob, editingJobCustomer, form]);
-
   const formData = form.watch();
-
-  // Job create/update mutations
-  const createJobMutation = useMutation({
-    mutationFn: async (data: GlobalJobCardFormData) => {
-      let customerId = data.customerId;
-      
-      // If no customer ID is provided, create a customer from job contact info
-      if (!customerId && (data.jobContactFirstName || data.jobContactLastName)) {
-        const customerName = `${data.jobContactFirstName || ''} ${data.jobContactLastName || ''}`.trim();
-        const customerData = {
-          name: customerName || 'New Customer',
-          email: data.jobContactEmail || "",
-          phone: data.jobContactPhone || "",
-          address: data.address || "",
-          city: data.city || "",
-          region: data.region || ""
-        };
-        
-        const customerResponse = await apiRequest('POST', '/api/customers', customerData);
-        const newCustomer = await customerResponse.json();
-        customerId = newCustomer.data.id;
-      }
-      // Ensure we have a customer ID
-      if (!customerId) {
-        throw new Error('Customer is required to create a job');
-      }
-      
-      // Create the job with the customer ID
-      const jobData = {
-        ...data,
-        customerId: customerId
-      };
-      
-      const response = await apiRequest('POST', '/api/jobs', jobData);
-      return response.json();
-    },
-    onSuccess: (newJob) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-      toast({
-        title: "Job Created",
-        description: "New job has been created successfully.",
-      });
-      onJobCreated?.(newJob);
-    },
-    onError: (error) => {
-      console.error('Error creating job:', error);
-      toast({
-        title: "Creation Error",
-        description: "Failed to create job. Please try again.",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const updateJobMutation = useMutation({
-    mutationFn: async (data: GlobalJobCardFormData) => {
-      if (!editingJob?.id) throw new Error('No job ID for update');
-      const response = await apiRequest('PUT', `/api/jobs/${editingJob.id}`, data);
-      return response.json();
-    },
-    onSuccess: (updatedJob) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-      toast({
-        title: "Job Updated",
-        description: "Job has been updated successfully.",
-      });
-      onJobUpdated?.(updatedJob);
-    },
-    onError: (error) => {
-      console.error('Error updating job:', error);
-      toast({
-        title: "Update Error",
-        description: "Failed to update job. Please try again.",
-        variant: "destructive"
-      });
-    }
-  });
 
   // Handle email click
   const handleEmailClick = () => {
@@ -388,34 +269,6 @@ export function GlobalJobCard({
         description: "Failed to schedule job. Please try again.",
         variant: "destructive"
       });
-    }
-  };
-
-  // Save button handlers
-  const handleSave = async () => {
-    const formData = form.getValues();
-    try {
-      if (mode === "create") {
-        await createJobMutation.mutateAsync(formData);
-      } else {
-        await updateJobMutation.mutateAsync(formData);
-      }
-    } catch (error) {
-      console.error('Save failed:', error);
-    }
-  };
-
-  const handleSaveAndClose = async () => {
-    const formData = form.getValues();
-    try {
-      if (mode === "create") {
-        await createJobMutation.mutateAsync(formData);
-      } else {
-        await updateJobMutation.mutateAsync(formData);
-      }
-      onClose();
-    } catch (error) {
-      console.error('Save and close failed:', error);
     }
   };
 
@@ -518,10 +371,12 @@ export function GlobalJobCard({
           <div className="flex-1 flex min-h-0">
             <Form {...form}>
             <form 
-              onSubmit={form.handleSubmit((data) => {
-                console.log('Form submitted:', data);
-                // Save functionality will be handled by the save buttons
-              })}
+              onSubmit={(e) => {
+                console.log('🚫 Job form submission prevented - use Save button instead');
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }} 
               className="flex flex-col h-full" 
               data-form="job-form"
             >
@@ -536,12 +391,12 @@ export function GlobalJobCard({
                         <div className="flex items-center gap-2 mb-2">
                           <UserCircle className="w-5 h-5 text-gray-600" />
                           <h3 className="font-semibold text-lg">
-                            {selectedCustomer?.name || formData.newCustomerName || 'Customer Name'}
+                            {selectedCustomer?.name || 'Roger Murphy'}
                           </h3>
                         </div>
                         <div className="text-sm text-gray-600">
-                          <div>{selectedCustomer?.address || formData.newCustomerAddress || 'Address'}</div>
-                          <div>{selectedCustomer?.city || formData.newCustomerCity || 'City'}, {selectedCustomer?.region || formData.newCustomerRegion || 'Region'}</div>
+                          <div>Anaura Road</div>
+                          <div>Anaura Bay 4079</div>
                         </div>
                       </div>
 
@@ -622,63 +477,13 @@ export function GlobalJobCard({
                             <label className="text-xs font-medium text-gray-600">Job Contact</label>
                           </div>
                           <div className="grid grid-cols-2 gap-3">
-                            <FormField
-                              control={form.control}
-                              name="jobContactFirstName"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="First Name" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactLastName"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="Last Name" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
+                            <Input className="h-8 text-sm" placeholder="Roger" value="Roger" />
+                            <Input className="h-8 text-sm" placeholder="Murphy" value="Murphy" />
                           </div>
                           <div className="mt-3 space-y-2">
-                            <FormField
-                              control={form.control}
-                              name="jobContactEmail"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="Email" type="email" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactPhone"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="Phone" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="billingContactMobile"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="Mobile" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
+                            <Input className="h-8 text-sm" placeholder="rogermurphy430@gmail.com" value="rogermurphy430@gmail.com" />
+                            <Input className="h-8 text-sm" placeholder="Phone" />
+                            <Input className="h-8 text-sm" placeholder="Mobile" />
                           </div>
                         </div>
                       </div>
@@ -694,48 +499,100 @@ export function GlobalJobCard({
                 </div>
 
                 {/* Right Panel - Activity Diary */}
-                <div className="w-1/2 bg-white overflow-y-auto">
-                  {editingJob && (
-                    <JobDiarySection 
-                      jobId={editingJob.id}
-                      isServiceM8Style={true}
-                    />
-                  )}
-                  {!editingJob && (
-                    <div className="p-4">
-                      <div className="text-center py-8 text-gray-500">
-                        <FileText className="w-8 h-8 mx-auto mb-2" />
-                        <p className="text-sm">Activity diary will appear here after saving the job.</p>
+                <div className="w-1/2 bg-white p-4 overflow-y-auto">
+                  <div className="space-y-3">
+                    {/* Activity Timeline */}
+                    <div className="space-y-3">
+                      {/* Note Entry */}
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-4 h-4 text-yellow-600" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-sm">Note</span>
+                              <span className="text-xs text-gray-500">12:27 PM 16/09/2025 • by Jullian</span>
+                            </div>
+                            <div className="text-sm text-gray-700 mb-2">Google review</div>
+                            <a href="#" className="text-xs text-blue-600 hover:underline">
+                              https://g.page/r/Cd_4iOOwMXJ_EAE/review
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Another Note Entry */}
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-4 h-4 text-yellow-600" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-sm">Note</span>
+                              <span className="text-xs text-gray-500">12:26 PM 16/09/2025 • by Jullian</span>
+                            </div>
+                            <div className="text-sm text-gray-700 mb-2">Facebook review</div>
+                            <a href="#" className="text-xs text-blue-600 hover:underline">
+                              https://www.facebook.com/TreemarkablesGisborne/reviews/
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Photo Entry */}
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <ImageIcon className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium text-sm">Photo</span>
+                              <span className="text-xs text-gray-500">11:47 AM 8/09/2025 • by Jullian</span>
+                            </div>
+                            <div className="w-20 h-16 bg-green-200 rounded border">
+                              {/* Photo thumbnail placeholder */}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Another Photo Entry */}
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <ImageIcon className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium text-sm">Photo</span>
+                              <span className="text-xs text-gray-500">5:21 AM 6/05/2025 • by Jullian</span>
+                            </div>
+                            <div className="w-20 h-16 bg-blue-200 rounded border">
+                              {/* Photo thumbnail placeholder */}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
               
               {/* Bottom Action Bar */}
               <div className="bg-gray-100 border-t border-gray-300 px-4 py-3 flex justify-between items-center">
                 <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={handleSave}
-                    disabled={createJobMutation.isPending || updateJobMutation.isPending}
-                    data-testid="button-save"
-                  >
-                    {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
+                  <Button size="sm" variant="outline" data-testid="button-save">
+                    Save
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={handleSaveAndClose}
-                    disabled={createJobMutation.isPending || updateJobMutation.isPending}
-                    data-testid="button-save-close"
-                  >
-                    {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save & Close'}
+                  <Button size="sm" variant="outline" data-testid="button-save-close">
+                    Save & Close
                   </Button>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={onClose} data-testid="button-cancel">
+                  <Button size="sm" variant="outline" data-testid="button-cancel">
                     Cancel
                   </Button>
                 </div>
