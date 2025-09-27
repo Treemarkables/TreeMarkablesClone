@@ -911,7 +911,7 @@ export function GlobalJobCard({
                           size="sm"
                           onClick={() => {
                             setIsAddingLineItem(false);
-                            setNewLineItem({ description: '', quantity: 1, unitPrice: 0 });
+                            setNewLineItem({ description: '', quantity: 1, unitPrice: 0, unitCost: 0 });
                           }}
                         >
                           ✕

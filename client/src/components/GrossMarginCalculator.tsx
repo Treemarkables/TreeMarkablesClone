@@ -180,12 +180,26 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       return sum + (quantity * unitPrice);
     }, 0);
   };
+
+  // Calculate total costs from job line items cost fields
+  const calculateJobLineItemsCosts = (jobLineItems: any[]): number => {
+    if (!Array.isArray(jobLineItems)) return 0;
+    return jobLineItems.reduce((sum, item) => {
+      const totalCost = parseFloat(item.totalCost || 0);
+      const unitCost = parseFloat(item.unitCost || 0);
+      const quantity = parseFloat(item.quantity || 0);
+      // Use totalCost if available, otherwise calculate from unitCost * quantity
+      const itemCost = totalCost > 0 ? totalCost : (unitCost * quantity);
+      return sum + itemCost;
+    }, 0);
+  };
   
   const jobLineItemsTotal = calculateJobLineItemsTotal(job?.lineItems || []);
+  const jobLineItemsCosts = calculateJobLineItemsCosts(job?.lineItems || []);
   const totalAmount = jobLineItemsTotal > 0 ? jobLineItemsTotal : (job?.totalAmount ? parseFloat(job.totalAmount) : 0);
   
-  // Materials costs now come from job line items total
-  const materialsCosts = jobLineItemsTotal;
+  // Materials costs come from the actual cost fields in line items
+  const materialsCosts = jobLineItemsCosts;
   
   const laborCosts = hasStaffTimeEntries ? staffTimeLaborCost : (formData.laborCosts || 0);
   const otherCosts = formData.otherCosts || 0;
