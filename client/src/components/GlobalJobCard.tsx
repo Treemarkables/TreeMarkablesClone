@@ -549,7 +549,7 @@ export function GlobalJobCard({
               {/* ServiceM8-style Two Panel Layout */}
               <div className="flex h-full">
                 {/* Left Panel - Job Details */}
-                <div className="w-1/2 bg-white border-r border-gray-300 p-4 overflow-y-auto">
+                <div className="w-2/5 bg-white border-r border-gray-300 p-4 overflow-y-auto">
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
                       {/* Customer Name and Address */}
