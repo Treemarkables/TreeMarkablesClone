@@ -342,18 +342,6 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   return (
     <div className="h-full bg-background p-4 md:p-6 overflow-hidden w-full max-w-full min-w-0">
       <div className="w-full max-w-full h-full flex flex-col min-w-0">
-        <div className="mb-4 md:mb-6 shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="heading-job-dashboard">
-                Job Dashboard
-              </h1>
-              <p className="text-muted-foreground" data-testid="text-dashboard-description">
-                Comprehensive business management for Treemarkables
-              </p>
-            </div>
-          </div>
-        </div>
 
         <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full">
 
