@@ -19,10 +19,7 @@ import {
   AlertCircle,
   Save,
   TrendingUp,
-  Users,
-  Plus,
-  Trash2,
-  Edit
+  Users
 } from "lucide-react";
 
 interface GrossMarginData {
@@ -40,7 +37,6 @@ interface GrossMarginData {
 
 interface StaffAssignment {
   staffId: string;
-  lineItemId?: string;
   hours?: number;
 }
 
@@ -63,15 +59,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   const [calculationMode, setCalculationMode] = useState<'manual' | 'hourly'>('manual');
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const lineItemsRef = useRef<LineItem[]>([]);
-  const [isAddingLineItem, setIsAddingLineItem] = useState(false);
-  const [newLineItem, setNewLineItem] = useState<Partial<LineItem>>({
-    description: '',
-    quantity: 1,
-    unitPrice: 0,
-    total: 0
-  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -87,15 +74,9 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     enabled: !compact // Only load when showing full calculator
   });
 
-  // Fetch materials and services catalog for line item selection
-  const { data: materialsServicesResponse } = useQuery({
-    queryKey: ['/api/materials-services'],
-    enabled: !compact // Only load when showing full calculator
-  });
   
   const job = (jobResponse as any)?.data;
   const employees = (employeesData as any)?.data || [];
-  const materialsAndServices = (materialsServicesResponse as any)?.data || [];
 
   // Fetch staff time entries from the new time tracking system
   const today = new Date().toISOString().split('T')[0];
@@ -162,39 +143,9 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
         setStaffAssignments([]);
       }
       
-      // Initialize line items from job data - remove top item and keep only bottom item
-      if (job.lineItems && Array.isArray(job.lineItems)) {
-        // Always remove the first (top) line item
-        const filteredItems = job.lineItems.slice(1);
-        setLineItems(filteredItems);
-        lineItemsRef.current = filteredItems;
-      } else {
-        setLineItems([]);
-        lineItemsRef.current = [];
-      }
     }
   }, [job]);
 
-  // Link line items to materials costs - automatically sync materials costs with line items total
-  useEffect(() => {
-    if (lineItems.length > 0) {
-      const lineItemsTotal = lineItems.reduce((sum, item) => {
-        // Parse numeric values properly since they come as strings from API
-        const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
-        return sum + (itemTotal || 0);
-      }, 0);
-      setFormData(prev => ({
-        ...prev,
-        materialsCosts: lineItemsTotal
-      }));
-    } else {
-      // Reset materials costs when no line items
-      setFormData(prev => ({
-        ...prev,
-        materialsCosts: 0
-      }));
-    }
-  }, [lineItems]);
 
   // Update gross margin mutation
   const updateGrossMarginMutation = useMutation({
@@ -220,21 +171,23 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     }
   });
 
-  // Calculate derived values - use line items total if available, otherwise fall back to job.totalAmount
-  const calculateLineItemsTotal = (lineItems: any[]): number => {
-    if (!Array.isArray(lineItems)) return 0;
-    return lineItems.reduce((sum, item) => {
+  // Calculate total revenue from job line items - read-only consumer
+  const calculateJobLineItemsTotal = (jobLineItems: any[]): number => {
+    if (!Array.isArray(jobLineItems)) return 0;
+    return jobLineItems.reduce((sum, item) => {
       const quantity = parseFloat(item.quantity || 0);
       const unitPrice = parseFloat(item.unitPrice || 0);
       return sum + (quantity * unitPrice);
     }, 0);
   };
   
-  const lineItemsTotal = lineItems.length > 0 ? calculateLineItemsTotal(lineItems) : 0;
-  const totalAmount = lineItemsTotal > 0 ? lineItemsTotal : (job?.totalAmount ? parseFloat(job.totalAmount) : 0);
+  const jobLineItemsTotal = calculateJobLineItemsTotal(job?.lineItems || []);
+  const totalAmount = jobLineItemsTotal > 0 ? jobLineItemsTotal : (job?.totalAmount ? parseFloat(job.totalAmount) : 0);
+  
+  // Materials costs now come from job line items total
+  const materialsCosts = jobLineItemsTotal;
   
   const laborCosts = hasStaffTimeEntries ? staffTimeLaborCost : (formData.laborCosts || 0);
-  const materialsCosts = formData.materialsCosts || 0;
   const otherCosts = formData.otherCosts || 0;
   const costOfGoods = job?.costOfGoods ? parseFloat(job.costOfGoods) : 0;
   // Include tracked expenses in total costs
@@ -271,84 +224,21 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     return staffAssignments.find(assignment => assignment.staffId === staffId) || { staffId };
   };
 
-  // Line item management functions
-  const addLineItem = () => {
-    if (!newLineItem.description || !newLineItem.quantity || !newLineItem.unitPrice) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const lineItem: LineItem = {
-      id: `item-${Date.now()}`,
-      description: newLineItem.description,
-      quantity: newLineItem.quantity || 1,
-      unitPrice: newLineItem.unitPrice || 0,
-      total: (newLineItem.quantity || 1) * (newLineItem.unitPrice || 0)
-    };
-
-    
-    setLineItems(prev => {
-      const newLineItems = [...prev, lineItem];
-      // Update the ref immediately with the new state
-      lineItemsRef.current = newLineItems;
-      return newLineItems;
-    });
-    setNewLineItem({
-      description: '',
-      quantity: 1,
-      unitPrice: 0,
-      total: 0
-    });
-    setIsAddingLineItem(false);
-    
-    toast({
-      title: "Success",
-      description: "Line item added successfully"
-    });
-  };
-
-  const removeLineItem = (itemId: string) => {
-    setLineItems(prev => {
-      const newLineItems = prev.filter(item => item.id !== itemId);
-      // Update the ref immediately with the new state
-      lineItemsRef.current = newLineItems;
-      return newLineItems;
-    });
-    // Remove any staff assignments for this line item
-    setStaffAssignments(prev => prev.filter(assignment => assignment.lineItemId !== itemId));
-    
-    toast({
-      title: "Success",
-      description: "Line item removed"
-    });
-  };
-
-  const updateNewLineItemTotal = () => {
-    const total = (newLineItem.quantity || 1) * (newLineItem.unitPrice || 0);
-    setNewLineItem(prev => ({ ...prev, total }));
-  };
 
   const handleSave = () => {
-    // Use the ref to get the most current line items state
-    const currentLineItems = lineItemsRef.current;
     const dataToSave = { 
       ...formData, 
       assignedStaffIds: selectedStaffIds,
-      staffAssignments: staffAssignments.filter(assignment => selectedStaffIds.includes(assignment.staffId)),
-      lineItems: currentLineItems
+      staffAssignments: staffAssignments.filter(assignment => selectedStaffIds.includes(assignment.staffId))
     };
   
     // Convert numeric values to strings for backend schema compatibility
     if (dataToSave.laborCosts !== undefined) {
       (dataToSave as any).laborCosts = dataToSave.laborCosts.toString();
     }
-    if (dataToSave.materialsCosts !== undefined) {
-      (dataToSave as any).materialsCosts = dataToSave.materialsCosts.toString();
-    }
+    // Use computed materials costs from job line items, not stale formData
+    (dataToSave as any).materialsCosts = materialsCosts.toString();
+    
     if (dataToSave.otherCosts !== undefined) {
       (dataToSave as any).otherCosts = dataToSave.otherCosts.toString();
     }
@@ -358,9 +248,8 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     if (dataToSave.hourlyRate !== undefined) {
       (dataToSave as any).hourlyRate = dataToSave.hourlyRate.toString();
     }
-    if (dataToSave.totalAmount !== undefined) {
-      (dataToSave as any).totalAmount = dataToSave.totalAmount.toString();
-    }
+    // Use computed total amount from line items
+    (dataToSave as any).totalAmount = totalAmount.toString();
     
     // If staff time entries exist, don't include laborCosts (server-calculated)
     if (hasStaffTimeEntries) {
@@ -483,164 +372,48 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
           </div>
         </div>
 
-        {/* Line Items Management Section */}
+        {/* Job Revenue from Line Items - Read Only */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              <h3 className="font-semibold">Line Items</h3>
-              <Badge variant="outline" className="text-xs">
-                {lineItems.length} items
-              </Badge>
-            </div>
-            {!isAddingLineItem && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => setIsAddingLineItem(true)}
-                data-testid="button-add-line-item"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Line Item
-              </Button>
-            )}
+          <div className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            <h3 className="font-semibold">Job Line Items</h3>
+            <Badge variant="outline" className="text-xs">
+              {job?.lineItems?.length || 0} items
+            </Badge>
+            <Badge className="bg-blue-100 text-blue-800 text-xs">
+              Managed in Job Card
+            </Badge>
           </div>
 
-          {/* Add New Line Item Form */}
-          {isAddingLineItem && (
-            <Card className="p-4 bg-gray-50">
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="new-line-item-description">Description *</Label>
-                  <Input
-                    id="new-line-item-description"
-                    value={newLineItem.description || ''}
-                    onChange={(e) => setNewLineItem(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="e.g., Tree removal, Stump grinding"
-                    data-testid="input-new-line-item-description"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <Label htmlFor="new-line-item-quantity">Quantity *</Label>
-                    <Input
-                      id="new-line-item-quantity"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={newLineItem.quantity || ''}
-                      onChange={(e) => {
-                        const quantity = parseFloat(e.target.value) || 0;
-                        setNewLineItem(prev => ({ ...prev, quantity }));
-                        updateNewLineItemTotal();
-                      }}
-                      data-testid="input-new-line-item-quantity"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="new-line-item-unit-price">Unit Price ($) *</Label>
-                    <Input
-                      id="new-line-item-unit-price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={newLineItem.unitPrice || ''}
-                      onChange={(e) => {
-                        const unitPrice = parseFloat(e.target.value) || 0;
-                        setNewLineItem(prev => ({ ...prev, unitPrice }));
-                        updateNewLineItemTotal();
-                      }}
-                      data-testid="input-new-line-item-unit-price"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="new-line-item-total">Total ($)</Label>
-                    <Input
-                      id="new-line-item-total"
-                      type="number"
-                      value={((newLineItem.quantity || 1) * (newLineItem.unitPrice || 0)).toFixed(2)}
-                      disabled
-                      className="bg-gray-100"
-                      data-testid="input-new-line-item-total"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={addLineItem}
-                    data-testid="button-save-line-item"
-                  >
-                    <Save className="h-4 w-4 mr-1" />
-                    Add Item
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setIsAddingLineItem(false);
-                      setNewLineItem({
-                        description: '',
-                        quantity: 1,
-                        unitPrice: 0,
-                        total: 0
-                      });
-                    }}
-                    data-testid="button-cancel-line-item"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Existing Line Items List */}
-          {lineItems.length > 0 && (
+          {job?.lineItems && job.lineItems.length > 0 ? (
             <div className="space-y-2">
-              {lineItems.map((item) => (
-                <Card key={item.id} className="p-3">
+              {job.lineItems.map((item: any, index: number) => (
+                <Card key={index} className="p-3 bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="font-medium">{item.description}</div>
                       <div className="text-sm text-gray-600">
-                        {item.quantity} × ${item.unitPrice.toFixed(2)} = ${item.total.toFixed(2)}
+                        {item.quantity} × ${parseFloat(item.unitPrice || 0).toFixed(2)} = ${(item.quantity * parseFloat(item.unitPrice || 0)).toFixed(2)}
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeLineItem(item.id)}
-                      data-testid={`button-remove-line-item-${item.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="text-sm font-semibold">
+                      ${(item.quantity * parseFloat(item.unitPrice || 0)).toFixed(2)}
+                    </div>
                   </div>
                 </Card>
               ))}
-            </div>
-          )}
-
-          {lineItems.length === 0 && !isAddingLineItem && (
-            <div className="text-center py-4 text-gray-500">
-              <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No line items added yet</p>
-              <p className="text-sm">Add line items to track staff costs by specific services</p>
-              <div className="mt-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('/materials-services', '_blank')}
-                  className="text-xs"
-                  data-testid="button-open-materials-services"
-                >
-                  <Package className="h-3 w-3 mr-1" />
-                  Manage Materials & Services
-                </Button>
+              <div className="text-right pt-2 border-t">
+                <div className="text-sm text-gray-600">Total Revenue</div>
+                <div className="text-lg font-bold text-green-700">
+                  ${jobLineItemsTotal.toFixed(2)}
+                </div>
               </div>
+            </div>
+          ) : (
+            <div className="text-center py-4 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+              <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No line items found</p>
+              <p className="text-sm">Add pricing items in the Job Card to track revenue</p>
             </div>
           )}
         </div>
@@ -696,21 +469,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                     </Badge>
                   </div>
                   
-                  {/* Check if line items with pricing exist */}
-                  {lineItems.length === 0 && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                        <div className="text-sm">
-                          <div className="font-medium text-yellow-800">Line Items Required</div>
-                          <div className="text-yellow-700 mt-1">
-                            To track staff costs by line item, add line items in the section above. 
-                            Staff can still be assigned for basic labor tracking.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   
                   <div className="space-y-3 max-h-64 overflow-y-auto bg-gray-50 p-3 rounded-md">
                     {employees.map((employee: any) => {
@@ -742,54 +500,9 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                             </Badge>
                           </div>
                           
-                          {/* Line item and time entry when selected */}
+                          {/* Time entry when selected */}
                           {isSelected && (
-                            <div className="ml-6 grid grid-cols-1 md:grid-cols-2 gap-2">
-                              <div>
-                                <Label className="text-xs">Line Item</Label>
-                                <Select 
-                                  value={assignment.lineItemId || "none"} 
-                                  onValueChange={(value) => updateStaffAssignment(employee.id, 'lineItemId', value === 'none' ? '' : value)}
-                                >
-                                  <SelectTrigger className="h-8 text-xs">
-                                    <SelectValue placeholder="Select service..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">No specific service</SelectItem>
-                                    {materialsAndServices.length > 0 ? (
-                                      <>
-                                        {/* Show current job line items first if any */}
-                                        {lineItems.length > 0 && (
-                                          <>
-                                            <SelectItem value="divider-job" disabled className="font-medium text-blue-800">
-                                              — Current Job Line Items —
-                                            </SelectItem>
-                                            {lineItems.map((lineItem: LineItem) => (
-                                              <SelectItem key={lineItem.id} value={lineItem.id}>
-                                                ✓ {lineItem.description}
-                                              </SelectItem>
-                                            ))}
-                                          </>
-                                        )}
-                                        
-                                        {/* Show materials & services catalog */}
-                                        <SelectItem value="divider-catalog" disabled className="font-medium text-green-800">
-                                          — Materials & Services Catalog —
-                                        </SelectItem>
-                                        {materialsAndServices.map((item: any) => (
-                                          <SelectItem key={item.id} value={item.id}>
-                                            {item.name} {item.category && `(${item.category})`}
-                                          </SelectItem>
-                                        ))}
-                                      </>
-                                    ) : (
-                                      <SelectItem value="general" disabled>
-                                        No services available - check Materials & Services settings
-                                      </SelectItem>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                            <div className="ml-6">
                               <div>
                                 <Label className="text-xs">Hours</Label>
                                 <Input
@@ -897,23 +610,20 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
             <Label htmlFor="materialsCosts" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
               Materials Costs ($)
-              {lineItems.length > 0 && (
-                <Badge className="bg-blue-100 text-blue-800 text-xs">
-                  Auto from Line Items
-                </Badge>
-              )}
+              <Badge className="bg-blue-100 text-blue-800 text-xs">
+                From Job Line Items
+              </Badge>
             </Label>
             <Input
               id="materialsCosts"
               type="number"
               step="0.01"
               min="0"
-              value={formData.materialsCosts || ''}
-              onChange={(e) => handleInputChange('materialsCosts', e.target.value)}
-              placeholder="Materials & supplies"
+              value={materialsCosts.toFixed(2)}
+              placeholder="Calculated from line items"
               data-testid="input-materials-costs"
-              readOnly={lineItems.length > 0}
-              className={lineItems.length > 0 ? "bg-gray-50" : ""}
+              readOnly
+              className="bg-gray-50"
             />
           </div>
           <div>
