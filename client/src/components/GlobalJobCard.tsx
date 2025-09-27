@@ -543,13 +543,13 @@ export function GlobalJobCard({
                 console.log('Form submitted:', data);
                 // Save functionality will be handled by the save buttons
               })}
-              className="flex flex-col h-full" 
+              className="flex flex-col h-full w-full" 
               data-form="job-form"
             >
               {/* ServiceM8-style Two Panel Layout */}
-              <div className="flex h-full">
+              <div className="flex h-full w-full">
                 {/* Left Panel - Job Details */}
-                <div className="w-3/5 bg-white border-r border-gray-300 p-4 overflow-y-auto">
+                <div className="flex-[3] bg-white border-r border-gray-300 p-4 overflow-y-auto">
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
                       {/* Customer Name and Address */}
@@ -726,7 +726,7 @@ export function GlobalJobCard({
                 </div>
 
                 {/* Right Panel - Activity Diary */}
-                <div className="w-2/5 bg-white overflow-y-auto">
+                <div className="flex-[2] bg-white overflow-y-auto">
                   {editingJob && (
                     <JobDiarySection 
                       jobId={editingJob.id}
