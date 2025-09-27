@@ -2070,6 +2070,40 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   });
 
   // ========================================
+  // MATERIALS & SERVICES API
+  // ========================================
+
+  // Get all materials and services for line item selection
+  app.get('/api/materials-services', (req, res) => {
+    try {
+      const materialsAndServices = [
+        // Materials
+        { id: "material-1", name: "10% discount with VIP membership", type: "material", price: 0.00, category: "Discount" },
+        { id: "material-2", name: "Admin Time", type: "material", price: 0.00, category: "Labour" },
+        { id: "material-3", name: "Bandit chipper hire", type: "material", price: 500.00, category: "Equipment" },
+        { id: "material-4", name: "Bucket truck", type: "material", price: 80.00, category: "Equipment" },
+        { id: "material-5", name: "Digger and truck", type: "material", price: 890.00, category: "Equipment" },
+        { id: "material-6", name: "Disposal", type: "material", price: 250.00, category: "Service" },
+        
+        // Services
+        { id: "service-1", name: "Tree Removal - Small (under 5m)", type: "service", price: 250.00, category: "Tree Services" },
+        { id: "service-2", name: "Tree Removal - Medium (5-10m)", type: "service", price: 650.00, category: "Tree Services" },
+        { id: "service-3", name: "Tree Removal - Large (10m+)", type: "service", price: 1250.00, category: "Tree Services" },
+        { id: "service-4", name: "Hedge Trimming", type: "service", price: 85.00, category: "Maintenance" },
+        { id: "service-5", name: "Stump Grinding", type: "service", price: 180.00, category: "Tree Services" },
+        { id: "service-6", name: "Tree Pruning", type: "service", price: 120.00, category: "Tree Services" },
+        { id: "service-7", name: "Emergency Tree Removal", type: "service", price: 1500.00, category: "Tree Services" },
+        { id: "service-8", name: "Mulching", type: "service", price: 65.00, category: "Service" },
+      ];
+
+      res.json({ success: true, data: materialsAndServices });
+    } catch (error) {
+      console.error('Error fetching materials and services:', error);
+      res.status(500).json({ success: false, message: 'Error fetching materials and services' });
+    }
+  });
+
+  // ========================================
   // GROSS MARGIN ROUTES
   // ========================================
 
