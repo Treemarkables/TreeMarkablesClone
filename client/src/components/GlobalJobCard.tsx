@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package } from "lucide-react";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
@@ -242,9 +242,14 @@ export function GlobalJobCard({
     });
     setIsAddingLineItem(false);
     
+    // Calculate profit impact for enhanced tracking
+    const updatedLineItems = form.getValues('lineItems') || [];
+    const newJobTotal = updatedLineItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    const revenueIncrease = lineItem.total;
+    
     toast({
-      title: "Success",
-      description: "Line item added successfully"
+      title: "Profit Tracking",
+      description: `Added "${lineItem.description}" • Revenue: +$${revenueIncrease.toFixed(2)} • Job Total: $${newJobTotal.toFixed(2)}`
     });
   };
 
@@ -260,16 +265,22 @@ export function GlobalJobCard({
   };
 
   const selectFromCatalog = (catalogItem: any) => {
+    const unitPrice = parseFloat(catalogItem.displayPrice || 0);
+    const itemName = catalogItem.name || catalogItem.itemNumber;
+    
     setNewLineItem({
-      description: catalogItem.name || catalogItem.itemNumber,
+      description: itemName,
       quantity: 1,
-      unitPrice: parseFloat(catalogItem.displayPrice || 0)
+      unitPrice: unitPrice
     });
     setIsCatalogModalOpen(false);
     
+    // Enhanced profit tracking feedback
+    const profitImpact = unitPrice * 1; // quantity = 1
+    
     toast({
-      title: "Item Selected",
-      description: `${catalogItem.name} added to line item form`,
+      title: "Item Selected from Catalog",
+      description: `${itemName} ($${unitPrice.toFixed(2)}) - Revenue impact: +$${profitImpact.toFixed(2)}`,
     });
   };
 
@@ -1194,38 +1205,48 @@ export function GlobalJobCard({
               
               {materialsAndServices.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {materialsAndServices.map((item: any) => (
-                    <Card 
-                      key={item.id}
-                      className="cursor-pointer hover:shadow-md transition-shadow border border-gray-200 hover:border-gray-300"
-                      onClick={() => selectFromCatalog(item)}
-                      data-testid={`catalog-item-${item.id}`}
-                    >
-                      <CardContent className="p-4">
-                        <div className="space-y-2">
-                          <div className="font-medium text-gray-900 text-sm leading-tight">
-                            {item.name || item.itemNumber}
+                  {materialsAndServices.map((item: any) => {
+                    const itemPrice = parseFloat(item.displayPrice || 0);
+                    const currentLineItems = form.getValues('lineItems') || [];
+                    const currentTotal = currentLineItems.reduce((sum, item) => sum + (item.total || 0), 0);
+                    const newTotal = currentTotal + itemPrice;
+                    
+                    return (
+                      <Card 
+                        key={item.id}
+                        className="cursor-pointer hover:shadow-md transition-shadow border border-gray-200 hover:border-gray-300"
+                        onClick={() => selectFromCatalog(item)}
+                        data-testid={`catalog-item-${item.id}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="space-y-2">
+                            <div className="font-medium text-gray-900 text-sm leading-tight">
+                              {item.name || item.itemNumber}
+                            </div>
+                            <div className="text-lg font-semibold text-green-600">
+                              ${itemPrice.toFixed(2)}
+                            </div>
+                            {item.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {item.category}
+                              </Badge>
+                            )}
+                            {item.type && (
+                              <Badge 
+                                variant={item.type === 'material' ? 'default' : 'secondary'} 
+                                className="text-xs ml-1"
+                              >
+                                {item.type}
+                              </Badge>
+                            )}
+                            <div className="text-xs bg-blue-50 text-blue-700 p-2 rounded border">
+                              💰 Job Total: ${currentTotal.toFixed(2)} → ${newTotal.toFixed(2)}
+                            </div>
                           </div>
-                          <div className="text-lg font-semibold text-gray-600">
-                            ${parseFloat(item.displayPrice || 0).toFixed(2)}
-                          </div>
-                          {item.category && (
-                            <Badge variant="outline" className="text-xs">
-                              {item.category}
-                            </Badge>
-                          )}
-                          {item.type && (
-                            <Badge 
-                              variant={item.type === 'material' ? 'default' : 'secondary'} 
-                              className="text-xs ml-1"
-                            >
-                              {item.type}
-                            </Badge>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8">
