@@ -235,7 +235,7 @@ export function GlobalJobCard({
         priority: editingJob.priority || 'medium',
         customerId: editingJob.customerId || '',
         category: editingJob.category || '',
-        poNumber: editingJob.poNumber || '',
+        leadSource: editingJob.leadSource || '',
         address: editingJob.address || '',
         city: editingJob.city || '',
         region: editingJob.region || '',
@@ -547,7 +547,7 @@ export function GlobalJobCard({
 
                       {/* Job Information Section */}
                       <div className="space-y-4">
-                        {/* Job Status, Category, PO Number */}
+                        {/* Job Status, Category, Lead Source */}
                         <div className="grid grid-cols-3 gap-3">
                           <div>
                             <label className="text-xs font-medium text-gray-600 mb-1 block">Job Status</label>
@@ -576,8 +576,32 @@ export function GlobalJobCard({
                             </Select>
                           </div>
                           <div>
-                            <label className="text-xs font-medium text-gray-600 mb-1 block">PO Number</label>
-                            <Input className="h-8 text-sm" placeholder="" />
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">Lead Source</label>
+                            <FormField
+                              control={form.control}
+                              name="leadSource"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Select value={field.value} onValueChange={field.onChange}>
+                                      <SelectTrigger className="h-8 text-sm">
+                                        <SelectValue placeholder="Select source" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="website">Website</SelectItem>
+                                        <SelectItem value="referral">Referral</SelectItem>
+                                        <SelectItem value="google">Google Search</SelectItem>
+                                        <SelectItem value="facebook">Facebook</SelectItem>
+                                        <SelectItem value="phone">Phone Call</SelectItem>
+                                        <SelectItem value="direct">Direct</SelectItem>
+                                        <SelectItem value="advertisement">Advertisement</SelectItem>
+                                        <SelectItem value="other">Other</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
                           </div>
                         </div>
 

@@ -287,7 +287,6 @@ export const jobs = pgTable("jobs", {
   invoiceEligible: boolean("invoice_eligible").default(false),
   
   // Global Job Card Fields
-  poNumber: text("po_number"), // Purchase order number
   checklist: jsonb("checklist"), // [{"id": "uuid", "text": "Task description", "completed": false}]
   notes: text("notes"), // Job notes and comments
   lineItems: jsonb("line_items"), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number}]
