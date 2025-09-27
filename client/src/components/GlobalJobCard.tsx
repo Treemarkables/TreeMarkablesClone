@@ -422,11 +422,11 @@ export function GlobalJobCard({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-7xl h-[95vh] flex flex-col p-0 bg-gray-50">
         {/* ServiceM8-style Header */}
-        <div className="bg-gray-100 border-b border-gray-300 px-4 py-2 flex-shrink-0">
+        <div className="bg-orange-500 border-b border-orange-600 px-4 py-2 flex-shrink-0">
           <div className="flex items-center justify-between">
             {/* Left: Job Title */}
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold text-gray-800" data-testid="text-job-title">
+              <h1 className="text-lg font-semibold text-white" data-testid="text-job-title">
                 {mode === "create" ? "New Job" : `Job #${editingJob?.jobNumber || "3314"}`}
               </h1>
             </div>
