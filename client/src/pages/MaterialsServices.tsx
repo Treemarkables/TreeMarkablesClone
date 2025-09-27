@@ -16,12 +16,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 // Form schema for adding/editing materials
 const materialSchema = z.object({
   itemNumber: z.string().min(1, "Item number is required"),
   name: z.string().min(1, "Name is required"),
-  price: z.string().min(1, "Price is required"),
+  price: z.coerce.number().nonnegative("Price must be a non-negative number"),
   priceIncludesTax: z.boolean(),
   taxRate: z.string().min(1, "Tax rate is required"),
   category: z.string().min(1, "Category is required"),
@@ -31,7 +33,7 @@ const materialSchema = z.object({
 const serviceSchema = z.object({
   name: z.string().min(1, "Service name is required"),
   category: z.string().min(1, "Category is required"),
-  basePrice: z.string().min(1, "Base price is required"),
+  basePrice: z.coerce.number().nonnegative("Base price must be a non-negative number"),
   unit: z.string().min(1, "Unit is required"),
   description: z.string().optional(),
 });
@@ -181,8 +183,6 @@ export default function MaterialsServices() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name");
-  const [materials, setMaterials] = useState(mockMaterials);
-  const [services, setServices] = useState(mockServices);
   const [showAddMaterialDialog, setShowAddMaterialDialog] = useState(false);
   const [showEditMaterialDialog, setShowEditMaterialDialog] = useState(false);
   const [showAddServiceDialog, setShowAddServiceDialog] = useState(false);
@@ -191,12 +191,153 @@ export default function MaterialsServices() {
   const [editingService, setEditingService] = useState<any>(null);
   const { toast } = useToast();
 
+  // Fetch materials and services using TanStack Query
+  const { data: materials = [], isLoading: materialsLoading } = useQuery({
+    queryKey: ['/api/materials'],
+    select: (response: any) => response.data || []
+  });
+
+  const { data: services = [], isLoading: servicesLoading } = useQuery({
+    queryKey: ['/api/services'], 
+    select: (response: any) => response.data || []
+  });
+
+  // Materials mutations
+  const createMaterialMutation = useMutation({
+    mutationFn: async (data: MaterialFormData) => {
+      return apiRequest('POST', '/api/materials', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/materials'] });
+      setShowAddMaterialDialog(false);
+      materialForm.reset();
+      toast({
+        title: "Material added successfully",
+        description: "The material has been added to your catalog.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add material. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const updateMaterialMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<MaterialFormData> }) => {
+      return apiRequest('PUT', `/api/materials/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/materials'] });
+      setShowEditMaterialDialog(false);
+      setEditingMaterial(null);
+      toast({
+        title: "Material updated successfully",
+        description: "The material has been updated in your catalog.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update material. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const deleteMaterialMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest('DELETE', `/api/materials/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/materials'] });
+      toast({
+        title: "Material deleted successfully",
+        description: "The material has been removed from your catalog.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete material. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Services mutations
+  const createServiceMutation = useMutation({
+    mutationFn: async (data: ServiceFormData) => {
+      return apiRequest('POST', '/api/services', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      setShowAddServiceDialog(false);
+      serviceForm.reset();
+      toast({
+        title: "Service added successfully",
+        description: "The service has been added to your catalog.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add service. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const updateServiceMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<ServiceFormData> }) => {
+      return apiRequest('PUT', `/api/services/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      setShowEditServiceDialog(false);
+      setEditingService(null);
+      toast({
+        title: "Service updated successfully",
+        description: "The service has been updated in your catalog.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update service. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const deleteServiceMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest('DELETE', `/api/services/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      toast({
+        title: "Service deleted successfully",
+        description: "The service has been removed from your catalog.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete service. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
   const materialForm = useForm<MaterialFormData>({
     resolver: zodResolver(materialSchema),
     defaultValues: {
       itemNumber: "",
       name: "",
-      price: "",
+      price: 0,
       priceIncludesTax: false,
       taxRate: "15% GST on Income",
       category: "",
@@ -208,138 +349,34 @@ export default function MaterialsServices() {
     defaultValues: {
       name: "",
       category: "",
-      basePrice: "",
+      basePrice: 0,
       unit: "",
       description: "",
     },
   });
 
   const onAddMaterial = (data: MaterialFormData) => {
-    try {
-      const newMaterial = {
-        id: Date.now().toString(),
-        itemNumber: data.itemNumber,
-        name: data.name,
-        price: parseFloat(data.price),
-        priceIncludesTax: data.priceIncludesTax,
-        taxRate: data.taxRate,
-        category: data.category,
-      };
-      
-      setMaterials(prev => [...prev, newMaterial]);
-      setShowAddMaterialDialog(false);
-      materialForm.reset();
-      
-      toast({
-        title: "Material Added",
-        description: `${data.name} has been added successfully.`,
-      });
-      
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add material. Please try again.",
-        variant: "destructive",
-      });
-    }
+    createMaterialMutation.mutate(data);
   };
 
   const onEditMaterial = (data: MaterialFormData) => {
-    try {
-      const updatedMaterial = {
-        ...editingMaterial,
-        itemNumber: data.itemNumber,
-        name: data.name,
-        price: parseFloat(data.price),
-        priceIncludesTax: data.priceIncludesTax,
-        taxRate: data.taxRate,
-        category: data.category,
-      };
-      
-      setMaterials(prev => prev.map(m => m.id === editingMaterial.id ? updatedMaterial : m));
-      setShowEditMaterialDialog(false);
-      setEditingMaterial(null);
-      materialForm.reset();
-      
-      toast({
-        title: "Material Updated",
-        description: `${data.name} has been updated successfully.`,
-      });
-      
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update material. Please try again.",
-        variant: "destructive",
-      });
+    if (editingMaterial) {
+      updateMaterialMutation.mutate({ id: editingMaterial.id, data });
     }
   };
 
   const onAddService = (data: ServiceFormData) => {
-    try {
-      const newService = {
-        id: Date.now().toString(),
-        name: data.name,
-        category: data.category,
-        basePrice: parseFloat(data.basePrice),
-        unit: data.unit,
-        description: data.description || "",
-      };
-      
-      setServices(prev => [...prev, newService]);
-      setShowAddServiceDialog(false);
-      serviceForm.reset();
-      
-      toast({
-        title: "Service Added",
-        description: `${data.name} has been added successfully.`,
-      });
-      
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add service. Please try again.",
-        variant: "destructive",
-      });
-    }
+    createServiceMutation.mutate(data);
   };
 
   const onEditService = (data: ServiceFormData) => {
-    try {
-      const updatedService = {
-        ...editingService,
-        name: data.name,
-        category: data.category,
-        basePrice: parseFloat(data.basePrice),
-        unit: data.unit,
-        description: data.description || "",
-      };
-      
-      setServices(prev => prev.map(s => s.id === editingService.id ? updatedService : s));
-      setShowEditServiceDialog(false);
-      setEditingService(null);
-      serviceForm.reset();
-      
-      toast({
-        title: "Service Updated",
-        description: `${data.name} has been updated successfully.`,
-      });
-      
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update service. Please try again.",
-        variant: "destructive",
-      });
+    if (editingService) {
+      updateServiceMutation.mutate({ id: editingService.id, data });
     }
   };
 
   const handleRemoveMaterial = (id: string) => {
-    setMaterials(materials.filter(m => m.id !== id));
-    toast({
-      title: "Material Removed",
-      description: "Material has been removed successfully.",
-    });
+    deleteMaterialMutation.mutate(id);
   };
 
   const handleEditMaterial = (material: any) => {
@@ -356,11 +393,7 @@ export default function MaterialsServices() {
   };
 
   const handleRemoveService = (id: string) => {
-    setServices(services.filter(s => s.id !== id));
-    toast({
-      title: "Service Removed",
-      description: "Service has been removed successfully.",
-    });
+    deleteServiceMutation.mutate(id);
   };
 
   const handleEditService = (service: any) => {
@@ -368,7 +401,7 @@ export default function MaterialsServices() {
     serviceForm.reset({
       name: service.name,
       category: service.category,
-      basePrice: service.basePrice.toString(),
+      basePrice: service.basePrice,
       unit: service.unit,
       description: service.description || "",
     });
@@ -481,7 +514,7 @@ export default function MaterialsServices() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Category</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger data-testid="select-material-category">
                                 <SelectValue placeholder="Select category" />
@@ -535,7 +568,7 @@ export default function MaterialsServices() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Tax Rate</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger data-testid="select-tax-rate">
                                 <SelectValue placeholder="Select tax rate" />
@@ -617,7 +650,7 @@ export default function MaterialsServices() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Category</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger data-testid="select-service-category">
                                 <SelectValue placeholder="Select category" />
@@ -704,6 +737,241 @@ export default function MaterialsServices() {
           </Button>
         </div>
       </div>
+
+      {/* Edit Material Dialog */}
+      <Dialog open={showEditMaterialDialog} onOpenChange={setShowEditMaterialDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit Material</DialogTitle>
+          </DialogHeader>
+          <Form {...materialForm}>
+            <form onSubmit={materialForm.handleSubmit(onEditMaterial)} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={materialForm.control}
+                  name="itemNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Item Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., 41" {...field} data-testid="input-edit-item-number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={materialForm.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-material-category">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Equipment">Equipment</SelectItem>
+                          <SelectItem value="Labour">Labour</SelectItem>
+                          <SelectItem value="Service">Service</SelectItem>
+                          <SelectItem value="Materials">Materials</SelectItem>
+                          <SelectItem value="Discount">Discount</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <FormField
+                control={materialForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Material name" {...field} data-testid="input-edit-material-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={materialForm.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-edit-material-price" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={materialForm.control}
+                  name="taxRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tax Rate</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-tax-rate">
+                            <SelectValue placeholder="Select tax rate" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="15% GST on Income">15% GST on Income</SelectItem>
+                          <SelectItem value="No GST">No GST</SelectItem>
+                          <SelectItem value="10% GST">10% GST</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <FormField
+                control={materialForm.control}
+                name="priceIncludesTax"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-edit-price-includes-tax"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Price includes taxes</FormLabel>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => setShowEditMaterialDialog(false)} data-testid="button-cancel-edit-material">
+                  Cancel
+                </Button>
+                <Button type="submit" data-testid="button-save-edit-material">
+                  Update Material
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Service Dialog */}
+      <Dialog open={showEditServiceDialog} onOpenChange={setShowEditServiceDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit Service</DialogTitle>
+          </DialogHeader>
+          <Form {...serviceForm}>
+            <form onSubmit={serviceForm.handleSubmit(onEditService)} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={serviceForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Service Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Tree Removal" {...field} data-testid="input-edit-service-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={serviceForm.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-service-category">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Tree Services">Tree Services</SelectItem>
+                          <SelectItem value="Maintenance">Maintenance</SelectItem>
+                          <SelectItem value="Emergency">Emergency</SelectItem>
+                          <SelectItem value="Consultation">Consultation</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={serviceForm.control}
+                  name="basePrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Base Price</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-edit-service-price" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={serviceForm.control}
+                  name="unit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Unit</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., per tree, per hour" {...field} data-testid="input-edit-service-unit" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <FormField
+                control={serviceForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Service description..." {...field} data-testid="textarea-edit-service-description" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => setShowEditServiceDialog(false)} data-testid="button-cancel-edit-service">
+                  Cancel
+                </Button>
+                <Button type="submit" data-testid="button-save-edit-service">
+                  Update Service
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -909,8 +1177,22 @@ export default function MaterialsServices() {
                     </div>
                     
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" data-testid={`button-edit-service-${service.id}`}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleEditService(service)}
+                        data-testid={`button-edit-service-${service.id}`}
+                      >
+                        <Edit className="w-4 h-4 mr-1" />
                         Edit
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleRemoveService(service.id)}
+                        data-testid={`button-remove-service-${service.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
