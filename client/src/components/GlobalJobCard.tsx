@@ -362,7 +362,16 @@ export function GlobalJobCard({
   // Get the currently editing job
   const editingJob = useMemo(() => {
     if (mode === "edit" && (jobId || job?.id)) {
-      return job || jobs.find(j => j.id === jobId);
+      const result = job || jobs.find(j => j.id === jobId);
+      console.log('EditingJob useMemo result:', { 
+        mode,
+        jobId, 
+        jobProp: job, 
+        jobsArrayLength: jobs.length,
+        result,
+        resultDescription: result?.description 
+      });
+      return result;
     }
     return null;
   }, [mode, jobId, job, jobs]);
@@ -420,7 +429,8 @@ export function GlobalJobCard({
 
   // Populate form with complete job data when editing an existing job
   useEffect(() => {
-    if (editingJob) {
+    if (editingJob && editingJob.id) {
+      // Wait for job data to be fully loaded before resetting form
       
       // Split customer name into first and last name for form fields
       const nameParts = editingJobCustomer?.name?.split(' ') || [];
@@ -430,14 +440,14 @@ export function GlobalJobCard({
       form.reset({
         // Core job data
         title: editingJob.title || '',
-        description: editingJob.description || '',
+        description: (editingJob.description ?? '') || '',
         status: (editingJob.status as any) || 'work_order',
         priority: editingJob.priority || 'medium',
         customerId: editingJob.customerId || '',
         leadSource: editingJob.leadSource || '',
         address: editingJob.address || '',
-        city: editingJob.city || '',
-        region: editingJob.region || '',
+        city: (editingJob.city ?? '') || '',
+        region: (editingJob.region ?? '') || '',
         totalAmount: editingJob.totalAmount || '0',
         paidAmount: editingJob.paidAmount || '0',
         notes: editingJob.notes || '',

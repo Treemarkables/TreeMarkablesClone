@@ -1083,18 +1083,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <div className="flex-1 truncate">
                       <div className="font-medium">{job.customerName}</div>
                       <div className="text-xs text-muted-foreground">
-                        {(() => {
-                          // Use actual job description from API
-                          const description = job.description || job.notes || job.specialInstructions || job.serviceType;
-                          
-                          if (description && description.length > 50) {
-                            return `${description.substring(0, 50)}...`;
-                          } else if (description) {
-                            return description;
-                          } else {
-                            return 'Tree removal and maintenance';
-                          }
-                        })()}
+                        {job.address || 'No address specified'}
                       </div>
                     </div>
                   </div>
@@ -1575,20 +1564,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   <div className="text-xs text-gray-600 mb-1">
                                     {job.address || 'No address specified'}
                                   </div>
-                                  {/* Replace date with job description */}
+                                  {/* Job date info */}
                                   <div className="text-xs text-gray-500">
-                                    {(() => {
-                                      // Use actual job description from API
-                                      const description = job.description || job.notes || job.specialInstructions || job.serviceType;
-                                      
-                                      if (description && description.length > 80) {
-                                        return `${description.substring(0, 80)}...`;
-                                      } else if (description) {
-                                        return description;
-                                      } else {
-                                        return 'Tree removal and arborist services';
-                                      }
-                                    })()}
+                                    {job.startTime ? format(new Date(job.startTime), 'MMM dd, yyyy') : format(selectedDate, 'MMM dd, yyyy')}
                                   </div>
                                 </div>
                                 <div className="text-right flex-shrink-0">
