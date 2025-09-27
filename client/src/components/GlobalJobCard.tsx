@@ -102,6 +102,9 @@ export function GlobalJobCard({
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
   
+  // Profit tracking state
+  const [isProfitTrackerOpen, setIsProfitTrackerOpen] = useState(false);
+  
   // Margin tracker dialog states
   const [isStaffTimeDialogOpen, setIsStaffTimeDialogOpen] = useState(false);
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
@@ -460,6 +463,10 @@ export function GlobalJobCard({
               <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={() => setIsProposalBuilderOpen(true)} data-testid="button-proposal">
                 <Presentation className="w-4 h-4 mr-1" />
                 Proposal
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={() => setIsProfitTrackerOpen(true)} data-testid="button-profit">
+                <DollarSign className="w-4 h-4 mr-1" />
+                Profit
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
