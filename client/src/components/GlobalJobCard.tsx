@@ -482,10 +482,32 @@ export function GlobalJobCard({
               </DropdownMenu>
             </div>
             
-            {/* Right: Close Button */}
-            <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={onClose} data-testid="button-close">
-              Close
-            </Button>
+            {/* Right: Save and Close Buttons */}
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs" 
+                onClick={handleSave}
+                disabled={createJobMutation.isPending || updateJobMutation.isPending}
+                data-testid="button-save"
+              >
+                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs" 
+                onClick={handleSaveAndClose}
+                disabled={createJobMutation.isPending || updateJobMutation.isPending}
+                data-testid="button-save-close"
+              >
+                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save & Close'}
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={onClose} data-testid="button-close">
+                Close
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -719,35 +741,6 @@ export function GlobalJobCard({
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
-              
-              {/* Bottom Action Bar */}
-              <div className="bg-gray-100 border-t border-gray-300 px-4 py-3 flex justify-between items-center">
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={handleSave}
-                    disabled={createJobMutation.isPending || updateJobMutation.isPending}
-                    data-testid="button-save"
-                  >
-                    {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={handleSaveAndClose}
-                    disabled={createJobMutation.isPending || updateJobMutation.isPending}
-                    data-testid="button-save-close"
-                  >
-                    {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save & Close'}
-                  </Button>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={onClose} data-testid="button-cancel">
-                    Cancel
-                  </Button>
                 </div>
               </div>
             </form>
