@@ -125,7 +125,10 @@ export function setupTimeTrackingRoutes(app: any) {
   app.get('/api/time-entries/:jobId/:date?', async (req: Request, res: Response) => {
     try {
       const { jobId, date } = req.params;
+      console.log('GET /api/time-entries called with:', { jobId, date });
+      
       const entries = await timeTrackingService.getJobTimeEntries(jobId, date);
+      console.log('Retrieved entries:', entries.length, 'entries:', entries);
       
       res.json({ success: true, data: entries });
     } catch (error) {
@@ -133,6 +136,95 @@ export function setupTimeTrackingRoutes(app: any) {
       res.status(500).json({ 
         success: false, 
         message: 'Error fetching job time entries' 
+      });
+    }
+  });
+
+  // POST /api/time-entries/:jobId - Create job time entries for a specific job
+  app.post('/api/time-entries/:jobId', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const { entries, rounding, travelTime } = req.body;
+      
+      console.log('POST /api/time-entries/:jobId called with:', {
+        jobId,
+        entriesCount: entries?.length,
+        entries: entries,
+        rounding,
+        travelTime
+      });
+      
+      if (!entries || !Array.isArray(entries)) {
+        console.log('Invalid entries data:', entries);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid entries data'
+        });
+      }
+
+      const createdEntries = [];
+      
+      // First, create or get a daily entry for today
+      const today = new Date().toISOString().split('T')[0];
+      let dailyEntry = await timeTrackingService.getDailyTimeEntry(entries[0]?.employeeId || 'default', today);
+      
+      if (!dailyEntry) {
+        dailyEntry = await timeTrackingService.createDailyTimeEntry({
+          employeeId: entries[0]?.employeeId || 'default',
+          entryDate: today,
+          totalHours: 0,
+          breakTime: 0,
+          notes: 'Auto-generated for time tracking',
+          timeEntries: []
+        });
+      }
+      
+      for (const entry of entries) {
+        console.log('Creating job time entry for:', entry);
+        
+        // Create job time entry with all required fields
+        const jobTimeEntry = await timeTrackingService.createJobTimeEntry({
+          dailyEntryId: dailyEntry.id,
+          jobId,
+          jobNumber: entry.jobNumber || '3317',
+          employeeId: entry.employeeId,
+          employeeName: entry.employeeName,
+          
+          // Line item fields (required)
+          lineItemId: entry.lineItemId,
+          lineItemNumber: entry.lineItemNumber,
+          lineItemName: entry.lineItemName,
+          lineItemCategory: entry.lineItemCategory,
+          
+          // Time details
+          entryDate: entry.entryDate,
+          startTime: entry.startTime,
+          hours: entry.hours,
+          rate: entry.rate,
+          
+          // ServiceM8 features
+          billed: entry.billed !== false,
+          roundingMode: entry.roundingMode || 'none',
+          travelTimeIncluded: entry.travelTimeIncluded || false
+        });
+        
+        console.log('Created job time entry:', jobTimeEntry);
+        createdEntries.push(jobTimeEntry);
+      }
+      
+      console.log('Successfully created', createdEntries.length, 'time entries');
+      
+      res.json({ 
+        success: true, 
+        data: createdEntries,
+        message: `Created ${createdEntries.length} time entries for job ${jobId}`
+      });
+    } catch (error) {
+      console.error('Error creating job time entries:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error creating time entries',
+        error: error.message
       });
     }
   });
