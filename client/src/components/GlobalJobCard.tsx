@@ -1167,6 +1167,221 @@ export function GlobalJobCard({
                           })()}
                         </div>
                       </div>
+                      
+                      {/* Line Items & Pricing Section */}
+                      <div className="mt-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-gray-800 flex items-center gap-2">
+                            <DollarSign className="w-4 h-4" />
+                            Line Items & Pricing
+                          </h4>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open('/materials-services', '_blank')}
+                            className="text-xs"
+                            data-testid="button-manage-catalog"
+                          >
+                            <Settings className="w-3 h-3 mr-1" />
+                            Manage Catalog
+                          </Button>
+                        </div>
+
+                        {/* Search or Add New Line Item Interface */}
+                        <div className="relative space-y-3">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Input
+                              placeholder="Search or add new item..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              onFocus={() => setShowSearchResults(true)}
+                              onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                              className="pl-10 text-sm"
+                              data-testid="input-search-items"
+                            />
+                          </div>
+
+                          {/* Search Results */}
+                          {showSearchResults && searchQuery && (
+                            <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto top-full mt-1">
+                              {filteredItems.length > 0 ? (
+                                <div className="py-2">
+                                  {filteredItems.map((item: any) => (
+                                    <div
+                                      key={item.id}
+                                      className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                      onClick={() => selectItemFromSearch(item)}
+                                      data-testid={`search-result-${item.id}`}
+                                    >
+                                      <div>
+                                        <div className="font-medium text-sm">{item.name}</div>
+                                        <div className="text-xs text-gray-500">{item.category}</div>
+                                      </div>
+                                      <div className="text-sm font-semibold text-green-600">
+                                        ${parseFloat(item.displayPrice || item.price || 0).toFixed(2)}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="p-4 text-center">
+                                  <div className="text-sm text-gray-500 mb-2">No items found</div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => addCustomItem(searchQuery)}
+                                    className="flex items-center gap-2"
+                                    data-testid="button-add-custom-item"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    Add "{searchQuery}" as custom item
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Manual Add Line Item Form */}
+                        {isAddingLineItem && (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-medium">Add Custom Line Item</h4>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setIsAddingLineItem(false);
+                                  setNewLineItem({ description: '', quantity: 1, unitPrice: 0, unitCost: 0 });
+                                }}
+                              >
+                                ✕
+                              </Button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 mb-3">
+                              <div className="col-span-2">
+                                <label className="text-sm font-medium text-gray-700 mb-1 block">Description</label>
+                                <Input
+                                  value={newLineItem.description}
+                                  onChange={(e) => setNewLineItem(prev => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Service description"
+                                  className="text-sm"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-4 gap-3">
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-1 block">Quantity</label>
+                                <Input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  value={newLineItem.quantity}
+                                  onChange={(e) => setNewLineItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                                  className="text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-1 block">Unit Price ($)</label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={newLineItem.unitPrice}
+                                  onChange={(e) => setNewLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
+                                  className="text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-1 block">Unit Cost ($)</label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={newLineItem.unitCost}
+                                  onChange={(e) => setNewLineItem(prev => ({ ...prev, unitCost: parseFloat(e.target.value) || 0 }))}
+                                  className="text-sm"
+                                />
+                              </div>
+                              <div className="flex items-end">
+                                <Button
+                                  type="button"
+                                  onClick={addLineItem}
+                                  className="w-full"
+                                  data-testid="button-add-item"
+                                >
+                                  Add Item
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Existing Line Items Table */}
+                        {form.watch('lineItems')?.length > 0 && (
+                          <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                              <h4 className="font-medium text-gray-800">Items & Services</h4>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                  <tr>
+                                    <th className="text-left p-3 font-medium text-gray-600">Item Code</th>
+                                    <th className="text-left p-3 font-medium text-gray-600">Description</th>
+                                    <th className="text-center p-3 font-medium text-gray-600">Qty</th>
+                                    <th className="text-right p-3 font-medium text-gray-600">Unit Price</th>
+                                    <th className="text-right p-3 font-medium text-gray-600">Total</th>
+                                    <th className="text-right p-3 font-medium text-gray-600">Cost</th>
+                                    <th className="text-right p-3 font-medium text-gray-600">Markup</th>
+                                    <th className="text-center p-3 font-medium text-gray-600">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {form.watch('lineItems')?.map((item: any, index: number) => {
+                                    const markup = (item.total || 0) - (item.totalCost || 0);
+                                    const markupPercent = item.totalCost > 0 ? ((markup / item.totalCost) * 100).toFixed(1) : '0';
+                                    
+                                    return (
+                                      <tr key={item.id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                                        <td className="p-3 text-gray-500 text-xs">—</td>
+                                        <td className="p-3 font-medium">{item.description}</td>
+                                        <td className="p-3 text-center">{item.quantity}</td>
+                                        <td className="p-3 text-right font-mono">${(item.unitPrice || 0).toFixed(2)}</td>
+                                        <td className="p-3 text-right font-mono font-semibold">${(item.total || 0).toFixed(2)}</td>
+                                        <td className="p-3 text-right font-mono text-gray-600">${(item.totalCost || 0).toFixed(2)}</td>
+                                        <td className="p-3 text-right">
+                                          <span className={`font-mono ${markup >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            ${markup.toFixed(2)} ({markupPercent}%)
+                                          </span>
+                                        </td>
+                                        <td className="p-3 text-center">
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => removeLineItem(index)}
+                                            className="h-6 w-6 p-0 hover:bg-red-50 hover:border-red-200"
+                                            data-testid={`button-remove-line-item-${index}`}
+                                          >
+                                            <Trash2 className="w-3 h-3 text-red-500" />
+                                          </Button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1190,8 +1405,6 @@ export function GlobalJobCard({
                 </div>
               </div>
 
-              {/* Line Items Section - Bottom of Job Card */}
-              <div className="bg-white border-t border-gray-300 p-4">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
@@ -1504,7 +1717,6 @@ export function GlobalJobCard({
                     </div>
                   )}
                 </div>
-              </div>
             </form>
           </Form>
           </div>
