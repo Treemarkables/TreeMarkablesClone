@@ -121,7 +121,13 @@ export function GlobalJobCard({
     notes: ''
   });
 
-  // Line item search state
+  // Line item management state
+  const [isAddingLineItem, setIsAddingLineItem] = useState(false);
+  const [newLineItem, setNewLineItem] = useState({
+    description: '',
+    quantity: 1,
+    unitPrice: 0
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -167,11 +173,73 @@ export function GlobalJobCard({
     enabled: isOpen,
   });
 
+  // Fetch materials and services catalog for line item integration
+  const { data: materialsServicesData } = useQuery({
+    queryKey: ['/api/materials-services'],
+    enabled: isOpen,
+  });
+
   const customers: Customer[] = (customersData as any)?.data || [];
   const employees: any[] = (employeesData as any)?.data || [];
   const jobs: Job[] = (jobsData as any)?.data || [];
+  const materialsAndServices = (materialsServicesData as any)?.data || [];
   const invoiceTemplate = invoiceTemplateData || null;
   const quoteTemplate = quoteTemplateData || null;
+
+  // Line item management functions
+  const addLineItem = () => {
+    if (!newLineItem.description || !newLineItem.quantity || !newLineItem.unitPrice) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const lineItem = {
+      id: `item-${Date.now()}`,
+      description: newLineItem.description,
+      quantity: newLineItem.quantity,
+      unitPrice: newLineItem.unitPrice,
+      total: newLineItem.quantity * newLineItem.unitPrice
+    };
+
+    const currentLineItems = form.getValues('lineItems') || [];
+    form.setValue('lineItems', [...currentLineItems, lineItem]);
+    
+    // Reset form
+    setNewLineItem({
+      description: '',
+      quantity: 1,
+      unitPrice: 0
+    });
+    setIsAddingLineItem(false);
+    
+    toast({
+      title: "Success",
+      description: "Line item added successfully"
+    });
+  };
+
+  const removeLineItem = (index: number) => {
+    const currentLineItems = form.getValues('lineItems') || [];
+    const updatedLineItems = currentLineItems.filter((_, i) => i !== index);
+    form.setValue('lineItems', updatedLineItems);
+    
+    toast({
+      title: "Success",
+      description: "Line item removed"
+    });
+  };
+
+  const selectFromCatalog = (catalogItem: any) => {
+    setNewLineItem({
+      description: catalogItem.name,
+      quantity: 1,
+      unitPrice: parseFloat(catalogItem.basePrice || 0)
+    });
+  };
 
   // Get the currently editing job
   const editingJob = useMemo(() => {
