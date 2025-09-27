@@ -30,6 +30,7 @@ interface GrossMarginData {
   grossMargin?: string;
   grossMarginCalculated?: boolean;
   totalAmount?: string;
+  assignedStaffIds?: string[];
 }
 
 interface GrossMarginCalculatorProps {
@@ -106,8 +107,16 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
         hourlyRate: job.hourlyRate ? parseFloat(job.hourlyRate) : undefined,
         grossMargin: job.grossMargin,
         grossMarginCalculated: job.grossMarginCalculated,
-        totalAmount: job.totalAmount
+        totalAmount: job.totalAmount,
+        assignedStaffIds: job.assignedStaffIds
       });
+      // Initialize selected staff from job data
+      if (job.assignedStaffIds && Array.isArray(job.assignedStaffIds)) {
+        setSelectedStaffIds(job.assignedStaffIds);
+      } else {
+        // Clear selected staff if no staff assigned to this job
+        setSelectedStaffIds([]);
+      }
     }
   }, [job]);
 
@@ -178,7 +187,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   };
 
   const handleSave = () => {
-    const dataToSave = { ...formData };
+    const dataToSave = { ...formData, assignedStaffIds: selectedStaffIds };
     
     // If staff time entries exist, don't include laborCosts (server-calculated)
     if (hasStaffTimeEntries) {
