@@ -232,7 +232,6 @@ export const jobs = pgTable("jobs", {
   jobNumber: text("job_number").notNull().unique(),
   title: text("title"),
   description: text("description"),
-  serviceType: text("service_type"), // tree_removal, hedge_trimming, stump_grinding, etc
   leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),

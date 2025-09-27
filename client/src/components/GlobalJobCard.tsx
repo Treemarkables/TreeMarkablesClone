@@ -234,7 +234,6 @@ export function GlobalJobCard({
         status: editingJob.status || 'work_order',
         priority: editingJob.priority || 'medium',
         customerId: editingJob.customerId || '',
-        category: editingJob.category || '',
         leadSource: editingJob.leadSource || '',
         address: editingJob.address || '',
         city: editingJob.city || '',
@@ -547,8 +546,8 @@ export function GlobalJobCard({
 
                       {/* Job Information Section */}
                       <div className="space-y-4">
-                        {/* Job Status, Category, Lead Source */}
-                        <div className="grid grid-cols-3 gap-3">
+                        {/* Job Status, Lead Source */}
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="text-xs font-medium text-gray-600 mb-1 block">Job Status</label>
                             <Select>
@@ -559,19 +558,6 @@ export function GlobalJobCard({
                                 <SelectItem value="work-order">Work Order</SelectItem>
                                 <SelectItem value="quote">Quote</SelectItem>
                                 <SelectItem value="completed">Completed</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-600 mb-1 block">Job Category</label>
-                            <Select>
-                              <SelectTrigger className="h-8 text-sm">
-                                <SelectValue placeholder="Select category" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="tree-removal">Tree Removal</SelectItem>
-                                <SelectItem value="pruning">Pruning</SelectItem>
-                                <SelectItem value="stump-grinding">Stump Grinding</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
