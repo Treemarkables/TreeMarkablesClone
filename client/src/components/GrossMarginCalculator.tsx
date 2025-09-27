@@ -157,8 +157,8 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       
       // Initialize line items from job data - remove top item and keep only bottom item
       if (job.lineItems && Array.isArray(job.lineItems)) {
-        // Remove the first (top) line item and keep the rest
-        const filteredItems = job.lineItems.length > 1 ? job.lineItems.slice(1) : job.lineItems;
+        // Always remove the first (top) line item
+        const filteredItems = job.lineItems.slice(1);
         setLineItems(filteredItems);
         lineItemsRef.current = filteredItems;
       } else {
@@ -171,10 +171,20 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   // Link line items to materials costs - automatically sync materials costs with line items total
   useEffect(() => {
     if (lineItems.length > 0) {
-      const lineItemsTotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+      const lineItemsTotal = lineItems.reduce((sum, item) => {
+        // Parse numeric values properly since they come as strings from API
+        const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
+        return sum + (itemTotal || 0);
+      }, 0);
       setFormData(prev => ({
         ...prev,
         materialsCosts: lineItemsTotal
+      }));
+    } else {
+      // Reset materials costs when no line items
+      setFormData(prev => ({
+        ...prev,
+        materialsCosts: 0
       }));
     }
   }, [lineItems]);
@@ -213,18 +223,9 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     }, 0);
   };
   
-  const lineItemsTotal = job?.lineItems ? calculateLineItemsTotal(job.lineItems) : 0;
+  const lineItemsTotal = lineItems.length > 0 ? calculateLineItemsTotal(lineItems) : 0;
   const totalAmount = lineItemsTotal > 0 ? lineItemsTotal : (job?.totalAmount ? parseFloat(job.totalAmount) : 0);
   
-  // Debug logging
-  console.log('GrossMarginCalculator DEBUG:', {
-    jobId,
-    hasJob: !!job,
-    lineItems: job?.lineItems,
-    lineItemsTotal,
-    jobTotalAmount: job?.totalAmount,
-    finalTotalAmount: totalAmount
-  });
   const laborCosts = hasStaffTimeEntries ? staffTimeLaborCost : (formData.laborCosts || 0);
   const materialsCosts = formData.materialsCosts || 0;
   const otherCosts = formData.otherCosts || 0;
