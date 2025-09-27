@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Calculator, 
   DollarSign, 
@@ -16,7 +17,8 @@ import {
   CheckCircle, 
   AlertCircle,
   Save,
-  TrendingUp
+  TrendingUp,
+  Users
 } from "lucide-react";
 
 interface GrossMarginData {
@@ -39,6 +41,7 @@ interface GrossMarginCalculatorProps {
 export function GrossMarginCalculator({ jobId, jobData, compact = false }: GrossMarginCalculatorProps) {
   const [formData, setFormData] = useState<GrossMarginData>({});
   const [calculationMode, setCalculationMode] = useState<'manual' | 'hourly'>('manual');
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -47,8 +50,15 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     queryKey: ['/api/jobs', jobId],
     enabled: !!jobId
   });
+
+  // Fetch employees for staff selection
+  const { data: employeesData } = useQuery({
+    queryKey: ['/api/employees', 'active'],
+    enabled: !compact // Only load when showing full calculator
+  });
   
   const job = (jobResponse as any)?.data;
+  const employees = (employeesData as any)?.data || [];
 
   // Fetch staff time entries from the new time tracking system
   const today = new Date().toISOString().split('T')[0];
@@ -304,30 +314,68 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
           </div>
           
           {!hasStaffTimeEntries && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="calculation-mode">Calculation Method</Label>
-                <div className="flex gap-2 mt-1">
-                  <Button
-                    type="button"
-                    variant={calculationMode === 'manual' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setCalculationMode('manual')}
-                    data-testid="button-manual-calculation"
-                  >
-                    Manual Entry
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={calculationMode === 'hourly' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setCalculationMode('hourly')}
-                    data-testid="button-hourly-calculation"
-                  >
-                    Hours × Rate
-                  </Button>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="calculation-mode">Calculation Method</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Button
+                      type="button"
+                      variant={calculationMode === 'manual' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setCalculationMode('manual')}
+                      data-testid="button-manual-calculation"
+                    >
+                      Manual Entry
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={calculationMode === 'hourly' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setCalculationMode('hourly')}
+                      data-testid="button-hourly-calculation"
+                    >
+                      Hours × Rate
+                    </Button>
+                  </div>
                 </div>
               </div>
+
+              {/* Staff Assignment for Labor Tracking */}
+              {employees.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    <Label>Assigned Staff</Label>
+                    <Badge variant="outline" className="text-xs">
+                      {selectedStaffIds.length} selected
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto bg-gray-50 p-3 rounded-md">
+                    {employees.map((employee: any) => (
+                      <div key={employee.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          checked={selectedStaffIds.includes(employee.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedStaffIds(prev => [...prev, employee.id]);
+                            } else {
+                              setSelectedStaffIds(prev => prev.filter(id => id !== employee.id));
+                            }
+                          }}
+                          data-testid={`checkbox-staff-${employee.id}`}
+                        />
+                        <Label className="text-sm font-medium">
+                          {employee.firstName} {employee.lastName}
+                        </Label>
+                        <Badge variant="outline" className="text-xs">
+                          {employee.position}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
