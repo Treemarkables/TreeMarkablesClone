@@ -419,6 +419,23 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                       {selectedStaffIds.length} selected
                     </Badge>
                   </div>
+                  
+                  {/* Check if line items with pricing exist */}
+                  {(!job?.lineItems || job.lineItems.length === 0) && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                        <div className="text-sm">
+                          <div className="font-medium text-yellow-800">Line Items Required</div>
+                          <div className="text-yellow-700 mt-1">
+                            To track staff costs by line item, this job needs pricing line items. 
+                            Staff can still be assigned for basic labor tracking.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="space-y-3 max-h-64 overflow-y-auto bg-gray-50 p-3 rounded-md">
                     {employees.map((employee: any) => {
                       const assignment = getStaffAssignment(employee.id);
@@ -463,11 +480,17 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">No line item</SelectItem>
-                                    {job?.lineItems?.map((lineItem: any) => (
-                                      <SelectItem key={lineItem.id} value={lineItem.id}>
-                                        {lineItem.description || lineItem.title || `Line Item ${lineItem.id}`}
+                                    {job?.lineItems && job.lineItems.length > 0 ? (
+                                      job.lineItems.map((lineItem: any) => (
+                                        <SelectItem key={lineItem.id} value={lineItem.id}>
+                                          {lineItem.description || lineItem.title || `Line Item ${lineItem.id}`}
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <SelectItem value="general" disabled>
+                                        No line items available
                                       </SelectItem>
-                                    ))}
+                                    )}
                                   </SelectContent>
                                 </Select>
                               </div>
