@@ -36,6 +36,7 @@ export const ServiceM8LineItemSchema = z.object({
   priceExGst: z.number().optional(),
   totalExGst: z.number().optional(),
   taxRate: z.number().default(15), // New Zealand GST 15%
+  priceIncludesTax: z.boolean().default(false), // GST inclusive/exclusive toggle
 });
 
 export type ServiceM8LineItem = z.infer<typeof ServiceM8LineItemSchema>;

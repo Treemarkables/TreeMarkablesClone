@@ -681,11 +681,27 @@ export function GlobalJobCard({
                 <Presentation className="w-4 h-4 mr-1" />
                 Proposal
               </Button>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={() => setIsProfitTrackerOpen(true)} data-testid="button-profit">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs" 
+                onClick={() => setIsProfitTrackerOpen(true)} 
+                disabled={!editingJob?.id || mode === 'create'}
+                data-testid="button-profit"
+                title={!editingJob?.id || mode === 'create' ? "Save job first to track profit" : "View profit tracking"}
+              >
                 <DollarSign className="w-4 h-4 mr-1" />
                 Profit
               </Button>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={() => setIsTimeTrackingOpen(true)} data-testid="button-time">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs" 
+                onClick={() => setIsTimeTrackingOpen(true)} 
+                disabled={!editingJob?.id || mode === 'create'}
+                data-testid="button-time"
+                title={!editingJob?.id || mode === 'create' ? "Save job first to track time" : "Record time tracking"}
+              >
                 <Clock className="w-4 h-4 mr-1" />
                 Time
               </Button>
@@ -1074,6 +1090,9 @@ export function GlobalJobCard({
                         <div className="flex items-center gap-2">
                           <Calculator className="w-4 h-4 text-blue-600" />
                           <h4 className="font-medium text-gray-800">Tax Settings</h4>
+                          <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                            GST Inc/Ex
+                          </div>
                         </div>
                         <div className="grid grid-cols-1 gap-3">
                           <div>
@@ -1337,12 +1356,13 @@ export function GlobalJobCard({
                               <div className="bg-gray-50 border-b border-gray-200">
                                 <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-600">
                                   <div className="col-span-2">Item Code</div>
-                                  <div className="col-span-3">Item Name</div>
+                                  <div className="col-span-2">Item Name</div>
                                   <div className="col-span-1 text-center">Qty</div>
+                                  <div className="col-span-1 text-center">GST</div>
                                   <div className="col-span-2 text-right">Cost ex GST</div>
                                   <div className="col-span-1 text-right">Markup</div>
-                                  <div className="col-span-2 text-right">Price ex GST</div>
-                                  <div className="col-span-1 text-right">Total ex GST</div>
+                                  <div className="col-span-2 text-right">Price</div>
+                                  <div className="col-span-1 text-right">Total</div>
                                 </div>
                               </div>
 
@@ -1360,7 +1380,7 @@ export function GlobalJobCard({
                                   return (
                                     <div key={field.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm">
                                       <div className="col-span-2 text-gray-500">—</div>
-                                      <div className="col-span-3 font-medium text-gray-900">
+                                      <div className="col-span-2 font-medium text-gray-900">
                                         <div className="flex items-center gap-2">
                                           <div className="w-4 h-4 bg-gray-200 rounded flex-shrink-0"></div>
                                           {field.description}
@@ -1389,6 +1409,58 @@ export function GlobalJobCard({
                                                   }}
                                                   className="w-16 h-8 text-center text-sm border-none bg-transparent p-0"
                                                 />
+                                              </FormControl>
+                                            </FormItem>
+                                          )}
+                                        />
+                                      </div>
+                                      <div className="col-span-1 text-center">
+                                        <FormField
+                                          control={form.control}
+                                          name={`lineItems.${index}.priceIncludesTax`}
+                                          render={({ field: gstField }) => (
+                                            <FormItem>
+                                              <FormControl>
+                                                <label className="inline-flex items-center cursor-pointer">
+                                                  <input
+                                                    type="checkbox"
+                                                    className="sr-only"
+                                                    checked={gstField.value || false}
+                                                    onChange={(e) => {
+                                                      const isIncluding = e.target.checked;
+                                                      const gstRate = 0.15; // 15% GST for NZ
+                                                      
+                                                      // Get current price
+                                                      const currentPrice = form.getValues(`lineItems.${index}.unitPrice`) || 0;
+                                                      const wasIncluding = gstField.value || false;
+                                                      
+                                                      let newPrice = currentPrice;
+                                                      
+                                                      // Convert price based on toggle direction
+                                                      if (isIncluding && !wasIncluding) {
+                                                        // Converting from Ex to Inc: add GST
+                                                        newPrice = currentPrice * (1 + gstRate);
+                                                      } else if (!isIncluding && wasIncluding) {
+                                                        // Converting from Inc to Ex: remove GST  
+                                                        newPrice = currentPrice / (1 + gstRate);
+                                                      }
+                                                      
+                                                      // Update the GST mode and the converted price
+                                                      gstField.onChange(isIncluding);
+                                                      form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+                                                    }}
+                                                  />
+                                                  <div className={`relative w-8 h-4 bg-gray-200 rounded-full transition-colors ${
+                                                    gstField.value ? 'bg-blue-600' : 'bg-gray-200'
+                                                  }`}>
+                                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
+                                                      gstField.value ? 'transform translate-x-4' : ''
+                                                    }`}></div>
+                                                  </div>
+                                                  <span className="ml-1 text-xs text-gray-600">
+                                                    {gstField.value ? 'Inc' : 'Ex'}
+                                                  </span>
+                                                </label>
                                               </FormControl>
                                             </FormItem>
                                           )}
@@ -1423,7 +1495,20 @@ export function GlobalJobCard({
                                           )}
                                         />
                                       </div>
-                                      <div className="col-span-1 text-right font-mono font-semibold">${totalExGst.toFixed(2)}</div>
+                                      <div className="col-span-1 text-right font-mono font-semibold">
+                                        {(() => {
+                                          const isGstInclusive = field.priceIncludesTax || false;
+                                          if (isGstInclusive) {
+                                            // Price includes GST - show the inclusive total
+                                            const gstRate = 0.15;
+                                            const totalIncGst = quantity * priceExGst;
+                                            return `$${totalIncGst.toFixed(2)}`;
+                                          } else {
+                                            // Price excludes GST - show ex GST total
+                                            return `$${totalExGst.toFixed(2)}`;
+                                          }
+                                        })()} 
+                                      </div>
                                     </div>
                                   );
                                 })}
