@@ -219,8 +219,8 @@ export function GlobalJobCard({
     }))
   ];
   
-  const invoiceTemplate = invoiceTemplateData || null;
-  const quoteTemplate = quoteTemplateData || null;
+  const invoiceTemplate = (invoiceTemplateData as any)?.data || null;
+  const quoteTemplate = (quoteTemplateData as any)?.data || null;
 
   // Line item management functions
   const addLineItem = () => {
@@ -2424,17 +2424,17 @@ export function GlobalJobCard({
                 template={quoteTemplate}
                 quote={{
                   id: editingJob.id,
-                  amount: formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0,
+                  amount: String(formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0),
                   status: 'draft',
                   customerId: selectedCustomer?.id || '',
                   leadId: editingJob.id,
                   description: editingJob.description || '',
-                  validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+                  validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                   terms: quoteTemplate?.paymentTerms || 'Payment due within 30 days',
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
+                  createdAt: new Date(),
+                  updatedAt: new Date()
                 }}
-                customer={selectedCustomer}
+                customer={selectedCustomer || undefined}
                 lineItems={formData?.lineItems?.map(item => ({
                   id: item.id,
                   description: item.description,
@@ -2489,7 +2489,7 @@ export function GlobalJobCard({
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString()
                 }}
-                customer={selectedCustomer}
+                customer={selectedCustomer || undefined}
                 lineItems={formData?.lineItems?.map(item => ({
                   id: item.id,
                   description: item.description,
