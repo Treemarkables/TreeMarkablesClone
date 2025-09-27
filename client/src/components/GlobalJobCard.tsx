@@ -35,7 +35,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { insertJobSchema, type ChecklistItem, type Job, type Customer } from "@shared/schema";
 
 // Form validation schema extending the base insertJobSchema
-const globalJobCardSchema = insertJobSchema.omit({ title: true }).extend({
+const globalJobCardSchema = insertJobSchema.extend({
   // Customer selection
   customerId: z.string().optional(),
   isNewCustomer: z.boolean().optional(),
@@ -53,8 +53,6 @@ const globalJobCardSchema = insertJobSchema.omit({ title: true }).extend({
   jobContactLastName: z.string().optional(), 
   jobContactEmail: z.string().email().optional().or(z.literal("")),
   jobContactPhone: z.string().optional(),
-  billingContactPhone: z.string().optional(),
-  billingContactMobile: z.string().optional(),
   
 }).refine((data) => {
   if (data.isNewCustomer) {
@@ -355,7 +353,7 @@ export function GlobalJobCard({
         // Core job data
         title: editingJob.title || '',
         description: editingJob.description || '',
-        status: editingJob.status || 'work_order',
+        status: (editingJob.status as any) || 'work_order',
         priority: editingJob.priority || 'medium',
         customerId: editingJob.customerId || '',
         leadSource: editingJob.leadSource || '',
@@ -713,7 +711,7 @@ export function GlobalJobCard({
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Select value={field.value} onValueChange={field.onChange}>
+                                    <Select value={field.value || ""} onValueChange={field.onChange}>
                                       <SelectTrigger className="h-8 text-sm">
                                         <SelectValue placeholder="Select source" />
                                       </SelectTrigger>
