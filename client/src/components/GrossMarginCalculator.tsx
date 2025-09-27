@@ -155,16 +155,29 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
         setStaffAssignments([]);
       }
       
-      // Initialize line items from job data
+      // Initialize line items from job data - remove top item and keep only bottom item
       if (job.lineItems && Array.isArray(job.lineItems)) {
-        setLineItems(job.lineItems);
-        lineItemsRef.current = job.lineItems;
+        // Remove the first (top) line item and keep the rest
+        const filteredItems = job.lineItems.length > 1 ? job.lineItems.slice(1) : job.lineItems;
+        setLineItems(filteredItems);
+        lineItemsRef.current = filteredItems;
       } else {
         setLineItems([]);
         lineItemsRef.current = [];
       }
     }
   }, [job]);
+
+  // Link line items to materials costs - automatically sync materials costs with line items total
+  useEffect(() => {
+    if (lineItems.length > 0) {
+      const lineItemsTotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+      setFormData(prev => ({
+        ...prev,
+        materialsCosts: lineItemsTotal
+      }));
+    }
+  }, [lineItems]);
 
   // Update gross margin mutation
   const updateGrossMarginMutation = useMutation({
@@ -269,12 +282,9 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       total: (newLineItem.quantity || 1) * (newLineItem.unitPrice || 0)
     };
 
-    console.log('addLineItem DEBUG - created lineItem:', lineItem);
-    console.log('addLineItem DEBUG - current lineItems before add:', lineItems);
     
     setLineItems(prev => {
       const newLineItems = [...prev, lineItem];
-      console.log('addLineItem DEBUG - new lineItems after add:', newLineItems);
       // Update the ref immediately with the new state
       lineItemsRef.current = newLineItems;
       return newLineItems;
@@ -317,36 +327,31 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   const handleSave = () => {
     // Use the ref to get the most current line items state
     const currentLineItems = lineItemsRef.current;
-    console.log('handleSave DEBUG - lineItems from ref:', currentLineItems);
-    console.log('handleSave DEBUG - lineItems length:', currentLineItems.length);
-    
     const dataToSave = { 
       ...formData, 
       assignedStaffIds: selectedStaffIds,
       staffAssignments: staffAssignments.filter(assignment => selectedStaffIds.includes(assignment.staffId)),
       lineItems: currentLineItems
     };
-    
-    console.log('handleSave DEBUG - dataToSave.lineItems:', dataToSave.lineItems);
   
     // Convert numeric values to strings for backend schema compatibility
     if (dataToSave.laborCosts !== undefined) {
-      dataToSave.laborCosts = dataToSave.laborCosts.toString();
+      (dataToSave as any).laborCosts = dataToSave.laborCosts.toString();
     }
     if (dataToSave.materialsCosts !== undefined) {
-      dataToSave.materialsCosts = dataToSave.materialsCosts.toString();
+      (dataToSave as any).materialsCosts = dataToSave.materialsCosts.toString();
     }
     if (dataToSave.otherCosts !== undefined) {
-      dataToSave.otherCosts = dataToSave.otherCosts.toString();
+      (dataToSave as any).otherCosts = dataToSave.otherCosts.toString();
     }
     if (dataToSave.laborHours !== undefined) {
-      dataToSave.laborHours = dataToSave.laborHours.toString();
+      (dataToSave as any).laborHours = dataToSave.laborHours.toString();
     }
     if (dataToSave.hourlyRate !== undefined) {
-      dataToSave.hourlyRate = dataToSave.hourlyRate.toString();
+      (dataToSave as any).hourlyRate = dataToSave.hourlyRate.toString();
     }
     if (dataToSave.totalAmount !== undefined) {
-      dataToSave.totalAmount = dataToSave.totalAmount.toString();
+      (dataToSave as any).totalAmount = dataToSave.totalAmount.toString();
     }
     
     // If staff time entries exist, don't include laborCosts (server-calculated)
@@ -356,7 +361,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       delete dataToSave.hourlyRate;
     } else if (calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate) {
       // If using hourly calculation mode, use calculated labor costs
-      dataToSave.laborCosts = calculatedLaborCosts.toString();
+      (dataToSave as any).laborCosts = calculatedLaborCosts.toString();
     }
 
     updateGrossMarginMutation.mutate(dataToSave);
@@ -724,7 +729,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                                 <Label className="text-xs">Line Item</Label>
                                 <Select 
                                   value={assignment.lineItemId || "none"} 
-                                  onValueChange={(value) => updateStaffAssignment(employee.id, 'lineItemId', value === 'none' ? undefined : value)}
+                                  onValueChange={(value) => updateStaffAssignment(employee.id, 'lineItemId', value === 'none' ? '' : value)}
                                 >
                                   <SelectTrigger className="h-8 text-xs">
                                     <SelectValue placeholder="Select line item..." />
@@ -852,6 +857,11 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
             <Label htmlFor="materialsCosts" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
               Materials Costs ($)
+              {lineItems.length > 0 && (
+                <Badge className="bg-blue-100 text-blue-800 text-xs">
+                  Auto from Line Items
+                </Badge>
+              )}
             </Label>
             <Input
               id="materialsCosts"
@@ -862,6 +872,8 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
               onChange={(e) => handleInputChange('materialsCosts', e.target.value)}
               placeholder="Materials & supplies"
               data-testid="input-materials-costs"
+              readOnly={lineItems.length > 0}
+              className={lineItems.length > 0 ? "bg-gray-50" : ""}
             />
           </div>
           <div>
