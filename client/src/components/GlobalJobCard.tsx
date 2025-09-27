@@ -726,7 +726,7 @@ export function GlobalJobCard({
                 </div>
 
                 {/* Right Panel - Activity Diary */}
-                <div className="w-1/2 bg-white overflow-y-auto">
+                <div className="flex-1 bg-white overflow-y-auto">
                   {editingJob && (
                     <JobDiarySection 
                       jobId={editingJob.id}
