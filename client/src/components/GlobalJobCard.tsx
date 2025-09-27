@@ -16,6 +16,7 @@ import { EmailComposerModal } from "./EmailComposerModal";
 import { SMSComposerModal } from "./SMSComposerModal";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
+import QuoteManagement from "./QuoteManagement";
 import { RecordedTimeModal } from "./RecordedTimeModal";
 
 import { Button } from "@/components/ui/button";
@@ -117,6 +118,8 @@ export function GlobalJobCard({
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [isEmailComposerOpen, setIsEmailComposerOpen] = useState(false);
   const [isSMSComposerOpen, setIsSMSComposerOpen] = useState(false);
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   
   // Scheduling modal state
   const [isSchedulingModalOpen, setIsSchedulingModalOpen] = useState(false);
@@ -612,6 +615,16 @@ export function GlobalJobCard({
     });
   };
 
+  // Handle quote click
+  const handleQuoteClick = () => {
+    setIsQuoteModalOpen(true);
+  };
+
+  // Handle invoice click
+  const handleInvoiceClick = () => {
+    setIsInvoiceModalOpen(true);
+  };
+
   // Handle print click
   const handlePrintClick = () => {
     toast({
@@ -753,6 +766,30 @@ export function GlobalJobCard({
               <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={handleFormClick} data-testid="button-form">
                 <FileText className="w-4 h-4 mr-1" />
                 Form
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs" 
+                onClick={handleQuoteClick} 
+                disabled={!editingJob?.id || mode === 'create'}
+                data-testid="button-quote"
+                title={!editingJob?.id || mode === 'create' ? "Save job first to create quote" : "Create or view quotes"}
+              >
+                <Receipt className="w-4 h-4 mr-1" />
+                Quote
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs" 
+                onClick={handleInvoiceClick} 
+                disabled={!editingJob?.id || mode === 'create'}
+                data-testid="button-invoice"
+                title={!editingJob?.id || mode === 'create' ? "Save job first to create invoice" : "Create or view invoices"}
+              >
+                <CreditCard className="w-4 h-4 mr-1" />
+                Invoice
               </Button>
               <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={() => setIsProposalBuilderOpen(true)} data-testid="button-proposal">
                 <Presentation className="w-4 h-4 mr-1" />
@@ -2380,6 +2417,48 @@ export function GlobalJobCard({
           customerId={selectedCustomer?.id}
           lineItems={formData?.lineItems || []}
         />
+      )}
+
+      {/* Quote Management Modal */}
+      {isQuoteModalOpen && (
+        <Dialog open={isQuoteModalOpen} onOpenChange={setIsQuoteModalOpen}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <h2 className="text-lg font-semibold">Quote Management - {editingJob?.title || 'Job'}</h2>
+            </DialogHeader>
+            <QuoteManagement compact={true} />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Invoice Management Modal */}
+      {isInvoiceModalOpen && (
+        <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <h2 className="text-lg font-semibold">Invoice Management - {editingJob?.title || 'Job'}</h2>
+            </DialogHeader>
+            <div className="p-6">
+              <div className="text-center py-8">
+                <CreditCard className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Invoice Management</h3>
+                <p className="text-gray-600">Create and manage invoices for this job. Generate professional invoices with GST/tax calculations.</p>
+                <Button 
+                  className="mt-4" 
+                  onClick={() => {
+                    toast({
+                      title: "Invoice Feature",
+                      description: "Invoice management functionality will be available soon.",
+                    });
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Invoice
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Profit Tracker */}
