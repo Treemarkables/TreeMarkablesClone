@@ -413,7 +413,7 @@ export function GlobalJobCard({
   });
 
   // Properly manage line items as form field array
-  const { fields: lineItemFields, append: appendLineItem, remove: removeLineItemField, update: updateLineItemField } = useFieldArray({
+  const { fields: lineItemFields, append: appendLineItem, remove: removeLineItemField, update: updateLineItemField, replace: replaceLineItems } = useFieldArray({
     control: form.control,
     name: "lineItems"
   });
@@ -421,6 +421,7 @@ export function GlobalJobCard({
   // Populate form with complete job data when editing an existing job
   useEffect(() => {
     if (editingJob) {
+      
       // Split customer name into first and last name for form fields
       const nameParts = editingJobCustomer?.name?.split(' ') || [];
       const firstName = nameParts[0] || '';
@@ -451,12 +452,17 @@ export function GlobalJobCard({
         invoiceDescription: editingJob.invoiceDescription || '',
         sameAsJobAddress: editingJob.sameAsJobAddress ?? true,
         taxMode: editingJob.taxMode || 'tax_exclusive',
-        // Arrays
-        lineItems: editingJob.lineItems || [],
+        // Arrays - DO NOT set lineItems here, let replaceLineItems() handle it
         checklist: editingJob.checklist || [],
       });
+      
+      // Fix: Explicitly sync useFieldArray with line items after form reset
+      if (editingJob.lineItems) {
+        // Use replace to atomically set line items from database
+        replaceLineItems(editingJob.lineItems);
+      }
     }
-  }, [editingJob, editingJobCustomer, form]);
+  }, [editingJob, editingJobCustomer, form, replaceLineItems]);
 
   // Keep billing address in sync with job address when "same as job address" is enabled
   useEffect(() => {
