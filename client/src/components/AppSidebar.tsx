@@ -245,7 +245,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-orange-200">
+      <SidebarFooter className="border-t border-blue-200">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
