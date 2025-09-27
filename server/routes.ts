@@ -7701,12 +7701,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           let customer = customerByName.get(customerName.toLowerCase());
 
           if (!customer && customerName) {
-            // Create new customer if not found
+            // Create new customer if not found - Map ServiceM8 contact fields
+            const customerEmail = jobData['Job Email Address'] || jobData['Billing Email Address'] || jobData.customerEmail || jobData.email || '';
+            const customerPhone = jobData['Job Telephone Number'] || jobData['Job Contact Mobile Number'] || jobData['Billing Telephone Number'] || jobData['Billing Contact Mobile Number'] || jobData.customerPhone || jobData.phone || '';
+            const customerAddress = jobData['Job Address'] || jobData['Billing Address'] || jobData.customerAddress || jobData.address || '';
+            
             customer = await storage.createCustomer({
               name: customerName,
-              email: jobData.customerEmail || jobData.email || '',
-              phone: jobData.customerPhone || jobData.phone || '',
-              address: jobData.customerAddress || jobData.address || ''
+              email: customerEmail,
+              phone: customerPhone,
+              address: customerAddress
             });
             customerByName.set(customerName.toLowerCase(), customer);
           }
@@ -7714,26 +7718,40 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           // If still no customer, create a default one based on job info
           if (!customer) {
             const defaultCustomerName = `Customer for Job ${jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`}`;
+            const customerEmail = jobData['Job Email Address'] || jobData['Billing Email Address'] || jobData.customerEmail || jobData.email || '';
+            const customerPhone = jobData['Job Telephone Number'] || jobData['Job Contact Mobile Number'] || jobData['Billing Telephone Number'] || jobData['Billing Contact Mobile Number'] || jobData.customerPhone || jobData.phone || '';
+            const customerAddress = jobData['Job Address'] || jobData['Billing Address'] || jobData.customerAddress || jobData.address || jobData.location || '';
+            
             customer = await storage.createCustomer({
               name: defaultCustomerName,
-              email: jobData.customerEmail || jobData.email || '',
-              phone: jobData.customerPhone || jobData.phone || '',
-              address: jobData.customerAddress || jobData.address || jobData.location || ''
+              email: customerEmail,
+              phone: customerPhone,
+              address: customerAddress
             });
             customerByName.set(defaultCustomerName.toLowerCase(), customer);
           }
 
-          // Create job with proper field mapping
-          // Ensure address is never null/undefined by explicitly checking and providing fallback
-          const jobAddress = jobData.location || jobData.address || jobData.customerAddress || jobData.jobAddress || '';
+          // Create job with proper field mapping for ServiceM8 data
+          // Map ServiceM8 specific column names to our fields
+          const jobAddress = jobData['Job Address'] || jobData.location || jobData.address || jobData.customerAddress || jobData.jobAddress || '';
           const safeAddress = (jobAddress && jobAddress.trim()) ? jobAddress.trim() : 'Address not specified';
+          
+          // Map ServiceM8 job description 
+          const jobDescription = jobData['Description of work'] || jobData.description || jobData.Description || jobData.notes || '';
+          
+          // Map ServiceM8 contact information
+          const jobEmail = jobData['Job Email Address'] || jobData.customerEmail || jobData.email || '';
+          const jobPhone = jobData['Job Telephone Number'] || jobData['Job Contact Mobile Number'] || jobData.customerPhone || jobData.phone || '';
+          
+          // Extract job status from ServiceM8 'Job Status' field
+          const jobStatus = jobData['Job Status'] || jobData.status || 'pending';
           
           const newJob = await storage.createJob({
             jobNumber: jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`,
-            title: jobData.title || jobData.description || jobData.Description || 'Imported Job',
-            description: jobData.description || jobData.Description || jobData.notes || '',
+            title: jobData.title || jobDescription || 'Imported Job',
+            description: jobDescription,
             customerId: customer.id,
-            status: jobData.status || 'pending',
+            status: jobStatus.toLowerCase(),
             priority: jobData.priority || 'medium',
             scheduledDate: jobData.scheduledDate || jobData['Scheduled Date'] || null,
             address: safeAddress,
