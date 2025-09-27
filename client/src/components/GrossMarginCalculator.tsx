@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,10 @@ import {
   AlertCircle,
   Save,
   TrendingUp,
-  Users
+  Users,
+  Plus,
+  Trash2,
+  Edit
 } from "lucide-react";
 
 interface GrossMarginData {
@@ -41,6 +44,14 @@ interface StaffAssignment {
   hours?: number;
 }
 
+interface LineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
 interface GrossMarginCalculatorProps {
   jobId: string;
   jobData?: any;
@@ -52,6 +63,15 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   const [calculationMode, setCalculationMode] = useState<'manual' | 'hourly'>('manual');
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const lineItemsRef = useRef<LineItem[]>([]);
+  const [isAddingLineItem, setIsAddingLineItem] = useState(false);
+  const [newLineItem, setNewLineItem] = useState<Partial<LineItem>>({
+    description: '',
+    quantity: 1,
+    unitPrice: 0,
+    total: 0
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -133,6 +153,15 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       } else {
         // Clear staff assignments if none exist
         setStaffAssignments([]);
+      }
+      
+      // Initialize line items from job data
+      if (job.lineItems && Array.isArray(job.lineItems)) {
+        setLineItems(job.lineItems);
+        lineItemsRef.current = job.lineItems;
+      } else {
+        setLineItems([]);
+        lineItemsRef.current = [];
       }
     }
   }, [job]);
@@ -221,13 +250,85 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     return staffAssignments.find(assignment => assignment.staffId === staffId) || { staffId };
   };
 
+  // Line item management functions
+  const addLineItem = () => {
+    if (!newLineItem.description || !newLineItem.quantity || !newLineItem.unitPrice) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const lineItem: LineItem = {
+      id: `item-${Date.now()}`,
+      description: newLineItem.description,
+      quantity: newLineItem.quantity || 1,
+      unitPrice: newLineItem.unitPrice || 0,
+      total: (newLineItem.quantity || 1) * (newLineItem.unitPrice || 0)
+    };
+
+    console.log('addLineItem DEBUG - created lineItem:', lineItem);
+    console.log('addLineItem DEBUG - current lineItems before add:', lineItems);
+    
+    setLineItems(prev => {
+      const newLineItems = [...prev, lineItem];
+      console.log('addLineItem DEBUG - new lineItems after add:', newLineItems);
+      // Update the ref immediately with the new state
+      lineItemsRef.current = newLineItems;
+      return newLineItems;
+    });
+    setNewLineItem({
+      description: '',
+      quantity: 1,
+      unitPrice: 0,
+      total: 0
+    });
+    setIsAddingLineItem(false);
+    
+    toast({
+      title: "Success",
+      description: "Line item added successfully"
+    });
+  };
+
+  const removeLineItem = (itemId: string) => {
+    setLineItems(prev => {
+      const newLineItems = prev.filter(item => item.id !== itemId);
+      // Update the ref immediately with the new state
+      lineItemsRef.current = newLineItems;
+      return newLineItems;
+    });
+    // Remove any staff assignments for this line item
+    setStaffAssignments(prev => prev.filter(assignment => assignment.lineItemId !== itemId));
+    
+    toast({
+      title: "Success",
+      description: "Line item removed"
+    });
+  };
+
+  const updateNewLineItemTotal = () => {
+    const total = (newLineItem.quantity || 1) * (newLineItem.unitPrice || 0);
+    setNewLineItem(prev => ({ ...prev, total }));
+  };
+
   const handleSave = () => {
+    // Use the ref to get the most current line items state
+    const currentLineItems = lineItemsRef.current;
+    console.log('handleSave DEBUG - lineItems from ref:', currentLineItems);
+    console.log('handleSave DEBUG - lineItems length:', currentLineItems.length);
+    
     const dataToSave = { 
       ...formData, 
       assignedStaffIds: selectedStaffIds,
-      staffAssignments: staffAssignments.filter(assignment => selectedStaffIds.includes(assignment.staffId))
+      staffAssignments: staffAssignments.filter(assignment => selectedStaffIds.includes(assignment.staffId)),
+      lineItems: currentLineItems
     };
     
+    console.log('handleSave DEBUG - dataToSave.lineItems:', dataToSave.lineItems);
+  
     // Convert numeric values to strings for backend schema compatibility
     if (dataToSave.laborCosts !== undefined) {
       dataToSave.laborCosts = dataToSave.laborCosts.toString();
@@ -369,6 +470,156 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
           </div>
         </div>
 
+        {/* Line Items Management Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              <h3 className="font-semibold">Line Items</h3>
+              <Badge variant="outline" className="text-xs">
+                {lineItems.length} items
+              </Badge>
+            </div>
+            {!isAddingLineItem && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setIsAddingLineItem(true)}
+                data-testid="button-add-line-item"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Line Item
+              </Button>
+            )}
+          </div>
+
+          {/* Add New Line Item Form */}
+          {isAddingLineItem && (
+            <Card className="p-4 bg-gray-50">
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="new-line-item-description">Description *</Label>
+                  <Input
+                    id="new-line-item-description"
+                    value={newLineItem.description || ''}
+                    onChange={(e) => setNewLineItem(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="e.g., Tree removal, Stump grinding"
+                    data-testid="input-new-line-item-description"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="new-line-item-quantity">Quantity *</Label>
+                    <Input
+                      id="new-line-item-quantity"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={newLineItem.quantity || ''}
+                      onChange={(e) => {
+                        const quantity = parseFloat(e.target.value) || 0;
+                        setNewLineItem(prev => ({ ...prev, quantity }));
+                        updateNewLineItemTotal();
+                      }}
+                      data-testid="input-new-line-item-quantity"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="new-line-item-unit-price">Unit Price ($) *</Label>
+                    <Input
+                      id="new-line-item-unit-price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newLineItem.unitPrice || ''}
+                      onChange={(e) => {
+                        const unitPrice = parseFloat(e.target.value) || 0;
+                        setNewLineItem(prev => ({ ...prev, unitPrice }));
+                        updateNewLineItemTotal();
+                      }}
+                      data-testid="input-new-line-item-unit-price"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="new-line-item-total">Total ($)</Label>
+                    <Input
+                      id="new-line-item-total"
+                      type="number"
+                      value={((newLineItem.quantity || 1) * (newLineItem.unitPrice || 0)).toFixed(2)}
+                      disabled
+                      className="bg-gray-100"
+                      data-testid="input-new-line-item-total"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={addLineItem}
+                    data-testid="button-save-line-item"
+                  >
+                    <Save className="h-4 w-4 mr-1" />
+                    Add Item
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsAddingLineItem(false);
+                      setNewLineItem({
+                        description: '',
+                        quantity: 1,
+                        unitPrice: 0,
+                        total: 0
+                      });
+                    }}
+                    data-testid="button-cancel-line-item"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Existing Line Items List */}
+          {lineItems.length > 0 && (
+            <div className="space-y-2">
+              {lineItems.map((item) => (
+                <Card key={item.id} className="p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium">{item.description}</div>
+                      <div className="text-sm text-gray-600">
+                        {item.quantity} × ${item.unitPrice.toFixed(2)} = ${item.total.toFixed(2)}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeLineItem(item.id)}
+                      data-testid={`button-remove-line-item-${item.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {lineItems.length === 0 && !isAddingLineItem && (
+            <div className="text-center py-4 text-gray-500">
+              <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No line items added yet</p>
+              <p className="text-sm">Add line items to track staff costs by specific services</p>
+            </div>
+          )}
+        </div>
+
         {/* Labor Costs Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-3">
@@ -421,14 +672,14 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                   </div>
                   
                   {/* Check if line items with pricing exist */}
-                  {(!job?.lineItems || job.lineItems.length === 0) && (
+                  {lineItems.length === 0 && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
                       <div className="flex items-start gap-2">
                         <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
                         <div className="text-sm">
                           <div className="font-medium text-yellow-800">Line Items Required</div>
                           <div className="text-yellow-700 mt-1">
-                            To track staff costs by line item, this job needs pricing line items. 
+                            To track staff costs by line item, add line items in the section above. 
                             Staff can still be assigned for basic labor tracking.
                           </div>
                         </div>
@@ -480,15 +731,15 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">No line item</SelectItem>
-                                    {job?.lineItems && job.lineItems.length > 0 ? (
-                                      job.lineItems.map((lineItem: any) => (
+                                    {lineItems.length > 0 ? (
+                                      lineItems.map((lineItem: LineItem) => (
                                         <SelectItem key={lineItem.id} value={lineItem.id}>
-                                          {lineItem.description || lineItem.title || `Line Item ${lineItem.id}`}
+                                          {lineItem.description}
                                         </SelectItem>
                                       ))
                                     ) : (
                                       <SelectItem value="general" disabled>
-                                        No line items available
+                                        No line items available - add line items above
                                       </SelectItem>
                                     )}
                                   </SelectContent>
