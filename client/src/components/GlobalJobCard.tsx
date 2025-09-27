@@ -1097,9 +1097,20 @@ export function GlobalJobCard({
                         {/* Job Description */}
                         <div>
                           <label className="text-xs font-medium text-gray-600 mb-1 block">Job Description</label>
-                          <Textarea 
-                            className="min-h-[90px] text-sm" 
-                            placeholder="Describe the work that needs to be done"
+                          <FormField
+                            control={form.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Textarea 
+                                    {...field}
+                                    className="min-h-[90px] text-sm" 
+                                    placeholder="Describe the work that needs to be done"
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
                           />
                         </div>
 
