@@ -746,8 +746,18 @@ export function GlobalJobCard({
               </DropdownMenu>
             </div>
             
-            {/* Right: Save and Close Button */}
+            {/* Right: Save Buttons */}
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs" 
+                onClick={handleSave}
+                disabled={createJobMutation.isPending || updateJobMutation.isPending}
+                data-testid="button-save"
+              >
+                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
