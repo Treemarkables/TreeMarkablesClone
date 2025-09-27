@@ -654,7 +654,9 @@ export const insertJobSchema = createInsertSchema(jobs)
       description: z.string(),
       quantity: z.number(),
       unitPrice: z.number(),
-      total: z.number()
+      total: z.number(),
+      unitCost: z.number().optional().default(0),
+      totalCost: z.number().optional().default(0)
     })).optional().default([]),
   });
 export const insertActivitySchema = createInsertSchema(activities).omit({ id: true, createdAt: true });
@@ -2327,6 +2329,7 @@ export const materials = pgTable("materials", {
   itemNumber: text("item_number").notNull(),
   name: text("name").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  cost: decimal("cost", { precision: 10, scale: 2 }).default("0.00"),
   priceIncludesTax: boolean("price_includes_tax").default(false),
   taxRate: text("tax_rate").notNull(),
   category: text("category").notNull(),
@@ -2339,6 +2342,7 @@ export const services = pgTable("services", {
   name: text("name").notNull(),
   category: text("category").notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
+  baseCost: decimal("base_cost", { precision: 10, scale: 2 }).default("0.00"),
   unit: text("unit").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),

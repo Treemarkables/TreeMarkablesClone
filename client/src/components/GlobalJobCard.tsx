@@ -131,7 +131,8 @@ export function GlobalJobCard({
   const [newLineItem, setNewLineItem] = useState({
     description: '',
     quantity: 1,
-    unitPrice: 0
+    unitPrice: 0,
+    unitCost: 0
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -214,10 +215,10 @@ export function GlobalJobCard({
 
   // Line item management functions
   const addLineItem = () => {
-    if (!newLineItem.description || !newLineItem.quantity || !newLineItem.unitPrice) {
+    if (!newLineItem.description || newLineItem.quantity <= 0 || newLineItem.unitPrice < 0 || newLineItem.unitCost < 0) {
       toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
+        title: "Validation Error", 
+        description: "Please fill in all required fields. Prices and costs must be non-negative.",
         variant: "destructive"
       });
       return;
@@ -228,7 +229,9 @@ export function GlobalJobCard({
       description: newLineItem.description,
       quantity: newLineItem.quantity,
       unitPrice: newLineItem.unitPrice,
-      total: newLineItem.quantity * newLineItem.unitPrice
+      unitCost: newLineItem.unitCost || 0,
+      total: newLineItem.quantity * newLineItem.unitPrice,
+      totalCost: newLineItem.quantity * (newLineItem.unitCost || 0)
     };
 
     const currentLineItems = form.getValues('lineItems') || [];
@@ -238,18 +241,22 @@ export function GlobalJobCard({
     setNewLineItem({
       description: '',
       quantity: 1,
-      unitPrice: 0
+      unitPrice: 0,
+      unitCost: 0
     });
     setIsAddingLineItem(false);
     
     // Calculate profit impact for enhanced tracking
     const updatedLineItems = form.getValues('lineItems') || [];
-    const newJobTotal = updatedLineItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    const newJobRevenue = updatedLineItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    const newJobCosts = updatedLineItems.reduce((sum, item) => sum + (item.totalCost || 0), 0);
     const revenueIncrease = lineItem.total;
+    const costIncrease = lineItem.totalCost;
+    const profitMargin = newJobRevenue - newJobCosts;
     
     toast({
       title: "Profit Tracking",
-      description: `Added "${lineItem.description}" • Revenue: +$${revenueIncrease.toFixed(2)} • Job Total: $${newJobTotal.toFixed(2)}`
+      description: `Added "${lineItem.description}" • Revenue: +$${revenueIncrease.toFixed(2)} • Costs: +$${costIncrease.toFixed(2)} • Job Profit: $${profitMargin.toFixed(2)}`
     });
   };
 
@@ -266,21 +273,24 @@ export function GlobalJobCard({
 
   const selectFromCatalog = (catalogItem: any) => {
     const unitPrice = parseFloat(catalogItem.displayPrice || 0);
+    const unitCost = parseFloat(catalogItem.cost || catalogItem.baseCost || 0);
     const itemName = catalogItem.name || catalogItem.itemNumber;
+    const margin = unitPrice - unitCost;
     
     setNewLineItem({
       description: itemName,
       quantity: 1,
-      unitPrice: unitPrice
+      unitPrice: unitPrice,
+      unitCost: unitCost
     });
     setIsCatalogModalOpen(false);
     
-    // Enhanced profit tracking feedback
-    const profitImpact = unitPrice * 1; // quantity = 1
+    // Enhanced profit tracking feedback with real margin calculation
+    const profitImpact = margin * 1; // quantity = 1
     
     toast({
       title: "Item Selected from Catalog",
-      description: `${itemName} ($${unitPrice.toFixed(2)}) - Revenue impact: +$${profitImpact.toFixed(2)}`,
+      description: `${itemName} ($${unitPrice.toFixed(2)}) - Profit margin: $${profitImpact.toFixed(2)} (${margin > 0 ? ((margin / unitPrice) * 100).toFixed(1) + '%' : '0%'})`,
     });
   };
 
@@ -924,8 +934,8 @@ export function GlobalJobCard({
                         </div>
                       )}
 
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div className="col-span-2">
                           <label className="text-sm font-medium text-gray-700 mb-1 block">Description</label>
                           <Input
                             value={newLineItem.description}
@@ -934,6 +944,9 @@ export function GlobalJobCard({
                             className="text-sm"
                           />
                         </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-4 gap-3">
                         <div>
                           <label className="text-sm font-medium text-gray-700 mb-1 block">Quantity</label>
                           <Input
@@ -955,6 +968,24 @@ export function GlobalJobCard({
                             onChange={(e) => setNewLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
                             className="text-sm"
                           />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 mb-1 block">Unit Cost ($)</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={newLineItem.unitCost}
+                            onChange={(e) => setNewLineItem(prev => ({ ...prev, unitCost: parseFloat(e.target.value) || 0 }))}
+                            className="text-sm"
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 mb-1 block">Profit</label>
+                          <div className="text-sm bg-gray-100 p-2 rounded border text-center font-medium">
+                            ${((newLineItem.unitPrice - newLineItem.unitCost) * newLineItem.quantity).toFixed(2)}
+                          </div>
                         </div>
                       </div>
                       
@@ -1239,8 +1270,8 @@ export function GlobalJobCard({
                                 {item.type}
                               </Badge>
                             )}
-                            <div className="text-xs bg-blue-50 text-blue-700 p-2 rounded border">
-                              💰 Job Total: ${currentTotal.toFixed(2)} → ${newTotal.toFixed(2)}
+                            <div className="text-xs bg-green-50 text-green-700 p-2 rounded border">
+                              Profit: ${(itemPrice - parseFloat(item.cost || item.baseCost || 0)).toFixed(2)} • Job Total: ${currentTotal.toFixed(2)} → ${newTotal.toFixed(2)}
                             </div>
                           </div>
                         </CardContent>
