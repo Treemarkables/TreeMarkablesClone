@@ -420,7 +420,7 @@ export function GlobalJobCard({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl h-[95vh] flex flex-col p-0 bg-gray-50">
+      <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0 bg-gray-50 rounded-xl">
         {/* ServiceM8-style Header */}
         <div className="bg-orange-500 border-b border-orange-600 px-4 py-2 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -482,18 +482,8 @@ export function GlobalJobCard({
               </DropdownMenu>
             </div>
             
-            {/* Right: Save and Close Buttons */}
+            {/* Right: Save and Close Button */}
             <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs" 
-                onClick={handleSave}
-                disabled={createJobMutation.isPending || updateJobMutation.isPending}
-                data-testid="button-save"
-              >
-                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
-              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
