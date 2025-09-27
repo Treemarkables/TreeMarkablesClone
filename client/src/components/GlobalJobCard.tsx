@@ -740,6 +740,74 @@ export function GlobalJobCard({
                   )}
                 </div>
               </div>
+
+              {/* Line Items Section - Bottom of Job Card */}
+              <div className="bg-white border-t border-gray-300 p-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <DollarSign className="w-5 h-5" />
+                      Line Items & Pricing
+                    </h3>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsAddingLineItem(true)}
+                      className="flex items-center gap-1"
+                      data-testid="button-add-line-item"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Item
+                    </Button>
+                  </div>
+
+                  {/* Line Items List */}
+                  {formData?.lineItems && formData.lineItems.length > 0 ? (
+                    <div className="space-y-2">
+                      {formData.lineItems.map((item: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{item.description}</div>
+                            <div className="text-xs text-gray-600">
+                              Qty: {item.quantity} × ${item.unitPrice?.toFixed(2) || '0.00'} = ${(item.quantity * (item.unitPrice || 0)).toFixed(2)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">${(item.quantity * (item.unitPrice || 0)).toFixed(2)}</span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeLineItem(index)}
+                              className="h-8 w-8 p-0"
+                              data-testid={`button-remove-line-item-${index}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {/* Total */}
+                      <div className="flex justify-end pt-2 border-t border-gray-200">
+                        <div className="text-right">
+                          <div className="text-sm text-gray-600">Total</div>
+                          <div className="text-lg font-bold text-gray-800">
+                            ${formData.lineItems.reduce((sum: number, item: any) => sum + (item.quantity * (item.unitPrice || 0)), 0).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                      <DollarSign className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No line items added yet</p>
+                      <p className="text-xs">Add pricing items to this job</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </form>
           </Form>
           </div>
