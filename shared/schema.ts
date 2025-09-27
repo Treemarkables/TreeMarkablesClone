@@ -17,6 +17,47 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// ServiceM8 GST & Tax Types
+export const TaxModeEnum = z.enum(['cost_markup', 'tax_inclusive', 'tax_exclusive']);
+export type TaxMode = z.infer<typeof TaxModeEnum>;
+
+// ServiceM8 Line Item Types
+export const ServiceM8LineItemSchema = z.object({
+  id: z.string(),
+  itemCode: z.string().optional(),
+  description: z.string(),
+  quantity: z.number(),
+  unitPrice: z.number(),
+  total: z.number(),
+  unitCost: z.number(),
+  totalCost: z.number(),
+  costExGst: z.number().optional(),
+  markup: z.number().optional(),
+  priceExGst: z.number().optional(),
+  totalExGst: z.number().optional(),
+  taxRate: z.number().default(15), // New Zealand GST 15%
+});
+
+export type ServiceM8LineItem = z.infer<typeof ServiceM8LineItemSchema>;
+
+// GST Calculation Types
+export interface GSTCalculation {
+  subtotal: number;
+  gstAmount: number;
+  totalIncludingGst: number;
+  taxMode: TaxMode;
+  taxRate: number;
+}
+
+// ServiceM8 Billing Summary
+export interface BillingSummary {
+  subtotal: number;
+  gst: number;
+  total: number;
+  paid: number;
+  balanceDue: number;
+}
+
 
 // Lead Source Tracking Schema
 export const leadSourceSchema = z.object({
@@ -292,7 +333,7 @@ export const jobs = pgTable("jobs", {
   // Global Job Card Fields
   checklist: jsonb("checklist"), // [{"id": "uuid", "text": "Task description", "completed": false}]
   notes: text("notes"), // Job notes and comments
-  lineItems: jsonb("line_items"), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number}]
+  lineItems: jsonb("line_items"), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number, "unitCost": number, "totalCost": number, "costExGst": number, "markup": number, "priceExGst": number, "totalExGst": number, "taxRate": number, "itemCode": string}]
   
   weatherDependent: boolean("weather_dependent").default(false),
   permitRequired: boolean("permit_required").default(false),
@@ -302,6 +343,26 @@ export const jobs = pgTable("jobs", {
   // Fresh Start Metrics - Only jobs created after implementation count toward business metrics
   metricsEligible: boolean("metrics_eligible").default(false),
   metricsStartDate: timestamp("metrics_start_date"), // Date when clean metrics tracking began
+  
+  // ServiceM8-Style Billing & GST Fields
+  billingAddress: text("billing_address"),
+  city: text("city"),
+  region: text("region"),
+  invoiceDescription: text("invoice_description"),
+  billingContactPhone: text("billing_contact_phone"),
+  billingContactMobile: text("billing_contact_mobile"),
+  sameAsJobAddress: boolean("same_as_job_address").default(true),
+  
+  // GST/Tax System (New Zealand 15% GST)
+  taxMode: text("tax_mode").default('tax_exclusive'), // cost_markup, tax_inclusive, tax_exclusive
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default('15.00'), // 15% GST
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).default('0.00'),
+  gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).default('0.00'),
+  totalIncludingGst: decimal("total_including_gst", { precision: 10, scale: 2 }).default('0.00'),
+  
+  // Payment Tracking
+  paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default('0.00'),
+  balanceDue: decimal("balance_due", { precision: 10, scale: 2 }).default('0.00'),
   
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -688,7 +749,6 @@ export type PriceRule = typeof priceRules.$inferSelect;
 
 // Insert Types
 export type InsertTeam = z.infer<typeof insertTeamSchema>;
-export type InsertCustomerImportBatch = z.infer<typeof insertCustomerImportBatchSchema>;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 
 // Safety Incident Types & Schemas
