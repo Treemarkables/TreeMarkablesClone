@@ -607,7 +607,7 @@ export function GlobalJobCard({
                         <div>
                           <label className="text-xs font-medium text-gray-600 mb-1 block">Job Description</label>
                           <Textarea 
-                            className="min-h-[60px] text-sm" 
+                            className="min-h-[90px] text-sm" 
                             placeholder="Describe the work that needs to be done"
                           />
                         </div>
