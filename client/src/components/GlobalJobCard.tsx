@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package } from "lucide-react";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
@@ -53,6 +53,14 @@ const globalJobCardSchema = insertJobSchema.extend({
   jobContactLastName: z.string().optional(), 
   jobContactEmail: z.string().email().optional().or(z.literal("")),
   jobContactPhone: z.string().optional(),
+  
+  // ServiceM8 Billing Fields
+  billingAddress: z.string().optional(),
+  invoiceDescription: z.string().optional(),
+  billingContactPhone: z.string().optional(),
+  billingContactMobile: z.string().optional(),
+  sameAsJobAddress: z.boolean().optional(),
+  taxMode: z.string().optional(),
   
 }).refine((data) => {
   if (data.isNewCustomer) {
@@ -333,6 +341,10 @@ export function GlobalJobCard({
       jobContactPhone: "",
       billingContactPhone: "",
       billingContactMobile: "",
+      billingAddress: "",
+      invoiceDescription: "",
+      sameAsJobAddress: true,
+      taxMode: "tax_exclusive",
       totalAmount: "0",
       paidAmount: "0",
       lineItems: [],
@@ -370,12 +382,33 @@ export function GlobalJobCard({
         jobContactPhone: editingJobCustomer?.phone || '',
         billingContactPhone: editingJob.billingContactPhone || '',
         billingContactMobile: editingJob.billingContactMobile || '',
+        billingAddress: editingJob.billingAddress || '',
+        invoiceDescription: editingJob.invoiceDescription || '',
+        sameAsJobAddress: editingJob.sameAsJobAddress ?? true,
+        taxMode: editingJob.taxMode || 'tax_exclusive',
         // Arrays
         lineItems: editingJob.lineItems || [],
         checklist: editingJob.checklist || [],
       });
     }
   }, [editingJob, editingJobCustomer, form]);
+
+  // Keep billing address in sync with job address when "same as job address" is enabled
+  useEffect(() => {
+    const subscription = form.watch((values, { name }) => {
+      const sameAsJobAddress = values.sameAsJobAddress;
+      
+      // If "same as job address" is enabled and job address fields change, update billing fields
+      if (sameAsJobAddress && (name === 'address' || name === 'city' || name === 'region')) {
+        if (name === 'address') {
+          form.setValue('billingAddress', values.address || '');
+        }
+        // city and region are shared fields, so they're automatically in sync
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   const formData = form.watch();
 
@@ -838,9 +871,202 @@ export function GlobalJobCard({
                   )}
 
                   {sidebarTab === 'billing' && (
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-lg">Billing Information</h3>
-                      <p className="text-gray-600">Billing details and invoice management will be displayed here.</p>
+                    <div className="space-y-6">
+                      {/* ServiceM8 Billing Header */}
+                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 -m-4 mb-4">
+                        <h3 className="font-semibold text-lg">Billing & Invoicing</h3>
+                        <p className="text-blue-100 text-sm">Manage billing address, tax settings, and financial details</p>
+                      </div>
+
+                      {/* Billing Address Section */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <MapPin className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-800">Billing Address</h4>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <FormField
+                            control={form.control}
+                            name="sameAsJobAddress"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox 
+                                      checked={field.value}
+                                      onCheckedChange={(checked) => {
+                                        field.onChange(checked);
+                                        // If checked, copy job address to billing address
+                                        if (checked) {
+                                          const jobAddress = form.getValues('address') || '';
+                                          const jobCity = form.getValues('city') || '';
+                                          const jobRegion = form.getValues('region') || '';
+                                          
+                                          // Populate billing fields with job address data
+                                          form.setValue('billingAddress', jobAddress);
+                                          
+                                          // Note: city and region are shared fields, so they're already populated
+                                          // Just ensure they have the job data
+                                          if (!form.getValues('city')) {
+                                            form.setValue('city', jobCity);
+                                          }
+                                          if (!form.getValues('region')) {
+                                            form.setValue('region', jobRegion);
+                                          }
+                                        }
+                                      }}
+                                    />
+                                    <label className="text-sm text-gray-600">
+                                      Same as job address
+                                    </label>
+                                  </div>
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <div className="grid grid-cols-1 gap-3">
+                            <FormField
+                              control={form.control}
+                              name="billingAddress"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input 
+                                      {...field} 
+                                      className="h-8 text-sm" 
+                                      placeholder="Billing Address"
+                                      disabled={form.watch('sameAsJobAddress')}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            <div className="grid grid-cols-2 gap-3">
+                              <FormField
+                                control={form.control}
+                                name="city"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input 
+                                        {...field} 
+                                        className="h-8 text-sm" 
+                                        placeholder="City"
+                                        disabled={form.watch('sameAsJobAddress')}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="region"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input 
+                                        {...field} 
+                                        className="h-8 text-sm" 
+                                        placeholder="Region"
+                                        disabled={form.watch('sameAsJobAddress')}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Invoice Description */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-800">Invoice Description</h4>
+                        </div>
+                        <FormField
+                          control={form.control}
+                          name="invoiceDescription"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Textarea 
+                                  {...field}
+                                  className="h-20 text-sm resize-none" 
+                                  placeholder="Description that will appear on the invoice..."
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* Tax Settings */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Calculator className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-800">Tax Settings</h4>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3">
+                          <div>
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">Tax Mode</label>
+                            <FormField
+                              control={form.control}
+                              name="taxMode"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Select value={field.value || "tax_exclusive"} onValueChange={field.onChange}>
+                                      <SelectTrigger className="h-8 text-sm">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="cost_markup">Cost & Markup</SelectItem>
+                                        <SelectItem value="tax_inclusive">Tax Inclusive</SelectItem>
+                                        <SelectItem value="tax_exclusive">Tax Exclusive</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">GST Rate</label>
+                            <Input className="h-8 text-sm" defaultValue="15.00%" readOnly />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial Summary */}
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                        <h4 className="font-medium text-gray-800 mb-3">Financial Summary</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Subtotal (Ex GST)</span>
+                            <span className="font-mono">$0.00</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">GST (15%)</span>
+                            <span className="font-mono">$0.00</span>
+                          </div>
+                          <div className="border-t border-gray-200 pt-2 flex justify-between font-semibold">
+                            <span>Total (Inc GST)</span>
+                            <span className="font-mono">$0.00</span>
+                          </div>
+                          <div className="flex justify-between text-green-600">
+                            <span>Paid</span>
+                            <span className="font-mono">$0.00</span>
+                          </div>
+                          <div className="flex justify-between font-semibold text-orange-600">
+                            <span>Balance Due</span>
+                            <span className="font-mono">$0.00</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1003,48 +1229,150 @@ export function GlobalJobCard({
                     </div>
                   )}
 
-                  {/* Line Items List */}
+                  {/* ServiceM8-Style Items & Services Table */}
                   {form.watch('lineItems')?.length > 0 ? (
-                    <div className="space-y-2">
-                      {form.watch('lineItems').map((item: any, index: number) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">{item.description}</div>
-                            <div className="text-xs text-gray-600">
-                              Qty: {item.quantity} × ${item.unitPrice?.toFixed(2) || '0.00'} = ${(item.quantity * (item.unitPrice || 0)).toFixed(2)}
+                    <div className="space-y-4">
+                      {/* Table Header */}
+                      <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 rounded-t-lg">
+                        <h4 className="font-semibold">Items & Services</h4>
+                        <p className="text-orange-100 text-sm">Professional service breakdown with GST calculations</p>
+                      </div>
+                      
+                      {/* Table */}
+                      <div className="overflow-x-auto border rounded-b-lg">
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-50 border-b">
+                            <tr>
+                              <th className="text-left p-2 font-medium text-gray-700">Item Code</th>
+                              <th className="text-left p-2 font-medium text-gray-700">Description</th>
+                              <th className="text-center p-2 font-medium text-gray-700">Qty</th>
+                              <th className="text-right p-2 font-medium text-gray-700">Unit Price</th>
+                              <th className="text-right p-2 font-medium text-gray-700">Total</th>
+                              <th className="text-right p-2 font-medium text-gray-700">Cost</th>
+                              <th className="text-right p-2 font-medium text-gray-700">Markup</th>
+                              <th className="text-center p-2 font-medium text-gray-700">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {form.watch('lineItems').map((item: any, index: number) => {
+                              const unitPrice = item.unitPrice || 0;
+                              const quantity = item.quantity || 0;
+                              const total = quantity * unitPrice;
+                              const unitCost = item.unitCost || 0;
+                              const totalCost = quantity * unitCost;
+                              const markup = total > 0 && totalCost > 0 ? ((total - totalCost) / totalCost * 100) : 0;
+                              
+                              return (
+                                <tr key={index} className="border-b hover:bg-gray-50">
+                                  <td className="p-2">
+                                    <span className="text-blue-600 font-mono text-xs">{item.itemCode || '-'}</span>
+                                  </td>
+                                  <td className="p-2">
+                                    <div className="font-medium text-gray-900">{item.description}</div>
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">
+                                      {quantity}
+                                    </span>
+                                  </td>
+                                  <td className="p-2 text-right font-mono">
+                                    ${unitPrice.toFixed(2)}
+                                  </td>
+                                  <td className="p-2 text-right font-mono font-semibold">
+                                    ${total.toFixed(2)}
+                                  </td>
+                                  <td className="p-2 text-right font-mono text-gray-600">
+                                    ${totalCost.toFixed(2)}
+                                  </td>
+                                  <td className="p-2 text-right">
+                                    <span className={`font-medium ${markup > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {markup.toFixed(1)}%
+                                    </span>
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => removeLineItem(index)}
+                                      className="h-6 w-6 p-0 hover:bg-red-50 hover:border-red-200"
+                                      data-testid={`button-remove-line-item-${index}`}
+                                    >
+                                      <Trash2 className="w-3 h-3 text-red-500" />
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      {/* ServiceM8-Style Financial Summary */}
+                      <div className="grid grid-cols-2 gap-6">
+                        {/* Cost Breakdown */}
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <h5 className="font-medium text-gray-800 mb-3">Cost Breakdown</h5>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Total Cost</span>
+                              <span className="font-mono text-red-600">
+                                ${form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitCost || 0)), 0).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Total Revenue</span>
+                              <span className="font-mono text-green-600">
+                                ${form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="border-t border-gray-200 pt-2 flex justify-between font-semibold">
+                              <span>Gross Profit</span>
+                              <span className="font-mono text-blue-600">
+                                ${(
+                                  form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0) -
+                                  form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitCost || 0)), 0)
+                                ).toFixed(2)}
+                              </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm">${(item.quantity * (item.unitPrice || 0)).toFixed(2)}</span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeLineItem(index)}
-                              className="h-8 w-8 p-0"
-                              data-testid={`button-remove-line-item-${index}`}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
                         </div>
-                      ))}
-                      
-                      {/* Total */}
-                      <div className="flex justify-end pt-2 border-t border-gray-200">
-                        <div className="text-right">
-                          <div className="text-sm text-gray-600">Total Revenue</div>
-                          <div className="text-lg font-bold text-green-700">
-                            ${form.watch('lineItems')?.reduce((sum: number, item: any) => sum + (item.quantity * (item.unitPrice || 0)), 0).toFixed(2)}
+                        
+                        {/* GST Calculation */}
+                        <div className="bg-blue-50 rounded-lg p-4">
+                          <h5 className="font-medium text-blue-800 mb-3">GST Calculation (15%)</h5>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-blue-700">Subtotal (Ex GST)</span>
+                              <span className="font-mono">
+                                ${(form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0) / 1.15).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-blue-700">GST (15%)</span>
+                              <span className="font-mono">
+                                ${(form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0) * 0.15 / 1.15).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="border-t border-blue-200 pt-2 flex justify-between font-semibold text-blue-900">
+                              <span>Total (Inc GST)</span>
+                              <span className="font-mono">
+                                ${form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toFixed(2)}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                      <DollarSign className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No line items added yet</p>
-                      <p className="text-xs">Add pricing items to this job</p>
+                    <div className="text-center py-12 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                      <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 rounded-t-lg -m-4 mb-8">
+                        <h4 className="font-semibold">Items & Services</h4>
+                        <p className="text-orange-100 text-sm">Professional service breakdown with GST calculations</p>
+                      </div>
+                      <DollarSign className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg font-medium">No items added yet</p>
+                      <p className="text-sm text-gray-400">Click "Add Line Item" to start building your quote</p>
                     </div>
                   )}
                 </div>
