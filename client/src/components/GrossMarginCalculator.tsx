@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Calculator, 
   DollarSign, 
@@ -31,6 +32,13 @@ interface GrossMarginData {
   grossMarginCalculated?: boolean;
   totalAmount?: string;
   assignedStaffIds?: string[];
+  staffAssignments?: StaffAssignment[];
+}
+
+interface StaffAssignment {
+  staffId: string;
+  lineItemId?: string;
+  hours?: number;
 }
 
 interface GrossMarginCalculatorProps {
@@ -43,6 +51,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   const [formData, setFormData] = useState<GrossMarginData>({});
   const [calculationMode, setCalculationMode] = useState<'manual' | 'hourly'>('manual');
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+  const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -117,6 +126,14 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
         // Clear selected staff if no staff assigned to this job
         setSelectedStaffIds([]);
       }
+      
+      // Initialize staff assignments from job data
+      if (job.staffAssignments && Array.isArray(job.staffAssignments)) {
+        setStaffAssignments(job.staffAssignments);
+      } else {
+        // Clear staff assignments if none exist
+        setStaffAssignments([]);
+      }
     }
   }, [job]);
 
@@ -186,8 +203,30 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     }));
   };
 
+  // Helper functions for staff assignments
+  const updateStaffAssignment = (staffId: string, field: keyof StaffAssignment, value: string | number) => {
+    setStaffAssignments(prev => {
+      const existingIndex = prev.findIndex(assignment => assignment.staffId === staffId);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = { ...updated[existingIndex], [field]: value };
+        return updated;
+      } else {
+        return [...prev, { staffId, [field]: value }];
+      }
+    });
+  };
+
+  const getStaffAssignment = (staffId: string): StaffAssignment => {
+    return staffAssignments.find(assignment => assignment.staffId === staffId) || { staffId };
+  };
+
   const handleSave = () => {
-    const dataToSave = { ...formData, assignedStaffIds: selectedStaffIds };
+    const dataToSave = { 
+      ...formData, 
+      assignedStaffIds: selectedStaffIds,
+      staffAssignments: staffAssignments.filter(assignment => selectedStaffIds.includes(assignment.staffId))
+    };
     
     // If staff time entries exist, don't include laborCosts (server-calculated)
     if (hasStaffTimeEntries) {
@@ -360,28 +399,77 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                       {selectedStaffIds.length} selected
                     </Badge>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto bg-gray-50 p-3 rounded-md">
-                    {employees.map((employee: any) => (
-                      <div key={employee.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          checked={selectedStaffIds.includes(employee.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedStaffIds(prev => [...prev, employee.id]);
-                            } else {
-                              setSelectedStaffIds(prev => prev.filter(id => id !== employee.id));
-                            }
-                          }}
-                          data-testid={`checkbox-staff-${employee.id}`}
-                        />
-                        <Label className="text-sm font-medium">
-                          {employee.firstName} {employee.lastName}
-                        </Label>
-                        <Badge variant="outline" className="text-xs">
-                          {employee.position}
-                        </Badge>
-                      </div>
-                    ))}
+                  <div className="space-y-3 max-h-64 overflow-y-auto bg-gray-50 p-3 rounded-md">
+                    {employees.map((employee: any) => {
+                      const assignment = getStaffAssignment(employee.id);
+                      const isSelected = selectedStaffIds.includes(employee.id);
+                      
+                      return (
+                        <div key={employee.id} className="space-y-2">
+                          {/* Staff member row */}
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedStaffIds(prev => [...prev, employee.id]);
+                                } else {
+                                  setSelectedStaffIds(prev => prev.filter(id => id !== employee.id));
+                                  // Remove assignment when unchecking
+                                  setStaffAssignments(prev => prev.filter(a => a.staffId !== employee.id));
+                                }
+                              }}
+                              data-testid={`checkbox-staff-${employee.id}`}
+                            />
+                            <Label className="text-sm font-medium">
+                              {employee.firstName} {employee.lastName}
+                            </Label>
+                            <Badge variant="outline" className="text-xs">
+                              {employee.position}
+                            </Badge>
+                          </div>
+                          
+                          {/* Line item and time entry when selected */}
+                          {isSelected && (
+                            <div className="ml-6 grid grid-cols-1 md:grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs">Line Item</Label>
+                                <Select 
+                                  value={assignment.lineItemId || ""} 
+                                  onValueChange={(value) => updateStaffAssignment(employee.id, 'lineItemId', value)}
+                                >
+                                  <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue placeholder="Select line item..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="">No line item</SelectItem>
+                                    {job?.lineItems?.map((lineItem: any) => (
+                                      <SelectItem key={lineItem.id} value={lineItem.id}>
+                                        {lineItem.description || lineItem.title || `Line Item ${lineItem.id}`}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs">Hours</Label>
+                                <Input
+                                  type="number"
+                                  step="0.25"
+                                  min="0"
+                                  max="24"
+                                  value={assignment.hours || ''}
+                                  onChange={(e) => updateStaffAssignment(employee.id, 'hours', parseFloat(e.target.value) || 0)}
+                                  placeholder="0.0"
+                                  className="h-8 text-xs"
+                                  data-testid={`input-hours-${employee.id}`}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
