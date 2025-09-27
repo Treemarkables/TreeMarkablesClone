@@ -17,6 +17,8 @@ import {
   type Inventory, type InsertInventory,
   type EquipmentCheckout, type InsertEquipmentCheckout,
   type InventoryTransaction, type InsertInventoryTransaction,
+  type Material, type InsertMaterial,
+  type Service, type InsertService,
   type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
   type Invoice, type InsertInvoice, type ServiceRequest, type InsertServiceRequest,
   type CustomerAuth, type InsertCustomerAuth,
@@ -445,6 +447,22 @@ export interface IStorage {
   createInventoryTransaction(transaction: InsertInventoryTransaction): Promise<InventoryTransaction>;
   getInventoryTransactions(inventoryId: string): Promise<InventoryTransaction[]>;
   getTransactionsByType(type: string): Promise<InventoryTransaction[]>;
+
+  // Materials Catalog Management
+  createMaterial(material: InsertMaterial): Promise<Material>;
+  getMaterial(id: string): Promise<Material | undefined>;
+  updateMaterial(id: string, updates: Partial<InsertMaterial>): Promise<Material>;
+  deleteMaterial(id: string): Promise<void>;
+  getAllMaterials(): Promise<Material[]>;
+  getMaterialsByCategory(category: string): Promise<Material[]>;
+  
+  // Services Catalog Management
+  createService(service: InsertService): Promise<Service>;
+  getService(id: string): Promise<Service | undefined>;
+  updateService(id: string, updates: Partial<InsertService>): Promise<Service>;
+  deleteService(id: string): Promise<void>;
+  getAllServices(): Promise<Service[]>;
+  getServicesByCategory(category: string): Promise<Service[]>;
 
   // Business Settings Management
   getBusinessSettings(): Promise<BusinessSettings>;
@@ -2634,6 +2652,158 @@ class DatabaseStorage implements IStorage {
     return await db.select().from(schema.generatedDocumentPhotos)
       .where(eq(schema.generatedDocumentPhotos.generatedDocumentId, documentId))
       .orderBy(schema.generatedDocumentPhotos.sortOrder);
+  }
+
+  // In-memory storage for materials and services (for immediate functionality)
+  private materials: Material[] = [
+    {
+      id: "1",
+      itemNumber: "VIP",
+      name: "10% discount with VIP membership",
+      price: "0.00",
+      priceIncludesTax: false,
+      taxRate: "No GST",
+      category: "Discount",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: "2", 
+      itemNumber: "Admin Time",
+      name: "Admin Time",
+      price: "0.00",
+      priceIncludesTax: false,
+      taxRate: "15% GST on Income",
+      category: "Labour",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: "3",
+      itemNumber: "41",
+      name: "Bandit chipper hire",
+      price: "500.00",
+      priceIncludesTax: false,
+      taxRate: "15% GST on Income",
+      category: "Equipment",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ];
+
+  private services: Service[] = [
+    {
+      id: "1",
+      name: "Tree Removal - Small (under 5m)",
+      category: "Tree Services",
+      basePrice: "250.00",
+      unit: "per tree",
+      description: "Complete removal for trees under 5 meters",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: "2",
+      name: "Tree Removal - Medium (5-10m)",
+      category: "Tree Services",
+      basePrice: "650.00",
+      unit: "per tree",
+      description: "Complete removal including stump grinding",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ];
+
+  // Materials Catalog Management
+  async createMaterial(material: InsertMaterial): Promise<Material> {
+    const newMaterial: Material = {
+      id: Date.now().toString(),
+      ...material,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.materials.push(newMaterial);
+    return newMaterial;
+  }
+
+  async getMaterial(id: string): Promise<Material | undefined> {
+    return this.materials.find(m => m.id === id);
+  }
+
+  async updateMaterial(id: string, updates: Partial<InsertMaterial>): Promise<Material> {
+    const index = this.materials.findIndex(m => m.id === id);
+    if (index === -1) {
+      throw new Error(`Material with id ${id} not found`);
+    }
+    
+    this.materials[index] = {
+      ...this.materials[index],
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    return this.materials[index];
+  }
+
+  async deleteMaterial(id: string): Promise<void> {
+    const index = this.materials.findIndex(m => m.id === id);
+    if (index !== -1) {
+      this.materials.splice(index, 1);
+    }
+  }
+
+  async getAllMaterials(): Promise<Material[]> {
+    return [...this.materials];
+  }
+
+  async getMaterialsByCategory(category: string): Promise<Material[]> {
+    return this.materials.filter(m => m.category === category);
+  }
+
+  // Services Catalog Management
+  async createService(service: InsertService): Promise<Service> {
+    const newService: Service = {
+      id: Date.now().toString(),
+      ...service,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.services.push(newService);
+    return newService;
+  }
+
+  async getService(id: string): Promise<Service | undefined> {
+    return this.services.find(s => s.id === id);
+  }
+
+  async updateService(id: string, updates: Partial<InsertService>): Promise<Service> {
+    const index = this.services.findIndex(s => s.id === id);
+    if (index === -1) {
+      throw new Error(`Service with id ${id} not found`);
+    }
+    
+    this.services[index] = {
+      ...this.services[index],
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    return this.services[index];
+  }
+
+  async deleteService(id: string): Promise<void> {
+    const index = this.services.findIndex(s => s.id === id);
+    if (index !== -1) {
+      this.services.splice(index, 1);
+    }
+  }
+
+  async getAllServices(): Promise<Service[]> {
+    return [...this.services];
+  }
+
+  async getServicesByCategory(category: string): Promise<Service[]> {
+    return this.services.filter(s => s.category === category);
   }
 }
 

@@ -8236,6 +8236,184 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // ============================================
+  // MATERIALS CATALOG MANAGEMENT ROUTES
+  // ============================================
+
+  // Get all materials
+  app.get('/api/materials', async (req: Request, res: Response) => {
+    try {
+      const materials = await storage.getAllMaterials();
+      res.json({ success: true, data: materials });
+    } catch (error) {
+      console.error('Error fetching materials:', error);
+      res.status(500).json({ success: false, message: 'Error fetching materials' });
+    }
+  });
+
+  // Create material
+  app.post('/api/materials', async (req: Request, res: Response) => {
+    try {
+      const validation = z.object({
+        itemNumber: z.string().min(1, "Item number is required"),
+        name: z.string().min(1, "Name is required"),
+        price: z.coerce.number().nonnegative("Price must be a non-negative number"),
+        priceIncludesTax: z.boolean(),
+        taxRate: z.string().min(1, "Tax rate is required"),
+        category: z.string().min(1, "Category is required"),
+      }).safeParse(req.body);
+
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid material data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const material = await storage.createMaterial({
+        ...validation.data,
+        price: validation.data.price.toString(),
+      });
+      res.json({ success: true, data: material });
+    } catch (error) {
+      console.error('Error creating material:', error);
+      res.status(500).json({ success: false, message: 'Error creating material' });
+    }
+  });
+
+  // Update material
+  app.put('/api/materials/:id', async (req: Request, res: Response) => {
+    try {
+      const validation = z.object({
+        itemNumber: z.string().min(1).optional(),
+        name: z.string().min(1).optional(),
+        price: z.coerce.number().nonnegative().optional(),
+        priceIncludesTax: z.boolean().optional(),
+        taxRate: z.string().min(1).optional(),
+        category: z.string().min(1).optional(),
+      }).safeParse(req.body);
+
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid material data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const updates = validation.data;
+      if (updates.price !== undefined) {
+        (updates as any).price = updates.price.toString();
+      }
+
+      const material = await storage.updateMaterial(req.params.id, updates);
+      res.json({ success: true, data: material });
+    } catch (error) {
+      console.error('Error updating material:', error);
+      res.status(500).json({ success: false, message: 'Error updating material' });
+    }
+  });
+
+  // Delete material
+  app.delete('/api/materials/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteMaterial(req.params.id);
+      res.json({ success: true, message: 'Material deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting material:', error);
+      res.status(500).json({ success: false, message: 'Error deleting material' });
+    }
+  });
+
+  // ============================================
+  // SERVICES CATALOG MANAGEMENT ROUTES
+  // ============================================
+
+  // Get all services
+  app.get('/api/services', async (req: Request, res: Response) => {
+    try {
+      const services = await storage.getAllServices();
+      res.json({ success: true, data: services });
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      res.status(500).json({ success: false, message: 'Error fetching services' });
+    }
+  });
+
+  // Create service
+  app.post('/api/services', async (req: Request, res: Response) => {
+    try {
+      const validation = z.object({
+        name: z.string().min(1, "Service name is required"),
+        category: z.string().min(1, "Category is required"),
+        basePrice: z.coerce.number().nonnegative("Base price must be a non-negative number"),
+        unit: z.string().min(1, "Unit is required"),
+        description: z.string().optional(),
+      }).safeParse(req.body);
+
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid service data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const service = await storage.createService({
+        ...validation.data,
+        basePrice: validation.data.basePrice.toString(),
+      });
+      res.json({ success: true, data: service });
+    } catch (error) {
+      console.error('Error creating service:', error);
+      res.status(500).json({ success: false, message: 'Error creating service' });
+    }
+  });
+
+  // Update service
+  app.put('/api/services/:id', async (req: Request, res: Response) => {
+    try {
+      const validation = z.object({
+        name: z.string().min(1).optional(),
+        category: z.string().min(1).optional(),
+        basePrice: z.coerce.number().nonnegative().optional(),
+        unit: z.string().min(1).optional(),
+        description: z.string().optional(),
+      }).safeParse(req.body);
+
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid service data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const updates = validation.data;
+      if (updates.basePrice !== undefined) {
+        (updates as any).basePrice = updates.basePrice.toString();
+      }
+
+      const service = await storage.updateService(req.params.id, updates);
+      res.json({ success: true, data: service });
+    } catch (error) {
+      console.error('Error updating service:', error);
+      res.status(500).json({ success: false, message: 'Error updating service' });
+    }
+  });
+
+  // Delete service
+  app.delete('/api/services/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteService(req.params.id);
+      res.json({ success: true, message: 'Service deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting service:', error);
+      res.status(500).json({ success: false, message: 'Error deleting service' });
+    }
+  });
+
   // Rate limiting for address search (simple in-memory store)
   const addressSearchRateLimit = new Map<string, { count: number; resetTime: number }>();
   const MAX_REQUESTS_PER_MINUTE = 30;
