@@ -607,14 +607,6 @@ export function GlobalJobCard({
     });
   };
 
-  // Handle form click
-  const handleFormClick = () => {
-    toast({
-      title: "Forms Feature",
-      description: "Job forms and templates will be available in a future update.",
-    });
-  };
-
   // Handle quote click
   const handleQuoteClick = () => {
     setIsQuoteModalOpen(true);
@@ -763,38 +755,39 @@ export function GlobalJobCard({
                 <FileText className="w-4 h-4 mr-1" />
                 Queue
               </Button>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={handleFormClick} data-testid="button-form">
-                <FileText className="w-4 h-4 mr-1" />
-                Form
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs" 
-                onClick={handleQuoteClick} 
-                disabled={!editingJob?.id || mode === 'create'}
-                data-testid="button-quote"
-                title={!editingJob?.id || mode === 'create' ? "Save job first to create quote" : "Create or view quotes"}
-              >
-                <Receipt className="w-4 h-4 mr-1" />
-                Quote
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs" 
-                onClick={handleInvoiceClick} 
-                disabled={!editingJob?.id || mode === 'create'}
-                data-testid="button-invoice"
-                title={!editingJob?.id || mode === 'create' ? "Save job first to create invoice" : "Create or view invoices"}
-              >
-                <CreditCard className="w-4 h-4 mr-1" />
-                Invoice
-              </Button>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={() => setIsProposalBuilderOpen(true)} data-testid="button-proposal">
-                <Presentation className="w-4 h-4 mr-1" />
-                Proposal
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 px-3 text-xs" data-testid="button-send">
+                    <Send className="w-4 h-4 mr-1" />
+                    Send
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem 
+                    onClick={handleQuoteClick}
+                    disabled={!editingJob?.id || mode === 'create'}
+                    data-testid="menu-item-quote"
+                  >
+                    <Receipt className="w-4 h-4 mr-2" />
+                    Quote
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={handleInvoiceClick}
+                    disabled={!editingJob?.id || mode === 'create'}
+                    data-testid="menu-item-invoice"
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Invoice
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => setIsProposalBuilderOpen(true)}
+                    data-testid="menu-item-proposal"
+                  >
+                    <Presentation className="w-4 h-4 mr-2" />
+                    Proposal
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button 
                 variant="outline" 
                 size="sm" 
