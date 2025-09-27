@@ -1045,26 +1045,62 @@ export function GlobalJobCard({
                       <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                         <h4 className="font-medium text-gray-800 mb-3">Financial Summary</h4>
                         <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Subtotal (Ex GST)</span>
-                            <span className="font-mono">$0.00</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">GST (15%)</span>
-                            <span className="font-mono">$0.00</span>
-                          </div>
-                          <div className="border-t border-gray-200 pt-2 flex justify-between font-semibold">
-                            <span>Total (Inc GST)</span>
-                            <span className="font-mono">$0.00</span>
-                          </div>
-                          <div className="flex justify-between text-green-600">
-                            <span>Paid</span>
-                            <span className="font-mono">$0.00</span>
-                          </div>
-                          <div className="flex justify-between font-semibold text-orange-600">
-                            <span>Balance Due</span>
-                            <span className="font-mono">$0.00</span>
-                          </div>
+                          {(() => {
+                            const lineItems = form.watch('lineItems') || [];
+                            const taxMode = form.watch('taxMode') || 'tax_exclusive';
+                            const paidAmount = parseFloat(form.watch('paidAmount') || '0');
+                            const gstRate = 0.15; // 15% GST for New Zealand
+                            
+                            // Calculate line item totals
+                            const lineItemTotal = lineItems.reduce((sum: number, item: any) => {
+                              const quantity = parseFloat(item.quantity || '0');
+                              const unitPrice = parseFloat(item.unitPrice || '0');
+                              return sum + (quantity * unitPrice);
+                            }, 0);
+                            
+                            let subtotal: number;
+                            let gstAmount: number;
+                            let totalIncGst: number;
+                            
+                            if (taxMode === 'tax_inclusive') {
+                              // Prices include GST - reverse calculate
+                              totalIncGst = lineItemTotal;
+                              subtotal = totalIncGst / (1 + gstRate);
+                              gstAmount = totalIncGst - subtotal;
+                            } else {
+                              // tax_exclusive or cost_markup - GST added on top
+                              subtotal = lineItemTotal;
+                              gstAmount = subtotal * gstRate;
+                              totalIncGst = subtotal + gstAmount;
+                            }
+                            
+                            const balanceDue = totalIncGst - paidAmount;
+                            
+                            return (
+                              <>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Subtotal (Ex GST)</span>
+                                  <span className="font-mono">${subtotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">GST (15%)</span>
+                                  <span className="font-mono">${gstAmount.toFixed(2)}</span>
+                                </div>
+                                <div className="border-t border-gray-200 pt-2 flex justify-between font-semibold">
+                                  <span>Total (Inc GST)</span>
+                                  <span className="font-mono">${totalIncGst.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-green-600">
+                                  <span>Paid</span>
+                                  <span className="font-mono">${paidAmount.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between font-semibold text-orange-600">
+                                  <span>Balance Due</span>
+                                  <span className="font-mono">${balanceDue.toFixed(2)}</span>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
