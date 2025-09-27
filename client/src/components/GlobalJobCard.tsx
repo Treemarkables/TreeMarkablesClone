@@ -16,6 +16,7 @@ import { EmailComposerModal } from "./EmailComposerModal";
 import { SMSComposerModal } from "./SMSComposerModal";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
+import { RecordedTimeModal } from "./RecordedTimeModal";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -120,6 +121,9 @@ export function GlobalJobCard({
     assignedTo: '',
     notes: ''
   });
+
+  // Time tracking modal state
+  const [isTimeTrackingOpen, setIsTimeTrackingOpen] = useState(false);
 
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
@@ -536,6 +540,10 @@ export function GlobalJobCard({
                 <DollarSign className="w-4 h-4 mr-1" />
                 Profit
               </Button>
+              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={() => setIsTimeTrackingOpen(true)} data-testid="button-time">
+                <Clock className="w-4 h-4 mr-1" />
+                Time
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8 px-3 text-xs" data-testid="button-more">
@@ -817,23 +825,130 @@ export function GlobalJobCard({
                       <DollarSign className="w-5 h-5" />
                       Line Items & Pricing
                     </h3>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsAddingLineItem(true)}
-                      className="flex items-center gap-1"
-                      data-testid="button-add-line-item"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Item
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open('/materials-services', '_blank')}
+                        className="text-xs"
+                        data-testid="button-manage-catalog"
+                      >
+                        <Settings className="w-3 h-3 mr-1" />
+                        Manage Catalog
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsAddingLineItem(true)}
+                        className="flex items-center gap-1"
+                        data-testid="button-add-line-item"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Item
+                      </Button>
+                    </div>
                   </div>
 
+                  {/* Add Line Item Form */}
+                  {isAddingLineItem && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Add New Line Item</h4>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setIsAddingLineItem(false);
+                            setNewLineItem({ description: '', quantity: 1, unitPrice: 0 });
+                          }}
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                      
+                      {/* Materials & Services Catalog */}
+                      {materialsAndServices.length > 0 && (
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 mb-2 block">
+                            Quick Select from Catalog
+                          </label>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+                            {materialsAndServices.map((item: any) => (
+                              <Button
+                                key={item.id}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => selectFromCatalog(item)}
+                                className="text-xs p-2 h-auto text-left justify-start"
+                              >
+                                <div>
+                                  <div className="font-medium">{item.name}</div>
+                                  <div className="text-gray-500">${parseFloat(item.basePrice || 0).toFixed(2)}</div>
+                                </div>
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 mb-1 block">Description</label>
+                          <Input
+                            value={newLineItem.description}
+                            onChange={(e) => setNewLineItem(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Service description"
+                            className="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 mb-1 block">Quantity</label>
+                          <Input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={newLineItem.quantity}
+                            onChange={(e) => setNewLineItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 mb-1 block">Unit Price ($)</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={newLineItem.unitPrice}
+                            onChange={(e) => setNewLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                          Total: ${(newLineItem.quantity * newLineItem.unitPrice).toFixed(2)}
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={addLineItem}
+                          disabled={!newLineItem.description || !newLineItem.quantity || !newLineItem.unitPrice}
+                          className="bg-orange-500 hover:bg-orange-600 text-white"
+                        >
+                          Add Item
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Line Items List */}
-                  {formData?.lineItems && formData.lineItems.length > 0 ? (
+                  {form.watch('lineItems')?.length > 0 ? (
                     <div className="space-y-2">
-                      {formData.lineItems.map((item: any, index: number) => (
+                      {form.watch('lineItems').map((item: any, index: number) => (
                         <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                           <div className="flex-1">
                             <div className="font-medium text-sm">{item.description}</div>
@@ -860,9 +975,9 @@ export function GlobalJobCard({
                       {/* Total */}
                       <div className="flex justify-end pt-2 border-t border-gray-200">
                         <div className="text-right">
-                          <div className="text-sm text-gray-600">Total</div>
-                          <div className="text-lg font-bold text-gray-800">
-                            ${formData.lineItems.reduce((sum: number, item: any) => sum + (item.quantity * (item.unitPrice || 0)), 0).toFixed(2)}
+                          <div className="text-sm text-gray-600">Total Revenue</div>
+                          <div className="text-lg font-bold text-green-700">
+                            ${form.watch('lineItems')?.reduce((sum: number, item: any) => sum + (item.quantity * (item.unitPrice || 0)), 0).toFixed(2)}
                           </div>
                         </div>
                       </div>
@@ -1027,6 +1142,16 @@ export function GlobalJobCard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Time Tracking Modal */}
+      {isTimeTrackingOpen && editingJob && (
+        <RecordedTimeModal
+          isOpen={isTimeTrackingOpen}
+          onClose={() => setIsTimeTrackingOpen(false)}
+          jobId={editingJob.id}
+          jobNumber={editingJob.jobNumber || "3314"}
+        />
+      )}
     </Dialog>
   );
 }
