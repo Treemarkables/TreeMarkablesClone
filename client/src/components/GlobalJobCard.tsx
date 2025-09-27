@@ -613,6 +613,16 @@ export function GlobalJobCard({
   // Save button handlers
   const handleSave = async () => {
     const formData = form.getValues();
+    
+    // Map new customer fields to job contact fields for backend compatibility
+    if (formData.isNewCustomer && formData.newCustomerName) {
+      const names = formData.newCustomerName.split(' ');
+      formData.jobContactFirstName = names[0] || '';
+      formData.jobContactLastName = names.slice(1).join(' ') || '';
+      formData.jobContactEmail = formData.newCustomerEmail || '';
+      formData.jobContactPhone = formData.newCustomerPhone || '';
+    }
+    
     try {
       if (mode === "create") {
         await createJobMutation.mutateAsync(formData);
@@ -626,6 +636,16 @@ export function GlobalJobCard({
 
   const handleSaveAndClose = async () => {
     const formData = form.getValues();
+    
+    // Map new customer fields to job contact fields for backend compatibility
+    if (formData.isNewCustomer && formData.newCustomerName) {
+      const names = formData.newCustomerName.split(' ');
+      formData.jobContactFirstName = names[0] || '';
+      formData.jobContactLastName = names.slice(1).join(' ') || '';
+      formData.jobContactEmail = formData.newCustomerEmail || '';
+      formData.jobContactPhone = formData.newCustomerPhone || '';
+    }
+    
     try {
       if (mode === "create") {
         await createJobMutation.mutateAsync(formData);
@@ -786,6 +806,217 @@ export function GlobalJobCard({
                 <div className="flex-[3] bg-white border-r border-gray-300 p-4 overflow-y-auto rounded-l-lg">
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
+                      {/* Customer Selection */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <UserCircle className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-800">Customer</h4>
+                        </div>
+                        
+                        {/* Customer Tabs */}
+                        <div className="flex bg-gray-100 rounded-lg p-1">
+                          <button
+                            type="button"
+                            className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+                              activeCustomerTab === 'existing' 
+                                ? 'bg-white text-gray-900 shadow-sm' 
+                                : 'text-gray-600 hover:text-gray-900'
+                            }`}
+                            onClick={() => {
+                              setActiveCustomerTab('existing');
+                              form.setValue('isNewCustomer', false);
+                              // Clear new customer fields
+                              form.setValue('newCustomerName', '');
+                              form.setValue('newCustomerEmail', '');
+                              form.setValue('newCustomerPhone', '');
+                              form.setValue('newCustomerAddress', '');
+                              form.setValue('newCustomerCity', '');
+                              form.setValue('newCustomerRegion', '');
+                            }}
+                            data-testid="tab-existing-customer"
+                          >
+                            Existing Customer
+                          </button>
+                          <button
+                            type="button"
+                            className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+                              activeCustomerTab === 'new' 
+                                ? 'bg-white text-gray-900 shadow-sm' 
+                                : 'text-gray-600 hover:text-gray-900'
+                            }`}
+                            onClick={() => {
+                              setActiveCustomerTab('new');
+                              form.setValue('isNewCustomer', true);
+                              form.setValue('customerId', '');
+                            }}
+                            data-testid="tab-new-customer"
+                          >
+                            New Customer
+                          </button>
+                        </div>
+
+                        {/* Existing Customer Selection */}
+                        {activeCustomerTab === 'existing' && (
+                          <div>
+                            <FormField
+                              control={form.control}
+                              name="customerId"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Select 
+                                      value={field.value} 
+                                      onValueChange={(value) => {
+                                        field.onChange(value);
+                                        form.setValue('isNewCustomer', false);
+                                      }}
+                                      data-testid="select-customer"
+                                    >
+                                      <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select a customer..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {customersData?.data?.map((customer) => (
+                                          <SelectItem key={customer.id} value={customer.id}>
+                                            {customer.name} - {customer.email}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        )}
+
+                        {/* New Customer Form */}
+                        {activeCustomerTab === 'new' && (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <FormField
+                                control={form.control}
+                                name="newCustomerName"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs font-medium text-gray-600">Customer Name</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        {...field} 
+                                        placeholder="Enter customer name"
+                                        onChange={(e) => {
+                                          field.onChange(e);
+                                          // Map new customer name to job contact fields for backend compatibility
+                                          const names = e.target.value.split(' ');
+                                          form.setValue('jobContactFirstName', names[0] || '');
+                                          form.setValue('jobContactLastName', names.slice(1).join(' ') || '');
+                                        }}
+                                        data-testid="input-new-customer-name"
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="newCustomerEmail"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs font-medium text-gray-600">Email</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        {...field} 
+                                        type="email"
+                                        placeholder="customer@example.com"
+                                        onChange={(e) => {
+                                          field.onChange(e);
+                                          // Map to job contact email for backend compatibility
+                                          form.setValue('jobContactEmail', e.target.value);
+                                        }}
+                                        data-testid="input-new-customer-email"
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <FormField
+                                control={form.control}
+                                name="newCustomerPhone"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs font-medium text-gray-600">Phone</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        {...field} 
+                                        placeholder="Phone number"
+                                        onChange={(e) => {
+                                          field.onChange(e);
+                                          // Map to job contact phone for backend compatibility
+                                          form.setValue('jobContactPhone', e.target.value);
+                                        }}
+                                        data-testid="input-new-customer-phone"
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="newCustomerAddress"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs font-medium text-gray-600">Address</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        {...field} 
+                                        placeholder="Street address"
+                                        data-testid="input-new-customer-address"
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <FormField
+                                control={form.control}
+                                name="newCustomerCity"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs font-medium text-gray-600">City</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        {...field} 
+                                        placeholder="City"
+                                        data-testid="input-new-customer-city"
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="newCustomerRegion"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs font-medium text-gray-600">Region</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        {...field} 
+                                        placeholder="Region/State"
+                                        data-testid="input-new-customer-region"
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       {/* Customer Name and Address */}
                       <div className="bg-gray-50 p-3 rounded-lg border">
                         <div className="flex items-center gap-2 mb-2">
