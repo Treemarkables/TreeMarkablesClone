@@ -241,7 +241,9 @@ export function GlobalJobCard({
       unitPrice: newLineItem.unitPrice,
       unitCost: newLineItem.unitCost || 0,
       total: newLineItem.quantity * newLineItem.unitPrice,
-      totalCost: newLineItem.quantity * (newLineItem.unitCost || 0)
+      totalCost: newLineItem.quantity * (newLineItem.unitCost || 0),
+      taxRate: 15, // New Zealand GST
+      priceIncludesTax: false // Default to tax exclusive
     };
 
     // Use useFieldArray helper to properly update the field array
@@ -325,7 +327,9 @@ export function GlobalJobCard({
       unitPrice: unitPrice,
       unitCost: unitCost,
       total: unitPrice * 1, // quantity * unitPrice
-      totalCost: unitCost * 1 // quantity * unitCost
+      totalCost: unitCost * 1, // quantity * unitCost
+      taxRate: 15, // New Zealand GST
+      priceIncludesTax: false // Default to tax exclusive
     };
 
     // Use appendLineItem from useFieldArray for proper form integration
