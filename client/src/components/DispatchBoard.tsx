@@ -1820,28 +1820,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         isOpen={showGlobalJobCard}
         mode={globalJobCardMode}
         jobId={jobToEdit?.id || undefined}
-        job={jobToEdit ? {
-          id: jobToEdit.id,
-          customerId: jobToEdit.customerId || '',
-          jobNumber: jobToEdit.jobId || '',
-          title: jobToEdit.customerName || '',
-          address: jobToEdit.address || '',
-          description: jobToEdit.description || '',
-          priority: jobToEdit.priority || 'medium',
-          status: jobToEdit.status || 'scheduled',
-          specialInstructions: jobToEdit.notes || jobToEdit.specialInstructions || '',
-          assignedTeam: jobToEdit.assignedTeam || [],
-          serviceType: jobToEdit.serviceType || '',
-          // Add default values for required fields
-          estimatedDuration: jobToEdit.duration || 2,
-          weatherDependent: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          deletedAt: null,
-          leadSource: 'dispatch_board' as any,
-          checklist: [] as any[],
-          lineItems: [] as any[]
-        } as any : undefined}
         customerId={jobToEdit?.customerId}
         onClose={() => {
           setShowGlobalJobCard(false);
