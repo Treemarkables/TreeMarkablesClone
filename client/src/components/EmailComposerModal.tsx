@@ -202,7 +202,7 @@ export function EmailComposerModal({
           name: `Treemarkables LTD Quote ${quoteData.quoteNumber}`,
           type: 'quote',
           id: quoteData.id,
-          url: quoteData.id ? `/api/quotes/${quoteData.id}/pdf` : undefined
+          url: undefined // PDF generation not yet implemented
         });
       }
       if (proposalData) {

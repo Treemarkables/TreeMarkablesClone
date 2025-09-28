@@ -117,6 +117,7 @@ export function GlobalJobCard({
   const [isStaffTimeDialogOpen, setIsStaffTimeDialogOpen] = useState(false);
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [isEmailComposerOpen, setIsEmailComposerOpen] = useState(false);
+  const [emailContext, setEmailContext] = useState<'general' | 'quote' | 'invoice' | 'proposal'>('general');
   const [isSMSComposerOpen, setIsSMSComposerOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
@@ -576,7 +577,8 @@ export function GlobalJobCard({
   });
 
   // Handle email click
-  const handleEmailClick = () => {
+  const handleEmailClick = (context: 'general' | 'quote' | 'invoice' | 'proposal' = 'general') => {
+    setEmailContext(context);
     setIsEmailComposerOpen(true);
   };
 
@@ -2381,12 +2383,28 @@ export function GlobalJobCard({
         <EmailComposerModal
           isOpen={isEmailComposerOpen}
           onClose={() => setIsEmailComposerOpen(false)}
-          recipientName={selectedCustomer?.name || ''}
-          recipientEmail={selectedCustomer?.email || ''}
-          jobTitle={mode === "create" ? "New Job" : `Job #${editingJob?.jobNumber || ""}`}
-          lineItems={formData?.lineItems || []}
-          invoiceTemplate={invoiceTemplate}
+          job={editingJob}
           customer={selectedCustomer}
+          quoteData={emailContext === 'quote' ? {
+            id: editingJob?.id,
+            quoteNumber: `QTE-${editingJob?.jobNumber || '0000'}`,
+            totalAmount: formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0,
+            validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            lineItems: formData?.lineItems || []
+          } : undefined}
+          invoiceData={emailContext === 'invoice' ? {
+            id: editingJob?.id,
+            invoiceNumber: `INV-${editingJob?.jobNumber || '0000'}`,
+            totalAmount: formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0,
+            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            lineItems: formData?.lineItems || []
+          } : undefined}
+          proposalData={emailContext === 'proposal' ? {
+            id: editingJob?.id,
+            proposalNumber: `PROP-${editingJob?.jobNumber || '0000'}`,
+            lineItems: formData?.lineItems || []
+          } : undefined}
+          templateType={emailContext === 'general' ? undefined : emailContext}
         />
       )}
 
@@ -2446,7 +2464,7 @@ export function GlobalJobCard({
                 showActions={true}
                 onEmail={() => {
                   setIsQuoteModalOpen(false);
-                  handleEmailClick();
+                  handleEmailClick('quote');
                 }}
                 onDownload={() => {
                   toast({
