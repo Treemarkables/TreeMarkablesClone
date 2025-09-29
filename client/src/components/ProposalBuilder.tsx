@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
-  Edit, Copy, Save, FolderPlus, GripVertical
+  Edit, Copy, Save, FolderPlus, GripVertical, Mail
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -195,6 +195,13 @@ export function ProposalBuilder({
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [activeSectionId, setActiveSectionId] = useState('section-1');
   const [showPreview, setShowPreview] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [emailForm, setEmailForm] = useState({
+    to: '',
+    cc: '',
+    subject: '',
+    message: ''
+  });
 
   // Line item form
   const [currentLineItem, setCurrentLineItem] = useState<Partial<LineItem>>({
@@ -634,6 +641,82 @@ export function ProposalBuilder({
       });
     },
   });
+
+  // Send email mutation  
+  const sendEmailMutation = useMutation({
+    mutationFn: async (emailData: { proposalId: string; to: string; subject: string; message?: string; cc?: string }) => {
+      console.log('Sending proposal email:', emailData);
+      const response = await apiRequest('POST', `/api/proposals/${emailData.proposalId}/send-email`, {
+        to: emailData.to,
+        subject: emailData.subject,
+        message: emailData.message,
+        cc: emailData.cc
+      });
+      return response;
+    },
+    onSuccess: (response: any) => {
+      console.log('Email sent successfully:', response);
+      toast({
+        title: "Email Sent",
+        description: `Proposal email sent successfully to ${emailForm.to}`,
+      });
+      setShowEmailDialog(false);
+      setEmailForm({ to: '', cc: '', subject: '', message: '' });
+    },
+    onError: (error: any) => {
+      console.error('Email sending error:', error);
+      toast({
+        title: "Email Failed",
+        description: error.message || "Failed to send proposal email",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Handle email form submission
+  const handleSendEmail = async () => {
+    if (!emailForm.to.trim() || !emailForm.subject.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter recipient email and subject",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Get current proposal data to send email for
+    const previewData = getPreviewData();
+    if (!previewData.proposal.id) {
+      toast({
+        title: "No Proposal",
+        description: "Please save the proposal first before sending email",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    await sendEmailMutation.mutateAsync({
+      proposalId: previewData.proposal.id,
+      to: emailForm.to,
+      subject: emailForm.subject,
+      message: emailForm.message,
+      cc: emailForm.cc
+    });
+  };
+
+  // Initialize email form with customer data
+  const initializeEmailForm = () => {
+    const previewData = getPreviewData();
+    const customerEmail = previewData.customer?.email || '';
+    const proposalNumber = previewData.proposal.proposalNumber || 'N/A';
+    
+    setEmailForm({
+      to: customerEmail,
+      cc: '',
+      subject: `Tree Service Proposal ${proposalNumber}`,
+      message: `Dear ${previewData.customer?.name || 'Valued Customer'},\n\nThank you for your interest in our tree services. Please find your personalized proposal attached.\n\nWe look forward to working with you!\n\nBest regards,\nProfessional Tree Care Services`
+    });
+  };
 
   // Preview functionality
   const handlePreview = () => {
@@ -1444,7 +1527,7 @@ export function ProposalBuilder({
                     customer={previewData.customer}
                     sections={previewData.sections}
                     showActions={true}
-                    onEmail={() => console.log('Email proposal')}
+                    onEmail={() => setShowEmailDialog(true)}
                     onDownload={() => console.log('Download proposal')}
                     onCopy={() => console.log('Copy proposal')}
                   />

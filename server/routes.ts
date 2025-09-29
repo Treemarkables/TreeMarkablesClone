@@ -2497,6 +2497,130 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Send proposal email
+  app.post('/api/proposals/:proposalId/send-email', async (req: Request, res: Response) => {
+    try {
+      const { proposalId } = req.params;
+      const { to, subject, message, cc, includeProposalPDF = true } = req.body;
+
+      // Validate required fields
+      if (!to || !subject) {
+        return res.status(400).json({
+          success: false,
+          message: 'Recipient email and subject are required'
+        });
+      }
+
+      // Get proposal details
+      const proposal = await storage.getProposal(proposalId);
+      if (!proposal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal not found'
+        });
+      }
+
+      // Get customer details
+      let customer;
+      if (proposal.customerId) {
+        customer = await storage.getCustomer(proposal.customerId);
+      }
+
+      // Prepare email content
+      const customerName = customer?.name || 'Valued Customer';
+      const proposalNumber = proposal.proposalNumber || 'N/A';
+      const totalAmount = proposal.totalAmount || 0;
+
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #f59e0b; margin: 0;">Tree Service Proposal</h1>
+            <p style="color: #6b7280; margin: 5px 0 0 0;">Professional Tree Care Services</p>
+          </div>
+
+          <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h2 style="color: #374151; margin: 0 0 15px 0;">Dear ${customerName},</h2>
+            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 15px 0;">
+              ${message || `Thank you for your interest in our tree services. Please find attached your personalized proposal ${proposalNumber}.`}
+            </p>
+            <p style="color: #4b5563; line-height: 1.6; margin: 0;">
+              We look forward to working with you!
+            </p>
+          </div>
+
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #374151; margin: 0 0 15px 0;">Proposal Summary</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #6b7280; border-bottom: 1px solid #f3f4f6;">Proposal Number:</td>
+                <td style="padding: 8px 0; color: #374151; font-weight: bold; border-bottom: 1px solid #f3f4f6;">${proposalNumber}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #6b7280; border-bottom: 1px solid #f3f4f6;">Total Amount:</td>
+                <td style="padding: 8px 0; color: #374151; font-weight: bold; border-bottom: 1px solid #f3f4f6;">$${parseFloat(totalAmount.toString()).toFixed(2)} NZD</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Status:</td>
+                <td style="padding: 8px 0; color: #059669; font-weight: bold;">${proposal.status || 'Draft'}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+            <p style="color: #92400e; margin: 0; font-size: 14px;">
+              <strong>Next Steps:</strong> Please review the attached proposal and contact us if you have any questions. We're happy to discuss any adjustments or schedule a consultation.
+            </p>
+          </div>
+
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">
+              Professional Tree Care Services<br>
+              Email: jullianhalley@hotmail.com<br>
+              Phone: Contact us for immediate assistance
+            </p>
+          </div>
+        </div>
+      `;
+
+      // Send email using EmailService
+      const emailSuccess = await emailService.sendEmail({
+        to,
+        cc,
+        from: 'jullianhalley@hotmail.com',
+        subject,
+        html: htmlContent,
+        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${parseFloat(totalAmount.toString()).toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
+      });
+
+      if (!emailSuccess) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send proposal email'
+        });
+      }
+
+      console.log(`📧 Proposal ${proposalNumber} email sent to ${to}`);
+
+      res.json({
+        success: true,
+        message: 'Proposal email sent successfully',
+        data: {
+          proposalId,
+          proposalNumber,
+          recipient: to,
+          sentAt: new Date().toISOString()
+        }
+      });
+
+    } catch (error) {
+      console.error('Error sending proposal email:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error sending proposal email'
+      });
+    }
+  });
+
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
     try {
