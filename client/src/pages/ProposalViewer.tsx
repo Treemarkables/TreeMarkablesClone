@@ -1,16 +1,20 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, Mail } from "lucide-react";
+import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ProposalViewerProps {}
 
 export default function ProposalViewer({}: ProposalViewerProps) {
   const { proposalId } = useParams();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   // Fetch proposal data
   const { data: proposalResponse, isLoading: proposalLoading } = useQuery({
@@ -28,6 +32,37 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const { data: templateResponse } = useQuery({
     queryKey: ["/api/templates/default/proposal"],
   });
+
+  // Accept proposal mutation
+  const acceptProposalMutation = useMutation({
+    mutationFn: async () => {
+      console.log('Accepting proposal:', proposalId);
+      const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
+      return response;
+    },
+    onSuccess: (response: any) => {
+      console.log('Proposal accepted successfully:', response);
+      toast({
+        title: "Proposal Accepted!",
+        description: "Your proposal has been accepted and converted to a work order. We'll be in touch to schedule the work.",
+      });
+      // Refresh proposal data to show updated status
+      queryClient.invalidateQueries({ queryKey: ["/api/proposals", proposalId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+    },
+    onError: (error: any) => {
+      console.error('Proposal acceptance error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to accept proposal. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleAcceptProposal = () => {
+    acceptProposalMutation.mutate();
+  };
 
   if (proposalLoading) {
     return (
@@ -75,6 +110,9 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     gstNumber: '123-456-789'
   };
 
+  const isExpired = proposal.validUntil && new Date(proposal.validUntil) < new Date();
+  const isAccepted = proposal.status === 'accepted';
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -98,6 +136,26 @@ export default function ProposalViewer({}: ProposalViewerProps) {
           </div>
           
           <div className="flex gap-2">
+            {!isAccepted && !isExpired && (
+              <Button 
+                onClick={handleAcceptProposal}
+                disabled={acceptProposalMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+                data-testid="button-accept-proposal"
+              >
+                {acceptProposalMutation.isPending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                    Accepting...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Accept Proposal
+                  </>
+                )}
+              </Button>
+            )}
             <Button variant="outline" size="sm">
               <Mail className="w-4 h-4 mr-2" />
               Email
@@ -112,6 +170,27 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
       {/* Proposal Content */}
       <div className="max-w-4xl mx-auto py-6 px-4">
+        {/* Status Banner */}
+        {isAccepted && (
+          <div className="bg-green-100 border border-green-300 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <Check className="w-5 h-5 text-green-600 mr-2" />
+              <span className="text-green-800 font-medium">Proposal Accepted</span>
+              <span className="text-green-600 ml-2">- We'll be in touch to schedule the work!</span>
+            </div>
+          </div>
+        )}
+
+        {isExpired && !isAccepted && (
+          <div className="bg-red-100 border border-red-300 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <Clock className="w-5 h-5 text-red-600 mr-2" />
+              <span className="text-red-800 font-medium">Proposal Expired</span>
+              <span className="text-red-600 ml-2">- Please contact us for an updated proposal</span>
+            </div>
+          </div>
+        )}
+
         <ProposalTemplate
           template={template}
           proposal={proposal}
