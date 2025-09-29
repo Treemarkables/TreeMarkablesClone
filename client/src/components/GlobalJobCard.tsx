@@ -542,6 +542,7 @@ export function GlobalJobCard({
       toast({
         title: "Job Created",
         description: "New job has been created successfully.",
+        duration: 1000,
       });
       onJobCreated?.(newJob);
     },
@@ -567,6 +568,7 @@ export function GlobalJobCard({
       toast({
         title: "Job Updated",
         description: "Job has been updated successfully.",
+        duration: 1000,
       });
       onJobUpdated?.(updatedJob);
     },
