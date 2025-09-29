@@ -45,6 +45,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
       toast({
         title: "Quote Accepted!",
         description: "Your quote has been accepted and converted to a work order. We'll be in touch to schedule the work.",
+        duration: 1000,
       });
       // Refresh quote data to show updated status
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId] });

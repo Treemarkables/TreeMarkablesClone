@@ -1567,7 +1567,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         description: quote.description || `Work based on accepted quote #${quote.quoteNumber}`,
         customerId: quote.customerId,
         leadId: quote.leadId,
-        status: 'confirmed',
+        status: 'work_order',
         priority: 'medium',
         totalAmount: quote.totalAmount,
         subtotal: quote.subtotal,
