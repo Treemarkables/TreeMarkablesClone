@@ -37,6 +37,8 @@ import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import JobTemplateManagement from "@/components/JobTemplateManagement";
 import ProposalViewer from "@/pages/ProposalViewer";
+import QuoteViewer from "@/pages/QuoteViewer";
+import InvoiceViewer from "@/pages/InvoiceViewer";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code } from "lucide-react";
@@ -183,6 +185,8 @@ function Router() {
       <Route path="/metrics" component={MetricsDashboard}/>
       <Route path="/customer-portal" component={CustomerPortal}/>
       <Route path="/proposal/:proposalId" component={ProposalViewer}/>
+      <Route path="/quote/:quoteId" component={QuoteViewer}/>
+      <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
       
       {/* Dashboard pages with sidebar */}
       <Route path="/pipeline">
