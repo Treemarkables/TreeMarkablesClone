@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Clock, CheckCircle, X } from "lucide-react";
+import { Plus, Clock, CheckCircle, X, Trash2 } from "lucide-react";
 
 interface TimeEntry {
   id: string;
@@ -16,7 +16,7 @@ interface TimeEntry {
   staffName: string;
   rate: string;
   start: string;
-  duration: number; // in minutes
+  duration: number; // in hours (decimal)
   billed: boolean;
 }
 
@@ -27,16 +27,30 @@ interface RecordedTimeModalProps {
   jobNumber: string;
 }
 
+// Generate time options in 15-minute increments (0.25 hour increments) up to 12 hours
+const generateTimeOptions = () => {
+  const options = [];
+  for (let hours = 0.25; hours <= 12; hours += 0.25) {
+    const hoursDisplay = Math.floor(hours);
+    const minutes = Math.round((hours % 1) * 60);
+    const label = minutes > 0 
+      ? `${hoursDisplay}h ${minutes}m` 
+      : `${hoursDisplay}h`;
+    options.push({ value: hours.toString(), label });
+  }
+  return options;
+};
+
 export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: RecordedTimeModalProps) {
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
-  const [isAddingTime, setIsAddingTime] = useState(false);
+  const [pendingEntries, setPendingEntries] = useState<TimeEntry[]>([]);
   const [rounding, setRounding] = useState("none");
   const [travelTime, setTravelTime] = useState("included");
+  const [useManualInput, setUseManualInput] = useState(false);
   const [newEntry, setNewEntry] = useState({
     staffId: '',
     rate: '',
     start: '',
-    duration: 0
+    duration: '1' // Default to 1 hour
   });
   
   const { toast } = useToast();
@@ -57,7 +71,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     cacheTime: 0,
   });
 
-  // Fetch existing time entries for this job - align with profit tracker API
+  // Fetch existing time entries for this job
   const today = new Date().toISOString().split('T')[0];
   const { data: timeEntriesData, refetch: refetchTimeEntries } = useQuery({
     queryKey: ['time-entries', jobId, today],
@@ -76,9 +90,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   const materialsAndServices = (materialsServicesData as any)?.data || [];
   const existingEntries = (timeEntriesData as any)?.data || [];
 
-  // Get staff rates from materials & services catalog
+  // Get staff rates from materials & services catalog (without displaying the rate)
   const getStaffRates = () => {
-    // Get all labour items from the catalog
     return materialsAndServices.filter((item: any) => {
       const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
       return item.category === 'Labour' && price >= 0;
@@ -86,7 +99,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
       return {
         value: `${item.itemNumber}`,
-        label: `${item.itemNumber} - ${item.name} ($${price.toFixed(2)}/hr)`,
+        label: `${item.itemNumber} - ${item.name}`, // Rate removed for privacy
         rate: price,
         itemNumber: item.itemNumber,
         name: item.name
@@ -95,6 +108,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   };
   
   const availableRates = getStaffRates();
+  const timeOptions = generateTimeOptions();
 
   // Refetch data when modal opens
   useEffect(() => {
@@ -104,40 +118,16 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     }
   }, [isOpen, jobId, refetchTimeEntries, refetchMaterials]);
 
-  // Initialize time entries from real data only (but don't reset if user has added entries)
-  const [hasInitialized, setHasInitialized] = useState(false);
-  
-  useEffect(() => {
-    // Only initialize on first open, don't reset if user has added entries
-    if (!hasInitialized && isOpen) {
-      if (existingEntries.length > 0) {
-        const formattedEntries = existingEntries.map((entry: any) => ({
-          id: entry.id,
-          date: new Date(entry.entryDate).toLocaleDateString('en-GB'), // Use entryDate from server
-          staffId: entry.employeeId, // Use employeeId from server
-          staffName: entry.employeeName || 'Unknown', // Use employeeName from server
-          rate: entry.lineItemNumber || '34', // Use lineItemNumber as rate reference
-          start: entry.startTime || '', // Use startTime from server
-          duration: Math.round((entry.hours || 0) * 60), // Convert hours to minutes
-          billed: entry.billed !== false
-        }));
-        setTimeEntries(formattedEntries);
-      } else {
-        // Start with empty entries - no dummy data
-        setTimeEntries([]);
-      }
-      setHasInitialized(true);
-    }
-  }, [existingEntries, employees, availableRates, isOpen, hasInitialized]);
-  
-  // Reset initialization flag when modal closes
+  // Reset form when modal closes
   useEffect(() => {
     if (!isOpen) {
-      setHasInitialized(false);
+      setPendingEntries([]);
+      setNewEntry({ staffId: '', rate: '', start: '', duration: '1' });
+      setUseManualInput(false);
     }
   }, [isOpen]);
 
-  const addTimeEntry = () => {
+  const addToPendingList = () => {
     if (!newEntry.staffId || !newEntry.rate) {
       toast({
         title: "Validation Error",
@@ -147,42 +137,43 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       return;
     }
 
+    if (!newEntry.duration || parseFloat(newEntry.duration) <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid duration",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const staff = employees.find((e: any) => e.id === newEntry.staffId);
+    const rateItem = availableRates.find((r: any) => r.itemNumber === newEntry.rate);
+    
     const newTimeEntry: TimeEntry = {
-      id: `entry-${Date.now()}`,
+      id: `pending-${Date.now()}-${Math.random()}`,
       date: new Date().toLocaleDateString('en-GB'),
       staffId: newEntry.staffId,
       staffName: `${staff?.firstName || ''} ${staff?.lastName || ''}`.trim(),
       rate: newEntry.rate,
       start: newEntry.start,
-      duration: newEntry.duration,
+      duration: parseFloat(newEntry.duration),
       billed: true
     };
     
-    setTimeEntries(prev => [...prev, newTimeEntry]);
+    setPendingEntries(prev => [...prev, newTimeEntry]);
     
-    setNewEntry({ staffId: '', rate: '', start: '', duration: 0 });
-    setIsAddingTime(false);
-    
-    toast({
-      title: "Success",
-      description: "Time entry added successfully"
-    });
+    // Reset form but keep it open for adding more entries
+    setNewEntry({ staffId: '', rate: '', start: '', duration: '1' });
+    setUseManualInput(false);
   };
 
-  const updateTimeEntry = (id: string, field: keyof TimeEntry, value: any) => {
-    setTimeEntries(prev => prev.map(entry => 
-      entry.id === id ? { ...entry, [field]: value } : entry
-    ));
+  const removePendingEntry = (id: string) => {
+    setPendingEntries(prev => prev.filter(entry => entry.id !== id));
   };
 
-  const deleteTimeEntry = (id: string) => {
-    setTimeEntries(prev => prev.filter(entry => entry.id !== id));
-  };
-
-  const saveTimeEntries = async () => {
+  const saveAllEntries = async () => {
     try {
-      if (timeEntries.length === 0) {
+      if (pendingEntries.length === 0) {
         toast({
           title: "No entries",
           description: "Please add time entries before saving",
@@ -192,7 +183,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       }
       
       // Prepare entries with all required fields
-      const formattedEntries = timeEntries.map(entry => {
+      const formattedEntries = pendingEntries.map(entry => {
         // Find the staff member
         const staff = employees.find((e: any) => e.id === entry.staffId);
         const staffName = staff ? `${staff.firstName} ${staff.lastName}` : 'Unknown Staff';
@@ -210,14 +201,14 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
           employeeName: staffName,
           
           // Line item connection (required for schema)
-          lineItemId: rateItem?.id || 'material-11', // Default to "34" Labour item
+          lineItemId: rateItem?.id || 'material-11',
           lineItemNumber: rateItem?.itemNumber || '34',
           lineItemName: rateItem?.name || 'Labour',
           lineItemCategory: 'Labour',
           
           // Time details
           entryDate: today,
-          hours: entry.duration / 60, // Convert minutes to hours
+          hours: entry.duration,
           rate: rateItem?.price || parseFloat(entry.rate.split(' ')[0]) || 75,
           startTime: entry.start,
           
@@ -234,16 +225,15 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
         travelTime
       });
       
-      // Invalidate related queries using the same query keys as profit tracker
+      // Invalidate related queries
       await queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       await queryClient.invalidateQueries({ queryKey: ['time-entries', jobId, today] });
       
-      // Also refetch the data to make sure it's fresh
       await refetchTimeEntries();
       
       toast({
         title: "Success",
-        description: "Time entries saved successfully"
+        description: `${pendingEntries.length} time ${pendingEntries.length === 1 ? 'entry' : 'entries'} saved successfully`
       });
       
       onClose();
@@ -256,6 +246,13 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     }
   };
 
+  // Format duration for display
+  const formatDuration = (hours: number) => {
+    const h = Math.floor(hours);
+    const m = Math.round((hours % 1) * 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -263,149 +260,199 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
           <DialogTitle className="text-lg font-semibold">
             Job #{jobNumber} Recorded Time
           </DialogTitle>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose} data-testid="button-close-modal">
             <X className="h-4 w-4" />
           </Button>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Add Time Button */}
-          <div className="flex justify-start">
-            <Button
-              onClick={() => setIsAddingTime(true)}
-              className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 hover:bg-green-100"
-              variant="outline"
-            >
-              <Plus className="h-4 w-4" />
-              Add Time
-            </Button>
-          </div>
-
-          {/* Add Time Form */}
-          {isAddingTime && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium">Add New Time Entry</h4>
-                <Button variant="ghost" size="sm" onClick={() => setIsAddingTime(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
+          {/* Add Time Form - Always Visible */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+            <h4 className="font-medium text-blue-900">Add Staff Time Entry</h4>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <label className="text-sm font-medium">Staff</label>
+                <Select value={newEntry.staffId} onValueChange={(value) => setNewEntry(prev => ({ ...prev, staffId: value }))} data-testid="select-staff">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select staff" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((staff: any) => (
+                      <SelectItem key={staff.id} value={staff.id}>
+                        {staff.firstName} {staff.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               
-              <div className="grid grid-cols-4 gap-3">
-                <div>
-                  <label className="text-sm font-medium">Staff</label>
-                  <Select value={newEntry.staffId} onValueChange={(value) => setNewEntry(prev => ({ ...prev, staffId: value }))}>
+              <div>
+                <label className="text-sm font-medium">Rate Type</label>
+                <Select value={newEntry.rate} onValueChange={(value) => setNewEntry(prev => ({ ...prev, rate: value }))} data-testid="select-rate">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select rate" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableRates.length > 0 ? (
+                      availableRates.map((rate: any) => (
+                        <SelectItem key={rate.itemNumber} value={rate.itemNumber}>
+                          {rate.label}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>
+                        No labour rates available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">Start Time</label>
+                <Input
+                  type="time"
+                  value={newEntry.start}
+                  onChange={(e) => setNewEntry(prev => ({ ...prev, start: e.target.value }))}
+                  data-testid="input-start-time"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium flex items-center justify-between">
+                  <span>Duration</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto p-0 text-xs text-blue-600 hover:text-blue-800"
+                    onClick={() => setUseManualInput(!useManualInput)}
+                    data-testid="button-toggle-manual"
+                  >
+                    {useManualInput ? 'Use Dropdown' : 'Manual Input'}
+                  </Button>
+                </label>
+                {useManualInput ? (
+                  <Input
+                    type="number"
+                    step="0.25"
+                    min="0.25"
+                    max="12"
+                    value={newEntry.duration}
+                    onChange={(e) => setNewEntry(prev => ({ ...prev, duration: e.target.value }))}
+                    placeholder="Hours (e.g. 1.5)"
+                    data-testid="input-duration-manual"
+                  />
+                ) : (
+                  <Select value={newEntry.duration} onValueChange={(value) => setNewEntry(prev => ({ ...prev, duration: value }))} data-testid="select-duration">
                     <SelectTrigger>
-                      <SelectValue placeholder="Select staff" />
+                      <SelectValue placeholder="Select time" />
                     </SelectTrigger>
                     <SelectContent>
-                      {employees.map((staff: any) => (
-                        <SelectItem key={staff.id} value={staff.id}>
-                          {staff.firstName} {staff.lastName}
+                      {timeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium">Rate</label>
-                  <Select value={newEntry.rate} onValueChange={(value) => setNewEntry(prev => ({ ...prev, rate: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select rate" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableRates.length > 0 ? (
-                        availableRates.map((rate: any) => (
-                          <SelectItem key={rate.itemNumber} value={rate.itemNumber}>
-                            {rate.label}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="" disabled>
-                          No labour rates available - add them in Materials & Services
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium">Start Time</label>
-                  <Input
-                    type="time"
-                    value={newEntry.start}
-                    onChange={(e) => setNewEntry(prev => ({ ...prev, start: e.target.value }))}
-                  />
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium">Duration (mins)</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={newEntry.duration}
-                    onChange={(e) => setNewEntry(prev => ({ ...prev, duration: parseInt(e.target.value) || 0 }))}
-                  />
-                </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex justify-end">
+              <Button 
+                onClick={addToPendingList} 
+                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+                data-testid="button-add-entry"
+              >
+                <Plus className="h-4 w-4" />
+                Add to List
+              </Button>
+            </div>
+          </div>
+
+          {/* Pending Entries List */}
+          {pendingEntries.length > 0 && (
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
+                <h4 className="font-medium text-gray-900">
+                  Pending Entries ({pendingEntries.length})
+                </h4>
               </div>
               
-              <div className="flex justify-end">
-                <Button onClick={addTimeEntry} className="bg-orange-500 hover:bg-orange-600 text-white">
-                  Add Entry
-                </Button>
+              <div className="divide-y divide-gray-100">
+                {pendingEntries.map((entry) => (
+                  <div key={entry.id} className="p-4 hover:bg-gray-50 flex items-center justify-between" data-testid={`entry-${entry.id}`}>
+                    <div className="flex-1 grid grid-cols-4 gap-4">
+                      <div>
+                        <div className="text-xs text-gray-500">Staff</div>
+                        <div className="font-medium">{entry.staffName}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Rate Type</div>
+                        <div className="text-sm">{availableRates.find(r => r.itemNumber === entry.rate)?.name || entry.rate}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Start Time</div>
+                        <div className="text-sm">{entry.start || 'Not set'}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Duration</div>
+                        <div className="text-sm font-medium">{formatDuration(entry.duration)}</div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removePendingEntry(entry.id)}
+                      className="ml-4 text-red-600 hover:text-red-800 hover:bg-red-50"
+                      data-testid={`button-remove-${entry.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Time Entries Table */}
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-gray-50 border-b border-gray-200">
-              <div className="grid grid-cols-6 gap-4 p-3 text-sm font-medium text-gray-700">
-                <div>Date</div>
-                <div>Staff</div>
-                <div>Rate</div>
-                <div>Start</div>
-                <div>Duration</div>
-                <div>Billed</div>
+          {/* Existing Saved Entries */}
+          {existingEntries.length > 0 && (
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-3">
+                <h4 className="font-medium text-emerald-900">
+                  Saved Today ({existingEntries.length})
+                </h4>
+              </div>
+              
+              <div className="divide-y divide-gray-100">
+                {existingEntries.map((entry: any) => (
+                  <div key={entry.id} className="p-4 bg-white">
+                    <div className="grid grid-cols-4 gap-4">
+                      <div>
+                        <div className="text-xs text-gray-500">Staff</div>
+                        <div className="font-medium">{entry.employeeName}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Rate Type</div>
+                        <div className="text-sm">{entry.lineItemName}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Start Time</div>
+                        <div className="text-sm">{entry.startTime || 'Not set'}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Duration</div>
+                        <div className="text-sm font-medium">{formatDuration(entry.hours)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            
-            <div className="bg-white">
-              {timeEntries.map((entry) => (
-                <div key={entry.id} className="grid grid-cols-6 gap-4 p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
-                  <div className="text-sm">{entry.date}</div>
-                  <div className="text-sm font-medium">{entry.staffName}</div>
-                  <div className="text-sm">{entry.rate}</div>
-                  <div className="text-sm">
-                    <Input
-                      type="time"
-                      value={entry.start}
-                      onChange={(e) => updateTimeEntry(entry.id, 'start', e.target.value)}
-                      className="h-7 text-xs"
-                    />
-                  </div>
-                  <div className="text-sm">
-                    <Input
-                      type="number"
-                      min="0"
-                      value={entry.duration}
-                      onChange={(e) => updateTimeEntry(entry.id, 'duration', parseInt(e.target.value) || 0)}
-                      className="h-7 text-xs"
-                      placeholder="0 mins"
-                    />
-                  </div>
-                  <div className="flex items-center justify-center">
-                    {entry.billed ? (
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <div className="h-4 w-4 rounded border border-gray-300" />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Bottom Controls */}
           <div className="flex items-center justify-between pt-4 border-t">
@@ -441,11 +488,16 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
             </div>
             
             <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={onClose}>
-                Close
+              <Button variant="outline" onClick={onClose} data-testid="button-cancel">
+                Cancel
               </Button>
-              <Button onClick={saveTimeEntries} className="bg-orange-500 hover:bg-orange-600 text-white">
-                Save
+              <Button 
+                onClick={saveAllEntries} 
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+                disabled={pendingEntries.length === 0}
+                data-testid="button-save"
+              >
+                Save All ({pendingEntries.length})
               </Button>
             </div>
           </div>
