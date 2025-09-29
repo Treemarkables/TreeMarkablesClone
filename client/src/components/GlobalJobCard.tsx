@@ -580,17 +580,79 @@ export function GlobalJobCard({
     }
   });
 
+  // Fetch proposal data for this job (always fetch when job exists)
+  const { data: jobProposalResponse, isLoading: isProposalLoading, isFetching: isProposalFetching, refetch: refetchProposals } = useQuery({
+    queryKey: ["/api/proposals", { jobId: editingJob?.id }],
+    enabled: !!editingJob?.id,
+  });
+
+  // Create proposal mutation
+  const createProposalMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingJob?.id || !selectedCustomer?.id) {
+        throw new Error('Job and customer are required');
+      }
+      
+      const proposalData = {
+        jobId: editingJob.id,
+        customerId: selectedCustomer.id,
+        title: editingJob.title || 'Proposal',
+        proposalNumber: `PROP-${Date.now()}`,
+        introduction: editingJob.description || '',
+        conclusion: '',
+        status: 'draft' as const,
+        deliveryMethod: 'email' as const,
+      };
+      
+      const response = await apiRequest('POST', '/api/proposals', proposalData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/proposals'] });
+    },
+  });
+
   // Handle email click
-  const handleEmailClick = (context: 'general' | 'quote' | 'invoice' | 'proposal' = 'general') => {
+  const handleEmailClick = async (context: 'general' | 'quote' | 'invoice' | 'proposal' = 'general') => {
     setEmailContext(context);
+    
+    // For proposal emails, ensure a proposal exists before opening composer
+    if (context === 'proposal' && editingJob?.id && selectedCustomer?.id) {
+      // Wait for proposal query to be fully settled (not loading or fetching)
+      if (isProposalLoading || isProposalFetching) {
+        toast({
+          title: "Loading",
+          description: "Please wait while we load proposal data...",
+        });
+        return;
+      }
+      
+      const hasProposal = jobProposalResponse?.success && jobProposalResponse.data.length > 0;
+      
+      if (!hasProposal) {
+        try {
+          // Create proposal and wait for the result
+          await createProposalMutation.mutateAsync();
+          // Refetch and verify we have the proposal data
+          const refetchResult = await refetchProposals();
+          
+          if (!refetchResult.data?.success || !refetchResult.data.data.length) {
+            throw new Error('Failed to load created proposal');
+          }
+        } catch (error) {
+          console.error('Failed to create proposal:', error);
+          toast({
+            title: "Error",
+            description: "Failed to create proposal. Please try again.",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+    }
+    
     setIsEmailComposerOpen(true);
   };
-
-  // Fetch actual proposal data for this job
-  const { data: jobProposalResponse } = useQuery({
-    queryKey: ["/api/proposals", { jobId: editingJob?.id }],
-    enabled: !!editingJob?.id && emailContext === 'proposal',
-  });
 
   // Handle call click
   const handleCallClick = () => {
@@ -2425,10 +2487,6 @@ export function GlobalJobCard({
             subtotal: jobProposalResponse.data[0].subtotal,
             validUntil: jobProposalResponse.data[0].validUntil,
             status: jobProposalResponse.data[0].status,
-            lineItems: formData?.lineItems || []
-          } : emailContext === 'proposal' ? {
-            id: `temp-${Date.now()}`,
-            proposalNumber: `PROP-${editingJob?.jobNumber || '0000'}`,
             lineItems: formData?.lineItems || []
           } : undefined}
           templateType={emailContext === 'general' ? undefined : emailContext}
