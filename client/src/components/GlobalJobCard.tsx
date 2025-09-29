@@ -401,7 +401,7 @@ export function GlobalJobCard({
     defaultValues: {
       title: "",
       description: "",
-      status: "work_order",
+      status: "quote",
       priority: "medium",
       customerId: "",
       isNewCustomer: false,
