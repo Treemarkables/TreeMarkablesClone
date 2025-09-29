@@ -792,6 +792,14 @@ export function GlobalJobCard({
                     <Presentation className="w-4 h-4 mr-2" />
                     Proposal
                   </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => handleEmailClick('proposal')}
+                    disabled={!editingJob?.id || mode === 'create'}
+                    data-testid="menu-item-email-proposal"
+                  >
+                    <Mail className="w-4 h-4 mr-2" />
+                    Email Proposal
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button 
