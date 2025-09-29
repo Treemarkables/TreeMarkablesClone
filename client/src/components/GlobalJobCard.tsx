@@ -1243,16 +1243,29 @@ export function GlobalJobCard({
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="text-xs font-medium text-gray-600 mb-1 block">Job Status</label>
-                            <Select>
-                              <SelectTrigger className="h-8 text-sm">
-                                <SelectValue placeholder="Work Order" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="work-order">Work Order</SelectItem>
-                                <SelectItem value="quote">Quote</SelectItem>
-                                <SelectItem value="completed">Completed</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <FormField
+                              control={form.control}
+                              name="status"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                                      <SelectTrigger className="h-8 text-sm" data-testid="select-job-status">
+                                        <SelectValue placeholder="Select status" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="lead">Lead</SelectItem>
+                                        <SelectItem value="quote">Quote</SelectItem>
+                                        <SelectItem value="scheduled">Scheduled</SelectItem>
+                                        <SelectItem value="work_order">Work Order</SelectItem>
+                                        <SelectItem value="completed">Completed</SelectItem>
+                                        <SelectItem value="unsuccessful">Unsuccessful</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
                           </div>
                           <div>
                             <label className="text-xs font-medium text-gray-600 mb-1 block">Lead Source</label>
