@@ -298,7 +298,7 @@ export default function Clients() {
     allCustomers.find(c => c.id === selectedCustomerId) : null;
 
   return (
-    <div className="flex flex-col min-h-screen p-6 space-y-6 overflow-auto">
+    <div className="flex flex-col p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
