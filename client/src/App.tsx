@@ -45,12 +45,14 @@ import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, C
 import { Link } from "wouter";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   
   const style = {
     "--sidebar-width": "12rem",
@@ -58,12 +60,12 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   };
 
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
+    <SidebarProvider style={style as React.CSSProperties} defaultOpen={true}>
       <div className="flex h-screen w-full">
         <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between p-2 border-b">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            {isMobile && <SidebarTrigger data-testid="button-sidebar-toggle" />}
             
             <div className="flex items-center gap-2">
               {/* Account Dropdown */}
