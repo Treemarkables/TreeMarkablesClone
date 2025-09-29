@@ -780,6 +780,28 @@ export function GlobalJobCard({
       return;
     }
 
+    // Check if there are line items
+    const lineItems = formData?.lineItems || [];
+    if (lineItems.length === 0) {
+      toast({
+        title: "No Line Items",
+        description: "Please add at least one line item before saving the quote.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if there's a valid amount
+    const totalAmount = lineItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    if (totalAmount <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please ensure line items have valid quantities and prices.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const hasQuote = jobQuoteResponse?.success && jobQuoteResponse.data.length > 0;
       
@@ -799,7 +821,6 @@ export function GlobalJobCard({
       }
 
       // Log to job diary
-      const totalAmount = formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0;
       const diaryEntry = {
         jobId: editingJob.id,
         entryType: 'note' as const,
