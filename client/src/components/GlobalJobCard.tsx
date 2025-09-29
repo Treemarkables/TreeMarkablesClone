@@ -2346,6 +2346,18 @@ export function GlobalJobCard({
                     <JobDiarySection 
                       jobId={editingJob.id}
                       isServiceM8Style={true}
+                      onQuoteClick={(quoteNumber) => {
+                        // Open quote modal
+                        setIsQuoteModalOpen(true);
+                      }}
+                      onInvoiceClick={(invoiceNumber) => {
+                        // Open invoice modal
+                        setIsInvoiceModalOpen(true);
+                      }}
+                      onProposalClick={(proposalNumber) => {
+                        // Open proposal builder
+                        setIsProposalBuilderOpen(true);
+                      }}
                     />
                   )}
                   {!editingJob && (
