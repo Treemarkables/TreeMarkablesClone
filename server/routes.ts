@@ -1534,6 +1534,86 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Accept quote - converts to work order and creates notification
+  app.post('/api/quotes/:id/accept', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      // Get the quote
+      const quote = await storage.getQuote(id);
+      if (!quote) {
+        return res.status(404).json({ success: false, message: 'Quote not found' });
+      }
+
+      // Check if already accepted
+      if (quote.status === 'accepted') {
+        return res.status(400).json({ success: false, message: 'Quote has already been accepted' });
+      }
+
+      // Check if expired
+      if (quote.validUntil && new Date(quote.validUntil) < new Date()) {
+        return res.status(400).json({ success: false, message: 'Quote has expired' });
+      }
+
+      // Update quote status to accepted
+      const updatedQuote = await storage.updateQuote(id, { 
+        status: 'accepted',
+        acceptedDate: new Date()
+      });
+
+      // Create work order (job) from quote
+      const jobData = {
+        title: `Work Order from Quote #${quote.quoteNumber}`,
+        description: quote.description || `Work based on accepted quote #${quote.quoteNumber}`,
+        customerId: quote.customerId,
+        leadId: quote.leadId,
+        status: 'confirmed',
+        priority: 'medium',
+        totalAmount: quote.totalAmount,
+        subtotal: quote.subtotal,
+        gstAmount: (quote.totalAmount || 0) - (quote.subtotal || 0),
+        jobType: 'quote-conversion',
+        quoteId: id,
+        metricsEligible: true,
+        metricsStartDate: new Date()
+      };
+
+      // Generate job number
+      const jobNumber = await storage.getNextJobNumber();
+      const job = await storage.createJob({ ...jobData, jobNumber });
+
+      // Create notification for business owner
+      const customer = quote.customerId ? await storage.getCustomer(quote.customerId) : null;
+      const notificationData = {
+        title: 'Quote Accepted!',
+        message: `${customer?.name || 'Customer'} has accepted quote #${quote.quoteNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(quote.totalAmount || 0)}. Work order #${jobNumber} has been created.`,
+        type: 'quote_accepted',
+        priority: 'high',
+        isRead: false,
+        entityType: 'quote',
+        entityId: id,
+        relatedEntityType: 'job',
+        relatedEntityId: job.id
+      };
+
+      await storage.createNotification(notificationData);
+
+      console.log(`✅ Quote ${quote.quoteNumber} accepted and converted to work order ${jobNumber}`);
+
+      res.json({ 
+        success: true, 
+        data: { 
+          quote: updatedQuote, 
+          workOrder: job,
+          message: 'Quote accepted successfully and work order created'
+        }
+      });
+    } catch (error) {
+      console.error('Error accepting quote:', error);
+      res.status(500).json({ success: false, message: 'Error accepting quote' });
+    }
+  });
+
   // ========================================
   // JOB MANAGEMENT API ROUTES
   // ========================================
@@ -7203,6 +7283,87 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         success: false,
         message: 'Error updating proposal'
       });
+    }
+  });
+
+  // Accept proposal - converts to work order and creates notification
+  app.post('/api/proposals/:id/accept', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      // Get the proposal
+      const proposal = await storage.getProposal(id);
+      if (!proposal) {
+        return res.status(404).json({ success: false, message: 'Proposal not found' });
+      }
+
+      // Check if already accepted
+      if (proposal.status === 'accepted') {
+        return res.status(400).json({ success: false, message: 'Proposal has already been accepted' });
+      }
+
+      // Check if expired
+      if (proposal.validUntil && new Date(proposal.validUntil) < new Date()) {
+        return res.status(400).json({ success: false, message: 'Proposal has expired' });
+      }
+
+      // Update proposal status to accepted
+      const updatedProposal = await storage.updateProposal(id, { 
+        status: 'accepted',
+        acceptedDate: new Date()
+      });
+
+      // Create work order (job) from proposal
+      const jobData = {
+        title: `Work Order from Proposal #${proposal.proposalNumber}`,
+        description: proposal.description || `Work based on accepted proposal #${proposal.proposalNumber}`,
+        customerId: proposal.customerId,
+        leadId: proposal.leadId,
+        quoteId: proposal.quoteId,
+        status: 'confirmed',
+        priority: 'medium',
+        totalAmount: proposal.totalAmount,
+        subtotal: proposal.subtotal,
+        gstAmount: (proposal.totalAmount || 0) - (proposal.subtotal || 0),
+        jobType: 'proposal-conversion',
+        proposalId: id,
+        metricsEligible: true,
+        metricsStartDate: new Date()
+      };
+
+      // Generate job number
+      const jobNumber = await storage.getNextJobNumber();
+      const job = await storage.createJob({ ...jobData, jobNumber });
+
+      // Create notification for business owner
+      const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
+      const notificationData = {
+        title: 'Proposal Accepted!',
+        message: `${customer?.name || 'Customer'} has accepted proposal #${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(proposal.totalAmount || 0)}. Work order #${jobNumber} has been created.`,
+        type: 'proposal_accepted',
+        priority: 'high',
+        isRead: false,
+        entityType: 'proposal',
+        entityId: id,
+        relatedEntityType: 'job',
+        relatedEntityId: job.id
+      };
+
+      await storage.createNotification(notificationData);
+
+      console.log(`✅ Proposal ${proposal.proposalNumber} accepted and converted to work order ${jobNumber}`);
+
+      res.json({ 
+        success: true, 
+        data: { 
+          proposal: updatedProposal, 
+          workOrder: job,
+          message: 'Proposal accepted successfully and work order created'
+        }
+      });
+    } catch (error) {
+      console.error('Error accepting proposal:', error);
+      res.status(500).json({ success: false, message: 'Error accepting proposal' });
     }
   });
 
