@@ -77,13 +77,8 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   });
 
   const handleAcceptProposal = () => {
-    // Use the actual proposal ID for acceptance, not the URL parameter
-    const realProposalId = proposal.id;
     acceptProposalMutation.mutate();
   };
-
-  // Update the accept proposal mutation to use the real proposal ID
-  const realProposalId = proposal?.id || proposalId;
 
   if (actualLoading) {
     return (
