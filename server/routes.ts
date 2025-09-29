@@ -7322,7 +7322,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         customerId: proposal.customerId,
         leadId: proposal.leadId,
         quoteId: proposal.quoteId,
-        status: 'confirmed',
+        status: 'work_order',
         priority: 'medium',
         totalAmount: proposal.totalAmount,
         subtotal: proposal.subtotal,

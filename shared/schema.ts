@@ -278,7 +278,7 @@ export const jobs = pgTable("jobs", {
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),
   completedDate: timestamp("completed_date"),
-  status: text("status").notNull().default('lead'), // lead, quote, scheduled, work_order, completed, unsuccessful
+  status: text("status").notNull().default('quote'), // lead, quote, scheduled, work_order, completed, unsuccessful
   priority: text("priority"), // low, medium, high, urgent
   assignedTeam: text("assigned_team").array(),
   estimatedDuration: integer("estimated_duration"), // hours
