@@ -577,7 +577,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     switch (job.status) {
       case 'completed': return 'bg-green-500';
       case 'unsuccessful': return 'bg-red-500'; // Unsuccessful
-      case 'work_order': return 'bg-yellow-500';
+      case 'work_order': return 'bg-green-500'; // Work Order
       case 'scheduled': return 'bg-orange-500';
       case 'quote': return 'bg-purple-500';
       case 'lead': return 'bg-blue-500';
@@ -595,7 +595,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     switch (job.status) {
       case 'completed': return '#10b981'; // green-500
       case 'unsuccessful': return '#ef4444'; // red-500 - Unsuccessful
-      case 'work_order': return '#eab308'; // yellow-500
+      case 'work_order': return '#10b981'; // green-500 - Work Order
       case 'scheduled': return '#f97316'; // orange-500
       case 'quote': return '#8b5cf6'; // purple-500  
       case 'lead': return '#3b82f6'; // blue-500
