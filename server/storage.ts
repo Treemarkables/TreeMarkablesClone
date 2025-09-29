@@ -1982,7 +1982,10 @@ class DatabaseStorage implements IStorage {
   async getScheduleEventsByJob(jobId: string): Promise<ScheduleEvent[]> { return []; }
   async deleteScheduleEvent(id: string): Promise<void> { }
 
-  async createProposal(proposal: InsertProposal): Promise<Proposal> { throw new Error("Not implemented"); }
+  async createProposal(proposal: InsertProposal): Promise<Proposal> {
+    const [created] = await db.insert(schema.proposals).values(proposal).returning();
+    return created;
+  }
   async getProposal(id: string): Promise<Proposal | undefined> { return undefined; }
   async updateProposal(id: string, updates: UpdateProposal): Promise<Proposal> { throw new Error("Not implemented"); }
   async getProposalsByCustomer(customerId: string): Promise<Proposal[]> { return []; }
