@@ -15,22 +15,48 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Fetch quote data
-  const { data: quoteResponse, isLoading: quoteLoading } = useQuery({
+  // First try to fetch quote directly by ID
+  const { data: quoteResponse, isLoading: quoteLoading, error: quoteError } = useQuery({
     queryKey: ["/api/quotes", quoteId],
     enabled: !!quoteId,
   });
 
+  // If direct fetch fails (404), try to find quote by job ID
+  const { data: quotesByJobResponse, isLoading: quotesByJobLoading } = useQuery({
+    queryKey: ["/api/quotes", { jobId: quoteId }],
+    queryFn: async () => {
+      try {
+        const response = await fetch(`/api/quotes?jobId=${quoteId}`);
+        if (!response.ok) {
+          return { success: false, data: [], count: 0 };
+        }
+        return response.json();
+      } catch (error) {
+        console.error('Error fetching quotes by job ID:', error);
+        return { success: false, data: [], count: 0 };
+      }
+    },
+    enabled: !!quoteId && !quoteLoading && !quoteResponse?.success,
+  });
+
+  // Use either direct quote or first quote found by job ID
+  const actualQuoteResponse = quoteResponse?.success ? quoteResponse : 
+    (quotesByJobResponse?.success && quotesByJobResponse.data.length > 0) ? 
+      { success: true, data: quotesByJobResponse.data[0] } : 
+      quoteResponse;
+
+  const actualLoading = quoteLoading || quotesByJobLoading;
+
   // Fetch customer data if quote has customerId
   const { data: customerResponse } = useQuery({
-    queryKey: ["/api/customers", quoteResponse?.data?.customerId],
-    enabled: !!quoteResponse?.data?.customerId,
+    queryKey: ["/api/customers", actualQuoteResponse?.data?.customerId],
+    enabled: !!actualQuoteResponse?.data?.customerId,
   });
 
   // Fetch job data if quote has jobId
   const { data: jobResponse } = useQuery({
-    queryKey: ["/api/jobs", quoteResponse?.data?.jobId],
-    enabled: !!quoteResponse?.data?.jobId,
+    queryKey: ["/api/jobs", actualQuoteResponse?.data?.jobId],
+    enabled: !!actualQuoteResponse?.data?.jobId,
   });
 
   // Accept quote mutation
@@ -65,7 +91,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
     acceptQuoteMutation.mutate();
   };
 
-  if (quoteLoading) {
+  if (actualLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -76,7 +102,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
     );
   }
 
-  if (!quoteResponse?.success || !quoteResponse?.data) {
+  if (!actualQuoteResponse?.success || !actualQuoteResponse?.data) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="w-full max-w-md">
@@ -97,7 +123,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
     );
   }
 
-  const quote = quoteResponse.data;
+  const quote = actualQuoteResponse.data;
   const customer = customerResponse?.data;
   const job = jobResponse?.data;
 

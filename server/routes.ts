@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
+import { z } from "zod";
 import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
@@ -1484,13 +1485,23 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   app.get('/api/quotes', async (req: Request, res: Response) => {
     try {
-      const { customerId, leadId } = req.query;
+      const { customerId, leadId, jobId } = req.query;
       let quotes;
       
       if (customerId && typeof customerId === 'string') {
         quotes = await storage.getQuotesByCustomer(customerId);
       } else if (leadId && typeof leadId === 'string') {
         quotes = await storage.getQuotesByLead(leadId);
+      } else if (jobId && typeof jobId === 'string') {
+        // Look up the job and get its quoteId, or find quotes with leadId matching the jobId
+        const job = await storage.getJob(jobId);
+        if (job && job.quoteId) {
+          const quote = await storage.getQuote(job.quoteId);
+          quotes = quote ? [quote] : [];
+        } else {
+          // Fallback: try to find quotes where leadId matches the jobId
+          quotes = await storage.getQuotesByLead(jobId);
+        }
       } else {
         quotes = await storage.getAllQuotes();
       }
