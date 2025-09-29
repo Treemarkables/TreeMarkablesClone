@@ -602,6 +602,7 @@ export function GlobalJobCard({
         conclusion: '',
         status: 'draft' as const,
         deliveryMethod: 'email' as const,
+        createdBy: 'system',
       };
       
       const response = await apiRequest('POST', '/api/proposals', proposalData);
