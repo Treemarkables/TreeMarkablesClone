@@ -68,7 +68,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     staleTime: 0,
-    cacheTime: 0,
   });
 
   // Fetch existing time entries for this job
@@ -392,7 +391,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">Rate Type</div>
-                        <div className="text-sm">{availableRates.find(r => r.itemNumber === entry.rate)?.name || entry.rate}</div>
+                        <div className="text-sm">{availableRates.find((r: any) => r.itemNumber === entry.rate)?.name || entry.rate}</div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">Start Time</div>
