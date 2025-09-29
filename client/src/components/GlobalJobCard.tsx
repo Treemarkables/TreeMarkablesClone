@@ -658,9 +658,13 @@ export function GlobalJobCard({
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
-      // Update the job with the quote ID
+      // Update the job with the quote ID (preserve line items)
       if (result.data?.id && editingJob?.id) {
-        apiRequest('PUT', `/api/jobs/${editingJob.id}`, { quoteId: result.data.id });
+        const lineItems = editingJob.lineItems || formData?.lineItems || [];
+        apiRequest('PUT', `/api/jobs/${editingJob.id}`, { 
+          quoteId: result.data.id,
+          lineItems: lineItems
+        });
       }
     },
   });
