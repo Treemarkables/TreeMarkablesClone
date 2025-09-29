@@ -821,24 +821,29 @@ export function GlobalJobCard({
         quoteResult = { data: jobQuoteResponse.data[0] };
       }
 
-      // Log to job diary
-      const diaryEntry = {
-        jobId: editingJob.id,
-        entryType: 'note' as const,
-        content: `Quote ${quoteResult.data.quoteNumber || 'draft'} created for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(totalAmount)}`,
-        isPrivate: false,
-        createdBy: 'system'
-      };
+      // Log to job diary (don't fail if this fails)
+      try {
+        const diaryEntry = {
+          jobId: editingJob.id,
+          entryType: 'note' as const,
+          content: `Quote ${quoteResult.data.quoteNumber || 'draft'} created for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(totalAmount)}`,
+          isPrivate: false,
+          createdBy: 'system'
+        };
 
-      await apiRequest('POST', `/api/jobs/${editingJob.id}/diary`, diaryEntry);
-      
-      // Invalidate diary query to refresh
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+        await apiRequest('POST', `/api/jobs/${editingJob.id}/diary`, diaryEntry);
+        
+        // Invalidate diary query to refresh
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+      } catch (diaryError) {
+        // Don't fail the whole operation if diary logging fails
+        console.error('Failed to log to diary:', diaryError);
+      }
 
       toast({
         title: "Quote Saved",
-        description: "Quote has been saved and logged to the job diary.",
-        duration: 1000,
+        description: `Quote ${quoteResult.data.quoteNumber} has been saved successfully.`,
+        duration: 2000,
       });
 
       setIsQuoteModalOpen(false);
