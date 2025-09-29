@@ -23,6 +23,7 @@ interface QuoteTemplateProps {
   lineItems?: LineItem[];
   className?: string;
   showActions?: boolean;
+  onSave?: () => void;
   onEmail?: () => void;
   onDownload?: () => void;
   onCopy?: () => void;
@@ -35,6 +36,7 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
   lineItems = [],
   className = '',
   showActions = false,
+  onSave,
   onEmail,
   onDownload,
   onCopy
@@ -104,6 +106,12 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
             </div>
           </div>
           <div className="flex gap-2">
+            {onSave && (
+              <Button size="sm" onClick={onSave} data-testid="button-save-quote" className="bg-green-600 hover:bg-green-700 text-white">
+                <FileText className="w-4 h-4 mr-2" />
+                Save Quote
+              </Button>
+            )}
             {onCopy && (
               <Button variant="outline" size="sm" onClick={onCopy} data-testid="button-copy-quote">
                 <Copy className="w-4 h-4 mr-2" />

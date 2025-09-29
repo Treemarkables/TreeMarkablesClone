@@ -643,11 +643,11 @@ export function GlobalJobCard({
         leadId: editingJob.id,
         customerId: selectedCustomer.id,
         quoteNumber: `QTE-${editingJob.jobNumber || Date.now()}`,
-        description: editingJob.description || editingJob.title || 'Quote',
-        amount: totalAmount.toString(),
+        description: editingJob.description || editingJob.title || 'Quote for tree services',
+        amount: totalAmount.toFixed(2),
         status: 'draft' as const,
         validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        lineItems: formData?.lineItems || [],
+        lineItems: JSON.stringify(formData?.lineItems || []),
         terms: 'Payment due within 30 days',
         createdBy: 'system',
       };
@@ -767,6 +767,67 @@ export function GlobalJobCard({
   // Handle quote click
   const handleQuoteClick = () => {
     setIsQuoteModalOpen(true);
+  };
+
+  // Handle save quote
+  const handleSaveQuote = async () => {
+    if (!editingJob?.id || !selectedCustomer?.id) {
+      toast({
+        title: "Error",
+        description: "Job and customer are required to save quote.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const hasQuote = jobQuoteResponse?.success && jobQuoteResponse.data.length > 0;
+      
+      let quoteResult;
+      if (!hasQuote) {
+        // Create the quote
+        quoteResult = await createQuoteMutation.mutateAsync();
+        
+        if (!quoteResult?.data?.id) {
+          throw new Error('Failed to create quote');
+        }
+        
+        // Refetch to get the latest quote data
+        await refetchQuotes();
+      } else {
+        quoteResult = { data: jobQuoteResponse.data[0] };
+      }
+
+      // Log to job diary
+      const totalAmount = formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0;
+      const diaryEntry = {
+        jobId: editingJob.id,
+        entryType: 'note' as const,
+        content: `Quote ${quoteResult.data.quoteNumber || 'draft'} created for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(totalAmount)}`,
+        isPrivate: false,
+        createdBy: 'system'
+      };
+
+      await apiRequest('POST', `/api/jobs/${editingJob.id}/diary`, diaryEntry);
+      
+      // Invalidate diary query to refresh
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+
+      toast({
+        title: "Quote Saved",
+        description: "Quote has been saved and logged to the job diary.",
+        duration: 1000,
+      });
+
+      setIsQuoteModalOpen(false);
+    } catch (error) {
+      console.error('Failed to save quote:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save quote. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Handle invoice click
@@ -2665,6 +2726,7 @@ export function GlobalJobCard({
                   total: item.total
                 })) || []}
                 showActions={true}
+                onSave={handleSaveQuote}
                 onEmail={() => {
                   setIsQuoteModalOpen(false);
                   handleEmailClick('quote');
