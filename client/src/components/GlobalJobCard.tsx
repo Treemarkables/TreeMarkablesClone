@@ -656,15 +656,22 @@ export function GlobalJobCard({
       const response = await apiRequest('POST', '/api/quotes', quoteData);
       return response.json();
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
       // Update the job with the quote ID (preserve line items)
       if (result.data?.id && editingJob?.id) {
-        const lineItems = editingJob.lineItems || formData?.lineItems || [];
-        apiRequest('PUT', `/api/jobs/${editingJob.id}`, { 
-          quoteId: result.data.id,
-          lineItems: lineItems
-        });
+        try {
+          const lineItems = editingJob.lineItems || formData?.lineItems || [];
+          console.log('📝 Updating job with quoteId and line items:', { quoteId: result.data.id, lineItemsCount: lineItems.length });
+          await apiRequest('PUT', `/api/jobs/${editingJob.id}`, { 
+            quoteId: result.data.id,
+            lineItems: lineItems
+          });
+          // Invalidate job queries to refresh
+          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        } catch (error) {
+          console.error('Failed to update job with quoteId:', error);
+        }
       }
     },
   });
@@ -830,9 +837,11 @@ export function GlobalJobCard({
         const diaryEntry = {
           jobId: editingJob.id,
           entryType: 'note' as const,
+          title: 'Quote Created',
+          description: `Quote ${quoteResult.data.quoteNumber} created`,
           content: `Quote ${quoteResult.data.quoteNumber || 'draft'} created for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(totalAmount)}`,
-          isPrivate: false,
-          createdBy: 'system'
+          authorName: 'System',
+          isPrivate: false
         };
 
         await apiRequest('POST', `/api/jobs/${editingJob.id}/diary`, diaryEntry);
