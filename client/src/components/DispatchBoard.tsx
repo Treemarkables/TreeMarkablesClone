@@ -670,65 +670,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     return jobs
       .filter(job => {
-        // For "All Jobs" filter, show jobs from different dates to ensure all jobs are visible
-        const jobDate = new Date(job.startTime);
-        const isValidDate = !isNaN(jobDate.getTime());
-        
-        // If job filter is 'all', be more inclusive with dates
-        if (jobFilter === 'all') {
-          // Show jobs for today, plus any jobs without valid dates or with recent dates
-          const isToday = isValidDate && isSameDay(jobDate, selectedDate);
-          const isRecent = isValidDate && Math.abs(jobDate.getTime() - selectedDate.getTime()) <= 7 * 24 * 60 * 60 * 1000; // Within 7 days
-          if (!isToday && !isRecent && isValidDate) return false;
-        } else {
-          // For other filters, stick to the selected date
-          const isToday = isValidDate && isSameDay(jobDate, selectedDate);
-          if (!isToday && isValidDate) return false;
-        }
-        
-        // Apply job filter based on selected filter option
-        switch (jobFilter) {
-          case 'all':
-            // Show active jobs (exclude only completed and cancelled), be more inclusive
-            return job.status !== 'completed' && job.status !== 'cancelled';
-            
-          case 'action_required':
-            // Jobs that need scheduling, assignment, or other action
-            return !job.assignedTeam?.length || job.status === 'scheduled' && !job.teamId && !job.staffId;
-            
-          case 'for_review':
-            // Jobs that need review (high priority or specific conditions)
-            return job.priority === 'urgent' || job.priority === 'high';
-            
-          case 'leads':
-            // Jobs that are potential customers/inquiries (status = lead OR low priority OR specific service type)
-            return job.status === 'lead' || job.priority === 'low' || job.serviceType?.toLowerCase().includes('lead') || job.serviceType?.toLowerCase().includes('inquiry');
-            
-          case 'quotes':
-            // Jobs with Quote in service type
-            return job.serviceType?.toLowerCase().includes('quote') || false;
-            
-          case 'work_orders':
-            // Jobs that are confirmed work orders (scheduled/work_order status, not quotes/leads)
-            return (job.status === 'scheduled' || job.status === 'work_order') && job.status !== 'lead' && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
-            
-          case 'unscheduled':
-            // Jobs without proper scheduling or assignment
-            const jobDate = new Date(job.startTime);
-            const isDefaultTime = jobDate.getHours() === 9 && jobDate.getMinutes() === 0; // Default 9 AM
-            return isDefaultTime || (!job.assignedTeam?.length && !job.teamId && !job.staffId);
-            
-          case 'in_progress':
-            // Jobs currently in progress
-            return job.status === 'in_progress' || job.status === 'scheduled';
-            
-          case 'completed':
-            // Recently completed or unsuccessful jobs
-            return job.status === 'completed' || job.status === 'cancelled';
-            
-          default:
-            return true;
-        }
+        // Show only jobs with status 'lead', 'quote', or 'work order'
+        return job.status === 'lead' || job.status === 'quote' || job.status === 'work order';
       })
       .filter(job => {
         // Apply search filter
@@ -747,7 +690,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                description.includes(query) ||
                jobId.includes(query);
       })
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      .sort((a, b) => {
+        // Sort by highest job number (descending)
+        const jobNumberA = parseInt(a.jobNumber || '0', 10);
+        const jobNumberB = parseInt(b.jobNumber || '0', 10);
+        return jobNumberB - jobNumberA;
+      })
+      .slice(0, 30); // Limit to 30 latest jobs
   };
 
   // Job Mutations
