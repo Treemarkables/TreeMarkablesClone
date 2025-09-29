@@ -4807,7 +4807,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Create new employee
   app.post('/api/employees', async (req: Request, res: Response) => {
     try {
-      const validatedData = insertEmployeeSchema.parse(req.body);
+      // Convert hourlyRate to string if it's a number
+      const bodyData = { ...req.body };
+      if (typeof bodyData.hourlyRate === 'number') {
+        bodyData.hourlyRate = bodyData.hourlyRate.toString();
+      }
+      
+      const validatedData = insertEmployeeSchema.parse(bodyData);
       const employee = await storage.createEmployee(validatedData);
       res.json({
         success: true,
