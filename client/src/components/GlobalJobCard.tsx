@@ -642,7 +642,6 @@ export function GlobalJobCard({
       const lineItems = editingJob.lineItems || formData?.lineItems || [];
       const totalAmount = lineItems.reduce((sum, item) => sum + (item.total || 0), 0) || 0;
       const quoteData = {
-        leadId: editingJob.id,
         customerId: selectedCustomer.id,
         quoteNumber: `QTE-${editingJob.jobNumber || Date.now()}`,
         description: editingJob.description || editingJob.title || 'Quote for tree services',
