@@ -447,7 +447,8 @@ export const riskAssessments = pgTable("risk_assessments", {
 // Proposal System
 export const proposals = pgTable("proposals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  quoteId: varchar("quote_id").references(() => quotes.id).notNull(),
+  jobId: varchar("job_id").references(() => jobs.id),
+  quoteId: varchar("quote_id").references(() => quotes.id),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   proposalNumber: text("proposal_number").notNull().unique(),
   title: text("title").notNull(),

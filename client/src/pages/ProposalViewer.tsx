@@ -24,7 +24,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   // If direct fetch fails (404), try to find proposal by job ID
   const { data: proposalsByJobResponse, isLoading: proposalsByJobLoading } = useQuery({
-    queryKey: ["/api/proposals", { jobId: proposalId }],
+    queryKey: ["/api/proposals?jobId=" + proposalId],
     enabled: !!proposalId && !!proposalError,
   });
 
@@ -63,7 +63,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       });
       // Refresh proposal data to show updated status
       queryClient.invalidateQueries({ queryKey: ["/api/proposals", proposalId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/proposals", { jobId: proposalId }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/proposals?jobId=" + proposalId] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     },
     onError: (error: any) => {
