@@ -431,11 +431,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     notes: ''
   });
 
-  // Fetch jobs from backend API (filtered for dispatch)
+  // Fetch jobs from backend API
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
-    queryKey: ['/api/jobs', 'dispatch'],
+    queryKey: ['/api/jobs'],
     queryFn: async () => {
-      const response = await fetch('/api/jobs?dispatch=true');
+      const response = await fetch('/api/jobs');
       if (!response.ok) throw new Error('Failed to fetch jobs');
       return response.json();
     }
@@ -465,8 +465,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Force refresh the cache to get corrected data mapping
   useEffect(() => {
     // Invalidate jobs cache to force refetch with corrected mapping and cleaned descriptions
-    queryClient.invalidateQueries({ queryKey: ['/api/jobs', 'dispatch'] });
-    queryClient.refetchQueries({ queryKey: ['/api/jobs', 'dispatch'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
   }, []); // Only run once on mount
 
   // Convert API jobs to DispatchBoard format
