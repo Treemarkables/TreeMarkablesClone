@@ -60,7 +60,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, ilike, and, gte, lte, desc, sql } from "drizzle-orm";
+import { eq, ilike, and, gte, lte, desc, sql, inArray } from "drizzle-orm";
 import * as schema from "@shared/schema";
 
 // modify the interface with any CRUD methods
@@ -159,6 +159,7 @@ export interface IStorage {
   updateJob(id: string, updates: Partial<InsertJob>): Promise<Job>;
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
+  getDispatchJobs(): Promise<Job[]>;
   getAllJobs(): Promise<Job[]>;
   clearAllJobs(): Promise<number>;
   deleteJob(id: string): Promise<boolean>;
@@ -1245,6 +1246,13 @@ class DatabaseStorage implements IStorage {
     return await db.select().from(schema.jobs)
       .where(eq(schema.jobs.status, status))
       .orderBy(desc(schema.jobs.createdAt));
+  }
+
+  async getDispatchJobs(): Promise<Job[]> {
+    return await db.select().from(schema.jobs)
+      .where(inArray(schema.jobs.status, ['lead', 'quote', 'work_order']))
+      .orderBy(desc(schema.jobs.createdAt))
+      .limit(30);
   }
 
   async getAllJobs(): Promise<Job[]> {
