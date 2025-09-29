@@ -2021,12 +2021,39 @@ class DatabaseStorage implements IStorage {
     const [created] = await db.insert(schema.proposals).values(proposal).returning();
     return created;
   }
-  async getProposal(id: string): Promise<Proposal | undefined> { return undefined; }
-  async updateProposal(id: string, updates: UpdateProposal): Promise<Proposal> { throw new Error("Not implemented"); }
-  async getProposalsByCustomer(customerId: string): Promise<Proposal[]> { return []; }
-  async getProposalsByQuote(quoteId: string): Promise<Proposal[]> { return []; }
-  async getAllProposals(): Promise<Proposal[]> { return []; }
-  async deleteProposal(id: string): Promise<void> { }
+  async getProposal(id: string): Promise<Proposal | undefined> {
+    const [proposal] = await db.select().from(schema.proposals).where(eq(schema.proposals.id, id));
+    return proposal || undefined;
+  }
+  
+  async updateProposal(id: string, updates: UpdateProposal): Promise<Proposal> {
+    const [updated] = await db.update(schema.proposals)
+      .set(updates)
+      .where(eq(schema.proposals.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getProposalsByCustomer(customerId: string): Promise<Proposal[]> {
+    const proposals = await db.select().from(schema.proposals)
+      .where(eq(schema.proposals.customerId, customerId));
+    return proposals;
+  }
+  
+  async getProposalsByQuote(quoteId: string): Promise<Proposal[]> {
+    const proposals = await db.select().from(schema.proposals)
+      .where(eq(schema.proposals.quoteId, quoteId));
+    return proposals;
+  }
+  
+  async getAllProposals(): Promise<Proposal[]> {
+    const proposals = await db.select().from(schema.proposals);
+    return proposals;
+  }
+  
+  async deleteProposal(id: string): Promise<void> {
+    await db.delete(schema.proposals).where(eq(schema.proposals.id, id));
+  }
 
   async createProposalSection(section: InsertProposalSection): Promise<ProposalSection> { throw new Error("Not implemented"); }
   async getProposalSection(id: string): Promise<ProposalSection | undefined> { return undefined; }
