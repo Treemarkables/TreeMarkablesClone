@@ -686,10 +686,12 @@ export function ProposalBuilder({
 
     // Get current proposal data to send email for
     const previewData = getPreviewData();
-    if (!previewData.proposal.id) {
+    
+    // Check if this is a preview proposal (not saved yet)
+    if (!previewData.proposal.id || previewData.proposal.id.startsWith('preview-')) {
       toast({
-        title: "No Proposal",
-        description: "Please save the proposal first before sending email",
+        title: "Save Proposal First",
+        description: "Please save the proposal first before sending email. Click 'Create Proposal' at the bottom of the form.",
         variant: "destructive"
       });
       return;
