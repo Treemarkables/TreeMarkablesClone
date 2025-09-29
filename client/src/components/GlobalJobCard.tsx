@@ -648,7 +648,7 @@ export function GlobalJobCard({
         description: editingJob.description || editingJob.title || 'Quote for tree services',
         amount: totalAmount.toFixed(2),
         status: 'draft' as const,
-        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         lineItems: JSON.stringify(lineItems),
         terms: 'Payment due within 30 days',
         createdBy: 'system',
