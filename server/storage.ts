@@ -1251,7 +1251,7 @@ class DatabaseStorage implements IStorage {
   async getDispatchJobs(): Promise<Job[]> {
     return await db.select().from(schema.jobs)
       .where(inArray(schema.jobs.status, ['lead', 'quote', 'work_order']))
-      .orderBy(desc(schema.jobs.createdAt))
+      .orderBy(desc(schema.jobs.jobNumber))
       .limit(30);
   }
 
