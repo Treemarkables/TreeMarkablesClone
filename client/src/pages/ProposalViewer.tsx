@@ -25,7 +25,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   // If direct fetch fails (404), try to find proposal by job ID
   const { data: proposalsByJobResponse, isLoading: proposalsByJobLoading } = useQuery({
     queryKey: ["/api/proposals?jobId=" + proposalId],
-    enabled: !!proposalId && !!proposalError,
+    enabled: !!proposalId && !proposalLoading && !proposalResponse?.success,
   });
 
   // Use either direct proposal or first proposal found by job ID
