@@ -638,7 +638,9 @@ export function GlobalJobCard({
         throw new Error('Job and customer are required');
       }
       
-      const totalAmount = formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0;
+      // Get line items from job record first, fallback to formData
+      const lineItems = editingJob.lineItems || formData?.lineItems || [];
+      const totalAmount = lineItems.reduce((sum, item) => sum + (item.total || 0), 0) || 0;
       const quoteData = {
         leadId: editingJob.id,
         customerId: selectedCustomer.id,
@@ -647,7 +649,7 @@ export function GlobalJobCard({
         amount: totalAmount.toFixed(2),
         status: 'draft' as const,
         validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        lineItems: JSON.stringify(formData?.lineItems || []),
+        lineItems: JSON.stringify(lineItems),
         terms: 'Payment due within 30 days',
         createdBy: 'system',
       };
@@ -780,8 +782,8 @@ export function GlobalJobCard({
       return;
     }
 
-    // Check if there are line items
-    const lineItems = formData?.lineItems || [];
+    // Get line items from the job record (not from formData which might not be loaded yet)
+    const lineItems = editingJob?.lineItems || formData?.lineItems || [];
     if (lineItems.length === 0) {
       toast({
         title: "No Line Items",
