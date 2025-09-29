@@ -1527,12 +1527,112 @@ export function ProposalBuilder({
                     customer={previewData.customer}
                     sections={previewData.sections}
                     showActions={true}
-                    onEmail={() => setShowEmailDialog(true)}
+                    onEmail={() => {
+                      initializeEmailForm();
+                      setShowEmailDialog(true);
+                    }}
                     onDownload={() => console.log('Download proposal')}
                     onCopy={() => console.log('Copy proposal')}
                   />
                 );
               })()}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Email Dialog */}
+      {showEmailDialog && (
+        <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-blue-600" />
+                Send Proposal Email
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Recipient Email */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">To *</label>
+                <Input
+                  type="email"
+                  placeholder="customer@example.com"
+                  value={emailForm.to}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, to: e.target.value }))}
+                  data-testid="input-email-to"
+                />
+              </div>
+
+              {/* CC Email */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">CC (optional)</label>
+                <Input
+                  type="email"
+                  placeholder="cc@example.com"
+                  value={emailForm.cc}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, cc: e.target.value }))}
+                  data-testid="input-email-cc"
+                />
+              </div>
+
+              {/* Subject */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Subject *</label>
+                <Input
+                  placeholder="Proposal subject"
+                  value={emailForm.subject}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, subject: e.target.value }))}
+                  data-testid="input-email-subject"
+                />
+              </div>
+
+              {/* Message */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Message</label>
+                <Textarea
+                  placeholder="Enter your message..."
+                  value={emailForm.message}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, message: e.target.value }))}
+                  rows={8}
+                  data-testid="textarea-email-message"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="text-xs text-gray-500">
+                  * Required fields
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowEmailDialog(false)}
+                    disabled={sendEmailMutation.isPending}
+                    data-testid="button-cancel-email"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSendEmail}
+                    disabled={sendEmailMutation.isPending || !emailForm.to.trim() || !emailForm.subject.trim()}
+                    data-testid="button-send-email"
+                  >
+                    {sendEmailMutation.isPending ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Send Email
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
