@@ -48,9 +48,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     enabled: isOpen,
   });
 
-  const { data: materialsServicesData } = useQuery({
+  const { data: materialsServicesData, refetch: refetchMaterials } = useQuery({
     queryKey: ['/api/materials'],
     enabled: isOpen,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 
   // Fetch existing time entries for this job - align with profit tracker API
@@ -76,10 +78,13 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
 
   // Get staff rates from materials & services catalog
   const getStaffRates = () => {
+    console.log('Getting staff rates from materials:', materialsAndServices);
     // Get all labour items from the catalog
-    return materialsAndServices.filter((item: any) => {
+    const labourItems = materialsAndServices.filter((item: any) => {
       const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
-      return item.category === 'Labour' && price >= 0;
+      const isLabour = item.category === 'Labour' && price >= 0;
+      console.log(`Item ${item.itemNumber} - ${item.name}: category=${item.category}, price=${price}, isLabour=${isLabour}`);
+      return isLabour;
     }).map((item: any) => {
       const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
       return {
@@ -90,6 +95,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
         name: item.name
       };
     });
+    console.log('Available rates:', labourItems);
+    return labourItems;
   };
   
   const availableRates = getStaffRates();
@@ -97,10 +104,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   // Refetch data when modal opens
   useEffect(() => {
     if (isOpen && jobId) {
-      console.log('Modal opened, refetching time entries...');
+      console.log('Modal opened, refetching time entries and materials...');
       refetchTimeEntries();
+      refetchMaterials();
     }
-  }, [isOpen, jobId, refetchTimeEntries]);
+  }, [isOpen, jobId, refetchTimeEntries, refetchMaterials]);
 
   // Initialize time entries from real data only (but don't reset if user has added entries)
   const [hasInitialized, setHasInitialized] = useState(false);
