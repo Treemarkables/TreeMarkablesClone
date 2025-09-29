@@ -586,6 +586,12 @@ export function GlobalJobCard({
     setIsEmailComposerOpen(true);
   };
 
+  // Fetch actual proposal data for this job
+  const { data: jobProposalResponse } = useQuery({
+    queryKey: ["/api/proposals", { jobId: editingJob?.id }],
+    enabled: !!editingJob?.id && emailContext === 'proposal',
+  });
+
   // Handle call click
   const handleCallClick = () => {
     const phone = selectedCustomer?.phone;
@@ -2411,8 +2417,17 @@ export function GlobalJobCard({
             dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             lineItems: formData?.lineItems || []
           } : undefined}
-          proposalData={emailContext === 'proposal' ? {
-            id: editingJob?.id,
+          proposalData={emailContext === 'proposal' && jobProposalResponse?.success && jobProposalResponse.data.length > 0 ? {
+            id: jobProposalResponse.data[0].id,
+            proposalNumber: jobProposalResponse.data[0].proposalNumber,
+            title: jobProposalResponse.data[0].title,
+            totalAmount: jobProposalResponse.data[0].totalAmount,
+            subtotal: jobProposalResponse.data[0].subtotal,
+            validUntil: jobProposalResponse.data[0].validUntil,
+            status: jobProposalResponse.data[0].status,
+            lineItems: formData?.lineItems || []
+          } : emailContext === 'proposal' ? {
+            id: `temp-${Date.now()}`,
             proposalNumber: `PROP-${editingJob?.jobNumber || '0000'}`,
             lineItems: formData?.lineItems || []
           } : undefined}

@@ -7139,13 +7139,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Get all proposals
   app.get('/api/proposals', async (req: Request, res: Response) => {
     try {
-      const { customerId, quoteId } = req.query;
+      const { customerId, quoteId, jobId } = req.query;
       
       let proposals;
       if (customerId) {
         proposals = await storage.getProposalsByCustomer(customerId as string);
       } else if (quoteId) {
         proposals = await storage.getProposalsByQuote(quoteId as string);
+      } else if (jobId) {
+        // Filter proposals by jobId - find proposals that were created for this job
+        const allProposals = await storage.getAllProposals();
+        proposals = allProposals.filter(proposal => 
+          proposal.quoteId === jobId || 
+          proposal.customerId === jobId ||
+          (proposal as any).jobId === jobId
+        );
       } else {
         proposals = await storage.getAllProposals();
       }
