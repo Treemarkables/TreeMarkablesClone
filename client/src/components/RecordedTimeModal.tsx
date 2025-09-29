@@ -49,7 +49,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   });
 
   const { data: materialsServicesData } = useQuery({
-    queryKey: ['/api/materials-services'],
+    queryKey: ['/api/materials'],
     enabled: isOpen,
   });
 
@@ -77,15 +77,19 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   // Get staff rates from materials & services catalog
   const getStaffRates = () => {
     // Get all labour items from the catalog
-    return materialsAndServices.filter((item: any) => 
-      item.category === 'Labour' && item.price > 0
-    ).map((item: any) => ({
-      value: `${item.itemNumber}`,
-      label: `${item.itemNumber} - ${item.name} ($${item.price}/hr)`,
-      rate: item.price,
-      itemNumber: item.itemNumber,
-      name: item.name
-    }));
+    return materialsAndServices.filter((item: any) => {
+      const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
+      return item.category === 'Labour' && price >= 0;
+    }).map((item: any) => {
+      const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
+      return {
+        value: `${item.itemNumber}`,
+        label: `${item.itemNumber} - ${item.name} ($${price.toFixed(2)}/hr)`,
+        rate: price,
+        itemNumber: item.itemNumber,
+        name: item.name
+      };
+    });
   };
   
   const availableRates = getStaffRates();
