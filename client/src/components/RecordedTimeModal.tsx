@@ -60,11 +60,9 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   const { data: timeEntriesData, refetch: refetchTimeEntries } = useQuery({
     queryKey: ['time-entries', jobId, today],
     queryFn: async () => {
-      console.log('Fetching time entries for job:', jobId, 'date:', today);
       const response = await fetch(`/api/time-entries/${jobId}/${today}`);
       if (!response.ok) throw new Error('Failed to fetch time entries');
       const result = await response.json();
-      console.log('Time entries response:', result);
       return result;
     },
     enabled: isOpen && !!jobId,
@@ -78,13 +76,10 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
 
   // Get staff rates from materials & services catalog
   const getStaffRates = () => {
-    console.log('Getting staff rates from materials:', materialsAndServices);
     // Get all labour items from the catalog
-    const labourItems = materialsAndServices.filter((item: any) => {
+    return materialsAndServices.filter((item: any) => {
       const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
-      const isLabour = item.category === 'Labour' && price >= 0;
-      console.log(`Item ${item.itemNumber} - ${item.name}: category=${item.category}, price=${price}, isLabour=${isLabour}`);
-      return isLabour;
+      return item.category === 'Labour' && price >= 0;
     }).map((item: any) => {
       const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
       return {
@@ -95,8 +90,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
         name: item.name
       };
     });
-    console.log('Available rates:', labourItems);
-    return labourItems;
   };
   
   const availableRates = getStaffRates();
@@ -104,7 +97,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   // Refetch data when modal opens
   useEffect(() => {
     if (isOpen && jobId) {
-      console.log('Modal opened, refetching time entries and materials...');
       refetchTimeEntries();
       refetchMaterials();
     }
@@ -164,15 +156,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       duration: newEntry.duration,
       billed: true
     };
-
-    console.log('Adding time entry:', newTimeEntry);
-    console.log('Current timeEntries before adding:', timeEntries.length, 'entries:', timeEntries);
     
-    setTimeEntries(prev => {
-      const newEntries = [...prev, newTimeEntry];
-      console.log('Updated timeEntries:', newEntries.length, 'entries:', newEntries);
-      return newEntries;
-    });
+    setTimeEntries(prev => [...prev, newTimeEntry]);
     
     setNewEntry({ staffId: '', rate: '', start: '', duration: 0 });
     setIsAddingTime(false);
@@ -195,10 +180,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
 
   const saveTimeEntries = async () => {
     try {
-      console.log('saveTimeEntries called with timeEntries:', timeEntries.length, 'entries:', timeEntries);
-      
       if (timeEntries.length === 0) {
-        console.log('No time entries to save!');
         toast({
           title: "No entries",
           description: "Please add time entries before saving",
@@ -331,12 +313,17 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       <SelectValue placeholder="Select rate" />
                     </SelectTrigger>
                     <SelectContent>
-                      {newEntry.staffId && getStaffRates(newEntry.staffId).map((rate: any) => (
-                        <SelectItem key={rate.id} value={`${rate.basePrice} ${rate.name}`}>
-                          ${rate.basePrice} {rate.name}
+                      {availableRates.length > 0 ? (
+                        availableRates.map((rate: any) => (
+                          <SelectItem key={rate.itemNumber} value={rate.itemNumber}>
+                            {rate.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>
+                          No labour rates available - add them in Materials & Services
                         </SelectItem>
-                      ))}
-                      <SelectItem value="34 labour">34 labour</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
