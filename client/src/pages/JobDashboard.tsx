@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield, Mail, Phone, Edit2, Briefcase, Search, Filter } from "lucide-react";
+import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield, Mail, Phone, Edit2, Briefcase, Search, Filter, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Pipeline from './Pipeline';
 import { PerformanceAnalytics } from '@/components/PerformanceAnalytics';
@@ -86,6 +87,9 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   const [currentJobPage, setCurrentJobPage] = useState(1);
   const [jobsPerPage] = useState(12); // Show 12 jobs per page for good performance
   
+  // Bulk selection state
+  const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -108,6 +112,28 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
       toast({
         title: "Error",
         description: "Failed to update customer name",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Bulk delete jobs mutation
+  const deleteJobsMutation = useMutation({
+    mutationFn: async (jobIds: string[]) => {
+      return await apiRequest('DELETE', '/api/jobs/bulk-delete', { jobIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      setSelectedJobs(new Set());
+      toast({
+        title: "Jobs Deleted",
+        description: `Successfully deleted ${selectedJobs.size} job entries`
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Failed to delete jobs",
         variant: "destructive"
       });
     }
@@ -141,6 +167,32 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   const handleCloseJobCard = () => {
     setIsJobCardOpen(false);
     setSelectedJobId(null);
+  };
+
+  // Job selection handlers
+  const handleSelectJob = (jobId: string, checked: boolean) => {
+    const newSelected = new Set(selectedJobs);
+    if (checked) {
+      newSelected.add(jobId);
+    } else {
+      newSelected.delete(jobId);
+    }
+    setSelectedJobs(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedJobs(new Set(paginatedJobs.map(job => job.id)));
+    } else {
+      setSelectedJobs(new Set());
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedJobs.size === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedJobs.size} selected jobs? This action cannot be undone.`)) {
+      deleteJobsMutation.mutate(Array.from(selectedJobs));
+    }
   };
 
   // Fetch jobs data with proper typing
@@ -492,6 +544,49 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </div>
               </div>
 
+              {/* Bulk Actions */}
+              {selectedJobs.size > 0 && (
+                <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-medium text-blue-800">
+                      {selectedJobs.size} selected
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedJobs(new Set())}
+                      data-testid="button-clear-selection"
+                    >
+                      Clear Selection
+                    </Button>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={deleteJobsMutation.isPending}
+                    data-testid="button-bulk-delete"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Selected
+                  </Button>
+                </div>
+              )}
+
+              {/* Select All Header */}
+              {paginatedJobs.length > 0 && (
+                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
+                  <Checkbox
+                    checked={selectedJobs.size === paginatedJobs.length && paginatedJobs.length > 0}
+                    onCheckedChange={handleSelectAll}
+                    data-testid="checkbox-select-all"
+                  />
+                  <span className="text-sm font-medium">
+                    Select All ({paginatedJobs.length})
+                  </span>
+                </div>
+              )}
+
               {/* Jobs Grid */}
               {jobsLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -522,50 +617,62 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                 </Card>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {paginatedJobs.map((job) => (
-                    <Card 
-                      key={job.id} 
-                      className="hover-elevate cursor-pointer transition-all duration-200"
-                      onClick={() => handleJobClick(job.id)}
-                      data-testid={`card-job-${job.id}`}
-                    >
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          <div className="flex items-start justify-between">
-                            <h3 className="font-semibold text-foreground line-clamp-2" data-testid={`text-job-title-${job.id}`}>
-                              {job.title}
-                            </h3>
-                            <div className="text-lg font-bold text-green-600 ml-2" data-testid={`text-job-value-${job.id}`}>
-                              ${job.estimatedValue.toLocaleString()}
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <p className="text-sm text-muted-foreground font-medium" data-testid={`text-job-customer-${job.id}`}>
-                              {job.customer}
-                            </p>
-                            
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                              <MapPin className="w-3 h-3" />
-                              <span className="line-clamp-1" data-testid={`text-job-location-${job.id}`}>{job.location}</span>
-                            </div>
-                            
-                            {job.scheduledDate && (
-                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                <Calendar className="w-3 h-3" />
-                                <span data-testid={`text-job-date-${job.id}`}>{job.scheduledDate}</span>
+                  {paginatedJobs.map((job) => {
+                    const isSelected = selectedJobs.has(job.id);
+                    
+                    return (
+                      <Card 
+                        key={job.id} 
+                        className={`hover-elevate cursor-pointer transition-all duration-200 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+                        onClick={() => handleJobClick(job.id)}
+                        data-testid={`card-job-${job.id}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-3 flex-1">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => handleSelectJob(job.id, checked as boolean)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  data-testid={`checkbox-select-job-${job.id}`}
+                                />
+                                <h3 className="font-semibold text-foreground line-clamp-2" data-testid={`text-job-title-${job.id}`}>
+                                  {job.title}
+                                </h3>
                               </div>
-                            )}
-                          </div>
+                              <div className="text-lg font-bold text-green-600 ml-2" data-testid={`text-job-value-${job.id}`}>
+                                ${job.estimatedValue.toLocaleString()}
+                              </div>
+                            </div>
                           
-                          <div className="flex gap-2 flex-wrap">
-                            {getJobStatusBadge(job.status)}
-                            {getPriorityBadge(job.priority)}
+                            <div className="space-y-2">
+                              <p className="text-sm text-muted-foreground font-medium" data-testid={`text-job-customer-${job.id}`}>
+                                {job.customer}
+                              </p>
+                              
+                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                <MapPin className="w-3 h-3" />
+                                <span className="line-clamp-1" data-testid={`text-job-location-${job.id}`}>{job.location}</span>
+                              </div>
+                              
+                              {job.scheduledDate && (
+                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                  <Calendar className="w-3 h-3" />
+                                  <span data-testid={`text-job-date-${job.id}`}>{job.scheduledDate}</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex gap-2 flex-wrap">
+                              {getJobStatusBadge(job.status)}
+                              {getPriorityBadge(job.priority)}
+                            </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
               
