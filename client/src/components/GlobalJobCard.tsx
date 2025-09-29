@@ -1059,6 +1059,17 @@ export function GlobalJobCard({
                                       onValueChange={(value) => {
                                         field.onChange(value);
                                         form.setValue('isNewCustomer', false);
+                                        
+                                        // Populate customer details into job contact fields
+                                        const selectedCustomer = customersData?.data?.find(c => c.id === value);
+                                        if (selectedCustomer) {
+                                          // Split customer name into first and last for job contact fields
+                                          const nameParts = selectedCustomer.name.split(' ');
+                                          form.setValue('jobContactFirstName', nameParts[0] || '');
+                                          form.setValue('jobContactLastName', nameParts.slice(1).join(' ') || '');
+                                          form.setValue('jobContactEmail', selectedCustomer.email || '');
+                                          form.setValue('jobContactPhone', selectedCustomer.phone || '');
+                                        }
                                       }}
                                       data-testid="select-customer"
                                     >
