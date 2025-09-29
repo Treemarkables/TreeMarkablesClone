@@ -1834,13 +1834,15 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   app.get('/api/jobs', async (req: Request, res: Response) => {
     try {
-      const { customerId, status } = req.query;
+      const { customerId, status, dispatch } = req.query;
       let jobs;
       
       if (customerId && typeof customerId === 'string') {
         jobs = await storage.getJobsByCustomer(customerId);
       } else if (status && typeof status === 'string') {
         jobs = await storage.getJobsByStatus(status);
+      } else if (dispatch === 'true') {
+        jobs = await storage.getDispatchJobs();
       } else {
         jobs = await storage.getAllJobs();
       }
