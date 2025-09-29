@@ -1925,6 +1925,45 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Bulk delete jobs endpoint
+  app.delete('/api/jobs/bulk-delete', async (req: Request, res: Response) => {
+    try {
+      const { jobIds } = req.body;
+      
+      if (!jobIds || !Array.isArray(jobIds)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid request: jobIds array is required'
+        });
+      }
+
+      if (jobIds.length === 0) {
+        return res.json({
+          success: true,
+          deleted: 0,
+          message: 'No jobs to delete'
+        });
+      }
+
+      // Delete jobs using storage layer
+      const result = await storage.bulkDeleteJobs(jobIds);
+
+      res.json({
+        success: true,
+        deleted: result.deleted,
+        failed: result.failed,
+        errors: result.errors,
+        message: `Successfully deleted ${result.deleted} jobs${result.failed > 0 ? `, ${result.failed} failed` : ''}`
+      });
+    } catch (error) {
+      console.error('Error performing bulk job deletion:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error performing bulk deletion',
+      });
+    }
+  });
+
   // ========================================
   // JOB DIARY ROUTES
   // ========================================

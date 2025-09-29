@@ -161,6 +161,8 @@ export interface IStorage {
   getJobsByStatus(status: string): Promise<Job[]>;
   getAllJobs(): Promise<Job[]>;
   clearAllJobs(): Promise<number>;
+  deleteJob(id: string): Promise<boolean>;
+  bulkDeleteJobs(jobIds: string[]): Promise<{deleted: number; failed: number; errors: string[]}>;
   
   // Sequential Job Number Management
   getNextJobNumber(): Promise<string>;
@@ -1252,6 +1254,39 @@ class DatabaseStorage implements IStorage {
   async clearAllJobs(): Promise<number> {
     const result = await db.delete(schema.jobs);
     return result.rowCount || 0;
+  }
+
+  async deleteJob(id: string): Promise<boolean> {
+    try {
+      const result = await db.delete(schema.jobs).where(eq(schema.jobs.id, id));
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      console.error('Error deleting job:', error);
+      return false;
+    }
+  }
+
+  async bulkDeleteJobs(jobIds: string[]): Promise<{deleted: number; failed: number; errors: string[]}> {
+    let deleted = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const jobId of jobIds) {
+      try {
+        const success = await this.deleteJob(jobId);
+        if (success) {
+          deleted++;
+        } else {
+          failed++;
+          errors.push(`Failed to delete job with ID: ${jobId}`);
+        }
+      } catch (error) {
+        failed++;
+        errors.push(`Error deleting job ${jobId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    return { deleted, failed, errors };
   }
 
   // Complete database wipe methods for Option A
