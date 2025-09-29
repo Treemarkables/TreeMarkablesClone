@@ -2071,8 +2071,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         jobId
       };
       
+      console.log('📝 Diary entry request:', JSON.stringify(entryData, null, 2));
       const validation = insertJobDiaryEntrySchema.safeParse(entryData);
       if (!validation.success) {
+        console.error('❌ Diary validation failed:', validation.error.errors);
         return res.status(400).json({ 
           success: false, 
           message: 'Invalid diary entry data',
