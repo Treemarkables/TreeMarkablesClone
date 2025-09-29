@@ -33,6 +33,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Link, useLocation, useRoute } from "wouter";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface AppSidebarProps {
   activeTab: string;
@@ -141,6 +142,7 @@ const businessItems = [
 export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   const [location, setLocation] = useLocation();
   const { setOpen } = useSidebar();
+  const isMobile = useIsMobile();
   
   const handleTabClick = (tabValue: string) => {
     // If not on job dashboard, navigate there first
@@ -149,8 +151,10 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     }
     // Set the tab
     onTabChange(tabValue);
-    // Collapse sidebar
-    setOpen(false);
+    // Collapse sidebar only on mobile
+    if (isMobile) {
+      setOpen(false);
+    }
   };
 
   return (
@@ -175,7 +179,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   ) : (
                     <SidebarMenuButton asChild isActive={location === item.url}>
-                      <Link href={item.url} onClick={() => setOpen(false)} data-testid={`link-${item.value}`}>
+                      <Link href={item.url} onClick={() => isMobile && setOpen(false)} data-testid={`link-${item.value}`}>
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
                       </Link>
@@ -205,7 +209,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   ) : (
                     <SidebarMenuButton asChild isActive={location === item.url}>
-                      <Link href={item.url} onClick={() => setOpen(false)} data-testid={`link-${item.value}`}>
+                      <Link href={item.url} onClick={() => isMobile && setOpen(false)} data-testid={`link-${item.value}`}>
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
                       </Link>
@@ -224,7 +228,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/dispatch"}>
-                  <Link href="/dispatch" onClick={() => setOpen(false)} data-testid="link-dispatch">
+                  <Link href="/dispatch" onClick={() => isMobile && setOpen(false)} data-testid="link-dispatch">
                     <Calendar className="h-4 w-4" />
                     <span>Dispatch Board</span>
                   </Link>
@@ -252,7 +256,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/workflows"}>
-                  <Link href="/workflows" onClick={() => setOpen(false)} data-testid="link-workflows">
+                  <Link href="/workflows" onClick={() => isMobile && setOpen(false)} data-testid="link-workflows">
                     <Workflow className="h-4 w-4" />
                     <span>Workflows</span>
                   </Link>
@@ -260,7 +264,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/opportunities"}>
-                  <Link href="/opportunities" onClick={() => setOpen(false)} data-testid="link-opportunities">
+                  <Link href="/opportunities" onClick={() => isMobile && setOpen(false)} data-testid="link-opportunities">
                     <MessageSquare className="h-4 w-4" />
                     <span>Conversations</span>
                   </Link>
@@ -268,7 +272,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/reputation"}>
-                  <Link href="/reputation" onClick={() => setOpen(false)} data-testid="link-reputation">
+                  <Link href="/reputation" onClick={() => isMobile && setOpen(false)} data-testid="link-reputation">
                     <Star className="h-4 w-4" />
                     <span>Reputation</span>
                   </Link>
@@ -276,7 +280,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/inbox"}>
-                  <Link href="/inbox" onClick={() => setOpen(false)} data-testid="link-inbox">
+                  <Link href="/inbox" onClick={() => isMobile && setOpen(false)} data-testid="link-inbox">
                     <Inbox className="h-4 w-4" />
                     <span>Inbox</span>
                   </Link>
@@ -284,7 +288,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/metrics"}>
-                  <Link href="/metrics" onClick={() => setOpen(false)} data-testid="link-metrics">
+                  <Link href="/metrics" onClick={() => isMobile && setOpen(false)} data-testid="link-metrics">
                     <BarChart3 className="h-4 w-4" />
                     <span>Metrics Dashboard</span>
                   </Link>
@@ -303,7 +307,9 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               isActive={activeTab === "settings"}
               onClick={() => {
                 onTabChange("settings");
-                setOpen(false);
+                if (isMobile) {
+                  setOpen(false);
+                }
               }}
             >
               <button className="w-full justify-start" data-testid="button-tab-settings">
