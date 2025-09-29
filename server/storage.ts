@@ -1947,14 +1947,63 @@ class DatabaseStorage implements IStorage {
   async importQuotesFromCsv(csvData: any[]): Promise<CsvImportResult> { throw new Error("Not implemented"); }
 
   // All remaining methods return empty/default values
-  async createNotification(notification: InsertNotification): Promise<Notification> { throw new Error("Not implemented"); }
-  async getNotification(id: string): Promise<Notification | undefined> { return undefined; }
-  async updateNotification(id: string, updates: UpdateNotification): Promise<Notification> { throw new Error("Not implemented"); }
-  async getAllNotifications(userId?: string, limit?: number): Promise<NotificationWithDetails[]> { return []; }
-  async getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]> { return []; }
-  async markNotificationAsRead(id: string): Promise<Notification> { throw new Error("Not implemented"); }
-  async markAllNotificationsAsRead(userId?: string): Promise<void> { }
-  async deleteNotification(id: string): Promise<void> { }
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [newNotification] = await db.insert(schema.notifications).values(notification).returning();
+    return newNotification;
+  }
+  async getNotification(id: string): Promise<Notification | undefined> {
+    const [notification] = await db.select().from(schema.notifications).where(eq(schema.notifications.id, id));
+    return notification || undefined;
+  }
+  async updateNotification(id: string, updates: UpdateNotification): Promise<Notification> {
+    const [updatedNotification] = await db.update(schema.notifications)
+      .set(updates)
+      .where(eq(schema.notifications.id, id))
+      .returning();
+    return updatedNotification;
+  }
+  async getAllNotifications(userId?: string, limit?: number): Promise<NotificationWithDetails[]> {
+    let query = db.select().from(schema.notifications);
+    if (userId) {
+      query = query.where(eq(schema.notifications.userId, userId)) as any;
+    }
+    if (limit) {
+      query = query.limit(limit) as any;
+    }
+    const notifications = await query.orderBy(desc(schema.notifications.createdAt));
+    return notifications as NotificationWithDetails[];
+  }
+  async getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]> {
+    const conditions = [eq(schema.notifications.isRead, false)];
+    if (userId) {
+      conditions.push(eq(schema.notifications.userId, userId));
+    }
+    const notifications = await db.select()
+      .from(schema.notifications)
+      .where(and(...conditions))
+      .orderBy(desc(schema.notifications.createdAt));
+    return notifications as NotificationWithDetails[];
+  }
+  async markNotificationAsRead(id: string): Promise<Notification> {
+    const [updatedNotification] = await db.update(schema.notifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(schema.notifications.id, id))
+      .returning();
+    return updatedNotification;
+  }
+  async markAllNotificationsAsRead(userId?: string): Promise<void> {
+    if (userId) {
+      await db.update(schema.notifications)
+        .set({ isRead: true, readAt: new Date() })
+        .where(eq(schema.notifications.userId, userId));
+    } else {
+      await db.update(schema.notifications)
+        .set({ isRead: true, readAt: new Date() });
+    }
+  }
+  async deleteNotification(id: string): Promise<void> {
+    await db.delete(schema.notifications).where(eq(schema.notifications.id, id));
+  }
   async getNotificationSummary(userId?: string): Promise<NotificationSummary> { 
     return { 
       total: 0, 
