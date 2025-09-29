@@ -183,7 +183,9 @@ export default function Clients() {
 
   const handleBulkDelete = () => {
     if (selectedCustomers.size === 0) return;
-    deleteCustomersMutation.mutate(Array.from(selectedCustomers));
+    if (confirm(`Are you sure you want to delete ${selectedCustomers.size} selected customers? This action cannot be undone.`)) {
+      deleteCustomersMutation.mutate(Array.from(selectedCustomers));
+    }
   };
 
   // Individual customer handlers
@@ -566,35 +568,37 @@ export default function Clients() {
                         </div>
                       </div>
                       
-                      <div className="flex gap-2 mt-4">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            handleEditCustomer(customer);
-                          }}
-                          style={{ pointerEvents: 'auto', zIndex: 10 }}
-                          data-testid={`button-edit-${customer.id}`}
-                        >
-                          <Edit className="w-4 h-4 mr-1" />
-                          Edit
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            handleCustomerCardClick(customer.id);
-                          }}
-                          style={{ pointerEvents: 'auto', zIndex: 10 }}
-                          data-testid={`button-view-${customer.id}`}
-                        >
-                          <Eye className="w-4 h-4 mr-1" />
-                          View Details
-                        </Button>
+                      <div className="flex items-center justify-between gap-2 mt-4">
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              handleEditCustomer(customer);
+                            }}
+                            style={{ pointerEvents: 'auto', zIndex: 10 }}
+                            data-testid={`button-edit-${customer.id}`}
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              handleCustomerCardClick(customer.id);
+                            }}
+                            style={{ pointerEvents: 'auto', zIndex: 10 }}
+                            data-testid={`button-view-${customer.id}`}
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            View Details
+                          </Button>
+                        </div>
                         <Button 
                           variant="destructive" 
                           size="sm" 
