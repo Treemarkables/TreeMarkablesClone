@@ -53,6 +53,9 @@ interface JobDiaryProps {
   jobId: string;
   jobTitle?: string;
   compact?: boolean;
+  onQuoteClick?: (quoteNumber: string) => void;
+  onInvoiceClick?: (invoiceNumber: string) => void;
+  onProposalClick?: (proposalNumber: string) => void;
 }
 
 const entryTypeConfig = {
@@ -66,7 +69,7 @@ const entryTypeConfig = {
   completion: { icon: CheckCircle, color: "bg-emerald-100 text-emerald-800", label: "Completion" }
 };
 
-export function JobDiary({ jobId, jobTitle, compact = false }: JobDiaryProps) {
+export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInvoiceClick, onProposalClick }: JobDiaryProps) {
   const [showNewEntryDialog, setShowNewEntryDialog] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
   const [showPrivateEntries, setShowPrivateEntries] = useState(true);
@@ -625,8 +628,42 @@ export function JobDiary({ jobId, jobTitle, compact = false }: JobDiaryProps) {
             const config = entryTypeConfig[entry.entryType as keyof typeof entryTypeConfig] || entryTypeConfig.note;
             const IconComponent = config.icon;
             
+            // Detect document type and extract number
+            const detectDocument = () => {
+              const title = entry.title.toLowerCase();
+              const desc = entry.description.toLowerCase();
+              const content = entry.content?.toLowerCase() || '';
+              
+              // Extract quote number (e.g., "QTE-3326")
+              const quoteMatch = (entry.title + ' ' + entry.description + ' ' + (entry.content || '')).match(/QTE-\d+/i);
+              if ((title.includes('quote') || desc.includes('quote') || content.includes('quote')) && quoteMatch && onQuoteClick) {
+                return { type: 'quote', number: quoteMatch[0], handler: () => onQuoteClick(quoteMatch[0]) };
+              }
+              
+              // Extract invoice number (e.g., "INV-3326")
+              const invoiceMatch = (entry.title + ' ' + entry.description + ' ' + (entry.content || '')).match(/INV-\d+/i);
+              if ((title.includes('invoice') || desc.includes('invoice') || content.includes('invoice')) && invoiceMatch && onInvoiceClick) {
+                return { type: 'invoice', number: invoiceMatch[0], handler: () => onInvoiceClick(invoiceMatch[0]) };
+              }
+              
+              // Extract proposal number (e.g., "PROP-3326")
+              const proposalMatch = (entry.title + ' ' + entry.description + ' ' + (entry.content || '')).match(/PROP-\d+/i);
+              if ((title.includes('proposal') || desc.includes('proposal') || content.includes('proposal')) && proposalMatch && onProposalClick) {
+                return { type: 'proposal', number: proposalMatch[0], handler: () => onProposalClick(proposalMatch[0]) };
+              }
+              
+              return null;
+            };
+            
+            const docInfo = detectDocument();
+            const isClickable = !!docInfo;
+            
             return (
-              <Card key={entry.id} className="overflow-hidden">
+              <Card 
+                key={entry.id} 
+                className={`overflow-hidden ${isClickable ? 'cursor-pointer hover-elevate active-elevate-2' : ''}`}
+                onClick={() => docInfo?.handler()}
+              >
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-4 flex-1">

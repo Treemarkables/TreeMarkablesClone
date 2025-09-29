@@ -90,6 +90,9 @@ interface JobDiarySectionProps {
   customerEmail?: string;
   customerPhone?: string;
   className?: string;
+  onQuoteClick?: (quoteNumber: string) => void;
+  onInvoiceClick?: (invoiceNumber: string) => void;
+  onProposalClick?: (proposalNumber: string) => void;
 }
 
 export function JobDiarySection({ 
@@ -97,7 +100,10 @@ export function JobDiarySection({
   customerId, 
   customerEmail, 
   customerPhone,
-  className 
+  className,
+  onQuoteClick,
+  onInvoiceClick,
+  onProposalClick
 }: JobDiarySectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -230,8 +236,13 @@ export function JobDiarySection({
 
   // Function to handle opening proposals from diary entries
   const handleOpenProposal = async (proposalNumber: string) => {
+    if (onProposalClick) {
+      onProposalClick(proposalNumber);
+      return;
+    }
+    
     try {
-      // Fetch all proposals and find the one with matching proposal number
+      // Fallback: Fetch all proposals and find the one with matching proposal number
       const response = await apiRequest('GET', '/api/proposals').then(res => res.json());
       const proposal = response.data?.find((p: any) => p.proposalNumber === proposalNumber);
       
@@ -253,6 +264,30 @@ export function JobDiarySection({
         variant: "destructive"
       });
     }
+  };
+
+  // Helper function to extract document numbers from diary entries
+  const extractDocumentInfo = (entry: DiaryEntry) => {
+    const content = `${entry.title} ${entry.content}`.toLowerCase();
+    
+    // Check for quote
+    const quoteMatch = (entry.title + ' ' + entry.content).match(/QTE-\d+/i);
+    if ((content.includes('quote') || content.includes('qte-')) && quoteMatch) {
+      return { type: 'quote', number: quoteMatch[0] };
+    }
+    
+    // Check for invoice
+    const invoiceMatch = (entry.title + ' ' + entry.content).match(/INV-\d+/i);
+    if ((content.includes('invoice') || content.includes('inv-')) && invoiceMatch) {
+      return { type: 'invoice', number: invoiceMatch[0] };
+    }
+    
+    // Check for proposal
+    if (entry.type === 'proposal' && entry.metadata?.proposalNumber) {
+      return { type: 'proposal', number: entry.metadata.proposalNumber };
+    }
+    
+    return null;
   };
 
   // Mutations
@@ -433,71 +468,95 @@ export function JobDiarySection({
           </div>
         ) : (
           <div className="space-y-4">
-            {diaryEntries.map((entry) => (
-              <div key={entry.id} className="flex gap-3" data-testid={`diary-entry-${entry.type}`}>
-                {/* Icon */}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getEntryColor(entry.type)} flex-shrink-0`}>
-                  {getEntryIcon(entry.type)}
-                </div>
+            {diaryEntries.map((entry) => {
+              const docInfo = extractDocumentInfo(entry);
+              const isClickable = docInfo && (
+                (docInfo.type === 'quote' && onQuoteClick) ||
+                (docInfo.type === 'invoice' && onInvoiceClick) ||
+                (docInfo.type === 'proposal' && (onProposalClick || true))
+              );
+              
+              const handleEntryClick = () => {
+                if (!docInfo) return;
                 
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <h4 className="font-medium text-sm text-gray-900 dark:text-white">
-                        {entry.type === 'sms' && entry.metadata?.phoneNumber && (
-                          <>SMS Message to {formatPhoneNumber(entry.metadata.phoneNumber)}</>
-                        )}
-                        {entry.type === 'email' && entry.metadata?.emailAddress && (
-                          <>Email to {entry.metadata.emailAddress}</>
-                        )}
-                        {entry.type === 'note' && <>Note</>}
-                        {entry.type === 'job_event' && <>Job Created</>}
-                        {entry.type === 'proposal' && entry.metadata?.proposalNumber && (
-                          <>Proposal {entry.metadata.proposalNumber}</>
-                        )}
-                      </h4>
-                      <Button size="icon" variant="ghost" className="h-6 w-6">
-                        <MoreHorizontal className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    
-                    <div className="text-xs text-muted-foreground mb-2 flex items-center gap-4">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {format(new Date(entry.timestamp), 'h:mm a dd/MM/yyyy')}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        by {entry.author}
-                      </span>
-                    </div>
-                    
-                    <div className="text-sm text-gray-700 dark:text-gray-300">
-                      {entry.content}
-                    </div>
-                    
-                    {entry.type === 'proposal' && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          {entry.metadata?.status || 'draft'}
-                        </Badge>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="text-xs h-6"
-                          onClick={() => entry.metadata?.proposalNumber && handleOpenProposal(entry.metadata.proposalNumber)}
-                          data-testid="button-view-proposal"
-                        >
-                          <ExternalLink className="w-3 h-3 mr-1" />
-                          View Proposal
+                if (docInfo.type === 'quote' && onQuoteClick) {
+                  onQuoteClick(docInfo.number);
+                } else if (docInfo.type === 'invoice' && onInvoiceClick) {
+                  onInvoiceClick(docInfo.number);
+                } else if (docInfo.type === 'proposal') {
+                  handleOpenProposal(docInfo.number);
+                }
+              };
+              
+              return (
+                <div key={entry.id} className="flex gap-3" data-testid={`diary-entry-${entry.type}`}>
+                  {/* Icon */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getEntryColor(entry.type)} flex-shrink-0`}>
+                    {getEntryIcon(entry.type)}
+                  </div>
+                  
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div 
+                      className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border ${isClickable ? 'cursor-pointer hover-elevate active-elevate-2' : ''}`}
+                      onClick={isClickable ? handleEntryClick : undefined}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h4 className="font-medium text-sm text-gray-900 dark:text-white">
+                          {entry.type === 'sms' && entry.metadata?.phoneNumber && (
+                            <>SMS Message to {formatPhoneNumber(entry.metadata.phoneNumber)}</>
+                          )}
+                          {entry.type === 'email' && entry.metadata?.emailAddress && (
+                            <>Email to {entry.metadata.emailAddress}</>
+                          )}
+                          {entry.type === 'note' && <>Note</>}
+                          {entry.type === 'job_event' && <>Job Created</>}
+                          {entry.type === 'proposal' && entry.metadata?.proposalNumber && (
+                            <>Proposal {entry.metadata.proposalNumber}</>
+                          )}
+                        </h4>
+                        <Button size="icon" variant="ghost" className="h-6 w-6">
+                          <MoreHorizontal className="w-3 h-3" />
                         </Button>
                       </div>
-                    )}
+                      
+                      <div className="text-xs text-muted-foreground mb-2 flex items-center gap-4">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {format(new Date(entry.timestamp), 'h:mm a dd/MM/yyyy')}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          by {entry.author}
+                        </span>
+                      </div>
+                      
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        {entry.content}
+                      </div>
+                      
+                      {entry.type === 'proposal' && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            {entry.metadata?.status || 'draft'}
+                          </Badge>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-xs h-6"
+                            onClick={() => entry.metadata?.proposalNumber && handleOpenProposal(entry.metadata.proposalNumber)}
+                            data-testid="button-view-proposal"
+                          >
+                            <ExternalLink className="w-3 h-3 mr-1" />
+                            View Proposal
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </ScrollArea>
