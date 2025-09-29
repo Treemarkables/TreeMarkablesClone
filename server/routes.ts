@@ -1466,8 +1466,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   app.post('/api/quotes', async (req: Request, res: Response) => {
     try {
+      console.log('📋 Quote creation request received:', JSON.stringify(req.body, null, 2));
       const validation = insertQuoteSchema.safeParse(req.body);
       if (!validation.success) {
+        console.error('❌ Quote validation failed:', validation.error.errors);
         return res.status(400).json({ 
           success: false, 
           message: 'Invalid quote data',
@@ -1475,6 +1477,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      console.log('✅ Quote validation succeeded');
       const quote = await storage.createQuote(validation.data);
       res.json({ success: true, data: quote });
     } catch (error) {
