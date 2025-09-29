@@ -30,7 +30,10 @@ import {
   CheckCircle,
   Presentation,
   ExternalLink,
-  MoreHorizontal
+  MoreHorizontal,
+  Edit,
+  Save,
+  X
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 // ServiceM8 API response types (matches server/services/servicem8-api.ts)
@@ -110,6 +113,8 @@ export function JobDiarySection({
   const [activeComposer, setActiveComposer] = useState<'note' | 'sms' | 'email' | null>(null);
   const [proposalDialogOpen, setProposalDialogOpen] = useState(false);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState<string>("");
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   
   // Forms
@@ -367,6 +372,27 @@ export function JobDiarySection({
     }
   });
 
+  const updateNoteMutation = useMutation({
+    mutationFn: async ({ entryId, content }: { entryId: string; content: string }) => {
+      return apiRequest('PUT', `/api/diary/${entryId}`, {
+        description: content
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Note updated successfully" });
+      setEditingEntryId(null);
+      setEditingContent("");
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to update note",
+        variant: "destructive"
+      });
+    }
+  });
+
   // Helper functions
   const getEntryIcon = (type: DiaryEntry['type']) => {
     switch (type) {
@@ -515,9 +541,21 @@ export function JobDiarySection({
                             <>Proposal {entry.metadata.proposalNumber}</>
                           )}
                         </h4>
-                        <Button size="icon" variant="ghost" className="h-6 w-6">
-                          <MoreHorizontal className="w-3 h-3" />
-                        </Button>
+                        {entry.type === 'note' && editingEntryId !== entry.id && (
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingEntryId(entry.id);
+                              setEditingContent(entry.content);
+                            }}
+                            data-testid={`button-edit-entry-${entry.id}`}
+                          >
+                            <Edit className="w-3 h-3" />
+                          </Button>
+                        )}
                       </div>
                       
                       <div className="text-xs text-muted-foreground mb-2 flex items-center gap-4">
@@ -531,9 +569,48 @@ export function JobDiarySection({
                         </span>
                       </div>
                       
-                      <div className="text-sm text-gray-700 dark:text-gray-300">
-                        {entry.content}
-                      </div>
+                      {editingEntryId === entry.id ? (
+                        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                          <Textarea
+                            value={editingContent}
+                            onChange={(e) => setEditingContent(e.target.value)}
+                            className="text-sm min-h-[80px]"
+                            placeholder="Edit note content..."
+                            data-testid="textarea-edit-note"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateNoteMutation.mutate({ entryId: entry.id, content: editingContent });
+                              }}
+                              disabled={updateNoteMutation.isPending || !editingContent.trim()}
+                              data-testid="button-save-edit"
+                            >
+                              <Save className="w-3 h-3 mr-1" />
+                              {updateNoteMutation.isPending ? 'Saving...' : 'Save'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingEntryId(null);
+                                setEditingContent("");
+                              }}
+                              data-testid="button-cancel-edit"
+                            >
+                              <X className="w-3 h-3 mr-1" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-700 dark:text-gray-300">
+                          {entry.content}
+                        </div>
+                      )}
                       
                       {entry.type === 'proposal' && (
                         <div className="mt-2 flex items-center gap-2">
