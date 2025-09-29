@@ -1449,17 +1449,50 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     )}
                   </div>
                   
-                  {/* Deep Search Button */}
+                  {/* Deep Search Button - Always visible */}
+                  <Button
+                    size="sm"
+                    variant={isDeepSearchActive ? "default" : "outline"}
+                    className="w-full"
+                    onClick={() => {
+                      if (isDeepSearchActive) {
+                        // Clear deep search
+                        setIsDeepSearchActive(false);
+                        setDeepSearchResults([]);
+                        setSearchQuery('');
+                      } else {
+                        // Perform deep search with current query or show all jobs
+                        const query = searchQuery.trim() || '';
+                        if (query) {
+                          performDeepSearch(query);
+                        } else {
+                          // Show all jobs if no search query
+                          setIsDeepSearchActive(true);
+                          setDeepSearchResults(jobs.sort((a, b) => {
+                            const jobNumberA = parseInt(a.jobNumber || '0', 10);
+                            const jobNumberB = parseInt(b.jobNumber || '0', 10);
+                            return jobNumberB - jobNumberA;
+                          }));
+                        }
+                      }
+                    }}
+                    data-testid="btn-deep-search-toggle"
+                  >
+                    <Search className="h-3 w-3 mr-2" />
+                    {isDeepSearchActive ? "Clear Search" : "Search All Jobs"}
+                  </Button>
+                  
+                  {/* Conditional Deep Search Button for specific query */}
                   {searchQuery.trim() && !isDeepSearchActive && (
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       className="w-full"
                       onClick={() => performDeepSearch(searchQuery)}
                       data-testid="btn-deep-search"
                     >
                       <Search className="h-3 w-3 mr-2" />
-                      Deep Search All Jobs
+                      Search "{searchQuery.slice(0, 20)}{searchQuery.length > 20 ? '...' : ''}"
                     </Button>
                   )}
                   
