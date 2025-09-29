@@ -582,7 +582,12 @@ export function GlobalJobCard({
 
   // Fetch proposal data for this job (always fetch when job exists)
   const { data: jobProposalResponse, isLoading: isProposalLoading, isFetching: isProposalFetching, refetch: refetchProposals } = useQuery({
-    queryKey: ["/api/proposals", { jobId: editingJob?.id }],
+    queryKey: ["/api/proposals", editingJob?.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/proposals?jobId=${editingJob?.id}`);
+      if (!response.ok) throw new Error('Failed to fetch proposals');
+      return response.json();
+    },
     enabled: !!editingJob?.id,
   });
 
