@@ -387,6 +387,7 @@ export interface IStorage {
   updateProposal(id: string, updates: UpdateProposal): Promise<Proposal>;
   getProposalsByCustomer(customerId: string): Promise<Proposal[]>;
   getProposalsByQuote(quoteId: string): Promise<Proposal[]>;
+  getProposalsByJob(jobId: string): Promise<Proposal[]>;
   getAllProposals(): Promise<Proposal[]>;
   deleteProposal(id: string): Promise<void>;
 
@@ -2043,6 +2044,12 @@ class DatabaseStorage implements IStorage {
   async getProposalsByQuote(quoteId: string): Promise<Proposal[]> {
     const proposals = await db.select().from(schema.proposals)
       .where(eq(schema.proposals.quoteId, quoteId));
+    return proposals;
+  }
+  
+  async getProposalsByJob(jobId: string): Promise<Proposal[]> {
+    const proposals = await db.select().from(schema.proposals)
+      .where(eq(schema.proposals.jobId, jobId));
     return proposals;
   }
   

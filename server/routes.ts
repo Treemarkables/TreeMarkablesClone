@@ -7147,13 +7147,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       } else if (quoteId) {
         proposals = await storage.getProposalsByQuote(quoteId as string);
       } else if (jobId) {
-        // Filter proposals by jobId - find proposals that were created for this job
-        const allProposals = await storage.getAllProposals();
-        proposals = allProposals.filter(proposal => 
-          proposal.quoteId === jobId || 
-          proposal.customerId === jobId ||
-          (proposal as any).jobId === jobId
-        );
+        proposals = await storage.getProposalsByJob(jobId as string);
       } else {
         proposals = await storage.getAllProposals();
       }
