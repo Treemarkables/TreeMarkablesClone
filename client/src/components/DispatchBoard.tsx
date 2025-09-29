@@ -670,8 +670,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     return jobs
       .filter(job => {
-        // Show only jobs with status 'lead', 'quote', or 'work order'
-        return job.status === 'lead' || job.status === 'quote' || job.status === 'work order';
+        // Show all jobs except completed and unsuccessful
+        return job.status !== 'completed' && job.status !== 'unsuccessful';
       })
       .filter(job => {
         // Apply search filter
