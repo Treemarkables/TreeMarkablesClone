@@ -846,8 +846,9 @@ export function GlobalJobCard({
 
         await apiRequest('POST', `/api/jobs/${editingJob.id}/diary`, diaryEntry);
         
-        // Invalidate diary query to refresh
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+        // Invalidate all diary-related queries to force refresh
+        await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+        await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
       } catch (diaryError) {
         // Don't fail the whole operation if diary logging fails
         console.error('Failed to log to diary:', diaryError);
