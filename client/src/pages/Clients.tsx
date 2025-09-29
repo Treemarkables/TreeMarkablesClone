@@ -298,7 +298,7 @@ export default function Clients() {
     allCustomers.find(c => c.id === selectedCustomerId) : null;
 
   return (
-    <div className="flex flex-col h-full p-6 space-y-6 overflow-hidden">
+    <div className="flex flex-col h-screen p-6 space-y-6 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -317,14 +317,14 @@ export default function Clients() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="list" data-testid="tab-customer-list">Customer List</TabsTrigger>
           <TabsTrigger value="import" data-testid="tab-import">Import Data</TabsTrigger>
         </TabsList>
 
         {/* Client List Tab */}
-        <TabsContent value="list" className="flex-1 flex flex-col space-y-6 mt-6 overflow-hidden">
+        <TabsContent value="list" className="space-y-6 mt-6">
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
