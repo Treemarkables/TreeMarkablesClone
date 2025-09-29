@@ -593,6 +593,17 @@ export function GlobalJobCard({
     enabled: !!editingJob?.id,
   });
 
+  // Fetch quote data for this job (always fetch when job exists)
+  const { data: jobQuoteResponse, refetch: refetchQuotes } = useQuery({
+    queryKey: ["/api/quotes", editingJob?.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/quotes?jobId=${editingJob?.id}`);
+      if (!response.ok) throw new Error('Failed to fetch quotes');
+      return response.json();
+    },
+    enabled: !!editingJob?.id,
+  });
+
   // Create proposal mutation
   const createProposalMutation = useMutation({
     mutationFn: async () => {
@@ -620,9 +631,73 @@ export function GlobalJobCard({
     },
   });
 
+  // Create quote mutation
+  const createQuoteMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingJob?.id || !selectedCustomer?.id) {
+        throw new Error('Job and customer are required');
+      }
+      
+      const totalAmount = formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0;
+      const quoteData = {
+        leadId: editingJob.id,
+        customerId: selectedCustomer.id,
+        quoteNumber: `QTE-${editingJob.jobNumber || Date.now()}`,
+        description: editingJob.description || editingJob.title || 'Quote',
+        amount: totalAmount.toString(),
+        status: 'draft' as const,
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        lineItems: formData?.lineItems || [],
+        terms: 'Payment due within 30 days',
+        createdBy: 'system',
+      };
+      
+      const response = await apiRequest('POST', '/api/quotes', quoteData);
+      return response.json();
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      // Update the job with the quote ID
+      if (result.data?.id && editingJob?.id) {
+        apiRequest('PUT', `/api/jobs/${editingJob.id}`, { quoteId: result.data.id });
+      }
+    },
+  });
+
   // Handle email click
   const handleEmailClick = async (context: 'general' | 'quote' | 'invoice' | 'proposal' = 'general') => {
     setEmailContext(context);
+    
+    // For quote emails, ensure a quote exists before opening composer
+    if (context === 'quote' && editingJob?.id && selectedCustomer?.id) {
+      const hasQuote = jobQuoteResponse?.success && jobQuoteResponse.data.length > 0;
+      
+      if (!hasQuote) {
+        try {
+          // Create quote and wait for the result
+          const quoteResult = await createQuoteMutation.mutateAsync();
+          
+          if (!quoteResult?.data?.id) {
+            throw new Error('Failed to create quote');
+          }
+          
+          // Refetch and verify we have the quote data
+          const refetchResult = await refetchQuotes();
+          
+          if (!refetchResult.data?.success || !refetchResult.data.data.length) {
+            throw new Error('Failed to load created quote');
+          }
+        } catch (error) {
+          console.error('Failed to create quote:', error);
+          toast({
+            title: "Error",
+            description: "Failed to create quote. Please try again.",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+    }
     
     // For proposal emails, ensure a proposal exists before opening composer
     if (context === 'proposal' && editingJob?.id && selectedCustomer?.id) {
@@ -2507,11 +2582,12 @@ export function GlobalJobCard({
           onClose={() => setIsEmailComposerOpen(false)}
           job={editingJob}
           customer={selectedCustomer}
-          quoteData={emailContext === 'quote' ? {
-            id: editingJob?.id,
-            quoteNumber: `QTE-${editingJob?.jobNumber || '0000'}`,
-            totalAmount: formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0,
-            validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          quoteData={emailContext === 'quote' && jobQuoteResponse?.success && jobQuoteResponse.data.length > 0 ? {
+            id: jobQuoteResponse.data[0].id,
+            quoteNumber: jobQuoteResponse.data[0].quoteNumber,
+            totalAmount: jobQuoteResponse.data[0].amount,
+            validUntil: jobQuoteResponse.data[0].validUntil,
+            status: jobQuoteResponse.data[0].status,
             lineItems: formData?.lineItems || []
           } : undefined}
           invoiceData={emailContext === 'invoice' ? {
