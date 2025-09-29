@@ -855,7 +855,17 @@ export function GlobalJobCard({
                     Invoice
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    onClick={() => setIsProposalBuilderOpen(true)}
+                    onClick={() => {
+                      if (!selectedCustomer?.id) {
+                        toast({
+                          title: "Customer Required",
+                          description: "Please select a customer before creating a proposal.",
+                          variant: "destructive"
+                        });
+                        return;
+                      }
+                      setIsProposalBuilderOpen(true);
+                    }}
                     data-testid="menu-item-proposal"
                   >
                     <Presentation className="w-4 h-4 mr-2" />
