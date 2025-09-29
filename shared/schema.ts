@@ -706,7 +706,11 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({ id: tru
 export const insertCommunicationPreferencesSchema = createInsertSchema(communicationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCallSchema = createInsertSchema(calls).omit({ id: true, createdAt: true });
-export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertQuoteSchema = createInsertSchema(quotes)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    validUntil: z.union([z.date(), z.string().transform((str) => new Date(str))]).optional(),
+  });
 export const insertJobSchema = createInsertSchema(jobs)
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
