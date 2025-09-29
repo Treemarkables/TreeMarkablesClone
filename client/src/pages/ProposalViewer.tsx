@@ -16,16 +16,30 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Fetch proposal data
-  const { data: proposalResponse, isLoading: proposalLoading } = useQuery({
+  // First try to fetch proposal directly by ID
+  const { data: proposalResponse, isLoading: proposalLoading, error: proposalError } = useQuery({
     queryKey: ["/api/proposals", proposalId],
     enabled: !!proposalId,
   });
 
+  // If direct fetch fails (404), try to find proposal by job ID
+  const { data: proposalsByJobResponse, isLoading: proposalsByJobLoading } = useQuery({
+    queryKey: ["/api/proposals", { jobId: proposalId }],
+    enabled: !!proposalId && !!proposalError,
+  });
+
+  // Use either direct proposal or first proposal found by job ID
+  const actualProposalResponse = proposalResponse?.success ? proposalResponse : 
+    (proposalsByJobResponse?.success && proposalsByJobResponse.data.length > 0) ? 
+      { success: true, data: proposalsByJobResponse.data[0] } : 
+      proposalResponse;
+
+  const actualLoading = proposalLoading || proposalsByJobLoading;
+
   // Fetch customer data if proposal has customerId
   const { data: customerResponse } = useQuery({
-    queryKey: ["/api/customers", proposalResponse?.data?.customerId],
-    enabled: !!proposalResponse?.data?.customerId,
+    queryKey: ["/api/customers", actualProposalResponse?.data?.customerId],
+    enabled: !!actualProposalResponse?.data?.customerId,
   });
 
   // Fetch default proposal template
@@ -36,8 +50,9 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   // Accept proposal mutation
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
-      console.log('Accepting proposal:', proposalId);
-      const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
+      const actualId = actualProposalResponse?.data?.id || proposalId;
+      console.log('Accepting proposal:', actualId);
+      const response = await apiRequest('POST', `/api/proposals/${actualId}/accept`);
       return response;
     },
     onSuccess: (response: any) => {
@@ -48,6 +63,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       });
       // Refresh proposal data to show updated status
       queryClient.invalidateQueries({ queryKey: ["/api/proposals", proposalId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/proposals", { jobId: proposalId }] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     },
     onError: (error: any) => {
@@ -61,10 +77,15 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   });
 
   const handleAcceptProposal = () => {
+    // Use the actual proposal ID for acceptance, not the URL parameter
+    const realProposalId = proposal.id;
     acceptProposalMutation.mutate();
   };
 
-  if (proposalLoading) {
+  // Update the accept proposal mutation to use the real proposal ID
+  const realProposalId = proposal?.id || proposalId;
+
+  if (actualLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -75,7 +96,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     );
   }
 
-  if (!proposalResponse?.success || !proposalResponse?.data) {
+  if (!actualProposalResponse?.success || !actualProposalResponse?.data) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="w-full max-w-md">
@@ -96,7 +117,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     );
   }
 
-  const proposal = proposalResponse.data;
+  const proposal = actualProposalResponse.data;
   const customer = customerResponse?.data;
   const template = templateResponse?.data || {
     id: 'default',
