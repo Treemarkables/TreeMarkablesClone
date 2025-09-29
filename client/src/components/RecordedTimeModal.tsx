@@ -51,8 +51,10 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   const { data: materialsServicesData, refetch: refetchMaterials } = useQuery({
     queryKey: ['/api/materials'],
     enabled: isOpen,
-    refetchOnMount: true,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
+    staleTime: 0,
+    cacheTime: 0,
   });
 
   // Fetch existing time entries for this job - align with profit tracker API
