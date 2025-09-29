@@ -2842,94 +2842,94 @@ class DatabaseStorage implements IStorage {
 
   // Materials Catalog Management
   async createMaterial(material: InsertMaterial): Promise<Material> {
-    const newMaterial: Material = {
-      id: Date.now().toString(),
-      ...material,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.materials.push(newMaterial);
+    const [newMaterial] = await db.insert(schema.materials)
+      .values(material)
+      .returning();
     return newMaterial;
   }
 
   async getMaterial(id: string): Promise<Material | undefined> {
-    return this.materials.find(m => m.id === id);
+    const [material] = await db.select()
+      .from(schema.materials)
+      .where(eq(schema.materials.id, id));
+    return material;
   }
 
   async updateMaterial(id: string, updates: Partial<InsertMaterial>): Promise<Material> {
-    const index = this.materials.findIndex(m => m.id === id);
-    if (index === -1) {
+    const [updated] = await db.update(schema.materials)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.materials.id, id))
+      .returning();
+    
+    if (!updated) {
       throw new Error(`Material with id ${id} not found`);
     }
     
-    this.materials[index] = {
-      ...this.materials[index],
-      ...updates,
-      updatedAt: new Date(),
-    };
-    
-    return this.materials[index];
+    return updated;
   }
 
   async deleteMaterial(id: string): Promise<void> {
-    const index = this.materials.findIndex(m => m.id === id);
-    if (index !== -1) {
-      this.materials.splice(index, 1);
-    }
+    await db.delete(schema.materials)
+      .where(eq(schema.materials.id, id));
   }
 
   async getAllMaterials(): Promise<Material[]> {
-    return [...this.materials];
+    return await db.select()
+      .from(schema.materials)
+      .orderBy(desc(schema.materials.createdAt));
   }
 
   async getMaterialsByCategory(category: string): Promise<Material[]> {
-    return this.materials.filter(m => m.category === category);
+    return await db.select()
+      .from(schema.materials)
+      .where(eq(schema.materials.category, category))
+      .orderBy(desc(schema.materials.createdAt));
   }
 
   // Services Catalog Management
   async createService(service: InsertService): Promise<Service> {
-    const newService: Service = {
-      id: Date.now().toString(),
-      ...service,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.services.push(newService);
+    const [newService] = await db.insert(schema.services)
+      .values(service)
+      .returning();
     return newService;
   }
 
   async getService(id: string): Promise<Service | undefined> {
-    return this.services.find(s => s.id === id);
+    const [service] = await db.select()
+      .from(schema.services)
+      .where(eq(schema.services.id, id));
+    return service;
   }
 
   async updateService(id: string, updates: Partial<InsertService>): Promise<Service> {
-    const index = this.services.findIndex(s => s.id === id);
-    if (index === -1) {
+    const [updated] = await db.update(schema.services)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.services.id, id))
+      .returning();
+    
+    if (!updated) {
       throw new Error(`Service with id ${id} not found`);
     }
     
-    this.services[index] = {
-      ...this.services[index],
-      ...updates,
-      updatedAt: new Date(),
-    };
-    
-    return this.services[index];
+    return updated;
   }
 
   async deleteService(id: string): Promise<void> {
-    const index = this.services.findIndex(s => s.id === id);
-    if (index !== -1) {
-      this.services.splice(index, 1);
-    }
+    await db.delete(schema.services)
+      .where(eq(schema.services.id, id));
   }
 
   async getAllServices(): Promise<Service[]> {
-    return [...this.services];
+    return await db.select()
+      .from(schema.services)
+      .orderBy(desc(schema.services.createdAt));
   }
 
   async getServicesByCategory(category: string): Promise<Service[]> {
-    return this.services.filter(s => s.category === category);
+    return await db.select()
+      .from(schema.services)
+      .where(eq(schema.services.category, category))
+      .orderBy(desc(schema.services.createdAt));
   }
 }
 
