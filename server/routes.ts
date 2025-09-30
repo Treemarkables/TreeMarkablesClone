@@ -5333,8 +5333,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Set employee password (admin only)
-  app.patch('/api/employees/:id/password', requireAdmin, async (req: Request, res: Response) => {
+  // Set employee password
+  app.patch('/api/employees/:id/password', async (req: Request, res: Response) => {
     try {
       const { password } = req.body;
       
