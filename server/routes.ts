@@ -5238,6 +5238,55 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
 
+      // Create diary entry for staff scheduling
+      try {
+        const employeeNames = [];
+        for (const assignment of created) {
+          const employee = await storage.getEmployee(assignment.employeeId);
+          if (employee) {
+            employeeNames.push(`${employee.firstName} ${employee.lastName}`);
+          }
+        }
+
+        const staffList = employeeNames.join(', ');
+        const scheduleDate = startTime.toLocaleDateString('en-NZ', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+        const startTimeStr = startTime.toLocaleTimeString('en-NZ', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+        const endTimeStr = endTime.toLocaleTimeString('en-NZ', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+
+        console.log('Creating staff scheduling diary entry:', { jobId, employeeNames, scheduleDate });
+
+        const diaryEntry = await storage.createJobDiaryEntry({
+          jobId,
+          entryType: 'milestone',
+          title: 'Staff Scheduled',
+          content: `${employeeNames.length} staff member(s) scheduled: ${staffList} on ${scheduleDate} from ${startTimeStr} to ${endTimeStr}`,
+          metadata: JSON.stringify({
+            staffIds: employeeIds,
+            staffNames: employeeNames,
+            date: scheduleDate,
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString()
+          }),
+          isPrivate: false
+        });
+
+        console.log('✅ Staff scheduling diary entry created:', diaryEntry.id);
+      } catch (diaryError) {
+        console.error('❌ Error creating diary entry for staff scheduling:', diaryError);
+        console.error('Diary error stack:', diaryError instanceof Error ? diaryError.stack : diaryError);
+        // Don't fail the request if diary entry creation fails
+      }
+
       res.json({
         success: true,
         data: created,
