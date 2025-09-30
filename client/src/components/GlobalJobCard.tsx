@@ -1047,9 +1047,10 @@ export function GlobalJobCard({
       const data = await response.json();
 
       if (data.success) {
+        const scheduledDate = new Date(startTimeISO);
         toast({
           title: "Job Scheduled",
-          description: `${schedulingData.assignedTo.length} staff member(s) scheduled for ${format(startTime, 'PPP')} at ${format(startTime, 'p')}`,
+          description: `${schedulingData.assignedTo.length} staff member(s) scheduled for ${format(scheduledDate, 'PPP')} at ${format(scheduledDate, 'p')}`,
         });
 
         // Refresh job data and staff assignments for dispatch board
