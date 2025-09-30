@@ -5321,6 +5321,52 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Set employee password (admin only)
+  app.patch('/api/employees/:id/password', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { password } = req.body;
+      
+      // Validate password
+      const passwordSchema = z.object({
+        password: z.string().min(8, 'Password must be at least 8 characters')
+      });
+      
+      const validatedData = passwordSchema.parse({ password });
+      
+      // Hash the password
+      const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+      
+      // Update employee with hashed password
+      const employee = await storage.updateEmployee(req.params.id, {
+        password: hashedPassword
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          id: employee.id,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          email: employee.email
+        },
+        message: 'Password updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating employee password:', error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({
+          success: false,
+          message: error.errors[0]?.message || 'Invalid password'
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Error updating password'
+        });
+      }
+    }
+  });
+
   // ========================================
   // JOB STAFF ASSIGNMENT ROUTES
   // ========================================
