@@ -20,6 +20,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { Customer } from "@shared/schema";
 import { CustomerCSVUpload } from "@/components/CustomerCSVUpload";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -48,6 +49,7 @@ export default function Clients() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
 
   // Fetch active customers
   const { data: activeCustomersResponse, isLoading: activeLoading } = useQuery<ApiResponse<Customer>>({
@@ -436,16 +438,18 @@ export default function Clients() {
                 Clear Selection
               </Button>
             </div>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkDelete}
-              disabled={deleteCustomersMutation.isPending}
-              data-testid="button-bulk-delete"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Selected
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={deleteCustomersMutation.isPending}
+                data-testid="button-bulk-delete"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -599,21 +603,23 @@ export default function Clients() {
                             View Details
                           </Button>
                         </div>
-                        <Button 
-                          variant="destructive" 
-                          size="sm" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            handleDeleteCustomer(customer.id);
-                          }}
-                          disabled={deleteCustomerMutation.isPending}
-                          style={{ pointerEvents: 'auto', zIndex: 10 }}
-                          data-testid={`button-delete-${customer.id}`}
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Delete
-                        </Button>
+                        {isAdmin && (
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              handleDeleteCustomer(customer.id);
+                            }}
+                            disabled={deleteCustomerMutation.isPending}
+                            style={{ pointerEvents: 'auto', zIndex: 10 }}
+                            data-testid={`button-delete-${customer.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </CardContent>
