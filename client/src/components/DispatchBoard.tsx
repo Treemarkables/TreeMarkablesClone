@@ -1231,41 +1231,31 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           {/* Desktop Time Grid View */}
           <div className="hidden md:flex gap-4 h-[700px]">
             {/* Team/Staff Column */}
-            <div className="w-36 border-r pr-4">
-              <h3 className="font-semibold mb-4 text-sm text-muted-foreground">
+            <div className="w-32 border-r pr-3">
+              <h3 className="font-semibold mb-2 text-xs text-muted-foreground h-9 flex items-center">
                 {assignmentMode === 'teams' ? 'TEAMS' : 'STAFF'}
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {assignmentMode === 'teams' ? (
                   // Teams Mode - Section Removed
                   null
                 ) : (
                   // Individual Staff Mode
                   staffMembers.map((staff: StaffMember) => {
-                    const staffJobs = getJobsForStaff(staff.id);
                     return (
                       <div
                         key={staff.id}
-                        className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer"
+                        className="flex items-center gap-2 h-11 rounded-md hover-elevate cursor-pointer px-2"
                         data-testid={`staff-${staff.id}`}
                       >
-                        <Avatar className="h-8 w-8">
+                        <Avatar className="h-7 w-7">
                           <AvatarFallback className={`${staff.color} text-white text-xs`}>
                             {staff.name.split(' ').map(n => n[0]).join('')}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{staff.name.split(' ')[0]}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {staff.role} • {staffJobs.length} jobs
-                          </div>
+                          <div className="font-medium text-sm truncate">{staff.name}</div>
                         </div>
-                        <Badge
-                          variant="secondary"
-                          className={`text-xs ${getStatusColor(staff.status)}`}
-                        >
-                          {staff.status}
-                        </Badge>
                       </div>
                     );
                   })
