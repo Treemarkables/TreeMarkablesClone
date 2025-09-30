@@ -17,7 +17,6 @@ import {
   Briefcase,
   Upload,
   BookOpen,
-  Cloud,
   Shield
 } from "lucide-react";
 import {
@@ -220,16 +219,6 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     <CalendarDays className="h-4 w-4" />
                     <span>Calendar</span>
                   </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={activeTab === "weather" && location === "/job-dashboard"}
-                  onClick={() => handleTabClick("weather")}
-                  data-testid="button-tab-weather"
-                >
-                  <Cloud className="h-4 w-4" />
-                  <span>Weather</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
