@@ -576,12 +576,6 @@ export function GlobalJobCard({
           
           // Don't invalidate queries on auto-save to prevent refetching
           // This avoids the infinite loop of save -> refetch -> form reset -> save
-          
-          toast({
-            title: "Auto-saved",
-            description: "Changes saved automatically",
-            duration: 2000,
-          });
         } catch (error) {
           console.error('Auto-save failed:', error);
           hasUserChangedRef.current = false;
