@@ -1297,13 +1297,22 @@ export function GlobalJobCard({
               Details
             </button>
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b border-gray-300 ${
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-gray-300 ${
                 sidebarTab === 'billing' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
               }`}
               onClick={() => setSidebarTab('billing')}
               data-testid="sidebar-billing"
             >
               Billing
+            </button>
+            <button
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b border-gray-300 ${
+                sidebarTab === 'diary' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+              onClick={() => setSidebarTab('diary')}
+              data-testid="sidebar-diary"
+            >
+              Diary
             </button>
           </div>
 
@@ -2479,6 +2488,31 @@ export function GlobalJobCard({
                             <p className="text-sm text-gray-400">Search for items above to start building your quote</p>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  )}
+
+                  {sidebarTab === 'diary' && editingJob && (
+                    <JobDiarySection 
+                      jobId={editingJob.id}
+                      isServiceM8Style={true}
+                      onQuoteClick={(quoteNumber) => {
+                        setIsQuoteModalOpen(true);
+                      }}
+                      onInvoiceClick={(invoiceNumber) => {
+                        setIsInvoiceModalOpen(true);
+                      }}
+                      onProposalClick={(proposalNumber) => {
+                        setIsProposalBuilderOpen(true);
+                      }}
+                    />
+                  )}
+                  
+                  {sidebarTab === 'diary' && !editingJob && (
+                    <div className="p-4">
+                      <div className="text-center py-8 text-gray-500">
+                        <FileText className="w-8 h-8 mx-auto mb-2" />
+                        <p className="text-sm">Activity diary will appear here after saving the job.</p>
                       </div>
                     </div>
                   )}
