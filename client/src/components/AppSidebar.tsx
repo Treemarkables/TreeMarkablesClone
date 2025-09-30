@@ -86,13 +86,6 @@ const dashboardItems = [
     isTab: true
   },
   {
-    title: "Job Diary",
-    url: "/job-dashboard",
-    icon: BookOpen,
-    value: "diary",
-    isTab: true
-  },
-  {
     title: "Analytics",
     url: "/job-dashboard", 
     icon: BarChart3,
