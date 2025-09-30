@@ -9268,9 +9268,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const errorMessages: string[] = [];
       const importedJobIds: string[] = [];
 
-      // Get all existing customers for matching
+      // Get all existing customers and jobs for matching
       const existingCustomers = await storage.getAllCustomers();
+      const existingJobs = await storage.getAllJobs();
       const customerByName = new Map(existingCustomers.map(c => [c.name.toLowerCase().trim(), c]));
+      const jobByJobNumber = new Map(existingJobs.map(j => [j.jobNumber, j]));
 
       console.log('\n🔥🔥🔥 CSV IMPORT STARTING 🔥🔥🔥');
       console.log('📊 Total jobs to import:', jobs.length);
@@ -9343,8 +9345,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           const paidAmount = jobData['Paid Amount'] || jobData.paidAmount || jobData['Amount Paid'] || '0';
           const paid = parseFloat(paidAmount.toString().replace(/[^0-9.-]/g, '')) || 0;
           
-          const newJob = await storage.createJob({
-            jobNumber: jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`,
+          const jobNumber = jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`;
+          const jobPayload = {
+            jobNumber: jobNumber,
             title: jobData.title || jobDescription || 'Imported Job',
             description: jobDescription,
             customerId: customer.id,
@@ -9358,10 +9361,23 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             totalAmount: invoiceAmount.toString(),
             paidAmount: paid.toString(),
             servicem8Uuid: jobData.servicem8Uuid || jobData['ServiceM8 UUID'] || null
-          });
+          };
 
-          importedJobIds.push(newJob.id);
-          imported++;
+          // Check if job already exists
+          const existingJob = jobByJobNumber.get(jobNumber);
+          
+          if (existingJob) {
+            // Update existing job
+            await storage.updateJob(existingJob.id, jobPayload);
+            importedJobIds.push(existingJob.id);
+            updated++;
+          } else {
+            // Create new job
+            const newJob = await storage.createJob(jobPayload);
+            importedJobIds.push(newJob.id);
+            jobByJobNumber.set(newJob.jobNumber, newJob);
+            imported++;
+          }
 
         } catch (error) {
           errors++;
@@ -9407,13 +9423,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
 
       let successfulMatches = 0;
+      let updatedJobs = 0;
+      let skippedJobs = 0;
       let newCustomers = 0;
       let errors = 0;
       const errorMessages: string[] = [];
       const importedJobIds: string[] = [];
 
-      // Get all existing customers for matching
+      // Get all existing customers and jobs for matching
       const existingCustomers = await storage.getAllCustomers();
+      const existingJobs = await storage.getAllJobs();
       
       // Create maps for efficient lookup by both name and ServiceM8 UUID
       const customerByName = new Map(existingCustomers.map(c => [c.name.toLowerCase().trim(), c]));
@@ -9422,6 +9441,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           .filter(c => c.servicem8Uuid)
           .map(c => [c.servicem8Uuid!, c])
       );
+      const jobByJobNumber = new Map(existingJobs.map(j => [j.jobNumber, j]));
 
       for (const csvJob of jobs) {
         try {
@@ -9522,9 +9542,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             paymentMethod: csvJob.paymentMethod
           };
 
-          const createdJob = await storage.createJob(jobData);
-          importedJobIds.push(createdJob.id);
-          successfulMatches++;
+          // Check if job already exists
+          const existingJob = jobByJobNumber.get(csvJob.jobNumber);
+          
+          if (existingJob) {
+            // Update existing job
+            await storage.updateJob(existingJob.id, jobData);
+            importedJobIds.push(existingJob.id);
+            updatedJobs++;
+          } else {
+            // Create new job
+            const createdJob = await storage.createJob(jobData);
+            importedJobIds.push(createdJob.id);
+            jobByJobNumber.set(createdJob.jobNumber, createdJob);
+            successfulMatches++;
+          }
           
         } catch (jobError) {
           errors++;
@@ -9535,11 +9567,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       res.json({
         success: true,
-        message: `Successfully imported ${successfulMatches} of ${jobs.length} jobs`,
+        message: `Imported ${successfulMatches} new jobs, updated ${updatedJobs} existing jobs`,
         stats: {
           totalJobs: jobs.length,
           processedJobs: jobs.length,
           successfulMatches,
+          updatedJobs,
+          skippedJobs,
           newCustomers,
           errors
         },
@@ -9547,6 +9581,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           success: true,
           totalRows: jobs.length,
           successfulImports: successfulMatches,
+          updatedJobs,
+          skippedJobs,
           errors: errorMessages.map((msg, index) => ({
             row: index + 1,
             error: msg,
