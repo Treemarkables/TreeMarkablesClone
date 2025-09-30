@@ -9346,7 +9346,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           const paid = parseFloat(paidAmount.toString().replace(/[^0-9.-]/g, '')) || 0;
           
           // Map invoice number
-          const importedInvoiceNumber = jobData['Invoice Number'] || jobData.invoiceNumber || jobData['Invoice #'] || jobData.invoice || null;
+          const importedInvoiceNumber = jobData['Invoice No'] || jobData['Invoice Number'] || jobData.invoiceNumber || jobData['Invoice #'] || jobData.invoice || null;
           
           const jobNumber = jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`;
           const jobPayload = {
@@ -9542,7 +9542,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             completedDate: csvJob.completionDate && csvJob.completionDate !== '0000-00-00 00:00:00' ? 
               new Date(csvJob.completionDate) : null,
             assignedTo: csvJob.completedBy || 'Imported Staff',
-            invoiceNumber: csvJob.invoiceNumber || csvJob['Invoice Number'] || csvJob['Invoice #'] || csvJob.invoice || null,
+            invoiceNumber: csvJob['Invoice No'] || csvJob.invoiceNumber || csvJob['Invoice Number'] || csvJob['Invoice #'] || csvJob.invoice || null,
             servicem8JobId: csvJob.jobNumber, // Store original ServiceM8 job number
             paymentMethod: csvJob.paymentMethod
           };
