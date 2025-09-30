@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
@@ -104,8 +105,10 @@ export function GlobalJobCard({
   const [activeCustomerTab, setActiveCustomerTab] = useState("existing");
   const [activeTab, setActiveTab] = useState("details");
   const [sidebarTab, setSidebarTab] = useState("details");
+  const [showMobileActions, setShowMobileActions] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
@@ -981,19 +984,19 @@ export function GlobalJobCard({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0 bg-gray-50 rounded-xl">
+      <DialogContent className="w-full h-full flex flex-col p-0 bg-gray-50 sm:max-w-6xl sm:h-[95vh] sm:rounded-xl">
         {/* ServiceM8-style Header */}
-        <div className="bg-orange-500 border-b border-orange-600 px-4 py-2 flex-shrink-0 rounded-t-xl">
-          <div className="flex items-center justify-between">
+        <div className="bg-orange-500 border-b border-orange-600 px-3 sm:px-4 py-2 sm:py-2 flex-shrink-0 sm:rounded-t-xl">
+          <div className="flex items-center justify-between gap-2">
             {/* Left: Job Title */}
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold text-white" data-testid="text-job-title">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h1 className="text-base sm:text-lg font-semibold text-white truncate" data-testid="text-job-title">
                 {mode === "create" ? "New Job" : `Job #${editingJob?.jobNumber || "3314"}`}
               </h1>
             </div>
             
-            {/* Center: Action Buttons */}
-            <div className="flex items-center gap-1">
+            {/* Center: Action Buttons - Hide on mobile */}
+            <div className="hidden md:flex items-center gap-1">
               <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={handleEmailClick} data-testid="button-email">
                 <Mail className="w-4 h-4 mr-1" />
                 Email
@@ -1110,12 +1113,63 @@ export function GlobalJobCard({
               </DropdownMenu>
             </div>
             
+            {/* Mobile: Essential Actions Dropdown */}
+            <div className="md:hidden flex items-center gap-1">
+              <DropdownMenu open={showMobileActions} onOpenChange={setShowMobileActions}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-11 px-3 text-xs" data-testid="button-mobile-actions">
+                    <Menu className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={handleEmailClick} data-testid="menu-item-email-mobile">
+                    <Mail className="w-4 h-4 mr-2" />
+                    Email
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsSMSComposerOpen(true)} data-testid="menu-item-sms-mobile">
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    SMS
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleCallClick} data-testid="menu-item-call-mobile">
+                    <Phone className="w-4 h-4 mr-2" />
+                    Call
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleScheduleClick} data-testid="menu-item-schedule-mobile">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Schedule
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleQuoteClick} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-quote-mobile">
+                    <Receipt className="w-4 h-4 mr-2" />
+                    Quote
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleInvoiceClick} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-invoice-mobile">
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Invoice
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsProposalBuilderOpen(true)} disabled={!selectedCustomer?.id} data-testid="menu-item-proposal-mobile">
+                    <Presentation className="w-4 h-4 mr-2" />
+                    Proposal
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setIsTimeTrackingOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-time-mobile">
+                    <Clock className="w-4 h-4 mr-2" />
+                    Time Tracking
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsProfitTrackerOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-profit-mobile">
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Profit
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            
             {/* Right: Save Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="h-8 px-3 text-xs" 
+                className="h-11 px-2 sm:px-3 text-xs" 
                 onClick={handleSave}
                 disabled={createJobMutation.isPending || updateJobMutation.isPending}
                 data-testid="button-save"
@@ -1125,26 +1179,27 @@ export function GlobalJobCard({
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="h-8 px-3 text-xs" 
+                className="hidden sm:inline-flex h-11 px-3 text-xs" 
                 onClick={handleSaveAndClose}
                 disabled={createJobMutation.isPending || updateJobMutation.isPending}
                 data-testid="button-save-close"
               >
                 {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save & Close'}
               </Button>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={onClose} data-testid="button-close">
-                Close
+              <Button variant="outline" size="sm" className="h-11 px-2 sm:px-3 text-xs" onClick={onClose} data-testid="button-close">
+                <X className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">Close</span>
               </Button>
             </div>
           </div>
         </div>
 
         {/* ServiceM8-style Layout: Left Sidebar + Two Panel Content */}
-        <div className="flex-1 flex min-h-0">
-          {/* Left Sidebar Navigation */}
-          <div className="w-16 bg-gray-200 border-r border-gray-300 flex flex-col">
+        <div className="flex-1 flex flex-col md:flex-row min-h-0">
+          {/* Horizontal Tabs on Mobile, Left Sidebar on Desktop */}
+          <div className="bg-gray-200 border-b md:border-b-0 md:border-r border-gray-300 flex md:flex-col md:w-16">
             <button
-              className={`p-3 text-xs font-medium border-b border-gray-300 ${
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-gray-300 ${
                 sidebarTab === 'details' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
               }`}
               onClick={() => setSidebarTab('details')}
@@ -1153,7 +1208,7 @@ export function GlobalJobCard({
               Details
             </button>
             <button
-              className={`p-3 text-xs font-medium border-b border-gray-300 ${
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b border-gray-300 ${
                 sidebarTab === 'billing' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
               }`}
               onClick={() => setSidebarTab('billing')}
@@ -1175,9 +1230,9 @@ export function GlobalJobCard({
               data-form="job-form"
             >
               {/* ServiceM8-style Two Panel Layout */}
-              <div className="flex h-full w-full">
+              <div className="flex flex-col md:flex-row h-full w-full">
                 {/* Left Panel - Job Details */}
-                <div className="flex-[3] bg-white border-r border-gray-300 p-4 overflow-y-auto rounded-l-lg">
+                <div className="flex-1 md:flex-[3] bg-white md:border-r border-gray-300 p-3 sm:p-4 overflow-y-auto md:rounded-l-lg">
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
                       {/* Customer Selection */}
@@ -2340,8 +2395,8 @@ export function GlobalJobCard({
                   )}
                 </div>
 
-                {/* Right Panel - Activity Diary */}
-                <div className="flex-[2] bg-white overflow-y-auto rounded-r-lg">
+                {/* Right Panel - Activity Diary - Hidden on Mobile */}
+                <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto rounded-r-lg">
                   {editingJob && (
                     <JobDiarySection 
                       jobId={editingJob.id}
