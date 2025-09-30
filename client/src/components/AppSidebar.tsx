@@ -1,5 +1,6 @@
 import {
   Calendar,
+  CalendarDays,
   BarChart3,
   Users,
   Settings,
@@ -238,6 +239,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   <Link href="/dispatch" onClick={() => isMobile && setOpen(false)} data-testid="link-dispatch">
                     <Calendar className="h-4 w-4" />
                     <span>Dispatch Board</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/calendar"}>
+                  <Link href="/calendar" onClick={() => isMobile && setOpen(false)} data-testid="link-calendar">
+                    <CalendarDays className="h-4 w-4" />
+                    <span>Calendar</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
