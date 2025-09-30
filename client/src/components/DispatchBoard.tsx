@@ -509,27 +509,31 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const jobAssignments: JobAssignment[] = [];
     const processedJobs = new Set<string>();
 
-    // Process all staff assignments (these are the scheduled jobs)
-    if (staffAssignmentsData?.data) {
+    // First, process all jobs with staff assignments
+    if (staffAssignmentsData?.data && staffAssignmentsData.data.length > 0) {
+      // Group assignments by job and date
+      const assignmentsByJobAndDate = new Map<string, any[]>();
+      
       staffAssignmentsData.data.forEach((assignment: any) => {
-        const apiJob = jobMap.get(assignment.jobId);
+        const dateKey = new Date(assignment.startTime).toDateString();
+        const key = `${assignment.jobId}-${dateKey}`;
+        
+        if (!assignmentsByJobAndDate.has(key)) {
+          assignmentsByJobAndDate.set(key, []);
+        }
+        assignmentsByJobAndDate.get(key)?.push(assignment);
+      });
+
+      // Create job assignments for each unique job-date combination
+      assignmentsByJobAndDate.forEach((assignments, key) => {
+        const firstAssignment = assignments[0];
+        const apiJob = jobMap.get(firstAssignment.jobId);
         if (!apiJob) return;
 
-        const jobKey = assignment.jobId;
-        if (processedJobs.has(jobKey)) {
-          // Job already processed, add this employee to the existing assignment
-          const existingJob = jobAssignments.find(j => j.id === jobKey);
-          if (existingJob && !existingJob.assignedTeam.includes(assignment.employeeId)) {
-            existingJob.assignedTeam.push(assignment.employeeId);
-          }
-          return;
-        }
+        processedJobs.add(firstAssignment.jobId);
 
-        processedJobs.add(jobKey);
-
-        // Get all assignments for this job
-        const jobAssignments_list = staffAssignmentsByJob.get(assignment.jobId) || [assignment];
-        const assignedTeam = jobAssignments_list.map((a: any) => a.employeeId);
+        // Collect all employee IDs for this job-date
+        const assignedTeam = assignments.map((a: any) => a.employeeId);
 
         // Determine teamId and staffId based on assignment mode
         let teamId = undefined;
@@ -555,12 +559,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           address: apiJob.address,
           serviceType: apiJob.serviceType || '',
           description: apiJob.description || '',
-          status: apiJob.status,
+          status: 'scheduled', // Jobs with staff assignments are scheduled
           priority: apiJob.priority,
-          startTime: assignment.startTime,
-          endTime: assignment.endTime,
-          duration: (new Date(assignment.endTime).getTime() - new Date(assignment.startTime).getTime()) / (1000 * 60 * 60),
-          notes: assignment.notes || apiJob.specialInstructions || apiJob.notes || '',
+          startTime: firstAssignment.startTime,
+          endTime: firstAssignment.endTime,
+          duration: (new Date(firstAssignment.endTime).getTime() - new Date(firstAssignment.startTime).getTime()) / (1000 * 60 * 60),
+          notes: firstAssignment.notes || apiJob.specialInstructions || apiJob.notes || '',
           assignedTeam: assignedTeam,
           teamId: teamId,
           staffId: staffId,
@@ -569,8 +573,41 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       });
     }
 
+    // Also include jobs without assignments (for display in unscheduled jobs list)
+    if (jobsData?.data) {
+      jobsData.data.forEach((apiJob: any) => {
+        // Skip if already processed with staff assignment
+        if (processedJobs.has(apiJob.id)) return;
+
+        const startTime = apiJob.scheduledDate || new Date().toISOString();
+        const estimatedDuration = apiJob.estimatedDuration || 2;
+        const endTime = new Date(new Date(startTime).getTime() + (estimatedDuration * 60 * 60 * 1000)).toISOString();
+
+        jobAssignments.push({
+          id: apiJob.id,
+          jobId: apiJob.jobNumber,
+          customerId: apiJob.customerId,
+          customerName: customerMap.get(apiJob.customerId) || apiJob.title || 'Unknown Customer',
+          customerPhone: '',
+          address: apiJob.address,
+          serviceType: apiJob.serviceType || '',
+          description: apiJob.description || '',
+          status: apiJob.status,
+          priority: apiJob.priority,
+          startTime: startTime,
+          endTime: endTime,
+          duration: estimatedDuration,
+          notes: apiJob.specialInstructions || apiJob.notes || '',
+          assignedTeam: apiJob.assignedTeam || [],
+          teamId: undefined,
+          staffId: undefined,
+          specialInstructions: apiJob.specialInstructions
+        });
+      });
+    }
+
     return jobAssignments;
-  }, [jobsData, staffAssignmentsData, customerMap, assignmentMode, jobMap, staffAssignmentsByJob]);
+  }, [jobsData, staffAssignmentsData, customerMap, assignmentMode, jobMap]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
