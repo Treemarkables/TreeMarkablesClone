@@ -1326,20 +1326,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               return (
                                 <div
                                   key={job.id}
-                                  className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs px-1 py-0.5 cursor-pointer hover:opacity-80 transition-opacity top-0.5 bottom-0.5`}
+                                  className={`absolute ${team.color} text-white rounded text-xs px-2 py-1 cursor-pointer hover:opacity-80 transition-opacity top-0.5 bottom-0.5 border-2 border-white shadow-sm`}
                                   onClick={() => handleEditJob(job)}
                                   data-testid={`job-block-${job.id}`}
                                   style={{
                                     left: `${leftPercent}%`,
                                     width: `${widthPercent}%`,
-                                    minWidth: '60px'
+                                    minWidth: '80px'
                                   }}
                                 >
-                                  <div className="font-medium truncate text-[8px]">
+                                  <div className="font-semibold truncate text-[10px]">
                                     {job.customerName}
                                   </div>
-                                  <div className="truncate text-[7px] opacity-90">
-                                    {job.serviceType}
+                                  <div className="truncate text-[9px] opacity-90">
+                                    {job.address || 'No address'}
                                   </div>
                                 </div>
                               );
@@ -1389,20 +1389,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               return (
                                 <div
                                   key={job.id}
-                                  className={`absolute ${getPriorityColor(job.priority)} text-white rounded text-xs px-1 py-0.5 cursor-pointer hover:opacity-80 transition-opacity top-0.5 bottom-0.5`}
+                                  className={`absolute ${staff.color} text-white rounded text-xs px-2 py-1 cursor-pointer hover:opacity-80 transition-opacity top-0.5 bottom-0.5 border-2 border-white shadow-sm`}
                                   onClick={() => handleEditJob(job)}
                                   data-testid={`job-block-${job.id}`}
                                   style={{
                                     left: `${leftPercent}%`,
                                     width: `${widthPercent}%`,
-                                    minWidth: '60px'
+                                    minWidth: '80px'
                                   }}
                                 >
-                                  <div className="font-medium truncate text-[8px]">
+                                  <div className="font-semibold truncate text-[10px]">
                                     {job.customerName}
                                   </div>
-                                  <div className="truncate text-[7px] opacity-90">
-                                    {job.serviceType}
+                                  <div className="truncate text-[9px] opacity-90">
+                                    {job.address || 'No address'}
                                   </div>
                                 </div>
                               );
