@@ -9349,9 +9349,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           let importedInvoiceNumber = jobData['Invoice No'] || jobData['Invoice Number'] || jobData.invoiceNumber || jobData['Invoice #'] || jobData.invoice || '';
           
           // If invoice number is empty but job has been invoiced, generate one
-          if (!importedInvoiceNumber && jobData['Invoice Sent'] === '1' && jobData['Invoice Date'] && jobData['Invoice Date'] !== '0000-00-00 00:00:00') {
-            const jobNum = jobData.jobNumber || jobData['Job Number'] || 'UNKNOWN';
+          const invoiceSent = jobData['Invoice Sent'];
+          const invoiceDate = jobData['Invoice Date'];
+          const jobNum = jobData.jobNumber || jobData['Job Number'] || 'UNKNOWN';
+          
+          if (!importedInvoiceNumber && invoiceSent === '1' && invoiceDate && invoiceDate !== '0000-00-00 00:00:00') {
             importedInvoiceNumber = `INV-${jobNum}`;
+            console.log(`🔖 Auto-generated invoice number for job ${jobNum}: ${importedInvoiceNumber}`);
           }
           
           // Set to null if still empty
