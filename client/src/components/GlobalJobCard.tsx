@@ -1231,6 +1231,10 @@ export function GlobalJobCard({
                     <DollarSign className="w-4 h-4 mr-2" />
                     Profit
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsPhotoCaptureOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-camera-mobile">
+                    <Camera className="w-4 h-4 mr-2" />
+                    Camera
+                  </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={() => sendToXeroMutation.mutate()}
                     disabled={
