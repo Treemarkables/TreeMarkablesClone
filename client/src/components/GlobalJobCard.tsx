@@ -1218,7 +1218,7 @@ export function GlobalJobCard({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-full h-full flex flex-col p-0 bg-gray-50 sm:max-w-6xl sm:h-[95vh] sm:rounded-xl">
+      <DialogContent className="w-full h-full max-w-full flex flex-col p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[95vh] sm:rounded-xl">
         {/* ServiceM8-style Header */}
         <div className="bg-orange-500 border-b border-orange-600 px-3 sm:px-4 py-2.5 flex-shrink-0 sm:rounded-t-xl">
           <div className="flex items-center justify-between gap-4">
@@ -1576,9 +1576,9 @@ export function GlobalJobCard({
         </div>
 
         {/* ServiceM8-style Layout: Left Sidebar + Two Panel Content */}
-        <div className="flex-1 flex flex-col md:flex-row min-h-0">
+        <div className="flex-1 flex flex-col md:flex-row min-h-0 max-w-full overflow-x-hidden">
           {/* Horizontal Tabs on Mobile, Left Sidebar on Desktop */}
-          <div className="bg-gray-200 border-b md:border-b-0 md:border-r border-gray-300 flex md:flex-col md:w-16">
+          <div className="bg-gray-200 border-b md:border-b-0 md:border-r border-gray-300 flex md:flex-col md:w-16 flex-shrink-0">
             <button
               className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-gray-300 ${
                 sidebarTab === 'details' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
@@ -1609,20 +1609,20 @@ export function GlobalJobCard({
           </div>
 
           {/* Main Content Area */}
-          <div className="flex-1 flex min-h-0">
+          <div className="flex-1 flex min-h-0 min-w-0">
             <Form {...form}>
             <form 
               onSubmit={form.handleSubmit((data) => {
                 console.log('Form submitted:', data);
                 // Save functionality will be handled by the save buttons
               })}
-              className="flex flex-col h-full w-full" 
+              className="flex flex-col h-full w-full min-w-0" 
               data-form="job-form"
             >
               {/* ServiceM8-style Two Panel Layout */}
-              <div className="flex flex-col md:flex-row h-full w-full">
+              <div className="flex flex-col md:flex-row h-full w-full min-w-0">
                 {/* Left Panel - Job Details */}
-                <div className="flex-1 md:flex-[3] bg-white md:border-r border-gray-300 p-3 sm:p-4 overflow-y-auto md:rounded-l-lg">
+                <div className="flex-1 md:flex-[3] bg-white md:border-r border-gray-300 p-3 sm:p-4 overflow-y-auto overflow-x-hidden md:rounded-l-lg min-w-0">
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
                       {/* ServiceM8-Style Customer Search or Create */}
@@ -2843,7 +2843,7 @@ export function GlobalJobCard({
                 </div>
 
                 {/* Right Panel - Activity Diary - Hidden on Mobile */}
-                <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto rounded-r-lg">
+                <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
                   {editingJob && (
                     <JobDiarySection 
                       jobId={editingJob.id}
