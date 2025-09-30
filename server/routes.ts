@@ -312,8 +312,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
-      // Employee ID authentication (dev mode)
+      // Employee ID authentication (dev mode only)
       else if (employeeId) {
+        // Only allow employeeId login if explicitly enabled (defaults to false for security)
+        const allowEmployeeIdLogin = process.env.ALLOW_EMPLOYEE_ID_LOGIN === 'true';
+        
+        if (!allowEmployeeIdLogin) {
+          console.warn(`[SECURITY] Attempted employeeId login blocked (employeeId: ${employeeId}, env: ${process.env.NODE_ENV})`);
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid credentials'
+          });
+        }
+
+        console.log(`[DEV] EmployeeId login allowed (employeeId: ${employeeId})`);
         employee = await storage.getEmployee(employeeId);
 
         if (!employee) {
