@@ -2374,23 +2374,34 @@ class DatabaseStorage implements IStorage {
       }
     }
     
-    let baseQuery = db.select().from(schema.conversations);
+    let baseQuery = db.select({
+      conversations: schema.conversations,
+      customerName: schema.customers.name
+    })
+    .from(schema.conversations)
+    .leftJoin(schema.customers, eq(schema.conversations.customerId, schema.customers.id));
     
     if (conditions.length > 0) {
-      baseQuery = baseQuery.where(and(...conditions));
+      baseQuery = baseQuery.where(and(...conditions)) as any;
     }
     
-    baseQuery = baseQuery.orderBy(desc(schema.conversations.lastMessageAt));
+    baseQuery = baseQuery.orderBy(desc(schema.conversations.lastMessageAt)) as any;
     
     if (filters?.limit) {
-      baseQuery = baseQuery.limit(filters.limit);
+      baseQuery = baseQuery.limit(filters.limit) as any;
     }
     
     if (filters?.offset) {
-      baseQuery = baseQuery.offset(filters.offset);
+      baseQuery = baseQuery.offset(filters.offset) as any;
     }
     
-    return await baseQuery;
+    const results = await baseQuery;
+    
+    // Map results to include customerName in the conversation object
+    return results.map((row: any) => ({
+      ...row.conversations,
+      customerName: row.customerName
+    })) as Conversation[];
   }
 
   async getConversationsByLead(leadId: string): Promise<Conversation[]> {

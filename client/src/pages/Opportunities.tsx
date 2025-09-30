@@ -192,7 +192,7 @@ export default function Opportunities() {
                 <div className="relative flex-shrink-0">
                   <Avatar className="h-11 w-11 sm:h-12 sm:w-12 bg-gray-200">
                     <AvatarFallback className="text-gray-600 font-medium">
-                      {getInitials(conversation.title)}
+                      {getInitials((conversation as any).customerName || conversation.title)}
                     </AvatarFallback>
                   </Avatar>
                   {conversation.source === 'social' && (
@@ -208,7 +208,7 @@ export default function Opportunities() {
                 <div className="flex-1 min-w-0 overflow-hidden">
                   <div className="flex items-baseline gap-1 sm:gap-2">
                     <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate flex-1 min-w-0" data-testid={`text-name-${conversation.id}`}>
-                      {conversation.title}
+                      {(conversation as any).customerName || conversation.title}
                     </h3>
                     <span className="text-[10px] sm:text-xs text-gray-500 flex-shrink-0 ml-auto whitespace-nowrap" data-testid={`text-date-${conversation.id}`}>
                       {formatDate(conversation.lastMessageAt || conversation.createdAt || new Date())}
