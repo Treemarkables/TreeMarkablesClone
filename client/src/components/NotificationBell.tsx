@@ -108,7 +108,7 @@ export function NotificationBell() {
   // Fetch notification summary for badge count
   const { data: summaryData } = useQuery({
     queryKey: ['/api/notifications/summary'],
-    refetchInterval: 30000, // Poll every 30 seconds
+    refetchInterval: 60000, // Poll every 60 seconds
   });
 
   // Fetch all notifications when dropdown is opened
