@@ -148,6 +148,10 @@ export function GlobalJobCard({
   // Photo capture modal state
   const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false);
 
+  // Auto-save state
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
+
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
@@ -516,6 +520,49 @@ export function GlobalJobCard({
     
     return () => subscription.unsubscribe();
   }, [form]);
+
+  // Auto-save effect - saves changes after user stops typing (only in edit mode)
+  useEffect(() => {
+    if (mode !== 'edit' || !editingJob?.id) return;
+    
+    const subscription = form.watch(async (values) => {
+      // Debounce auto-save
+      const timeoutId = setTimeout(async () => {
+        try {
+          setIsAutoSaving(true);
+          const formData = form.getValues();
+          
+          // Map new customer fields to job contact fields for backend compatibility
+          if (formData.isNewCustomer && formData.newCustomerName) {
+            const names = formData.newCustomerName.split(' ');
+            formData.jobContactFirstName = names[0] || '';
+            formData.jobContactLastName = names.slice(1).join(' ') || '';
+            formData.jobContactEmail = formData.newCustomerEmail || '';
+            formData.jobContactPhone = formData.newCustomerPhone || '';
+          }
+          
+          await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
+          setLastAutoSaveTime(new Date());
+          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+          
+          toast({
+            title: "Auto-saved",
+            description: "Changes saved automatically",
+            duration: 2000,
+          });
+        } catch (error) {
+          console.error('Auto-save failed:', error);
+        } finally {
+          setIsAutoSaving(false);
+        }
+      }, 2000); // 2 second debounce
+      
+      return () => clearTimeout(timeoutId);
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [form, mode, editingJob?.id, toast, queryClient]);
 
   const formData = form.watch();
 
@@ -1151,27 +1198,34 @@ export function GlobalJobCard({
               </h1>
             </div>
             
-            {/* Right: Save Buttons */}
-            <div className="flex items-center gap-2">
+            {/* Right: Save Button & Auto-save Indicator */}
+            <div className="flex items-center gap-3">
+              {/* Auto-save status */}
+              {mode === 'edit' && (
+                <div className="text-xs text-white/80 flex items-center gap-1.5">
+                  {isAutoSaving ? (
+                    <>
+                      <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                      <span>Saving...</span>
+                    </>
+                  ) : lastAutoSaveTime ? (
+                    <>
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>Saved</span>
+                    </>
+                  ) : null}
+                </div>
+              )}
+              
               <Button 
                 variant="ghost" 
                 size="sm" 
                 className="h-9 px-3 sm:px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
                 onClick={handleSave}
-                disabled={createJobMutation.isPending || updateJobMutation.isPending}
+                disabled={createJobMutation.isPending || updateJobMutation.isPending || isAutoSaving}
                 data-testid="button-save"
               >
                 {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-9 px-3 sm:px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all whitespace-nowrap" 
-                onClick={handleSaveAndClose}
-                disabled={createJobMutation.isPending || updateJobMutation.isPending}
-                data-testid="button-save-close"
-              >
-                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save & Close'}
               </Button>
             </div>
           </div>
