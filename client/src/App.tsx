@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
+import Login from "@/pages/Login";
 import Home from "@/pages/Home";
 import TreeRemoval from "@/pages/TreeRemoval";
 import TreePruning from "@/pages/TreePruning";
@@ -169,7 +170,9 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home}/>
+      <Route path="/" component={Login}/>
+      <Route path="/login" component={Login}/>
+      <Route path="/home" component={Home}/>
       <Route path="/tree-removal" component={TreeRemoval}/>
       <Route path="/tree-pruning" component={TreePruning}/>
       <Route path="/stump-grinding" component={StumpGrinding}/>
