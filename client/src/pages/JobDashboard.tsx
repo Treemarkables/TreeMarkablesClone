@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield, Mail, Phone, Edit2, Briefcase, Search, Filter, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -85,7 +86,7 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
   // Jobs pagination and search state
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [currentJobPage, setCurrentJobPage] = useState(1);
-  const [jobsPerPage] = useState(12); // Show 12 jobs per page for good performance
+  const [jobsPerPage, setJobsPerPage] = useState(12); // Show 12 jobs per page for good performance
   
   // Bulk selection state
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
@@ -688,6 +689,20 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                       <p className="text-xs text-muted-foreground">
                         Total: {allDisplayJobs.length.toLocaleString()} jobs in database
                       </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <label className="text-xs text-muted-foreground">Jobs per page:</label>
+                        <Select value={jobsPerPage.toString()} onValueChange={(value) => { setJobsPerPage(parseInt(value)); setCurrentJobPage(1); }}>
+                          <SelectTrigger className="w-20 h-8 text-xs" data-testid="select-jobs-per-page">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="12">12</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     
                     {/* Pagination controls */}
