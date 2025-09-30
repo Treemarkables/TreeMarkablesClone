@@ -797,7 +797,33 @@ export function GlobalJobCard({
   };
 
   // Handle schedule click
-  const handleScheduleClick = () => {
+  const handleScheduleClick = async () => {
+    if (!editingJob?.id) return;
+    
+    // Fetch existing staff assignments for this job
+    try {
+      const response = await fetch(`/api/jobs/${editingJob.id}/staff-assignments`);
+      const data = await response.json();
+      
+      if (data.success && data.data && data.data.length > 0) {
+        // Pre-populate the form with existing assignment data
+        const firstAssignment = data.data[0];
+        const startDate = new Date(firstAssignment.startTime);
+        const endDate = new Date(firstAssignment.endTime);
+        const durationMinutes = (endDate.getTime() - startDate.getTime()) / 60000;
+        
+        setSchedulingData({
+          date: startDate.toISOString().split('T')[0],
+          startTime: startDate.toTimeString().slice(0, 5),
+          duration: durationMinutes.toString(),
+          assignedTo: data.data.map((a: any) => a.employeeId),
+          notes: firstAssignment.notes || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error loading existing assignments:', error);
+    }
+    
     setIsSchedulingModalOpen(true);
   };
 
