@@ -9345,8 +9345,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           const paidAmount = jobData['Paid Amount'] || jobData.paidAmount || jobData['Amount Paid'] || '0';
           const paid = parseFloat(paidAmount.toString().replace(/[^0-9.-]/g, '')) || 0;
           
-          // Map invoice number
-          const importedInvoiceNumber = jobData['Invoice No'] || jobData['Invoice Number'] || jobData.invoiceNumber || jobData['Invoice #'] || jobData.invoice || null;
+          // Map invoice number - auto-generate if empty but job has been invoiced
+          let importedInvoiceNumber = jobData['Invoice No'] || jobData['Invoice Number'] || jobData.invoiceNumber || jobData['Invoice #'] || jobData.invoice || '';
+          
+          // If invoice number is empty but job has been invoiced, generate one
+          if (!importedInvoiceNumber && jobData['Invoice Sent'] === '1' && jobData['Invoice Date'] && jobData['Invoice Date'] !== '0000-00-00 00:00:00') {
+            const jobNum = jobData.jobNumber || jobData['Job Number'] || 'UNKNOWN';
+            importedInvoiceNumber = `INV-${jobNum}`;
+          }
+          
+          // Set to null if still empty
+          if (!importedInvoiceNumber) {
+            importedInvoiceNumber = null;
+          }
           
           const jobNumber = jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`;
           const jobPayload = {
@@ -9523,6 +9534,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           const totalInvoiceAmount = parseFloat(csvJob.invoiceAmount || csvJob['Total Invoice'] || '0');
           const paidAmountValue = parseFloat(csvJob.paidAmount || csvJob['Paid Amount'] || '0');
           
+          // Map invoice number - auto-generate if empty but job has been invoiced
+          let invoiceNum = csvJob['Invoice No'] || csvJob.invoiceNumber || csvJob['Invoice Number'] || csvJob['Invoice #'] || csvJob.invoice || '';
+          
+          // If invoice number is empty but job has been invoiced, generate one
+          if (!invoiceNum && csvJob.invoiceSent === '1' && csvJob.invoiceDate && csvJob.invoiceDate !== '0000-00-00 00:00:00') {
+            invoiceNum = `INV-${csvJob.jobNumber}`;
+          }
+          
+          // Set to null if still empty
+          if (!invoiceNum) {
+            invoiceNum = null;
+          }
+          
           const jobData = {
             customerId: customer.id,
             jobNumber: csvJob.jobNumber,
@@ -9542,7 +9566,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             completedDate: csvJob.completionDate && csvJob.completionDate !== '0000-00-00 00:00:00' ? 
               new Date(csvJob.completionDate) : null,
             assignedTo: csvJob.completedBy || 'Imported Staff',
-            invoiceNumber: csvJob['Invoice No'] || csvJob.invoiceNumber || csvJob['Invoice Number'] || csvJob['Invoice #'] || csvJob.invoice || null,
+            invoiceNumber: invoiceNum,
             servicem8JobId: csvJob.jobNumber, // Store original ServiceM8 job number
             paymentMethod: csvJob.paymentMethod
           };
