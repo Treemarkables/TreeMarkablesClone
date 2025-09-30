@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -151,8 +151,8 @@ export function GlobalJobCard({
   // Auto-save state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
-  const isLoadingDataRef = React.useRef(false);
-  const hasUserChangedRef = React.useRef(false);
+  const isLoadingDataRef = useRef(false);
+  const hasUserChangedRef = useRef(false);
 
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
