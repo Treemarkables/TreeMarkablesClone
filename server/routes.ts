@@ -5300,25 +5300,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Update employee
   app.put('/api/employees/:id', async (req: Request, res: Response) => {
     try {
-      console.log('UPDATE REQUEST BODY:', JSON.stringify(req.body, null, 2));
       const validatedData = updateEmployeeSchema.parse(req.body);
-      console.log('VALIDATED DATA:', JSON.stringify(validatedData, null, 2));
       
       // Convert all timestamp fields from strings to Date objects
       const dataToUpdate: any = { ...validatedData };
       
-      // Convert hireDate if it's a string
+      // Convert empty strings to undefined for all fields
+      Object.keys(dataToUpdate).forEach(key => {
+        if (dataToUpdate[key] === '') {
+          dataToUpdate[key] = undefined;
+        }
+      });
+      
+      // Convert hireDate if it's a string (and not empty)
       if (dataToUpdate.hireDate && typeof dataToUpdate.hireDate === 'string') {
-        console.log('Converting hireDate from string to Date:', dataToUpdate.hireDate);
         dataToUpdate.hireDate = new Date(dataToUpdate.hireDate);
-        console.log('Converted hireDate:', dataToUpdate.hireDate);
       }
       
       // Remove auto-managed timestamp fields - they should not be updated manually
       delete dataToUpdate.createdAt;
       delete dataToUpdate.updatedAt;
-      
-      console.log('FINAL DATA TO UPDATE:', JSON.stringify(dataToUpdate, null, 2));
       
       const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
       res.json({
