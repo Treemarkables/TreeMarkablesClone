@@ -1011,67 +1011,6 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
             <JobTemplateManagement />
           </TabsContent>
 
-          {/* Job Diary Tab */}
-          <TabsContent value="diary" className="flex-1 overflow-auto">
-            <div className="space-y-4">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="heading-job-diary">
-                  Job Documentation & Progress Tracking
-                </h2>
-                <p className="text-muted-foreground" data-testid="text-diary-description">
-                  Comprehensive job diary system for documentation, progress tracking, and field notes
-                </p>
-              </div>
-
-              {/* Job Diary will show real job data when available */}
-              {displayJobs.length > 0 && (
-                <Card data-testid="card-featured-job-diary">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2" data-testid="title-featured-job">
-                      <FileText className="w-5 h-5" />
-                      Featured Job: {displayJobs[0].title}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground" data-testid="text-job-details">
-                      {displayJobs[0].customer} - {displayJobs[0].location}
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <JobDiary 
-                      jobId={displayJobs[0].id} 
-                      jobTitle={displayJobs[0].title} 
-                      compact={false}
-                    />
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Additional Job Diaries - Show real jobs when available */}
-              {displayJobs.length > 1 && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {displayJobs.slice(1, 3).map((job) => (
-                    <Card key={job.id} data-testid={`card-job-diary-${job.id}`}>
-                      <CardHeader>
-                        <CardTitle className="text-lg" data-testid={`title-job-${job.id}`}>
-                          {job.title}
-                        </CardTitle>
-                        <p className="text-sm text-muted-foreground" data-testid={`text-job-details-${job.id}`}>
-                          {job.customer} - {job.location}
-                        </p>
-                      </CardHeader>
-                      <CardContent>
-                        <JobDiary 
-                          jobId={job.id} 
-                          jobTitle={job.title} 
-                          compact={true}
-                        />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
-          </TabsContent>
-
           {/* Quotes Tab */}
           <TabsContent value="quotes" className="flex-1 overflow-auto">
             <QuoteManagement />
