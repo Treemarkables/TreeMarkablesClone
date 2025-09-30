@@ -5129,6 +5129,36 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Get all staff assignments (for dispatch board)
+  app.get('/api/staff-assignments', async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const assignments = await storage.getAllJobStaffAssignments();
+      
+      // Filter by date range if provided
+      let filteredAssignments = assignments;
+      if (startDate || endDate) {
+        filteredAssignments = assignments.filter((assignment: any) => {
+          const assignmentStart = new Date(assignment.startTime);
+          if (startDate && assignmentStart < new Date(startDate as string)) return false;
+          if (endDate && assignmentStart > new Date(endDate as string)) return false;
+          return true;
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: filteredAssignments
+      });
+    } catch (error) {
+      console.error('Error fetching all staff assignments:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching staff assignments'
+      });
+    }
+  });
+
   // Get staff assignments for a job
   app.get('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
     try {
