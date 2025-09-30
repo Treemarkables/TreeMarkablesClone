@@ -1173,6 +1173,41 @@ export type ScheduleEvent = typeof scheduleEvents.$inferSelect;
 export type InsertScheduleEvent = z.infer<typeof insertScheduleEventSchema>;
 export type UpdateScheduleEvent = z.infer<typeof updateScheduleEventSchema>;
 
+// Job Staff Assignments - tracks which staff are assigned to which jobs with timing
+export const jobStaffAssignments = pgTable("job_staff_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  scheduleEventId: varchar("schedule_event_id"), // Link to calendar event
+  
+  // Timing details
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time").notNull(),
+  
+  // Assignment details
+  role: text("role"), // lead, operator, ground_crew, driver
+  status: text("status").notNull().default("assigned"), // assigned, confirmed, in_progress, completed, cancelled
+  notificationSent: boolean("notification_sent").notNull().default(false),
+  notificationSentAt: timestamp("notification_sent_at"),
+  confirmed: boolean("confirmed").notNull().default(false),
+  confirmedAt: timestamp("confirmed_at"),
+  
+  // Metadata
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertJobStaffAssignmentSchema = createInsertSchema(jobStaffAssignments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type JobStaffAssignment = typeof jobStaffAssignments.$inferSelect;
+export type InsertJobStaffAssignment = z.infer<typeof insertJobStaffAssignmentSchema>;
+
 // Job Template Schema  
 export const jobTemplates = pgTable("job_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
