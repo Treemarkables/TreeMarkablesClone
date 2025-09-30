@@ -23,7 +23,7 @@ import { RecordedTimeModal } from "./RecordedTimeModal";
 import { PhotoCaptureModal } from "./PhotoCaptureModal";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -3418,7 +3418,7 @@ export function GlobalJobCard({
         <Dialog open={isProfitTrackerOpen} onOpenChange={setIsProfitTrackerOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <h2 className="text-lg font-semibold">Profit Tracking - {editingJob.title}</h2>
+              <DialogTitle>Profit Tracking - {editingJob.title}</DialogTitle>
             </DialogHeader>
             <GrossMarginCalculator
               jobId={editingJob.id}
