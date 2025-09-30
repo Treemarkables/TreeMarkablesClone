@@ -30,9 +30,11 @@ import {
   UserCheck,
   UserX,
   Settings,
-  ChevronLeft
+  ChevronLeft,
+  Lock
 } from 'lucide-react';
 import { Link } from 'wouter';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Staff role options
 const STAFF_ROLES = [
@@ -541,10 +543,124 @@ function StaffFormDialog({
   );
 }
 
-function StaffCard({ staff, onEdit, onDelete }: { 
+function SetPasswordDialog({ 
+  staff, 
+  isOpen, 
+  onClose, 
+  onSubmit 
+}: { 
+  staff: StaffMember | null; 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onSubmit: (staffId: string, password: string) => void;
+}) {
+  const passwordSchema = z.object({
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(8, "Password must be at least 8 characters")
+  }).refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"]
+  });
+
+  type PasswordFormData = z.infer<typeof passwordSchema>;
+
+  const form = useForm<PasswordFormData>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: {
+      password: "",
+      confirmPassword: ""
+    }
+  });
+
+  const handleSubmit = (data: PasswordFormData) => {
+    if (staff) {
+      onSubmit(staff.id, data.password);
+      form.reset();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader className="bg-gradient-to-r from-orange-500 to-amber-500 text-white p-4 rounded-t-lg -m-6 mb-4">
+          <div className="flex items-center gap-2">
+            <Lock className="w-5 h-5" />
+            <DialogTitle className="text-white">
+              Set Password for {staff?.firstName} {staff?.lastName}
+            </DialogTitle>
+          </div>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>New Password *</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="password" 
+                      {...field} 
+                      placeholder="Enter new password (min 8 characters)"
+                      data-testid="input-password"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirm Password *</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="password" 
+                      {...field} 
+                      placeholder="Confirm new password"
+                      data-testid="input-confirm-password"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={onClose}
+                data-testid="button-cancel-password"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit"
+                className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+                data-testid="button-save-password"
+              >
+                Set Password
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StaffCard({ staff, onEdit, onDelete, onSetPassword, isAdmin }: { 
   staff: StaffMember; 
   onEdit: (staff: StaffMember) => void;
   onDelete: (staff: StaffMember) => void;
+  onSetPassword: (staff: StaffMember) => void;
+  isAdmin: boolean;
 }) {
   const roleConfig = STAFF_ROLES.find(r => r.value === staff.role);
   const initials = `${staff.firstName[0]}${staff.lastName[0]}`.toUpperCase();
@@ -578,6 +694,17 @@ function StaffCard({ staff, onEdit, onDelete }: {
             </Badge>
             
             <div className="flex items-center gap-1">
+              {isAdmin && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onSetPassword(staff)}
+                  data-testid={`button-set-password-${staff.id}`}
+                  title="Set Password"
+                >
+                  <Lock className="w-4 h-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -674,9 +801,11 @@ export default function StaffManagement() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const [passwordStaff, setPasswordStaff] = useState<StaffMember | null>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
 
   // Fetch staff data
   const { data: staffData, isLoading } = useQuery<{ success: boolean; data: StaffMember[] }>({
@@ -765,27 +894,35 @@ export default function StaffManagement() {
     },
   });
 
+  // Set password mutation
+  const setPasswordMutation = useMutation({
+    mutationFn: async ({ staffId, password }: { staffId: string; password: string }) => {
+      return apiRequest('PATCH', `/api/employees/${staffId}/password`, { password });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password Updated",
+        description: "Password has been set successfully!",
+      });
+      setPasswordStaff(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to set password",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAddStaff = (data: StaffFormData) => {
-    // Transform form data to match API expectations
-    const apiData = {
-      ...data,
-      // Convert empty hireDate string to undefined, or convert to Date object
-      hireDate: data.hireDate ? new Date(data.hireDate) : undefined,
-      // Convert hourlyRate string to decimal
-      hourlyRate: data.hourlyRate ? parseFloat(data.hourlyRate) : undefined
-    };
-    createStaffMutation.mutate(apiData);
+    createStaffMutation.mutate(data);
   };
 
   const handleEditStaff = (data: StaffFormData) => {
     if (editingStaff) {
-      // Transform form data to match API expectations
       const apiData = {
         ...data,
-        // Convert empty hireDate string to undefined, or convert to Date object
-        hireDate: data.hireDate ? new Date(data.hireDate) : undefined,
-        // Convert hourlyRate string to decimal
-        hourlyRate: data.hourlyRate ? parseFloat(data.hourlyRate) : undefined,
         id: editingStaff.id
       };
       updateStaffMutation.mutate(apiData);
@@ -796,6 +933,10 @@ export default function StaffManagement() {
     if (confirm(`Are you sure you want to delete ${staff.firstName} ${staff.lastName}?`)) {
       deleteStaffMutation.mutate(staff.id);
     }
+  };
+
+  const handleSetPassword = (staffId: string, password: string) => {
+    setPasswordMutation.mutate({ staffId, password });
   };
 
   // Calculate stats
@@ -952,6 +1093,8 @@ export default function StaffManagement() {
                 staff={staffMember}
                 onEdit={setEditingStaff}
                 onDelete={handleDeleteStaff}
+                onSetPassword={setPasswordStaff}
+                isAdmin={isAdmin}
               />
             ))}
           </div>
@@ -996,6 +1139,14 @@ export default function StaffManagement() {
         isOpen={!!editingStaff}
         onClose={() => setEditingStaff(null)}
         onSubmit={handleEditStaff}
+      />
+
+      {/* Set Password Dialog */}
+      <SetPasswordDialog
+        staff={passwordStaff}
+        isOpen={!!passwordStaff}
+        onClose={() => setPasswordStaff(null)}
+        onSubmit={handleSetPassword}
       />
     </div>
   );
