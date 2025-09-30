@@ -118,6 +118,7 @@ export function JobDiarySection({
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState<string>("");
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   
   // Forms
@@ -628,7 +629,7 @@ export function JobDiarySection({
                                 className="max-w-full h-auto rounded-lg cursor-pointer hover-elevate"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  window.open(entry.photoUrl, '_blank');
+                                  setViewingPhotoUrl(entry.photoUrl || null);
                                 }}
                                 data-testid="img-diary-photo"
                               />
@@ -902,6 +903,48 @@ export function JobDiarySection({
           proposalId={selectedProposalId}
         />
       )}
+
+      {/* Photo Viewer Modal */}
+      <Dialog open={!!viewingPhotoUrl} onOpenChange={(open) => !open && setViewingPhotoUrl(null)}>
+        <DialogContent className="max-w-4xl w-full p-0">
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle>Job Photo</DialogTitle>
+            <DialogDescription>Click download to save to your device</DialogDescription>
+          </DialogHeader>
+          {viewingPhotoUrl && (
+            <div className="p-6 pt-0">
+              <img 
+                src={viewingPhotoUrl} 
+                alt="Job photo full size" 
+                className="w-full h-auto rounded-lg"
+              />
+              <div className="flex gap-2 mt-4">
+                <Button 
+                  className="flex-1" 
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = viewingPhotoUrl;
+                    link.download = `job-photo-${Date.now()}.jpg`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  data-testid="button-download-photo"
+                >
+                  Download Photo
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setViewingPhotoUrl(null)}
+                  data-testid="button-close-photo"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
