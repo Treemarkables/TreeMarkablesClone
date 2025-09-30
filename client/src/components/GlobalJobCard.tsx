@@ -408,17 +408,6 @@ export function GlobalJobCard({
     return null;
   }, [mode, jobId, job, jobs]);
 
-  // Find selected customer
-  const selectedCustomer = useMemo(() => {
-    if (mode === "edit" && editingJob?.customerId) {
-      return customers.find(c => c.id === editingJob.customerId);
-    }
-    return null;
-  }, [mode, editingJob, customers]);
-
-  // Get customer data for the editing job
-  const editingJobCustomer = editingJob ? customers.find(c => c.id === editingJob.customerId) : null;
-
   // Form setup
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
@@ -458,6 +447,25 @@ export function GlobalJobCard({
     control: form.control,
     name: "lineItems"
   });
+
+  // Watch customerId from form for finding selected customer
+  const formCustomerId = form.watch('customerId');
+
+  // Find selected customer based on form data or editing job
+  const selectedCustomer = useMemo(() => {
+    // For edit mode, use the editing job's customer
+    if (mode === "edit" && editingJob?.customerId) {
+      return customers.find(c => c.id === editingJob.customerId);
+    }
+    // For create mode, use the selected customer from form
+    if (formCustomerId) {
+      return customers.find(c => c.id === formCustomerId);
+    }
+    return null;
+  }, [mode, editingJob, customers, formCustomerId]);
+
+  // Get customer data for the editing job
+  const editingJobCustomer = editingJob ? customers.find(c => c.id === editingJob.customerId) : null;
 
   // Populate form with complete job data when editing an existing job
   useEffect(() => {
