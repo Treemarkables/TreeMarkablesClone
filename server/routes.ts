@@ -7197,6 +7197,143 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Send reply to conversation (email, messenger, etc.)
+  app.post('/api/conversations/:conversationId/reply', async (req: Request, res: Response) => {
+    try {
+      const { conversationId } = req.params;
+      const { content, type = 'message', platform, staffId } = req.body;
+      
+      if (!content) {
+        res.status(400).json({ success: false, message: 'Content is required' });
+        return;
+      }
+      
+      // Get conversation to determine recipient
+      const conversation = await storage.getConversation(conversationId);
+      if (!conversation) {
+        res.status(404).json({ success: false, message: 'Conversation not found' });
+        return;
+      }
+      
+      // Get the most recent inbound message to determine recipient
+      const messages = await storage.getConversationMessages(conversationId);
+      const lastInboundMessage = messages.filter(m => m.direction === 'inbound').sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )[0];
+      
+      if (!lastInboundMessage) {
+        res.status(400).json({ success: false, message: 'No recipient found for this conversation' });
+        return;
+      }
+      
+      const recipientContact = lastInboundMessage.fromContact;
+      const recipientName = lastInboundMessage.fromName;
+      
+      // Create outbound message
+      const message = await storage.createConversationMessage({
+        conversationId,
+        type: type as any,
+        content,
+        direction: 'outbound',
+        toName: recipientName,
+        toContact: recipientContact,
+        staffId,
+        platform: platform || lastInboundMessage.platform,
+        deliveryStatus: 'pending'
+      });
+      
+      // Send based on platform
+      const messagePlatform = platform || lastInboundMessage.platform;
+      
+      if (messagePlatform === 'email') {
+        // Send email using SendGrid
+        try {
+          const sgMail = require('@sendgrid/mail');
+          const apiKey = process.env.SENDGRID_API_KEY;
+          
+          if (apiKey) {
+            sgMail.setApiKey(apiKey);
+            
+            await sgMail.send({
+              to: recipientContact,
+              from: process.env.SENDGRID_FROM_EMAIL || 'info@treemarkables.co.nz',
+              subject: lastInboundMessage.subject ? `Re: ${lastInboundMessage.subject}` : 'Response to your enquiry',
+              text: content,
+              html: content.replace(/\n/g, '<br>')
+            });
+            
+            await storage.updateConversationMessage(message.id, {
+              deliveryStatus: 'delivered'
+            });
+            
+            console.log(`📧 Email sent to ${recipientContact}`);
+          } else {
+            console.warn('⚠️ SendGrid API key not configured');
+            await storage.updateConversationMessage(message.id, {
+              deliveryStatus: 'failed'
+            });
+          }
+        } catch (emailError) {
+          console.error('Error sending email:', emailError);
+          await storage.updateConversationMessage(message.id, {
+            deliveryStatus: 'failed'
+          });
+        }
+      } else if (messagePlatform === 'facebook_messenger') {
+        // Send Facebook message
+        try {
+          const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+          
+          if (pageAccessToken) {
+            const response = await fetch(
+              `https://graph.facebook.com/v18.0/me/messages?access_token=${pageAccessToken}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  recipient: { id: recipientContact },
+                  message: { text: content }
+                })
+              }
+            );
+            
+            if (response.ok) {
+              await storage.updateConversationMessage(message.id, {
+                deliveryStatus: 'delivered'
+              });
+              console.log(`💬 Facebook message sent to ${recipientContact}`);
+            } else {
+              await storage.updateConversationMessage(message.id, {
+                deliveryStatus: 'failed'
+              });
+            }
+          } else {
+            console.warn('⚠️ Facebook Page Access Token not configured');
+            await storage.updateConversationMessage(message.id, {
+              deliveryStatus: 'failed'
+            });
+          }
+        } catch (fbError) {
+          console.error('Error sending Facebook message:', fbError);
+          await storage.updateConversationMessage(message.id, {
+            deliveryStatus: 'failed'
+          });
+        }
+      }
+      
+      // Update conversation
+      await storage.updateConversation(conversationId, {
+        lastMessageAt: new Date(),
+        lastMessageBy: 'staff'
+      });
+      
+      res.json({ success: true, data: message });
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      res.status(500).json({ success: false, message: 'Error sending reply' });
+    }
+  });
+
   // ========================================
   // CUSTOMER PORTAL API ROUTES  
   // ========================================

@@ -36,6 +36,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 // Conversation types imported from shared schema
 
@@ -66,9 +69,68 @@ export default function Opportunities() {
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [selectedMessages, setSelectedMessages] = useState<ConversationMessage[]>([]);
+  const [showReplyDialog, setShowReplyDialog] = useState(false);
+  const [replyContent, setReplyContent] = useState('');
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Reply mutation
+  const replyMutation = useMutation({
+    mutationFn: async ({ conversationId, content }: { conversationId: string; content: string }) => {
+      return apiRequest('POST', `/api/conversations/${conversationId}/reply`, { content });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations', selectedConversation?.id, 'messages'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      setReplyContent('');
+      setShowReplyDialog(false);
+      toast({ title: 'Reply sent successfully' });
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to send reply', 
+        description: 'Please try again or check your connection.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Convert to lead mutation
+  const convertToLeadMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      return apiRequest('POST', '/api/leads', {
+        title: selectedConversation?.title || 'Lead from conversation',
+        status: 'new',
+        source: selectedConversation?.source || 'other',
+        priority: selectedConversation?.priority || 'medium',
+        serviceType: selectedConversation?.serviceType,
+        estimatedValue: selectedConversation?.estimatedValue,
+        notes: `Converted from conversation ${conversationId}`
+      });
+    },
+    onSuccess: async (data: any) => {
+      if (selectedConversation && data?.data?.id) {
+        // Update conversation with conversion info
+        await apiRequest('PATCH', `/api/conversations/${selectedConversation.id}/convert`, { 
+          quoteId: data.data.id 
+        });
+        
+        queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+        toast({ 
+          title: 'Lead created successfully',
+          description: 'Conversation has been converted to a lead in your pipeline.'
+        });
+      }
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to create lead', 
+        description: 'Please try again.',
+        variant: 'destructive'
+      });
+    }
+  });
 
   // Fetch conversations from backend
   const { data: conversationsResponse, isLoading, error } = useQuery({
@@ -670,8 +732,16 @@ export default function Opportunities() {
                   </div>
                   
                   <div className="flex gap-2 pt-4">
-                    <Button data-testid="button-reply">
-                      <Reply className="h-4 w-4 mr-2" />
+                    <Button 
+                      data-testid="button-reply"
+                      onClick={() => setShowReplyDialog(true)}
+                      disabled={!selectedConversation || replyMutation.isPending}
+                    >
+                      {replyMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Reply className="h-4 w-4 mr-2" />
+                      )}
                       Reply
                     </Button>
                     <Button variant="outline" data-testid="button-forward">
@@ -682,12 +752,18 @@ export default function Opportunities() {
                       variant="outline" 
                       data-testid="button-create-lead"
                       onClick={() => {
-                        // In a real app, this would navigate to lead creation
-                        toast({ title: 'Feature coming soon', description: 'Lead creation will be available soon.' });
+                        if (selectedConversation) {
+                          convertToLeadMutation.mutate(selectedConversation.id);
+                        }
                       }}
+                      disabled={!selectedConversation || convertToLeadMutation.isPending || selectedConversation?.status === 'converted'}
                     >
-                      <User className="h-4 w-4 mr-2" />
-                      Create Lead
+                      {convertToLeadMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <User className="h-4 w-4 mr-2" />
+                      )}
+                      {selectedConversation?.status === 'converted' ? 'Already Converted' : 'Create Lead'}
                     </Button>
                     <Button 
                       variant="outline" 
@@ -713,6 +789,68 @@ export default function Opportunities() {
           )}
         </div>
       </div>
+
+      {/* Reply Dialog */}
+      <Dialog open={showReplyDialog} onOpenChange={setShowReplyDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Reply to {selectedConversation?.title}</DialogTitle>
+            <DialogDescription>
+              Send a response via {messages.find(m => m.direction === 'inbound')?.platform || 'the original channel'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reply-content">Message</Label>
+              <Textarea
+                id="reply-content"
+                data-testid="textarea-reply-content"
+                placeholder="Type your reply here..."
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
+                rows={6}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowReplyDialog(false);
+                setReplyContent('');
+              }}
+              data-testid="button-cancel-reply"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                if (selectedConversation && replyContent.trim()) {
+                  replyMutation.mutate({ 
+                    conversationId: selectedConversation.id, 
+                    content: replyContent 
+                  });
+                }
+              }}
+              disabled={!replyContent.trim() || replyMutation.isPending}
+              data-testid="button-send-reply"
+            >
+              {replyMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Reply className="h-4 w-4 mr-2" />
+                  Send Reply
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
