@@ -13,6 +13,7 @@ import Pipeline from './Pipeline';
 import { PerformanceAnalytics } from '@/components/PerformanceAnalytics';
 import { EquipmentTracker } from '@/components/EquipmentTracker';
 import CommunicationsManagement from './CommunicationsManagement';
+import Opportunities from './Opportunities';
 import Integrations from './Integrations';
 import { WeatherDashboard } from '@/components/WeatherDashboard';
 import QuoteManagement from '@/components/QuoteManagement';
@@ -74,7 +75,7 @@ interface JobDashboardProps {
   onTabChange?: (tab: string) => void;
 }
 
-export default function JobDashboard({ activeTab = "overview", onTabChange }: JobDashboardProps) {
+export default function JobDashboard({ activeTab = "communications", onTabChange }: JobDashboardProps) {
   // State for job card modal
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isJobCardOpen, setIsJobCardOpen] = useState(false);
@@ -1085,8 +1086,8 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
           </TabsContent>
 
           {/* Communications Tab */}
-          <TabsContent value="communications" className="flex-1 overflow-auto">
-            <CommunicationsManagement />
+          <TabsContent value="communications" className="flex-1 overflow-hidden">
+            <Opportunities />
           </TabsContent>
 
           {/* Weather Tab */}
