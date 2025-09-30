@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
@@ -132,9 +132,10 @@ export function GlobalJobCard({
     date: '',
     startTime: '',
     endTime: '',
-    assignedTo: '',
+    assignedTo: [] as string[],
     notes: ''
   });
+  const [staffConflicts, setStaffConflicts] = useState<{employeeId: string; conflicts: any[]}[]>([]);
 
   // Time tracking modal state
   const [isTimeTrackingOpen, setIsTimeTrackingOpen] = useState(false);
@@ -933,31 +934,107 @@ export function GlobalJobCard({
     });
   };
 
+  // Check for staff conflicts when scheduling data changes
+  useEffect(() => {
+    const abortController = new AbortController();
+    
+    const checkConflicts = async () => {
+      if (!schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || schedulingData.assignedTo.length === 0) {
+        setStaffConflicts([]);
+        return;
+      }
+
+      try {
+        const startTime = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
+        const endTime = new Date(`${schedulingData.date}T${schedulingData.endTime}`);
+
+        const response = await fetch('/api/staff/check-conflicts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employeeIds: schedulingData.assignedTo,
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            excludeJobId: editingJob?.id
+          }),
+          signal: abortController.signal
+        });
+
+        if (abortController.signal.aborted) return;
+
+        const data = await response.json();
+        if (data.success) {
+          setStaffConflicts(data.data || []);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          // Request was cancelled, ignore
+          return;
+        }
+        console.error('Error checking conflicts:', error);
+      }
+    };
+
+    const timeoutId = setTimeout(checkConflicts, 300); // Debounce
+    return () => {
+      clearTimeout(timeoutId);
+      abortController.abort();
+    };
+  }, [schedulingData.date, schedulingData.startTime, schedulingData.endTime, schedulingData.assignedTo, editingJob?.id]);
+
   // Save schedule function
   const saveSchedule = async () => {
+    if (!editingJob?.id) return;
+
     try {
-      const scheduledDate = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
-      
-      toast({
-        title: "Job Scheduled",
-        description: `Job scheduled for ${format(scheduledDate, 'PPP')} at ${format(scheduledDate, 'p')}`,
+      const startTime = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
+      const endTime = new Date(`${schedulingData.date}T${schedulingData.endTime}`);
+
+      // Create staff assignments
+      const staffAssignments = schedulingData.assignedTo.map(employeeId => ({
+        employeeId,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        notes: schedulingData.notes
+      }));
+
+      const response = await fetch(`/api/jobs/${editingJob.id}/staff-assignments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffAssignments,
+          sendNotifications: true
+        })
       });
-      
-      setIsSchedulingModalOpen(false);
-      setSchedulingData({
-        date: '',
-        startTime: '',
-        endTime: '',
-        assignedTo: '',
-        notes: ''
-      });
-      
-      console.log("Job scheduled successfully");
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: "Job Scheduled",
+          description: `${schedulingData.assignedTo.length} staff member(s) scheduled for ${format(startTime, 'PPP')} at ${format(startTime, 'p')}`,
+        });
+
+        // Refresh job data
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        
+        setIsSchedulingModalOpen(false);
+        setSchedulingData({
+          date: '',
+          startTime: '',
+          endTime: '',
+          assignedTo: [],
+          notes: ''
+        });
+        setStaffConflicts([]);
+      } else {
+        throw new Error(data.message || 'Failed to schedule');
+      }
     } catch (error) {
       console.error("Error scheduling job:", error);
       toast({
         title: "Scheduling Error",
-        description: "Failed to schedule job. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to schedule job. Please try again.",
         variant: "destructive"
       });
     }
@@ -3096,22 +3173,56 @@ export function GlobalJobCard({
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium">Assigned To</label>
-              <Select
-                value={schedulingData.assignedTo}
-                onValueChange={(value) => setSchedulingData(prev => ({ ...prev, assignedTo: value }))}
-              >
-                <SelectTrigger data-testid="select-schedule-staff">
-                  <SelectValue placeholder="Select staff member" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((employee: any) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.firstName} {employee.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">Assign Staff Members</label>
+              <div className="mt-2 space-y-2 border rounded-md p-3 max-h-60 overflow-y-auto">
+                {employees.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No staff members available</p>
+                ) : (
+                  employees.map((employee: any) => {
+                    const hasConflict = staffConflicts.some(c => c.employeeId === employee.id);
+                    const isSelected = schedulingData.assignedTo.includes(employee.id);
+                    
+                    return (
+                      <div key={employee.id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`staff-${employee.id}`}
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const newAssigned = e.target.checked
+                              ? [...schedulingData.assignedTo, employee.id]
+                              : schedulingData.assignedTo.filter(id => id !== employee.id);
+                            setSchedulingData(prev => ({ ...prev, assignedTo: newAssigned }));
+                          }}
+                          className="h-4 w-4 rounded border-gray-300"
+                          data-testid={`checkbox-staff-${employee.id}`}
+                        />
+                        <label
+                          htmlFor={`staff-${employee.id}`}
+                          className="text-sm flex-1 cursor-pointer"
+                        >
+                          {employee.firstName} {employee.lastName}
+                          {employee.position && (
+                            <span className="text-xs text-muted-foreground ml-1">({employee.position})</span>
+                          )}
+                        </label>
+                        {hasConflict && (
+                          <Badge variant="destructive" className="text-xs">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Conflict
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {staffConflicts.length > 0 && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                  <AlertCircle className="h-4 w-4 inline mr-1" />
+                  {staffConflicts.length} staff member(s) have scheduling conflicts at this time
+                </div>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium">Notes</label>
@@ -3132,9 +3243,10 @@ export function GlobalJobCard({
                   date: '',
                   startTime: '',
                   endTime: '',
-                  assignedTo: '',
+                  assignedTo: [],
                   notes: ''
                 });
+                setStaffConflicts([]);
               }}
               data-testid="btn-cancel-schedule"
             >
@@ -3142,12 +3254,12 @@ export function GlobalJobCard({
             </Button>
             <Button
               onClick={saveSchedule}
-              disabled={!schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || !schedulingData.assignedTo}
+              disabled={!schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || schedulingData.assignedTo.length === 0 || staffConflicts.length > 0}
               data-testid="btn-save-schedule"
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Clock className="h-4 w-4 mr-2" />
-              Schedule Job
+              Schedule {schedulingData.assignedTo.length} Staff Member{schedulingData.assignedTo.length !== 1 ? 's' : ''}
             </Button>
           </div>
         </DialogContent>
