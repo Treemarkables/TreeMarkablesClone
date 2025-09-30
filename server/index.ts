@@ -9,6 +9,18 @@ import { fileURLToPath } from 'url';
 import session from "express-session";
 import createMemoryStore from "memorystore";
 
+// Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
+if (!process.env.ALLOW_EMPLOYEE_ID_LOGIN) {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  process.env.ALLOW_EMPLOYEE_ID_LOGIN = isDevelopment ? 'true' : 'false';
+  
+  if (!isDevelopment) {
+    console.warn(`[SECURITY] ALLOW_EMPLOYEE_ID_LOGIN auto-configured to 'false' (NODE_ENV=${process.env.NODE_ENV || 'undefined'}). Set NODE_ENV=development to enable dev login selector.`);
+  } else {
+    console.log(`[CONFIG] ALLOW_EMPLOYEE_ID_LOGIN auto-configured to 'true' for development mode.`);
+  }
+}
+
 const app = express();
 // Increase JSON payload limit for large CSV imports (ServiceM8 data can be huge)
 app.use(express.json({ limit: '50mb' }));
