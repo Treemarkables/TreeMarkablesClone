@@ -1013,7 +1013,13 @@ export function GlobalJobCard({
     if (!editingJob?.id) return;
 
     try {
-      const startTime = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
+      // Parse date and time components
+      const [year, month, day] = schedulingData.date.split('-').map(Number);
+      const [hours, minutes] = schedulingData.startTime.split(':').map(Number);
+      
+      // Create Date in UTC to preserve the exact date/time entered
+      // This prevents timezone conversion issues
+      const startTime = new Date(Date.UTC(year, month - 1, day, hours, minutes));
       const endTime = new Date(startTime.getTime() + parseInt(schedulingData.duration) * 60000);
 
       // Create staff assignments
