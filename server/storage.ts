@@ -1275,6 +1275,10 @@ class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<boolean> {
     try {
+      // First, delete all related diary entries
+      await db.delete(schema.jobDiaryEntries).where(eq(schema.jobDiaryEntries.jobId, id));
+      
+      // Then delete the job itself
       const result = await db.delete(schema.jobs).where(eq(schema.jobs.id, id));
       return (result.rowCount || 0) > 0;
     } catch (error) {
