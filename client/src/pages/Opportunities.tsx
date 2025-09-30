@@ -99,15 +99,14 @@ export default function Opportunities() {
     return `${month}/${day}/${year}`;
   };
 
-  const truncateMessage = (message: string, maxLength: number = 50) => {
+  const truncateMessage = (message: string, maxLength: number = 80) => {
     if (message.length <= maxLength) return message;
     return message.substring(0, maxLength) + '...';
   };
 
   const handleConversationClick = (conversation: Conversation) => {
-    setSelectedConversation(conversation);
-    // For now, open reply dialog - in future could navigate to detail view
-    setShowReplyDialog(true);
+    // Navigate to conversation detail page
+    setLocation(`/conversation/${conversation.id}`);
   };
 
   return (
