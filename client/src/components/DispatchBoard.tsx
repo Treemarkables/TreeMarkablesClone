@@ -509,6 +509,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const jobAssignments: JobAssignment[] = [];
     const processedJobs = new Set<string>();
 
+    console.log('🔍 DISPATCH BOARD DEBUG:', {
+      staffAssignmentsCount: staffAssignmentsData?.data?.length || 0,
+      jobsDataCount: jobsData?.data?.length || 0,
+      sampleAssignment: staffAssignmentsData?.data?.[0]
+    });
+
     // First, process all jobs with staff assignments
     if (staffAssignmentsData?.data && staffAssignmentsData.data.length > 0) {
       // Group assignments by job and date
@@ -550,7 +556,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           }
         }
 
-        jobAssignments.push({
+        const jobAssignment = {
           id: apiJob.id,
           jobId: apiJob.jobNumber,
           customerId: apiJob.customerId,
@@ -569,7 +575,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           teamId: teamId,
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions
+        };
+        
+        console.log('📅 Created job assignment:', {
+          jobId: jobAssignment.id.slice(0, 8),
+          customerName: jobAssignment.customerName,
+          startTime: jobAssignment.startTime,
+          assignedTeam: jobAssignment.assignedTeam.map(id => id.slice(0, 8))
         });
+        
+        jobAssignments.push(jobAssignment);
       });
     }
 
