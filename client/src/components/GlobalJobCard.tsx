@@ -643,7 +643,23 @@ export function GlobalJobCard({
         description: "New job has been created successfully.",
         duration: 1000,
       });
+      
+      // Reset form to default values
+      form.reset({
+        title: '',
+        description: '',
+        status: 'quote',
+        priority: 'medium',
+        customerId: '',
+        lineItems: [],
+        checklist: [],
+        totalAmount: '0',
+        paidAmount: '0',
+      });
+      
+      // Close modal and call callback
       onJobCreated?.(newJob);
+      onClose();
     },
     onError: (error) => {
       console.error('Error creating job:', error);
