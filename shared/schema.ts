@@ -1062,7 +1062,7 @@ export type NotificationSummary = z.infer<typeof notificationSummarySchema>;
 // ========================================
 
 // Staff Role Enum
-export const StaffRole = z.enum(['owner', 'office_staff', 'crew']);
+export const StaffRole = z.enum(['admin', 'crew']);
 export type StaffRoleType = z.infer<typeof StaffRole>;
 
 // Employee/Team Member Schema
@@ -1073,7 +1073,7 @@ export const employees = pgTable("employees", {
   email: text("email"),
   phone: text("phone"),
   position: text("position").notNull(), // arborist, ground_crew, foreman, driver
-  role: text("role").notNull().default("crew"), // owner, office_staff, crew
+  role: text("role").notNull().default("crew"), // admin, crew
   status: text("status").notNull().default("active"), // active, inactive, on_leave
   skillLevel: text("skill_level").notNull().default("beginner"), // beginner, intermediate, expert
   certifications: text("certifications").array().default([]), // ISA, CTSP, etc.

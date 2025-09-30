@@ -127,7 +127,7 @@ interface Employee {
   email?: string;
   phone?: string;
   position: string;
-  role: string; // owner, office_staff, crew
+  role: string; // admin, crew
   status: string;
   skillLevel: string;
   certifications: string[];

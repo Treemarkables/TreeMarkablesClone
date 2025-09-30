@@ -36,8 +36,7 @@ import { Link } from 'wouter';
 
 // Staff role options
 const STAFF_ROLES = [
-  { value: 'owner', label: 'Owner', color: 'bg-gradient-to-r from-purple-500 to-pink-500' },
-  { value: 'office_staff', label: 'Office Staff', color: 'bg-gradient-to-r from-blue-500 to-cyan-500' },
+  { value: 'admin', label: 'Admin', color: 'bg-gradient-to-r from-purple-500 to-pink-500' },
   { value: 'crew', label: 'Crew', color: 'bg-gradient-to-r from-green-500 to-emerald-500' }
 ];
 
@@ -90,7 +89,7 @@ const staffFormSchema = z.object({
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   phone: z.string().optional(),
   position: z.string().min(1, "Position is required"),
-  role: z.enum(['owner', 'office_staff', 'crew']),
+  role: z.enum(['admin', 'crew']),
   status: z.enum(['active', 'inactive', 'on_leave']).default('active'),
   skillLevel: z.enum(['beginner', 'intermediate', 'advanced', 'expert']).default('beginner'),
   hourlyRate: z.string().optional(),
@@ -111,7 +110,7 @@ interface StaffMember {
   email?: string;
   phone?: string;
   position: string;
-  role: 'owner' | 'office_staff' | 'crew';
+  role: 'admin' | 'crew';
   status: 'active' | 'inactive' | 'on_leave';
   skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
   hourlyRate?: string;
