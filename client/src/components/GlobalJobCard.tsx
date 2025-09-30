@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
@@ -33,9 +33,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertJobSchema, type ChecklistItem, type Job, type Customer } from "@shared/schema";
+import { cn } from "@/lib/utils";
 
 // Form validation schema extending the base insertJobSchema
 const globalJobCardSchema = insertJobSchema.extend({
@@ -103,10 +106,12 @@ export function GlobalJobCard({
     Array.isArray(job?.checklist) ? job.checklist : []
   );
   const [newChecklistItem, setNewChecklistItem] = useState("");
-  const [activeCustomerTab, setActiveCustomerTab] = useState("existing");
   const [activeTab, setActiveTab] = useState("details");
   const [sidebarTab, setSidebarTab] = useState("details");
   const [showMobileActions, setShowMobileActions] = useState(false);
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [customerSearchValue, setCustomerSearchValue] = useState("");
+  const [selectedCustomerName, setSelectedCustomerName] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
@@ -486,6 +491,11 @@ export function GlobalJobCard({
       if (editingJob.lineItems) {
         // Use replace to atomically set line items from database
         replaceLineItems(editingJob.lineItems);
+      }
+      
+      // Set selected customer name for the search/create combobox
+      if (editingJobCustomer?.name) {
+        setSelectedCustomerName(editingJobCustomer.name);
       }
     }
   }, [editingJob, editingJobCustomer, form, replaceLineItems]);
@@ -1450,103 +1460,133 @@ export function GlobalJobCard({
                 <div className="flex-1 md:flex-[3] bg-white md:border-r border-gray-300 p-3 sm:p-4 overflow-y-auto md:rounded-l-lg">
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
-                      {/* Customer Selection */}
+                      {/* ServiceM8-Style Customer Search or Create */}
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
                           <UserCircle className="w-4 h-4 text-blue-600" />
                           <h4 className="font-medium text-gray-800">Customer</h4>
                         </div>
                         
-                        {/* Customer Tabs */}
-                        <div className="flex bg-gray-100 rounded-lg p-1">
-                          <button
-                            type="button"
-                            className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
-                              activeCustomerTab === 'existing' 
-                                ? 'bg-white text-gray-900 shadow-sm' 
-                                : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                            onClick={() => {
-                              setActiveCustomerTab('existing');
-                              form.setValue('isNewCustomer', false);
-                              // Clear new customer fields
-                              form.setValue('newCustomerName', '');
-                              form.setValue('newCustomerEmail', '');
-                              form.setValue('newCustomerPhone', '');
-                              form.setValue('newCustomerAddress', '');
-                              form.setValue('newCustomerCity', '');
-                              form.setValue('newCustomerRegion', '');
-                            }}
-                            data-testid="tab-existing-customer"
-                          >
-                            Existing Customer
-                          </button>
-                          <button
-                            type="button"
-                            className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
-                              activeCustomerTab === 'new' 
-                                ? 'bg-white text-gray-900 shadow-sm' 
-                                : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                            onClick={() => {
-                              setActiveCustomerTab('new');
-                              form.setValue('isNewCustomer', true);
-                              form.setValue('customerId', '');
-                            }}
-                            data-testid="tab-new-customer"
-                          >
-                            New Customer
-                          </button>
-                        </div>
-
-                        {/* Existing Customer Selection */}
-                        {activeCustomerTab === 'existing' && (
-                          <div>
-                            <FormField
-                              control={form.control}
-                              name="customerId"
-                              render={({ field }) => (
-                                <FormItem>
+                        {/* Search or Create Client Combobox */}
+                        <FormField
+                          control={form.control}
+                          name="customerId"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-col">
+                              <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                                <PopoverTrigger asChild>
                                   <FormControl>
-                                    <Select 
-                                      value={field.value} 
-                                      onValueChange={(value) => {
-                                        field.onChange(value);
-                                        form.setValue('isNewCustomer', false);
-                                        
-                                        // Populate customer details into job contact fields
-                                        const selectedCustomer = customersData?.data?.find(c => c.id === value);
-                                        if (selectedCustomer) {
-                                          // Split customer name into first and last for job contact fields
-                                          const nameParts = selectedCustomer.name.split(' ');
-                                          form.setValue('jobContactFirstName', nameParts[0] || '');
-                                          form.setValue('jobContactLastName', nameParts.slice(1).join(' ') || '');
-                                          form.setValue('jobContactEmail', selectedCustomer.email || '');
-                                          form.setValue('jobContactPhone', selectedCustomer.phone || '');
-                                        }
-                                      }}
-                                      data-testid="select-customer"
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      type="button"
+                                      className={cn(
+                                        "w-full justify-between h-11 font-normal",
+                                        !selectedCustomerName && "text-muted-foreground"
+                                      )}
+                                      data-testid="button-search-customer"
                                     >
-                                      <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select a customer..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {customersData?.data?.map((customer) => (
-                                          <SelectItem key={customer.id} value={customer.id}>
-                                            {customer.name} - {customer.email}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
+                                      {selectedCustomerName || "Search or Create Client"}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
                                   </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                        )}
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[400px] p-0" align="start">
+                                  <Command shouldFilter={false}>
+                                    <CommandInput
+                                      placeholder="Type customer name, phone, or address..."
+                                      value={customerSearchValue}
+                                      onValueChange={setCustomerSearchValue}
+                                      data-testid="input-search-customer"
+                                    />
+                                    <CommandList>
+                                      <CommandEmpty>
+                                        <div className="py-6 text-center text-sm">
+                                          <p className="text-muted-foreground mb-2">No customer found</p>
+                                          <Button
+                                            type="button"
+                                            variant="default"
+                                            size="sm"
+                                            onClick={() => {
+                                              // Create new customer with search value as name
+                                              form.setValue('isNewCustomer', true);
+                                              form.setValue('customerId', '');
+                                              form.setValue('newCustomerName', customerSearchValue);
+                                              setSelectedCustomerName(customerSearchValue);
+                                              
+                                              // Set name in job contact fields
+                                              const names = customerSearchValue.split(' ');
+                                              form.setValue('jobContactFirstName', names[0] || '');
+                                              form.setValue('jobContactLastName', names.slice(1).join(' ') || '');
+                                              
+                                              setCustomerSearchOpen(false);
+                                            }}
+                                            data-testid="button-create-new-customer"
+                                          >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Create "{customerSearchValue}"
+                                          </Button>
+                                        </div>
+                                      </CommandEmpty>
+                                      <CommandGroup heading="Existing Customers">
+                                        {customersData?.data
+                                          ?.filter((customer) => {
+                                            const searchLower = customerSearchValue.toLowerCase();
+                                            return (
+                                              customer.name.toLowerCase().includes(searchLower) ||
+                                              customer.email?.toLowerCase().includes(searchLower) ||
+                                              customer.phone?.toLowerCase().includes(searchLower) ||
+                                              customer.address?.toLowerCase().includes(searchLower)
+                                            );
+                                          })
+                                          .map((customer) => (
+                                            <CommandItem
+                                              key={customer.id}
+                                              value={customer.id}
+                                              onSelect={() => {
+                                                field.onChange(customer.id);
+                                                form.setValue('isNewCustomer', false);
+                                                setSelectedCustomerName(customer.name);
+                                                setCustomerSearchValue("");
+                                                
+                                                // Auto-populate customer details
+                                                const nameParts = customer.name.split(' ');
+                                                form.setValue('jobContactFirstName', nameParts[0] || '');
+                                                form.setValue('jobContactLastName', nameParts.slice(1).join(' ') || '');
+                                                form.setValue('jobContactEmail', customer.email || '');
+                                                form.setValue('jobContactPhone', customer.phone || '');
+                                                form.setValue('newCustomerAddress', customer.address || '');
+                                                
+                                                setCustomerSearchOpen(false);
+                                              }}
+                                              data-testid={`customer-option-${customer.id}`}
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  "mr-2 h-4 w-4",
+                                                  field.value === customer.id ? "opacity-100" : "opacity-0"
+                                                )}
+                                              />
+                                              <div className="flex flex-col">
+                                                <span className="font-medium">{customer.name}</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                  {customer.email} • {customer.phone}
+                                                </span>
+                                              </div>
+                                            </CommandItem>
+                                          ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                        {/* New Customer Form */}
-                        {activeCustomerTab === 'new' && (
+                        {/* Show New Customer Fields When Creating */}
+                        {form.watch('isNewCustomer') && form.watch('newCustomerName') && (
                           <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                               <FormField
