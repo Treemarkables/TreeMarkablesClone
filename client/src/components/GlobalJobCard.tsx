@@ -1186,10 +1186,6 @@ export function GlobalJobCard({
               >
                 {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save & Close'}
               </Button>
-              <Button variant="outline" size="sm" className="h-11 px-2 sm:px-3 text-xs" onClick={onClose} data-testid="button-close">
-                <X className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Close</span>
-              </Button>
             </div>
           </div>
         </div>
