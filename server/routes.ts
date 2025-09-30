@@ -226,6 +226,43 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
   }
 }
 
+// ========================================
+// AUTHORIZATION MIDDLEWARE
+// ========================================
+
+// Middleware to require admin role for protected endpoints
+async function requireAdmin(req: Request, res: Response, next: express.NextFunction): Promise<void> {
+  try {
+    const employeeId = req.headers['x-employee-id'] as string;
+    
+    if (!employeeId) {
+      res.status(403).json({ 
+        success: false, 
+        message: 'Admin access required' 
+      });
+      return;
+    }
+    
+    const employee = await storage.getEmployee(employeeId);
+    
+    if (!employee || employee.role !== 'admin') {
+      res.status(403).json({ 
+        success: false, 
+        message: 'Admin access required' 
+      });
+      return;
+    }
+    
+    next();
+  } catch (error) {
+    console.error('Error in requireAdmin middleware:', error);
+    res.status(403).json({ 
+      success: false, 
+      message: 'Admin access required' 
+    });
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // SEO routes - serve sitemap.xml and robots.txt
   app.get('/sitemap.xml', (req: Request, res: Response) => {
@@ -986,7 +1023,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  app.delete('/api/customers/:id', async (req: Request, res: Response) => {
+  app.delete('/api/customers/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
       const success = await storage.deleteCustomer(req.params.id);
       if (!success) {
@@ -1107,7 +1144,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   });
 
   // Bulk delete customers endpoint
-  app.delete('/api/customers/bulk-delete', async (req: Request, res: Response) => {
+  app.delete('/api/customers/bulk-delete', requireAdmin, async (req: Request, res: Response) => {
     try {
       const { customerIds } = req.body;
       
