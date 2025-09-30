@@ -2138,6 +2138,52 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         lineItems: validation.data.lineItems
       });
 
+      // Authorization: Check if crew user is trying to modify invoice prices
+      const employeeId = req.headers['x-employee-id'] as string;
+      if (employeeId) {
+        const employee = await storage.getEmployee(employeeId);
+        
+        if (employee && employee.role === 'crew') {
+          // Check if lineItems prices are being modified
+          if (validation.data.lineItems && oldJob?.lineItems) {
+            const oldLineItems = oldJob.lineItems;
+            const newLineItems = validation.data.lineItems;
+            
+            // Compare unitPrice values
+            let priceChanged = false;
+            for (let i = 0; i < newLineItems.length; i++) {
+              const newItem = newLineItems[i];
+              const oldItem = oldLineItems.find((item: any) => 
+                item.description === newItem.description || 
+                (oldLineItems[i] && oldLineItems[i].description === newItem.description)
+              ) || oldLineItems[i];
+              
+              if (oldItem && newItem.unitPrice !== oldItem.unitPrice) {
+                priceChanged = true;
+                break;
+              }
+            }
+            
+            // Also check if new items were added with prices different from 0
+            if (newLineItems.length > oldLineItems.length) {
+              for (let i = oldLineItems.length; i < newLineItems.length; i++) {
+                if (newLineItems[i].unitPrice && newLineItems[i].unitPrice !== 0) {
+                  priceChanged = true;
+                  break;
+                }
+              }
+            }
+            
+            if (priceChanged) {
+              return res.status(403).json({ 
+                success: false, 
+                message: 'Crew users cannot modify invoice prices' 
+              });
+            }
+          }
+        }
+      }
+
       const job = await storage.updateJob(req.params.id, validation.data);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
