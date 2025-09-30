@@ -696,7 +696,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                     <div className="flex items-center gap-2 mt-2">
                       <label className="text-xs text-muted-foreground">Jobs per page:</label>
                       <Select value={jobsPerPage.toString()} onValueChange={(value) => { setJobsPerPage(parseInt(value)); setCurrentJobPage(1); }}>
-                        <SelectTrigger className="w-20 h-8 text-xs" data-testid="select-jobs-per-page">
+                        <SelectTrigger className="w-full sm:w-20 h-8 text-xs" data-testid="select-jobs-per-page">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -711,7 +711,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                   
                   {/* Pagination controls */}
                   {totalPages > 1 && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 overflow-x-auto max-w-full">
                       <Button
                         variant="outline"
                         size="sm"
@@ -722,7 +722,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                         Previous
                       </Button>
                       
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         {[...Array(Math.min(5, totalPages))].map((_, i) => {
                           const pageNum = currentJobPage <= 3 ? i + 1 : currentJobPage - 2 + i;
                           if (pageNum > totalPages) return null;
@@ -733,7 +733,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                               variant={pageNum === currentJobPage ? "default" : "ghost"}
                               size="sm"
                               onClick={() => setCurrentJobPage(pageNum)}
-                              className="w-8"
+                              className="w-8 flex-shrink-0"
                               data-testid={`button-page-${pageNum}`}
                             >
                               {pageNum}
@@ -743,12 +743,12 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                         
                         {totalPages > 5 && currentJobPage < totalPages - 2 && (
                           <>
-                            <span className="text-muted-foreground">...</span>
+                            <span className="text-muted-foreground flex-shrink-0">...</span>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => setCurrentJobPage(totalPages)}
-                              className="w-8"
+                              className="w-8 flex-shrink-0"
                               data-testid={`button-page-${totalPages}`}
                             >
                               {totalPages}
