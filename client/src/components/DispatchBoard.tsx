@@ -1869,6 +1869,125 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </CardContent>
       </Card>
 
+      {/* Unscheduled Jobs Section */}
+      {(() => {
+        const unscheduledJobs = getTodaysJobs().filter((job: any) => 
+          job.status === 'quote' || job.status === 'lead' || !job.startTime || job.startTime.includes('0000-00-00')
+        );
+        
+        if (unscheduledJobs.length === 0) return null;
+        
+        return (
+          <Card data-testid="unscheduled-jobs-section">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-purple-500" />
+                  <span>Unscheduled Jobs</span>
+                  <Badge variant="secondary" data-testid="unscheduled-jobs-count">
+                    {unscheduledJobs.length}
+                  </Badge>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCreateJob}
+                  data-testid="create-job-from-unscheduled"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Job
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {unscheduledJobs.map((job) => (
+                  <div
+                    key={job.id}
+                    className="border rounded-lg p-3 hover-elevate cursor-pointer"
+                    onClick={() => setSelectedJob(job)}
+                    data-testid={`unscheduled-job-${job.id}`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <CustomerAvatar
+                          customerName={job.customerName}
+                          size="sm"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {job.customerName}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            #{(job as any).jobNumber || job.jobId}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${
+                          job.status === 'quote' ? 'border-purple-500 text-purple-500' :
+                          job.status === 'lead' ? 'border-blue-500 text-blue-500' :
+                          'border-gray-500 text-gray-500'
+                        }`}
+                        data-testid={`job-status-${job.id}`}
+                      >
+                        {job.status}
+                      </Badge>
+                    </div>
+                    
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        <span className="truncate">{job.address || 'No address'}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Phone className="h-3 w-3" />
+                        <span>{job.customerPhone || 'No phone'}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2 pt-2 border-t">
+                      <div className="text-xs font-medium truncate">
+                        {job.serviceType || (job as any).title || 'No service type'}
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2 flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs h-7"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleScheduleJob(job);
+                        }}
+                        data-testid={`schedule-job-${job.id}`}
+                      >
+                        <Clock className="h-3 w-3 mr-1" />
+                        Schedule
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs h-7"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditJob(job);
+                        }}
+                        data-testid={`edit-job-${job.id}`}
+                      >
+                        <Edit className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Global Job Card */}
       <GlobalJobCard 
