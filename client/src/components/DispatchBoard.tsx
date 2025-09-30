@@ -784,7 +784,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const jobNumberB = parseInt(b.jobNumber || '0', 10);
         return jobNumberB - jobNumberA;
       })
-      .slice(0, 30); // Limit to 30 latest jobs
+      .slice(0, 60); // Limit to 60 latest jobs
   };
 
   // Job Mutations
