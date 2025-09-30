@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
@@ -19,6 +19,7 @@ import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
 import QuoteManagement from "./QuoteManagement";
 import { RecordedTimeModal } from "./RecordedTimeModal";
+import { PhotoCaptureModal } from "./PhotoCaptureModal";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
@@ -137,6 +138,9 @@ export function GlobalJobCard({
 
   // Time tracking modal state
   const [isTimeTrackingOpen, setIsTimeTrackingOpen] = useState(false);
+
+  // Photo capture modal state
+  const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false);
 
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
@@ -1146,6 +1150,18 @@ export function GlobalJobCard({
                   : editingJob?.xeroStatus === 'sent' 
                   ? 'Sent to Xero' 
                   : 'Send to Xero'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs" 
+                onClick={() => setIsPhotoCaptureOpen(true)}
+                disabled={!editingJob?.id || mode === 'create'}
+                data-testid="button-camera"
+                title={!editingJob?.id || mode === 'create' ? "Save job first to capture photos" : "Capture photo"}
+              >
+                <Camera className="w-4 h-4 mr-1" />
+                Camera
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -3106,6 +3122,15 @@ export function GlobalJobCard({
           onClose={() => setIsTimeTrackingOpen(false)}
           jobId={editingJob.id}
           jobNumber={editingJob.jobNumber || "3314"}
+        />
+      )}
+
+      {/* Photo Capture Modal */}
+      {editingJob && (
+        <PhotoCaptureModal
+          isOpen={isPhotoCaptureOpen}
+          onClose={() => setIsPhotoCaptureOpen(false)}
+          jobId={editingJob.id}
         />
       )}
 

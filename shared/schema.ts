@@ -385,6 +385,7 @@ export const jobDiaryEntries = pgTable("job_diary_entries", {
   authorName: text("author_name").notNull(), // Name of person making entry
   authorRole: text("author_role"), // foreman, technician, supervisor, manager
   photos: text("photos").array(), // URLs/paths to related photos
+  photoUrl: text("photo_url"), // Single photo URL for quick photo capture
   weatherConditions: text("weather_conditions"), // sunny, rainy, windy, etc
   equipmentUsed: text("equipment_used").array(), // Equipment used during this activity
   timeSpent: integer("time_spent"), // Minutes spent on this activity

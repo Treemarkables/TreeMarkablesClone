@@ -2193,6 +2193,61 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Upload photo and create diary entry
+  app.post('/api/jobs/:jobId/photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      
+      if (!req.file) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'No photo file provided' 
+        });
+      }
+
+      // Create unique filename with timestamp
+      const timestamp = Date.now();
+      const fileExtension = path.extname(path.basename(req.file.originalname)).toLowerCase();
+      const filename = `${timestamp}${fileExtension}`;
+      const filepath = path.join(photosDir, filename);
+
+      // Move file from temp location to final destination
+      fs.renameSync(req.file.path, filepath);
+
+      // Create the photo URL (relative path for serving)
+      const photoUrl = `/uploads/photos/${filename}`;
+
+      // Create diary entry with photo
+      const diaryEntry = await storage.createJobDiaryEntry({
+        jobId,
+        entryType: 'photo',
+        title: 'Photo Added',
+        description: req.body.description || 'Photo added',
+        authorName: req.body.authorName || 'User',
+        photoUrl,
+        isPrivate: false
+      });
+
+      res.json({ 
+        success: true, 
+        data: diaryEntry,
+        message: 'Photo uploaded successfully' 
+      });
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      
+      // Clean up file if it exists
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      res.status(500).json({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Error uploading photo' 
+      });
+    }
+  });
+
   // Get all diary entries (for admin view)
   app.get('/api/diary', async (req: Request, res: Response) => {
     try {
@@ -4333,6 +4388,15 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // PHOTO UPLOAD ENDPOINTS FOR JOB DOCUMENTATION
   // ========================================
 
+  // Serve uploaded photos and files as static files with security headers
+  app.use('/uploads', (req, res, next) => {
+    // Add security headers for file serving
+    res.set('Cache-Control', 'public, max-age=86400'); // 24 hours cache
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('X-Frame-Options', 'DENY');
+    next();
+  }, express.static(path.join(__dirname, '..', 'uploads')));
+
   // Serve uploaded photos as static files with security headers
   app.use('/photos', (req, res, next) => {
     // Add security headers for image serving
@@ -4392,7 +4456,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       for (let i = 0; i < req.files.length; i++) {
         const file = req.files[i] as Express.Multer.File;
-        const fileExtension = path.extname(file.originalname);
+        const fileExtension = path.extname(path.basename(file.originalname)).toLowerCase();
         const newFileName = `${jobId}_${type}_${timestamp}_${i}${fileExtension}`;
         const newPath = path.join(photosDir, newFileName);
         
