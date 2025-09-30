@@ -1092,6 +1092,7 @@ export const employees = pgTable("employees", {
 
 export const insertEmployeeSchema = createInsertSchema(employees).extend({
   password: z.string().min(8).optional(),
+  hireDate: z.string().optional().or(z.date().optional()),
 });
 
 export const updateEmployeeSchema = insertEmployeeSchema.partial();
