@@ -73,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // List of public pages where dev banner should NOT show
   const publicPages = [
+    '/',
+    '/login',
     '/home',
     '/tree-removal',
     '/tree-pruning',
