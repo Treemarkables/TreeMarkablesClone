@@ -65,13 +65,6 @@ const dashboardItems = [
     isTab: false
   },
   {
-    title: "Customers",
-    url: "/job-dashboard",
-    icon: Users,
-    value: "customers", 
-    isTab: true
-  },
-  {
     title: "Job Import",
     url: "/job-dashboard",
     icon: Upload,
