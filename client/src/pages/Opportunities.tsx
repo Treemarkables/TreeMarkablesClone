@@ -212,14 +212,14 @@ export default function Opportunities() {
                       {conversation.title}
                     </h3>
                     <span className="text-xs text-gray-500 flex-shrink-0" data-testid={`text-date-${conversation.id}`}>
-                      {formatDate(conversation.lastMessageAt || conversation.createdAt)}
+                      {formatDate(conversation.lastMessageAt || conversation.createdAt || new Date())}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <p className="text-sm text-gray-600 truncate" data-testid={`text-preview-${conversation.id}`}>
                       {truncateMessage(conversation.title)}
                     </p>
-                    {conversation.unreadCount > 0 && (
+                    {conversation.unreadCount && conversation.unreadCount > 0 && (
                       <div 
                         className="flex-shrink-0 bg-green-500 text-white text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center"
                         data-testid={`badge-unread-${conversation.id}`}
@@ -251,7 +251,7 @@ export default function Opportunities() {
           <DialogHeader>
             <DialogTitle>Reply to {selectedConversation?.title}</DialogTitle>
             <DialogDescription>
-              Send a response via {messages.find(m => m.direction === 'inbound')?.platform || 'the original channel'}
+              Send a response via {messages.find((m: ConversationMessage) => m.direction === 'inbound')?.platform || 'the original channel'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
