@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -17,12 +18,14 @@ import {
   ChevronUp,
   Hammer,
   FileText,
-  Upload
+  Upload,
+  MapPin
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Job, Customer } from "@shared/schema";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { JobCSVUpload } from "@/components/JobCSVUpload";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -35,6 +38,7 @@ type SortColumn = 'date' | 'jobNumber' | 'company' | 'status' | 'amount';
 type SortDirection = 'asc' | 'desc';
 
 export default function History() {
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -196,20 +200,20 @@ export default function History() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-white">
+      {/* Header - Mobile Responsive */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border-b bg-white gap-3 sm:gap-0">
         <div className="flex items-center gap-2">
           <Archive className="h-5 w-5 text-gray-600" />
-          <h1 className="text-xl font-semibold text-gray-900">Job History</h1>
-          <Badge className="bg-blue-100 text-blue-800 ml-2">
-            {jobs.length} jobs
+          <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Job History</h1>
+          <Badge className="bg-blue-100 text-blue-800">
+            {jobs.length}
           </Badge>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button 
             variant="outline"
-            className="bg-white"
+            className="bg-white flex-1 sm:flex-none h-11 sm:h-10"
             data-testid="button-export-csv"
           >
             <FileText className="h-4 w-4 mr-2" />
@@ -218,25 +222,26 @@ export default function History() {
         </div>
       </div>
 
-      {/* Search and Filter Bar */}
-      <div className="flex items-center gap-3 p-4 border-b bg-gray-50">
-        <div className="relative flex-1 max-w-md">
+      {/* Search and Filter Bar - Mobile Responsive */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 border-b bg-gray-50">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <Input
             placeholder="Search jobs..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-white"
+            className="pl-10 bg-white h-11 sm:h-10"
             data-testid="input-search"
           />
         </div>
         
+        <div className="flex items-center gap-2 flex-wrap">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="bg-white" data-testid="button-filter">
-              <Filter className="h-4 w-4 mr-2" />
-              Filter Status
-              <ChevronDown className="h-4 w-4 ml-2" />
+            <Button variant="outline" className="bg-white flex-1 sm:flex-none h-11 sm:h-10 min-w-[44px]" data-testid="button-filter">
+              <Filter className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Filter Status</span>
+              <ChevronDown className="h-4 w-4 sm:ml-2" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
@@ -257,9 +262,10 @@ export default function History() {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="bg-white" data-testid="button-actions">
-              Actions
-              <ChevronDown className="h-4 w-4 ml-2" />
+            <Button variant="outline" className="bg-white flex-1 sm:flex-none h-11 sm:h-10 min-w-[44px]" data-testid="button-actions">
+              <MoreHorizontal className="h-4 w-4 sm:hidden" />
+              <span className="hidden sm:inline">Actions</span>
+              <ChevronDown className="hidden sm:inline h-4 w-4 ml-2" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
@@ -268,11 +274,101 @@ export default function History() {
             <DropdownMenuItem>Email List</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
 
-      {/* Jobs Table */}
+      {/* Jobs Table - Desktop / Mobile Cards */}
       <div className="flex-1 overflow-auto">
-        <Table>
+        {isMobile ? (
+          /* Mobile Card Layout */
+          <div className="p-3 space-y-3">
+            {jobsLoading ? (
+              // Loading skeleton cards
+              [...Array(5)].map((_, i) => (
+                <Card key={i} className="p-4">
+                  <div className="space-y-3">
+                    <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+                    <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4"></div>
+                    <div className="h-3 bg-gray-200 rounded animate-pulse w-full"></div>
+                  </div>
+                </Card>
+              ))
+            ) : paginatedJobs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                <Hammer className="h-12 w-12 text-gray-400 mb-3" />
+                <span className="text-base">No jobs found</span>
+                {searchQuery && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setSearchQuery('')}
+                    className="mt-3"
+                  >
+                    Clear search
+                  </Button>
+                )}
+              </div>
+            ) : (
+              paginatedJobs.map((job) => {
+                const customer = customerMap.get(job.customerId || '');
+                return (
+                  <Card 
+                    key={job.id}
+                    className="p-4 hover-elevate cursor-pointer"
+                    onClick={() => handleJobRowClick(job.id)}
+                    data-testid={`card-job-${job.id}`}
+                  >
+                    <div className="space-y-3">
+                      {/* Header Row */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-base font-semibold text-blue-600" data-testid={`text-job-number-${job.id}`}>
+                              {job.jobNumber || ''}
+                            </span>
+                            <span data-testid={`badge-status-${job.id}`}>
+                              {getStatusBadge(job.status || '')}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-gray-900" data-testid={`text-customer-${job.id}`}>
+                            {customer?.name || 'Unknown Customer'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-base font-semibold text-gray-900" data-testid={`text-amount-${job.id}`}>
+                            {formatCurrency(job.totalAmount)}
+                          </p>
+                          <p className="text-xs text-gray-500" data-testid={`text-date-${job.id}`}>
+                            {formatDate(job.createdAt ? job.createdAt.toString() : null)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Job Details */}
+                      {job.title && (
+                        <p className="text-sm text-gray-700" data-testid={`text-title-${job.id}`}>
+                          {job.title}
+                        </p>
+                      )}
+
+                      {/* Address */}
+                      {job.address && (
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-gray-600" data-testid={`text-address-${job.id}`}>
+                            {job.address}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          /* Desktop Table Layout */
+          <Table>
           <TableHeader>
             <TableRow className="border-b">
               <TableHead className="w-24">
@@ -412,17 +508,18 @@ export default function History() {
             )}
           </TableBody>
         </Table>
+        )}
       </div>
 
-      {/* Pagination Footer */}
-      <div className="flex items-center justify-between p-4 border-t bg-gray-50">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">View</span>
+      {/* Pagination Footer - Mobile Responsive */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-3 sm:p-4 border-t bg-gray-50 gap-3 sm:gap-0">
+        <div className="flex items-center gap-2 justify-center sm:justify-start">
+          <span className="text-xs sm:text-sm text-gray-600">View</span>
           <Select value={itemsPerPage.toString()} onValueChange={(value) => {
             setItemsPerPage(parseInt(value));
             setCurrentPage(1);
           }}>
-            <SelectTrigger className="w-20 h-8 bg-white" data-testid="select-items-per-page">
+            <SelectTrigger className="w-20 h-10 sm:h-8 bg-white" data-testid="select-items-per-page">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -432,11 +529,11 @@ export default function History() {
               <SelectItem value="100">100</SelectItem>
             </SelectContent>
           </Select>
-          <span className="text-sm text-gray-600">per page</span>
+          <span className="text-xs sm:text-sm text-gray-600">per page</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">
+        <div className="flex items-center gap-2 justify-center">
+          <span className="text-xs sm:text-sm text-gray-600">
             {startIndex + 1} - {Math.min(endIndex, sortedJobs.length)} of {sortedJobs.length}
           </span>
           
@@ -444,6 +541,7 @@ export default function History() {
             <Button
               variant="outline"
               size="sm"
+              className="h-10 sm:h-9"
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
               data-testid="button-prev-page"
@@ -454,6 +552,7 @@ export default function History() {
             <Button
               variant="outline"
               size="sm"
+              className="h-10 sm:h-9"
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages || totalPages === 0}
               data-testid="button-next-page"
