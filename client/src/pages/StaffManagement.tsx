@@ -140,23 +140,7 @@ function StaffFormDialog({
 }) {
   const form = useForm<StaffFormData>({
     resolver: zodResolver(staffFormSchema),
-    defaultValues: staff ? {
-      firstName: staff.firstName,
-      lastName: staff.lastName,
-      email: staff.email || "",
-      phone: staff.phone || "",
-      position: staff.position,
-      role: staff.role,
-      status: staff.status,
-      skillLevel: staff.skillLevel,
-      hourlyRate: staff.hourlyRate || "",
-      emergencyContact: staff.emergencyContact || "",
-      emergencyContactPhone: staff.emergencyContactPhone || "",
-      notes: staff.notes || "",
-      hireDate: staff.hireDate || "",
-      certifications: staff.certifications || [],
-      skills: staff.skills || []
-    } : {
+    defaultValues: {
       firstName: "",
       lastName: "",
       email: "",
@@ -174,6 +158,49 @@ function StaffFormDialog({
       skills: []
     }
   });
+
+  // Reset form when staff data changes or dialog opens
+  React.useEffect(() => {
+    if (isOpen) {
+      if (staff) {
+        form.reset({
+          firstName: staff.firstName,
+          lastName: staff.lastName,
+          email: staff.email || "",
+          phone: staff.phone || "",
+          position: staff.position,
+          role: staff.role,
+          status: staff.status,
+          skillLevel: staff.skillLevel,
+          hourlyRate: staff.hourlyRate || "",
+          emergencyContact: staff.emergencyContact || "",
+          emergencyContactPhone: staff.emergencyContactPhone || "",
+          notes: staff.notes || "",
+          hireDate: staff.hireDate || "",
+          certifications: staff.certifications || [],
+          skills: staff.skills || []
+        });
+      } else {
+        form.reset({
+          firstName: "",
+          lastName: "",
+          email: "",
+          phone: "",
+          position: "",
+          role: "crew",
+          status: "active",
+          skillLevel: "beginner",
+          hourlyRate: "",
+          emergencyContact: "",
+          emergencyContactPhone: "",
+          notes: "",
+          hireDate: "",
+          certifications: [],
+          skills: []
+        });
+      }
+    }
+  }, [staff, isOpen, form]);
 
   const handleSubmit = (data: StaffFormData) => {
     onSubmit(data);
