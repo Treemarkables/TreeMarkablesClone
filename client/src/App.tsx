@@ -19,6 +19,7 @@ import JobDashboard from "@/pages/JobDashboard";
 import MetricsDashboard from "@/pages/MetricsDashboard";
 import Pipeline from "@/pages/Pipeline";
 import Opportunities from "@/pages/Opportunities";
+import ConversationDetail from "@/pages/ConversationDetail";
 import Reputation from "@/pages/Reputation";
 import Inbox from "@/pages/Inbox";
 import Integrations from "@/pages/Integrations";
@@ -224,6 +225,11 @@ function Router() {
       <Route path="/communications">
         <SidebarLayout>
           <CommunicationsManagement />
+        </SidebarLayout>
+      </Route>
+      <Route path="/conversation/:id">
+        <SidebarLayout>
+          <ConversationDetail />
         </SidebarLayout>
       </Route>
       <Route path="/equipment">
