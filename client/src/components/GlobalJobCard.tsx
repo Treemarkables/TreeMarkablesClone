@@ -3107,7 +3107,7 @@ export function GlobalJobCard({
                 <SelectContent>
                   {employees.map((employee: any) => (
                     <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name}
+                      {employee.firstName} {employee.lastName}
                     </SelectItem>
                   ))}
                 </SelectContent>
