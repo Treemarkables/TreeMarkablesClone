@@ -33,7 +33,9 @@ import {
   MoreHorizontal,
   Edit,
   Save,
-  X
+  X,
+  Camera,
+  Image as ImageIcon
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 // ServiceM8 API response types (matches server/services/servicem8-api.ts)
@@ -52,11 +54,12 @@ interface ServiceM8DiaryEntry {
 // Types for diary entries
 interface DiaryEntry {
   id: string;
-  type: 'note' | 'sms' | 'email' | 'job_event' | 'proposal' | 'call';
+  type: 'note' | 'sms' | 'email' | 'job_event' | 'proposal' | 'call' | 'photo';
   title: string;
   content: string;
   author: string;
   timestamp: string;
+  photoUrl?: string;
   metadata?: {
     phoneNumber?: string;
     emailAddress?: string;
@@ -402,6 +405,7 @@ export function JobDiarySection({
       case 'job_event': return <CheckCircle className="w-4 h-4" />;
       case 'proposal': return <Presentation className="w-4 h-4" />;
       case 'call': return <Phone className="w-4 h-4" />;
+      case 'photo': return <Camera className="w-4 h-4" />;
       default: return <FileText className="w-4 h-4" />;
     }
   };
@@ -414,6 +418,7 @@ export function JobDiarySection({
       case 'job_event': return "bg-green-100 text-green-800";
       case 'proposal': return "bg-purple-100 text-purple-800";
       case 'call': return "bg-orange-100 text-orange-800";
+      case 'photo': return "bg-indigo-100 text-indigo-800";
       default: return "bg-gray-100 text-gray-800";
     }
   };
@@ -540,6 +545,9 @@ export function JobDiarySection({
                           {entry.type === 'proposal' && entry.metadata?.proposalNumber && (
                             <>Proposal {entry.metadata.proposalNumber}</>
                           )}
+                          {entry.type === 'photo' && (
+                            <><Camera className="w-4 h-4 inline mr-1" />Photo Added</>
+                          )}
                         </h4>
                         {entry.type === 'note' && editingEntryId !== entry.id && (
                           <Button 
@@ -607,9 +615,26 @@ export function JobDiarySection({
                           </div>
                         </div>
                       ) : (
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {entry.content}
-                        </div>
+                        <>
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {entry.content}
+                          </div>
+                          
+                          {entry.type === 'photo' && entry.photoUrl && (
+                            <div className="mt-3">
+                              <img 
+                                src={entry.photoUrl} 
+                                alt="Job photo" 
+                                className="max-w-full h-auto rounded-lg cursor-pointer hover-elevate"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(entry.photoUrl, '_blank');
+                                }}
+                                data-testid="img-diary-photo"
+                              />
+                            </div>
+                          )}
+                        </>
                       )}
                       
                       {entry.type === 'proposal' && (
