@@ -9335,6 +9335,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           // Extract job status from ServiceM8 'Job Status' field
           const jobStatus = jobData['Job Status'] || jobData.status || 'pending';
           
+          // Map ServiceM8 financial data - "Total Invoice" column
+          const totalInvoice = jobData['Total Invoice'] || jobData.invoiceAmount || jobData['Invoice Amount'] || jobData.totalAmount || '0';
+          const invoiceAmount = parseFloat(totalInvoice.toString().replace(/[^0-9.-]/g, '')) || 0;
+          
+          // Map payment/paid amount if available
+          const paidAmount = jobData['Paid Amount'] || jobData.paidAmount || jobData['Amount Paid'] || '0';
+          const paid = parseFloat(paidAmount.toString().replace(/[^0-9.-]/g, '')) || 0;
+          
           const newJob = await storage.createJob({
             jobNumber: jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`,
             title: jobData.title || jobDescription || 'Imported Job',
@@ -9347,6 +9355,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             duration: parseInt(jobData.duration || '60') || 60,
             assignedTeam: jobData.teamMembers ? jobData.teamMembers.split(',').map((m: string) => m.trim()) : [],
             equipment: jobData.equipment ? jobData.equipment.split(',').map((e: string) => e.trim()) : [],
+            totalAmount: invoiceAmount.toString(),
+            paidAmount: paid.toString(),
             servicem8Uuid: jobData.servicem8Uuid || jobData['ServiceM8 UUID'] || null
           });
 
@@ -9485,6 +9495,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             return rawDesc;
           })();
           
+          // Map financial data from ServiceM8 CSV
+          const totalInvoiceAmount = parseFloat(csvJob.invoiceAmount || csvJob['Total Invoice'] || '0');
+          const paidAmountValue = parseFloat(csvJob.paidAmount || csvJob['Paid Amount'] || '0');
+          
           const jobData = {
             customerId: customer.id,
             jobNumber: csvJob.jobNumber,
@@ -9495,7 +9509,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                    csvJob.status.toLowerCase() === 'unsuccessful' ? 'unsuccessful' : 'work_order',
             priority: 'medium',
             leadSource: csvJob.source || 'servicem8_import',
-            estimatedValue: parseFloat(csvJob.invoiceAmount || '0'),
+            totalAmount: totalInvoiceAmount.toString(),
+            paidAmount: paidAmountValue.toString(),
+            estimatedValue: totalInvoiceAmount,
             actualCost: parseFloat(csvJob.totalCost || '0'),
             scheduledDate: csvJob.workOrderDate && csvJob.workOrderDate !== '0000-00-00 00:00:00' ? 
               new Date(csvJob.workOrderDate) : null,
