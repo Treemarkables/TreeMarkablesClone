@@ -175,7 +175,7 @@ export function GlobalJobCard({
   // Fetch employees for scheduling assignment
   const { data: employeesData } = useQuery({
     queryKey: ['/api/employees'],
-    enabled: isOpen,
+    enabled: isOpen || isSchedulingModalOpen,
   });
 
   // Fetch default invoice template
