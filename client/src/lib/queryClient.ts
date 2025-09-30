@@ -18,11 +18,6 @@ export async function apiRequest(
     headers["Content-Type"] = "application/json";
   }
   
-  const currentEmployeeId = localStorage.getItem('currentEmployeeId');
-  if (currentEmployeeId) {
-    headers["X-Employee-Id"] = currentEmployeeId;
-  }
-  
   const res = await fetch(url, {
     method,
     headers,
@@ -40,15 +35,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const headers: Record<string, string> = {};
-    
-    const currentEmployeeId = localStorage.getItem('currentEmployeeId');
-    if (currentEmployeeId) {
-      headers["X-Employee-Id"] = currentEmployeeId;
-    }
-    
     const res = await fetch(queryKey.join("/") as string, {
-      headers,
       credentials: "include",
     });
 

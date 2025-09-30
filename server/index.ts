@@ -6,11 +6,32 @@ import { setupVite, log } from "./vite";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
+import session from "express-session";
+import createMemoryStore from "memorystore";
 
 const app = express();
 // Increase JSON payload limit for large CSV imports (ServiceM8 data can be huge)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+
+// Configure session middleware with memorystore
+const MemoryStore = createMemoryStore(session);
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    store: new MemoryStore({
+      checkPeriod: 86400000, // Prune expired entries every 24h
+    }),
+    cookie: {
+      secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      sameSite: 'lax',
+    },
+  })
+);
 
 // Runtime static file serving with path resolution
 function resolveAndServeStatic(app: express.Express) {

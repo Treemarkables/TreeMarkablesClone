@@ -1,48 +1,68 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Employee } from '@shared/schema';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User } from 'lucide-react';
+import { User, LogOut } from 'lucide-react';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { Button } from '@/components/ui/button';
 
 interface AuthContextType {
   currentUser: Employee | null;
   userRole: 'admin' | 'crew' | null;
   isAdmin: boolean;
   isCrew: boolean;
-  setCurrentUser: (user: Employee | null) => void;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'auth_current_user';
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<Employee | null>(null);
 
-  const { data: employees = [] } = useQuery<Employee[]>({
+  const { data: employeesResponse } = useQuery<{ success: boolean; data: Employee[] }>({
     queryKey: ['/api/employees/active'],
   });
+  
+  const employees = employeesResponse?.data || [];
+
+  const { data: meResponse } = useQuery<{ success: boolean; data: Employee | null }>({
+    queryKey: ['/api/auth/me'],
+    retry: false,
+  });
+
+  const loginMutation = useMutation({
+    mutationFn: async (employeeId: string) => {
+      const res = await apiRequest('POST', '/api/auth/login', { employeeId });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.success && data.data) {
+        setCurrentUserState(data.data);
+        queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      }
+    },
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/auth/logout');
+      return res.json();
+    },
+    onSuccess: () => {
+      setCurrentUserState(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+    },
+  });
+
+  const logout = () => {
+    logoutMutation.mutate();
+  };
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const user = JSON.parse(stored);
-        setCurrentUserState(user);
-      } catch (e) {
-        console.error('Failed to parse stored user:', e);
-      }
+    if (meResponse?.data && !currentUser) {
+      setCurrentUserState(meResponse.data);
     }
-  }, []);
-
-  const setCurrentUser = (user: Employee | null) => {
-    setCurrentUserState(user);
-    if (user) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  };
+  }, [meResponse, currentUser]);
 
   const userRole = currentUser?.role as 'admin' | 'crew' | null;
   const isAdmin = userRole === 'admin';
@@ -55,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userRole,
         isAdmin,
         isCrew,
-        setCurrentUser,
+        logout,
       }}
     >
       <div className="flex flex-col h-screen">
@@ -67,8 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           <Select
             value={currentUser?.id || ''}
             onValueChange={(value) => {
-              const employee = employees.find((e) => e.id === value);
-              setCurrentUser(employee || null);
+              loginMutation.mutate(value);
             }}
           >
             <SelectTrigger 
@@ -98,6 +117,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               <span className="px-2 py-0.5 bg-white/20 rounded text-xs" data-testid="text-user-role">
                 {currentUser.role.toUpperCase()}
               </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={logout}
+                className="ml-2 h-7 bg-white/10 hover:bg-white/20 text-white"
+                data-testid="button-logout"
+              >
+                <LogOut className="w-3 h-3 mr-1" />
+                Logout
+              </Button>
             </div>
           )}
         </div>
