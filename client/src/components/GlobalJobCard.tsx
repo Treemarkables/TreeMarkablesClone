@@ -1171,6 +1171,20 @@ export function GlobalJobCard({
   // Save button handlers
   const handleSave = async () => {
     const formData = form.getValues();
+    console.log('Form data before save:', formData);
+    console.log('Form errors:', form.formState.errors);
+    
+    // Check if form has validation errors
+    const isValid = await form.trigger();
+    if (!isValid) {
+      console.error('Form validation failed:', form.formState.errors);
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
     
     // Map new customer fields to job contact fields for backend compatibility
     if (formData.isNewCustomer && formData.newCustomerName) {
@@ -1189,6 +1203,11 @@ export function GlobalJobCard({
       }
     } catch (error) {
       console.error('Save failed:', error);
+      toast({
+        title: "Save Failed",
+        description: error instanceof Error ? error.message : "Failed to save job",
+        variant: "destructive"
+      });
     }
   };
 
