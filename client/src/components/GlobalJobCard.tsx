@@ -6,6 +6,7 @@ import { z } from "zod";
 import { format } from "date-fns";
 import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
 import { JobDiarySection } from "./JobDiarySection";
@@ -115,6 +116,7 @@ export function GlobalJobCard({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
+  const { isAdmin } = useAuth();
   
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
@@ -2645,6 +2647,8 @@ export function GlobalJobCard({
                                                     currentItems[index].total = currentItems[index].quantity * newPrice;
                                                     form.setValue('lineItems', currentItems);
                                                   }}
+                                                  disabled={!isAdmin}
+                                                  readOnly={!isAdmin}
                                                   className="w-20 h-8 text-right text-sm border-none bg-transparent p-1 font-mono"
                                                 />
                                               </FormControl>
