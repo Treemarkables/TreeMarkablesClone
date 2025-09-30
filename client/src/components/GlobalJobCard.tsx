@@ -1153,31 +1153,78 @@ export function GlobalJobCard({
             
             {/* Center: Action Buttons - Hide on mobile */}
             <div className="hidden md:flex items-center gap-1">
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={handleEmailClick} data-testid="button-email">
-                <Mail className="w-4 h-4 mr-1" />
-                Email
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                onClick={handleEmailClick} 
+                data-testid="button-email"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Mail className="w-4 h-4" />
+                  <span>Email</span>
+                </div>
               </Button>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={() => setIsSMSComposerOpen(true)} data-testid="button-sms">
-                <MessageSquare className="w-4 h-4 mr-1" />
-                SMS
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                onClick={() => setIsSMSComposerOpen(true)} 
+                data-testid="button-sms"
+              >
+                <div className="flex items-center gap-1.5">
+                  <MessageSquare className="w-4 h-4" />
+                  <span>SMS</span>
+                </div>
               </Button>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={handleCallClick} data-testid="button-call">
-                <Phone className="w-4 h-4 mr-1" />
-                Call
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                onClick={handleCallClick} 
+                data-testid="button-call"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Phone className="w-4 h-4" />
+                  <span>Call</span>
+                </div>
               </Button>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={handleScheduleClick} data-testid="button-schedule">
-                <Calendar className="w-4 h-4 mr-1" />
-                Schedule
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                onClick={handleScheduleClick} 
+                data-testid="button-schedule"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4" />
+                  <span>Schedule</span>
+                </div>
               </Button>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={handleQueueClick} data-testid="button-queue">
-                <FileText className="w-4 h-4 mr-1" />
-                Queue
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                onClick={handleQueueClick} 
+                data-testid="button-queue"
+              >
+                <div className="flex items-center gap-1.5">
+                  <FileText className="w-4 h-4" />
+                  <span>Queue</span>
+                </div>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 px-3 text-xs" data-testid="button-send">
-                    <Send className="w-4 h-4 mr-1" />
-                    Send
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                    data-testid="button-send"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Send className="w-4 h-4" />
+                      <span>Send</span>
+                    </div>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -1225,33 +1272,51 @@ export function GlobalJobCard({
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="sm" 
-                className="h-8 px-3 text-xs" 
+                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all disabled:opacity-50 disabled:bg-white/5" 
                 onClick={() => setIsProfitTrackerOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
                 title={!editingJob?.id || mode === 'create' ? "Save job first to track profit" : "View profit tracking"}
               >
-                <DollarSign className="w-4 h-4 mr-1" />
-                Profit
+                <div className="flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4" />
+                  <span>Profit</span>
+                </div>
               </Button>
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="sm" 
-                className="h-8 px-3 text-xs" 
+                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all disabled:opacity-50 disabled:bg-white/5" 
                 onClick={() => setIsTimeTrackingOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
                 title={!editingJob?.id || mode === 'create' ? "Save job first to track time" : "Record time tracking"}
               >
-                <Clock className="w-4 h-4 mr-1" />
-                Time
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-4 h-4" />
+                  <span>Time</span>
+                </div>
               </Button>
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="sm" 
-                className="h-8 px-3 text-xs" 
+                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all disabled:opacity-50 disabled:bg-white/5" 
+                onClick={() => setIsPhotoCaptureOpen(true)}
+                disabled={!editingJob?.id || mode === 'create'}
+                data-testid="button-camera"
+                title={!editingJob?.id || mode === 'create' ? "Save job first to capture photos" : "Capture photo"}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Camera className="w-4 h-4" />
+                  <span>Camera</span>
+                </div>
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all disabled:opacity-50 disabled:bg-white/5" 
                 onClick={() => sendToXeroMutation.mutate()}
                 disabled={
                   !editingJob?.id || 
@@ -1271,30 +1336,29 @@ export function GlobalJobCard({
                     : "Send invoice to Xero"
                 }
               >
-                <FileText className="w-4 h-4 mr-1" />
-                {sendToXeroMutation.isPending 
-                  ? 'Sending...' 
-                  : editingJob?.xeroStatus === 'sent' 
-                  ? 'Sent to Xero' 
-                  : 'Send to Xero'}
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs" 
-                onClick={() => setIsPhotoCaptureOpen(true)}
-                disabled={!editingJob?.id || mode === 'create'}
-                data-testid="button-camera"
-                title={!editingJob?.id || mode === 'create' ? "Save job first to capture photos" : "Capture photo"}
-              >
-                <Camera className="w-4 h-4 mr-1" />
-                Camera
+                <div className="flex items-center gap-1.5">
+                  <FileText className="w-4 h-4" />
+                  <span>
+                    {sendToXeroMutation.isPending 
+                      ? 'Sending...' 
+                      : editingJob?.xeroStatus === 'sent' 
+                      ? 'Sent to Xero' 
+                      : 'Send to Xero'}
+                  </span>
+                </div>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 px-3 text-xs" data-testid="button-more">
-                    <MoreHorizontal className="w-4 h-4 mr-1" />
-                    More
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                    data-testid="button-more"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <MoreHorizontal className="w-4 h-4" />
+                      <span>More</span>
+                    </div>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -1387,9 +1451,9 @@ export function GlobalJobCard({
             {/* Right: Save Buttons */}
             <div className="flex items-center gap-2 mr-12 sm:mr-0">
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="sm" 
-                className="h-11 px-2 sm:px-3 text-xs" 
+                className="h-9 px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
                 onClick={handleSave}
                 disabled={createJobMutation.isPending || updateJobMutation.isPending}
                 data-testid="button-save"
@@ -1397,9 +1461,9 @@ export function GlobalJobCard({
                 {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
               </Button>
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="sm" 
-                className="hidden sm:inline-flex h-11 px-3 text-xs" 
+                className="hidden sm:inline-flex h-9 px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
                 onClick={handleSaveAndClose}
                 disabled={createJobMutation.isPending || updateJobMutation.isPending}
                 data-testid="button-save-close"
