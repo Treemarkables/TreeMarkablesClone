@@ -5269,7 +5269,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           jobId,
           entryType: 'milestone',
           title: 'Staff Scheduled',
-          content: `${employeeNames.length} staff member(s) scheduled: ${staffList} on ${scheduleDate} from ${startTimeStr} to ${endTimeStr}`,
+          description: `${employeeNames.length} staff member(s) scheduled: ${staffList}`,
+          authorName: 'System',
+          content: `Scheduled on ${scheduleDate} from ${startTimeStr} to ${endTimeStr}`,
           metadata: JSON.stringify({
             staffIds: employeeIds,
             staffNames: employeeNames,

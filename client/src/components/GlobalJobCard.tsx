@@ -1015,8 +1015,10 @@ export function GlobalJobCard({
           description: `${schedulingData.assignedTo.length} staff member(s) scheduled for ${format(startTime, 'PPP')} at ${format(startTime, 'p')}`,
         });
 
-        // Refresh job data
+        // Refresh job data and staff assignments for dispatch board
         queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
         
         setIsSchedulingModalOpen(false);
         setSchedulingData({
