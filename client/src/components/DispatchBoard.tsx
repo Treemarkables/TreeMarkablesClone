@@ -1232,20 +1232,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <div className="hidden md:flex gap-4 h-[700px]">
             {/* Team/Staff Column */}
             <div className="w-32 border-r pr-3">
-              <h3 className="font-semibold mb-2 text-xs text-muted-foreground h-9 flex items-center">
-                {assignmentMode === 'teams' ? 'TEAMS' : 'STAFF'}
-              </h3>
+              {/* Header to match time grid header height */}
+              <div className="h-[44px] flex items-center mb-2">
+                <h3 className="font-semibold text-xs text-muted-foreground">
+                  {assignmentMode === 'teams' ? 'TEAMS' : 'STAFF'}
+                </h3>
+              </div>
               <div className="space-y-1">
                 {assignmentMode === 'teams' ? (
                   // Teams Mode - Section Removed
                   null
                 ) : (
-                  // Individual Staff Mode
+                  // Individual Staff Mode - exact height match with calendar rows
                   staffMembers.map((staff: StaffMember) => {
                     return (
                       <div
                         key={staff.id}
-                        className="flex items-center gap-2 h-11 rounded-md hover-elevate cursor-pointer px-2"
+                        className={`flex items-center gap-2 h-11 rounded-md hover-elevate cursor-pointer px-2 border-l-4 ${staff.color.replace('bg-', 'border-l-')}`}
                         data-testid={`staff-${staff.id}`}
                       >
                         <Avatar className="h-7 w-7">
@@ -1268,11 +1271,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             <div className="flex-1 overflow-x-auto">
               <div className="min-w-[800px]">
                 {/* Time Headers */}
-                <div className="grid grid-cols-12 gap-1 mb-2 bg-white">
+                <div className="grid grid-cols-12 gap-1 mb-2 bg-white h-[44px]">
                   {timeSlots.map((time) => (
                     <div
                       key={time}
-                      className="text-center text-xs font-medium text-gray-600 p-2 border-b border-gray-200 min-w-0"
+                      className="text-center text-xs font-medium text-gray-600 p-2 border-b border-gray-200 min-w-0 flex items-center justify-center"
                       data-testid={`time-slot-${time}`}
                     >
                       {time}
