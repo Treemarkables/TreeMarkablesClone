@@ -9353,6 +9353,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           const invoiceDate = jobData['Invoice Date'];
           const jobNum = jobData.jobNumber || jobData['Job Number'] || 'UNKNOWN';
           
+          // Debug logging for first job only
+          if (jobNum === '1587') {
+            console.log('🔍 DEBUG Job 1587:');
+            console.log('  - importedInvoiceNumber:', importedInvoiceNumber);
+            console.log('  - !importedInvoiceNumber:', !importedInvoiceNumber);
+            console.log('  - invoiceSent:', invoiceSent);
+            console.log('  - invoiceSent === "1":', invoiceSent === '1');
+            console.log('  - invoiceDate:', invoiceDate);
+            console.log('  - invoiceDate !== "0000-00-00 00:00:00":', invoiceDate !== '0000-00-00 00:00:00');
+          }
+          
           if (!importedInvoiceNumber && invoiceSent === '1' && invoiceDate && invoiceDate !== '0000-00-00 00:00:00') {
             importedInvoiceNumber = `INV-${jobNum}`;
             console.log(`🔖 Auto-generated invoice number for job ${jobNum}: ${importedInvoiceNumber}`);
