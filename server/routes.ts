@@ -5302,11 +5302,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     try {
       const validatedData = updateEmployeeSchema.parse(req.body);
       
-      // Convert hireDate string to Date object if it's a string
-      const dataToUpdate = { ...validatedData };
+      // Convert all timestamp fields from strings to Date objects
+      const dataToUpdate: any = { ...validatedData };
+      
+      // Convert hireDate if it's a string
       if (dataToUpdate.hireDate && typeof dataToUpdate.hireDate === 'string') {
         dataToUpdate.hireDate = new Date(dataToUpdate.hireDate);
       }
+      
+      // Remove auto-managed timestamp fields - they should not be updated manually
+      delete dataToUpdate.createdAt;
+      delete dataToUpdate.updatedAt;
       
       const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
       res.json({
