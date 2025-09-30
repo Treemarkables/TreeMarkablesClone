@@ -71,6 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isDev = import.meta.env.DEV;
   const [location] = useLocation();
 
+  // Extract just the pathname without query params or hash
+  const pathname = location.split('?')[0].split('#')[0];
+
   // List of public pages where dev banner should NOT show
   const publicPages = [
     '/',
@@ -86,11 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ];
   
   // Check if current page is public or a viewer page (proposal, quote, invoice)
-  const isPublicPage = publicPages.includes(location) || 
-                      location.startsWith('/blog/') ||
-                      location.startsWith('/proposal/') ||
-                      location.startsWith('/quote/') ||
-                      location.startsWith('/invoice/');
+  const isPublicPage = publicPages.includes(pathname) || 
+                      pathname.startsWith('/blog/') ||
+                      pathname.startsWith('/proposal/') ||
+                      pathname.startsWith('/quote/') ||
+                      pathname.startsWith('/invoice/');
   
   // Only show dev banner in dev mode AND on internal dashboard pages
   const showDevBanner = isDev && !isPublicPage;
