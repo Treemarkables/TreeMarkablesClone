@@ -1714,6 +1714,77 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           
           {/* Mobile Jobs List - Direct Display */}
           <div className="md:hidden space-y-3">
+            {/* Unscheduled Jobs Section - Mobile */}
+            {(() => {
+              const unscheduledJobs = getTodaysJobs().filter((job: any) => 
+                job.status === 'quote' || job.status === 'lead' || !job.startTime || job.startTime.includes('0000-00-00')
+              );
+              
+              if (unscheduledJobs.length === 0) return null;
+              
+              return (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-purple-500" />
+                      <h3 className="font-semibold text-sm">Unscheduled Jobs</h3>
+                      <Badge variant="secondary" className="text-xs" data-testid="unscheduled-jobs-count-mobile">
+                        {unscheduledJobs.length}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {unscheduledJobs.map((job) => (
+                      <div
+                        key={`unscheduled-${job.id}`}
+                        className="p-3 border border-purple-200 rounded-lg bg-purple-50/50 hover:bg-purple-50 cursor-pointer transition-colors"
+                        onClick={() => handleEditJob(job)}
+                        data-testid={`mobile-unscheduled-job-${job.id}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div 
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
+                            style={{ backgroundColor: getJobStatusColorValue(job) }}
+                          >
+                            {getStatusInitials(job)}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between mb-1">
+                              <h3 className="font-semibold text-gray-900 text-sm">
+                                {job.customerName}
+                              </h3>
+                              <div className="text-xs font-medium text-gray-500">
+                                #{(job as any).jobNumber || job.jobId}
+                              </div>
+                            </div>
+                            
+                            <div className="text-xs text-gray-600 mb-1">
+                              {job.address || 'No address'}
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className={`text-xs ${
+                                job.status === 'quote' ? 'border-purple-500 text-purple-500' :
+                                job.status === 'lead' ? 'border-blue-500 text-blue-500' :
+                                'border-gray-500 text-gray-500'
+                              }`}>
+                                {job.status}
+                              </Badge>
+                              <Badge variant="secondary" className="text-xs">
+                                {job.priority}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t my-4"></div>
+                </div>
+              );
+            })()}
+            
             {/* Job Search Field for Mobile */}
             <div className="space-y-2 mb-4">
               <div className="relative">
