@@ -585,6 +585,31 @@ export function GlobalJobCard({
     }
   });
 
+  const sendToXeroMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingJob?.id) throw new Error('No job ID for Xero');
+      const response = await apiRequest('POST', '/api/xero/send-invoice', { 
+        jobId: editingJob.id 
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      toast({
+        title: "Sent to Xero",
+        description: "Invoice has been successfully sent to Xero.",
+      });
+    },
+    onError: (error) => {
+      console.error('Error sending to Xero:', error);
+      toast({
+        title: "Xero Error",
+        description: "Failed to send invoice to Xero. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
   // Fetch proposal data for this job (always fetch when job exists)
   const { data: jobProposalResponse, isLoading: isProposalLoading, isFetching: isProposalFetching, refetch: refetchProposals } = useQuery({
     queryKey: ["/api/proposals", editingJob?.id],
@@ -1092,6 +1117,36 @@ export function GlobalJobCard({
                 <Clock className="w-4 h-4 mr-1" />
                 Time
               </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs" 
+                onClick={() => sendToXeroMutation.mutate()}
+                disabled={
+                  !editingJob?.id || 
+                  mode === 'create' || 
+                  editingJob?.status !== 'completed' || 
+                  editingJob?.xeroStatus === 'sent' ||
+                  sendToXeroMutation.isPending
+                }
+                data-testid="button-send-xero"
+                title={
+                  !editingJob?.id || mode === 'create' 
+                    ? "Save job first" 
+                    : editingJob?.status !== 'completed'
+                    ? "Job must be completed to send to Xero"
+                    : editingJob?.xeroStatus === 'sent'
+                    ? "Already sent to Xero"
+                    : "Send invoice to Xero"
+                }
+              >
+                <FileText className="w-4 h-4 mr-1" />
+                {sendToXeroMutation.isPending 
+                  ? 'Sending...' 
+                  : editingJob?.xeroStatus === 'sent' 
+                  ? 'Sent to Xero' 
+                  : 'Send to Xero'}
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8 px-3 text-xs" data-testid="button-more">
@@ -1159,6 +1214,24 @@ export function GlobalJobCard({
                   <DropdownMenuItem onClick={() => setIsProfitTrackerOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-profit-mobile">
                     <DollarSign className="w-4 h-4 mr-2" />
                     Profit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => sendToXeroMutation.mutate()}
+                    disabled={
+                      !editingJob?.id || 
+                      mode === 'create' || 
+                      editingJob?.status !== 'completed' || 
+                      editingJob?.xeroStatus === 'sent' ||
+                      sendToXeroMutation.isPending
+                    }
+                    data-testid="menu-item-send-xero-mobile"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    {sendToXeroMutation.isPending 
+                      ? 'Sending...' 
+                      : editingJob?.xeroStatus === 'sent' 
+                      ? 'Sent to Xero' 
+                      : 'Send to Xero'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
