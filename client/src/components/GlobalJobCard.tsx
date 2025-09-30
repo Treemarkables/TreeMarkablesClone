@@ -43,6 +43,9 @@ import { cn } from "@/lib/utils";
 
 // Form validation schema extending the base insertJobSchema
 const globalJobCardSchema = insertJobSchema.extend({
+  // Make jobNumber optional since it's auto-generated on backend
+  jobNumber: z.string().optional(),
+  
   // Customer selection
   customerId: z.string().optional(),
   isNewCustomer: z.boolean().optional(),
