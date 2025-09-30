@@ -365,6 +365,11 @@ export const jobs = pgTable("jobs", {
   paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default('0.00'),
   balanceDue: decimal("balance_due", { precision: 10, scale: 2 }).default('0.00'),
   
+  // Xero Integration Tracking
+  xeroInvoiceId: text("xero_invoice_id"),
+  xeroStatus: text("xero_status"), // pending, sent, error
+  sentToXeroDate: timestamp("sent_to_xero_date"),
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

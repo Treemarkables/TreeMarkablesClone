@@ -21,6 +21,7 @@ import Reputation from "@/pages/Reputation";
 import Inbox from "@/pages/Inbox";
 import Integrations from "@/pages/Integrations";
 import Equipment from "@/pages/Equipment";
+import Invoices from "@/pages/Invoices";
 import NotFound from "@/pages/not-found";
 import { CustomerPortal } from "@/pages/CustomerPortal";
 import CommunicationsManagement from "@/pages/CommunicationsManagement";
@@ -224,6 +225,11 @@ function Router() {
       <Route path="/equipment">
         <SidebarLayout>
           <Equipment />
+        </SidebarLayout>
+      </Route>
+      <Route path="/invoices">
+        <SidebarLayout>
+          <Invoices />
         </SidebarLayout>
       </Route>
       <Route path="/templates">

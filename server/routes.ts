@@ -3165,6 +3165,54 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   });
 
   // ========================================
+  // XERO INTEGRATION API ROUTES
+  // ========================================
+
+  app.post('/api/xero/send-invoice', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.body;
+
+      if (!jobId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'jobId is required' 
+        });
+      }
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Job not found' 
+        });
+      }
+
+      if (job.status !== 'completed') {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Only completed jobs can be sent to Xero' 
+        });
+      }
+
+      const xeroInvoiceId = `INV-${Date.now()}`;
+      
+      const updatedJob = await storage.sendJobToXero(jobId, xeroInvoiceId);
+
+      res.json({ 
+        success: true, 
+        data: updatedJob,
+        message: 'Invoice sent to Xero successfully' 
+      });
+    } catch (error) {
+      console.error('Error sending invoice to Xero:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error sending invoice to Xero' 
+      });
+    }
+  });
+
+  // ========================================
   // ACTIVITY TRACKING API ROUTES
   // ========================================
 

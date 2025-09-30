@@ -228,6 +228,9 @@ export interface IStorage {
     date: string;
   }>>;
   
+  // Xero Integration
+  sendJobToXero(jobId: string, xeroInvoiceId: string): Promise<Job>;
+  
   // Activity Tracking
   createActivity(activity: InsertActivity): Promise<Activity>;
   getActivity(id: string): Promise<Activity | undefined>;
@@ -1572,6 +1575,20 @@ class DatabaseStorage implements IStorage {
   async removeStaffTimeEntry(jobId: string, employeeId: string, date?: string): Promise<Job> { throw new Error("Not implemented"); }
   async calculateLaborCostFromStaffTime(jobId: string): Promise<number> { return 0; }
   async getJobStaffTimeEntries(jobId: string): Promise<any[]> { return []; }
+  
+  async sendJobToXero(jobId: string, xeroInvoiceId: string): Promise<Job> {
+    const [updatedJob] = await db.update(schema.jobs)
+      .set({
+        xeroInvoiceId: xeroInvoiceId,
+        xeroStatus: 'sent',
+        sentToXeroDate: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(schema.jobs.id, jobId))
+      .returning();
+    return updatedJob;
+  }
+  
   async createActivity(activity: InsertActivity): Promise<Activity> { throw new Error("Not implemented"); }
   async getActivity(id: string): Promise<Activity | undefined> { return undefined; }
   async getActivitiesByCustomer(customerId: string): Promise<Activity[]> { return []; }

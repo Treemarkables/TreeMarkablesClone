@@ -110,6 +110,13 @@ const businessItems = [
     isTab: true
   },
   {
+    title: "Invoices",
+    url: "/invoices",
+    icon: FileText,
+    value: "invoices",
+    isTab: false
+  },
+  {
     title: "Templates",
     url: "/templates",
     icon: Layout,
