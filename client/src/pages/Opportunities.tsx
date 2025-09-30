@@ -112,15 +112,15 @@ export default function Opportunities() {
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" data-testid="button-menu">
+      <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <Button variant="ghost" size="icon" className="flex-shrink-0" data-testid="button-menu">
             <Menu className="h-5 w-5" />
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold" data-testid="text-title">Treemarkables</h1>
-              <ChevronDown className="h-4 w-4 text-gray-500" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <h1 className="text-base sm:text-lg font-semibold truncate" data-testid="text-title">Treemarkables</h1>
+              <ChevronDown className="h-4 w-4 text-gray-500 flex-shrink-0" />
             </div>
             <p className="text-xs text-gray-500">Gisborne</p>
           </div>
@@ -128,14 +128,14 @@ export default function Opportunities() {
       </div>
 
       {/* Filter Buttons */}
-      <div className="flex gap-2 px-4 py-3 border-b overflow-x-auto">
+      <div className="flex gap-2 px-3 sm:px-4 py-2 sm:py-3 border-b overflow-x-auto scrollbar-hide">
         <Button 
           variant="outline" 
           size="sm"
-          className="flex-shrink-0"
+          className="flex-shrink-0 text-xs sm:text-sm"
           data-testid="button-filter"
         >
-          <Filter className="h-4 w-4 mr-2" />
+          <Filter className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
           Filter
           <ChevronDown className="h-3 w-3 ml-1" />
         </Button>
@@ -143,7 +143,7 @@ export default function Opportunities() {
           variant={filterType === 'internal' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setFilterType('internal')}
-          className="flex-shrink-0"
+          className="flex-shrink-0 text-xs sm:text-sm"
           data-testid="button-internal-chat"
         >
           Internal Chat
@@ -152,7 +152,7 @@ export default function Opportunities() {
           variant={filterType === 'recent' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setFilterType('recent')}
-          className="flex-shrink-0"
+          className="flex-shrink-0 text-xs sm:text-sm"
           data-testid="button-recent"
         >
           Recent
@@ -161,7 +161,7 @@ export default function Opportunities() {
           variant={filterType === 'unread' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setFilterType('unread')}
-          className="flex-shrink-0"
+          className="flex-shrink-0 text-xs sm:text-sm"
           data-testid="button-unread"
         >
           Unread
@@ -184,13 +184,13 @@ export default function Opportunities() {
             {conversations.map((conversation: Conversation) => (
               <div
                 key={conversation.id}
-                className="flex items-center gap-3 px-4 py-3 hover-elevate active-elevate-2 cursor-pointer"
+                className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2 cursor-pointer"
                 onClick={() => handleConversationClick(conversation)}
                 data-testid={`conversation-item-${conversation.id}`}
               >
                 {/* Avatar with Badge */}
                 <div className="relative flex-shrink-0">
-                  <Avatar className="h-12 w-12 bg-gray-200">
+                  <Avatar className="h-11 w-11 sm:h-12 sm:w-12 bg-gray-200">
                     <AvatarFallback className="text-gray-600 font-medium">
                       {getInitials(conversation.title)}
                     </AvatarFallback>
@@ -206,21 +206,21 @@ export default function Opportunities() {
 
                 {/* Conversation Info */}
                 <div className="flex-1 min-w-0 overflow-hidden">
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="font-semibold text-gray-900 truncate flex-1 min-w-0" data-testid={`text-name-${conversation.id}`}>
+                  <div className="flex items-baseline gap-1 sm:gap-2">
+                    <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate flex-1 min-w-0" data-testid={`text-name-${conversation.id}`}>
                       {conversation.title}
                     </h3>
-                    <span className="text-xs text-gray-500 flex-shrink-0 ml-auto" data-testid={`text-date-${conversation.id}`}>
+                    <span className="text-[10px] sm:text-xs text-gray-500 flex-shrink-0 ml-auto whitespace-nowrap" data-testid={`text-date-${conversation.id}`}>
                       {formatDate(conversation.lastMessageAt || conversation.createdAt || new Date())}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-sm text-gray-600 truncate flex-1 min-w-0" data-testid={`text-preview-${conversation.id}`}>
+                  <div className="flex items-center gap-1 sm:gap-2 mt-0.5">
+                    <p className="text-xs sm:text-sm text-gray-600 truncate flex-1 min-w-0" data-testid={`text-preview-${conversation.id}`}>
                       {truncateMessage(conversation.title)}
                     </p>
                     {conversation.unreadCount && conversation.unreadCount > 0 && (
                       <div 
-                        className="flex-shrink-0 bg-green-500 text-white text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center ml-auto"
+                        className="flex-shrink-0 bg-green-500 text-white text-[10px] sm:text-xs font-semibold rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center ml-auto"
                         data-testid={`badge-unread-${conversation.id}`}
                       >
                         {conversation.unreadCount}
@@ -237,11 +237,11 @@ export default function Opportunities() {
       {/* Floating Action Button */}
       <Button
         size="icon"
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700 z-50"
         data-testid="button-new-conversation"
         onClick={() => toast({ title: 'New conversation', description: 'Feature coming soon' })}
       >
-        <Plus className="h-6 w-6" />
+        <Plus className="h-5 w-5 sm:h-6 sm:w-6" />
       </Button>
 
       {/* Reply Dialog */}
