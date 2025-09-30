@@ -39,7 +39,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Business Features
 - **Job Dashboard**: Central hub at `/job-dashboard` with comprehensive business management tools
-- **Dispatch Board**: ServiceM8-style visual scheduling interface with time-grid (7 AM - 6 PM), staff roster, job assignments, and drag-and-drop scheduling capabilities
+- **Dispatch Board**: ServiceM8-style visual scheduling interface with time-grid (6 AM - 7 PM), staff roster, job assignments, and drag-and-drop scheduling capabilities with duration-based scheduling (15min to 8hr increments)
 - **ServiceM8-Style Job Creation**: Professional job creation form with orange header design, comprehensive job details, dynamic checklist functionality, contact management, and seamless integration with dispatch boards - fully validates and creates jobs with proper status enum handling. Features inline customer creation allowing users to add new customers directly within the job form instead of being restricted to existing customer dropdown selection
 - **Lead Management**: Pipeline tracking, lead scoring, conversion funnels, and automated follow-up systems
 - **Customer Management**: Complete customer profiles, service history, communication logs, and relationship tracking
@@ -121,3 +121,12 @@ The application now serves as a complete business management platform with profe
 - **SMS Invoice Functionality**: Complete SMS composer with purple/pink gradient theme, character counter (160 limit), and pre-populated invoice messaging
 - **Colorful Dropdown Actions**: Invoice action dropdown now features color-coded icons (green for Send Invoice, purple for SMS Invoice, yellow for Auto Invoice, orange for Partial Invoice, teal for Customise Invoice, blue for Add Payment)
 - **Enhanced Communication Modals**: Both email and SMS modals feature vibrant gradient headers with white text overlays and improved visual hierarchy
+
+## Recent Changes (September 30, 2025)
+
+### Scheduling System Improvements
+- **Fixed Critical Conflict Detection Bug**: Resolved SQL query issue that was causing false positive conflicts between non-overlapping dates (e.g., Oct 1 assignments incorrectly conflicting with Oct 4 scheduling). Replaced raw SQL template literals with proper Drizzle ORM operators (`lt`, `gt`, `ne`) for accurate date comparison
+- **Duration-Based Scheduling**: Implemented automatic end time calculation based on selected duration (15min to 8hr increments) replacing manual end time selection for more intuitive scheduling workflow
+- **Extended Dispatch Board Hours**: Increased daily view from 7:00-18:00 to 6:00-19:00 for better coverage of early morning and evening work
+- **Automatic Diary Logging**: All staff scheduling activities now automatically create job diary entries with detailed staff information, date, and time for comprehensive audit trail
+- **Enhanced Error Logging**: Improved error handling and logging throughout the scheduling system for better debugging and monitoring
