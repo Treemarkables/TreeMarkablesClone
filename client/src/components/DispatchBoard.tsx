@@ -1063,30 +1063,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader>
+        {/* Desktop Header - Hidden on Mobile */}
+        <CardHeader className="hidden md:block">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
               Dispatch Board
             </CardTitle>
             <div className="flex items-center gap-2">
-              {/* Mobile Jobs Button - Only visible on mobile when Jobs Panel is hidden */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="md:hidden"
-                onClick={() => {
-                  const jobsPanel = document.getElementById('mobile-jobs-panel');
-                  if (jobsPanel) {
-                    jobsPanel.scrollIntoView({ behavior: 'smooth' });
-                  }
-                }}
-                data-testid="mobile-jobs-btn"
-              >
-                <List className="h-4 w-4 mr-1" />
-                Jobs ({getTodaysJobs().length})
-              </Button>
-              
               <Button
                 variant="outline"
                 size="sm"
@@ -1155,11 +1139,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </div>
           </div>
         </CardHeader>
+        
+        {/* Mobile Header - Simple Title Only */}
+        <CardHeader className="md:hidden">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Calendar className="h-5 w-5" />
+            Jobs ({getTodaysJobs().length})
+          </CardTitle>
+        </CardHeader>
 
         <CardContent>
-          <div className="flex gap-4 h-[700px]">
+          {/* Desktop Time Grid View */}
+          <div className="hidden md:flex gap-4 h-[700px]">
             {/* Team/Staff Column */}
-            <div className="w-36 border-r pr-4 hidden md:block">
+            <div className="w-36 border-r pr-4">
               <h3 className="font-semibold mb-4 text-sm text-muted-foreground">
                 {assignmentMode === 'teams' ? 'TEAMS' : 'STAFF'}
               </h3>
@@ -1202,7 +1195,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
             </div>
 
-            {/* Time Grid */}
+            {/* Time Grid - Desktop Only */}
             <div className="flex-1 overflow-x-auto">
               <div className="min-w-[800px]">
                 {/* Time Headers */}
@@ -1351,8 +1344,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
             </div>
 
-            {/* ServiceM8 Style Jobs Panel */}
-            <div className="w-80 bg-gray-50 border-l flex flex-col h-[700px] hidden md:block">
+            {/* ServiceM8 Style Jobs Panel - Desktop */}
+            <div className="w-80 bg-gray-50 border-l flex flex-col h-[700px]">
               {/* ServiceM8 Header */}
               <div className="p-4 space-y-3 flex-shrink-0">
                 {/* ServiceM8 Style Filter Dropdown */}
@@ -1632,75 +1625,68 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Mobile Jobs Panel - Only visible on mobile */}
-      <Card className="md:hidden" id="mobile-jobs-panel">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <List className="h-5 w-5" />
-            Today's Jobs ({getTodaysJobs().length})
-          </CardTitle>
-          {/* Job Search Field for Mobile */}
-          <div className="space-y-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={isDeepSearchActive ? "Deep search results..." : "Search by customer, job #, address..."}
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (!isDeepSearchActive) {
-                    // Normal search - let the regular filtering handle it
-                  }
-                }}
-                className="pl-10 bg-white"
-                data-testid="mobile-job-search-input"
-              />
-              {isDeepSearchActive && (
+          
+          {/* Mobile Jobs List - Direct Display */}
+          <div className="md:hidden space-y-3">
+            {/* Job Search Field for Mobile */}
+            <div className="space-y-2 mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={isDeepSearchActive ? "Deep search results..." : "Search by customer, job #, address..."}
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (!isDeepSearchActive) {
+                      // Normal search - let the regular filtering handle it
+                    }
+                  }}
+                  className="pl-10 bg-white"
+                  data-testid="mobile-job-search-input"
+                />
+                {isDeepSearchActive && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 px-2"
+                    onClick={() => {
+                      setIsDeepSearchActive(false);
+                      setDeepSearchResults([]);
+                      setSearchQuery('');
+                    }}
+                    data-testid="btn-clear-deep-search-mobile"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+              
+              {/* Deep Search Button for Mobile */}
+              {searchQuery.trim() && !isDeepSearchActive && (
                 <Button
                   size="sm"
-                  variant="ghost"
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 px-2"
-                  onClick={() => {
-                    setIsDeepSearchActive(false);
-                    setDeepSearchResults([]);
-                    setSearchQuery('');
-                  }}
-                  data-testid="btn-clear-deep-search-mobile"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => performDeepSearch(searchQuery)}
+                  data-testid="btn-deep-search-mobile"
                 >
-                  <X className="h-3 w-3" />
+                  <Search className="h-3 w-3 mr-2" />
+                  Deep Search All Jobs
                 </Button>
+              )}
+              
+              {/* Deep Search Status for Mobile */}
+              {isDeepSearchActive && (
+                <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                  <SearchX className="h-3 w-3" />
+                  Deep search: {deepSearchResults.length} total jobs found
+                </div>
               )}
             </div>
             
-            {/* Deep Search Button for Mobile */}
-            {searchQuery.trim() && !isDeepSearchActive && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full"
-                onClick={() => performDeepSearch(searchQuery)}
-                data-testid="btn-deep-search-mobile"
-              >
-                <Search className="h-3 w-3 mr-2" />
-                Deep Search All Jobs
-              </Button>
-            )}
-            
-            {/* Deep Search Status for Mobile */}
-            {isDeepSearchActive && (
-              <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                <SearchX className="h-3 w-3" />
-                Deep search: {deepSearchResults.length} total jobs found
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="max-h-96 overflow-y-auto">
-          <div className="space-y-3">
-            {getTodaysJobs().map((job, index) => {
+            {/* Mobile Jobs Cards */}
+            <div className="space-y-3">
+              {getTodaysJobs().map((job, index) => {
               const customerName = job.customerName || 'Unknown Customer';
               
               return (
@@ -1776,22 +1762,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               );
             })}
             
-            {/* Empty State for Mobile */}
-            {getTodaysJobs().length === 0 && (
-              <div className="p-8 text-center text-gray-500">
-                <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">No jobs scheduled for this date</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-3"
-                  onClick={handleCreateJob}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create First Job
-                </Button>
-              </div>
-            )}
+              {/* Empty State for Mobile */}
+              {getTodaysJobs().length === 0 && (
+                <div className="p-8 text-center text-gray-500">
+                  <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p className="text-sm">No jobs scheduled for this date</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-3"
+                    onClick={handleCreateJob}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create First Job
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
