@@ -46,6 +46,7 @@ import {
 import multer from "multer";
 import Papa from "papaparse";
 import path from "path";
+import bcrypt from "bcrypt";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -275,30 +276,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AUTHENTICATION ENDPOINTS
   // ========================================
 
-  // POST /api/auth/login - Create server-side session with employee ID
+  // POST /api/auth/login - Create server-side session with employee ID or email+password
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
-      const { employeeId } = req.body;
+      const { employeeId, email, password } = req.body;
+      let employee;
 
-      if (!employeeId) {
+      // Email+password authentication
+      if (email && password) {
+        // Find employee by email
+        employee = await storage.getEmployeeByEmail(email);
+
+        if (!employee) {
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid email or password'
+          });
+        }
+
+        // Verify password if it exists
+        if (!employee.password) {
+          return res.status(401).json({
+            success: false,
+            message: 'Password authentication not configured for this account'
+          });
+        }
+
+        // Compare password with stored hash
+        const passwordMatch = await bcrypt.compare(password, employee.password);
+
+        if (!passwordMatch) {
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid email or password'
+          });
+        }
+      }
+      // Employee ID authentication (dev mode)
+      else if (employeeId) {
+        employee = await storage.getEmployee(employeeId);
+
+        if (!employee) {
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid employee ID'
+          });
+        }
+      }
+      // Neither authentication method provided
+      else {
         return res.status(400).json({
           success: false,
-          message: 'Employee ID is required'
-        });
-      }
-
-      // Verify employee exists
-      const employee = await storage.getEmployee(employeeId);
-
-      if (!employee) {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid employee ID'
+          message: 'Email and password, or employee ID required'
         });
       }
 
       // Create server-side session
-      req.session.employeeId = employeeId;
+      req.session.employeeId = employee.id;
 
       res.json({
         success: true,

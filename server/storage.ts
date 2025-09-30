@@ -361,6 +361,7 @@ export interface IStorage {
   // Employee Management
   createEmployee(employee: InsertEmployee): Promise<Employee>;
   getEmployee(id: string): Promise<Employee | undefined>;
+  getEmployeeByEmail(email: string): Promise<Employee | undefined>;
   updateEmployee(id: string, updates: UpdateEmployee): Promise<Employee>;
   getAllEmployees(): Promise<Employee[]>;
   getActiveEmployees(): Promise<Employee[]>;
@@ -2051,6 +2052,11 @@ class DatabaseStorage implements IStorage {
 
   async getEmployee(id: string): Promise<Employee | undefined> {
     const [employee] = await db.select().from(schema.employees).where(eq(schema.employees.id, id));
+    return employee || undefined;
+  }
+
+  async getEmployeeByEmail(email: string): Promise<Employee | undefined> {
+    const [employee] = await db.select().from(schema.employees).where(eq(schema.employees.email, email));
     return employee || undefined;
   }
 
