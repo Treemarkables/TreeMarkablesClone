@@ -37,6 +37,7 @@ import {
   // Employee and Schedule Management
   type Employee, type InsertEmployee, type UpdateEmployee,
   type ScheduleEvent, type InsertScheduleEvent, type UpdateScheduleEvent,
+  type JobStaffAssignment, type InsertJobStaffAssignment,
   // Job Templates and Proposals
   type JobTemplate, type InsertJobTemplate, type UpdateJobTemplate,
   // Email and SMS Templates
@@ -375,6 +376,16 @@ export interface IStorage {
   getScheduleEventsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]>;
   getScheduleEventsByJob(jobId: string): Promise<ScheduleEvent[]>;
   deleteScheduleEvent(id: string): Promise<void>;
+
+  // Job Staff Assignment Management
+  createJobStaffAssignment(assignment: InsertJobStaffAssignment): Promise<JobStaffAssignment>;
+  getJobStaffAssignment(id: string): Promise<JobStaffAssignment | undefined>;
+  getJobStaffAssignmentsByJob(jobId: string): Promise<JobStaffAssignment[]>;
+  getJobStaffAssignmentsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<JobStaffAssignment[]>;
+  checkStaffConflicts(employeeIds: string[], startTime: Date, endTime: Date, excludeJobId?: string): Promise<{employeeId: string; conflicts: JobStaffAssignment[]}[]>;
+  updateJobStaffAssignment(id: string, updates: Partial<InsertJobStaffAssignment>): Promise<JobStaffAssignment>;
+  deleteJobStaffAssignment(id: string): Promise<void>;
+  deleteJobStaffAssignmentsByJob(jobId: string): Promise<void>;
 
   // Job Template Management
   createJobTemplate(template: InsertJobTemplate): Promise<JobTemplate>;
@@ -2083,6 +2094,86 @@ class DatabaseStorage implements IStorage {
   async getScheduleEventsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]> { return []; }
   async getScheduleEventsByJob(jobId: string): Promise<ScheduleEvent[]> { return []; }
   async deleteScheduleEvent(id: string): Promise<void> { }
+
+  async createJobStaffAssignment(assignment: InsertJobStaffAssignment): Promise<JobStaffAssignment> {
+    const [newAssignment] = await db.insert(schema.jobStaffAssignments).values(assignment).returning();
+    return newAssignment;
+  }
+
+  async getJobStaffAssignment(id: string): Promise<JobStaffAssignment | undefined> {
+    const [assignment] = await db.select().from(schema.jobStaffAssignments).where(eq(schema.jobStaffAssignments.id, id));
+    return assignment;
+  }
+
+  async getJobStaffAssignmentsByJob(jobId: string): Promise<JobStaffAssignment[]> {
+    return await db.select().from(schema.jobStaffAssignments)
+      .where(eq(schema.jobStaffAssignments.jobId, jobId))
+      .orderBy(schema.jobStaffAssignments.startTime);
+  }
+
+  async getJobStaffAssignmentsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<JobStaffAssignment[]> {
+    let query = db.select().from(schema.jobStaffAssignments)
+      .where(eq(schema.jobStaffAssignments.employeeId, employeeId));
+
+    if (startDate && endDate) {
+      query = query.where(
+        and(
+          gte(schema.jobStaffAssignments.startTime, startDate),
+          lte(schema.jobStaffAssignments.endTime, endDate)
+        )
+      );
+    }
+
+    return await query.orderBy(schema.jobStaffAssignments.startTime);
+  }
+
+  async checkStaffConflicts(employeeIds: string[], startTime: Date, endTime: Date, excludeJobId?: string): Promise<{employeeId: string; conflicts: JobStaffAssignment[]}[]> {
+    const conflicts: {employeeId: string; conflicts: JobStaffAssignment[]}[] = [];
+    
+    for (const employeeId of employeeIds) {
+      // Find assignments that overlap with the requested time period
+      let query = db.select().from(schema.jobStaffAssignments)
+        .where(
+          and(
+            eq(schema.jobStaffAssignments.employeeId, employeeId),
+            // Check for time overlap: assignment starts before requested end AND ends after requested start
+            sql`${schema.jobStaffAssignments.startTime} < ${endTime}`,
+            sql`${schema.jobStaffAssignments.endTime} > ${startTime}`,
+            // Only include active assignments
+            sql`${schema.jobStaffAssignments.status} != 'cancelled'`
+          )
+        );
+
+      // Exclude assignments from the current job if editing
+      if (excludeJobId) {
+        query = query.where(sql`${schema.jobStaffAssignments.jobId} != ${excludeJobId}`);
+      }
+
+      const employeeConflicts = await query;
+      
+      if (employeeConflicts.length > 0) {
+        conflicts.push({ employeeId, conflicts: employeeConflicts });
+      }
+    }
+
+    return conflicts;
+  }
+
+  async updateJobStaffAssignment(id: string, updates: Partial<InsertJobStaffAssignment>): Promise<JobStaffAssignment> {
+    const [updated] = await db.update(schema.jobStaffAssignments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.jobStaffAssignments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteJobStaffAssignment(id: string): Promise<void> {
+    await db.delete(schema.jobStaffAssignments).where(eq(schema.jobStaffAssignments.id, id));
+  }
+
+  async deleteJobStaffAssignmentsByJob(jobId: string): Promise<void> {
+    await db.delete(schema.jobStaffAssignments).where(eq(schema.jobStaffAssignments.jobId, jobId));
+  }
 
   async createProposal(proposal: InsertProposal): Promise<Proposal> {
     const [created] = await db.insert(schema.proposals).values(proposal).returning();
