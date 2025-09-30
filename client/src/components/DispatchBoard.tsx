@@ -1187,7 +1187,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 Today
               </Button>
               <Select value={assignmentMode} onValueChange={(value: AssignmentMode) => setAssignmentMode(value)}>
-                <SelectTrigger className="w-[160px]" data-testid="assignment-mode-select">
+                <SelectTrigger className="w-full sm:w-[160px]" data-testid="assignment-mode-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1280,7 +1280,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </div>
 
             {/* Time Grid - Desktop Only */}
-            <div className="flex-1 overflow-x-auto">
+            <div className="flex-1 overflow-x-auto max-w-full">
               <div className="min-w-[800px]">
                 {/* Time Headers */}
                 <div className="grid grid-cols-12 gap-1 mb-2 bg-white h-[44px]">

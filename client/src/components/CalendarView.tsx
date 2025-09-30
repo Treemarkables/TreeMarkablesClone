@@ -239,7 +239,7 @@ export function CalendarView({ view = 'week', onEventClick, onAddEvent }: Calend
               <ChevronLeft className="h-4 w-4" />
             </Button>
             
-            <div className="text-sm font-medium min-w-[140px] text-center" data-testid="text-current-week">
+            <div className="text-sm font-medium min-w-[100px] sm:min-w-[140px] text-center" data-testid="text-current-week">
               {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d, yyyy')}
             </div>
             

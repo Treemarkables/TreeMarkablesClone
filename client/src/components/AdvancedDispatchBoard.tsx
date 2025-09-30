@@ -467,7 +467,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">Jobs</span>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[140px] h-8 text-xs">
+                  <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs">
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
