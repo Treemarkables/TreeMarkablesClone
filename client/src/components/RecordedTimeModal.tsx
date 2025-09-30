@@ -253,26 +253,26 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-full h-full overflow-y-auto sm:max-w-4xl sm:max-h-[90vh] sm:h-auto">
         <DialogHeader className="flex flex-row items-center justify-between pb-4 border-b">
-          <DialogTitle className="text-lg font-semibold">
+          <DialogTitle className="text-base sm:text-lg font-semibold">
             Job #{jobNumber} Recorded Time
           </DialogTitle>
-          <Button variant="ghost" size="sm" onClick={onClose} data-testid="button-close-modal">
-            <X className="h-4 w-4" />
+          <Button variant="ghost" size="icon" onClick={onClose} data-testid="button-close-modal" className="shrink-0 h-11 w-11">
+            <X className="h-5 w-5" />
           </Button>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Add Time Form - Always Visible */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-            <h4 className="font-medium text-blue-900">Add Staff Time Entry</h4>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 space-y-3">
+            <h4 className="font-medium text-blue-900 text-sm sm:text-base">Add Staff Time Entry</h4>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <div>
                 <label className="text-sm font-medium">Staff</label>
                 <Select value={newEntry.staffId} onValueChange={(value) => setNewEntry(prev => ({ ...prev, staffId: value }))} data-testid="select-staff">
-                  <SelectTrigger>
+                  <SelectTrigger className="min-h-11">
                     <SelectValue placeholder="Select staff" />
                   </SelectTrigger>
                   <SelectContent>
@@ -288,7 +288,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               <div>
                 <label className="text-sm font-medium">Rate Type</label>
                 <Select value={newEntry.rate} onValueChange={(value) => setNewEntry(prev => ({ ...prev, rate: value }))} data-testid="select-rate">
-                  <SelectTrigger>
+                  <SelectTrigger className="min-h-11">
                     <SelectValue placeholder="Select rate" />
                   </SelectTrigger>
                   <SelectContent>
@@ -314,7 +314,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 text-xs text-blue-600 hover:text-blue-800"
+                    className="h-auto p-1 min-h-11 sm:min-h-0 sm:p-0 text-xs text-blue-600 hover:text-blue-800"
                     onClick={() => setUseManualInput(!useManualInput)}
                     data-testid="button-toggle-manual"
                   >
@@ -330,11 +330,12 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                     value={newEntry.duration}
                     onChange={(e) => setNewEntry(prev => ({ ...prev, duration: e.target.value }))}
                     placeholder="Hours (e.g. 1.5)"
+                    className="min-h-11"
                     data-testid="input-duration-manual"
                   />
                 ) : (
                   <Select value={newEntry.duration} onValueChange={(value) => setNewEntry(prev => ({ ...prev, duration: value }))} data-testid="select-duration">
-                    <SelectTrigger>
+                    <SelectTrigger className="min-h-11">
                       <SelectValue placeholder="Select time" />
                     </SelectTrigger>
                     <SelectContent>
@@ -352,7 +353,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
             <div className="flex justify-end">
               <Button 
                 onClick={addToPendingList} 
-                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2 w-full sm:w-auto min-h-11"
                 data-testid="button-add-entry"
               >
                 <Plus className="h-4 w-4" />
@@ -372,11 +373,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               
               <div className="divide-y divide-gray-100">
                 {pendingEntries.map((entry) => (
-                  <div key={entry.id} className="p-4 hover:bg-gray-50 flex items-center justify-between" data-testid={`entry-${entry.id}`}>
-                    <div className="flex-1 grid grid-cols-3 gap-4">
+                  <div key={entry.id} className="p-3 sm:p-4 hover:bg-gray-50 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between" data-testid={`entry-${entry.id}`}>
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <div className="text-xs text-gray-500">Staff</div>
-                        <div className="font-medium">{entry.staffName}</div>
+                        <div className="font-medium text-sm sm:text-base">{entry.staffName}</div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">Rate Type</div>
@@ -391,13 +392,14 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       variant="ghost"
                       size="sm"
                       onClick={() => removePendingEntry(entry.id)}
-                      className="ml-4 text-red-600 hover:text-red-800 hover:bg-red-50"
+                      className="sm:ml-4 text-red-600 hover:text-red-800 hover:bg-red-50 w-full sm:w-auto min-h-11"
                       data-testid={`button-remove-${entry.id}`}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4 sm:mr-0 mr-2" />
+                      <span className="sm:hidden">Remove</span>
                     </Button>
                   </div>
-                ))}
+                ))}  
               </div>
             </div>
           )}
@@ -413,11 +415,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               
               <div className="divide-y divide-gray-100">
                 {existingEntries.map((entry: any) => (
-                  <div key={entry.id} className="p-4 bg-white">
-                    <div className="grid grid-cols-3 gap-4">
+                  <div key={entry.id} className="p-3 sm:p-4 bg-white">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <div className="text-xs text-gray-500">Staff</div>
-                        <div className="font-medium">{entry.employeeName}</div>
+                        <div className="font-medium text-sm sm:text-base">{entry.employeeName}</div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">Rate Type</div>
@@ -435,12 +437,12 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
           )}
 
           {/* Bottom Controls */}
-          <div className="flex items-center justify-between pt-4 border-t">
-            <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Rounding:</span>
+                <span className="text-sm font-medium whitespace-nowrap">Rounding:</span>
                 <Select value={rounding} onValueChange={setRounding}>
-                  <SelectTrigger className="w-24">
+                  <SelectTrigger className="w-full sm:w-24 min-h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -453,9 +455,9 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               </div>
               
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Travel Time:</span>
+                <span className="text-sm font-medium whitespace-nowrap">Travel Time:</span>
                 <Select value={travelTime} onValueChange={setTravelTime}>
-                  <SelectTrigger className="w-28">
+                  <SelectTrigger className="w-full sm:w-28 min-h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -467,13 +469,13 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={onClose} data-testid="button-cancel">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <Button variant="outline" onClick={onClose} data-testid="button-cancel" className="w-full sm:w-auto min-h-11">
                 Cancel
               </Button>
               <Button 
                 onClick={saveAllEntries} 
-                className="bg-orange-500 hover:bg-orange-600 text-white"
+                className="bg-orange-500 hover:bg-orange-600 text-white w-full sm:w-auto min-h-11"
                 disabled={pendingEntries.length === 0}
                 data-testid="button-save"
               >
