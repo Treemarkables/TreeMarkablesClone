@@ -7019,6 +7019,124 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // CONVERSATION WEBHOOKS & INTEGRATIONS
   // ========================================
 
+  // Seed sample conversations (development only)
+  app.post('/api/conversations/seed-samples', async (req: Request, res: Response) => {
+    try {
+      const sampleConversations = [
+        {
+          title: 'Tree Removal Enquiry - Large Oak',
+          status: 'open',
+          source: 'web_form',
+          priority: 'high',
+          serviceType: 'tree_removal',
+          urgency: 'within_week',
+          propertyType: 'residential',
+          estimatedValue: 2500,
+          lastMessageBy: 'customer',
+          lastMessageAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+          unreadCount: 1
+        },
+        {
+          title: 'Emergency Storm Damage',
+          status: 'open',
+          source: 'phone',
+          priority: 'urgent',
+          serviceType: 'emergency',
+          urgency: 'immediate',
+          propertyType: 'residential',
+          estimatedValue: 3500,
+          lastMessageBy: 'customer',
+          lastMessageAt: new Date(Date.now() - 30 * 60 * 1000),
+          unreadCount: 2
+        },
+        {
+          title: 'Facebook: Pruning Quote Request',
+          status: 'qualified',
+          source: 'social',
+          priority: 'medium',
+          serviceType: 'pruning',
+          urgency: 'within_month',
+          propertyType: 'commercial',
+          estimatedValue: 1200,
+          lastMessageBy: 'staff',
+          lastMessageAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          unreadCount: 0
+        },
+        {
+          title: 'Email: Hedge Trimming Service',
+          status: 'open',
+          source: 'email',
+          priority: 'low',
+          serviceType: 'pruning',
+          urgency: 'planning',
+          propertyType: 'residential',
+          estimatedValue: 450,
+          lastMessageBy: 'customer',
+          lastMessageAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+          unreadCount: 1
+        }
+      ];
+
+      const sampleMessages = [
+        {
+          content: 'Hi, I need help removing a large oak tree in my backyard. It\'s about 15 meters tall and very close to my house. Can you provide a quote?',
+          fromName: 'Sarah Johnson',
+          fromContact: 'sarah.j@email.com'
+        },
+        {
+          content: 'URGENT: A tree fell on my roof during the storm last night! I need immediate assistance. My address is 42 Elm Street, Auckland.',
+          fromName: 'Mike Thompson',
+          fromContact: '021-555-0123'
+        },
+        {
+          content: 'I saw your page on Facebook. I run a commercial property and need regular pruning services for our trees. Can we discuss pricing?',
+          fromName: 'David Chen',
+          fromContact: 'fb_12345'
+        },
+        {
+          content: 'Hello, I\'m looking for someone to trim my hedges. They\'re getting a bit out of control. What are your rates?',
+          fromName: 'Emma Wilson',
+          fromContact: 'emma.wilson@email.com'
+        }
+      ];
+
+      const createdConversations = [];
+      
+      for (let i = 0; i < sampleConversations.length; i++) {
+        const conversation = await storage.createConversation(sampleConversations[i] as any);
+        
+        // Create initial message for each conversation
+        await storage.createConversationMessage({
+          conversationId: conversation.id,
+          type: 'message',
+          content: sampleMessages[i].content,
+          direction: 'inbound',
+          fromName: sampleMessages[i].fromName,
+          fromContact: sampleMessages[i].fromContact,
+          platform: sampleConversations[i].source === 'email' ? 'email' : 
+                   sampleConversations[i].source === 'social' ? 'facebook_messenger' : 
+                   sampleConversations[i].source === 'phone' ? 'phone' : 'web_form',
+          isRead: sampleConversations[i].unreadCount === 0
+        });
+
+        createdConversations.push(conversation);
+      }
+
+      res.json({ 
+        success: true, 
+        message: `Created ${createdConversations.length} sample conversations`,
+        data: createdConversations 
+      });
+    } catch (error) {
+      console.error('Error seeding sample conversations:', error);
+      res.status(500).json({ success: false, message: 'Error seeding conversations' });
+    }
+  });
+
+  // ========================================
+  // CONVERSATION WEBHOOKS & INTEGRATIONS
+  // ========================================
+
   // Email webhook - Receives incoming emails from SendGrid Inbound Parse or similar
   app.post('/api/webhooks/email', async (req: Request, res: Response) => {
     try {
