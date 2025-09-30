@@ -1072,6 +1072,7 @@ export const employees = pgTable("employees", {
   lastName: text("last_name").notNull(),
   email: text("email"),
   phone: text("phone"),
+  password: text("password"), // Passwords should be hashed with bcrypt before storing
   position: text("position").notNull(), // arborist, ground_crew, foreman, driver
   role: text("role").notNull().default("crew"), // admin, crew
   status: text("status").notNull().default("active"), // active, inactive, on_leave
@@ -1089,7 +1090,9 @@ export const employees = pgTable("employees", {
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-export const insertEmployeeSchema = createInsertSchema(employees);
+export const insertEmployeeSchema = createInsertSchema(employees).extend({
+  password: z.string().min(8).optional(),
+});
 
 export const updateEmployeeSchema = insertEmployeeSchema.partial();
 
