@@ -7016,6 +7016,188 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   });
 
   // ========================================
+  // CONVERSATION WEBHOOKS & INTEGRATIONS
+  // ========================================
+
+  // Email webhook - Receives incoming emails from SendGrid Inbound Parse or similar
+  app.post('/api/webhooks/email', async (req: Request, res: Response) => {
+    try {
+      const { from, to, subject, text, html, headers } = req.body;
+      
+      console.log(`📧 Incoming email from: ${from}, subject: ${subject}`);
+      
+      // Parse sender info
+      const [fromName, fromEmail] = from.includes('<') 
+        ? [from.split('<')[0].trim(), from.split('<')[1].replace('>', '').trim()]
+        : ['', from];
+      
+      // Check if conversation exists for this email
+      const existingConversations = await storage.getAllConversations({ search: fromEmail });
+      let conversation = existingConversations[0];
+      
+      if (!conversation) {
+        // Create new conversation
+        conversation = await storage.createConversation({
+          title: subject || 'Email Enquiry',
+          status: 'open',
+          source: 'email',
+          priority: 'medium',
+          lastMessageBy: 'customer',
+          lastMessageAt: new Date()
+        });
+      }
+      
+      // Create message in conversation
+      await storage.createConversationMessage({
+        conversationId: conversation.id,
+        type: 'email',
+        content: text || html || '',
+        direction: 'inbound',
+        fromName: fromName || fromEmail,
+        fromContact: fromEmail,
+        subject: subject,
+        platform: 'email',
+        isRead: false
+      });
+      
+      // Update conversation
+      await storage.updateConversation(conversation.id, {
+        lastMessageAt: new Date(),
+        lastMessageBy: 'customer',
+        unreadCount: (conversation.unreadCount || 0) + 1
+      });
+      
+      res.json({ success: true, message: 'Email received and processed' });
+    } catch (error) {
+      console.error('Error processing incoming email:', error);
+      res.status(500).json({ success: false, message: 'Error processing email' });
+    }
+  });
+
+  // Facebook Messenger webhook verification (required by Facebook)
+  app.get('/api/webhooks/messenger', (req: Request, res: Response) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+    
+    const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN || 'treemarkables_verify_token';
+    
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+      console.log('Facebook webhook verified');
+      res.status(200).send(challenge);
+    } else {
+      res.sendStatus(403);
+    }
+  });
+
+  // Facebook Messenger webhook - Receives incoming messages
+  app.post('/api/webhooks/messenger', async (req: Request, res: Response) => {
+    try {
+      const { entry } = req.body;
+      
+      if (!entry || !Array.isArray(entry)) {
+        res.sendStatus(200);
+        return;
+      }
+      
+      for (const item of entry) {
+        if (item.messaging) {
+          for (const event of item.messaging) {
+            const senderId = event.sender.id;
+            const recipientId = event.recipient.id;
+            const messageData = event.message;
+            
+            if (messageData && messageData.text) {
+              console.log(`💬 Facebook message from ${senderId}: ${messageData.text}`);
+              
+              // Find or create conversation for this sender
+              const existingConversations = await storage.getAllConversations({ search: senderId });
+              let conversation = existingConversations[0];
+              
+              if (!conversation) {
+                conversation = await storage.createConversation({
+                  title: 'Facebook Messenger Enquiry',
+                  status: 'open',
+                  source: 'social',
+                  priority: 'medium',
+                  lastMessageBy: 'customer',
+                  lastMessageAt: new Date()
+                });
+              }
+              
+              // Create message
+              await storage.createConversationMessage({
+                conversationId: conversation.id,
+                type: 'message',
+                content: messageData.text,
+                direction: 'inbound',
+                fromContact: senderId,
+                platform: 'facebook_messenger',
+                externalId: messageData.mid,
+                isRead: false
+              });
+              
+              // Update conversation
+              await storage.updateConversation(conversation.id, {
+                lastMessageAt: new Date(),
+                lastMessageBy: 'customer',
+                unreadCount: (conversation.unreadCount || 0) + 1
+              });
+            }
+          }
+        }
+      }
+      
+      res.sendStatus(200);
+    } catch (error) {
+      console.error('Error processing Facebook message:', error);
+      res.sendStatus(500);
+    }
+  });
+
+  // Web form submission endpoint
+  app.post('/api/webhooks/contact-form', async (req: Request, res: Response) => {
+    try {
+      const { name, email, phone, message, serviceType, urgency } = req.body;
+      
+      console.log(`📝 Web form submission from: ${name} (${email})`);
+      
+      // Create conversation
+      const conversation = await storage.createConversation({
+        title: `Web Form: ${serviceType || 'General Enquiry'}`,
+        status: 'open',
+        source: 'web_form',
+        priority: urgency === 'immediate' ? 'urgent' : 'medium',
+        serviceType: serviceType,
+        urgency: urgency,
+        lastMessageBy: 'customer',
+        lastMessageAt: new Date()
+      });
+      
+      // Create message
+      await storage.createConversationMessage({
+        conversationId: conversation.id,
+        type: 'message',
+        content: message,
+        direction: 'inbound',
+        fromName: name,
+        fromContact: email || phone,
+        platform: 'web_form',
+        isRead: false
+      });
+      
+      res.json({ 
+        success: true, 
+        message: 'Your enquiry has been received. We\'ll contact you shortly!',
+        conversationId: conversation.id
+      });
+    } catch (error) {
+      console.error('Error processing web form:', error);
+      res.status(500).json({ success: false, message: 'Error processing form submission' });
+    }
+  });
+
+  // ========================================
   // CUSTOMER PORTAL API ROUTES  
   // ========================================
 
