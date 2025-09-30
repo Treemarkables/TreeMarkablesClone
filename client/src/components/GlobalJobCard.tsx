@@ -1410,12 +1410,12 @@ export function GlobalJobCard({
           </div>
         </div>
 
-        {/* Responsive Layout: Tabs on Mobile, Two Panels on Desktop */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Mobile Tabs - Only visible on small screens */}
-          <div className="md:hidden bg-gray-200 border-b border-gray-300 flex">
+        {/* ServiceM8-style Layout: Left Sidebar + Two Panel Content */}
+        <div className="flex-1 flex flex-col md:flex-row min-h-0">
+          {/* Horizontal Tabs on Mobile, Left Sidebar on Desktop */}
+          <div className="bg-gray-200 border-b md:border-b-0 md:border-r border-gray-300 flex md:flex-col md:w-16">
             <button
-              className={`flex-1 p-3 min-h-[44px] text-xs font-medium border-r border-gray-300 ${
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-gray-300 ${
                 sidebarTab === 'details' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
               }`}
               onClick={() => setSidebarTab('details')}
@@ -1424,7 +1424,7 @@ export function GlobalJobCard({
               Details
             </button>
             <button
-              className={`flex-1 p-3 min-h-[44px] text-xs font-medium border-r border-gray-300 ${
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-gray-300 ${
                 sidebarTab === 'billing' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
               }`}
               onClick={() => setSidebarTab('billing')}
@@ -1433,7 +1433,7 @@ export function GlobalJobCard({
               Billing
             </button>
             <button
-              className={`flex-1 p-3 min-h-[44px] text-xs font-medium ${
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b border-gray-300 ${
                 sidebarTab === 'diary' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
               }`}
               onClick={() => setSidebarTab('diary')}
@@ -1454,11 +1454,11 @@ export function GlobalJobCard({
               className="flex flex-col h-full w-full" 
               data-form="job-form"
             >
-              {/* Mobile: Single Panel (tab-based), Desktop: Two Panels Side-by-Side */}
-              <div className="flex h-full w-full">
-                {/* Left Panel - Job Details (always visible on desktop, conditional on mobile) */}
-                <div className={`flex-1 md:flex-[3] bg-white md:border-r border-gray-300 p-3 sm:p-4 overflow-y-auto ${sidebarTab !== 'details' ? 'hidden md:block' : ''}`}>
-                  {/* Details Content */}
+              {/* ServiceM8-style Two Panel Layout */}
+              <div className="flex flex-col md:flex-row h-full w-full">
+                {/* Left Panel - Job Details */}
+                <div className="flex-1 md:flex-[3] bg-white md:border-r border-gray-300 p-3 sm:p-4 overflow-y-auto md:rounded-l-lg">
+                  {sidebarTab === 'details' && (
                     <div className="space-y-4">
                       {/* ServiceM8-Style Customer Search or Create */}
                       <div className="space-y-3">
@@ -1954,12 +1954,9 @@ export function GlobalJobCard({
                         </div>
                       </div>
                     </div>
-                </div>
+                  )}
 
-                {/* Right Panel - Billing & Diary (visible on desktop when showing billing/diary, hidden on mobile when showing details) */}
-                <div className={`flex-1 md:flex-[2] bg-white p-3 sm:p-4 overflow-y-auto ${sidebarTab === 'details' ? 'hidden md:block' : sidebarTab === 'billing' ? 'block' : 'block'}`}>
-                  {/* Show Billing when billing tab is active OR on desktop when details tab is active */}
-                  {(sidebarTab === 'billing' || (sidebarTab === 'details' && !isMobile)) && (
+                  {sidebarTab === 'billing' && (
                     <div className="space-y-6">
                       {/* ServiceM8 Billing Header */}
                       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 -m-4 mb-4">
