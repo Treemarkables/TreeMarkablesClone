@@ -1229,7 +1229,7 @@ export function GlobalJobCard({
               </h1>
             </div>
             
-            {/* Right: Save Button & Auto-save Indicator */}
+            {/* Right: Close Button (Mobile), Save Button & Auto-save Indicator */}
             <div className="flex items-center gap-3">
               {/* Auto-save status */}
               {mode === 'edit' && (
@@ -1247,6 +1247,17 @@ export function GlobalJobCard({
                   ) : null}
                 </div>
               )}
+              
+              {/* Close button - Mobile only */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="md:hidden h-9 w-9 text-white hover:bg-white/20" 
+                onClick={onClose}
+                data-testid="button-close-mobile"
+              >
+                <X className="h-5 w-5" />
+              </Button>
               
               <Button 
                 variant="ghost" 
