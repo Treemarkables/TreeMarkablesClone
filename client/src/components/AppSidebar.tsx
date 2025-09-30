@@ -111,13 +111,6 @@ const businessItems = [
     isTab: false
   },
   {
-    title: "Communications",
-    url: "/communications",
-    icon: MessageSquare,
-    value: "communications",
-    isTab: false
-  },
-  {
     title: "Integrations",
     url: "/integrations",
     icon: Plug,
