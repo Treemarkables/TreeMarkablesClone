@@ -14,6 +14,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertEquipmentCheckoutSchema, insertEquipmentMaintenanceSchema } from "@shared/schema";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Truck,
   Wrench,
@@ -152,6 +153,7 @@ const getStatusIcon = (status: string) => {
 };
 
 export default function Equipment() {
+  const isMobile = useIsMobile();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -917,7 +919,8 @@ export default function Equipment() {
                   {item.status === "available" ? (
                     <Button 
                       variant="default" 
-                      size="sm" 
+                      size={isMobile ? "default" : "sm"}
+                      className={isMobile ? "h-11" : ""}
                       onClick={() => handleCheckout(item)}
                       data-testid={`button-checkout-${item.id}`}
                     >
@@ -925,19 +928,30 @@ export default function Equipment() {
                       Check Out
                     </Button>
                   ) : (
-                    <Button variant="outline" size="sm" data-testid={`button-view-${item.id}`}>
+                    <Button 
+                      variant="outline" 
+                      size={isMobile ? "default" : "sm"}
+                      className={isMobile ? "h-11" : ""}
+                      data-testid={`button-view-${item.id}`}
+                    >
                       <Eye className="h-4 w-4 mr-2" />
                       View Details
                     </Button>
                   )}
                   
                   <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" data-testid={`button-edit-${item.id}`}>
+                    <Button 
+                      variant="ghost" 
+                      size={isMobile ? "icon" : "sm"}
+                      className={isMobile ? "h-11 w-11" : ""}
+                      data-testid={`button-edit-${item.id}`}
+                    >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button 
                       variant="ghost" 
-                      size="sm" 
+                      size={isMobile ? "icon" : "sm"}
+                      className={isMobile ? "h-11 w-11" : ""}
                       onClick={() => handleMaintenance(item)}
                       data-testid={`button-maintenance-${item.id}`}
                     >
@@ -983,7 +997,8 @@ export default function Equipment() {
                           </div>
                           <div className="flex gap-2">
                             <Button 
-                              size="sm" 
+                              size={isMobile ? "default" : "sm"}
+                              className={isMobile ? "h-11" : ""}
                               onClick={() => handleCheckin(checkout)}
                               data-testid={`button-checkin-${checkout.id}`}
                             >
