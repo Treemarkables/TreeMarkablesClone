@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { User, LogOut } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
+import { useLocation } from 'wouter';
 
 interface AuthContextType {
   currentUser: Employee | null;
@@ -68,6 +69,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = userRole === 'admin';
   const isCrew = userRole === 'crew';
   const isDev = import.meta.env.DEV;
+  const [location] = useLocation();
+
+  // List of public pages where dev banner should NOT show
+  const publicPages = [
+    '/home',
+    '/tree-removal',
+    '/tree-pruning',
+    '/stump-grinding',
+    '/hedge-trimming',
+    '/blog',
+    '/summer-offer',
+    '/customer-portal',
+  ];
+  
+  // Check if current page is public or a viewer page (proposal, quote, invoice)
+  const isPublicPage = publicPages.includes(location) || 
+                      location.startsWith('/blog/') ||
+                      location.startsWith('/proposal/') ||
+                      location.startsWith('/quote/') ||
+                      location.startsWith('/invoice/');
+  
+  // Only show dev banner in dev mode AND on internal dashboard pages
+  const showDevBanner = isDev && !isPublicPage;
 
   return (
     <AuthContext.Provider
@@ -80,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       <div className="flex flex-col h-screen">
-        {isDev && (
+        {showDevBanner && (
           <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <User className="w-4 h-4" />
