@@ -61,7 +61,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, ilike, and, gte, lte, desc, sql } from "drizzle-orm";
+import { eq, ilike, and, gte, lte, lt, gt, ne, desc, sql } from "drizzle-orm";
 import * as schema from "@shared/schema";
 
 // modify the interface with any CRUD methods
@@ -2137,25 +2137,25 @@ class DatabaseStorage implements IStorage {
     const conflicts: {employeeId: string; conflicts: JobStaffAssignment[]}[] = [];
     
     for (const employeeId of employeeIds) {
-      // Find assignments that overlap with the requested time period
-      let query = db.select().from(schema.jobStaffAssignments)
-        .where(
-          and(
-            eq(schema.jobStaffAssignments.employeeId, employeeId),
-            // Check for time overlap: assignment starts before requested end AND ends after requested start
-            sql`${schema.jobStaffAssignments.startTime} < ${endTime}`,
-            sql`${schema.jobStaffAssignments.endTime} > ${startTime}`,
-            // Only include active assignments
-            sql`${schema.jobStaffAssignments.status} != 'cancelled'`
-          )
-        );
+      // Build conditions array for proper time overlap detection
+      const conditions = [
+        eq(schema.jobStaffAssignments.employeeId, employeeId),
+        // Check for time overlap: assignment starts before requested end AND ends after requested start
+        lt(schema.jobStaffAssignments.startTime, endTime),
+        gt(schema.jobStaffAssignments.endTime, startTime),
+        // Only include active assignments
+        ne(schema.jobStaffAssignments.status, 'cancelled' as any)
+      ];
 
-      // Exclude assignments from the current job if editing
+      // Add exclude condition if provided
       if (excludeJobId) {
-        query = query.where(sql`${schema.jobStaffAssignments.jobId} != ${excludeJobId}`);
+        conditions.push(ne(schema.jobStaffAssignments.jobId, excludeJobId));
       }
 
-      const employeeConflicts = await query;
+      // Find assignments that overlap with the requested time period
+      const employeeConflicts = await db.select()
+        .from(schema.jobStaffAssignments)
+        .where(and(...conditions));
       
       if (employeeConflicts.length > 0) {
         conflicts.push({ employeeId, conflicts: employeeConflicts });
