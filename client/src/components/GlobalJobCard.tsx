@@ -1017,9 +1017,13 @@ export function GlobalJobCard({
       const [year, month, day] = schedulingData.date.split('-').map(Number);
       const [hours, minutes] = schedulingData.startTime.split(':').map(Number);
       
-      // Create Date in UTC to preserve the exact date/time entered
-      // This prevents timezone conversion issues
-      const startTime = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+      // Create Date in local timezone, then manually adjust to get the ISO string
+      // that represents the same clock time in UTC (which will display correctly in local time)
+      const localDate = new Date(year, month - 1, day, hours, minutes);
+      
+      // Get timezone offset and adjust the time
+      const timezoneOffsetMs = localDate.getTimezoneOffset() * 60000;
+      const startTime = new Date(localDate.getTime() - timezoneOffsetMs);
       const endTime = new Date(startTime.getTime() + parseInt(schedulingData.duration) * 60000);
 
       // Create staff assignments
