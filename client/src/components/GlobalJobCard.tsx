@@ -151,6 +151,8 @@ export function GlobalJobCard({
   // Auto-save state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
+  const isLoadingDataRef = React.useRef(false);
+  const hasUserChangedRef = React.useRef(false);
 
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
@@ -455,7 +457,9 @@ export function GlobalJobCard({
   // Populate form with complete job data when editing an existing job
   useEffect(() => {
     if (editingJob && editingJob.id) {
-      // Wait for job data to be fully loaded before resetting form
+      // Mark that we're loading data to prevent auto-save
+      isLoadingDataRef.current = true;
+      hasUserChangedRef.current = false;
       
       // Split customer name into first and last name for form fields
       const nameParts = editingJobCustomer?.name?.split(' ') || [];
@@ -501,6 +505,11 @@ export function GlobalJobCard({
       if (editingJobCustomer?.name) {
         setSelectedCustomerName(editingJobCustomer.name);
       }
+      
+      // Reset loading flag after a small delay to ensure all form updates are done
+      setTimeout(() => {
+        isLoadingDataRef.current = false;
+      }, 100);
     }
   }, [editingJob, editingJobCustomer, form, replaceLineItems]);
 
@@ -528,6 +537,14 @@ export function GlobalJobCard({
     let timeoutId: NodeJS.Timeout;
     
     const subscription = form.watch(() => {
+      // Skip auto-save if we're currently loading data from the server
+      if (isLoadingDataRef.current) {
+        return;
+      }
+      
+      // Mark that the user has made a change
+      hasUserChangedRef.current = true;
+      
       // Clear existing timeout
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -535,6 +552,11 @@ export function GlobalJobCard({
       
       // Set new timeout for auto-save
       timeoutId = setTimeout(async () => {
+        // Only auto-save if the user actually changed something
+        if (!hasUserChangedRef.current) {
+          return;
+        }
+        
         try {
           setIsAutoSaving(true);
           const formData = form.getValues();
@@ -550,8 +572,10 @@ export function GlobalJobCard({
           
           await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
           setLastAutoSaveTime(new Date());
-          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+          hasUserChangedRef.current = false;
+          
+          // Don't invalidate queries on auto-save to prevent refetching
+          // This avoids the infinite loop of save -> refetch -> form reset -> save
           
           toast({
             title: "Auto-saved",
@@ -560,6 +584,7 @@ export function GlobalJobCard({
           });
         } catch (error) {
           console.error('Auto-save failed:', error);
+          hasUserChangedRef.current = false;
         } finally {
           setIsAutoSaving(false);
         }
