@@ -132,8 +132,8 @@ export default function ConversationDetail() {
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b bg-white">
-        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+      <div className="flex items-center justify-between px-3 sm:px-4 py-4 border-b bg-white">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <Button 
             variant="ghost" 
             size="icon"
@@ -143,36 +143,24 @@ export default function ConversationDetail() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <Avatar className="h-9 w-9 sm:h-10 sm:w-10 bg-gray-200 flex-shrink-0">
-            <AvatarFallback className="text-gray-600 font-medium text-sm">
-              {getInitials(conversation.title)}
-            </AvatarFallback>
-          </Avatar>
           <div className="flex-1 min-w-0">
-            <h1 className="font-semibold text-sm sm:text-base text-gray-900 truncate" data-testid="text-conversation-title">
+            <h1 className="font-bold text-lg sm:text-xl text-gray-900 truncate" data-testid="text-conversation-title">
               {conversation.title}
             </h1>
-            <p className="text-[10px] sm:text-xs text-gray-500 truncate">
+            <p className="text-xs sm:text-sm text-gray-500 truncate capitalize">
               {conversation.source}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-          <Button variant="ghost" size="icon" className="hidden sm:flex" data-testid="button-call">
-            <Phone className="h-5 w-5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="hidden sm:flex" data-testid="button-video">
-            <Video className="h-5 w-5" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => setShowManageMenu(true)}
-            data-testid="button-more"
-          >
-            <MoreVertical className="h-5 w-5" />
-          </Button>
-        </div>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          className="flex-shrink-0"
+          onClick={() => setShowManageMenu(true)}
+          data-testid="button-more"
+        >
+          <MoreVertical className="h-5 w-5" />
+        </Button>
       </div>
 
       {/* Messages */}
