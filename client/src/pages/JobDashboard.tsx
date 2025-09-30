@@ -87,7 +87,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   // Jobs pagination and search state
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [currentJobPage, setCurrentJobPage] = useState(1);
-  const [jobsPerPage, setJobsPerPage] = useState(12); // Show 12 jobs per page for good performance
+  const [jobsPerPage, setJobsPerPage] = useState(100); // Show 100 jobs per page by default
   
   // Bulk selection state
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
@@ -678,96 +678,98 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                 </div>
               )}
               
-              {/* Pagination info and controls */}
-              {allDisplayJobs.length > 0 && (
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t">
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground" data-testid="text-jobs-showing">
-                        Showing {startIndex + 1}-{Math.min(endIndex, filteredJobs.length)} of {filteredJobs.length.toLocaleString()} 
-                        {jobSearchQuery ? ' filtered' : ''} jobs
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Total: {allDisplayJobs.length.toLocaleString()} jobs in database
-                      </p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <label className="text-xs text-muted-foreground">Jobs per page:</label>
-                        <Select value={jobsPerPage.toString()} onValueChange={(value) => { setJobsPerPage(parseInt(value)); setCurrentJobPage(1); }}>
-                          <SelectTrigger className="w-20 h-8 text-xs" data-testid="select-jobs-per-page">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="12">12</SelectItem>
-                            <SelectItem value="20">20</SelectItem>
-                            <SelectItem value="50">50</SelectItem>
-                            <SelectItem value="100">100</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    
-                    {/* Pagination controls */}
-                    {totalPages > 1 && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentJobPage(prev => Math.max(prev - 1, 1))}
-                          disabled={currentJobPage === 1}
-                          data-testid="button-prev-page"
-                        >
-                          Previous
-                        </Button>
-                        
-                        <div className="flex items-center gap-1">
-                          {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                            const pageNum = currentJobPage <= 3 ? i + 1 : currentJobPage - 2 + i;
-                            if (pageNum > totalPages) return null;
-                            
-                            return (
-                              <Button
-                                key={pageNum}
-                                variant={pageNum === currentJobPage ? "default" : "ghost"}
-                                size="sm"
-                                onClick={() => setCurrentJobPage(pageNum)}
-                                className="w-8"
-                                data-testid={`button-page-${pageNum}`}
-                              >
-                                {pageNum}
-                              </Button>
-                            );
-                          })}
-                          
-                          {totalPages > 5 && currentJobPage < totalPages - 2 && (
-                            <>
-                              <span className="text-muted-foreground">...</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setCurrentJobPage(totalPages)}
-                                className="w-8"
-                                data-testid={`button-page-${totalPages}`}
-                              >
-                                {totalPages}
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentJobPage(prev => Math.min(prev + 1, totalPages))}
-                          disabled={currentJobPage === totalPages}
-                          data-testid="button-next-page"
-                        >
-                          Next
-                        </Button>
-                      </div>
+              {/* Pagination info and controls - Always show dropdown */}
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t">
+                  <div className="space-y-1">
+                    {allDisplayJobs.length > 0 && (
+                      <>
+                        <p className="text-sm text-muted-foreground" data-testid="text-jobs-showing">
+                          Showing {startIndex + 1}-{Math.min(endIndex, filteredJobs.length)} of {filteredJobs.length.toLocaleString()} 
+                          {jobSearchQuery ? ' filtered' : ''} jobs
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Total: {allDisplayJobs.length.toLocaleString()} jobs in database
+                        </p>
+                      </>
                     )}
+                    <div className="flex items-center gap-2 mt-2">
+                      <label className="text-xs text-muted-foreground">Jobs per page:</label>
+                      <Select value={jobsPerPage.toString()} onValueChange={(value) => { setJobsPerPage(parseInt(value)); setCurrentJobPage(1); }}>
+                        <SelectTrigger className="w-20 h-8 text-xs" data-testid="select-jobs-per-page">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="12">12</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+                  
+                  {/* Pagination controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentJobPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentJobPage === 1}
+                        data-testid="button-prev-page"
+                      >
+                        Previous
+                      </Button>
+                      
+                      <div className="flex items-center gap-1">
+                        {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                          const pageNum = currentJobPage <= 3 ? i + 1 : currentJobPage - 2 + i;
+                          if (pageNum > totalPages) return null;
+                          
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={pageNum === currentJobPage ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => setCurrentJobPage(pageNum)}
+                              className="w-8"
+                              data-testid={`button-page-${pageNum}`}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                        
+                        {totalPages > 5 && currentJobPage < totalPages - 2 && (
+                          <>
+                            <span className="text-muted-foreground">...</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setCurrentJobPage(totalPages)}
+                              className="w-8"
+                              data-testid={`button-page-${totalPages}`}
+                            >
+                              {totalPages}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentJobPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentJobPage === totalPages}
+                        data-testid="button-next-page"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </TabsContent>
 
