@@ -5301,7 +5301,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   app.put('/api/employees/:id', async (req: Request, res: Response) => {
     try {
       const validatedData = updateEmployeeSchema.parse(req.body);
-      const employee = await storage.updateEmployee(req.params.id, validatedData);
+      
+      // Convert hireDate string to Date object if it's a string
+      const dataToUpdate = { ...validatedData };
+      if (dataToUpdate.hireDate && typeof dataToUpdate.hireDate === 'string') {
+        dataToUpdate.hireDate = new Date(dataToUpdate.hireDate);
+      }
+      
+      const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
       res.json({
         success: true,
         data: employee,
