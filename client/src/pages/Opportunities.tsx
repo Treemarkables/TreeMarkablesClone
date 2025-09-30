@@ -205,22 +205,22 @@ export default function Opportunities() {
                 </div>
 
                 {/* Conversation Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="font-semibold text-gray-900 truncate" data-testid={`text-name-${conversation.id}`}>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <div className="flex items-baseline gap-2">
+                    <h3 className="font-semibold text-gray-900 truncate flex-1 min-w-0" data-testid={`text-name-${conversation.id}`}>
                       {conversation.title}
                     </h3>
-                    <span className="text-xs text-gray-500 flex-shrink-0" data-testid={`text-date-${conversation.id}`}>
+                    <span className="text-xs text-gray-500 flex-shrink-0 ml-auto" data-testid={`text-date-${conversation.id}`}>
                       {formatDate(conversation.lastMessageAt || conversation.createdAt || new Date())}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-2 mt-0.5">
-                    <p className="text-sm text-gray-600 truncate" data-testid={`text-preview-${conversation.id}`}>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-sm text-gray-600 truncate flex-1 min-w-0" data-testid={`text-preview-${conversation.id}`}>
                       {truncateMessage(conversation.title)}
                     </p>
                     {conversation.unreadCount && conversation.unreadCount > 0 && (
                       <div 
-                        className="flex-shrink-0 bg-green-500 text-white text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center"
+                        className="flex-shrink-0 bg-green-500 text-white text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center ml-auto"
                         data-testid={`badge-unread-${conversation.id}`}
                       >
                         {conversation.unreadCount}
