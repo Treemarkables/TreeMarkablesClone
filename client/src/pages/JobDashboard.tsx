@@ -17,7 +17,6 @@ import Opportunities from './Opportunities';
 import Integrations from './Integrations';
 import { WeatherDashboard } from '@/components/WeatherDashboard';
 import QuoteManagement from '@/components/QuoteManagement';
-import { LeadEnhancement } from '@/components/LeadEnhancement';
 import { DispatchBoard } from '@/components/DispatchBoard';
 import { SafetyReporting } from '@/components/SafetyReporting';
 import JobTemplateManagement from '@/components/JobTemplateManagement';
@@ -775,11 +774,6 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
           {/* Pipeline Tab */}
           <TabsContent value="pipeline" className="flex-1 overflow-auto">
             <Pipeline />
-          </TabsContent>
-
-          {/* Leads Tab */}
-          <TabsContent value="leads" className="flex-1 overflow-auto">
-            <LeadEnhancement />
           </TabsContent>
 
           {/* Customers Tab */}

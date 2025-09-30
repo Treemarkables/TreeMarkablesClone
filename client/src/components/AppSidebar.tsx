@@ -65,13 +65,6 @@ const dashboardItems = [
     isTab: false
   },
   {
-    title: "Leads",
-    url: "/job-dashboard", 
-    icon: Target,
-    value: "leads",
-    isTab: true
-  },
-  {
     title: "Customers",
     url: "/job-dashboard",
     icon: Users,
