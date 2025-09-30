@@ -1165,7 +1165,7 @@ export function GlobalJobCard({
             </div>
             
             {/* Right: Save Buttons */}
-            <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-2 mr-12 sm:mr-0">
               <Button 
                 variant="outline" 
                 size="sm" 
