@@ -97,6 +97,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // Only show dev banner in dev mode AND on internal dashboard pages
   const showDevBanner = isDev && !isPublicPage;
+  
+  // Debug logging
+  if (isDev) {
+    console.log('Auth Debug:', { location, pathname, isPublicPage, showDevBanner });
+  }
 
   return (
     <AuthContext.Provider
