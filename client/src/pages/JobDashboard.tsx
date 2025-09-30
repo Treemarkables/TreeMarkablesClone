@@ -796,11 +796,6 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
             <EquipmentTracker />
           </TabsContent>
 
-          {/* Communications Tab */}
-          <TabsContent value="communications" className="flex-1 overflow-hidden">
-            <Opportunities />
-          </TabsContent>
-
           {/* Weather Tab */}
           <TabsContent value="weather" className="flex-1 overflow-auto">
             <div className="space-y-4 w-full max-w-full overflow-hidden min-w-0">
