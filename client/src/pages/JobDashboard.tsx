@@ -19,7 +19,6 @@ import { WeatherDashboard } from '@/components/WeatherDashboard';
 import QuoteManagement from '@/components/QuoteManagement';
 import { LeadEnhancement } from '@/components/LeadEnhancement';
 import { DispatchBoard } from '@/components/DispatchBoard';
-import { JobDiary } from '@/components/JobDiary';
 import { SafetyReporting } from '@/components/SafetyReporting';
 import JobTemplateManagement from '@/components/JobTemplateManagement';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
