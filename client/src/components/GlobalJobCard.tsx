@@ -525,9 +525,16 @@ export function GlobalJobCard({
   useEffect(() => {
     if (mode !== 'edit' || !editingJob?.id) return;
     
-    const subscription = form.watch(async (values) => {
-      // Debounce auto-save
-      const timeoutId = setTimeout(async () => {
+    let timeoutId: NodeJS.Timeout;
+    
+    const subscription = form.watch(() => {
+      // Clear existing timeout
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
+      // Set new timeout for auto-save
+      timeoutId = setTimeout(async () => {
         try {
           setIsAutoSaving(true);
           const formData = form.getValues();
@@ -557,11 +564,14 @@ export function GlobalJobCard({
           setIsAutoSaving(false);
         }
       }, 2000); // 2 second debounce
-      
-      return () => clearTimeout(timeoutId);
     });
     
-    return () => subscription.unsubscribe();
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      subscription.unsubscribe();
+    };
   }, [form, mode, editingJob?.id, toast, queryClient]);
 
   const formData = form.watch();
