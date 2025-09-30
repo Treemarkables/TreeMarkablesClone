@@ -3,6 +3,13 @@ import express from "express";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
 import { z } from "zod";
+
+// Extend Express Session to include employeeId
+declare module 'express-session' {
+  interface SessionData {
+    employeeId?: string;
+  }
+}
 import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
@@ -233,12 +240,12 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
 // Middleware to require admin role for protected endpoints
 async function requireAdmin(req: Request, res: Response, next: express.NextFunction): Promise<void> {
   try {
-    const employeeId = req.headers['x-employee-id'] as string;
+    const employeeId = req.session.employeeId;
     
     if (!employeeId) {
       res.status(403).json({ 
         success: false, 
-        message: 'Admin access required' 
+        message: 'Admin access required. Please log in.' 
       });
       return;
     }
@@ -264,6 +271,118 @@ async function requireAdmin(req: Request, res: Response, next: express.NextFunct
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ========================================
+  // AUTHENTICATION ENDPOINTS
+  // ========================================
+
+  // POST /api/auth/login - Create server-side session with employee ID
+  app.post('/api/auth/login', async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.body;
+
+      if (!employeeId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee ID is required'
+        });
+      }
+
+      // Verify employee exists
+      const employee = await storage.getEmployee(employeeId);
+
+      if (!employee) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid employee ID'
+        });
+      }
+
+      // Create server-side session
+      req.session.employeeId = employeeId;
+
+      res.json({
+        success: true,
+        data: {
+          id: employee.id,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          email: employee.email,
+          role: employee.role,
+          phone: employee.phone,
+          status: employee.status
+        }
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Login failed'
+      });
+    }
+  });
+
+  // GET /api/auth/me - Get currently authenticated employee from session
+  app.get('/api/auth/me', async (req: Request, res: Response) => {
+    try {
+      const employeeId = req.session.employeeId;
+
+      if (!employeeId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Not authenticated'
+        });
+      }
+
+      const employee = await storage.getEmployee(employeeId);
+
+      if (!employee) {
+        // Session has invalid employee ID, clear it
+        req.session.destroy(() => {});
+        return res.status(401).json({
+          success: false,
+          message: 'Employee not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: employee.id,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          email: employee.email,
+          role: employee.role,
+          phone: employee.phone,
+          status: employee.status
+        }
+      });
+    } catch (error) {
+      console.error('Auth check error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Authentication check failed'
+      });
+    }
+  });
+
+  // POST /api/auth/logout - Destroy session
+  app.post('/api/auth/logout', (req: Request, res: Response) => {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Logout error:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Logout failed'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Logged out successfully'
+      });
+    });
+  });
+
   // SEO routes - serve sitemap.xml and robots.txt
   app.get('/sitemap.xml', (req: Request, res: Response) => {
     try {
