@@ -157,17 +157,26 @@ interface AllocationSuggestion {
   conflicts: ResourceConflict[];
 }
 
+// Unique color palette for each staff member
+const staffColorPalette = [
+  'bg-emerald-500',  // Green
+  'bg-blue-500',     // Blue
+  'bg-purple-500',   // Purple
+  'bg-orange-500',   // Orange
+  'bg-teal-500',     // Teal
+  'bg-pink-500',     // Pink
+  'bg-indigo-500',   // Indigo
+  'bg-rose-500',     // Rose
+  'bg-cyan-500',     // Cyan
+  'bg-amber-500',    // Amber
+  'bg-violet-500',   // Violet
+  'bg-lime-500',     // Lime
+];
+
 // Function to transform Employee data to StaffMember format for dispatch board
-const transformEmployeeToStaffMember = (employee: Employee): StaffMember => {
-  // Map role-based colors
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'owner': return 'bg-purple-500';
-      case 'office_staff': return 'bg-blue-500';
-      case 'crew': return 'bg-green-500';
-      default: return 'bg-gray-500';
-    }
-  };
+const transformEmployeeToStaffMember = (employee: Employee, index: number): StaffMember => {
+  // Assign unique color to each staff member
+  const color = staffColorPalette[index % staffColorPalette.length];
 
   // Map status from employee to dispatch format
   const getDispatchStatus = (status: string): 'available' | 'busy' | 'offline' => {
@@ -185,7 +194,7 @@ const transformEmployeeToStaffMember = (employee: Employee): StaffMember => {
     role: employee.position || 'crew',
     skills: employee.skills || [],
     status: getDispatchStatus(employee.status),
-    color: getRoleColor(employee.role || 'crew')
+    color: color
   };
 };
 
@@ -343,7 +352,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const staffMembers = useMemo(() => {
     return employees
       .filter(emp => emp.isActive === true) // Only show active employees
-      .map(transformEmployeeToStaffMember);
+      .map((emp, index) => transformEmployeeToStaffMember(emp, index));
   }, [employees]);
 
   // Fetch job templates for template selection
@@ -1245,10 +1254,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 ) : (
                   // Individual Staff Mode - exact height match with calendar rows
                   staffMembers.map((staff: StaffMember) => {
+                    const staffJobs = getJobsForStaff(staff.id);
+                    const hasJobs = staffJobs.length > 0;
+                    
                     return (
                       <div
                         key={staff.id}
-                        className={`flex items-center gap-2 h-11 rounded-md hover-elevate cursor-pointer px-2 border-l-4 ${staff.color.replace('bg-', 'border-l-')}`}
+                        className={`flex items-center gap-2 h-11 rounded-md hover-elevate cursor-pointer px-2 border-l-4 ${staff.color.replace('bg-', 'border-l-')} ${!hasJobs ? 'opacity-40' : ''}`}
                         data-testid={`staff-${staff.id}`}
                       >
                         <Avatar className="h-7 w-7">
@@ -1352,10 +1364,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     // Individual Staff Mode
                     staffMembers.map((staff: StaffMember) => {
                       const staffJobs = getJobsForStaff(staff.id);
+                      const hasJobs = staffJobs.length > 0;
+                      
                       return (
                         <div key={staff.id} className="relative h-11" data-testid={`staff-row-${staff.id}`}>
                           {/* Time Grid Background */}
-                          <div className="grid grid-cols-12 gap-1 h-full absolute inset-0 z-0">
+                          <div className={`grid grid-cols-12 gap-1 h-full absolute inset-0 z-0 ${!hasJobs ? 'opacity-30' : ''}`}>
                             {timeSlots.map((time) => (
                               <div
                                 key={`${staff.id}-${time}`}
