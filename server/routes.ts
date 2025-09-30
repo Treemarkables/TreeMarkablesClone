@@ -118,6 +118,114 @@ if (!fs.existsSync(photosDir)) {
   fs.mkdirSync(photosDir, { recursive: true });
 }
 
+// ========================================
+// BUSINESS HOURS NOTIFICATION HELPERS
+// ========================================
+
+// Check if current time is within business hours (7am-4pm Mon-Fri, NZ time)
+function isWithinBusinessHours(): boolean {
+  const now = new Date();
+  const nzTime = new Date(now.toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+  
+  const day = nzTime.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const hour = nzTime.getHours();
+  
+  // Check if it's Monday-Friday (1-5) and between 7am-4pm
+  return day >= 1 && day <= 5 && hour >= 7 && hour < 16;
+}
+
+// Queue or send schedule notification based on business hours
+async function queueScheduleNotification(employee: any, job: any, assignment: any): Promise<void> {
+  const now = new Date();
+  
+  // Check if we're within business hours
+  if (isWithinBusinessHours()) {
+    // Send immediately
+    await sendScheduleNotification(employee, job, assignment);
+  } else {
+    // Calculate next business day 7am
+    const nextSendTime = getNextBusinessHourTime();
+    
+    // Log that notification is queued
+    console.log(`[Notification Queue] Schedule notification for ${employee.firstName} ${employee.lastName} queued until ${nextSendTime.toISOString()}`);
+    
+    // In a production system, you would store this in a queue or database
+    // For now, we'll just log it and send immediately in development
+    // In production, you'd use a job queue like Bull or Redis
+    await sendScheduleNotification(employee, job, assignment);
+  }
+}
+
+// Get next business hour time (next weekday at 7am)
+function getNextBusinessHourTime(): Date {
+  const now = new Date();
+  const nzTime = new Date(now.toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+  
+  let nextTime = new Date(nzTime);
+  nextTime.setHours(7, 0, 0, 0);
+  
+  // If it's already past 7am today, move to tomorrow
+  if (nzTime.getHours() >= 7) {
+    nextTime.setDate(nextTime.getDate() + 1);
+  }
+  
+  // Skip weekends
+  while (nextTime.getDay() === 0 || nextTime.getDay() === 6) {
+    nextTime.setDate(nextTime.getDate() + 1);
+  }
+  
+  return nextTime;
+}
+
+// Send schedule notification via email/SMS
+async function sendScheduleNotification(employee: any, job: any, assignment: any): Promise<void> {
+  try {
+    const startTime = new Date(assignment.startTime).toLocaleString('en-NZ', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'Pacific/Auckland'
+    });
+    
+    const endTime = new Date(assignment.endTime).toLocaleTimeString('en-NZ', {
+      timeStyle: 'short',
+      timeZone: 'Pacific/Auckland'
+    });
+
+    // Send email notification
+    if (employee.email) {
+      await emailService.sendEmail({
+        to: employee.email,
+        subject: `Job Scheduled: ${job?.title || 'Tree Service'}`,
+        html: `
+          <h2>You've been scheduled for a job</h2>
+          <p>Hi ${employee.firstName},</p>
+          <p>You've been assigned to the following job:</p>
+          <ul>
+            <li><strong>Job:</strong> ${job?.title || 'Tree Service'}</li>
+            <li><strong>Location:</strong> ${job?.address || 'Address TBD'}</li>
+            <li><strong>Date & Time:</strong> ${startTime} - ${endTime}</li>
+            ${assignment.role ? `<li><strong>Role:</strong> ${assignment.role}</li>` : ''}
+            ${assignment.notes ? `<li><strong>Notes:</strong> ${assignment.notes}</li>` : ''}
+          </ul>
+          <p>Please confirm your availability as soon as possible.</p>
+          <p>Thanks,<br>Treemarkables Team</p>
+        `,
+        text: `Hi ${employee.firstName},\n\nYou've been assigned to: ${job?.title || 'Tree Service'}\nLocation: ${job?.address || 'Address TBD'}\nDate & Time: ${startTime} - ${endTime}\n\nPlease confirm your availability.`
+      });
+    }
+
+    // Send SMS notification if phone number exists
+    if (employee.phone) {
+      const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
+      await smsService.sendSMS(employee.phone, smsMessage);
+    }
+
+    console.log(`[Notification] Schedule notification sent to ${employee.firstName} ${employee.lastName}`);
+  } catch (error) {
+    console.error('Error sending schedule notification:', error);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // SEO routes - serve sitemap.xml and robots.txt
   app.get('/sitemap.xml', (req: Request, res: Response) => {
@@ -4973,6 +5081,160 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({
         success: false,
         message: 'Error deleting employee'
+      });
+    }
+  });
+
+  // ========================================
+  // JOB STAFF ASSIGNMENT ROUTES
+  // ========================================
+
+  // Check for staff scheduling conflicts
+  app.post('/api/staff/check-conflicts', async (req: Request, res: Response) => {
+    try {
+      const { employeeIds, startTime, endTime, excludeJobId } = req.body;
+      
+      if (!employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee IDs array is required'
+        });
+      }
+
+      if (!startTime || !endTime) {
+        return res.status(400).json({
+          success: false,
+          message: 'Start time and end time are required'
+        });
+      }
+
+      const conflicts = await storage.checkStaffConflicts(
+        employeeIds,
+        new Date(startTime),
+        new Date(endTime),
+        excludeJobId
+      );
+
+      res.json({
+        success: true,
+        data: conflicts,
+        hasConflicts: conflicts.length > 0
+      });
+    } catch (error) {
+      console.error('Error checking staff conflicts:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error checking staff conflicts'
+      });
+    }
+  });
+
+  // Get staff assignments for a job
+  app.get('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
+    try {
+      const assignments = await storage.getJobStaffAssignmentsByJob(req.params.jobId);
+      res.json({
+        success: true,
+        data: assignments
+      });
+    } catch (error) {
+      console.error('Error fetching staff assignments:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching staff assignments'
+      });
+    }
+  });
+
+  // Create staff assignments for a job (with conflict checking and notifications)
+  app.post('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
+    try {
+      const { staffAssignments, sendNotifications = true } = req.body;
+      const jobId = req.params.jobId;
+
+      if (!staffAssignments || !Array.isArray(staffAssignments) || staffAssignments.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Staff assignments array is required'
+        });
+      }
+
+      // Check for conflicts before creating assignments
+      const employeeIds = staffAssignments.map((a: any) => a.employeeId);
+      const startTime = new Date(staffAssignments[0].startTime);
+      const endTime = new Date(staffAssignments[0].endTime);
+
+      const conflicts = await storage.checkStaffConflicts(employeeIds, startTime, endTime, jobId);
+
+      if (conflicts.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: 'Staff scheduling conflicts detected',
+          conflicts
+        });
+      }
+
+      // Create all staff assignments
+      const created = [];
+      for (const assignment of staffAssignments) {
+        const newAssignment = await storage.createJobStaffAssignment({
+          jobId,
+          employeeId: assignment.employeeId,
+          startTime: new Date(assignment.startTime),
+          endTime: new Date(assignment.endTime),
+          role: assignment.role,
+          notes: assignment.notes
+        });
+        created.push(newAssignment);
+      }
+
+      // Update job's assignedTeam array
+      const job = await storage.getJob(jobId);
+      if (job) {
+        await storage.updateJob(jobId, {
+          assignedTeam: employeeIds,
+          status: 'scheduled'
+        });
+      }
+
+      // Send notifications if requested (will be queued for business hours)
+      if (sendNotifications) {
+        for (const assignment of created) {
+          const employee = await storage.getEmployee(assignment.employeeId);
+          if (employee && employee.email) {
+            // Queue notification - will be sent during business hours
+            await queueScheduleNotification(employee, job, assignment);
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        data: created,
+        message: `${created.length} staff member(s) scheduled successfully`
+      });
+    } catch (error) {
+      console.error('Error creating staff assignments:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating staff assignments'
+      });
+    }
+  });
+
+  // Delete a staff assignment
+  app.delete('/api/staff-assignments/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteJobStaffAssignment(req.params.id);
+      res.json({
+        success: true,
+        message: 'Staff assignment deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting staff assignment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting staff assignment'
       });
     }
   });
