@@ -509,12 +509,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const jobAssignments: JobAssignment[] = [];
     const processedJobs = new Set<string>();
 
-    console.log('🔍 DISPATCH BOARD DEBUG:', {
-      staffAssignmentsCount: staffAssignmentsData?.data?.length || 0,
-      jobsDataCount: jobsData?.data?.length || 0,
-      sampleAssignment: staffAssignmentsData?.data?.[0]
-    });
-
     // First, process all jobs with staff assignments
     if (staffAssignmentsData?.data && staffAssignmentsData.data.length > 0) {
       // Group assignments by job and date
@@ -556,7 +550,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           }
         }
 
-        const jobAssignment = {
+        jobAssignments.push({
           id: apiJob.id,
           jobId: apiJob.jobNumber,
           customerId: apiJob.customerId,
@@ -575,16 +569,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           teamId: teamId,
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions
-        };
-        
-        console.log('📅 Created job assignment:', {
-          jobId: jobAssignment.id.slice(0, 8),
-          customerName: jobAssignment.customerName,
-          startTime: jobAssignment.startTime,
-          assignedTeam: jobAssignment.assignedTeam.map(id => id.slice(0, 8))
         });
-        
-        jobAssignments.push(jobAssignment);
       });
     }
 
@@ -1327,15 +1312,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           {/* Job Blocks */}
                           <div className="relative h-full z-10">
                             {teamJobs.map((job) => {
-                              const jobStart = new Date(job.startTime);
-                              const jobEnd = new Date(job.endTime);
-                              const dayStart = new Date(selectedDate);
-                              dayStart.setHours(7, 0, 0, 0); // 7:00 AM start
+                              // Parse time directly from ISO string to avoid timezone conversion
+                              // ISO format: "2025-10-23T09:00:00.000Z"
+                              const startTimeMatch = job.startTime.match(/T(\d{2}):(\d{2})/);
+                              const endTimeMatch = job.endTime.match(/T(\d{2}):(\d{2})/);
                               
-                              const startHour = jobStart.getHours();
-                              const startMinutes = jobStart.getMinutes();
-                              const endHour = jobEnd.getHours();
-                              const endMinutes = jobEnd.getMinutes();
+                              const startHour = startTimeMatch ? parseInt(startTimeMatch[1]) : 0;
+                              const startMinutes = startTimeMatch ? parseInt(startTimeMatch[2]) : 0;
+                              const endHour = endTimeMatch ? parseInt(endTimeMatch[1]) : 0;
+                              const endMinutes = endTimeMatch ? parseInt(endTimeMatch[2]) : 0;
                               
                               // Calculate position and width as percentage of the 12-hour grid (7 AM to 7 PM)
                               const totalMinutes = 12 * 60; // 7 AM to 7 PM = 12 hours = 720 minutes
@@ -1390,15 +1375,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           {/* Job Blocks */}
                           <div className="relative h-full z-10">
                             {staffJobs.map((job) => {
-                              const jobStart = new Date(job.startTime);
-                              const jobEnd = new Date(job.endTime);
-                              const dayStart = new Date(selectedDate);
-                              dayStart.setHours(7, 0, 0, 0); // 7:00 AM start
+                              // Parse time directly from ISO string to avoid timezone conversion
+                              // ISO format: "2025-10-23T09:00:00.000Z"
+                              const startTimeMatch = job.startTime.match(/T(\d{2}):(\d{2})/);
+                              const endTimeMatch = job.endTime.match(/T(\d{2}):(\d{2})/);
                               
-                              const startHour = jobStart.getHours();
-                              const startMinutes = jobStart.getMinutes();
-                              const endHour = jobEnd.getHours();
-                              const endMinutes = jobEnd.getMinutes();
+                              const startHour = startTimeMatch ? parseInt(startTimeMatch[1]) : 0;
+                              const startMinutes = startTimeMatch ? parseInt(startTimeMatch[2]) : 0;
+                              const endHour = endTimeMatch ? parseInt(endTimeMatch[1]) : 0;
+                              const endMinutes = endTimeMatch ? parseInt(endTimeMatch[2]) : 0;
                               
                               // Calculate position and width as percentage of the 12-hour grid (7 AM to 7 PM)
                               const totalMinutes = 12 * 60; // 7 AM to 7 PM = 12 hours = 720 minutes

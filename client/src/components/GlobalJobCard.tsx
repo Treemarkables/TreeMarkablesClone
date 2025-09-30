@@ -1017,20 +1017,21 @@ export function GlobalJobCard({
       const [year, month, day] = schedulingData.date.split('-').map(Number);
       const [hours, minutes] = schedulingData.startTime.split(':').map(Number);
       
-      // Create Date in local timezone, then manually adjust to get the ISO string
-      // that represents the same clock time in UTC (which will display correctly in local time)
-      const localDate = new Date(year, month - 1, day, hours, minutes);
+      // Create ISO string that preserves the local date/time as-is
+      // Format: YYYY-MM-DDTHH:MM:00.000Z
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00.000Z`;
+      const startTimeISO = `${dateStr}T${timeStr}`;
       
-      // Get timezone offset and adjust the time
-      const timezoneOffsetMs = localDate.getTimezoneOffset() * 60000;
-      const startTime = new Date(localDate.getTime() - timezoneOffsetMs);
-      const endTime = new Date(startTime.getTime() + parseInt(schedulingData.duration) * 60000);
+      const durationMs = parseInt(schedulingData.duration) * 60000;
+      const endDate = new Date(new Date(startTimeISO).getTime() + durationMs);
+      const endTimeISO = endDate.toISOString();
 
       // Create staff assignments
       const staffAssignments = schedulingData.assignedTo.map(employeeId => ({
         employeeId,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
+        startTime: startTimeISO,
+        endTime: endTimeISO,
         notes: schedulingData.notes
       }));
 
