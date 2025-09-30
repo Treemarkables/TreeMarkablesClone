@@ -9337,8 +9337,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           // Extract job status from ServiceM8 'Job Status' field
           const jobStatus = jobData['Job Status'] || jobData.status || 'pending';
           
-          // Map ServiceM8 financial data - "Total Invoice" column
-          const totalInvoice = jobData['Total Invoice'] || jobData.invoiceAmount || jobData['Invoice Amount'] || jobData.totalAmount || '0';
+          // Map ServiceM8 financial data - "Total Invoice Amount" column
+          const totalInvoice = jobData['Total Invoice Amount'] || jobData['Total Invoice'] || jobData.invoiceAmount || jobData['Invoice Amount'] || jobData.totalAmount || '0';
           const invoiceAmount = parseFloat(totalInvoice.toString().replace(/[^0-9.-]/g, '')) || 0;
           
           // Map payment/paid amount if available
@@ -9356,6 +9356,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           // Debug logging for first job only
           if (jobNum === '1587') {
             console.log('🔍 DEBUG Job 1587:');
+            console.log('  - Total Invoice Amount from CSV:', jobData['Total Invoice Amount']);
+            console.log('  - Parsed invoiceAmount:', invoiceAmount);
             console.log('  - importedInvoiceNumber:', importedInvoiceNumber);
             console.log('  - !importedInvoiceNumber:', !importedInvoiceNumber);
             console.log('  - invoiceSent:', invoiceSent);
