@@ -1275,10 +1275,21 @@ class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<boolean> {
     try {
-      // First, delete all related diary entries
+      // Delete all related records first (in order to avoid foreign key constraints)
+      
+      // 1. Delete diary entries
       await db.delete(schema.jobDiaryEntries).where(eq(schema.jobDiaryEntries.jobId, id));
       
-      // Then delete the job itself
+      // 2. Delete proposals
+      await db.delete(schema.proposals).where(eq(schema.proposals.jobId, id));
+      
+      // 3. Delete staff assignments
+      await db.delete(schema.jobStaffAssignments).where(eq(schema.jobStaffAssignments.jobId, id));
+      
+      // 4. Delete communications
+      await db.delete(schema.communications).where(eq(schema.communications.jobId, id));
+      
+      // Finally, delete the job itself
       const result = await db.delete(schema.jobs).where(eq(schema.jobs.id, id));
       return (result.rowCount || 0) > 0;
     } catch (error) {
