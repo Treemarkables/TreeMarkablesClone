@@ -694,17 +694,15 @@ function StaffCard({ staff, onEdit, onDelete, onSetPassword, isAdmin }: {
             </Badge>
             
             <div className="flex items-center gap-1">
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onSetPassword(staff)}
-                  data-testid={`button-set-password-${staff.id}`}
-                  title="Set Password"
-                >
-                  <Lock className="w-4 h-4" />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onSetPassword(staff)}
+                data-testid={`button-set-password-${staff.id}`}
+                title="Set Password"
+              >
+                <Lock className="w-4 h-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
