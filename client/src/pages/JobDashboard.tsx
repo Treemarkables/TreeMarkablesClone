@@ -637,8 +637,8 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                                   onClick={(e) => e.stopPropagation()}
                                   data-testid={`checkbox-select-job-${job.id}`}
                                 />
-                                <h3 className="font-semibold text-foreground line-clamp-2" data-testid={`text-job-title-${job.id}`}>
-                                  {job.title}
+                                <h3 className="font-semibold text-foreground line-clamp-2" data-testid={`text-job-customer-${job.id}`}>
+                                  {job.customer}
                                 </h3>
                               </div>
                               <div className="text-lg font-bold text-green-600 ml-2" data-testid={`text-job-value-${job.id}`}>
@@ -647,8 +647,8 @@ export default function JobDashboard({ activeTab = "overview", onTabChange }: Jo
                             </div>
                           
                             <div className="space-y-2">
-                              <p className="text-sm text-muted-foreground font-medium" data-testid={`text-job-customer-${job.id}`}>
-                                {job.customer}
+                              <p className="text-sm text-muted-foreground font-medium" data-testid={`text-job-title-${job.id}`}>
+                                {job.title}
                               </p>
                               
                               <div className="flex items-center gap-1 text-sm text-muted-foreground">
