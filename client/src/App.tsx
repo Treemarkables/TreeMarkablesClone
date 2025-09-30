@@ -37,6 +37,7 @@ import Settings from "@/pages/Settings";
 import StaffManagement from "@/pages/StaffManagement";
 import TemplateManagement from "@/pages/TemplateManagement";
 import Developer from "@/pages/Developer";
+import Calendar from "@/pages/Calendar";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import JobTemplateManagement from "@/components/JobTemplateManagement";
@@ -250,6 +251,11 @@ function Router() {
       <Route path="/dispatch">
         <SidebarLayout>
           <Dispatch />
+        </SidebarLayout>
+      </Route>
+      <Route path="/calendar">
+        <SidebarLayout>
+          <Calendar />
         </SidebarLayout>
       </Route>
       <Route path="/workflows">
