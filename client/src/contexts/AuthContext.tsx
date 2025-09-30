@@ -31,8 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async (employeeId: string) => {
-      const res = await apiRequest('POST', '/api/auth/login', { employeeId });
+    mutationFn: async (credentials: { employeeId?: string; email?: string; password?: string }) => {
+      const res = await apiRequest('POST', '/api/auth/login', credentials);
       return res.json();
     },
     onSuccess: (data) => {
@@ -67,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userRole = currentUser?.role as 'admin' | 'crew' | null;
   const isAdmin = userRole === 'admin';
   const isCrew = userRole === 'crew';
+  const isDev = import.meta.env.DEV;
 
   return (
     <AuthContext.Provider
@@ -79,57 +80,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       <div className="flex flex-col h-screen">
-        <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <User className="w-4 h-4" />
-            <span className="text-sm font-medium">Dev Mode - Login As:</span>
-          </div>
-          <Select
-            value={currentUser?.id || ''}
-            onValueChange={(value) => {
-              loginMutation.mutate(value);
-            }}
-          >
-            <SelectTrigger 
-              className="w-64 bg-white text-black" 
-              data-testid="select-employee-auth"
-            >
-              <SelectValue placeholder="Select employee..." />
-            </SelectTrigger>
-            <SelectContent>
-              {employees.map((employee) => (
-                <SelectItem 
-                  key={employee.id} 
-                  value={employee.id}
-                  data-testid={`select-employee-${employee.id}`}
-                >
-                  {employee.firstName} {employee.lastName} ({employee.role})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {currentUser && (
-            <div className="flex items-center gap-2 text-sm">
-              <span>Logged in as:</span>
-              <span className="font-semibold" data-testid="text-current-user">
-                {currentUser.firstName} {currentUser.lastName}
-              </span>
-              <span className="px-2 py-0.5 bg-white/20 rounded text-xs" data-testid="text-user-role">
-                {currentUser.role.toUpperCase()}
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={logout}
-                className="ml-2 h-7 bg-white/10 hover:bg-white/20 text-white"
-                data-testid="button-logout"
-              >
-                <LogOut className="w-3 h-3 mr-1" />
-                Logout
-              </Button>
+        {isDev && (
+          <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4" />
+              <span className="text-sm font-medium">Dev Mode - Login As:</span>
             </div>
-          )}
-        </div>
+            <Select
+              value={currentUser?.id || ''}
+              onValueChange={(value) => {
+                loginMutation.mutate({ employeeId: value });
+              }}
+            >
+              <SelectTrigger 
+                className="w-64 bg-white text-black" 
+                data-testid="select-employee-auth"
+              >
+                <SelectValue placeholder="Select employee..." />
+              </SelectTrigger>
+              <SelectContent>
+                {employees.map((employee) => (
+                  <SelectItem 
+                    key={employee.id} 
+                    value={employee.id}
+                    data-testid={`select-employee-${employee.id}`}
+                  >
+                    {employee.firstName} {employee.lastName} ({employee.role})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {currentUser && (
+              <div className="flex items-center gap-2 text-sm">
+                <span>Logged in as:</span>
+                <span className="font-semibold" data-testid="text-current-user">
+                  {currentUser.firstName} {currentUser.lastName}
+                </span>
+                <span className="px-2 py-0.5 bg-white/20 rounded text-xs" data-testid="text-user-role">
+                  {currentUser.role.toUpperCase()}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={logout}
+                  className="ml-2 h-7 bg-white/10 hover:bg-white/20 text-white"
+                  data-testid="button-logout"
+                >
+                  <LogOut className="w-3 h-3 mr-1" />
+                  Logout
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex-1 overflow-hidden">
           {children}
         </div>
