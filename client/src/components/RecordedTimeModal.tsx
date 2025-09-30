@@ -49,7 +49,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   const [newEntry, setNewEntry] = useState({
     staffId: '',
     rate: '',
-    start: '',
     duration: '1' // Default to 1 hour
   });
   
@@ -121,7 +120,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   useEffect(() => {
     if (!isOpen) {
       setPendingEntries([]);
-      setNewEntry({ staffId: '', rate: '', start: '', duration: '1' });
+      setNewEntry({ staffId: '', rate: '', duration: '1' });
       setUseManualInput(false);
     }
   }, [isOpen]);
@@ -154,7 +153,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       staffId: newEntry.staffId,
       staffName: `${staff?.firstName || ''} ${staff?.lastName || ''}`.trim(),
       rate: newEntry.rate,
-      start: newEntry.start,
+      start: '',
       duration: parseFloat(newEntry.duration),
       billed: true
     };
@@ -162,7 +161,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     setPendingEntries(prev => [...prev, newTimeEntry]);
     
     // Reset form but keep it open for adding more entries
-    setNewEntry({ staffId: '', rate: '', start: '', duration: '1' });
+    setNewEntry({ staffId: '', rate: '', duration: '1' });
     setUseManualInput(false);
   };
 
@@ -269,7 +268,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
             <h4 className="font-medium text-blue-900">Add Staff Time Entry</h4>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-sm font-medium">Staff</label>
                 <Select value={newEntry.staffId} onValueChange={(value) => setNewEntry(prev => ({ ...prev, staffId: value }))} data-testid="select-staff">
@@ -306,16 +305,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                     )}
                   </SelectContent>
                 </Select>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium">Start Time</label>
-                <Input
-                  type="time"
-                  value={newEntry.start}
-                  onChange={(e) => setNewEntry(prev => ({ ...prev, start: e.target.value }))}
-                  data-testid="input-start-time"
-                />
               </div>
               
               <div>
@@ -384,7 +373,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               <div className="divide-y divide-gray-100">
                 {pendingEntries.map((entry) => (
                   <div key={entry.id} className="p-4 hover:bg-gray-50 flex items-center justify-between" data-testid={`entry-${entry.id}`}>
-                    <div className="flex-1 grid grid-cols-4 gap-4">
+                    <div className="flex-1 grid grid-cols-3 gap-4">
                       <div>
                         <div className="text-xs text-gray-500">Staff</div>
                         <div className="font-medium">{entry.staffName}</div>
@@ -392,10 +381,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       <div>
                         <div className="text-xs text-gray-500">Rate Type</div>
                         <div className="text-sm">{availableRates.find((r: any) => r.itemNumber === entry.rate)?.name || entry.rate}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500">Start Time</div>
-                        <div className="text-sm">{entry.start || 'Not set'}</div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">Duration</div>
@@ -429,7 +414,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               <div className="divide-y divide-gray-100">
                 {existingEntries.map((entry: any) => (
                   <div key={entry.id} className="p-4 bg-white">
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                       <div>
                         <div className="text-xs text-gray-500">Staff</div>
                         <div className="font-medium">{entry.employeeName}</div>
@@ -437,10 +422,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       <div>
                         <div className="text-xs text-gray-500">Rate Type</div>
                         <div className="text-sm">{entry.lineItemName}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500">Start Time</div>
-                        <div className="text-sm">{entry.startTime || 'Not set'}</div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">Duration</div>
