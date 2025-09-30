@@ -1079,19 +1079,20 @@ export default function MaterialsServices() {
         </TabsList>
 
         <TabsContent value="materials" className="flex-1 overflow-auto mt-6">
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[80px]">Actions</TableHead>
-                  <TableHead className="w-[120px]">Item Number</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="w-[100px]">Price</TableHead>
-                  <TableHead className="w-[150px]">Price Includes Taxes</TableHead>
-                  <TableHead className="w-[150px]">Tax Rate</TableHead>
-                  <TableHead className="w-[160px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+          <div className="overflow-x-auto max-w-full">
+            <div className="border rounded-lg min-w-[800px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Actions</TableHead>
+                    <TableHead>Item Number</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Price Includes Taxes</TableHead>
+                    <TableHead>Tax Rate</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {filteredMaterials.map((material) => (
                   <TableRow key={material.id} data-testid={`row-material-${material.id}`}>
@@ -1144,6 +1145,7 @@ export default function MaterialsServices() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </div>
         </TabsContent>
 

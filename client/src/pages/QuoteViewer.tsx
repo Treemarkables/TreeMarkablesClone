@@ -289,7 +289,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
             {quote.lineItems && quote.lineItems.length > 0 && (
               <div className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Services</h3>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-w-full">
                   <table className="w-full border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-gray-50">

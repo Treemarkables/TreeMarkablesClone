@@ -1074,7 +1074,7 @@ export default function StaffManagement() {
               </div>
               
               <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-[180px]" data-testid="select-filter-role">
+                <SelectTrigger className="w-full md:w-[180px]" data-testid="select-filter-role">
                   <SelectValue placeholder="Filter by role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1088,7 +1088,7 @@ export default function StaffManagement() {
               </Select>
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[180px]" data-testid="select-filter-status">
+                <SelectTrigger className="w-full md:w-[180px]" data-testid="select-filter-status">
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
                 <SelectContent>
