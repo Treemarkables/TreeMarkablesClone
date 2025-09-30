@@ -10,12 +10,21 @@ import {
   Loader2,
   MoreVertical,
   Phone,
-  Video
+  Video,
+  Calendar,
+  UserPlus,
+  Star,
+  Activity,
+  MessageSquare,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { formatDistanceToNow } from 'date-fns';
 
 export default function ConversationDetail() {
@@ -23,6 +32,8 @@ export default function ConversationDetail() {
   const [, setLocation] = useLocation();
   const conversationId = params?.id;
   const [replyContent, setReplyContent] = useState('');
+  const [showManageMenu, setShowManageMenu] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -153,7 +164,12 @@ export default function ConversationDetail() {
           <Button variant="ghost" size="icon" className="hidden sm:flex" data-testid="button-video">
             <Video className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" data-testid="button-more">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => setShowManageMenu(true)}
+            data-testid="button-more"
+          >
             <MoreVertical className="h-5 w-5" />
           </Button>
         </div>
@@ -226,6 +242,113 @@ export default function ConversationDetail() {
           </Button>
         </div>
       </div>
+
+      {/* Manage Menu Sheet */}
+      <Sheet open={showManageMenu} onOpenChange={setShowManageMenu}>
+        <SheetContent side="bottom" className="h-auto rounded-t-3xl">
+          <SheetHeader>
+            <SheetTitle className="text-center text-lg font-semibold">Manage</SheetTitle>
+          </SheetHeader>
+          
+          <div className="mt-6 space-y-1">
+            {/* Schedule Appointment */}
+            <button
+              onClick={() => {
+                setShowManageMenu(false);
+                toast({ title: 'Schedule Appointment', description: 'Feature coming soon' });
+              }}
+              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
+              data-testid="button-schedule-appointment"
+            >
+              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                <Calendar className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-base font-medium text-gray-900">Schedule Appointment</span>
+            </button>
+
+            {/* Create Opportunity */}
+            <button
+              onClick={() => {
+                setShowManageMenu(false);
+                toast({ title: 'Create Opportunity', description: 'Converting to lead...' });
+              }}
+              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
+              data-testid="button-create-opportunity"
+            >
+              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                <UserPlus className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-base font-medium text-gray-900">Create Opportunity</span>
+            </button>
+
+            {/* Send Review Request */}
+            <button
+              onClick={() => {
+                setShowManageMenu(false);
+                toast({ title: 'Send Review Request', description: 'Feature coming soon' });
+              }}
+              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
+              data-testid="button-send-review-request"
+            >
+              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                <Star className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-base font-medium text-gray-900">Send Review Request</span>
+            </button>
+
+            {/* Show Activity */}
+            <div className="w-full flex items-center justify-between gap-4 px-4 py-4 rounded-lg">
+              <div className="flex items-center gap-4">
+                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                  <Activity className="h-5 w-5 text-white" />
+                </div>
+                <span className="text-base font-medium text-gray-900">Show Activity</span>
+              </div>
+              <Switch
+                checked={showActivity}
+                onCheckedChange={setShowActivity}
+                data-testid="switch-show-activity"
+              />
+            </div>
+
+            {/* Add Internal Comments */}
+            <button
+              onClick={() => {
+                setShowManageMenu(false);
+                toast({ title: 'Add Internal Comments', description: 'Feature coming soon' });
+              }}
+              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
+              data-testid="button-add-internal-comments"
+            >
+              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                <MessageSquare className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-base font-medium text-gray-900">Add Internal Comments</span>
+            </button>
+
+            <Separator className="my-2" />
+
+            {/* Delete Conversation */}
+            <button
+              onClick={() => {
+                setShowManageMenu(false);
+                toast({ 
+                  title: 'Delete Conversation', 
+                  description: 'Feature coming soon',
+                  variant: 'destructive'
+                });
+              }}
+              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
+              data-testid="button-delete-conversation"
+            >
+              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-red-500 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-base font-medium text-red-600">Delete Conversation</span>
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
