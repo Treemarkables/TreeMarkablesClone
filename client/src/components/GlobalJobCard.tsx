@@ -131,7 +131,7 @@ export function GlobalJobCard({
   const [schedulingData, setSchedulingData] = useState({
     date: '',
     startTime: '',
-    endTime: '',
+    duration: '', // in minutes
     assignedTo: [] as string[],
     notes: ''
   });
@@ -939,14 +939,14 @@ export function GlobalJobCard({
     const abortController = new AbortController();
     
     const checkConflicts = async () => {
-      if (!schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || schedulingData.assignedTo.length === 0) {
+      if (!schedulingData.date || !schedulingData.startTime || !schedulingData.duration || schedulingData.assignedTo.length === 0) {
         setStaffConflicts([]);
         return;
       }
 
       try {
         const startTime = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
-        const endTime = new Date(`${schedulingData.date}T${schedulingData.endTime}`);
+        const endTime = new Date(startTime.getTime() + parseInt(schedulingData.duration) * 60000);
 
         const response = await fetch('/api/staff/check-conflicts', {
           method: 'POST',
@@ -980,7 +980,7 @@ export function GlobalJobCard({
       clearTimeout(timeoutId);
       abortController.abort();
     };
-  }, [schedulingData.date, schedulingData.startTime, schedulingData.endTime, schedulingData.assignedTo, editingJob?.id]);
+  }, [schedulingData.date, schedulingData.startTime, schedulingData.duration, schedulingData.assignedTo, editingJob?.id]);
 
   // Save schedule function
   const saveSchedule = async () => {
@@ -988,7 +988,7 @@ export function GlobalJobCard({
 
     try {
       const startTime = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
-      const endTime = new Date(`${schedulingData.date}T${schedulingData.endTime}`);
+      const endTime = new Date(startTime.getTime() + parseInt(schedulingData.duration) * 60000);
 
       // Create staff assignments
       const staffAssignments = schedulingData.assignedTo.map(employeeId => ({
@@ -1022,7 +1022,7 @@ export function GlobalJobCard({
         setSchedulingData({
           date: '',
           startTime: '',
-          endTime: '',
+          duration: '',
           assignedTo: [],
           notes: ''
         });
@@ -3163,13 +3163,37 @@ export function GlobalJobCard({
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">End Time</label>
-                <Input
-                  type="time"
-                  value={schedulingData.endTime}
-                  onChange={(e) => setSchedulingData(prev => ({ ...prev, endTime: e.target.value }))}
-                  data-testid="input-schedule-end-time"
-                />
+                <label className="text-sm font-medium">Duration</label>
+                <Select
+                  value={schedulingData.duration}
+                  onValueChange={(value) => setSchedulingData(prev => ({ ...prev, duration: value }))}
+                >
+                  <SelectTrigger data-testid="select-schedule-duration">
+                    <SelectValue placeholder="Select duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15">15 minutes</SelectItem>
+                    <SelectItem value="30">30 minutes</SelectItem>
+                    <SelectItem value="45">45 minutes</SelectItem>
+                    <SelectItem value="60">1 hour</SelectItem>
+                    <SelectItem value="75">1 hour 15 min</SelectItem>
+                    <SelectItem value="90">1 hour 30 min</SelectItem>
+                    <SelectItem value="105">1 hour 45 min</SelectItem>
+                    <SelectItem value="120">2 hours</SelectItem>
+                    <SelectItem value="135">2 hours 15 min</SelectItem>
+                    <SelectItem value="150">2 hours 30 min</SelectItem>
+                    <SelectItem value="165">2 hours 45 min</SelectItem>
+                    <SelectItem value="180">3 hours</SelectItem>
+                    <SelectItem value="195">3 hours 15 min</SelectItem>
+                    <SelectItem value="210">3 hours 30 min</SelectItem>
+                    <SelectItem value="225">3 hours 45 min</SelectItem>
+                    <SelectItem value="240">4 hours</SelectItem>
+                    <SelectItem value="300">5 hours</SelectItem>
+                    <SelectItem value="360">6 hours</SelectItem>
+                    <SelectItem value="420">7 hours</SelectItem>
+                    <SelectItem value="480">8 hours</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div>
@@ -3242,7 +3266,7 @@ export function GlobalJobCard({
                 setSchedulingData({
                   date: '',
                   startTime: '',
-                  endTime: '',
+                  duration: '',
                   assignedTo: [],
                   notes: ''
                 });
@@ -3254,7 +3278,7 @@ export function GlobalJobCard({
             </Button>
             <Button
               onClick={saveSchedule}
-              disabled={!schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || schedulingData.assignedTo.length === 0 || staffConflicts.length > 0}
+              disabled={!schedulingData.date || !schedulingData.startTime || !schedulingData.duration || schedulingData.assignedTo.length === 0 || staffConflicts.length > 0}
               data-testid="btn-save-schedule"
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
