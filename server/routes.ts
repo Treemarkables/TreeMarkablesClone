@@ -9345,6 +9345,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           const paidAmount = jobData['Paid Amount'] || jobData.paidAmount || jobData['Amount Paid'] || '0';
           const paid = parseFloat(paidAmount.toString().replace(/[^0-9.-]/g, '')) || 0;
           
+          // Map invoice number
+          const importedInvoiceNumber = jobData['Invoice Number'] || jobData.invoiceNumber || jobData['Invoice #'] || jobData.invoice || null;
+          
           const jobNumber = jobData.jobNumber || jobData['Job Number'] || `JOB-${Date.now()}`;
           const jobPayload = {
             jobNumber: jobNumber,
@@ -9360,6 +9363,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             equipment: jobData.equipment ? jobData.equipment.split(',').map((e: string) => e.trim()) : [],
             totalAmount: invoiceAmount.toString(),
             paidAmount: paid.toString(),
+            invoiceNumber: importedInvoiceNumber,
             servicem8Uuid: jobData.servicem8Uuid || jobData['ServiceM8 UUID'] || null
           };
 
@@ -9538,6 +9542,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             completedDate: csvJob.completionDate && csvJob.completionDate !== '0000-00-00 00:00:00' ? 
               new Date(csvJob.completionDate) : null,
             assignedTo: csvJob.completedBy || 'Imported Staff',
+            invoiceNumber: csvJob.invoiceNumber || csvJob['Invoice Number'] || csvJob['Invoice #'] || csvJob.invoice || null,
             servicem8JobId: csvJob.jobNumber, // Store original ServiceM8 job number
             paymentMethod: csvJob.paymentMethod
           };
