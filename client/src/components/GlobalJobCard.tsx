@@ -1142,8 +1142,8 @@ export function GlobalJobCard({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-full h-full flex flex-col p-0 bg-gray-50 sm:max-w-6xl sm:h-[95vh] sm:rounded-xl">
         {/* ServiceM8-style Header */}
-        <div className="bg-orange-500 border-b border-orange-600 px-3 sm:px-4 py-2 sm:py-2 flex-shrink-0 sm:rounded-t-xl">
-          <div className="flex items-center justify-between gap-2">
+        <div className="bg-orange-500 border-b border-orange-600 px-3 sm:px-4 py-2.5 flex-shrink-0 sm:rounded-t-xl">
+          <div className="flex items-center justify-between gap-4">
             {/* Left: Job Title */}
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <h1 className="text-base sm:text-lg font-semibold text-white truncate" data-testid="text-job-title">
@@ -1151,12 +1151,41 @@ export function GlobalJobCard({
               </h1>
             </div>
             
-            {/* Center: Action Buttons - Hide on mobile */}
-            <div className="hidden md:flex items-center gap-1">
+            {/* Right: Save Buttons */}
+            <div className="flex items-center gap-2">
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                className="h-9 px-3 sm:px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
+                onClick={handleSave}
+                disabled={createJobMutation.isPending || updateJobMutation.isPending}
+                data-testid="button-save"
+              >
+                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-3 sm:px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all whitespace-nowrap" 
+                onClick={handleSaveAndClose}
+                disabled={createJobMutation.isPending || updateJobMutation.isPending}
+                data-testid="button-save-close"
+              >
+                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save & Close'}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Buttons Bar - Below Orange Header */}
+        <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2 flex-shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            {/* Action Buttons - Hide on mobile */}
+            <div className="hidden md:flex items-center gap-1 flex-wrap">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                 onClick={handleEmailClick} 
                 data-testid="button-email"
               >
@@ -1166,9 +1195,9 @@ export function GlobalJobCard({
                 </div>
               </Button>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                 onClick={() => setIsSMSComposerOpen(true)} 
                 data-testid="button-sms"
               >
@@ -1178,9 +1207,9 @@ export function GlobalJobCard({
                 </div>
               </Button>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                 onClick={handleCallClick} 
                 data-testid="button-call"
               >
@@ -1190,9 +1219,9 @@ export function GlobalJobCard({
                 </div>
               </Button>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                 onClick={handleScheduleClick} 
                 data-testid="button-schedule"
               >
@@ -1202,9 +1231,9 @@ export function GlobalJobCard({
                 </div>
               </Button>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                 onClick={handleQueueClick} 
                 data-testid="button-queue"
               >
@@ -1216,9 +1245,9 @@ export function GlobalJobCard({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
-                    variant="ghost" 
+                    variant="outline" 
                     size="sm" 
-                    className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                    className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                     data-testid="button-send"
                   >
                     <div className="flex items-center gap-1.5">
@@ -1272,9 +1301,9 @@ export function GlobalJobCard({
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all disabled:opacity-50 disabled:bg-white/5" 
+                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                 onClick={() => setIsProfitTrackerOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
@@ -1286,9 +1315,9 @@ export function GlobalJobCard({
                 </div>
               </Button>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all disabled:opacity-50 disabled:bg-white/5" 
+                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                 onClick={() => setIsTimeTrackingOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
@@ -1300,9 +1329,9 @@ export function GlobalJobCard({
                 </div>
               </Button>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all disabled:opacity-50 disabled:bg-white/5" 
+                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                 onClick={() => setIsPhotoCaptureOpen(true)}
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
@@ -1314,9 +1343,9 @@ export function GlobalJobCard({
                 </div>
               </Button>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all disabled:opacity-50 disabled:bg-white/5" 
+                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                 onClick={() => sendToXeroMutation.mutate()}
                 disabled={
                   !editingJob?.id || 
@@ -1350,9 +1379,9 @@ export function GlobalJobCard({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
-                    variant="ghost" 
+                    variant="outline" 
                     size="sm" 
-                    className="h-9 px-3 text-xs bg-white/10 hover:bg-white/20 text-white border-0 transition-all" 
+                    className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
                     data-testid="button-more"
                   >
                     <div className="flex items-center gap-1.5">
@@ -1446,30 +1475,6 @@ export function GlobalJobCard({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-            
-            {/* Right: Save Buttons */}
-            <div className="flex items-center gap-2 mr-12 sm:mr-0">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-9 px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
-                onClick={handleSave}
-                disabled={createJobMutation.isPending || updateJobMutation.isPending}
-                data-testid="button-save"
-              >
-                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="hidden sm:inline-flex h-9 px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
-                onClick={handleSaveAndClose}
-                disabled={createJobMutation.isPending || updateJobMutation.isPending}
-                data-testid="button-save-close"
-              >
-                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save & Close'}
-              </Button>
             </div>
           </div>
         </div>
