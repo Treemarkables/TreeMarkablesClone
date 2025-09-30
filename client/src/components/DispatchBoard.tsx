@@ -451,6 +451,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
   });
 
+  // Fetch staff assignments for dispatch board
+  const { data: staffAssignmentsData } = useQuery({
+    queryKey: ['/api/staff-assignments'],
+    queryFn: async () => {
+      const response = await fetch('/api/staff-assignments');
+      if (!response.ok) throw new Error('Failed to fetch staff assignments');
+      return response.json();
+    }
+  });
+
   // Create customer lookup map
   const customerMap = useMemo(() => {
     const map = new Map();
@@ -462,73 +472,105 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return map;
   }, [customersData]);
 
+  // Create job lookup map
+  const jobMap = useMemo(() => {
+    const map = new Map();
+    if (jobsData?.data) {
+      jobsData.data.forEach((job: any) => {
+        map.set(job.id, job);
+      });
+    }
+    return map;
+  }, [jobsData]);
+
+  // Create staff assignment lookup by job ID
+  const staffAssignmentsByJob = useMemo(() => {
+    const map = new Map<string, any[]>();
+    if (staffAssignmentsData?.data) {
+      staffAssignmentsData.data.forEach((assignment: any) => {
+        if (!map.has(assignment.jobId)) {
+          map.set(assignment.jobId, []);
+        }
+        map.get(assignment.jobId)?.push(assignment);
+      });
+    }
+    return map;
+  }, [staffAssignmentsData]);
+
   // Force refresh the cache to get corrected data mapping
   useEffect(() => {
-    // Invalidate jobs cache to force refetch with corrected mapping and cleaned descriptions
+    // Invalidate caches to force refetch
     queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-    queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
   }, []); // Only run once on mount
 
-  // Convert API jobs to DispatchBoard format
-  const jobs: JobAssignment[] = (jobsData?.data || []).map((apiJob: any) => {
-    // Calculate endTime from scheduledDate + estimatedDuration
-    // For jobs without scheduled dates, default to today at 9 AM for dispatch board display
-    const startTime = apiJob.scheduledDate || (() => {
-      const today = new Date();
-      today.setHours(9, 0, 0, 0); // Default to 9 AM today for unscheduled jobs
-      return today;
-    })();
-    const estimatedDuration = apiJob.estimatedDuration || 2; // Default 2 hours
-    const endTime = new Date(new Date(startTime).getTime() + (estimatedDuration * 60 * 60 * 1000));
+  // Convert staff assignments to JobAssignment format for dispatch board
+  const jobs: JobAssignment[] = useMemo(() => {
+    const jobAssignments: JobAssignment[] = [];
+    const processedJobs = new Set<string>();
 
-    // Use actual assignedTeam from API, or create assignment from existing teamId/staffId
-    const assignedTeam = apiJob.assignedTeam || [];
-    
-    // Determine teamId and staffId based on assignment mode and existing data
-    let teamId = undefined;
-    let staffId = undefined;
-    
-    if (assignedTeam.length > 0) {
-      // If we have assignedTeam, derive teamId/staffId based on team membership
-      if (assignmentMode === 'teams') {
-        // Find which team contains these staff members
-        const matchingTeam = mockTeams.find(team => 
-          assignedTeam.some((assignedId: string) => team.members.includes(assignedId))
-        );
-        teamId = matchingTeam?.id;
-      } else {
-        // Individual mode - use first assigned team member as staffId
-        staffId = assignedTeam[0];
-      }
+    // Process all staff assignments (these are the scheduled jobs)
+    if (staffAssignmentsData?.data) {
+      staffAssignmentsData.data.forEach((assignment: any) => {
+        const apiJob = jobMap.get(assignment.jobId);
+        if (!apiJob) return;
+
+        const jobKey = assignment.jobId;
+        if (processedJobs.has(jobKey)) {
+          // Job already processed, add this employee to the existing assignment
+          const existingJob = jobAssignments.find(j => j.id === jobKey);
+          if (existingJob && !existingJob.assignedTeam.includes(assignment.employeeId)) {
+            existingJob.assignedTeam.push(assignment.employeeId);
+          }
+          return;
+        }
+
+        processedJobs.add(jobKey);
+
+        // Get all assignments for this job
+        const jobAssignments_list = staffAssignmentsByJob.get(assignment.jobId) || [assignment];
+        const assignedTeam = jobAssignments_list.map((a: any) => a.employeeId);
+
+        // Determine teamId and staffId based on assignment mode
+        let teamId = undefined;
+        let staffId = undefined;
+
+        if (assignedTeam.length > 0) {
+          if (assignmentMode === 'teams') {
+            const matchingTeam = mockTeams.find(team =>
+              assignedTeam.some((assignedId: string) => team.members.includes(assignedId))
+            );
+            teamId = matchingTeam?.id;
+          } else {
+            staffId = assignedTeam[0];
+          }
+        }
+
+        jobAssignments.push({
+          id: apiJob.id,
+          jobId: apiJob.jobNumber,
+          customerId: apiJob.customerId,
+          customerName: customerMap.get(apiJob.customerId) || apiJob.title || 'Unknown Customer',
+          customerPhone: '',
+          address: apiJob.address,
+          serviceType: apiJob.serviceType || '',
+          description: apiJob.description || '',
+          status: apiJob.status,
+          priority: apiJob.priority,
+          startTime: assignment.startTime,
+          endTime: assignment.endTime,
+          duration: (new Date(assignment.endTime).getTime() - new Date(assignment.startTime).getTime()) / (1000 * 60 * 60),
+          notes: assignment.notes || apiJob.specialInstructions || apiJob.notes || '',
+          assignedTeam: assignedTeam,
+          teamId: teamId,
+          staffId: staffId,
+          specialInstructions: apiJob.specialInstructions
+        });
+      });
     }
 
-    return {
-      id: apiJob.id,
-      jobId: apiJob.jobNumber,
-      customerId: apiJob.customerId,
-      customerName: customerMap.get(apiJob.customerId) || (() => {
-        // Don't use title if it contains timestamps
-        if (apiJob.title && !apiJob.title.includes('2025-') && !apiJob.title.includes('0000-00-00')) {
-          return apiJob.title;
-        }
-        return 'Unknown Customer';
-      })(),
-      customerPhone: '', // Not available in API response
-      address: apiJob.address,
-      serviceType: apiJob.serviceType || '',
-      description: apiJob.description || '',
-      status: apiJob.status,
-      priority: apiJob.priority,
-      startTime: startTime,
-      endTime: endTime.toISOString(),
-      estimatedDuration: estimatedDuration,
-      notes: apiJob.specialInstructions || apiJob.notes || '',
-      assignedTeam: assignedTeam,
-      teamId: teamId,
-      staffId: staffId,
-      specialInstructions: apiJob.specialInstructions
-    };
-  });
+    return jobAssignments;
+  }, [jobsData, staffAssignmentsData, customerMap, assignmentMode, jobMap, staffAssignmentsByJob]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
