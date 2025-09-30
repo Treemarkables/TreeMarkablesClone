@@ -380,6 +380,7 @@ export interface IStorage {
   // Job Staff Assignment Management
   createJobStaffAssignment(assignment: InsertJobStaffAssignment): Promise<JobStaffAssignment>;
   getJobStaffAssignment(id: string): Promise<JobStaffAssignment | undefined>;
+  getAllJobStaffAssignments(): Promise<JobStaffAssignment[]>;
   getJobStaffAssignmentsByJob(jobId: string): Promise<JobStaffAssignment[]>;
   getJobStaffAssignmentsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<JobStaffAssignment[]>;
   checkStaffConflicts(employeeIds: string[], startTime: Date, endTime: Date, excludeJobId?: string): Promise<{employeeId: string; conflicts: JobStaffAssignment[]}[]>;
@@ -2103,6 +2104,11 @@ class DatabaseStorage implements IStorage {
   async getJobStaffAssignment(id: string): Promise<JobStaffAssignment | undefined> {
     const [assignment] = await db.select().from(schema.jobStaffAssignments).where(eq(schema.jobStaffAssignments.id, id));
     return assignment;
+  }
+
+  async getAllJobStaffAssignments(): Promise<JobStaffAssignment[]> {
+    return await db.select().from(schema.jobStaffAssignments)
+      .orderBy(schema.jobStaffAssignments.startTime);
   }
 
   async getJobStaffAssignmentsByJob(jobId: string): Promise<JobStaffAssignment[]> {
