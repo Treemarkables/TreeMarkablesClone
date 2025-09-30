@@ -15,7 +15,6 @@ import { EquipmentTracker } from '@/components/EquipmentTracker';
 import CommunicationsManagement from './CommunicationsManagement';
 import Opportunities from './Opportunities';
 import Integrations from './Integrations';
-import { WeatherDashboard } from '@/components/WeatherDashboard';
 import QuoteManagement from '@/components/QuoteManagement';
 import { DispatchBoard } from '@/components/DispatchBoard';
 import { SafetyReporting } from '@/components/SafetyReporting';
@@ -794,13 +793,6 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
           {/* Equipment Tab */}
           <TabsContent value="equipment" className="flex-1 overflow-auto">
             <EquipmentTracker />
-          </TabsContent>
-
-          {/* Weather Tab */}
-          <TabsContent value="weather" className="flex-1 overflow-auto">
-            <div className="space-y-4 w-full max-w-full overflow-hidden min-w-0">
-              <WeatherDashboard />
-            </div>
           </TabsContent>
 
           {/* Safety Tab */}
