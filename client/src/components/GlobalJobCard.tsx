@@ -1323,67 +1323,79 @@ export function GlobalJobCard({
         <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2 flex-shrink-0">
           <div className="flex items-center justify-between gap-2">
             {/* Action Buttons - Hide on mobile */}
-            <div className="hidden md:flex items-center gap-1 flex-wrap">
+            <div className="hidden md:flex items-center gap-2 flex-wrap">
               <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8 hover-elevate active-elevate-2" 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={handleEmailClick} 
                 data-testid="button-email"
-                title="Email"
               >
-                <Mail className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                  <Mail className="w-5 h-5 text-blue-500" />
+                  <span className="text-sm font-medium text-gray-700">Email</span>
+                </div>
               </Button>
               <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8 hover-elevate active-elevate-2" 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={() => setIsSMSComposerOpen(true)} 
                 data-testid="button-sms"
-                title="SMS"
               >
-                <MessageSquare className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                  <MessageSquare className="w-5 h-5 text-blue-500" />
+                  <span className="text-sm font-medium text-gray-700">SMS</span>
+                </div>
               </Button>
               <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8 hover-elevate active-elevate-2" 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={handleCallClick} 
                 data-testid="button-call"
-                title="Call"
               >
-                <Phone className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                  <Phone className="w-5 h-5 text-green-500" />
+                  <span className="text-sm font-medium text-gray-700">Call</span>
+                </div>
               </Button>
               <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8 hover-elevate active-elevate-2" 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={handleScheduleClick} 
                 data-testid="button-schedule"
-                title="Schedule"
               >
-                <Calendar className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-5 h-5 text-red-500" />
+                  <span className="text-sm font-medium text-gray-700">Schedule</span>
+                </div>
               </Button>
               <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8 hover-elevate active-elevate-2" 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={handleQueueClick} 
                 data-testid="button-queue"
-                title="Queue"
               >
-                <FileText className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <span className="text-sm font-medium text-gray-700">Queue</span>
+                </div>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
-                    variant="outline" 
-                    size="icon" 
-                    className="h-8 w-8 hover-elevate active-elevate-2" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-9 px-2 hover-elevate active-elevate-2" 
                     data-testid="button-send"
-                    title="Send"
                   >
-                    <Send className="w-4 h-4" />
+                    <div className="flex items-center gap-1.5">
+                      <Send className="w-5 h-5 text-orange-500" />
+                      <span className="text-sm font-medium text-gray-700">Form</span>
+                    </div>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -1431,73 +1443,56 @@ export function GlobalJobCard({
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8 hover-elevate active-elevate-2" 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={() => setIsProfitTrackerOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
-                title={!editingJob?.id || mode === 'create' ? "Save job first to track profit" : "Profit"}
               >
-                <DollarSign className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                  <DollarSign className="w-5 h-5 text-teal-500" />
+                  <span className="text-sm font-medium text-gray-700">Proposal</span>
+                </div>
               </Button>
               <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8 hover-elevate active-elevate-2" 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={() => setIsTimeTrackingOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
-                title={!editingJob?.id || mode === 'create' ? "Save job first to track time" : "Time"}
               >
-                <Clock className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-5 h-5 text-purple-500" />
+                  <span className="text-sm font-medium text-gray-700">Time</span>
+                </div>
               </Button>
               <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8 hover-elevate active-elevate-2" 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={() => setIsPhotoCaptureOpen(true)}
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
-                title={!editingJob?.id || mode === 'create' ? "Save job first to capture photos" : "Camera"}
               >
-                <Camera className="w-4 h-4" />
-              </Button>
-              <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8 hover-elevate active-elevate-2" 
-                onClick={() => sendToXeroMutation.mutate()}
-                disabled={
-                  !editingJob?.id || 
-                  mode === 'create' || 
-                  editingJob?.status !== 'completed' || 
-                  editingJob?.xeroStatus === 'sent' ||
-                  sendToXeroMutation.isPending
-                }
-                data-testid="button-send-xero"
-                title={
-                  !editingJob?.id || mode === 'create' 
-                    ? "Save job first" 
-                    : editingJob?.status !== 'completed'
-                    ? "Job must be completed to send to Xero"
-                    : editingJob?.xeroStatus === 'sent'
-                    ? "Already sent to Xero"
-                    : "Send invoice to Xero"
-                }
-              >
-                <FileText className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                  <Camera className="w-5 h-5 text-pink-500" />
+                  <span className="text-sm font-medium text-gray-700">Camera</span>
+                </div>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
-                    variant="outline" 
-                    size="icon" 
-                    className="h-8 w-8 hover-elevate active-elevate-2" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-9 px-2 hover-elevate active-elevate-2" 
                     data-testid="button-more"
-                    title="More"
                   >
-                    <MoreHorizontal className="w-4 h-4" />
+                    <div className="flex items-center gap-1.5">
+                      <MoreHorizontal className="w-5 h-5 text-green-600" />
+                      <span className="text-sm font-medium text-gray-700">More</span>
+                    </div>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -1509,6 +1504,23 @@ export function GlobalJobCard({
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleArchiveClick}>
                     Archive
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => sendToXeroMutation.mutate()}
+                    disabled={
+                      !editingJob?.id || 
+                      mode === 'create' || 
+                      editingJob?.status !== 'completed' || 
+                      editingJob?.xeroStatus === 'sent' ||
+                      sendToXeroMutation.isPending
+                    }
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    {sendToXeroMutation.isPending 
+                      ? 'Sending to Xero...' 
+                      : editingJob?.xeroStatus === 'sent' 
+                      ? 'Sent to Xero' 
+                      : 'Send to Xero'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
