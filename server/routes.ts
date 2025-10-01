@@ -3027,6 +3027,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      // Get job details for replyTo
+      let job;
+      let replyToEmail;
+      if (proposal.jobId) {
+        job = await storage.getJob(proposal.jobId);
+        if (job?.jobNumber) {
+          replyToEmail = `job-${job.jobNumber}@jobs.www.treemarkables.co.nz`;
+        }
+      }
+
       // Get customer details
       let customer;
       if (proposal.customerId) {
@@ -3094,6 +3104,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         to,
         cc,
         from: 'jullianhalley@hotmail.com',
+        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.www.treemarkables.co.nz
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${parseFloat(totalAmount.toString()).toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
