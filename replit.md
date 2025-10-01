@@ -22,15 +22,18 @@ Preferred communication style: Simple, everyday language.
 ### Backend
 - **Runtime**: Node.js with Express
 - **Language**: TypeScript
-- **API**: RESTful API (`/api` prefix)
+- **API**: RESTful API (`/api` prefix, `/api/mobile` for mobile endpoints)
+- **Authentication**: Session-based (web) + API key with SHA-256 hashing (mobile)
+- **File Storage**: Static file serving for audio recordings (`/uploads/recordings/`)
 - **Development**: Hot module replacement (Vite middleware)
-- **Storage Interface**: Abstracted layer with in-memory implementation (ready for database integration)
+- **Storage Interface**: PostgreSQL with Drizzle ORM
 
 ### Data Layer
 - **ORM**: Drizzle ORM (PostgreSQL)
 - **Schema**: Type-safe definitions with Zod validation
-- **Database**: PostgreSQL (configured, currently using in-memory)
+- **Database**: PostgreSQL with indexed phone number matching (normalizedPhone column)
 - **Migrations**: Drizzle Kit
+- **Transactions**: Database transaction support for atomic multi-step operations
 
 ### Business Features
 - **Job Dashboard**: Central hub at `/job-dashboard`.
@@ -54,6 +57,7 @@ Preferred communication style: Simple, everyday language.
 - **Job Diary System**: Comprehensive CRUD for diary entries (note, progress, issue, milestone, weather, equipment, safety, completion) with rich metadata and filtering.
 - **Secure Password Authentication System**: Role-based (admin/crew) server-controlled session authentication with bcrypt hashing. Environment-aware login.
 - **Email-to-Job-Diary Integration**: Email webhook intelligently routes customer replies with job/quote references directly to job diaries as "email" type entries.
+- **Mobile App Integration**: Native mobile API with Bearer token authentication for call recording uploads, OpenAI Whisper transcription, customer phone matching, and automated job creation with diary logging. Includes comprehensive API documentation.
 
 ## External Dependencies
 
@@ -84,3 +88,5 @@ Preferred communication style: Simple, everyday language.
 
 ### Other Integrations
 - SendGrid (for email webhooks)
+- OpenAI (Whisper API for call transcription)
+- Multer (audio file upload handling, 50 MB limit)
