@@ -192,8 +192,10 @@ function DraggableOpportunityCard({
     <div 
       ref={setNodeRef} 
       style={style}
-      className={`bg-white rounded-md border hover-elevate cursor-pointer group p-2 ${isLoading ? 'opacity-50' : ''}`}
+      className={`bg-white rounded-md border hover-elevate cursor-grab active:cursor-grabbing group p-2 ${isLoading ? 'opacity-50' : ''}`}
       data-testid={`opportunity-card-${opportunity.id}`}
+      {...attributes}
+      {...listeners}
     >
       <div className="flex items-center justify-between gap-1">
         <div className="min-w-0 flex-1">
@@ -205,19 +207,18 @@ function DraggableOpportunityCard({
           </div>
         </div>
         <div className="flex items-center gap-0.5 flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="cursor-grab active:cursor-grabbing h-4 w-4 p-0"
-            {...attributes}
-            {...listeners}
-            data-testid={`drag-handle-${opportunity.id}`}
-          >
-            <GripVertical className="h-2.5 w-2.5" />
-          </Button>
+          <div className="h-4 w-4 flex items-center justify-center">
+            <GripVertical className="h-2.5 w-2.5 text-gray-400" />
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-4 w-4 p-0" data-testid={`menu-${opportunity.id}`}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-4 w-4 p-0" 
+                data-testid={`menu-${opportunity.id}`}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MoreVertical className="h-2.5 w-2.5" />
               </Button>
             </DropdownMenuTrigger>
