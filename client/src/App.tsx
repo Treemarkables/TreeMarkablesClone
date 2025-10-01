@@ -47,11 +47,15 @@ import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, Bell } from "lucide-react";
 import { Link } from "wouter";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useQuery } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
@@ -74,6 +78,75 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             
             <div className="flex items-center gap-2">
+              {/* Notifications Button */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+                    <Bell className="h-5 w-5" />
+                    {/* Notification badge - showing count */}
+                    <span className="absolute top-0 right-0 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                      3
+                    </span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-96 p-0" align="end">
+                  <div className="flex items-center justify-between p-4 border-b">
+                    <h3 className="font-semibold">Notifications</h3>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs">
+                      Mark all read
+                    </Button>
+                  </div>
+                  <ScrollArea className="h-96">
+                    <div className="p-2 space-y-2">
+                      {/* Sample notifications - replace with real data */}
+                      <div className="p-3 hover-elevate rounded-lg border cursor-pointer" data-testid="notification-item">
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"></div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm">Quote Accepted</p>
+                            <p className="text-sm text-muted-foreground">
+                              Hamish Cave accepted quote #QTE-3326 for $1,966.50
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">2 minutes ago</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 hover-elevate rounded-lg border cursor-pointer" data-testid="notification-item">
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0"></div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm">New Email Received</p>
+                            <p className="text-sm text-muted-foreground">
+                              Customer replied to job #3304
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">15 minutes ago</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 hover-elevate rounded-lg border cursor-pointer" data-testid="notification-item">
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 rounded-full bg-orange-500 mt-1.5 flex-shrink-0"></div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm">Job Scheduled</p>
+                            <p className="text-sm text-muted-foreground">
+                              Job #3304 scheduled for tomorrow at 8:00 AM
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">1 hour ago</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 text-center">
+                        <Button variant="ghost" size="sm" className="text-xs">
+                          View all notifications
+                        </Button>
+                      </div>
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
               {/* Account Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
