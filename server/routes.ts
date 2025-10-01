@@ -7660,7 +7660,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               try {
                 console.log(`💾 Saving message to conversation ${conversation.id}...`);
                 
-                // Create message
+                // Create message (isRead is auto-managed by schema)
                 const newMessage = await storage.createConversationMessage({
                   conversationId: conversation.id,
                   type: 'message',
@@ -7668,17 +7668,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                   direction: 'inbound',
                   fromContact: senderId,
                   platform: 'facebook_messenger',
-                  externalId: messageData.mid,
-                  isRead: false
+                  externalId: messageData.mid
                 });
                 
                 console.log(`✅ Message saved with ID: ${newMessage.id}`);
                 
-                // Update conversation
+                // Update conversation (lastMessageAt and unreadCount are auto-managed)
                 await storage.updateConversation(conversation.id, {
-                  lastMessageAt: new Date(),
-                  lastMessageBy: 'customer',
-                  unreadCount: (conversation.unreadCount || 0) + 1
+                  lastMessageBy: 'customer'
                 });
                 
                 console.log(`✅ Conversation ${conversation.id} updated`);
