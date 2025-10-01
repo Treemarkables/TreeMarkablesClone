@@ -1653,11 +1653,6 @@ export function GlobalJobCard({
                     <div className="space-y-4">
                       {/* ServiceM8-Style Customer Search or Create */}
                       <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <UserCircle className="w-4 h-4 text-blue-600" />
-                          <h4 className="font-medium text-gray-800">Customer</h4>
-                        </div>
-                        
                         {/* Search or Create Client Combobox */}
                         <FormField
                           control={form.control}
