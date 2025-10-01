@@ -143,6 +143,7 @@ export interface IStorage {
   getCall(id: string): Promise<Call | undefined>;
   updateCall(id: string, updates: Partial<InsertCall>): Promise<Call>;
   getCallsByCustomer(customerId: string): Promise<Call[]>;
+  getCallsByJobId(jobId: string): Promise<Call[]>;
   getCallsByLead(leadId: string): Promise<Call[]>;
   getAllCalls(limit?: number): Promise<Call[]>;
   
@@ -169,6 +170,17 @@ export interface IStorage {
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
   getAllJobs(): Promise<Job[]>;
+  createJobFromCall(params: {
+    callId: string;
+    customerName: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    customerAddress?: string;
+    jobTitle: string;
+    jobDescription?: string;
+    jobAddress?: string;
+    call: Call;
+  }): Promise<{ job: Job; customer: Customer; call: Call }>;
   clearAllJobs(): Promise<number>;
   deleteJob(id: string): Promise<boolean>;
   bulkDeleteJobs(jobIds: string[]): Promise<{deleted: number; failed: number; errors: string[]}>;
@@ -1364,6 +1376,90 @@ class DatabaseStorage implements IStorage {
     return { deleted, failed, errors };
   }
 
+  async createJobFromCall(params: {
+    callId: string;
+    customerName: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    customerAddress?: string;
+    jobTitle: string;
+    jobDescription?: string;
+    jobAddress?: string;
+    call: Call;
+  }): Promise<{ job: Job; customer: Customer; call: Call }> {
+    // Use transaction to ensure atomicity
+    return await db.transaction(async (tx) => {
+      // Find or create customer
+      let customer;
+      if (params.customerPhone) {
+        const normalizedPhone = this.normalizePhone(params.customerPhone);
+        if (normalizedPhone) {
+          const [existingCustomer] = await tx
+            .select()
+            .from(schema.customers)
+            .where(eq(schema.customers.normalizedPhone, normalizedPhone))
+            .limit(1);
+          customer = existingCustomer;
+        }
+      }
+      
+      if (!customer) {
+        // Create new customer
+        const [newCustomer] = await tx.insert(schema.customers).values({
+          name: params.customerName,
+          phone: params.customerPhone || null,
+          normalizedPhone: this.normalizePhone(params.customerPhone),
+          email: params.customerEmail || null,
+          address: params.customerAddress || null,
+          source: 'phone',
+        }).returning();
+        customer = newCustomer;
+      }
+
+      // Link call to customer
+      const [updatedCall1] = await tx.update(schema.calls)
+        .set({ customerId: customer.id })
+        .where(eq(schema.calls.id, params.callId))
+        .returning();
+
+      // Create job
+      const [job] = await tx.insert(schema.jobs).values({
+        customerId: customer.id,
+        title: params.jobTitle,
+        description: params.jobDescription || `Job created from call on ${new Date().toLocaleString()}`,
+        address: params.jobAddress || params.customerAddress || customer.address || 'Address not specified',
+        leadSource: 'phone',
+        status: 'quote',
+      }).returning();
+
+      // Link call to job
+      const [updatedCall2] = await tx.update(schema.calls)
+        .set({ jobId: job.id })
+        .where(eq(schema.calls.id, params.callId))
+        .returning();
+
+      // Create job diary entry for the call
+      const diaryContent = params.call.transcript 
+        ? `Call recording and transcript from ${params.call.phoneNumber}\n\nTranscript:\n${params.call.transcript}`
+        : `Call recording from ${params.call.phoneNumber}`;
+      
+      await tx.insert(schema.jobDiaryEntries).values({
+        jobId: job.id,
+        entryType: 'note',
+        title: `Phone Call - ${new Date(params.call.createdAt).toLocaleString()}`,
+        description: diaryContent,
+        authorName: 'Mobile App',
+        authorRole: 'system',
+      });
+
+      return {
+        job,
+        customer,
+        call: updatedCall2
+      };
+    });
+  }
+
   // Complete database wipe methods for Option A
   async clearAllQuotes(): Promise<number> {
     const result = await db.delete(schema.quotes);
@@ -1596,6 +1692,10 @@ class DatabaseStorage implements IStorage {
   
   async getCallsByCustomer(customerId: string): Promise<Call[]> {
     return await db.select().from(schema.calls).where(eq(schema.calls.customerId, customerId));
+  }
+  
+  async getCallsByJobId(jobId: string): Promise<Call[]> {
+    return await db.select().from(schema.calls).where(eq(schema.calls.jobId, jobId)).orderBy(desc(schema.calls.createdAt));
   }
   
   async getCallsByLead(leadId: string): Promise<Call[]> {

@@ -7331,6 +7331,176 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // POST /api/mobile/jobs/create-from-call - Create job from call with customer info
+  app.post('/api/mobile/jobs/create-from-call', requireApiKey, async (req: Request, res: Response) => {
+    try {
+      const { callId, customerName, customerPhone, customerEmail, customerAddress, jobTitle, jobDescription, jobAddress } = req.body;
+      
+      if (!callId || !customerName || !jobTitle) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Missing required fields: callId, customerName, jobTitle' 
+        });
+      }
+
+      // Get the call record first (outside transaction)
+      const call = await storage.getCall(callId);
+      if (!call) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Call not found' 
+        });
+      }
+
+      // Create job from call in a transaction for atomicity
+      const result = await storage.createJobFromCall({
+        callId,
+        customerName,
+        customerPhone,
+        customerEmail,
+        customerAddress,
+        jobTitle,
+        jobDescription,
+        jobAddress,
+        call
+      });
+
+      res.json({ 
+        success: true, 
+        data: result,
+        message: 'Job created successfully from call' 
+      });
+    } catch (error) {
+      console.error('Error creating job from call:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Error creating job from call' 
+      });
+    }
+  });
+
+  // POST /api/mobile/calls/:callId/attach-to-job/:jobId - Attach call to existing job
+  app.post('/api/mobile/calls/:callId/attach-to-job/:jobId', requireApiKey, async (req: Request, res: Response) => {
+    try {
+      const { callId, jobId } = req.params;
+      
+      if (!callId || !jobId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Call ID and Job ID are required' 
+        });
+      }
+
+      // Verify call and job exist
+      const call = await storage.getCall(callId);
+      if (!call) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Call not found' 
+        });
+      }
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Job not found' 
+        });
+      }
+
+      // Prepare diary entry data and validate before transaction
+      const diaryContent = call.transcript 
+        ? `Call recording and transcript from ${call.phoneNumber}\n\nTranscript:\n${call.transcript}`
+        : `Call recording from ${call.phoneNumber}`;
+      
+      const diaryEntry = {
+        jobId,
+        entryType: 'note',
+        title: `Phone Call - ${new Date(call.createdAt).toLocaleString()}`,
+        description: diaryContent,
+        authorName: 'Mobile App',
+        authorRole: 'system',
+      };
+      const diaryValidation = insertJobDiaryEntrySchema.safeParse(diaryEntry);
+      if (!diaryValidation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid diary entry data',
+          errors: diaryValidation.error.errors 
+        });
+      }
+
+      // Use transaction to ensure atomicity of call linking and diary entry creation
+      const result = await db.transaction(async (tx) => {
+        // Link call to job
+        const [updatedCall] = await tx.update(schema.calls)
+          .set({ jobId })
+          .where(eq(schema.calls.id, callId))
+          .returning();
+
+        // Create job diary entry for the call
+        const [createdDiary] = await tx.insert(schema.jobDiaryEntries)
+          .values(diaryValidation.data)
+          .returning();
+
+        return { updatedCall, createdDiary };
+      });
+
+      res.json({ 
+        success: true, 
+        data: {
+          call: result.updatedCall,
+          diaryEntry: result.createdDiary
+        },
+        message: 'Call attached to job successfully' 
+      });
+    } catch (error) {
+      console.error('Error attaching call to job:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Error attaching call to job' 
+      });
+    }
+  });
+
+  // GET /api/mobile/jobs/:jobId/calls - Get all calls for a job
+  app.get('/api/mobile/jobs/:jobId/calls', requireApiKey, async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      
+      if (!jobId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Job ID is required' 
+        });
+      }
+
+      // Verify job exists
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Job not found' 
+        });
+      }
+
+      // Get all calls for this job
+      const calls = await storage.getCallsByJobId(jobId);
+
+      res.json({ 
+        success: true, 
+        data: calls,
+        message: `Found ${calls.length} call(s) for this job` 
+      });
+    } catch (error) {
+      console.error('Error getting calls for job:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error retrieving calls for job' 
+      });
+    }
+  });
+
   // GET /api/mobile/customers/match/:phoneNumber - Find customer by phone number
   app.get('/api/mobile/customers/match/:phoneNumber', requireApiKey, async (req: Request, res: Response) => {
     try {
