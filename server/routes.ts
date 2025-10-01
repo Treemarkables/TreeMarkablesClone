@@ -6702,12 +6702,22 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      console.log('📧 Sending email via diary:', { to, subject });
+      // Get job for replyTo email
+      let replyToEmail;
+      if (jobId) {
+        const job = await storage.getJob(jobId);
+        if (job?.jobNumber) {
+          replyToEmail = `job-${job.jobNumber}@jobs.www.treemarkables.co.nz`;
+        }
+      }
+
+      console.log('📧 Sending email via diary:', { to, subject, replyTo: replyToEmail });
       
       // Send email using the service
       const success = await emailService.sendEmail({
         to,
         from: 'noreply@treemarkables.co.nz',
+        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.www.treemarkables.co.nz
         subject,
         text: message,
         html: `<p>${message.replace(/\n/g, '<br>')}</p>`
