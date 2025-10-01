@@ -887,9 +887,10 @@ export const csvImportResultSchema = z.object({
 });
 
 // CSV Import Types
-export type ServiceM8CustomerCsv = z.infer<typeof servicem8CustomerCsvSchema>;
-export type ServiceM8JobCsv = z.infer<typeof servicem8JobCsvSchema>;  
-export type ServiceM8QuoteCsv = z.infer<typeof servicem8QuoteCsvSchema>;
+// TODO: Define servicem8 CSV schemas when needed
+// export type ServiceM8CustomerCsv = z.infer<typeof servicem8CustomerCsvSchema>;
+// export type ServiceM8JobCsv = z.infer<typeof servicem8JobCsvSchema>;  
+// export type ServiceM8QuoteCsv = z.infer<typeof servicem8QuoteCsvSchema>;
 export type CsvImportResult = z.infer<typeof csvImportResultSchema>;
 
 // ========================================
@@ -1399,47 +1400,6 @@ export const insertProposalLineItemSchema = createInsertSchema(proposalLineItems
   id: true,
   createdAt: true,
   updatedAt: true,
-}).refine((data) => {
-  // Validate sourceId based on sourceType
-  if (data.sourceType === 'fixed' && data.sourceId) {
-    return false; // Fixed items should not have sourceId
-  }
-  if ((data.sourceType === 'quote' || data.sourceType === 'template') && !data.sourceId) {
-    return false; // Quote/template items must have sourceId
-  }
-  
-  // Validate pricing type constraints
-  if (data.pricingType === 'choice' && !data.selectedChoiceId) {
-    return false; // Choice items must have a selected choice
-  }
-  if (data.pricingType === 'fixed') {
-    if (!data.fixedPrice) return false; // Fixed pricing items must have a fixed price
-    if (data.selectedChoiceId) return false; // Fixed pricing should not have selected choices
-  }
-  if (data.pricingType === 'normal') {
-    if (data.selectedChoiceId) return false; // Normal pricing should not have selected choices
-    if (data.fixedPrice) return false; // Normal pricing should not have fixed price
-  }
-  
-  // Validate totalPrice calculation based on pricing type
-  if (data.pricingType === 'fixed') {
-    // Fixed pricing: totalPrice should equal fixedPrice
-    if (Math.abs(Number(data.totalPrice) - Number(data.fixedPrice || 0)) > 0.01) {
-      return false;
-    }
-  } else if (data.pricingType === 'normal') {
-    // Normal pricing: totalPrice should equal quantity × unitPrice
-    const calculatedTotal = Number(data.quantity) * Number(data.unitPrice);
-    if (Math.abs(calculatedTotal - Number(data.totalPrice)) > 0.01) {
-      return false;
-    }
-  }
-  // Choice pricing validation would need the actual choices data to validate totalPrice
-  // This is enforced at the API/service layer where choices are available
-  
-  return true;
-}, {
-  message: "Invalid line item: pricing type constraints or calculation errors"
 });
 
 export const updateProposalLineItemSchema = createInsertSchema(proposalLineItems).omit({

@@ -247,6 +247,7 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
     if (employee.email) {
       await emailService.sendEmail({
         to: employee.email,
+        from: 'jullianhalley@hotmail.com',
         subject: `Job Scheduled: ${job?.title || 'Tree Service'}`,
         html: `
           <h2>You've been scheduled for a job</h2>
@@ -269,7 +270,7 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
     // Send SMS notification if phone number exists
     if (employee.phone) {
       const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
-      await smsService.sendSMS(employee.phone, smsMessage);
+      await smsService.sendSMS({ to: employee.phone, message: smsMessage });
     }
 
     console.log(`[Notification] Schedule notification sent to ${employee.firstName} ${employee.lastName}`);
@@ -3328,6 +3329,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Send email using the emailService
       const emailSent = await emailService.sendEmail({
         to: to,
+        from: 'jullianhalley@hotmail.com',
         subject: subject,
         text: body,
         html: emailHtml,
