@@ -7168,15 +7168,56 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // CONVERSATION WEBHOOKS & INTEGRATIONS
   // ========================================
 
+  // Helper function to clean email body for conversation display
+  function cleanEmailBody(text: string, html: string): string {
+    let cleaned = text || html || '';
+    
+    // If we have text, use it and clean it
+    if (text) {
+      // Remove quoted replies (lines starting with >, or "On ... wrote:" sections)
+      const lines = text.split('\n');
+      const cleanLines = [];
+      let inQuote = false;
+      
+      for (const line of lines) {
+        // Check if this is a quote header like "On Thu, Oct 2, 2025 at 4:21 AM <...> wrote:"
+        if (line.match(/^On .+ wrote:$/i) || line.match(/^[-]{3,} Original Message [-]{3,}/i)) {
+          inQuote = true;
+          break;
+        }
+        // Check if line starts with > (quoted text)
+        if (line.trim().startsWith('>')) {
+          inQuote = true;
+          break;
+        }
+        cleanLines.push(line);
+      }
+      
+      cleaned = cleanLines.join('\n').trim();
+    } else if (html) {
+      // Strip HTML tags for plain text display
+      cleaned = html
+        .replace(/<style[^>]*>.*?<\/style>/gis, '')
+        .replace(/<script[^>]*>.*?<\/script>/gis, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/\r\n/g, '\n')
+        .replace(/\n\n+/g, '\n\n')
+        .trim();
+    }
+    
+    return cleaned;
+  }
+  
   // Configure multer for SendGrid Inbound Parse webhook (multipart/form-data)
   const emailWebhookUpload = multer({ storage: multer.memoryStorage() });
   
   // Email webhook - Receives incoming emails from SendGrid Inbound Parse or similar
   app.post('/api/webhooks/email', emailWebhookUpload.none(), async (req: Request, res: Response) => {
     try {
-      // Log full request body to debug SendGrid format
-      console.log('📧 Incoming email webhook - Full body:', JSON.stringify(req.body, null, 2));
-      
       const { from, to, subject, text, html, headers } = req.body;
       
       console.log(`📧 Incoming email from: ${from}, subject: ${subject}`);
@@ -7191,6 +7232,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const [fromName, fromEmail] = from.includes('<') 
         ? [from.split('<')[0].trim(), from.split('<')[1].replace('>', '').trim()]
         : ['', from];
+      
+      // Clean email body for conversation display
+      const cleanedBody = cleanEmailBody(text, html);
       
       // Extract job/quote reference from subject line
       // Matches patterns like: "Job 12345", "QTE-3326", "#12345", "Quote QTE-3326"
@@ -7212,7 +7256,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             jobId: job.id,
             entryType: 'email',
             title: `Email from ${fromName || fromEmail}`,
-            description: text || html || '',
+            description: cleanedBody,
             content: subject || '',
             authorName: fromName || fromEmail,
             authorRole: 'customer',
@@ -7239,7 +7283,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             jobId: job.id,
             entryType: 'email',
             title: `Email from ${fromName || fromEmail}`,
-            description: text || html || '',
+            description: cleanedBody,
             content: subject || '',
             authorName: fromName || fromEmail,
             authorRole: 'customer',
@@ -7275,7 +7319,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         await storage.createConversationMessage({
           conversationId: conversation.id,
           type: 'email',
-          content: text || html || '',
+          content: cleanedBody,
           direction: 'inbound',
           fromName: fromName || fromEmail,
           fromContact: fromEmail,
