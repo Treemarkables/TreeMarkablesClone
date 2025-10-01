@@ -7302,6 +7302,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Check if conversation exists for this email
         const existingConversations = await storage.getAllConversations({ search: fromEmail });
         let conversation = existingConversations[0];
+        const isNewConversation = !conversation;
         
         if (!conversation) {
           // Create new conversation
@@ -7334,6 +7335,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           lastMessageBy: 'customer',
           unreadCount: (conversation.unreadCount || 0) + 1
         });
+
+        // Create notification for new conversation or message
+        const notificationData = {
+          title: isNewConversation ? 'New Email Conversation' : 'New Email Reply',
+          message: `${fromName || fromEmail}: ${subject || 'No subject'}`,
+          type: 'email_received',
+          priority: 'medium' as const,
+          isRead: false,
+          entityType: 'conversation' as const,
+          entityId: conversation.id
+        };
+        await storage.createNotification(notificationData);
+        console.log(`🔔 Notification created for conversation ${conversation.id}`);
       }
       
       res.json({ success: true, message: 'Email received and processed' });
