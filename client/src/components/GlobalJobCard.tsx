@@ -3026,8 +3026,9 @@ export function GlobalJobCard({
                     </div>
                   )}
 
-                  {/* ServiceM8-Style Items & Services Table */}
-                  {lineItemFields.length > 0 ? (
+                  {/* ServiceM8-Style Items & Services Table - Only show in Billing tab */}
+                  {sidebarTab === 'billing' && (
+                    lineItemFields.length > 0 ? (
                     <div className="space-y-4">
                       {/* Table Header */}
                       <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 rounded-t-lg">
@@ -3171,6 +3172,7 @@ export function GlobalJobCard({
                       <p className="text-lg font-medium">No items added yet</p>
                       <p className="text-sm text-gray-400">Click "Add Line Item" to start building your quote</p>
                     </div>
+                    )
                   )}
                 </div>
             </form>
