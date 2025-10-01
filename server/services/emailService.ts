@@ -6,6 +6,7 @@ interface EmailParams {
   subject: string;
   text?: string;
   html?: string;
+  cc?: string | string[]; // CC email address(es)
   replyTo?: string; // Email address for customer replies
   templateId?: string;
   dynamicTemplateData?: Record<string, any>;
@@ -64,6 +65,7 @@ class EmailService {
         subject: params.subject,
         text: params.text,
         html: params.html,
+        ...(params.cc && { cc: params.cc }), // CC recipients
         ...(params.replyTo && { replyTo: params.replyTo }), // Customer replies route to job email
         ...(params.templateId && { templateId: params.templateId }),
         ...(params.dynamicTemplateData && { dynamicTemplateData: params.dynamicTemplateData }),
