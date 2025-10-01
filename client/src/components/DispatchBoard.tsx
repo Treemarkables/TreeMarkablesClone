@@ -381,7 +381,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       startTime: prev.startTime || '09:00',
       endTime: template.estimatedDuration ? 
         calculateEndTime('09:00', template.estimatedDuration) : 
-        prev.endTime || '17:00'
+        prev.endTime || '17:00',
+      // Copy equipment checklist from template with normalization
+      equipmentChecklist: (template.equipmentChecklist || []).map((item, index) => {
+        // Normalize: handle string[], partial objects, or full EquipmentChecklistItem[]
+        const equipmentName = typeof item === 'string' ? item : (item.equipment || item.name || `Item ${index + 1}`);
+        return {
+          id: `equipment-${Date.now()}-${index}`,
+          equipment: equipmentName,
+          checked: false
+          // checkedAt and checkedBy are undefined (not null) for unchecked items
+        };
+      })
     }));
 
     toast({
