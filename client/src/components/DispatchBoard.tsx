@@ -1287,7 +1287,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   {timeSlots.map((time) => (
                     <div
                       key={time}
-                      className="text-center text-xs font-medium text-gray-600 p-2 border-b border-gray-200 min-w-0 flex items-center justify-center"
+                      className="text-center text-xs font-medium text-gray-600 p-2 border-b border-gray-200 min-w-0 flex items-center justify-center overflow-hidden whitespace-nowrap"
                       data-testid={`time-slot-${time}`}
                     >
                       {time}
