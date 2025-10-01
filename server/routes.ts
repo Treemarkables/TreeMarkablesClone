@@ -7168,12 +7168,24 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // CONVERSATION WEBHOOKS & INTEGRATIONS
   // ========================================
 
+  // Configure multer for SendGrid Inbound Parse webhook (multipart/form-data)
+  const emailWebhookUpload = multer({ storage: multer.memoryStorage() });
+  
   // Email webhook - Receives incoming emails from SendGrid Inbound Parse or similar
-  app.post('/api/webhooks/email', async (req: Request, res: Response) => {
+  app.post('/api/webhooks/email', emailWebhookUpload.none(), async (req: Request, res: Response) => {
     try {
+      // Log full request body to debug SendGrid format
+      console.log('📧 Incoming email webhook - Full body:', JSON.stringify(req.body, null, 2));
+      
       const { from, to, subject, text, html, headers } = req.body;
       
       console.log(`📧 Incoming email from: ${from}, subject: ${subject}`);
+      
+      // Validate required fields
+      if (!from || !subject) {
+        console.warn('⚠️ Missing required fields (from or subject) in email webhook');
+        return res.status(200).json({ success: true, message: 'Email received but missing required fields' });
+      }
       
       // Parse sender info
       const [fromName, fromEmail] = from.includes('<') 
