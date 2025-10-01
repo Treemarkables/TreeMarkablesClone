@@ -222,9 +222,9 @@ export const communicationPreferences = pgTable("communication_preferences", {
 export const leads = pgTable("leads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id),
-  name: text("name").notNull(),
+  name: text("name"),
   email: text("email"),
-  phone: text("phone").notNull(),
+  phone: text("phone"),
   address: text("address"),
   serviceRequested: text("service_requested"), // tree removal, hedge trimming, etc
   urgency: text("urgency"), // low, medium, high, emergency

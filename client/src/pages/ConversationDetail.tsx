@@ -105,10 +105,10 @@ export default function ConversationDetail() {
   // Create Opportunity mutation
   const createOpportunityMutation = useMutation({
     mutationFn: async (leadData: typeof leadForm) => {
-      return apiRequest('POST', '/api/leads', leadData);
+      return apiRequest('POST', '/api/pipeline-leads', leadData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/pipeline-leads'] });
       setShowCreateOpportunity(false);
       setLeadForm({
         name: '',
@@ -124,7 +124,7 @@ export default function ConversationDetail() {
         title: 'Opportunity created successfully',
         description: 'The lead has been added to your pipeline'
       });
-      setLocation('/job-dashboard?tab=leads');
+      setLocation('/pipeline');
     },
     onError: () => {
       toast({ 
