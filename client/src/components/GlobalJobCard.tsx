@@ -1992,38 +1992,6 @@ export function GlobalJobCard({
                               </FormItem>
                             )}
                           />
-                          <div className="grid grid-cols-2 gap-3">
-                            <FormField
-                              control={form.control}
-                              name="city"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input 
-                                      {...field}
-                                      className="h-8 text-sm" 
-                                      placeholder="City"
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="region"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input 
-                                      {...field}
-                                      className="h-8 text-sm" 
-                                      placeholder="Region"
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
                         </div>
 
                         {/* Job Description */}
