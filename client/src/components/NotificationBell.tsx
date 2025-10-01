@@ -58,6 +58,7 @@ interface NotificationWithDetails {
   customerName?: string;
   jobTitle?: string;
   quoteNumber?: string;
+  metadata?: any;
 }
 
 interface NotificationSummary {
@@ -168,6 +169,13 @@ export function NotificationBell() {
     // Navigate to action URL if provided and it's an internal route
     if (notification.actionUrl && notification.actionUrl.startsWith('/')) {
       setLocation(notification.actionUrl);
+      setIsOpen(false);
+      return;
+    }
+
+    // Check metadata for conversationId (for older notifications or alternative storage)
+    if (notification.metadata?.conversationId) {
+      setLocation(`/conversation/${notification.metadata.conversationId}`);
       setIsOpen(false);
       return;
     }

@@ -7463,8 +7463,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           type: 'email_received',
           priority: 'medium' as const,
           isRead: false,
-          entityType: 'conversation' as const,
-          entityId: conversation.id
+          actionUrl: `/conversation/${conversation.id}`,
+          metadata: { conversationId: conversation.id, entityType: 'conversation' }
         };
         await storage.createNotification(notificationData);
         console.log(`🔔 Notification created for conversation ${conversation.id}`);
