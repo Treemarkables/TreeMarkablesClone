@@ -3248,7 +3248,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               authorName: 'System',
               authorRole: 'system',
               tags: ['communication', 'email', invoiceId ? 'invoice' : ''].filter(Boolean),
-              isPrivate: false
+              isPrivate: false,
+              metadata: {
+                emailAddress: to
+              }
             });
             console.log(`📝 Email logged to job diary for job ${job?.jobNumber || jobId}`);
           } catch (diaryError) {
@@ -7200,7 +7203,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             description: text || html || '',
             content: subject || '',
             authorName: fromName || fromEmail,
-            authorRole: 'customer'
+            authorRole: 'customer',
+            metadata: {
+              emailAddress: fromEmail || from
+            }
           });
           jobFound = true;
           console.log(`📝 Email logged to job ${job.jobNumber} diary`);
@@ -7224,7 +7230,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             description: text || html || '',
             content: subject || '',
             authorName: fromName || fromEmail,
-            authorRole: 'customer'
+            authorRole: 'customer',
+            metadata: {
+              emailAddress: fromEmail || from
+            }
           });
           jobFound = true;
           console.log(`📝 Email logged to job ${job.jobNumber} diary (via quote ${quoteNumber})`);
