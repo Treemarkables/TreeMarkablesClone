@@ -7273,6 +7273,88 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Contact form submission endpoint with Zod validation
+  app.post('/api/contact', async (req: Request, res: Response) => {
+    try {
+      // Define Zod schema for contact form validation
+      const contactFormSchema = z.object({
+        name: z.string().min(1, 'Name is required').max(255, 'Name must be less than 255 characters'),
+        email: z.string().email('Invalid email format').max(255, 'Email must be less than 255 characters'),
+        phone: z.string().min(1, 'Phone is required').max(50, 'Phone must be less than 50 characters'),
+        serviceType: z.enum(['tree_removal', 'pruning', 'hedge_trimming', 'stump_grinding', 'emergency', 'other'], {
+          errorMap: () => ({ message: 'Invalid service type' })
+        }),
+        propertyType: z.enum(['residential', 'commercial', 'council']).optional(),
+        urgency: z.enum(['immediate', 'within_week', 'within_month', 'planning']).optional(),
+        message: z.string().min(1, 'Message is required').max(5000, 'Message must be less than 5000 characters')
+      });
+
+      // Validate request body
+      const validationResult = contactFormSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: validationResult.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+
+      const { name, email, phone, serviceType, propertyType, urgency, message } = validationResult.data;
+
+      console.log(`📝 Contact form submission from: ${name} (${email})`);
+
+      // Determine priority based on urgency
+      let priority: string;
+      if (urgency === 'immediate') {
+        priority = 'urgent';
+      } else if (urgency) {
+        priority = urgency === 'within_week' ? 'high' : urgency === 'within_month' ? 'medium' : 'medium';
+      } else {
+        priority = 'medium';
+      }
+
+      // Create conversation
+      const conversation = await storage.createConversation({
+        title: `Web Enquiry from ${name}`,
+        status: 'open',
+        source: 'web_form',
+        priority,
+        serviceType,
+        propertyType,
+        urgency,
+        lastMessageBy: 'customer'
+      });
+
+      // Create the first message in the conversation
+      await storage.createConversationMessage({
+        conversationId: conversation.id,
+        type: 'message',
+        content: message,
+        direction: 'inbound',
+        fromName: name,
+        fromContact: email,
+        platform: 'web_form'
+      });
+
+      res.json({
+        success: true,
+        message: 'Your enquiry has been received. We\'ll contact you shortly!',
+        conversationId: conversation.id
+      });
+
+    } catch (error) {
+      console.error('Error processing contact form:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error processing form submission'
+      });
+    }
+  });
+
   // Web form submission endpoint
   app.post('/api/webhooks/contact-form', async (req: Request, res: Response) => {
     try {
