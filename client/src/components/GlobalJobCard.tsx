@@ -1624,13 +1624,22 @@ export function GlobalJobCard({
               Billing
             </button>
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b border-gray-300 ${
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-gray-300 ${
                 sidebarTab === 'diary' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
               }`}
               onClick={() => setSidebarTab('diary')}
               data-testid="sidebar-diary"
             >
               Diary
+            </button>
+            <button
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b border-gray-300 ${
+                sidebarTab === 'equipment' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+              onClick={() => setSidebarTab('equipment')}
+              data-testid="sidebar-equipment"
+            >
+              Equipment
             </button>
           </div>
 
@@ -2826,6 +2835,102 @@ export function GlobalJobCard({
                         <FileText className="w-8 h-8 mx-auto mb-2" />
                         <p className="text-sm">Activity diary will appear here after saving the job.</p>
                       </div>
+                    </div>
+                  )}
+
+                  {sidebarTab === 'equipment' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Package className="w-5 h-5 text-blue-600" />
+                        <h3 className="text-lg font-semibold text-gray-800">Equipment Checklist</h3>
+                      </div>
+
+                      {editingJob && (editingJob.equipmentChecklist && editingJob.equipmentChecklist.length > 0) ? (
+                        <div className="space-y-2">
+                          {editingJob.equipmentChecklist.map((item: any) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                              data-testid={`equipment-item-${item.id}`}
+                            >
+                              <Checkbox
+                                checked={item.checked || false}
+                                onCheckedChange={async (checked) => {
+                                  if (!editingJob?.id) return;
+
+                                  const now = new Date().toISOString();
+                                  const updatedChecklist = editingJob.equipmentChecklist.map((i: any) =>
+                                    i.id === item.id
+                                      ? {
+                                          ...i,
+                                          checked: checked as boolean,
+                                          checkedAt: checked ? now : undefined,
+                                          checkedBy: checked ? 'Staff' : undefined,
+                                        }
+                                      : i
+                                  );
+
+                                  try {
+                                    // Update the equipment checklist
+                                    await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                      equipmentChecklist: updatedChecklist,
+                                    });
+
+                                    // Create diary entry
+                                    await apiRequest('POST', `/api/jobs/${editingJob.id}/diary`, {
+                                      entryType: 'equipment',
+                                      entryText: checked
+                                        ? `Equipment checked: ${item.equipment} by Staff`
+                                        : `Equipment unchecked: ${item.equipment}`,
+                                      metadata: {
+                                        equipmentId: item.id,
+                                        equipmentName: item.equipment,
+                                        action: checked ? 'checked' : 'unchecked',
+                                        checkedBy: 'Staff',
+                                      },
+                                    });
+
+                                    // Invalidate queries to refresh data
+                                    queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+                                    queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+
+                                    toast({
+                                      title: checked ? 'Equipment Checked' : 'Equipment Unchecked',
+                                      description: `${item.equipment} has been ${checked ? 'checked' : 'unchecked'} and logged to diary`,
+                                    });
+                                  } catch (error) {
+                                    console.error('Error updating equipment:', error);
+                                    toast({
+                                      title: 'Error',
+                                      description: 'Failed to update equipment checklist',
+                                      variant: 'destructive',
+                                    });
+                                  }
+                                }}
+                                data-testid={`checkbox-equipment-${item.id}`}
+                              />
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-800">{item.equipment}</p>
+                                {item.checked && item.checkedAt && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Checked by {item.checkedBy || 'Staff'} on{' '}
+                                    {format(new Date(item.checkedAt), 'MMM d, yyyy h:mm a')}
+                                  </p>
+                                )}
+                              </div>
+                              {item.checked && (
+                                <CheckCircle className="w-5 h-5 text-green-600" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                          <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg font-medium">No equipment assigned to this job</p>
+                          <p className="text-sm text-gray-400 mt-2">Equipment items will appear here when added to the job</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
