@@ -6,6 +6,7 @@ interface EmailParams {
   subject: string;
   text?: string;
   html?: string;
+  replyTo?: string; // Email address for customer replies
   templateId?: string;
   dynamicTemplateData?: Record<string, any>;
   attachments?: Array<{
@@ -44,6 +45,7 @@ class EmailService {
         console.log('\n=== EMAIL NOTIFICATION (Mock Mode) ===');
         console.log(`To: ${params.to}`);
         console.log(`From: ${params.from}`);
+        if (params.replyTo) console.log(`Reply-To: ${params.replyTo}`);
         console.log(`Subject: ${params.subject}`);
         if (params.text) console.log(`Text: ${params.text}`);
         if (params.html) console.log(`HTML: ${params.html}`);
@@ -62,6 +64,7 @@ class EmailService {
         subject: params.subject,
         text: params.text,
         html: params.html,
+        ...(params.replyTo && { replyTo: params.replyTo }), // Customer replies route to job email
         ...(params.templateId && { templateId: params.templateId }),
         ...(params.dynamicTemplateData && { dynamicTemplateData: params.dynamicTemplateData }),
         ...(params.attachments && { attachments: params.attachments }),
