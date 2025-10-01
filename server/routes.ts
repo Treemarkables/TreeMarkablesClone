@@ -7619,10 +7619,23 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             if (messageData && messageData.text) {
               console.log(`💬 Facebook message from ${senderId}: ${messageData.text}`);
               
-              // Find or create conversation for this sender
-              const existingConversations = await storage.getAllConversations({ search: senderId });
-              let conversation = existingConversations[0];
+              // Find existing conversation for this Facebook sender
+              // Get all social conversations and check their messages for this sender
+              const allConversations = await storage.getAllConversations({ source: 'social' });
+              let conversation = null;
               
+              for (const conv of allConversations) {
+                const messages = await storage.getConversationMessages(conv.id);
+                const hasMessageFromSender = messages.some(
+                  msg => msg.platform === 'facebook_messenger' && msg.fromContact === senderId
+                );
+                if (hasMessageFromSender) {
+                  conversation = conv;
+                  break;
+                }
+              }
+              
+              // Create new conversation if none exists for this sender
               if (!conversation) {
                 conversation = await storage.createConversation({
                   title: 'Facebook Messenger Enquiry',
