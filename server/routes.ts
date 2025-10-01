@@ -7617,6 +7617,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             const messageData = event.message;
             
             if (messageData && messageData.text) {
+              // Skip echo messages (messages we sent)
+              if (messageData.is_echo) {
+                console.log(`🔄 Skipping echo message`);
+                continue;
+              }
+              
               console.log(`💬 Facebook message from ${senderId}: ${messageData.text}`);
               
               // Find existing conversation for this Facebook sender
@@ -7624,12 +7630,15 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               const allConversations = await storage.getAllConversations({ source: 'social' });
               let conversation = null;
               
+              console.log(`📋 Searching through ${allConversations.length} social conversations for sender ${senderId}`);
+              
               for (const conv of allConversations) {
                 const messages = await storage.getConversationMessages(conv.id);
                 const hasMessageFromSender = messages.some(
                   msg => msg.platform === 'facebook_messenger' && msg.fromContact === senderId
                 );
                 if (hasMessageFromSender) {
+                  console.log(`✅ Found existing conversation ${conv.id} for sender ${senderId}`);
                   conversation = conv;
                   break;
                 }
@@ -7637,6 +7646,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               
               // Create new conversation if none exists for this sender
               if (!conversation) {
+                console.log(`➕ Creating new conversation for sender ${senderId}`);
                 conversation = await storage.createConversation({
                   title: 'Facebook Messenger Enquiry',
                   status: 'open',
