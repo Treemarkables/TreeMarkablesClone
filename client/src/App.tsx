@@ -47,16 +47,12 @@ import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, Bell } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatDistanceToNow } from "date-fns";
+import { NotificationBell } from "@/components/NotificationBell";
 
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
@@ -64,17 +60,6 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const [, setLocation] = useLocation();
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  
-  // Fetch real notifications
-  const { data: notificationsData } = useQuery<{ data: any[] }>({
-    queryKey: ['/api/notifications/unread'],
-    refetchInterval: 30000, // Refresh every 30 seconds
-  });
-  
-  const notifications = notificationsData?.data || [];
-  const unreadCount = notifications.length;
   
   const style = {
     "--sidebar-width": "12rem",
@@ -90,85 +75,9 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             
             <div className="flex items-center gap-2">
-              {/* Notifications Button */}
-              <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-                    <Bell className="h-5 w-5" />
-                    {/* Notification badge - showing count */}
-                    {unreadCount > 0 && (
-                      <span className="absolute top-0 right-0 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                      </span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-96 p-0" align="end">
-                  <div className="flex items-center justify-between p-4 border-b">
-                    <h3 className="font-semibold">Notifications</h3>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs">
-                      Mark all read
-                    </Button>
-                  </div>
-                  <ScrollArea className="h-96">
-                    <div className="p-2 space-y-2">
-                      {notifications.length === 0 ? (
-                        <div className="p-8 text-center">
-                          <p className="text-sm text-muted-foreground">No new notifications</p>
-                        </div>
-                      ) : (
-                        <>
-                          {notifications.slice(0, 10).map((notification: any) => {
-                            const colorMap: Record<string, string> = {
-                              email_received: 'bg-blue-500',
-                              proposal_accepted: 'bg-green-500',
-                              quote_accepted: 'bg-green-500',
-                              job_completed: 'bg-purple-500',
-                              job_status_change: 'bg-orange-500',
-                            };
-                            
-                            const handleClick = () => {
-                              if (notification.type === 'email_received' && notification.entityId) {
-                                setLocation(`/conversation/${notification.entityId}`);
-                              } else if (notification.actionUrl) {
-                                setLocation(notification.actionUrl);
-                              }
-                              setNotificationsOpen(false);
-                            };
-                            
-                            return (
-                              <div 
-                                key={notification.id}
-                                className="p-3 hover-elevate rounded-lg border cursor-pointer" 
-                                data-testid="notification-item"
-                                onClick={handleClick}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className={`w-2 h-2 rounded-full ${colorMap[notification.type] || 'bg-gray-500'} mt-1.5 flex-shrink-0`}></div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-sm">{notification.title}</p>
-                                    <p className="text-sm text-muted-foreground">
-                                      {notification.message}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          <div className="p-3 text-center">
-                            <Button variant="ghost" size="sm" className="text-xs">
-                              View all notifications
-                            </Button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </PopoverContent>
-              </Popover>
+              {/* Notifications Bell */}
+              <NotificationBell />
+              
               {/* Account Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
