@@ -7250,6 +7250,112 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Test endpoint - Simulate customer email reply (for testing email-to-diary flow)
+  app.post('/api/webhooks/email/test', async (req: Request, res: Response) => {
+    try {
+      const { jobNumber, quoteNumber } = req.body;
+      
+      if (!jobNumber && !quoteNumber) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Please provide jobNumber or quoteNumber to test' 
+        });
+      }
+      
+      // Simulate email with job/quote reference
+      const testSubject = jobNumber 
+        ? `Re: Invoice RE: ${jobNumber} 123 Main Street`
+        : `Re: Your Quote RE: ${quoteNumber}`;
+      
+      console.log(`\n🧪 === EMAIL-TO-DIARY TEST ===`);
+      console.log(`Subject: ${testSubject}`);
+      console.log(`From: John Smith <john.smith@example.com>`);
+      console.log(`Message: Thank you for the quote. When can you start the work?`);
+      
+      // Test job lookup by job number
+      if (jobNumber) {
+        const job = await storage.getJobByJobNumber(jobNumber);
+        if (job) {
+          console.log(`✅ Found job: ${job.jobNumber} (ID: ${job.id})`);
+          
+          // Create test diary entry
+          const diaryEntry = await storage.createJobDiaryEntry({
+            jobId: job.id,
+            entryType: 'email',
+            title: `Email from John Smith`,
+            description: 'Thank you for the quote. When can you start the work?',
+            content: testSubject,
+            authorName: 'John Smith',
+            authorRole: 'customer'
+          });
+          
+          console.log(`📝 Created diary entry in job ${job.jobNumber}`);
+          console.log(`=== TEST SUCCESSFUL ===\n`);
+          
+          return res.json({
+            success: true,
+            message: `Email logged to job ${job.jobNumber} diary`,
+            data: {
+              job: { id: job.id, jobNumber: job.jobNumber },
+              diaryEntry: { id: diaryEntry.id, title: diaryEntry.title }
+            }
+          });
+        } else {
+          console.log(`❌ Job ${jobNumber} not found`);
+          console.log(`=== TEST FAILED ===\n`);
+          return res.status(404).json({ 
+            success: false, 
+            message: `Job ${jobNumber} not found. Create a job with this number first.` 
+          });
+        }
+      }
+      
+      // Test job lookup by quote number
+      if (quoteNumber) {
+        const jobs = await storage.getAllJobs({ quoteNumber });
+        if (jobs && jobs.length > 0) {
+          const job = jobs[0];
+          console.log(`✅ Found job via quote: ${job.jobNumber} (ID: ${job.id})`);
+          
+          // Create test diary entry
+          const diaryEntry = await storage.createJobDiaryEntry({
+            jobId: job.id,
+            entryType: 'email',
+            title: `Email from John Smith`,
+            description: 'Thank you for the quote. When can you start the work?',
+            content: testSubject,
+            authorName: 'John Smith',
+            authorRole: 'customer'
+          });
+          
+          console.log(`📝 Created diary entry in job ${job.jobNumber}`);
+          console.log(`=== TEST SUCCESSFUL ===\n`);
+          
+          return res.json({
+            success: true,
+            message: `Email logged to job ${job.jobNumber} diary (via quote ${quoteNumber})`,
+            data: {
+              job: { id: job.id, jobNumber: job.jobNumber, quoteNumber },
+              diaryEntry: { id: diaryEntry.id, title: diaryEntry.title }
+            }
+          });
+        } else {
+          console.log(`❌ No job found with quote ${quoteNumber}`);
+          console.log(`=== TEST FAILED ===\n`);
+          return res.status(404).json({ 
+            success: false, 
+            message: `No job found with quote ${quoteNumber}` 
+          });
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ Error testing email webhook:', error);
+      console.log(`=== TEST FAILED ===\n`);
+      res.status(500).json({ success: false, message: 'Test failed', error: String(error) });
+    }
+  });
+
   // Facebook Messenger webhook verification (required by Facebook)
   app.get('/api/webhooks/messenger', (req: Request, res: Response) => {
     const mode = req.query['hub.mode'];
