@@ -3327,9 +3327,8 @@ export function GlobalJobCard({
         <SMSComposerModal
           isOpen={isSMSComposerOpen}
           onClose={() => setIsSMSComposerOpen(false)}
-          recipientName={selectedCustomer?.name || ''}
-          recipientPhone={selectedCustomer?.phone || ''}
-          jobTitle={mode === "create" ? "New Job" : `Job #${editingJob?.jobNumber || ""}`}
+          job={editingJob}
+          customer={selectedCustomer}
         />
       )}
 
