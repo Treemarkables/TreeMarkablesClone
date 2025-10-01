@@ -7656,6 +7656,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 });
               }
               
+              console.log(`🔍 About to save message. Conversation:`, conversation ? conversation.id : 'NULL');
+              
               try {
                 console.log(`💾 Saving message to conversation ${conversation.id}...`);
                 
