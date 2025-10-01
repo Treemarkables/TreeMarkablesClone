@@ -7180,16 +7180,43 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       let inQuote = false;
       
       for (const line of lines) {
+        const trimmed = line.trim();
+        
         // Check if this is a quote header like "On Thu, Oct 2, 2025 at 4:21 AM <...> wrote:"
         if (line.match(/^On .+ wrote:$/i) || line.match(/^[-]{3,} Original Message [-]{3,}/i)) {
           inQuote = true;
           break;
         }
+        
         // Check if line starts with > (quoted text)
-        if (line.trim().startsWith('>')) {
+        if (trimmed.startsWith('>')) {
           inQuote = true;
           break;
         }
+        
+        // Stop at signature patterns
+        if (
+          // Standard signature separators
+          trimmed === '--' ||
+          trimmed.match(/^-{2,}$/) ||
+          trimmed.match(/^_{2,}$/) ||
+          // Sent from / Get Outlook
+          trimmed.toLowerCase().includes('sent from') ||
+          trimmed.toLowerCase().includes('get outlook') ||
+          // Disclaimer markers
+          trimmed.toLowerCase().startsWith('disclaimer') ||
+          trimmed.toLowerCase().startsWith('this email') ||
+          // Common signature patterns with pipes or separators
+          trimmed.match(/^[A-Z][a-z]+ [A-Z][a-z]+\s*[\|\/·•]/i) || // "Name Name | Title"
+          // Contact info patterns
+          trimmed.match(/^p:\s*[+\d]/i) || // Phone: "p: +64..."
+          trimmed.match(/^w:\s*www\./i) || // Website: "w: www..."
+          trimmed.match(/^e:\s*\S+@\S+/i) || // Email: "e: email@..."
+          trimmed.match(/^a:\s*\d+/i) // Address: "a: 347..."
+        ) {
+          break;
+        }
+        
         cleanLines.push(line);
       }
       
