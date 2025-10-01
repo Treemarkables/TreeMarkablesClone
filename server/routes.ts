@@ -309,6 +309,68 @@ async function requireAdmin(req: Request, res: Response, next: express.NextFunct
   }
 }
 
+// Middleware to require API key for mobile app endpoints
+async function requireApiKey(req: Request, res: Response, next: express.NextFunction): Promise<void> {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ 
+        success: false, 
+        message: 'API key required. Include Authorization: Bearer <api-key> header.' 
+      });
+      return;
+    }
+    
+    const apiKey = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
+    if (!apiKey) {
+      res.status(401).json({ 
+        success: false, 
+        message: 'API key is empty' 
+      });
+      return;
+    }
+    
+    // Hash the API key using SHA-256 (for API keys, not bcrypt)
+    const crypto = await import('crypto');
+    const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+    
+    // Look up the API key in the database
+    const storedKey = await storage.getApiKeyByHash(keyHash);
+    
+    if (!storedKey) {
+      res.status(401).json({ 
+        success: false, 
+        message: 'Invalid API key' 
+      });
+      return;
+    }
+    
+    if (!storedKey.isActive) {
+      res.status(401).json({ 
+        success: false, 
+        message: 'API key is inactive' 
+      });
+      return;
+    }
+    
+    // Update last used timestamp
+    await storage.updateApiKeyLastUsed(storedKey.id);
+    
+    // Add API key info to request for logging/tracking
+    (req as any).apiKey = storedKey;
+    
+    next();
+  } catch (error) {
+    console.error('Error in requireApiKey middleware:', error);
+    res.status(401).json({ 
+      success: false, 
+      message: 'API key authentication failed' 
+    });
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // ========================================
   // AUTHENTICATION ENDPOINTS
@@ -7081,6 +7143,92 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error getting unread count:', error);
       res.status(500).json({ success: false, message: 'Error getting unread count' });
+    }
+  });
+
+  // ========================================
+  // MOBILE APP API ROUTES
+  // ========================================
+
+  // POST /api/mobile/calls/upload - Upload call recording from mobile app
+  app.post('/api/mobile/calls/upload', requireApiKey, (req: Request, res: Response, next: express.NextFunction) => {
+    // Handle multer errors explicitly
+    audioUpload.single('audio')(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ 
+              success: false, 
+              message: 'Audio file is too large. Maximum size is 50MB.' 
+            });
+          }
+          return res.status(400).json({ 
+            success: false, 
+            message: `File upload error: ${err.message}` 
+          });
+        }
+        return res.status(400).json({ 
+          success: false, 
+          message: err.message || 'Invalid audio file' 
+        });
+      }
+      next();
+    });
+  }, async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'No audio file uploaded' 
+        });
+      }
+
+      // Validate required fields
+      const { phoneNumber, direction, duration, status } = req.body;
+      if (!phoneNumber || !direction) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Missing required fields: phoneNumber, direction' 
+        });
+      }
+
+      // Create the recording URL (relative path that will be accessible via the server)
+      const recordingUrl = `/uploads/recordings/${file.filename}`;
+
+      // Create call record in database
+      const callData = {
+        phoneNumber,
+        direction,
+        status: status || 'answered',
+        duration: duration ? parseInt(duration) : undefined,
+        recordingUrl,
+        customerId: req.body.customerId || undefined,
+        leadId: req.body.leadId || undefined,
+      };
+
+      const validation = insertCallSchema.safeParse(callData);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid call data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const call = await storage.createCall(validation.data);
+
+      res.json({ 
+        success: true, 
+        data: call,
+        message: 'Call recording uploaded successfully' 
+      });
+    } catch (error) {
+      console.error('Error uploading call recording:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error uploading call recording' 
+      });
     }
   });
 
