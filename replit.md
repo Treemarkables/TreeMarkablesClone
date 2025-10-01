@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a comprehensive tree removal service business management application for Treemarkables, a New Zealand-based arborist company. The application has evolved from a marketing website into a full-featured business dashboard with advanced scheduling, job management, customer relationship tools, and operational analytics. The system includes a ServiceM8-style dispatch board for visual job scheduling, crew management, equipment tracking, invoice management, photo documentation, safety reporting, route optimization, and performance analytics.
+This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved from a marketing website into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
 ## User Preferences
 
@@ -10,134 +10,77 @@ Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Frontend Architecture
-- **Framework**: React with TypeScript using Vite as the build tool
-- **Routing**: Wouter for lightweight client-side routing
-- **UI Components**: Shadcn/ui component library with Radix UI primitives
-- **Styling**: Tailwind CSS with custom design system following professional service industry standards
-- **State Management**: TanStack Query for server state management
+### Frontend
+- **Framework**: React with TypeScript (Vite build tool)
+- **Routing**: Wouter
+- **UI Components**: Shadcn/ui (Radix UI primitives)
+- **Styling**: Tailwind CSS (custom design system, professional orange/blue theme, light/dark mode)
+- **State Management**: TanStack Query
 - **Form Handling**: React Hook Form with Zod validation
+- **Design System**: Mobile-first responsive design, Inter, Source Sans Pro, and Merriweather fonts.
 
-### Design System
-- **Color Palette**: Professional orange/blue theme with both light and dark mode support
-- **Typography**: Inter for headings, Source Sans Pro for body text, Merriweather for testimonials
-- **Component Architecture**: Modular component structure with reusable UI components
-- **Layout Strategy**: Mobile-first responsive design with max-width containers and consistent spacing
-
-### Backend Architecture
-- **Runtime**: Node.js with Express server
-- **Language**: TypeScript throughout the stack
-- **API Structure**: RESTful API design with `/api` prefix for all endpoints
-- **Development**: Hot module replacement with Vite middleware integration
-- **Storage Interface**: Abstracted storage layer with in-memory implementation (ready for database integration)
+### Backend
+- **Runtime**: Node.js with Express
+- **Language**: TypeScript
+- **API**: RESTful API (`/api` prefix)
+- **Development**: Hot module replacement (Vite middleware)
+- **Storage Interface**: Abstracted layer with in-memory implementation (ready for database integration)
 
 ### Data Layer
-- **ORM**: Drizzle ORM configured for PostgreSQL
-- **Schema**: Type-safe database schema definitions with Zod validation
-- **Database**: PostgreSQL (configured but using in-memory storage currently)
-- **Migrations**: Drizzle Kit for database migrations and schema management
+- **ORM**: Drizzle ORM (PostgreSQL)
+- **Schema**: Type-safe definitions with Zod validation
+- **Database**: PostgreSQL (configured, currently using in-memory)
+- **Migrations**: Drizzle Kit
 
 ### Business Features
-- **Job Dashboard**: Central hub at `/job-dashboard` with comprehensive business management tools
-- **Dispatch Board**: ServiceM8-style visual scheduling interface with time-grid (6 AM - 7 PM), staff roster, job assignments, and drag-and-drop scheduling capabilities with duration-based scheduling (15min to 8hr increments)
-- **ServiceM8-Style Job Creation**: Professional job creation form with orange header design, comprehensive job details, dynamic checklist functionality, contact management, and seamless integration with dispatch boards - fully validates and creates jobs with proper status enum handling. Features inline customer creation allowing users to add new customers directly within the job form instead of being restricted to existing customer dropdown selection
-- **Lead Management**: Pipeline tracking, lead scoring, conversion funnels, and automated follow-up systems
-- **Customer Management**: Complete customer profiles, service history, communication logs, and relationship tracking
-- **Quote Management**: Professional quote generation, analytics, approval workflows, and conversion tracking
-- **Business Analytics**: Revenue tracking, performance metrics, service analytics, and comprehensive reporting
-- **Weather Integration**: Real-time weather data for job planning and safety considerations
-- **Crew Management**: Staff scheduling, skill tracking, certification management, and performance monitoring
-- **Equipment Tracking**: Asset management, maintenance schedules, usage tracking, and availability status
-- **Invoice Management**: Professional invoice generation, payment tracking, and financial reporting
-- **Photo Documentation**: Job documentation, before/after photos, and visual progress tracking
-- **Safety Reporting**: Incident tracking, safety protocols, risk assessments, and compliance monitoring
-- **Route Optimization**: Efficient job routing, travel time calculation, and fuel cost optimization
-- **ServiceM8-Style Settings Interface**: Simplified settings management with clean grid layout featuring 8 essential business setting cards (Staff, Materials & Services, Job Categories, Company Info, Security & API, Notifications, Job Templates, Preferences) - removed complex enterprise features (addons, automations, external calendars, custom fields) for streamlined user experience with quick action shortcuts. All setting cards link to appropriate placeholder pages preventing 404 errors
+- **Job Dashboard**: Central hub at `/job-dashboard`.
+- **Dispatch Board**: ServiceM8-style visual scheduling (6 AM - 7 PM, drag-and-drop, 15min-8hr increments).
+- **ServiceM8-Style Job Creation**: Professional form with dynamic checklists, contact management, inline customer creation, and proper status handling.
+- **Lead Management**: Pipeline tracking, scoring, and follow-up.
+- **Customer Management**: Profiles, service history, communication logs.
+- **Quote Management**: Generation, analytics, approval workflows.
+- **Business Analytics**: Revenue, performance, service metrics, reporting.
+- **Weather Integration**: Real-time data for job planning.
+- **Crew Management**: Scheduling, skill tracking, certifications.
+- **Equipment Tracking**: Asset management, maintenance, usage.
+- **Invoice Management**: Generation, payment tracking, financial reporting.
+- **Photo Documentation**: Before/after, visual progress.
+- **Safety Reporting**: Incident tracking, protocols, risk assessments.
+- **Route Optimization**: Efficient routing, travel time, fuel costs.
+- **ServiceM8-Style Settings Interface**: Streamlined settings management with quick action shortcuts for Staff, Materials & Services, Job Categories, Company Info, Security & API, Notifications, Job Templates, Preferences.
+- **Intelligent Process Automation**: Workflow system with intelligent job assignment, automated communications, and business process triggers.
+- **Event-Driven Architecture**: Triggers on job creation, status changes, quote acceptance.
+- **Workflow Management UI**: Dashboard at `/job-dashboard` → "Workflows" tab.
+- **Job Diary System**: Comprehensive CRUD for diary entries (note, progress, issue, milestone, weather, equipment, safety, completion) with rich metadata and filtering.
+- **Secure Password Authentication System**: Role-based (admin/crew) server-controlled session authentication with bcrypt hashing. Environment-aware login.
+- **Email-to-Job-Diary Integration**: Email webhook intelligently routes customer replies with job/quote references directly to job diaries as "email" type entries.
 
 ## External Dependencies
 
-### Core Framework Dependencies
-- **@tanstack/react-query**: Server state management and API caching
-- **wouter**: Lightweight routing library
-- **react-hook-form**: Form state management and validation
-- **@hookform/resolvers**: Zod integration for form validation
+### Core Framework
+- `@tanstack/react-query`
+- `wouter`
+- `react-hook-form`
+- `@hookform/resolvers`
 
-### UI Component Libraries
-- **@radix-ui/***: Comprehensive set of accessible UI primitives (accordion, dialog, dropdown, etc.)
-- **lucide-react**: Icon library for consistent iconography
-- **class-variance-authority**: Type-safe CSS class variant management
-- **clsx & tailwind-merge**: Conditional CSS class handling
+### UI & Styling
+- `@radix-ui/*`
+- `lucide-react`
+- `class-variance-authority`
+- `clsx`, `tailwind-merge`
+- `tailwindcss`, `autoprefixer`
+- Google Fonts (Inter, Source Sans Pro, Merriweather)
 
 ### Database & Validation
-- **drizzle-orm & drizzle-kit**: Type-safe ORM and migration tools
-- **@neondatabase/serverless**: PostgreSQL database driver
-- **zod**: Runtime type validation and schema definition
-- **drizzle-zod**: Integration between Drizzle schemas and Zod validation
+- `drizzle-orm`, `drizzle-kit`
+- `@neondatabase/serverless` (PostgreSQL driver)
+- `zod`, `drizzle-zod`
 
 ### Development Tools
-- **vite**: Fast build tool and development server
-- **tsx**: TypeScript execution for development
-- **esbuild**: Fast JavaScript bundler for production builds
-- **@replit/vite-plugin-***: Replit-specific development enhancements
+- `vite`
+- `tsx`
+- `esbuild`
+- `@replit/vite-plugin-*`
 
-### Styling & Fonts
-- **tailwindcss**: Utility-first CSS framework
-- **autoprefixer**: CSS vendor prefixing
-- **Google Fonts**: Inter, Source Sans Pro, and Merriweather font families
-
-### Advanced Workflow Automation System (Latest Addition)
-- **Intelligent Process Automation**: Complete workflow automation system with intelligent job assignment, automated communications, and business process triggers
-- **Event-Driven Architecture**: Automatically triggers on real business events (job creation, status changes, quote acceptance) through integration with existing AutomatedTriggers service
-- **Workflow Management UI**: Comprehensive dashboard at `/job-dashboard` → "Workflows" tab with real-time statistics, workflow rule management, trigger testing, and mobile-optimized interface
-- **API Integration**: RESTful endpoints for complete workflow CRUD operations (`/api/workflows`, `/api/workflows/:id/toggle`, `/api/workflows/trigger`) with enhanced validation
-- **Business Logic**: Pre-configured workflows for emergency job handling, invoice generation, customer follow-up scheduling, and intelligent crew assignment based on availability and skills
-- **Real-time Operations**: Background processing for automated assignment, notification delivery, and scheduling with comprehensive logging and error handling
-- **Integration Architecture**: Seamlessly integrated with existing notification service, storage interface, and business logic without disrupting current operations
-
-### Job Diary System
-- **Comprehensive Diary Management**: Complete CRUD operations for job diary entries with rich metadata support
-- **Entry Types**: Multiple entry categories (note, progress, issue, milestone, weather, equipment, safety, completion) with color-coded UI
-- **Advanced Features**: Private entries, filtering by type, progress tracking, weather documentation, equipment logging, time tracking
-- **API Integration**: RESTful endpoints for diary management (`/api/jobs/:jobId/diary`, `/api/diary/:id`) with proper validation
-- **UI Components**: Modal dialog integration, timeline view, rich form inputs, delete confirmation, responsive design
-- **Real-time Updates**: Automatic cache invalidation and UI updates using TanStack Query
-- **Data Persistence**: Proper storage interface with in-memory implementation ready for database scaling
-
-The application now serves as a complete business management platform with professional-grade features comparable to industry-standard field service management solutions. The system features a vibrant, colorful design system with emerald, purple, orange, yellow, and teal color schemes that enhance user experience and visual appeal.
-
-### ServiceM8-Style Job Card Implementation (September 2025)
-- **Complete ServiceM8 Integration**: Successfully implemented professional ServiceM8-style job card modal with clean white header design
-- **ServiceM8HeaderToolbar**: Complete action toolbar with Email, SMS, Call, Schedule, Queue, Form, Proposal, Profit, and More dropdown
-- **Functional Scheduling**: Full scheduling modal with date/time selection, staff assignment, and notes - integrated with job status management
-- **Professional Design**: Replaced orange gradient header with clean ServiceM8-style white header for professional appearance
-- **Enhanced Business Logic**: Updated job status enum to include 'scheduled' status for proper job lifecycle management
-- **Complete Integration**: All ServiceM8 functionality working including invoice creation, email composers, SMS composers, and proposal builders
-- **Customer Avatars**: Professional customer avatar display in jobs panel with fallback initials
-- **ServiceM8ActivityFeed**: Ready-to-use activity feed component for future two-column layout implementation
-
-### Recent UI Enhancements (September 2025)
-- **Vibrant Color System**: Enhanced the design with a comprehensive color palette including emerald green, purple, orange, yellow, teal, and pink gradients
-- **Email Composer Enhancement**: Updated EmailComposerModal with green gradient header theme to match the "Send Invoice" action
-- **SMS Invoice Functionality**: Complete SMS composer with purple/pink gradient theme, character counter (160 limit), and pre-populated invoice messaging
-- **Colorful Dropdown Actions**: Invoice action dropdown now features color-coded icons (green for Send Invoice, purple for SMS Invoice, yellow for Auto Invoice, orange for Partial Invoice, teal for Customise Invoice, blue for Add Payment)
-- **Enhanced Communication Modals**: Both email and SMS modals feature vibrant gradient headers with white text overlays and improved visual hierarchy
-
-## Recent Changes (September 30, 2025)
-
-### Secure Password Authentication System
-- **Role-Based Security**: Complete implementation of admin/crew roles with server-controlled session-based authentication preventing client-side identity manipulation
-- **Password Authentication**: Secure bcrypt-hashed password storage and verification for all staff members
-- **Environment-Aware Login**: Development mode shows quick-select dropdown for testing; production requires email/password login form
-- **Fail-Safe Security**: ALLOW_EMPLOYEE_ID_LOGIN environment variable defaults to disabled (secure) unless NODE_ENV is explicitly 'development'
-- **Password Management**: Admin-only UI in Staff Management page for setting/resetting staff passwords with validation
-- **Authorization Middleware**: Backend protection for sensitive operations (customer deletion, invoice price changes) requiring admin role
-- **Security Logging**: Comprehensive logging of authentication attempts with warnings for blocked dev login attempts in production
-- **Login Page**: Professional `/login` page with email/password form for production deployments
-- **Session Management**: Express-session with memorystore for secure server-side session handling
-
-### Scheduling System Improvements
-- **Fixed Critical Conflict Detection Bug**: Resolved SQL query issue that was causing false positive conflicts between non-overlapping dates (e.g., Oct 1 assignments incorrectly conflicting with Oct 4 scheduling). Replaced raw SQL template literals with proper Drizzle ORM operators (`lt`, `gt`, `ne`) for accurate date comparison
-- **Duration-Based Scheduling**: Implemented automatic end time calculation based on selected duration (15min to 8hr increments) replacing manual end time selection for more intuitive scheduling workflow
-- **Extended Dispatch Board Hours**: Increased daily view from 7:00-18:00 to 6:00-19:00 for better coverage of early morning and evening work
-- **Automatic Diary Logging**: All staff scheduling activities now automatically create job diary entries with detailed staff information, date, and time for comprehensive audit trail
-- **Enhanced Error Logging**: Improved error handling and logging throughout the scheduling system for better debugging and monitoring
+### Other Integrations
+- SendGrid (for email webhooks)
