@@ -7231,10 +7231,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     const fromMatch = forwardedContent.match(/From:\s*([^\n]+)/i);
     const subjectMatch = forwardedContent.match(/Subject:\s*([^\n]+)/i);
     const dateMatch = forwardedContent.match(/Date:\s*([^\n]+)/i);
+    const toMatch = forwardedContent.match(/To:\s*([^\n]+)/i);
     
-    // Find where the body starts (after the headers)
-    const bodyStart = forwardedContent.search(/\n\n/);
-    const body = bodyStart > 0 ? forwardedContent.substring(bodyStart).trim() : '';
+    // Find where the body starts (after all headers and the blank line)
+    // Look for the last header line (To:) and then find the body after double newline
+    let bodyStartIndex = 0;
+    const headerLines = ['From:', 'Date:', 'Subject:', 'To:'];
+    
+    // Find the last occurrence of any header
+    for (const header of headerLines) {
+      const headerIndex = forwardedContent.toLowerCase().lastIndexOf(header.toLowerCase());
+      if (headerIndex > bodyStartIndex) {
+        bodyStartIndex = headerIndex;
+      }
+    }
+    
+    // Find the first double newline after the last header
+    const afterHeaders = forwardedContent.substring(bodyStartIndex);
+    const bodyStart = afterHeaders.search(/\n\n/);
+    const body = bodyStart > 0 ? afterHeaders.substring(bodyStart).trim() : '';
     
     if (!fromMatch) return null;
     
