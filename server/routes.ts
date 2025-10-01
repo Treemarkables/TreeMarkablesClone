@@ -47,6 +47,7 @@ import multer from "multer";
 import Papa from "papaparse";
 import path from "path";
 import bcrypt from "bcrypt";
+import OpenAI from "openai";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -163,6 +164,11 @@ const recordingsDir = path.join(__dirname, '..', 'uploads', 'recordings');
 if (!fs.existsSync(recordingsDir)) {
   fs.mkdirSync(recordingsDir, { recursive: true });
 }
+
+// Initialize OpenAI client for call transcription
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 // ========================================
 // BUSINESS HOURS NOTIFICATION HELPERS
@@ -7228,6 +7234,99 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({ 
         success: false, 
         message: 'Error uploading call recording' 
+      });
+    }
+  });
+
+  // POST /api/mobile/calls/:callId/transcribe - Transcribe call recording using OpenAI Whisper
+  app.post('/api/mobile/calls/:callId/transcribe', requireApiKey, async (req: Request, res: Response) => {
+    try {
+      const { callId } = req.params;
+      
+      if (!callId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Call ID is required' 
+        });
+      }
+
+      // Get the call record
+      const call = await storage.getCallById(callId);
+      if (!call) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Call not found' 
+        });
+      }
+
+      // Check if already transcribed
+      if (call.transcript) {
+        return res.json({ 
+          success: true, 
+          data: { 
+            callId: call.id,
+            transcript: call.transcript,
+            alreadyTranscribed: true 
+          },
+          message: 'Call already transcribed' 
+        });
+      }
+
+      // Check if recording exists
+      if (!call.recordingUrl) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Call has no recording to transcribe' 
+        });
+      }
+
+      // Build the file path from the recording URL
+      // Strip leading slash to prevent absolute path resolution
+      const relativePath = call.recordingUrl.startsWith('/') 
+        ? call.recordingUrl.substring(1) 
+        : call.recordingUrl;
+      const recordingPath = path.join(__dirname, '..', relativePath);
+      
+      // Check if file exists
+      if (!fs.existsSync(recordingPath)) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Recording file not found on server' 
+        });
+      }
+
+      // Transcribe using OpenAI Whisper
+      console.log(`Transcribing call ${callId} from ${recordingPath}`);
+      const transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(recordingPath),
+        model: 'whisper-1',
+        language: 'en',
+        response_format: 'text'
+      });
+
+      // Extract text from response (handles both string and object responses)
+      const transcriptText = typeof transcription === 'string' 
+        ? transcription 
+        : (transcription as any).text || String(transcription);
+
+      // Update call record with transcript
+      const updatedCall = await storage.updateCall(callId, {
+        transcript: transcriptText
+      });
+
+      res.json({ 
+        success: true, 
+        data: {
+          callId: updatedCall.id,
+          transcript: updatedCall.transcript
+        },
+        message: 'Call transcribed successfully' 
+      });
+    } catch (error) {
+      console.error('Error transcribing call:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Error transcribing call' 
       });
     }
   });
