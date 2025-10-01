@@ -7625,6 +7625,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               
               console.log(`💬 Facebook message from ${senderId}: ${messageData.text}`);
               
+              // Fetch sender's name from Facebook Graph API
+              let senderName = 'Facebook Messenger Enquiry';
+              try {
+                const PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+                if (PAGE_ACCESS_TOKEN) {
+                  const userInfoResponse = await fetch(
+                    `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`
+                  );
+                  if (userInfoResponse.ok) {
+                    const userInfo = await userInfoResponse.json();
+                    if (userInfo.name) {
+                      senderName = userInfo.name;
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Error fetching Facebook user info:', error);
+              }
+              
               // Find existing conversation for this Facebook sender
               const allConversations = await storage.getAllConversations({ source: 'social' });
               let conversation = null;
@@ -7636,31 +7655,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 );
                 if (hasMessageFromSender) {
                   conversation = conv;
+                  // Update conversation title with real name if it's still generic
+                  if (conversation.title === 'Facebook Messenger Enquiry' && senderName !== 'Facebook Messenger Enquiry') {
+                    await storage.updateConversation(conversation.id, { title: senderName });
+                    conversation.title = senderName;
+                  }
                   break;
                 }
               }
               
               // Create new conversation if none exists for this sender
               if (!conversation) {
-                // Fetch sender's name from Facebook Graph API
-                let senderName = 'Facebook Messenger Enquiry';
-                try {
-                  const PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
-                  if (PAGE_ACCESS_TOKEN) {
-                    const userInfoResponse = await fetch(
-                      `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`
-                    );
-                    if (userInfoResponse.ok) {
-                      const userInfo = await userInfoResponse.json();
-                      if (userInfo.name) {
-                        senderName = userInfo.name;
-                      }
-                    }
-                  }
-                } catch (error) {
-                  console.error('Error fetching Facebook user info:', error);
-                }
-                
                 conversation = await storage.createConversation({
                   title: senderName,
                   status: 'open',
