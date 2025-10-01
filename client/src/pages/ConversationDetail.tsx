@@ -39,6 +39,7 @@ export default function ConversationDetail() {
   const [showManageMenu, setShowManageMenu] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [showCreateOpportunity, setShowCreateOpportunity] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Create Opportunity form state
   const [leadForm, setLeadForm] = useState({
@@ -129,6 +130,28 @@ export default function ConversationDetail() {
       toast({ 
         title: 'Failed to create opportunity', 
         description: 'Please try again.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Delete Conversation mutation
+  const deleteConversationMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('DELETE', `/api/conversations/${conversationId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      toast({ 
+        title: 'Conversation deleted',
+        description: 'The conversation has been permanently removed'
+      });
+      setLocation('/opportunities');
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to delete conversation',
+        description: 'Please try again',
         variant: 'destructive'
       });
     }
@@ -392,11 +415,7 @@ export default function ConversationDetail() {
             <button
               onClick={() => {
                 setShowManageMenu(false);
-                toast({ 
-                  title: 'Delete Conversation', 
-                  description: 'Feature coming soon',
-                  variant: 'destructive'
-                });
+                setShowDeleteConfirm(true);
               }}
               className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
               data-testid="button-delete-conversation"
@@ -537,6 +556,45 @@ export default function ConversationDetail() {
                 </>
               ) : (
                 'Create Opportunity'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Conversation?</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this conversation? This action cannot be undone and all messages will be permanently removed.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleteConversationMutation.isPending}
+              data-testid="button-cancel-delete"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteConversationMutation.mutate()}
+              disabled={deleteConversationMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteConversationMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Conversation'
               )}
             </Button>
           </DialogFooter>
