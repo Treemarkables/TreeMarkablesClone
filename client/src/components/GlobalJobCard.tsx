@@ -1270,7 +1270,7 @@ export function GlobalJobCard({
           <div className="flex items-center justify-between gap-4">
             {/* Left: Job Title */}
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <h1 className="text-base sm:text-lg font-semibold text-white truncate" data-testid="text-job-title">
+              <h1 className="text-xl sm:text-2xl font-bold text-white truncate tracking-tight" data-testid="text-job-title">
                 {mode === "create" ? "New Job" : `Job #${editingJob?.jobNumber || "3314"}`}
               </h1>
             </div>
@@ -1927,11 +1927,11 @@ export function GlobalJobCard({
                       <div className="bg-gray-50 p-3 rounded-lg border">
                         <div className="flex items-center gap-2 mb-2">
                           <UserCircle className="w-5 h-5 text-gray-600" />
-                          <h3 className="font-semibold text-lg">
+                          <h3 className="font-bold text-xl tracking-tight">
                             {selectedCustomer?.name || formData.newCustomerName || 'Customer Name'}
                           </h3>
                         </div>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-base text-gray-700 font-medium">
                           <div>{selectedCustomer?.address || formData.newCustomerAddress || 'Address'}</div>
                           <div>{selectedCustomer?.city || formData.newCustomerCity || 'City'}, {selectedCustomer?.region || formData.newCustomerRegion || 'Region'}</div>
                         </div>
@@ -2054,7 +2054,7 @@ export function GlobalJobCard({
 
                         {/* Job Description */}
                         <div>
-                          <label className="text-xs font-medium text-gray-600 mb-1 block">Job Description</label>
+                          <label className="text-sm font-semibold text-gray-700 mb-1 block">Job Description</label>
                           <FormField
                             control={form.control}
                             name="description"
@@ -2063,7 +2063,7 @@ export function GlobalJobCard({
                                 <FormControl>
                                   <Textarea 
                                     {...field}
-                                    className="min-h-[90px] text-sm" 
+                                    className="min-h-[90px] text-base font-medium" 
                                     placeholder="Describe the work that needs to be done"
                                   />
                                 </FormControl>
