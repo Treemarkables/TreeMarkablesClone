@@ -7642,8 +7642,27 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               
               // Create new conversation if none exists for this sender
               if (!conversation) {
+                // Fetch sender's name from Facebook Graph API
+                let senderName = 'Facebook Messenger Enquiry';
+                try {
+                  const PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+                  if (PAGE_ACCESS_TOKEN) {
+                    const userInfoResponse = await fetch(
+                      `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`
+                    );
+                    if (userInfoResponse.ok) {
+                      const userInfo = await userInfoResponse.json();
+                      if (userInfo.name) {
+                        senderName = userInfo.name;
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error fetching Facebook user info:', error);
+                }
+                
                 conversation = await storage.createConversation({
-                  title: 'Facebook Messenger Enquiry',
+                  title: senderName,
                   status: 'open',
                   source: 'social',
                   priority: 'medium',
