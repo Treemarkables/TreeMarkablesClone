@@ -26,12 +26,14 @@ export default function Inbox() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const { toast } = useToast();
 
-  // Fetch conversations from backend
+  // Fetch conversations from backend - ONLY quote requests from website
   const { data: conversationsResponse, isLoading, refetch } = useQuery({
-    queryKey: ['/api/conversations', { search: searchTerm || undefined }],
+    queryKey: ['/api/conversations', { search: searchTerm || undefined, source: 'quote_request' }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
+      // Only show quote requests from website in inbox
+      params.append('source', 'quote_request');
       const response = await fetch(`/api/conversations?${params}`);
       if (!response.ok) throw new Error('Failed to fetch conversations');
       return response.json();
@@ -95,8 +97,8 @@ export default function Inbox() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <MessageSquare className="h-6 w-6 text-primary" />
-              Conversations
+              <Mail className="h-6 w-6 text-primary" />
+              Quote Requests
               {unreadCount > 0 && (
                 <Badge variant="destructive" className="ml-2">
                   {unreadCount} unread
@@ -104,7 +106,7 @@ export default function Inbox() {
               )}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Manage all your email conversations in one place
+              Quote requests from your website
             </p>
           </div>
           <Button 
@@ -124,11 +126,11 @@ export default function Inbox() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search conversations..."
+                placeholder="Search quote requests..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
-                data-testid="input-search-conversations"
+                data-testid="input-search-quote-requests"
               />
             </div>
           </div>
@@ -151,10 +153,10 @@ export default function Inbox() {
         <div className="divide-y">
           {filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-medium text-muted-foreground">No conversations found</p>
+              <Mail className="h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-lg font-medium text-muted-foreground">No quote requests found</p>
               <p className="text-sm text-muted-foreground mt-1">
-                {searchTerm ? 'Try adjusting your search terms' : 'New email conversations will appear here'}
+                {searchTerm ? 'Try adjusting your search terms' : 'Quote requests from your website will appear here'}
               </p>
             </div>
           ) : (
