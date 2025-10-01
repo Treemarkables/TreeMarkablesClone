@@ -1,10 +1,14 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -14,7 +18,8 @@ import {
   User,
   Plus,
   Grid3x3,
-  List
+  List,
+  MessageSquare
 } from "lucide-react";
 import { 
   format, 
@@ -30,7 +35,8 @@ import {
   parseISO,
   isToday
 } from "date-fns";
-import type { Job } from "@shared/schema";
+import type { Job, Customer } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -40,22 +46,44 @@ interface ApiResponse<T> {
 
 type ViewMode = 'month' | 'week';
 
+interface JobWithCustomer extends Job {
+  customer?: Customer;
+}
+
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<JobWithCustomer | null>(null);
+  const [smsMessage, setSmsMessage] = useState("");
+  const { toast } = useToast();
 
   // Fetch jobs/appointments
   const { data: jobsResponse, isLoading } = useQuery<ApiResponse<Job>>({
     queryKey: ['/api/jobs'],
   });
 
+  // Fetch customers
+  const { data: customersResponse } = useQuery<ApiResponse<Customer>>({
+    queryKey: ['/api/customers'],
+  });
+
   const jobs = jobsResponse?.data || [];
+  const customers = customersResponse?.data || [];
+
+  // Merge jobs with customer data
+  const jobsWithCustomers: JobWithCustomer[] = useMemo(() => {
+    return jobs.map(job => {
+      const customer = customers.find(c => c.id === job.customerId);
+      return { ...job, customer };
+    });
+  }, [jobs, customers]);
 
   // Filter jobs that have a scheduled date
   const scheduledJobs = useMemo(() => {
-    return jobs.filter(job => job.scheduledDate && job.status !== 'unsuccessful');
-  }, [jobs]);
+    return jobsWithCustomers.filter(job => job.scheduledDate && job.status !== 'unsuccessful');
+  }, [jobsWithCustomers]);
 
   // Get appointments for a specific date
   const getAppointmentsForDate = (date: Date) => {
@@ -65,6 +93,76 @@ export default function Calendar() {
         ? parseISO(job.scheduledDate) 
         : job.scheduledDate;
       return isSameDay(jobDate, date);
+    });
+  };
+
+  // Send SMS mutation
+  const sendSmsMutation = useMutation({
+    mutationFn: async (data: { phone: string; message: string; jobId?: string; customerId?: string }) => {
+      return apiRequest('/api/sms/send', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "SMS Sent",
+        description: "Your message has been sent successfully.",
+      });
+      setSmsDialogOpen(false);
+      setSmsMessage("");
+      setSelectedJob(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Send SMS",
+        description: error.message || "There was an error sending the SMS.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle SMS button click
+  const handleSendSms = (job: JobWithCustomer) => {
+    setSelectedJob(job);
+    const customerName = job.customer?.name || "Customer";
+    const jobTitle = job.title || "your appointment";
+    const scheduledTime = job.scheduledDate 
+      ? format(
+          typeof job.scheduledDate === 'string' ? parseISO(job.scheduledDate) : job.scheduledDate,
+          'MMMM d, yyyy \'at\' h:mm a'
+        )
+      : "soon";
+    
+    setSmsMessage(`Hi ${customerName}, this is a reminder about ${jobTitle} scheduled for ${scheduledTime}. - Treemarkables`);
+    setSmsDialogOpen(true);
+  };
+
+  // Handle SMS send
+  const handleSendSmsConfirm = () => {
+    if (!selectedJob || !selectedJob.customer?.phone) {
+      toast({
+        title: "No Phone Number",
+        description: "This customer doesn't have a phone number on file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (smsMessage.length > 160) {
+      toast({
+        title: "Message Too Long",
+        description: "SMS messages must be 160 characters or less.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    sendSmsMutation.mutate({
+      phone: selectedJob.customer.phone,
+      message: smsMessage,
+      jobId: selectedJob.id,
+      customerId: selectedJob.customerId || undefined,
     });
   };
 
@@ -363,18 +461,29 @@ export default function Calendar() {
                                 </span>
                               </div>
                             )}
-                            {appointment.customerId && (
+                            {appointment.customer && (
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <User className="h-4 w-4" />
                                 <span data-testid={`text-customer-${appointment.id}`}>
-                                  Customer
+                                  {appointment.customer.name}
                                 </span>
                               </div>
                             )}
-                            <div className="pt-2">
+                            <div className="pt-2 flex items-center justify-between gap-2">
                               <Badge variant="outline" className="capitalize">
                                 {appointment.status.replace('_', ' ')}
                               </Badge>
+                              {appointment.customer?.phone && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleSendSms(appointment)}
+                                  data-testid={`button-send-sms-${appointment.id}`}
+                                >
+                                  <MessageSquare className="h-4 w-4 mr-1" />
+                                  SMS
+                                </Button>
+                              )}
                             </div>
                           </CardContent>
                         </Card>
@@ -425,10 +534,27 @@ export default function Calendar() {
                             )}
                           </p>
                         )}
+                        {appointment.customer?.name && (
+                          <p className="text-xs text-muted-foreground">
+                            {appointment.customer.name}
+                          </p>
+                        )}
                       </div>
-                      <Badge variant="outline" className="capitalize text-[10px]">
-                        {appointment.status.replace('_', ' ')}
-                      </Badge>
+                      <div className="flex flex-col gap-1 items-end">
+                        <Badge variant="outline" className="capitalize text-[10px]">
+                          {appointment.status.replace('_', ' ')}
+                        </Badge>
+                        {appointment.customer?.phone && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSendSms(appointment)}
+                            data-testid={`button-send-sms-mobile-${appointment.id}`}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -437,6 +563,57 @@ export default function Calendar() {
           </ScrollArea>
         </div>
       )}
+
+      {/* SMS Dialog */}
+      <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-send-sms">
+          <DialogHeader>
+            <DialogTitle>Send SMS to Customer</DialogTitle>
+            <DialogDescription>
+              Send a text message to {selectedJob?.customer?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="customer-phone">Phone Number</Label>
+              <div className="text-sm text-muted-foreground" data-testid="text-customer-phone">
+                {selectedJob?.customer?.phone || 'No phone number'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sms-message">Message ({smsMessage.length}/160)</Label>
+              <Textarea
+                id="sms-message"
+                placeholder="Enter your message..."
+                value={smsMessage}
+                onChange={(e) => setSmsMessage(e.target.value)}
+                maxLength={160}
+                rows={4}
+                data-testid="textarea-sms-message"
+              />
+              <p className="text-xs text-muted-foreground">
+                SMS messages are limited to 160 characters
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSmsDialogOpen(false)}
+              data-testid="button-cancel-sms"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendSmsConfirm}
+              disabled={!smsMessage || smsMessage.length === 0 || sendSmsMutation.isPending}
+              data-testid="button-confirm-send-sms"
+            >
+              {sendSmsMutation.isPending ? 'Sending...' : 'Send SMS'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
