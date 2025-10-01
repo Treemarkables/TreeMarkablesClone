@@ -7149,41 +7149,99 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         ? [from.split('<')[0].trim(), from.split('<')[1].replace('>', '').trim()]
         : ['', from];
       
-      // Check if conversation exists for this email
-      const existingConversations = await storage.getAllConversations({ search: fromEmail });
-      let conversation = existingConversations[0];
+      // Extract job/quote reference from subject line
+      // Matches patterns like: "Job 12345", "QTE-3326", "#12345", "Quote QTE-3326"
+      const jobNumberMatch = subject?.match(/\b(?:Job\s*#?\s*)?(\d{3,})\b/i);
+      const quoteNumberMatch = subject?.match(/\b(?:Quote\s*#?\s*)?(QTE-\d+)\b/i);
       
-      if (!conversation) {
-        // Create new conversation
-        conversation = await storage.createConversation({
-          title: subject || 'Email Enquiry',
-          status: 'open',
-          source: 'email',
-          priority: 'medium',
-          lastMessageBy: 'customer',
-          lastMessageAt: new Date()
-        });
+      let jobFound = false;
+      
+      // Try to find job by job number
+      if (jobNumberMatch) {
+        const jobNumber = jobNumberMatch[1];
+        console.log(`🔍 Looking up job by number: ${jobNumber}`);
+        const job = await storage.getJobByJobNumber(jobNumber);
+        
+        if (job) {
+          console.log(`✅ Found job ${job.jobNumber} - creating diary entry`);
+          // Create diary entry in the job
+          await storage.createJobDiaryEntry({
+            jobId: job.id,
+            entryType: 'email',
+            title: `Email from ${fromName || fromEmail}`,
+            description: text || html || '',
+            content: subject || '',
+            authorName: fromName || fromEmail,
+            authorRole: 'customer'
+          });
+          jobFound = true;
+          console.log(`📝 Email logged to job ${job.jobNumber} diary`);
+        }
       }
       
-      // Create message in conversation
-      await storage.createConversationMessage({
-        conversationId: conversation.id,
-        type: 'email',
-        content: text || html || '',
-        direction: 'inbound',
-        fromName: fromName || fromEmail,
-        fromContact: fromEmail,
-        subject: subject,
-        platform: 'email',
-        isRead: false
-      });
+      // Try to find job by quote number if not found by job number
+      if (!jobFound && quoteNumberMatch) {
+        const quoteNumber = quoteNumberMatch[1];
+        console.log(`🔍 Looking up job by quote number: ${quoteNumber}`);
+        const jobs = await storage.getAllJobs({ quoteNumber });
+        
+        if (jobs && jobs.length > 0) {
+          const job = jobs[0];
+          console.log(`✅ Found job ${job.jobNumber} via quote - creating diary entry`);
+          // Create diary entry in the job
+          await storage.createJobDiaryEntry({
+            jobId: job.id,
+            entryType: 'email',
+            title: `Email from ${fromName || fromEmail}`,
+            description: text || html || '',
+            content: subject || '',
+            authorName: fromName || fromEmail,
+            authorRole: 'customer'
+          });
+          jobFound = true;
+          console.log(`📝 Email logged to job ${job.jobNumber} diary (via quote ${quoteNumber})`);
+        }
+      }
       
-      // Update conversation
-      await storage.updateConversation(conversation.id, {
-        lastMessageAt: new Date(),
-        lastMessageBy: 'customer',
-        unreadCount: (conversation.unreadCount || 0) + 1
-      });
+      // If no job found, create/update conversation (original behavior)
+      if (!jobFound) {
+        console.log(`💬 No job reference found - creating conversation`);
+        // Check if conversation exists for this email
+        const existingConversations = await storage.getAllConversations({ search: fromEmail });
+        let conversation = existingConversations[0];
+        
+        if (!conversation) {
+          // Create new conversation
+          conversation = await storage.createConversation({
+            title: subject || 'Email Enquiry',
+            status: 'open',
+            source: 'email',
+            priority: 'medium',
+            lastMessageBy: 'customer',
+            lastMessageAt: new Date()
+          });
+        }
+        
+        // Create message in conversation
+        await storage.createConversationMessage({
+          conversationId: conversation.id,
+          type: 'email',
+          content: text || html || '',
+          direction: 'inbound',
+          fromName: fromName || fromEmail,
+          fromContact: fromEmail,
+          subject: subject,
+          platform: 'email',
+          isRead: false
+        });
+        
+        // Update conversation
+        await storage.updateConversation(conversation.id, {
+          lastMessageAt: new Date(),
+          lastMessageBy: 'customer',
+          unreadCount: (conversation.unreadCount || 0) + 1
+        });
+      }
       
       res.json({ success: true, message: 'Email received and processed' });
     } catch (error) {
