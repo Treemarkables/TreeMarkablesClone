@@ -7658,7 +7658,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               }
               
               // Create message
-              await storage.createConversationMessage({
+              const newMessage = await storage.createConversationMessage({
                 conversationId: conversation.id,
                 type: 'message',
                 content: messageData.text,
@@ -7669,12 +7669,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 isRead: false
               });
               
+              console.log(`✅ Message saved with ID: ${newMessage.id}`);
+              
               // Update conversation
               await storage.updateConversation(conversation.id, {
                 lastMessageAt: new Date(),
                 lastMessageBy: 'customer',
                 unreadCount: (conversation.unreadCount || 0) + 1
               });
+              
+              console.log(`✅ Conversation ${conversation.id} updated`);
             }
           }
         }
