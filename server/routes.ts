@@ -7626,11 +7626,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               console.log(`💬 Facebook message from ${senderId}: ${messageData.text}`);
               
               // Find existing conversation for this Facebook sender
-              // Get all social conversations and check their messages for this sender
               const allConversations = await storage.getAllConversations({ source: 'social' });
               let conversation = null;
-              
-              console.log(`📋 Searching through ${allConversations.length} social conversations for sender ${senderId}`);
               
               for (const conv of allConversations) {
                 const messages = await storage.getConversationMessages(conv.id);
@@ -7638,7 +7635,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                   msg => msg.platform === 'facebook_messenger' && msg.fromContact === senderId
                 );
                 if (hasMessageFromSender) {
-                  console.log(`✅ Found existing conversation ${conv.id} for sender ${senderId}`);
                   conversation = conv;
                   break;
                 }
@@ -7646,7 +7642,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               
               // Create new conversation if none exists for this sender
               if (!conversation) {
-                console.log(`➕ Creating new conversation for sender ${senderId}`);
                 conversation = await storage.createConversation({
                   title: 'Facebook Messenger Enquiry',
                   status: 'open',
@@ -7656,34 +7651,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 });
               }
               
-              console.log(`🔍 About to save message. Conversation:`, conversation ? conversation.id : 'NULL');
+              // Save message to conversation
+              await storage.createConversationMessage({
+                conversationId: conversation.id,
+                type: 'message',
+                content: messageData.text,
+                direction: 'inbound',
+                fromContact: senderId,
+                platform: 'facebook_messenger',
+                externalId: messageData.mid
+              });
               
-              try {
-                console.log(`💾 Saving message to conversation ${conversation.id}...`);
-                
-                // Create message (isRead is auto-managed by schema)
-                const newMessage = await storage.createConversationMessage({
-                  conversationId: conversation.id,
-                  type: 'message',
-                  content: messageData.text,
-                  direction: 'inbound',
-                  fromContact: senderId,
-                  platform: 'facebook_messenger',
-                  externalId: messageData.mid
-                });
-                
-                console.log(`✅ Message saved with ID: ${newMessage.id}`);
-                
-                // Update conversation (lastMessageAt and unreadCount are auto-managed)
-                await storage.updateConversation(conversation.id, {
-                  lastMessageBy: 'customer'
-                });
-                
-                console.log(`✅ Conversation ${conversation.id} updated`);
-              } catch (saveError) {
-                console.error(`❌ Error saving message:`, saveError);
-                throw saveError;
-              }
+              // Update conversation
+              await storage.updateConversation(conversation.id, {
+                lastMessageBy: 'customer'
+              });
             }
           }
         }
