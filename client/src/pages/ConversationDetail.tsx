@@ -49,7 +49,7 @@ export default function ConversationDetail() {
     address: '',
     serviceRequested: '',
     urgency: 'medium' as 'low' | 'medium' | 'high' | 'emergency',
-    status: 'new' as 'new' | 'contacted' | 'qualified' | 'quoted' | 'won' | 'lost',
+    status: 'new_lead' as 'new_lead' | 'quote_scheduled' | 'proposal_sent' | 'closed',
     notes: ''
   });
   
@@ -117,7 +117,7 @@ export default function ConversationDetail() {
         address: '',
         serviceRequested: '',
         urgency: 'medium',
-        status: 'new',
+        status: 'new_lead',
         notes: ''
       });
       toast({ 
@@ -506,12 +506,10 @@ export default function ConversationDetail() {
                   <SelectValue placeholder="Select stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="qualified">Qualified</SelectItem>
-                  <SelectItem value="quoted">Quoted</SelectItem>
-                  <SelectItem value="won">Won</SelectItem>
-                  <SelectItem value="lost">Lost</SelectItem>
+                  <SelectItem value="new_lead">New Lead</SelectItem>
+                  <SelectItem value="quote_scheduled">Quote Scheduled</SelectItem>
+                  <SelectItem value="proposal_sent">Proposal Sent</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
