@@ -1,5 +1,5 @@
-// @ts-ignore - Twilio types issue with package.json exports
-import { Twilio } from 'twilio';
+import { getTwilioClient, getTwilioFromPhoneNumber } from './twilioClient';
+import type { Twilio } from 'twilio';
 
 interface SMSParams {
   to: string;
@@ -10,30 +10,40 @@ class SMSService {
   private client: Twilio | null = null;
   private isConfigured: boolean = false;
   private fromPhone: string = '';
+  private isInitializing: boolean = false;
 
   constructor() {
     this.configure();
   }
 
-  private configure(): void {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const phoneNumber = process.env.TWILIO_PHONE_NUMBER;
+  private async configure(): Promise<void> {
+    if (this.isInitializing) return;
+    this.isInitializing = true;
 
-    if (accountSid && authToken && phoneNumber) {
-      this.client = new Twilio(accountSid, authToken);
-      this.fromPhone = phoneNumber;
+    try {
+      this.client = await getTwilioClient();
+      this.fromPhone = await getTwilioFromPhoneNumber();
       this.isConfigured = true;
-      console.log('📱 Twilio SMS service configured successfully');
-    } else {
-      console.log('📱 Twilio credentials not found - SMS service in mock mode');
+      console.log('📱 Twilio SMS service configured successfully via Replit connector');
+    } catch (error) {
+      console.log('📱 Twilio connector not configured - SMS service in mock mode');
+      console.log('📱 Error:', error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      this.isInitializing = false;
+    }
+  }
+
+  private async ensureConfigured(): Promise<void> {
+    if (!this.isConfigured && !this.isInitializing) {
+      await this.configure();
     }
   }
 
   async sendSMS(params: SMSParams): Promise<boolean> {
     try {
+      await this.ensureConfigured();
+
       if (!this.isConfigured || !this.client) {
-        // Mock mode - log the SMS instead of sending
         console.log('\n=== SMS NOTIFICATION (Mock Mode) ===');
         console.log(`To: ${params.to}`);
         console.log(`From: ${this.fromPhone || 'Treemarkables'}`);
