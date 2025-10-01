@@ -192,9 +192,9 @@ export default function ConversationDetail() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 sm:px-4 py-4 border-b bg-white">
+      <div className="flex items-center justify-between px-3 sm:px-4 py-4 border-b bg-white flex-shrink-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <Button 
             variant="ghost" 
@@ -262,7 +262,7 @@ export default function ConversationDetail() {
       </ScrollArea>
 
       {/* Message Input */}
-      <div className="border-t bg-white px-3 sm:px-4 py-2 sm:py-3">
+      <div className="border-t bg-white px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0">
         <div className="flex items-end gap-2">
           <Textarea
             placeholder="Type a message..."
