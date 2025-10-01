@@ -59,9 +59,11 @@ class EmailService {
         return true;
       }
 
+      const fromEmail = params.from || this.fromEmail;
+      
       await this.mailService.send({
         to: params.to,
-        from: params.from || this.fromEmail,
+        from: fromEmail,
         subject: params.subject,
         text: params.text,
         html: params.html,

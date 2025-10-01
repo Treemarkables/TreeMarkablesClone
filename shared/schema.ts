@@ -526,7 +526,7 @@ export const proposalSections = pgTable("proposal_sections", {
 });
 
 // Proposal Line Items
-export const proposalLineItems = pgTable("proposal_line_items", {
+export const proposalLineItems: any = pgTable("proposal_line_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   proposalId: varchar("proposal_id").references(() => proposals.id, { onDelete: 'cascade' }).notNull(),
   sectionId: varchar("section_id").references(() => proposalSections.id, { onDelete: 'cascade' }),
@@ -551,7 +551,7 @@ export const proposalLineItems = pgTable("proposal_line_items", {
 });
 
 // Proposal Line Item Choices (for multiple choice options)
-export const proposalLineItemChoices = pgTable("proposal_line_item_choices", {
+export const proposalLineItemChoices: any = pgTable("proposal_line_item_choices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   lineItemId: varchar("line_item_id").references(() => proposalLineItems.id, { onDelete: 'cascade' }).notNull(),
   label: text("label").notNull(), // "Basic", "Premium", "Emergency"

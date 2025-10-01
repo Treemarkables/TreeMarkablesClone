@@ -28,6 +28,8 @@ import {
   insertInventorySchema, insertEquipmentCheckoutSchema, insertEquipmentMaintenanceSchema,
   insertBusinessSettingsSchema, updateBusinessSettingsSchema,
   insertCommunicationSchema, updateCommunicationSchema,
+  insertConversationSchema, updateConversationSchema,
+  insertConversationMessageSchema, updateConversationMessageSchema,
   insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, gpsLocationSchema,
   insertInvoiceSchema, insertServiceRequestSchema, insertCustomerAuthSchema,
   insertCommunicationPreferencesSchema,
