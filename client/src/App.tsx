@@ -15,6 +15,7 @@ import HedgeTrimming from "@/pages/HedgeTrimming";
 import Blog from "@/pages/Blog";
 import BlogPost from "@/pages/BlogPost";
 import SummerOffer from "@/pages/SummerOffer";
+import Contact from "@/pages/Contact";
 import JobDashboard from "@/pages/JobDashboard";
 import MetricsDashboard from "@/pages/MetricsDashboard";
 import Pipeline from "@/pages/Pipeline";
@@ -182,6 +183,7 @@ function Router() {
       <Route path="/blog" component={Blog}/>
       <Route path="/blog/:slug" component={BlogPost}/>
       <Route path="/summer-offer" component={SummerOffer}/>
+      <Route path="/contact" component={Contact}/>
       <Route path="/job-dashboard">
         {() => (
           <SidebarLayout>
