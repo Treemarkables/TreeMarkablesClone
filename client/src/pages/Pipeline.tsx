@@ -189,77 +189,57 @@ function DraggableOpportunityCard({
   };
 
   return (
-    <Card 
+    <div 
       ref={setNodeRef} 
-      style={style} 
-      className={`bg-white hover-elevate cursor-pointer group ${isLoading ? 'opacity-50' : ''}`}
+      style={style}
+      className={`bg-white rounded-md border hover-elevate cursor-pointer group p-2 ${isLoading ? 'opacity-50' : ''}`}
       data-testid={`opportunity-card-${opportunity.id}`}
     >
-      <CardContent className="p-1.5">
-        <div className="flex items-center justify-between gap-1">
-          <h4 className="font-semibold text-[11px] leading-none min-w-0 truncate" data-testid={`opportunity-name-${opportunity.id}`}>
+      <div className="flex items-center justify-between gap-1">
+        <div className="min-w-0 flex-1">
+          <h4 className="font-semibold text-[10px] leading-tight truncate" data-testid={`opportunity-name-${opportunity.id}`}>
             {opportunity.name || opportunity.customerName}
           </h4>
-          <div className="flex items-center gap-0.5 flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="cursor-grab active:cursor-grabbing h-5 w-5 p-0"
-              {...attributes}
-              {...listeners}
-              data-testid={`drag-handle-${opportunity.id}`}
-            >
-              <GripVertical className="h-2.5 w-2.5" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`menu-${opportunity.id}`}>
-                  <MoreVertical className="h-2.5 w-2.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {pipelineStages.map((stage) => {
-                  const currentStageId = StageMap.toStageId[opportunity.status] || opportunity.status;
-                  if (stage.id === currentStageId) return null;
-                  return (
-                    <DropdownMenuItem
-                      key={stage.id}
-                      onClick={() => onMoveOpportunity(opportunity.id, stage.id)}
-                      data-testid={`move-to-${stage.id}-${opportunity.id}`}
-                    >
-                      Move to {stage.title}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div className="text-[9px] font-medium text-gray-900" data-testid={`opportunity-value-${opportunity.id}`}>
+            {formatCurrency(parseFloat(opportunity.estimatedValue || '0'))}
           </div>
         </div>
-        
-        <div className="text-[10px] font-medium text-gray-900 mt-0.5" data-testid={`opportunity-value-${opportunity.id}`}>
-          {formatCurrency(parseFloat(opportunity.estimatedValue || '0'))}
-        </div>
-
-        <div className="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {opportunity.phone && (
-            <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`call-${opportunity.id}`}>
-              <Phone className="h-2.5 w-2.5" />
-            </Button>
-          )}
-          {opportunity.email && (
-            <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`email-${opportunity.id}`}>
-              <Mail className="h-2.5 w-2.5" />
-            </Button>
-          )}
-          <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`schedule-${opportunity.id}`}>
-            <Calendar className="h-2.5 w-2.5" />
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="cursor-grab active:cursor-grabbing h-4 w-4 p-0"
+            {...attributes}
+            {...listeners}
+            data-testid={`drag-handle-${opportunity.id}`}
+          >
+            <GripVertical className="h-2.5 w-2.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`view-${opportunity.id}`}>
-            <Eye className="h-2.5 w-2.5" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-4 w-4 p-0" data-testid={`menu-${opportunity.id}`}>
+                <MoreVertical className="h-2.5 w-2.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {pipelineStages.map((stage) => {
+                const currentStageId = StageMap.toStageId[opportunity.status] || opportunity.status;
+                if (stage.id === currentStageId) return null;
+                return (
+                  <DropdownMenuItem
+                    key={stage.id}
+                    onClick={() => onMoveOpportunity(opportunity.id, stage.id)}
+                    data-testid={`move-to-${stage.id}-${opportunity.id}`}
+                  >
+                    Move to {stage.title}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
