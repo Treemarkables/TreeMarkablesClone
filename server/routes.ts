@@ -7297,7 +7297,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           actualFromName = parsed.originalFromName;
           actualFromEmail = parsed.originalFromEmail;
           actualSubject = parsed.originalSubject || subject;
-          actualText = parsed.originalBody;
+          // Clean the parsed body to remove any remaining signatures/disclaimers
+          actualText = cleanEmailBody(parsed.originalBody, '');
           console.log(`📧 Original sender: ${actualFrom}, Original subject: ${actualSubject}`);
         } else {
           console.warn(`⚠️ Could not parse forwarded email format`);
