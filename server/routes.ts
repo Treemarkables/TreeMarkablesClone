@@ -7212,6 +7212,47 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     return cleaned;
   }
   
+  // Parse Gmail forwarded message to extract original sender and content
+  function parseForwardedEmail(text: string, html: string) {
+    // Gmail forward format: "---------- Forwarded message ---------"
+    const forwardMarker = /---------- Forwarded message ---------/i;
+    
+    if (!text || !forwardMarker.test(text)) {
+      return null; // Not a forwarded email
+    }
+    
+    // Extract forwarded content after the marker
+    const parts = text.split(forwardMarker);
+    if (parts.length < 2) return null;
+    
+    const forwardedContent = parts[1];
+    
+    // Parse forwarded headers
+    const fromMatch = forwardedContent.match(/From:\s*([^\n]+)/i);
+    const subjectMatch = forwardedContent.match(/Subject:\s*([^\n]+)/i);
+    const dateMatch = forwardedContent.match(/Date:\s*([^\n]+)/i);
+    
+    // Find where the body starts (after the headers)
+    const bodyStart = forwardedContent.search(/\n\n/);
+    const body = bodyStart > 0 ? forwardedContent.substring(bodyStart).trim() : '';
+    
+    if (!fromMatch) return null;
+    
+    const originalFrom = fromMatch[1].trim();
+    const [originalFromName, originalFromEmail] = originalFrom.includes('<')
+      ? [originalFrom.split('<')[0].trim(), originalFrom.split('<')[1].replace('>', '').trim()]
+      : ['', originalFrom];
+    
+    return {
+      originalFrom,
+      originalFromName,
+      originalFromEmail,
+      originalSubject: subjectMatch ? subjectMatch[1].trim() : '',
+      originalBody: body,
+      isForwarded: true
+    };
+  }
+  
   // Configure multer for SendGrid Inbound Parse webhook (multipart/form-data)
   const emailWebhookUpload = multer({ storage: multer.memoryStorage() });
   
@@ -7220,26 +7261,54 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     try {
       const { from, to, subject, text, html, headers } = req.body;
       
-      console.log(`📧 Incoming email from: ${from}, subject: ${subject}`);
+      console.log(`📧 Incoming email from: ${from}, to: ${to}, subject: ${subject}`);
+      
+      // Check if this is a forwarded email to forward@jobs.treemarkables.co.nz
+      const isForwardingAddress = to?.includes('forward@jobs.treemarkables.co.nz');
+      let actualFrom = from;
+      let actualSubject = subject;
+      let actualText = text;
+      let actualFromName = '';
+      let actualFromEmail = '';
+      let forwardedBy = from;
+      
+      if (isForwardingAddress) {
+        console.log(`📨 Detected forwarded email to forward@jobs.treemarkables.co.nz`);
+        const parsed = parseForwardedEmail(text, html);
+        
+        if (parsed) {
+          console.log(`✅ Successfully parsed forwarded email from: ${parsed.originalFrom}`);
+          actualFrom = parsed.originalFrom;
+          actualFromName = parsed.originalFromName;
+          actualFromEmail = parsed.originalFromEmail;
+          actualSubject = parsed.originalSubject || subject;
+          actualText = parsed.originalBody;
+          console.log(`📧 Original sender: ${actualFrom}, Original subject: ${actualSubject}`);
+        } else {
+          console.warn(`⚠️ Could not parse forwarded email format`);
+        }
+      }
       
       // Validate required fields
-      if (!from || !subject) {
+      if (!actualFrom || !actualSubject) {
         console.warn('⚠️ Missing required fields (from or subject) in email webhook');
         return res.status(200).json({ success: true, message: 'Email received but missing required fields' });
       }
       
-      // Parse sender info
-      const [fromName, fromEmail] = from.includes('<') 
-        ? [from.split('<')[0].trim(), from.split('<')[1].replace('>', '').trim()]
-        : ['', from];
+      // Parse sender info (if not already parsed from forwarding)
+      if (!actualFromName && !actualFromEmail) {
+        [actualFromName, actualFromEmail] = actualFrom.includes('<') 
+          ? [actualFrom.split('<')[0].trim(), actualFrom.split('<')[1].replace('>', '').trim()]
+          : ['', actualFrom];
+      }
       
       // Clean email body for conversation display
-      const cleanedBody = cleanEmailBody(text, html);
+      const cleanedBody = cleanEmailBody(actualText, html);
       
-      // Extract job/quote reference from subject line
+      // Extract job/quote reference from subject line (use actualSubject for forwarded emails)
       // Matches patterns like: "Job 12345", "QTE-3326", "#12345", "Quote QTE-3326"
-      const jobNumberMatch = subject?.match(/\b(?:Job\s*#?\s*)?(\d{3,})\b/i);
-      const quoteNumberMatch = subject?.match(/\b(?:Quote\s*#?\s*)?(QTE-\d+)\b/i);
+      const jobNumberMatch = actualSubject?.match(/\b(?:Job\s*#?\s*)?(\d{3,})\b/i);
+      const quoteNumberMatch = actualSubject?.match(/\b(?:Quote\s*#?\s*)?(QTE-\d+)\b/i);
       
       let jobFound = false;
       
@@ -7255,13 +7324,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           await storage.createJobDiaryEntry({
             jobId: job.id,
             entryType: 'email',
-            title: `Email from ${fromName || fromEmail}`,
+            title: `Email from ${actualFromName || actualFromEmail}`,
             description: cleanedBody,
-            content: subject || '',
-            authorName: fromName || fromEmail,
+            content: actualSubject || '',
+            authorName: actualFromName || actualFromEmail,
             authorRole: 'customer',
             metadata: {
-              emailAddress: fromEmail || from
+              emailAddress: actualFromEmail || actualFrom,
+              ...(isForwardingAddress && { forwardedBy })
             }
           });
           jobFound = true;
@@ -7282,13 +7352,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           await storage.createJobDiaryEntry({
             jobId: job.id,
             entryType: 'email',
-            title: `Email from ${fromName || fromEmail}`,
+            title: `Email from ${actualFromName || actualFromEmail}`,
             description: cleanedBody,
-            content: subject || '',
-            authorName: fromName || fromEmail,
+            content: actualSubject || '',
+            authorName: actualFromName || actualFromEmail,
             authorRole: 'customer',
             metadata: {
-              emailAddress: fromEmail || from
+              emailAddress: actualFromEmail || actualFrom,
+              ...(isForwardingAddress && { forwardedBy })
             }
           });
           jobFound = true;
@@ -7299,17 +7370,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // If no job found, create/update conversation (original behavior)
       if (!jobFound) {
         console.log(`💬 No job reference found - creating conversation`);
-        // Check if conversation exists for this email
-        const existingConversations = await storage.getAllConversations({ search: fromEmail });
+        // Check if conversation exists for this email (use actual email for forwarded)
+        const existingConversations = await storage.getAllConversations({ search: actualFromEmail });
         let conversation = existingConversations[0];
         const isNewConversation = !conversation;
         
         if (!conversation) {
           // Create new conversation
           conversation = await storage.createConversation({
-            title: subject || 'Email Enquiry',
+            title: actualSubject || 'Email Enquiry',
             status: 'open',
-            source: 'email',
+            source: isForwardingAddress ? 'email_forwarded' : 'email',
             priority: 'medium',
             lastMessageBy: 'customer',
             lastMessageAt: new Date()
@@ -7322,9 +7393,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           type: 'email',
           content: cleanedBody,
           direction: 'inbound',
-          fromName: fromName || fromEmail,
-          fromContact: fromEmail,
-          subject: subject,
+          fromName: actualFromName || actualFromEmail,
+          fromContact: actualFromEmail,
+          subject: actualSubject,
           platform: 'email',
           isRead: false
         });
@@ -7339,7 +7410,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Create notification for new conversation or message
         const notificationData = {
           title: isNewConversation ? 'New Email Conversation' : 'New Email Reply',
-          message: `${fromName || fromEmail}: ${subject || 'No subject'}`,
+          message: `${actualFromName || actualFromEmail}: ${actualSubject || 'No subject'}${isForwardingAddress ? ' (forwarded)' : ''}`,
           type: 'email_received',
           priority: 'medium' as const,
           isRead: false,
