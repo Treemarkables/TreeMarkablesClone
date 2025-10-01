@@ -56,6 +56,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { formatDistanceToNow } from "date-fns";
 
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
@@ -65,6 +66,15 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   const isMobile = useIsMobile();
   const [, setLocation] = useLocation();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  
+  // Fetch real notifications
+  const { data: notificationsData } = useQuery<{ data: any[] }>({
+    queryKey: ['/api/notifications/unread'],
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+  
+  const notifications = notificationsData?.data || [];
+  const unreadCount = notifications.length;
   
   const style = {
     "--sidebar-width": "12rem",
@@ -86,9 +96,11 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
                   <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
                     <Bell className="h-5 w-5" />
                     {/* Notification badge - showing count */}
-                    <span className="absolute top-0 right-0 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                      3
-                    </span>
+                    {unreadCount > 0 && (
+                      <span className="absolute top-0 right-0 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-96 p-0" align="end">
@@ -100,72 +112,59 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
                   </div>
                   <ScrollArea className="h-96">
                     <div className="p-2 space-y-2">
-                      {/* Sample notifications - replace with real data */}
-                      <div 
-                        className="p-3 hover-elevate rounded-lg border cursor-pointer" 
-                        data-testid="notification-item"
-                        onClick={() => {
-                          setLocation('/job-dashboard?quote=QTE-3326');
-                          setNotificationsOpen(false);
-                        }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"></div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm">Quote Accepted</p>
-                            <p className="text-sm text-muted-foreground">
-                              Hamish Cave accepted quote #QTE-3326 for $1,966.50
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">2 minutes ago</p>
-                          </div>
+                      {notifications.length === 0 ? (
+                        <div className="p-8 text-center">
+                          <p className="text-sm text-muted-foreground">No new notifications</p>
                         </div>
-                      </div>
-                      
-                      <div 
-                        className="p-3 hover-elevate rounded-lg border cursor-pointer" 
-                        data-testid="notification-item"
-                        onClick={() => {
-                          setLocation('/job-dashboard?job=3304');
-                          setNotificationsOpen(false);
-                        }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0"></div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm">New Email Received</p>
-                            <p className="text-sm text-muted-foreground">
-                              Customer replied to job #3304
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">15 minutes ago</p>
+                      ) : (
+                        <>
+                          {notifications.slice(0, 10).map((notification: any) => {
+                            const colorMap: Record<string, string> = {
+                              email_received: 'bg-blue-500',
+                              proposal_accepted: 'bg-green-500',
+                              quote_accepted: 'bg-green-500',
+                              job_completed: 'bg-purple-500',
+                              job_status_change: 'bg-orange-500',
+                            };
+                            
+                            const handleClick = () => {
+                              if (notification.type === 'email_received' && notification.entityId) {
+                                setLocation(`/conversation/${notification.entityId}`);
+                              } else if (notification.actionUrl) {
+                                setLocation(notification.actionUrl);
+                              }
+                              setNotificationsOpen(false);
+                            };
+                            
+                            return (
+                              <div 
+                                key={notification.id}
+                                className="p-3 hover-elevate rounded-lg border cursor-pointer" 
+                                data-testid="notification-item"
+                                onClick={handleClick}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className={`w-2 h-2 rounded-full ${colorMap[notification.type] || 'bg-gray-500'} mt-1.5 flex-shrink-0`}></div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm">{notification.title}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {notification.message}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div className="p-3 text-center">
+                            <Button variant="ghost" size="sm" className="text-xs">
+                              View all notifications
+                            </Button>
                           </div>
-                        </div>
-                      </div>
-                      
-                      <div 
-                        className="p-3 hover-elevate rounded-lg border cursor-pointer" 
-                        data-testid="notification-item"
-                        onClick={() => {
-                          setLocation('/dispatch?job=3304');
-                          setNotificationsOpen(false);
-                        }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="w-2 h-2 rounded-full bg-orange-500 mt-1.5 flex-shrink-0"></div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm">Job Scheduled</p>
-                            <p className="text-sm text-muted-foreground">
-                              Job #3304 scheduled for tomorrow at 8:00 AM
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">1 hour ago</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="p-3 text-center">
-                        <Button variant="ghost" size="sm" className="text-xs">
-                          View all notifications
-                        </Button>
-                      </div>
+                        </>
+                      )}
                     </div>
                   </ScrollArea>
                 </PopoverContent>
