@@ -7652,8 +7652,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                   status: 'open',
                   source: 'social',
                   priority: 'medium',
-                  lastMessageBy: 'customer',
-                  lastMessageAt: new Date()
+                  lastMessageBy: 'customer'
                 });
               }
               
