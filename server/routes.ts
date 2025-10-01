@@ -7657,28 +7657,35 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 });
               }
               
-              // Create message
-              const newMessage = await storage.createConversationMessage({
-                conversationId: conversation.id,
-                type: 'message',
-                content: messageData.text,
-                direction: 'inbound',
-                fromContact: senderId,
-                platform: 'facebook_messenger',
-                externalId: messageData.mid,
-                isRead: false
-              });
-              
-              console.log(`✅ Message saved with ID: ${newMessage.id}`);
-              
-              // Update conversation
-              await storage.updateConversation(conversation.id, {
-                lastMessageAt: new Date(),
-                lastMessageBy: 'customer',
-                unreadCount: (conversation.unreadCount || 0) + 1
-              });
-              
-              console.log(`✅ Conversation ${conversation.id} updated`);
+              try {
+                console.log(`💾 Saving message to conversation ${conversation.id}...`);
+                
+                // Create message
+                const newMessage = await storage.createConversationMessage({
+                  conversationId: conversation.id,
+                  type: 'message',
+                  content: messageData.text,
+                  direction: 'inbound',
+                  fromContact: senderId,
+                  platform: 'facebook_messenger',
+                  externalId: messageData.mid,
+                  isRead: false
+                });
+                
+                console.log(`✅ Message saved with ID: ${newMessage.id}`);
+                
+                // Update conversation
+                await storage.updateConversation(conversation.id, {
+                  lastMessageAt: new Date(),
+                  lastMessageBy: 'customer',
+                  unreadCount: (conversation.unreadCount || 0) + 1
+                });
+                
+                console.log(`✅ Conversation ${conversation.id} updated`);
+              } catch (saveError) {
+                console.error(`❌ Error saving message:`, saveError);
+                throw saveError;
+              }
             }
           }
         }
