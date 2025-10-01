@@ -1326,76 +1326,64 @@ export function GlobalJobCard({
             <div className="hidden md:flex items-center gap-1 flex-wrap">
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                size="icon" 
+                className="h-8 w-8 hover-elevate active-elevate-2" 
                 onClick={handleEmailClick} 
                 data-testid="button-email"
+                title="Email"
               >
-                <div className="flex items-center gap-1.5">
-                  <Mail className="w-4 h-4" />
-                  <span>Email</span>
-                </div>
+                <Mail className="w-4 h-4" />
               </Button>
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                size="icon" 
+                className="h-8 w-8 hover-elevate active-elevate-2" 
                 onClick={() => setIsSMSComposerOpen(true)} 
                 data-testid="button-sms"
+                title="SMS"
               >
-                <div className="flex items-center gap-1.5">
-                  <MessageSquare className="w-4 h-4" />
-                  <span>SMS</span>
-                </div>
+                <MessageSquare className="w-4 h-4" />
               </Button>
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                size="icon" 
+                className="h-8 w-8 hover-elevate active-elevate-2" 
                 onClick={handleCallClick} 
                 data-testid="button-call"
+                title="Call"
               >
-                <div className="flex items-center gap-1.5">
-                  <Phone className="w-4 h-4" />
-                  <span>Call</span>
-                </div>
+                <Phone className="w-4 h-4" />
               </Button>
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                size="icon" 
+                className="h-8 w-8 hover-elevate active-elevate-2" 
                 onClick={handleScheduleClick} 
                 data-testid="button-schedule"
+                title="Schedule"
               >
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4" />
-                  <span>Schedule</span>
-                </div>
+                <Calendar className="w-4 h-4" />
               </Button>
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                size="icon" 
+                className="h-8 w-8 hover-elevate active-elevate-2" 
                 onClick={handleQueueClick} 
                 data-testid="button-queue"
+                title="Queue"
               >
-                <div className="flex items-center gap-1.5">
-                  <FileText className="w-4 h-4" />
-                  <span>Queue</span>
-                </div>
+                <FileText className="w-4 h-4" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="outline" 
-                    size="sm" 
-                    className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                    size="icon" 
+                    className="h-8 w-8 hover-elevate active-elevate-2" 
                     data-testid="button-send"
+                    title="Send"
                   >
-                    <div className="flex items-center gap-1.5">
-                      <Send className="w-4 h-4" />
-                      <span>Send</span>
-                    </div>
+                    <Send className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -1444,50 +1432,41 @@ export function GlobalJobCard({
               </DropdownMenu>
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                size="icon" 
+                className="h-8 w-8 hover-elevate active-elevate-2" 
                 onClick={() => setIsProfitTrackerOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
-                title={!editingJob?.id || mode === 'create' ? "Save job first to track profit" : "View profit tracking"}
+                title={!editingJob?.id || mode === 'create' ? "Save job first to track profit" : "Profit"}
               >
-                <div className="flex items-center gap-1.5">
-                  <DollarSign className="w-4 h-4" />
-                  <span>Profit</span>
-                </div>
+                <DollarSign className="w-4 h-4" />
               </Button>
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                size="icon" 
+                className="h-8 w-8 hover-elevate active-elevate-2" 
                 onClick={() => setIsTimeTrackingOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
-                title={!editingJob?.id || mode === 'create' ? "Save job first to track time" : "Record time tracking"}
+                title={!editingJob?.id || mode === 'create' ? "Save job first to track time" : "Time"}
               >
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-4 h-4" />
-                  <span>Time</span>
-                </div>
+                <Clock className="w-4 h-4" />
               </Button>
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                size="icon" 
+                className="h-8 w-8 hover-elevate active-elevate-2" 
                 onClick={() => setIsPhotoCaptureOpen(true)}
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
-                title={!editingJob?.id || mode === 'create' ? "Save job first to capture photos" : "Capture photo"}
+                title={!editingJob?.id || mode === 'create' ? "Save job first to capture photos" : "Camera"}
               >
-                <div className="flex items-center gap-1.5">
-                  <Camera className="w-4 h-4" />
-                  <span>Camera</span>
-                </div>
+                <Camera className="w-4 h-4" />
               </Button>
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                size="icon" 
+                className="h-8 w-8 hover-elevate active-elevate-2" 
                 onClick={() => sendToXeroMutation.mutate()}
                 disabled={
                   !editingJob?.id || 
@@ -1507,29 +1486,18 @@ export function GlobalJobCard({
                     : "Send invoice to Xero"
                 }
               >
-                <div className="flex items-center gap-1.5">
-                  <FileText className="w-4 h-4" />
-                  <span>
-                    {sendToXeroMutation.isPending 
-                      ? 'Sending...' 
-                      : editingJob?.xeroStatus === 'sent' 
-                      ? 'Sent to Xero' 
-                      : 'Send to Xero'}
-                  </span>
-                </div>
+                <FileText className="w-4 h-4" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="outline" 
-                    size="sm" 
-                    className="h-8 px-3 text-xs hover-elevate active-elevate-2" 
+                    size="icon" 
+                    className="h-8 w-8 hover-elevate active-elevate-2" 
                     data-testid="button-more"
+                    title="More"
                   >
-                    <div className="flex items-center gap-1.5">
-                      <MoreHorizontal className="w-4 h-4" />
-                      <span>More</span>
-                    </div>
+                    <MoreHorizontal className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
