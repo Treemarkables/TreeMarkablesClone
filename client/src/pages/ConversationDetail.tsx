@@ -227,7 +227,7 @@ export default function ConversationDetail() {
 
       {/* Messages */}
       <ScrollArea className="flex-1 px-2 py-1">
-        <div className="space-y-1">
+        <div className="space-y-3">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-gray-400 text-sm">No messages yet</p>
@@ -240,15 +240,15 @@ export default function ConversationDetail() {
                 data-testid={`message-${message.id}`}
               >
                 <div
-                  className={`max-w-[90%] rounded-lg px-1.5 py-0.5 ${
+                  className={`max-w-[90%] rounded-lg px-3 py-2 ${
                     message.direction === 'outbound'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-900'
                   }`}
                 >
-                  <p className="text-[10px] whitespace-pre-wrap break-words leading-snug">{message.content}</p>
+                  <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
                   <p
-                    className={`text-[7px] mt-0 ${
+                    className={`text-xs mt-1 ${
                       message.direction === 'outbound' ? 'text-blue-100' : 'text-gray-500'
                     }`}
                   >
