@@ -192,7 +192,7 @@ export default function ConversationDetail() {
   }
 
   return (
-    <div className="flex flex-col absolute top-0 left-0 right-0 bottom-0 bg-white">
+    <div className="flex flex-col absolute top-0 left-0 right-0 bottom-20 bg-white">
       {/* Header */}
       <div className="flex items-center justify-between px-3 sm:px-4 py-4 border-b bg-white flex-shrink-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -261,6 +261,37 @@ export default function ConversationDetail() {
         </div>
       </ScrollArea>
 
+      {/* Message Input */}
+      <div className="border-t bg-white px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 mb-4">
+        <div className="flex items-end gap-2">
+          <Textarea
+            placeholder="Type a message..."
+            value={replyContent}
+            onChange={(e) => setReplyContent(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendReply();
+              }
+            }}
+            className="min-h-[40px] sm:min-h-[44px] max-h-[100px] sm:max-h-[120px] resize-none text-sm sm:text-base"
+            data-testid="textarea-message-input"
+          />
+          <Button
+            size="icon"
+            onClick={handleSendReply}
+            disabled={!replyContent.trim() || replyMutation.isPending}
+            className="flex-shrink-0 h-10 w-10 sm:h-11 sm:w-11 bg-blue-600 hover:bg-blue-700"
+            data-testid="button-send"
+          >
+            {replyMutation.isPending ? (
+              <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+            )}
+          </Button>
+        </div>
+      </div>
 
       {/* Manage Menu Sheet */}
       <Sheet open={showManageMenu} onOpenChange={setShowManageMenu}>
