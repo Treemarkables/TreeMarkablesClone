@@ -262,6 +262,17 @@ export const calls = pgTable("calls", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// API Keys for Mobile App Authentication
+export const apiKeys = pgTable("api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull().unique(),
+  createdBy: text("created_by").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Quote Management
 export const quotes = pgTable("quotes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -724,6 +735,7 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({ id: tru
 export const insertCommunicationPreferencesSchema = createInsertSchema(communicationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCallSchema = createInsertSchema(calls).omit({ id: true, createdAt: true });
+export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, createdAt: true, lastUsedAt: true });
 export const insertQuoteSchema = createInsertSchema(quotes)
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
@@ -846,6 +858,8 @@ export type InsertComplianceRecord = z.infer<typeof complianceRecordInsertSchema
 export type InsertCommunicationPreferences = z.infer<typeof insertCommunicationPreferencesSchema>;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type InsertCall = z.infer<typeof insertCallSchema>;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type InsertJobDiaryEntry = z.infer<typeof insertJobDiaryEntrySchema>;

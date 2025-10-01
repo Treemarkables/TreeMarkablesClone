@@ -3,7 +3,7 @@ import {
   type Customer, type InsertCustomer, type CustomerImportBatch, type InsertCustomerImportBatch,
   type CommunicationPreferences, type InsertCommunicationPreferences,
   type Lead, type InsertLead,
-  type Call, type InsertCall, type Quote, type InsertQuote,
+  type Call, type InsertCall, type ApiKey, type InsertApiKey, type Quote, type InsertQuote,
   type Job, type InsertJob, type JobDiaryEntry, type InsertJobDiaryEntry,
   type Activity, type InsertActivity,
   type Review, type InsertReview, type Campaign, type InsertCampaign,
@@ -144,6 +144,13 @@ export interface IStorage {
   getCallsByCustomer(customerId: string): Promise<Call[]>;
   getCallsByLead(leadId: string): Promise<Call[]>;
   getAllCalls(limit?: number): Promise<Call[]>;
+  
+  // API Key Management
+  createApiKey(apiKey: InsertApiKey): Promise<ApiKey>;
+  getApiKeyByHash(keyHash: string): Promise<ApiKey | undefined>;
+  updateApiKeyLastUsed(id: string): Promise<void>;
+  getAllApiKeys(): Promise<ApiKey[]>;
+  deleteApiKey(id: string): Promise<boolean>;
   
   // Quote Management
   createQuote(quote: InsertQuote): Promise<Quote>;
@@ -1533,12 +1540,62 @@ class DatabaseStorage implements IStorage {
   async deleteCommunicationPreferences(customerId: string): Promise<boolean> { return false; }
 
   // Calls
-  async createCall(call: InsertCall): Promise<Call> { throw new Error("Not implemented"); }
-  async getCall(id: string): Promise<Call | undefined> { return undefined; }
-  async updateCall(id: string, updates: Partial<InsertCall>): Promise<Call> { throw new Error("Not implemented"); }
-  async getCallsByCustomer(customerId: string): Promise<Call[]> { return []; }
-  async getCallsByLead(leadId: string): Promise<Call[]> { return []; }
-  async getAllCalls(limit?: number): Promise<Call[]> { return []; }
+  async createCall(call: InsertCall): Promise<Call> {
+    const [createdCall] = await db.insert(schema.calls).values(call).returning();
+    return createdCall;
+  }
+  
+  async getCall(id: string): Promise<Call | undefined> {
+    const calls = await db.select().from(schema.calls).where(eq(schema.calls.id, id));
+    return calls[0];
+  }
+  
+  async updateCall(id: string, updates: Partial<InsertCall>): Promise<Call> {
+    const [updatedCall] = await db.update(schema.calls)
+      .set(updates)
+      .where(eq(schema.calls.id, id))
+      .returning();
+    return updatedCall;
+  }
+  
+  async getCallsByCustomer(customerId: string): Promise<Call[]> {
+    return await db.select().from(schema.calls).where(eq(schema.calls.customerId, customerId));
+  }
+  
+  async getCallsByLead(leadId: string): Promise<Call[]> {
+    return await db.select().from(schema.calls).where(eq(schema.calls.leadId, leadId));
+  }
+  
+  async getAllCalls(limit: number = 100): Promise<Call[]> {
+    return await db.select().from(schema.calls).limit(limit);
+  }
+
+  // API Keys
+  async createApiKey(apiKey: InsertApiKey): Promise<ApiKey> {
+    const [createdKey] = await db.insert(schema.apiKeys).values(apiKey).returning();
+    return createdKey;
+  }
+  
+  async getApiKeyByHash(keyHash: string): Promise<ApiKey | undefined> {
+    const keys = await db.select().from(schema.apiKeys)
+      .where(eq(schema.apiKeys.keyHash, keyHash));
+    return keys[0];
+  }
+  
+  async updateApiKeyLastUsed(id: string): Promise<void> {
+    await db.update(schema.apiKeys)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(schema.apiKeys.id, id));
+  }
+  
+  async getAllApiKeys(): Promise<ApiKey[]> {
+    return await db.select().from(schema.apiKeys);
+  }
+  
+  async deleteApiKey(id: string): Promise<boolean> {
+    const deleted = await db.delete(schema.apiKeys).where(eq(schema.apiKeys.id, id)).returning();
+    return deleted.length > 0;
+  }
 
   // Quotes
   async createQuote(quote: InsertQuote): Promise<Quote> {
