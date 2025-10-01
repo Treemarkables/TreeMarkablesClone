@@ -169,9 +169,36 @@ export function NotificationBell() {
     if (notification.actionUrl && notification.actionUrl.startsWith('/')) {
       setLocation(notification.actionUrl);
       setIsOpen(false);
-    } else {
-      setIsOpen(false);
+      return;
     }
+
+    // Fallback navigation based on related entities
+    if (notification.jobId) {
+      setLocation(`/job-dashboard?job=${notification.jobId}`);
+      setIsOpen(false);
+      return;
+    }
+
+    if (notification.quoteId) {
+      setLocation(`/quotes?quote=${notification.quoteId}`);
+      setIsOpen(false);
+      return;
+    }
+
+    if (notification.leadId) {
+      setLocation(`/opportunities?lead=${notification.leadId}`);
+      setIsOpen(false);
+      return;
+    }
+
+    if (notification.customerId) {
+      setLocation(`/customers?customer=${notification.customerId}`);
+      setIsOpen(false);
+      return;
+    }
+
+    // If no navigation target, just close
+    setIsOpen(false);
   };
 
   const getPriorityBadgeClass = (priority: string) => {
