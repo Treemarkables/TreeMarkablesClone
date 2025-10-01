@@ -7254,29 +7254,35 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     
     const forwardedContent = parts[1];
     
-    // Parse forwarded headers
-    const fromMatch = forwardedContent.match(/From:\s*([^\n]+)/i);
-    const subjectMatch = forwardedContent.match(/Subject:\s*([^\n]+)/i);
-    const dateMatch = forwardedContent.match(/Date:\s*([^\n]+)/i);
-    const toMatch = forwardedContent.match(/To:\s*([^\n]+)/i);
+    // Parse forwarded headers - they appear on consecutive lines without line breaks between label and value
+    // Format: "From: Name <email>Date: ...Subject: ...To: ..."
+    const fromMatch = forwardedContent.match(/From:\s*([^\n]+?)(?=Date:|Subject:|To:|\n\n)/is);
+    const dateMatch = forwardedContent.match(/Date:\s*([^\n]+?)(?=Subject:|To:|From:|\n\n)/is);
+    const subjectMatch = forwardedContent.match(/Subject:\s*([^\n]+?)(?=To:|From:|Date:|\n\n)/is);
+    const toMatch = forwardedContent.match(/To:\s*([^\n]+?)(?=From:|Date:|Subject:|\n\n)/is);
     
-    // Find where the body starts (after all headers and the blank line)
-    // Look for the last header line (To:) and then find the body after double newline
-    let bodyStartIndex = 0;
-    const headerLines = ['From:', 'Date:', 'Subject:', 'To:'];
+    // Find where the actual message body starts
+    // The body comes after all headers. Headers end when we hit a line that doesn't start with From/Date/Subject/To
+    const lines = forwardedContent.split('\n');
+    let bodyLines: string[] = [];
+    let foundBody = false;
     
-    // Find the last occurrence of any header
-    for (const header of headerLines) {
-      const headerIndex = forwardedContent.toLowerCase().lastIndexOf(header.toLowerCase());
-      if (headerIndex > bodyStartIndex) {
-        bodyStartIndex = headerIndex;
-      }
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      // Skip empty lines before body
+      if (!foundBody && trimmed === '') continue;
+      
+      // Skip header lines
+      if (trimmed.match(/^(From|Date|Subject|To):/i)) continue;
+      
+      // This is the body
+      foundBody = true;
+      bodyLines.push(line);
     }
     
-    // Find the first double newline after the last header
-    const afterHeaders = forwardedContent.substring(bodyStartIndex);
-    const bodyStart = afterHeaders.search(/\n\n/);
-    const body = bodyStart > 0 ? afterHeaders.substring(bodyStart).trim() : '';
+    const body = bodyLines.join('\n').trim();
     
     if (!fromMatch) return null;
     
