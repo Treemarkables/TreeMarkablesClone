@@ -3454,6 +3454,23 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           console.warn('Failed to log SMS communication:', commError);
           // Don't fail the SMS send if logging fails
         }
+
+        // Also add to job diary if jobId exists
+        if (jobId) {
+          try {
+            await storage.createJobDiaryEntry({
+              jobId: jobId,
+              entryType: 'note',
+              title: '📱 SMS Sent',
+              description: `SMS sent to ${customer?.name || phone}\n\nMessage: ${message}`,
+              authorName: 'System',
+              authorRole: 'system',
+              tags: ['sms', 'communication']
+            });
+          } catch (diaryError) {
+            console.warn('Failed to log SMS to job diary:', diaryError);
+          }
+        }
       }
       
       res.json({ 
@@ -3468,6 +3485,64 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         success: false, 
         message: error.message || 'Failed to send SMS' 
       });
+    }
+  });
+
+  // Twilio webhook for incoming SMS replies
+  app.post('/api/webhooks/sms', async (req: Request, res: Response) => {
+    try {
+      const { From, To, Body, MessageSid } = req.body;
+      
+      console.log(`📱 Incoming SMS from ${From}: ${Body}`);
+      
+      // Find customer by phone number
+      const customers = await storage.getAllCustomers();
+      const customer = customers.find(c => c.phone === From || c.normalizedPhone === From.replace(/\D/g, ''));
+      
+      if (customer) {
+        // Get most recent job for this customer
+        const jobs = await storage.getJobsByCustomer(customer.id);
+        const recentJob = jobs[0]; // Most recent job
+        
+        // Log to communications table
+        await storage.createCommunication({
+          customerId: customer.id,
+          jobId: recentJob?.id,
+          type: 'sms',
+          direction: 'inbound',
+          subject: 'Customer SMS Reply',
+          content: Body,
+          phoneNumber: From,
+          timestamp: new Date().toISOString(),
+          status: 'received'
+        });
+        
+        // Log to job diary if job exists
+        if (recentJob) {
+          await storage.createJobDiaryEntry({
+            jobId: recentJob.id,
+            entryType: 'note',
+            title: '📱 SMS Received',
+            description: `SMS received from ${customer.name} (${From})\n\nMessage: ${Body}`,
+            authorName: customer.name,
+            authorRole: 'customer',
+            tags: ['sms', 'communication', 'customer-reply']
+          });
+        }
+        
+        console.log(`📱 SMS logged for customer ${customer.name}${recentJob ? ` in job #${recentJob.jobNumber}` : ''}`);
+      } else {
+        console.warn(`📱 Received SMS from unknown number: ${From}`);
+      }
+      
+      // Respond to Twilio with TwiML (required)
+      res.type('text/xml');
+      res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+      
+    } catch (error: any) {
+      console.error('❌ SMS webhook error:', error);
+      res.type('text/xml');
+      res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
     }
   });
 
