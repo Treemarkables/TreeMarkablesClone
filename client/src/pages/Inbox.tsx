@@ -1,8 +1,13 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import type { Conversation } from '@shared/schema';
+import { insertLeadSchema } from '@shared/schema';
 import {
   MessageSquare,
   Search,
@@ -10,7 +15,10 @@ import {
   RefreshCw,
   Mail,
   Phone,
-  Video
+  Video,
+  MoreVertical,
+  Briefcase,
+  UserPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,13 +26,57 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from 'date-fns';
+import { LeadFormDialog } from "@/components/LeadFormDialog";
+
+// Form schema extending insertLeadSchema with required validation
+const createLeadFormSchema = insertLeadSchema.extend({
+  name: z.string().min(1, "Name is required"),
+  phone: z.string().min(1, "Phone is required"),
+  status: z.string().default('new'),
+  urgency: z.enum(['low', 'medium', 'high', 'emergency']).optional().default('medium'),
+});
 
 export default function Inbox() {
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [showCreateJobDialog, setShowCreateJobDialog] = useState(false);
+  const [showCreateOpportunityDialog, setShowCreateOpportunityDialog] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Form for creating job as lead
+  const jobForm = useForm<z.infer<typeof createLeadFormSchema>>({
+    resolver: zodResolver(createLeadFormSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      address: '',
+      serviceRequested: '',
+      urgency: 'medium',
+      status: 'new',
+      notes: ''
+    }
+  });
+
+  // Form for creating opportunity
+  const opportunityForm = useForm<z.infer<typeof createLeadFormSchema>>({
+    resolver: zodResolver(createLeadFormSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      address: '',
+      serviceRequested: '',
+      urgency: 'medium',
+      status: 'new',
+      notes: ''
+    }
+  });
 
   // Fetch conversations from backend - ONLY quote requests from website
   const { data: conversationsResponse, isLoading, refetch } = useQuery({
@@ -41,6 +93,53 @@ export default function Inbox() {
   });
 
   const conversations: Conversation[] = conversationsResponse?.data || [];
+
+  // Create Opportunity mutation
+  const createOpportunityMutation = useMutation({
+    mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
+      return apiRequest('POST', '/api/leads', leadData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
+      setShowCreateOpportunityDialog(false);
+      opportunityForm.reset();
+      toast({ 
+        title: 'Opportunity created successfully',
+        description: 'The lead has been added to your pipeline'
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to create opportunity', 
+        description: 'Please try again.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Create Job as Lead mutation
+  const createJobMutation = useMutation({
+    mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
+      return apiRequest('POST', '/api/leads', { ...leadData, status: 'new' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
+      setShowCreateJobDialog(false);
+      jobForm.reset();
+      toast({ 
+        title: 'Job lead created successfully',
+        description: 'The job lead has been sent to dispatch'
+      });
+      setLocation('/dispatch');
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to create job lead', 
+        description: 'Please try again.',
+        variant: 'destructive'
+      });
+    }
+  });
 
   // Filter conversations based on status
   const filteredConversations = useMemo(() => {
@@ -163,20 +262,19 @@ export default function Inbox() {
             filteredConversations.map((conversation) => (
               <div
                 key={conversation.id}
-                className={`p-4 cursor-pointer hover-elevate active-elevate-2 ${
+                className={`p-4 hover-elevate active-elevate-2 ${
                   (conversation.unreadCount || 0) > 0 ? 'bg-accent/50' : ''
                 }`}
-                onClick={() => setLocation(`/conversation/${conversation.id}`)}
                 data-testid={`conversation-item-${conversation.id}`}
               >
                 <div className="flex items-start gap-3">
-                  <Avatar className="h-10 w-10">
+                  <Avatar className="h-10 w-10 cursor-pointer" onClick={() => setLocation(`/conversation/${conversation.id}`)}>
                     <AvatarFallback>
                       {conversation.title?.charAt(0).toUpperCase() || 'C'}
                     </AvatarFallback>
                   </Avatar>
                   
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setLocation(`/conversation/${conversation.id}`)}>
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         {getSourceIcon(conversation.source || 'email')}
@@ -189,17 +287,17 @@ export default function Inbox() {
                       <span className="text-xs text-muted-foreground">
                         {conversation.lastMessageAt 
                           ? formatDistanceToNow(new Date(conversation.lastMessageAt), { addSuffix: true })
-                          : formatDistanceToNow(new Date(conversation.createdAt), { addSuffix: true })
+                          : formatDistanceToNow(new Date(conversation.createdAt || new Date()), { addSuffix: true })
                         }
                       </span>
                     </div>
                     
                     <div className="flex items-center gap-2 mt-2">
-                      <Badge className={getStatusBadgeColor(conversation.status)} variant="secondary">
-                        {conversation.status}
+                      <Badge className={getStatusBadgeColor(conversation.status || 'open')} variant="secondary">
+                        {conversation.status || 'open'}
                       </Badge>
-                      <Badge className={getPriorityBadgeColor(conversation.priority)} variant="secondary">
-                        {conversation.priority}
+                      <Badge className={getPriorityBadgeColor(conversation.priority || 'medium')} variant="secondary">
+                        {conversation.priority || 'medium'}
                       </Badge>
                       {(conversation.unreadCount || 0) > 0 && (
                         <Badge variant="destructive" className="text-xs">
@@ -208,12 +306,98 @@ export default function Inbox() {
                       )}
                     </div>
                   </div>
+
+                  {/* Action Menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="flex-shrink-0 h-8 w-8"
+                        data-testid={`button-actions-${conversation.id}`}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedConversation(conversation);
+                          jobForm.reset({
+                            name: conversation.title || '',
+                            email: '',
+                            phone: '',
+                            address: '',
+                            serviceRequested: '',
+                            urgency: 'medium',
+                            status: 'new',
+                            notes: `From quote request: ${conversation.title || ''}`
+                          });
+                          setShowCreateJobDialog(true);
+                        }}
+                        data-testid={`menuitem-create-job-${conversation.id}`}
+                      >
+                        <Briefcase className="h-4 w-4 mr-2" />
+                        Create Job as Lead
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedConversation(conversation);
+                          opportunityForm.reset({
+                            name: conversation.title || '',
+                            email: '',
+                            phone: '',
+                            address: '',
+                            serviceRequested: '',
+                            urgency: 'medium',
+                            status: 'new',
+                            notes: `Converted from quote request: ${conversation.title || ''}`
+                          });
+                          setShowCreateOpportunityDialog(true);
+                        }}
+                        data-testid={`menuitem-create-opportunity-${conversation.id}`}
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Create Opportunity
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             ))
           )}
         </div>
       </ScrollArea>
+
+      {/* Create Job as Lead Dialog */}
+      <LeadFormDialog
+        open={showCreateJobDialog}
+        onOpenChange={setShowCreateJobDialog}
+        title="Create Job as Lead"
+        description="Create a new job lead that will be sent to dispatch"
+        submitLabel="Create Job Lead"
+        isSubmitting={createJobMutation.isPending}
+        form={jobForm}
+        onSubmit={(values) => createJobMutation.mutate({ ...values, status: 'new' })}
+        includeStatus={false}
+        testIdPrefix="inbox-job"
+      />
+
+      {/* Create Opportunity Dialog */}
+      <LeadFormDialog
+        open={showCreateOpportunityDialog}
+        onOpenChange={setShowCreateOpportunityDialog}
+        title="Create Opportunity"
+        description="Add a new lead to your sales pipeline"
+        submitLabel="Create Opportunity"
+        isSubmitting={createOpportunityMutation.isPending}
+        form={opportunityForm}
+        onSubmit={(values) => createOpportunityMutation.mutate(values)}
+        includeStatus={true}
+        testIdPrefix="inbox-opportunity"
+      />
     </div>
   );
 }

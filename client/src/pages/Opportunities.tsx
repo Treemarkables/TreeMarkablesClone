@@ -3,31 +3,82 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import type { Conversation, ConversationMessage } from '@shared/schema';
+import { insertLeadSchema } from '@shared/schema';
 import {
   Menu,
   ChevronDown,
   Filter,
   Plus,
   Facebook,
-  Loader2
+  Loader2,
+  MoreVertical,
+  Briefcase,
+  UserPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { LeadFormDialog } from "@/components/LeadFormDialog";
+
+// Form schema extending insertLeadSchema with required validation
+const createLeadFormSchema = insertLeadSchema.extend({
+  name: z.string().min(1, "Name is required"),
+  phone: z.string().min(1, "Phone is required"),
+  status: z.string().default('new'),
+  urgency: z.enum(['low', 'medium', 'high', 'emergency']).optional().default('medium'),
+});
 
 export default function Opportunities() {
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showReplyDialog, setShowReplyDialog] = useState(false);
   const [replyContent, setReplyContent] = useState('');
+  const [showCreateJobDialog, setShowCreateJobDialog] = useState(false);
+  const [showCreateOpportunityDialog, setShowCreateOpportunityDialog] = useState(false);
   const [, setLocation] = useLocation();
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Form for creating job as lead
+  const jobForm = useForm<z.infer<typeof createLeadFormSchema>>({
+    resolver: zodResolver(createLeadFormSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      address: '',
+      serviceRequested: '',
+      urgency: 'medium',
+      status: 'new',
+      notes: ''
+    }
+  });
+
+  // Form for creating opportunity
+  const opportunityForm = useForm<z.infer<typeof createLeadFormSchema>>({
+    resolver: zodResolver(createLeadFormSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      address: '',
+      serviceRequested: '',
+      urgency: 'medium',
+      status: 'new',
+      notes: ''
+    }
+  });
 
   // Fetch conversations from backend
   const { data: conversationsResponse, isLoading } = useQuery({
@@ -77,6 +128,53 @@ export default function Opportunities() {
       toast({ 
         title: 'Failed to send reply', 
         description: 'Please try again or check your connection.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Create Opportunity mutation
+  const createOpportunityMutation = useMutation({
+    mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
+      return apiRequest('POST', '/api/leads', leadData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
+      setShowCreateOpportunityDialog(false);
+      opportunityForm.reset();
+      toast({ 
+        title: 'Opportunity created successfully',
+        description: 'The lead has been added to your pipeline'
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to create opportunity', 
+        description: 'Please try again.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Create Job as Lead mutation
+  const createJobMutation = useMutation({
+    mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
+      return apiRequest('POST', '/api/leads', { ...leadData, status: 'new' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
+      setShowCreateJobDialog(false);
+      jobForm.reset();
+      toast({ 
+        title: 'Job lead created successfully',
+        description: 'The job lead has been sent to dispatch'
+      });
+      setLocation('/dispatch');
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to create job lead', 
+        description: 'Please try again.',
         variant: 'destructive'
       });
     }
@@ -184,8 +282,7 @@ export default function Opportunities() {
             {conversations.map((conversation: Conversation) => (
               <div
                 key={conversation.id}
-                className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2 cursor-pointer"
-                onClick={() => handleConversationClick(conversation)}
+                className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2"
                 data-testid={`conversation-item-${conversation.id}`}
               >
                 {/* Avatar with Badge */}
@@ -205,7 +302,7 @@ export default function Opportunities() {
                 </div>
 
                 {/* Conversation Info */}
-                <div className="flex-1 min-w-0 overflow-hidden">
+                <div className="flex-1 min-w-0 overflow-hidden cursor-pointer" onClick={() => handleConversationClick(conversation)}>
                   <div className="flex items-baseline gap-1 sm:gap-2">
                     <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate flex-1 min-w-0" data-testid={`text-name-${conversation.id}`}>
                       {(conversation as any).customerName || conversation.title}
@@ -228,6 +325,65 @@ export default function Opportunities() {
                     )}
                   </div>
                 </div>
+                
+                {/* Action Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="flex-shrink-0" 
+                      onClick={(e) => e.stopPropagation()}
+                      data-testid={`button-actions-${conversation.id}`}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedConversation(conversation);
+                        jobForm.reset({
+                          name: conversation.title || '',
+                          email: '',
+                          phone: '',
+                          address: '',
+                          serviceRequested: '',
+                          urgency: 'medium',
+                          status: 'new',
+                          notes: `From conversation: ${conversation.title || ''}`
+                        });
+                        setShowCreateJobDialog(true);
+                      }}
+                      data-testid={`menuitem-create-job-${conversation.id}`}
+                    >
+                      <Briefcase className="h-4 w-4 mr-2" />
+                      Create Job as Lead
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedConversation(conversation);
+                        opportunityForm.reset({
+                          name: conversation.title || '',
+                          email: '',
+                          phone: '',
+                          address: '',
+                          serviceRequested: '',
+                          urgency: 'medium',
+                          status: 'new',
+                          notes: `Converted from conversation: ${conversation.title || ''}`
+                        });
+                        setShowCreateOpportunityDialog(true);
+                      }}
+                      data-testid={`menuitem-create-opportunity-${conversation.id}`}
+                    >
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Create Opportunity
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ))}
           </div>
@@ -302,6 +458,34 @@ export default function Opportunities() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Create Job as Lead Dialog */}
+      <LeadFormDialog
+        open={showCreateJobDialog}
+        onOpenChange={setShowCreateJobDialog}
+        title="Create Job as Lead"
+        description="Create a new job lead that will be sent to dispatch"
+        submitLabel="Create Job Lead"
+        isSubmitting={createJobMutation.isPending}
+        form={jobForm}
+        onSubmit={(values) => createJobMutation.mutate({ ...values, status: 'new' })}
+        includeStatus={false}
+        testIdPrefix="job"
+      />
+
+      {/* Create Opportunity Dialog */}
+      <LeadFormDialog
+        open={showCreateOpportunityDialog}
+        onOpenChange={setShowCreateOpportunityDialog}
+        title="Create Opportunity"
+        description="Add a new lead to your sales pipeline"
+        submitLabel="Create Opportunity"
+        isSubmitting={createOpportunityMutation.isPending}
+        form={opportunityForm}
+        onSubmit={(values) => createOpportunityMutation.mutate(values)}
+        includeStatus={true}
+        testIdPrefix="opportunity"
+      />
     </div>
   );
 }
