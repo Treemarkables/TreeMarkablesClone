@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -179,6 +179,7 @@ export const customers = pgTable("customers", {
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
+  normalizedPhone: text("normalized_phone"), // Phone with all non-digits stripped for efficient matching
   address: text("address"),
   city: text("city"),
   region: text("region"),
@@ -196,7 +197,9 @@ export const customers = pgTable("customers", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  normalizedPhoneIdx: index("customers_normalized_phone_idx").on(table.normalizedPhone),
+}));
 
 // Customer Communication Preferences
 export const communicationPreferences = pgTable("communication_preferences", {

@@ -81,6 +81,7 @@ export interface IStorage {
   // Customer Management
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getCustomer(id: string): Promise<Customer | undefined>;
+  findCustomerByPhone(phone: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: string): Promise<boolean>;
   getAllCustomers(): Promise<Customer[]>;
@@ -738,8 +739,20 @@ class DatabaseStorage implements IStorage {
   // CUSTOMER MANAGEMENT
   // ========================================
   
+  // Helper function to normalize phone numbers (strip all non-digits)
+  private normalizePhone(phone: string | null | undefined): string | null {
+    if (!phone) return null;
+    const normalized = phone.replace(/\D/g, '');
+    return normalized || null;
+  }
+  
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
-    const [newCustomer] = await db.insert(schema.customers).values(customer).returning();
+    // Automatically populate normalizedPhone when creating customer
+    const customerData = {
+      ...customer,
+      normalizedPhone: this.normalizePhone(customer.phone)
+    };
+    const [newCustomer] = await db.insert(schema.customers).values(customerData).returning();
     return newCustomer;
   }
 
@@ -748,10 +761,33 @@ class DatabaseStorage implements IStorage {
     return customer || undefined;
   }
 
+  async findCustomerByPhone(phone: string): Promise<Customer | undefined> {
+    // Normalize phone number: remove all non-digit characters
+    const normalizedInput = this.normalizePhone(phone);
+    
+    if (!normalizedInput) {
+      return undefined;
+    }
+    
+    // Use indexed normalizedPhone column for efficient lookup
+    const [customer] = await db
+      .select()
+      .from(schema.customers)
+      .where(eq(schema.customers.normalizedPhone, normalizedInput))
+      .limit(1);
+    
+    return customer || undefined;
+  }
 
   async updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer> {
+    // Automatically update normalizedPhone if phone is being updated
+    const updateData = { ...updates, updatedAt: new Date() };
+    if (updates.phone !== undefined) {
+      updateData.normalizedPhone = this.normalizePhone(updates.phone);
+    }
+    
     const [customer] = await db.update(schema.customers)
-      .set({ ...updates, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(schema.customers.id, id))
       .returning();
     return customer;

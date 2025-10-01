@@ -7331,6 +7331,46 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // GET /api/mobile/customers/match/:phoneNumber - Find customer by phone number
+  app.get('/api/mobile/customers/match/:phoneNumber', requireApiKey, async (req: Request, res: Response) => {
+    try {
+      const { phoneNumber } = req.params;
+      
+      if (!phoneNumber) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Phone number is required' 
+        });
+      }
+
+      // Normalize phone number: remove all non-digit characters (spaces, dashes, parentheses, plus signs, etc)
+      const normalizedPhone = phoneNumber.replace(/\D/g, '');
+
+      // Search for customer by phone number
+      const customer = await storage.findCustomerByPhone(normalizedPhone);
+
+      if (!customer) {
+        return res.json({ 
+          success: true, 
+          data: null,
+          message: 'No customer found with this phone number' 
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        data: customer,
+        message: 'Customer found' 
+      });
+    } catch (error) {
+      console.error('Error matching customer by phone:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error searching for customer' 
+      });
+    }
+  });
+
   // ========================================
   // CONVERSATION WEBHOOKS & INTEGRATIONS
   // ========================================
