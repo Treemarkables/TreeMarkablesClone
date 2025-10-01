@@ -1908,7 +1908,6 @@ export function GlobalJobCard({
                         </div>
                         <div className="text-base text-gray-700 font-medium">
                           <div>{selectedCustomer?.address || formData.newCustomerAddress || 'Address'}</div>
-                          <div>{selectedCustomer?.city || formData.newCustomerCity || 'City'}, {selectedCustomer?.region || formData.newCustomerRegion || 'Region'}</div>
                         </div>
                       </div>
 
