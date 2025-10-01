@@ -41,6 +41,26 @@ export const ServiceM8LineItemSchema = z.object({
 
 export type ServiceM8LineItem = z.infer<typeof ServiceM8LineItemSchema>;
 
+// Checklist item schema for jobs
+export const checklistItemSchema = z.object({
+  id: z.string(),
+  text: z.string().min(1, "Checklist item cannot be empty"),
+  completed: z.boolean().default(false),
+});
+
+export type ChecklistItem = z.infer<typeof checklistItemSchema>;
+
+// Equipment checklist item schema for jobs
+export const equipmentChecklistItemSchema = z.object({
+  id: z.string(),
+  equipment: z.string().min(1, "Equipment name cannot be empty"),
+  checked: z.boolean().default(false),
+  checkedAt: z.string().optional(),
+  checkedBy: z.string().optional(),
+});
+
+export type EquipmentChecklistItem = z.infer<typeof equipmentChecklistItemSchema>;
+
 // GST Calculation Types
 export interface GSTCalculation {
   subtotal: number;
@@ -332,9 +352,10 @@ export const jobs = pgTable("jobs", {
   invoiceEligible: boolean("invoice_eligible").default(false),
   
   // Global Job Card Fields
-  checklist: jsonb("checklist"), // [{"id": "uuid", "text": "Task description", "completed": false}]
+  checklist: jsonb("checklist").$type<ChecklistItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "uuid", "text": "Task description", "completed": false}]
+  equipmentChecklist: jsonb("equipment_checklist").$type<EquipmentChecklistItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "uuid", "equipment": "Chainsaw", "checked": false, "checkedAt": "timestamp", "checkedBy": "name"}]
   notes: text("notes"), // Job notes and comments
-  lineItems: jsonb("line_items"), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number, "unitCost": number, "totalCost": number, "costExGst": number, "markup": number, "priceExGst": number, "totalExGst": number, "taxRate": number, "itemCode": string}]
+  lineItems: jsonb("line_items").$type<ServiceM8LineItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number, "unitCost": number, "totalCost": number, "costExGst": number, "markup": number, "priceExGst": number, "totalExGst": number, "taxRate": number, "itemCode": string}]
   
   weatherDependent: boolean("weather_dependent").default(false),
   permitRequired: boolean("permit_required").default(false),
@@ -696,15 +717,6 @@ export const priceRules = pgTable("price_rules", {
 // INSERT SCHEMAS & TYPES
 // ========================================
 
-// Checklist item schema for jobs
-export const checklistItemSchema = z.object({
-  id: z.string(),
-  text: z.string().min(1, "Checklist item cannot be empty"),
-  completed: z.boolean().default(false),
-});
-
-export type ChecklistItem = z.infer<typeof checklistItemSchema>;
-
 export const insertTeamSchema = createInsertSchema(teams).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCustomerImportBatchSchema = createInsertSchema(customerImportBatches).omit({ id: true, createdAt: true });
 export const updateCustomerImportBatchSchema = createInsertSchema(customerImportBatches).omit({ id: true, createdAt: true }).partial();
@@ -722,6 +734,7 @@ export const insertJobSchema = createInsertSchema(jobs)
   .extend({
     status: JobStatus.optional().default('lead'),
     checklist: z.array(checklistItemSchema).optional().default([]),
+    equipmentChecklist: z.array(equipmentChecklistItemSchema).optional().default([]),
     lineItems: z.array(ServiceM8LineItemSchema).optional().default([]),
   });
 export const insertActivitySchema = createInsertSchema(activities).omit({ id: true, createdAt: true });
@@ -1246,6 +1259,7 @@ export const jobTemplates = pgTable("job_templates", {
   // Checklist items
   preJobChecklist: text("pre_job_checklist").array().default([]),
   postJobChecklist: text("post_job_checklist").array().default([]),
+  equipmentChecklist: text("equipment_checklist").array().default([]),
   categoryTags: text("category_tags").array().default([]),
   
   isActive: boolean("is_active").notNull().default(true),
