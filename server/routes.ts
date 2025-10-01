@@ -116,6 +116,38 @@ const imageUpload = multer({
   }
 });
 
+// Safe audio file extensions and MIME types for call recordings
+const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.webm'];
+const ALLOWED_AUDIO_MIME_TYPES = [
+  'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/m4a', 
+  'audio/wav', 'audio/wave', 'audio/x-wav',
+  'audio/aac', 'audio/ogg', 'audio/webm'
+];
+
+// Audio upload configuration for call recordings  
+const audioUpload = multer({
+  dest: 'uploads/recordings/',
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit for audio files
+  },
+  fileFilter: (req, file, cb) => {
+    // Check MIME type
+    if (!ALLOWED_AUDIO_MIME_TYPES.includes(file.mimetype)) {
+      cb(new Error(`Audio file type ${file.mimetype} not allowed. Only MP3, M4A, WAV, AAC, OGG, and WebM audio files are permitted.`));
+      return;
+    }
+    
+    // Check file extension
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_AUDIO_EXTENSIONS.includes(ext)) {
+      cb(new Error(`File extension ${ext} not allowed. Only ${ALLOWED_AUDIO_EXTENSIONS.join(', ')} files are permitted.`));
+      return;
+    }
+    
+    cb(null, true);
+  }
+});
+
 // Get the directory path for ES module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -124,6 +156,12 @@ const __dirname = path.dirname(__filename);
 const photosDir = path.join(__dirname, '..', 'uploads', 'photos');
 if (!fs.existsSync(photosDir)) {
   fs.mkdirSync(photosDir, { recursive: true });
+}
+
+// Create recordings directory if it doesn't exist
+const recordingsDir = path.join(__dirname, '..', 'uploads', 'recordings');
+if (!fs.existsSync(recordingsDir)) {
+  fs.mkdirSync(recordingsDir, { recursive: true });
 }
 
 // ========================================
