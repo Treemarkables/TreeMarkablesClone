@@ -1321,16 +1321,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const csvContent = fs.readFileSync(req.file.path, 'utf8');
       
       // Enhanced CSV parsing with better delimiter detection
-      const parsedCsv = Papa.parse(csvContent, {
+      const parsedCsv = Papa.parse<any>(csvContent, {
         header: true,
         skipEmptyLines: true,
-        transformHeader: (header) => header.trim(),
-        delimiter: "", // Auto-detect delimiter
-        newline: "", // Auto-detect line endings
-        quoteChar: '"',
-        escapeChar: '"',
-        comments: false,
-        skipFirstNLines: 0,
+        transformHeader: (header: string) => header.trim(),
         delimitersToGuess: [',', '\t', '|', ';', Papa.RECORD_SEP, Papa.UNIT_SEP]
       });
 
@@ -1991,24 +1985,27 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Update quote status to accepted
       const updatedQuote = await storage.updateQuote(id, { 
         status: 'accepted',
-        acceptedDate: new Date()
+        responseDate: new Date()
       });
 
       // Create work order (job) from quote
+      const quoteAmount = Number(quote.amount) || 0;
+      
       const jobData = {
         title: `Work Order from Quote #${quote.quoteNumber}`,
         description: quote.description || `Work based on accepted quote #${quote.quoteNumber}`,
         customerId: quote.customerId,
         leadId: quote.leadId,
-        status: 'work_order',
+        status: 'work_order' as const,
         priority: 'medium',
-        totalAmount: quote.totalAmount,
-        subtotal: quote.subtotal,
-        gstAmount: (quote.totalAmount || 0) - (quote.subtotal || 0),
         jobType: 'quote-conversion',
         quoteId: id,
+        totalAmount: quote.amount,
         metricsEligible: true,
-        metricsStartDate: new Date()
+        metricsStartDate: new Date(),
+        lineItems: quote.lineItems || [],
+        checklist: [],
+        equipmentChecklist: []
       };
 
       // Generate job number
@@ -2019,7 +2016,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const customer = quote.customerId ? await storage.getCustomer(quote.customerId) : null;
       const notificationData = {
         title: 'Quote Accepted!',
-        message: `${customer?.name || 'Customer'} has accepted quote #${quote.quoteNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(quote.totalAmount || 0)}. Work order #${jobNumber} has been created.`,
+        message: `${customer?.name || 'Customer'} has accepted quote #${quote.quoteNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(quoteAmount)}. Work order #${jobNumber} has been created.`,
         type: 'quote_accepted',
         priority: 'high',
         isRead: false,
