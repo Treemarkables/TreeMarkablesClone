@@ -163,14 +163,6 @@ export default function ConversationDetail() {
   };
 
   const handleCreateOpportunity = () => {
-    if (!leadForm.name.trim() || !leadForm.phone.trim()) {
-      toast({
-        title: 'Missing required fields',
-        description: 'Name and phone are required',
-        variant: 'destructive'
-      });
-      return;
-    }
     createOpportunityMutation.mutate(leadForm);
   };
 
@@ -437,7 +429,7 @@ export default function ConversationDetail() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Name *</Label>
+              <Label htmlFor="name">Name</Label>
               <Input
                 id="name"
                 value={leadForm.name}
@@ -447,7 +439,7 @@ export default function ConversationDetail() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="phone">Phone *</Label>
+              <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
                 value={leadForm.phone}
