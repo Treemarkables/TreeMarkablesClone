@@ -3033,7 +3033,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       if (proposal.jobId) {
         job = await storage.getJob(proposal.jobId);
         if (job?.jobNumber) {
-          replyToEmail = `job-${job.jobNumber}@jobs.www.treemarkables.co.nz`;
+          replyToEmail = `job-${job.jobNumber}@jobs.treemarkables.co.nz`;
         }
       }
 
@@ -3104,7 +3104,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         to,
         cc,
         from: 'jullianhalley@hotmail.com',
-        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.www.treemarkables.co.nz
+        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${parseFloat(totalAmount.toString()).toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
@@ -3170,7 +3170,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Create replyTo email address using job number
       let replyToEmail;
       if (job?.jobNumber) {
-        replyToEmail = `job-${job.jobNumber}@jobs.www.treemarkables.co.nz`;
+        replyToEmail = `job-${job.jobNumber}@jobs.treemarkables.co.nz`;
       }
 
       // Prepare email content with any necessary formatting
@@ -3225,7 +3225,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         subject: subject,
         text: body,
         html: emailHtml,
-        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.www.treemarkables.co.nz
+        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
@@ -6710,7 +6710,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       if (jobId) {
         const job = await storage.getJob(jobId);
         if (job?.jobNumber) {
-          replyToEmail = `job-${job.jobNumber}@jobs.www.treemarkables.co.nz`;
+          replyToEmail = `job-${job.jobNumber}@jobs.treemarkables.co.nz`;
         }
       }
 
@@ -6720,7 +6720,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const success = await emailService.sendEmail({
         to,
         from: 'noreply@treemarkables.co.nz',
-        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.www.treemarkables.co.nz
+        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         text: message,
         html: `<p>${message.replace(/\n/g, '<br>')}</p>`
