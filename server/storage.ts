@@ -2374,12 +2374,32 @@ class DatabaseStorage implements IStorage {
       }
     }
     
-    let baseQuery = db.select({
-      conversations: schema.conversations,
-      customerName: schema.customers.name
-    })
-    .from(schema.conversations)
-    .leftJoin(schema.customers, eq(schema.conversations.customerId, schema.customers.id));
+    // Subquery to get the first message's fromName for each conversation
+    const firstMessageSubquery = db
+      .select({
+        conversationId: schema.conversationMessages.conversationId,
+        fromName: schema.conversationMessages.fromName,
+        rowNum: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${schema.conversationMessages.conversationId} ORDER BY ${schema.conversationMessages.createdAt} ASC)`.as('row_num')
+      })
+      .from(schema.conversationMessages)
+      .where(eq(schema.conversationMessages.direction, 'inbound'))
+      .as('first_message');
+    
+    let baseQuery = db
+      .select({
+        conversations: schema.conversations,
+        customerName: schema.customers.name,
+        senderName: firstMessageSubquery.fromName
+      })
+      .from(schema.conversations)
+      .leftJoin(schema.customers, eq(schema.conversations.customerId, schema.customers.id))
+      .leftJoin(
+        firstMessageSubquery,
+        and(
+          eq(schema.conversations.id, firstMessageSubquery.conversationId),
+          eq(firstMessageSubquery.rowNum, 1)
+        )
+      );
     
     if (conditions.length > 0) {
       baseQuery = baseQuery.where(and(...conditions)) as any;
@@ -2397,10 +2417,10 @@ class DatabaseStorage implements IStorage {
     
     const results = await baseQuery;
     
-    // Map results to include customerName in the conversation object
+    // Map results to include customerName or senderName in the conversation object
     return results.map((row: any) => ({
       ...row.conversations,
-      customerName: row.customerName
+      customerName: row.customerName || row.senderName
     })) as Conversation[];
   }
 
