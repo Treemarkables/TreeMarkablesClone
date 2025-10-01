@@ -3167,6 +3167,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         invoice = await storage.getInvoice(invoiceId);
       }
 
+      // Create replyTo email address using job number
+      let replyToEmail;
+      if (job?.jobNumber) {
+        replyToEmail = `job-${job.jobNumber}@jobs.www.treemarkables.co.nz`;
+      }
+
       // Prepare email content with any necessary formatting
       const emailHtml = body.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
       
@@ -3219,6 +3225,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         subject: subject,
         text: body,
         html: emailHtml,
+        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.www.treemarkables.co.nz
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
