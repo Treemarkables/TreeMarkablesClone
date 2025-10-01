@@ -567,15 +567,40 @@ export function JobDiarySection({
                         )}
                       </div>
                       
-                      <div className="text-xs text-muted-foreground mb-2 flex items-center gap-4">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {format(new Date(entry.timestamp), 'h:mm a dd/MM/yyyy')}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          by {entry.author}
-                        </span>
+                      <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-4">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {format(new Date(entry.timestamp), 'h:mm a dd/MM/yyyy')}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            by {entry.author}
+                          </span>
+                        </div>
+                        {entry.type === 'email' && entry.metadata?.emailAddress && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveComposer('email');
+                              // Pre-fill email address for reply
+                              if (entry.metadata?.emailAddress) {
+                                // Store the reply-to email in a ref or state if needed
+                                setTimeout(() => {
+                                  const emailInput = document.querySelector('[data-testid="input-email-to"]') as HTMLInputElement;
+                                  if (emailInput) emailInput.value = entry.metadata.emailAddress || '';
+                                }, 100);
+                              }
+                            }}
+                            data-testid={`button-reply-email-${entry.id}`}
+                          >
+                            <Mail className="w-3 h-3 mr-1" />
+                            Reply
+                          </Button>
+                        )}
                       </div>
                       
                       {editingEntryId === entry.id ? (
