@@ -192,29 +192,29 @@ function DraggableOpportunityCard({
     <Card 
       ref={setNodeRef} 
       style={style} 
-      className={`bg-white hover-elevate cursor-pointer ${isLoading ? 'opacity-50' : ''}`}
+      className={`bg-white hover-elevate cursor-pointer group ${isLoading ? 'opacity-50' : ''}`}
       data-testid={`opportunity-card-${opportunity.id}`}
     >
-      <CardContent className="p-1 sm:p-2">
-        <div className="flex items-start justify-between mb-1">
-          <h4 className="font-semibold text-[10px] sm:text-xs leading-tight mr-1 min-w-0 truncate" data-testid={`opportunity-name-${opportunity.id}`}>
+      <CardContent className="p-1.5">
+        <div className="flex items-center justify-between gap-1">
+          <h4 className="font-semibold text-[11px] leading-none min-w-0 truncate" data-testid={`opportunity-name-${opportunity.id}`}>
             {opportunity.name || opportunity.customerName}
           </h4>
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <Button
               variant="ghost"
               size="icon"
-              className="cursor-grab active:cursor-grabbing h-6 w-6"
+              className="cursor-grab active:cursor-grabbing h-5 w-5 p-0"
               {...attributes}
               {...listeners}
               data-testid={`drag-handle-${opportunity.id}`}
             >
-              <GripVertical className="h-3 w-3" />
+              <GripVertical className="h-2.5 w-2.5" />
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6" data-testid={`menu-${opportunity.id}`}>
-                  <MoreVertical className="h-3 w-3" />
+                <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`menu-${opportunity.id}`}>
+                  <MoreVertical className="h-2.5 w-2.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -236,46 +236,26 @@ function DraggableOpportunityCard({
           </div>
         </div>
         
-        <div className="space-y-1 text-[10px] text-gray-600">
-          <div className="flex items-center justify-between">
-            <span>Value:</span>
-            <span className="font-medium" data-testid={`opportunity-value-${opportunity.id}`}>
-              {formatCurrency(parseFloat(opportunity.estimatedValue || '0'))}
-            </span>
-          </div>
-          
-          {opportunity.source && (
-            <div className="flex items-center justify-between">
-              <span>Source:</span>
-              <Badge className={`${getSourceBadgeColor(opportunity.source)} text-[9px] px-1 py-0`}>
-                {opportunity.source}
-              </Badge>
-            </div>
-          )}
-
-          {opportunity.serviceRequested && (
-            <div className="text-[10px] text-gray-500 mt-1">
-              {opportunity.serviceRequested}
-            </div>
-          )}
+        <div className="text-[10px] font-medium text-gray-900 mt-0.5" data-testid={`opportunity-value-${opportunity.id}`}>
+          {formatCurrency(parseFloat(opportunity.estimatedValue || '0'))}
         </div>
 
-        <div className="flex items-center gap-0.5 mt-1">
+        <div className="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {opportunity.phone && (
-            <Button variant="ghost" size="icon" className="h-6 w-6" data-testid={`call-${opportunity.id}`}>
-              <Phone className="h-3 w-3" />
+            <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`call-${opportunity.id}`}>
+              <Phone className="h-2.5 w-2.5" />
             </Button>
           )}
           {opportunity.email && (
-            <Button variant="ghost" size="icon" className="h-6 w-6" data-testid={`email-${opportunity.id}`}>
-              <Mail className="h-3 w-3" />
+            <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`email-${opportunity.id}`}>
+              <Mail className="h-2.5 w-2.5" />
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="h-6 w-6" data-testid={`schedule-${opportunity.id}`}>
-            <Calendar className="h-3 w-3" />
+          <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`schedule-${opportunity.id}`}>
+            <Calendar className="h-2.5 w-2.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6" data-testid={`view-${opportunity.id}`}>
-            <Eye className="h-3 w-3" />
+          <Button variant="ghost" size="icon" className="h-5 w-5 p-0" data-testid={`view-${opportunity.id}`}>
+            <Eye className="h-2.5 w-2.5" />
           </Button>
         </div>
       </CardContent>
