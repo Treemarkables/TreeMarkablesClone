@@ -391,7 +391,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   };
 
   return (
-    <div className="h-full bg-background p-4 md:p-6 overflow-hidden w-full max-w-full min-w-0">
+    <div className="h-full bg-background p-2 sm:p-4 md:p-6 overflow-x-hidden overflow-y-auto w-full max-w-full min-w-0">
       <div className="w-full max-w-full h-full flex flex-col min-w-0">
 
         <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full">
