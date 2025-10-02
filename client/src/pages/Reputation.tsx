@@ -1,471 +1,469 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
-import {
-  TrendingUp,
-  TrendingDown,
-  Star,
-  ThumbsUp,
-  ThumbsDown,
-  MessageSquare,
-  BarChart3,
-  Target,
-  Calendar,
-  Sparkles,
-  ArrowUp,
-  ArrowDown
+import { 
+  Star, 
+  Send, 
+  Mail, 
+  MessageSquare, 
+  TrendingUp, 
+  SkipForward,
+  CheckCircle2,
+  Clock
 } from "lucide-react";
+import { format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useToast } from "@/hooks/use-toast";
 
-interface ReputationStats {
-  invitesGoal: {
-    current: number;
-    target: number;
-    percentage: number;
-  };
-  reviewsReceived: {
-    count: number;
-    change: number;
-    trend: 'up' | 'down';
-  };
-  sentiment: {
-    positive: number;
-    negative: number;
-    positivePercentage: number;
-    negativePercentage: number;
-  };
-  averageRating: {
-    rating: number;
-    maxRating: number;
-    distribution: Array<{ stars: number; count: number }>;
-  };
-  aiSummary: {
-    text: string;
-    reviewCount: number;
-  };
+interface CompletedJob {
+  id: string;
+  jobNumber: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  address: string;
+  completedDate: string;
+  reviewRequestId?: string;
+  reviewRequestStatus?: string;
+  reviewSubmissionId?: string;
+  reviewRating?: number;
 }
 
-const mockReputationData: ReputationStats = {
-  invitesGoal: {
-    current: 4,
-    target: 20,
-    percentage: 20
-  },
-  reviewsReceived: {
-    count: 7,
-    change: -22,
-    trend: 'down'
-  },
-  sentiment: {
-    positive: 0,
-    negative: 0,
-    positivePercentage: 0,
-    negativePercentage: 0
-  },
-  averageRating: {
-    rating: 4.8,
-    maxRating: 5,
-    distribution: [
-      { stars: 5, count: 24 },
-      { stars: 4, count: 8 },
-      { stars: 3, count: 2 },
-      { stars: 2, count: 1 },
-      { stars: 1, count: 0 }
-    ]
-  },
-  aiSummary: {
-    text: "Treemarkables consistently delivers exceptional tree maintenance services, characterized by prompt, professional, and friendly interactions. Customers commend the team's efficiency, quality of work, and effective communication, resulting in high levels of satisfaction and recommendations.",
-    reviewCount: 37
-  }
-};
+interface ReviewStats {
+  totalSent: number;
+  totalReceived: number;
+  conversionRate: number;
+  averageRating: number;
+}
+
+interface ReviewSubmission {
+  id: string;
+  rating: number;
+  comment: string;
+  postedToGoogle: boolean;
+  postedToFacebook: boolean;
+  googlePostStatus: string;
+  facebookPostStatus: string;
+  internalStatus: string;
+  submittedAt: string;
+  jobNumber: string;
+  customerName: string;
+  jobAddress: string;
+}
 
 export default function Reputation() {
-  const [selectedPeriod, setSelectedPeriod] = useState('6months');
-  const [activeTab, setActiveTab] = useState('overview');
+  const { toast } = useToast();
+  const [selectedJob, setSelectedJob] = useState<CompletedJob | null>(null);
+  const [sendVia, setSendVia] = useState<"sms" | "email" | "both">("both");
 
-  // Fetch reputation data (using mock data for now)
-  const { data: reputationData, isLoading } = useQuery({
-    queryKey: ['/api/reputation/stats', selectedPeriod],
-    queryFn: async () => {
-      // TODO: Replace with real API call
-      return { success: true, data: mockReputationData };
-    }
+  const { data: stats } = useQuery<{ data: ReviewStats }>({
+    queryKey: ["/api/reviews/stats"],
   });
 
-  const stats = reputationData?.data || mockReputationData;
+  const { data: completedJobs, isLoading: jobsLoading } = useQuery<{ data: CompletedJob[] }>({
+    queryKey: ["/api/reviews/completed-jobs"],
+  });
 
-  if (isLoading) {
+  const { data: submissions } = useQuery<{ data: ReviewSubmission[] }>({
+    queryKey: ["/api/reviews/submissions"],
+  });
+
+  const sendRequestMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("POST", "/api/reviews/send-request", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews/completed-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews/stats"] });
+      setSelectedJob(null);
+      toast({
+        title: "Review request sent!",
+        description: `Request sent to ${selectedJob?.customerName}`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to send request",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const skipMutation = useMutation({
+    mutationFn: async (requestId: string) => {
+      return await apiRequest("POST", `/api/reviews/${requestId}/skip`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews/completed-jobs"] });
+      toast({
+        title: "Job skipped",
+        description: "This job has been marked as skipped",
+      });
+    },
+  });
+
+  const handleSendRequest = () => {
+    if (!selectedJob) return;
+
+    sendRequestMutation.mutate({
+      jobId: selectedJob.id,
+      customerId: selectedJob.customerId,
+      jobNumber: selectedJob.jobNumber,
+      customerName: selectedJob.customerName,
+      customerEmail: selectedJob.customerEmail,
+      customerPhone: selectedJob.customerPhone,
+      sentVia: sendVia,
+    });
+  };
+
+  const pendingJobs = completedJobs?.data.filter(
+    job => !job.reviewRequestId || job.reviewRequestStatus === 'pending'
+  ) || [];
+
+  const sentJobs = completedJobs?.data.filter(
+    job => job.reviewRequestStatus === 'sent' && !job.reviewSubmissionId
+  ) || [];
+
+  const reviewedJobs = completedJobs?.data.filter(
+    job => job.reviewSubmissionId
+  ) || [];
+
+  const renderStarRating = (rating: number) => {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading reputation data...</p>
-        </div>
+      <div className="flex gap-0.5">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            className={`w-4 h-4 ${
+              star <= rating
+                ? "fill-yellow-400 text-yellow-400"
+                : "text-muted-foreground"
+            }`}
+          />
+        ))}
       </div>
     );
-  }
+  };
 
   return (
-    <div className="h-full bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <Star className="h-6 w-6 text-orange-600" />
-                Reputation
-              </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Monitor and manage your online reputation and customer reviews
-              </p>
-            </div>
-            <Button data-testid="button-send-review-request" className="bg-blue-600 hover:bg-blue-700">
-              Send Review Request
-            </Button>
-          </div>
+    <div className="h-full overflow-auto">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold">Reputation Management</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+            Collect and manage customer reviews
+          </p>
         </div>
 
-        {/* Navigation Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="px-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:grid-cols-6">
-            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-            <TabsTrigger value="requests" data-testid="tab-requests">Requests</TabsTrigger>
-            <TabsTrigger value="reviews" data-testid="tab-reviews">Reviews</TabsTrigger>
-            <TabsTrigger value="widgets" data-testid="tab-widgets">Widgets</TabsTrigger>
-            <TabsTrigger value="listings" data-testid="tab-listings">Listings</TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings">Settings</TabsTrigger>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">Requests Sent</CardTitle>
+              <Send className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl sm:text-2xl font-bold">{stats?.data.totalSent || 0}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">Reviews Received</CardTitle>
+              <Star className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl sm:text-2xl font-bold">{stats?.data.totalReceived || 0}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">Conversion Rate</CardTitle>
+              <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl sm:text-2xl font-bold">{stats?.data.conversionRate || 0}%</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">Avg Rating</CardTitle>
+              <Star className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-400 fill-yellow-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl sm:text-2xl font-bold">{stats?.data.averageRating || 0}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabs */}
+        <Tabs defaultValue="pending" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="pending" data-testid="tab-pending">
+              Pending ({pendingJobs.length})
+            </TabsTrigger>
+            <TabsTrigger value="sent" data-testid="tab-sent">
+              Sent ({sentJobs.length})
+            </TabsTrigger>
+            <TabsTrigger value="reviews" data-testid="tab-reviews">
+              Reviews ({submissions?.data.length || 0})
+            </TabsTrigger>
           </TabsList>
+
+          {/* Pending Jobs - Queue */}
+          <TabsContent value="pending" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
+            {jobsLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            ) : pendingJobs.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 text-green-500" />
+                  <p className="text-sm sm:text-base">All completed jobs have been handled!</p>
+                </CardContent>
+              </Card>
+            ) : (
+              pendingJobs.map((job) => (
+                <Card key={job.id} className="overflow-hidden">
+                  <CardContent className="p-3 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-2 mb-2">
+                          <Badge variant="outline" className="text-xs">#{job.jobNumber}</Badge>
+                          {job.completedDate && (
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {format(new Date(job.completedDate), "MMM d, yyyy")}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-semibold text-sm sm:text-base truncate">{job.customerName}</h3>
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1 mt-1">{job.address}</p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {job.customerPhone && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <MessageSquare className="h-3 w-3" />
+                              <span className="truncate">{job.customerPhone}</span>
+                            </div>
+                          )}
+                          {job.customerEmail && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Mail className="h-3 w-3" />
+                              <span className="truncate">{job.customerEmail}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => setSelectedJob(job)}
+                          data-testid={`button-send-request-${job.id}`}
+                          className="flex-1 sm:flex-none"
+                        >
+                          <Send className="h-4 w-4 mr-1.5" />
+                          Send Request
+                        </Button>
+                        {job.reviewRequestId && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => skipMutation.mutate(job.reviewRequestId!)}
+                            data-testid={`button-skip-${job.id}`}
+                          >
+                            <SkipForward className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </TabsContent>
+
+          {/* Sent - Awaiting Response */}
+          <TabsContent value="sent" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
+            {sentJobs.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  <Clock className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3" />
+                  <p className="text-sm sm:text-base">No pending review requests</p>
+                </CardContent>
+              </Card>
+            ) : (
+              sentJobs.map((job) => (
+                <Card key={job.id}>
+                  <CardContent className="p-3 sm:p-6">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="outline" className="text-xs">#{job.jobNumber}</Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Awaiting
+                          </Badge>
+                        </div>
+                        <h3 className="font-semibold text-sm sm:text-base truncate">{job.customerName}</h3>
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1 mt-1">{job.address}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </TabsContent>
+
+          {/* Submitted Reviews */}
+          <TabsContent value="reviews" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
+            {!submissions?.data || submissions.data.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  <Star className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3" />
+                  <p className="text-sm sm:text-base">No reviews submitted yet</p>
+                </CardContent>
+              </Card>
+            ) : (
+              submissions.data.map((review) => (
+                <Card key={review.id}>
+                  <CardContent className="p-3 sm:p-6">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline" className="text-xs">#{review.jobNumber}</Badge>
+                            {renderStarRating(review.rating)}
+                          </div>
+                          <h3 className="font-semibold text-sm sm:text-base truncate">{review.customerName}</h3>
+                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{review.jobAddress}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground whitespace-nowrap">
+                            {format(new Date(review.submittedAt), "MMM d, yyyy")}
+                          </p>
+                        </div>
+                      </div>
+
+                      {review.comment && (
+                        <p className="text-xs sm:text-sm text-muted-foreground italic border-l-2 pl-3">
+                          "{review.comment}"
+                        </p>
+                      )}
+
+                      <div className="flex flex-wrap gap-2">
+                        {review.rating >= 4 ? (
+                          <>
+                            <Badge variant={review.googlePostStatus === 'posted' ? 'default' : 'secondary'} className="text-xs">
+                              Google: {review.googlePostStatus}
+                            </Badge>
+                            <Badge variant={review.facebookPostStatus === 'posted' ? 'default' : 'secondary'} className="text-xs">
+                              Facebook: {review.facebookPostStatus}
+                            </Badge>
+                          </>
+                        ) : (
+                          <Badge variant="outline" className="text-xs">
+                            Internal Review: {review.internalStatus}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </TabsContent>
         </Tabs>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsContent value="overview" className="p-6 space-y-6">
-            {/* Period Selector and My Stats Section */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <h2 className="text-lg font-semibold text-blue-600">My Stats</h2>
-                <div className="border-l border-gray-300 h-4"></div>
-                <span className="text-gray-500">Competitor Analysis</span>
+      {/* Send Request Dialog */}
+      <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Review Request</DialogTitle>
+            <DialogDescription>
+              Request a review from {selectedJob?.customerName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Customer Details</Label>
+              <div className="text-sm space-y-1">
+                <p className="text-muted-foreground">Job #{selectedJob?.jobNumber}</p>
+                {selectedJob?.customerPhone && (
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                    <span>{selectedJob.customerPhone}</span>
+                  </div>
+                )}
+                {selectedJob?.customerEmail && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span className="truncate">{selectedJob.customerEmail}</span>
+                  </div>
+                )}
               </div>
-              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                <SelectTrigger className="w-40" data-testid="select-period">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1month">Last Month</SelectItem>
-                  <SelectItem value="3months">Last 3 Months</SelectItem>
-                  <SelectItem value="6months">Last 6 Months</SelectItem>
-                  <SelectItem value="1year">Last Year</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
-            {/* AI Recap Section */}
-            <Card className="border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="bg-purple-100 dark:bg-purple-900 p-2 rounded-lg">
-                    <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">AI Recap 🤖</CardTitle>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Get chill AI summaries of customer reviews from your chosen Review Pages and time frames!
-                    </p>
-                  </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Send via</Label>
+              <RadioGroup value={sendVia} onValueChange={(v) => setSendVia(v as any)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="sms" id="sms" data-testid="radio-sms" />
+                  <Label htmlFor="sms" className="font-normal cursor-pointer">
+                    SMS only
+                  </Label>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-purple-200">
-                  <div className="flex items-start gap-3">
-                    <div className="bg-purple-100 dark:bg-purple-900 p-2 rounded-full">
-                      <MessageSquare className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                        {stats.aiSummary.text}
-                      </p>
-                      <div className="flex items-center gap-2 mt-3">
-                        <Badge variant="secondary" className="text-xs">
-                          From {stats.aiSummary.reviewCount} Reviews
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="email" id="email" data-testid="radio-email" />
+                  <Label htmlFor="email" className="font-normal cursor-pointer">
+                    Email only
+                  </Label>
                 </div>
-                <div className="mt-3">
-                  <Button variant="ghost" className="text-purple-600 hover:text-purple-700 p-0 h-auto">
-                    Check out Reviews AI →
-                  </Button>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="both" id="both" data-testid="radio-both" />
+                  <Label htmlFor="both" className="font-normal cursor-pointer">
+                    Both SMS and Email
+                  </Label>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* Invites Goal */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Invites Goal
-                    </CardTitle>
-                    <Target className="h-4 w-4 text-gray-400" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-center">
-                      <div className="relative w-24 h-24">
-                        <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 36 36">
-                          <path
-                            className="text-gray-200 dark:text-gray-700"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          />
-                          <path
-                            className="text-blue-600"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeDasharray={`${stats.invitesGoal.percentage}, 100`}
-                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                            {stats.invitesGoal.current}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-center space-y-1">
-                      <div className="flex items-center justify-center gap-1">
-                        <ArrowUp className="h-3 w-3 text-green-600" />
-                        <span className="text-sm font-medium text-green-600">
-                          {stats.invitesGoal.percentage}%
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        out of {stats.invitesGoal.target}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Reviews Received */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Reviews Received
-                    </CardTitle>
-                    <MessageSquare className="h-4 w-4 text-gray-400" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                        {stats.reviewsReceived.count}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-center gap-1">
-                      <ArrowDown className="h-3 w-3 text-red-600" />
-                      <span className="text-sm font-medium text-red-600">
-                        {Math.abs(stats.reviewsReceived.change)}%
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        vs Previous 6 Months
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Sentiment - Positive */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Sentiment
-                    </CardTitle>
-                    <ThumbsUp className="h-4 w-4 text-green-600" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                        {stats.sentiment.positive}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-center gap-1">
-                      <ArrowUp className="h-3 w-3 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-500">
-                        {stats.sentiment.positivePercentage}%
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Sentiment - Negative */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Sentiment
-                    </CardTitle>
-                    <ThumbsDown className="h-4 w-4 text-red-600" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                        {stats.sentiment.negative}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-center gap-1">
-                      <ArrowUp className="h-3 w-3 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-500">
-                        {stats.sentiment.negativePercentage}%
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              </RadioGroup>
             </div>
+          </div>
 
-            {/* Average Rating */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Average Rating</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-8">
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
-                      {stats.averageRating.rating}
-                    </div>
-                    <div className="flex items-center justify-center gap-1 mt-1">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Star
-                          key={i}
-                          className={`h-4 w-4 ${
-                            i < Math.floor(stats.averageRating.rating)
-                              ? 'text-yellow-400 fill-current'
-                              : 'text-gray-300'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div className="flex-1 space-y-2">
-                    {stats.averageRating.distribution.map((item, index) => (
-                      <div key={item.stars} className="flex items-center gap-3">
-                        <div className="flex items-center gap-1 w-8">
-                          <span className="text-sm text-gray-600">{item.stars}</span>
-                          <Star className="h-3 w-3 text-yellow-400 fill-current" />
-                        </div>
-                        <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div
-                            className="bg-yellow-400 h-2 rounded-full"
-                            style={{
-                              width: `${
-                                (item.count / Math.max(...stats.averageRating.distribution.map(d => d.count))) * 100
-                              }%`
-                            }}
-                          />
-                        </div>
-                        <span className="text-sm text-gray-600 w-8 text-right">{item.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Other Tab Content (placeholder) */}
-          <TabsContent value="requests" className="p-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Review Requests</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Manage and track review requests sent to customers.
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="reviews" className="p-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer Reviews</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 dark:text-gray-400">
-                  View and respond to customer reviews from all platforms.
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="widgets" className="p-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Review Widgets</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Embed review widgets on your website and social media.
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="listings" className="p-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Business Listings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Manage your business listings across review platforms.
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="settings" className="p-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Reputation Settings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Configure reputation management settings and integrations.
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setSelectedJob(null)}
+              data-testid="button-cancel-send"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendRequest}
+              disabled={sendRequestMutation.isPending}
+              data-testid="button-confirm-send"
+            >
+              {sendRequestMutation.isPending ? "Sending..." : "Send Request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
