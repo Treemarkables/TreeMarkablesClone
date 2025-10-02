@@ -161,11 +161,15 @@ export function JobDiarySection({
           entries.push({
             id: entry.id,
             type: entry.entryType === 'note' ? 'note' : 
-                  entry.entryType === 'proposal' ? 'proposal' : 'job_event',
+                  entry.entryType === 'proposal' ? 'proposal' : 
+                  entry.entryType === 'photo' ? 'photo' :
+                  entry.entryType === 'email' ? 'email' :
+                  'job_event',
             title: entry.title,
             content: entry.description,
             author: entry.authorName || 'System',
             timestamp: entry.createdAt,
+            photoUrl: entry.photos && entry.photos.length > 0 ? entry.photos[0] : undefined,
             metadata: {
               eventType: entry.entryType,
               proposalNumber: entry.entryType === 'proposal' ? 
