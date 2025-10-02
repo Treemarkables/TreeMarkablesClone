@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -138,6 +138,17 @@ export function JobDiarySection({
     resolver: zodResolver(emailSchema),
     defaultValues: { to: customerEmail || "", subject: "", message: "" }
   });
+
+  // Force cache invalidation on mobile devices to prevent stale data
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  useEffect(() => {
+    if (isMobile) {
+      // On mobile, aggressively invalidate all diary caches on mount
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+      queryClient.removeQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+    }
+  }, [isMobile, jobId, queryClient]);
 
   // Fetch diary entries (combining local and ServiceM8 sources)
   const { data: diaryEntries = [], isLoading } = useQuery({
