@@ -235,10 +235,10 @@ export default function History() {
           />
         </div>
         
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex w-full min-w-0 flex-wrap gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="bg-white flex-1 sm:flex-none h-11 sm:h-10 min-w-[44px]" data-testid="button-filter">
+            <Button variant="outline" className="bg-white basis-full sm:basis-auto sm:flex-none h-11 sm:h-10 min-w-[44px]" data-testid="button-filter">
               <Filter className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Filter Status</span>
               <ChevronDown className="h-4 w-4 sm:ml-2" />
@@ -262,7 +262,7 @@ export default function History() {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="bg-white flex-1 sm:flex-none h-11 sm:h-10 min-w-[44px]" data-testid="button-actions">
+            <Button variant="outline" className="bg-white basis-full sm:basis-auto sm:flex-none h-11 sm:h-10 min-w-[44px]" data-testid="button-actions">
               <MoreHorizontal className="h-4 w-4 sm:hidden" />
               <span className="hidden sm:inline">Actions</span>
               <ChevronDown className="hidden sm:inline h-4 w-4 ml-2" />
