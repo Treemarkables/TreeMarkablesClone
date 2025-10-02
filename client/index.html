@@ -51,6 +51,60 @@
   </head>
   <body>
     <div id="root"></div>
+    
+    <!-- PWA Cache Bypass: Pre-fetch diary data BEFORE React loads -->
+    <!-- This runs before the cached bundle, bypassing service worker -->
+    <script>
+      (function() {
+        console.log('🚀 PWA Bootstrap: Starting diary pre-fetch');
+        
+        // Check localStorage for last viewed job (GlobalJobCard stores this)
+        var lastJobId = null;
+        try {
+          var stored = localStorage.getItem('lastViewedJobId');
+          if (stored) {
+            lastJobId = stored;
+            console.log('📱 Found last viewed job:', lastJobId);
+          }
+        } catch (e) {
+          console.log('⚠️ Cannot access localStorage');
+        }
+        
+        if (lastJobId) {
+          var timestamp = Date.now();
+          
+          console.log('📱 Bypassing service worker for job', lastJobId);
+          
+          // Fetch with cache-busting to bypass service worker completely
+          fetch('/api/jobs/' + lastJobId + '/diary?pwa=1&ts=' + timestamp, {
+            cache: 'reload',  // Force network, bypass all caches
+            headers: {
+              'X-Bypass-SW': '1',
+              'Cache-Control': 'no-cache'
+            }
+          })
+          .then(function(response) {
+            console.log('✅ Bootstrap diary fetch:', response.status);
+            return response.json();
+          })
+          .then(function(data) {
+            console.log('✅ Bootstrap diary data:', data.data?.length, 'entries');
+            // Store for React Query to use
+            window.__DIARY_BOOTSTRAP__ = {
+              jobId: lastJobId,
+              data: data.data || [],
+              timestamp: timestamp
+            };
+          })
+          .catch(function(error) {
+            console.error('❌ Bootstrap fetch failed:', error);
+          });
+        } else {
+          console.log('ℹ️ No job to bootstrap');
+        }
+      })();
+    </script>
+    
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
