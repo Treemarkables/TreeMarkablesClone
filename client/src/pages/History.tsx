@@ -281,7 +281,7 @@ export default function History() {
       <div className="flex-1 overflow-auto w-full max-w-full">
         {isMobile ? (
           /* Mobile Card Layout */
-          <div className="p-3 space-y-3">
+          <div className="p-3 space-y-3 w-full max-w-full min-w-0">
             {jobsLoading ? (
               // Loading skeleton cards
               [...Array(5)].map((_, i) => (
@@ -314,14 +314,14 @@ export default function History() {
                 return (
                   <Card 
                     key={job.id}
-                    className="p-4 hover-elevate cursor-pointer"
+                    className="p-4 hover-elevate cursor-pointer w-full max-w-full min-w-0"
                     onClick={() => handleJobRowClick(job.id)}
                     data-testid={`card-job-${job.id}`}
                   >
-                    <div className="space-y-3">
+                    <div className="space-y-3 w-full max-w-full min-w-0">
                       {/* Header Row */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                      <div className="flex items-start justify-between gap-2 w-full max-w-full min-w-0">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-base font-semibold text-blue-600" data-testid={`text-job-number-${job.id}`}>
                               {job.jobNumber || ''}
@@ -353,9 +353,9 @@ export default function History() {
 
                       {/* Address */}
                       {job.address && (
-                        <div className="flex items-start gap-2">
+                        <div className="flex items-start gap-2 w-full max-w-full min-w-0">
                           <MapPin className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-gray-600" data-testid={`text-address-${job.id}`}>
+                          <p className="text-sm text-gray-600 break-words" data-testid={`text-address-${job.id}`}>
                             {job.address}
                           </p>
                         </div>
@@ -368,7 +368,8 @@ export default function History() {
           </div>
         ) : (
           /* Desktop Table Layout */
-          <Table>
+          <div className="w-full overflow-x-auto">
+          <Table className="min-w-full">
           <TableHeader>
             <TableRow className="border-b">
               <TableHead className="w-24">
@@ -508,6 +509,7 @@ export default function History() {
             )}
           </TableBody>
         </Table>
+        </div>
         )}
       </div>
 
