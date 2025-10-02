@@ -3325,6 +3325,113 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.services.category, category))
       .orderBy(desc(schema.services.createdAt));
   }
+
+  // ==========================================
+  // REVIEW MANAGEMENT METHODS
+  // ==========================================
+
+  async getCompletedJobsForReviews(): Promise<any[]> {
+    return await db.select({
+      id: schema.jobs.id,
+      jobNumber: schema.jobs.jobNumber,
+      customerId: schema.jobs.customerId,
+      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerEmail: schema.customers.email,
+      customerPhone: schema.customers.phone,
+      address: schema.jobs.address,
+      completedDate: schema.jobs.completedDate,
+      reviewRequestId: schema.reviewRequests.id,
+      reviewRequestStatus: schema.reviewRequests.status,
+      reviewSubmissionId: schema.reviewSubmissions.id,
+      reviewRating: schema.reviewSubmissions.rating
+    })
+      .from(schema.jobs)
+      .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+      .leftJoin(schema.reviewRequests, eq(schema.jobs.id, schema.reviewRequests.jobId))
+      .leftJoin(schema.reviewSubmissions, eq(schema.reviewRequests.id, schema.reviewSubmissions.requestId))
+      .where(eq(schema.jobs.status, 'completed'))
+      .orderBy(desc(schema.jobs.completedDate));
+  }
+
+  async createReviewRequest(data: any): Promise<any> {
+    const [newRequest] = await db.insert(schema.reviewRequests)
+      .values(data)
+      .returning();
+    return newRequest;
+  }
+
+  async updateReviewRequestStatus(requestId: string, status: string): Promise<any> {
+    const [updated] = await db.update(schema.reviewRequests)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(schema.reviewRequests.id, requestId))
+      .returning();
+    return updated;
+  }
+
+  async getReviewRequestByToken(token: string): Promise<any> {
+    const [request] = await db.select()
+      .from(schema.reviewRequests)
+      .where(eq(schema.reviewRequests.token, token));
+    return request;
+  }
+
+  async createReviewSubmission(data: any): Promise<any> {
+    const [newSubmission] = await db.insert(schema.reviewSubmissions)
+      .values(data)
+      .returning();
+    return newSubmission;
+  }
+
+  async updateReviewSubmission(submissionId: string, updates: any): Promise<any> {
+    const [updated] = await db.update(schema.reviewSubmissions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.reviewSubmissions.id, submissionId))
+      .returning();
+    return updated;
+  }
+
+  async getAllReviewSubmissions(): Promise<any[]> {
+    return await db.select({
+      id: schema.reviewSubmissions.id,
+      rating: schema.reviewSubmissions.rating,
+      comment: schema.reviewSubmissions.comment,
+      postedToGoogle: schema.reviewSubmissions.postedToGoogle,
+      postedToFacebook: schema.reviewSubmissions.postedToFacebook,
+      googlePostStatus: schema.reviewSubmissions.googlePostStatus,
+      facebookPostStatus: schema.reviewSubmissions.facebookPostStatus,
+      internalStatus: schema.reviewSubmissions.internalStatus,
+      submittedAt: schema.reviewSubmissions.submittedAt,
+      jobNumber: schema.jobs.jobNumber,
+      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      jobAddress: schema.jobs.address
+    })
+      .from(schema.reviewSubmissions)
+      .leftJoin(schema.jobs, eq(schema.reviewSubmissions.jobId, schema.jobs.id))
+      .leftJoin(schema.customers, eq(schema.reviewSubmissions.customerId, schema.customers.id))
+      .orderBy(desc(schema.reviewSubmissions.submittedAt));
+  }
+
+  async getReviewStats(): Promise<any> {
+    const totalRequests = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.reviewRequests);
+    
+    const totalSubmissions = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.reviewSubmissions);
+    
+    const avgRating = await db.select({ avg: sql<number>`avg(rating)` })
+      .from(schema.reviewSubmissions);
+    
+    const sent = totalRequests[0]?.count || 0;
+    const received = totalSubmissions[0]?.count || 0;
+    const conversionRate = sent > 0 ? ((received / sent) * 100).toFixed(1) : '0.0';
+
+    return {
+      totalSent: sent,
+      totalReceived: received,
+      conversionRate: parseFloat(conversionRate),
+      averageRating: avgRating[0]?.avg ? parseFloat(avgRating[0].avg.toFixed(1)) : 0
+    };
+  }
 }
 
 export const storage = new DatabaseStorage();

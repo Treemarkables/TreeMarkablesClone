@@ -43,7 +43,9 @@ import {
   insertProposalLineItemSchema, updateProposalLineItemSchema,
   insertProposalLineItemChoiceSchema, updateProposalLineItemChoiceSchema,
   // Document Template Management
-  insertDocumentTemplateSchema
+  insertDocumentTemplateSchema,
+  // Review Management
+  insertReviewRequestSchema, insertReviewSubmissionSchema
 } from "@shared/schema";
 import multer from "multer";
 import Papa from "papaparse";
@@ -11547,6 +11549,183 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         success: false, 
         message: 'Internal server error' 
       });
+    }
+  });
+
+  // ==========================================
+  // REVIEW MANAGEMENT ROUTES
+  // ==========================================
+
+  // Get completed jobs for review queue
+  app.get("/api/reviews/completed-jobs", async (req, res) => {
+    try {
+      const completedJobs = await storage.getCompletedJobsForReviews();
+      res.json({ success: true, data: completedJobs });
+    } catch (error) {
+      console.error("Error fetching completed jobs:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch completed jobs" });
+    }
+  });
+
+  // Send review request
+  app.post("/api/reviews/send-request", async (req, res) => {
+    try {
+      const data = req.body;
+      
+      // Validate required fields
+      if (!data.jobId || !data.customerId) {
+        return res.status(400).json({ success: false, message: "Job ID and Customer ID are required" });
+      }
+
+      // Generate unique token
+      const token = require('crypto').randomBytes(32).toString('hex');
+      
+      // Create review request
+      const reviewRequest = await storage.createReviewRequest({
+        ...data,
+        token,
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+        sentBy: req.session.employeeId || 'Admin'
+      });
+
+      // Send SMS/Email with review link
+      const reviewLink = `${req.protocol}://${req.get('host')}/review/${token}`;
+      
+      if (data.sentVia === 'sms' || data.sentVia === 'both') {
+        if (data.customerPhone) {
+          await smsService.sendSMS(
+            data.customerPhone,
+            `Hi ${data.customerName}! Thanks for choosing our tree services. We'd love to hear about your experience. Please leave us a review: ${reviewLink}`
+          );
+        }
+      }
+      
+      if (data.sentVia === 'email' || data.sentVia === 'both') {
+        if (data.customerEmail) {
+          await emailService.sendEmail({
+            to: data.customerEmail,
+            subject: 'How was our service?',
+            html: `
+              <p>Hi ${data.customerName},</p>
+              <p>Thank you for choosing our tree services for job #${data.jobNumber}.</p>
+              <p>We'd love to hear about your experience! Please take a moment to leave us a review:</p>
+              <p><a href="${reviewLink}" style="background-color: #4CAF50; color: white; padding: 14px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Leave a Review</a></p>
+              <p>Your feedback helps us improve our services.</p>
+              <p>Best regards,<br>Treemarkables Team</p>
+            `
+          });
+        }
+      }
+
+      res.json({ success: true, data: reviewRequest });
+    } catch (error) {
+      console.error("Error sending review request:", error);
+      res.status(500).json({ success: false, message: "Failed to send review request" });
+    }
+  });
+
+  // Skip review request
+  app.post("/api/reviews/:requestId/skip", async (req, res) => {
+    try {
+      const { requestId } = req.params;
+      const updated = await storage.updateReviewRequestStatus(requestId, 'skipped');
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Error skipping review request:", error);
+      res.status(500).json({ success: false, message: "Failed to skip review request" });
+    }
+  });
+
+  // Get review request by token (public endpoint)
+  app.get("/api/reviews/request/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const reviewRequest = await storage.getReviewRequestByToken(token);
+      
+      if (!reviewRequest) {
+        return res.status(404).json({ success: false, message: "Review request not found" });
+      }
+
+      res.json({ success: true, data: reviewRequest });
+    } catch (error) {
+      console.error("Error fetching review request:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch review request" });
+    }
+  });
+
+  // Submit review (public endpoint)
+  app.post("/api/reviews/submit", async (req, res) => {
+    try {
+      const { token, rating, comment } = req.body;
+
+      if (!token || !rating) {
+        return res.status(400).json({ success: false, message: "Token and rating are required" });
+      }
+
+      // Get review request
+      const reviewRequest = await storage.getReviewRequestByToken(token);
+      if (!reviewRequest) {
+        return res.status(404).json({ success: false, message: "Review request not found" });
+      }
+
+      // Create review submission
+      const submission = await storage.createReviewSubmission({
+        requestId: reviewRequest.id,
+        jobId: reviewRequest.jobId,
+        customerId: reviewRequest.customerId,
+        rating: parseInt(rating),
+        comment: comment || '',
+        submittedAt: new Date().toISOString()
+      });
+
+      // Update request status
+      await storage.updateReviewRequestStatus(reviewRequest.id, 'submitted');
+
+      // Auto-post logic based on rating
+      if (rating >= 4) {
+        // Auto-approve and post 4-5 star reviews
+        await storage.updateReviewSubmission(submission.id, {
+          internalStatus: 'approved',
+          googlePostStatus: 'pending',
+          facebookPostStatus: 'pending'
+        });
+        // TODO: Implement actual posting to Google/Facebook APIs
+      } else {
+        // Hold 1-3 star reviews for internal review
+        await storage.updateReviewSubmission(submission.id, {
+          internalStatus: 'held',
+          googlePostStatus: 'held',
+          facebookPostStatus: 'held'
+        });
+      }
+
+      res.json({ success: true, data: submission });
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      res.status(500).json({ success: false, message: "Failed to submit review" });
+    }
+  });
+
+  // Get all review submissions
+  app.get("/api/reviews/submissions", async (req, res) => {
+    try {
+      const submissions = await storage.getAllReviewSubmissions();
+      res.json({ success: true, data: submissions });
+    } catch (error) {
+      console.error("Error fetching review submissions:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch review submissions" });
+    }
+  });
+
+  // Get review stats
+  app.get("/api/reviews/stats", async (req, res) => {
+    try {
+      const stats = await storage.getReviewStats();
+      res.json({ success: true, data: stats });
+    } catch (error) {
+      console.error("Error fetching review stats:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch review stats" });
     }
   });
 
