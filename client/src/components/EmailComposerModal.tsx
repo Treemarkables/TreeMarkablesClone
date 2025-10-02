@@ -453,9 +453,9 @@ export function EmailComposerModal({
               <X className="w-4 h-4" />
             </Button>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2">
             <Select value={emailData.selectedTemplate} onValueChange={handleTemplateSelect}>
-              <SelectTrigger className="w-full sm:w-48 bg-white/10 border-white/20 text-white text-sm">
+              <SelectTrigger className="w-full bg-white/10 border-white/20 text-white text-sm">
                 <SelectValue placeholder="Email Templates" />
               </SelectTrigger>
               <SelectContent>
@@ -466,16 +466,27 @@ export function EmailComposerModal({
                 ))}
               </SelectContent>
             </Select>
-            <Button 
-              onClick={handleFileAttachment} 
-              variant="outline" 
-              size="sm"
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20 flex-1 sm:flex-none"
-              data-testid="button-attach-file"
-            >
-              <Paperclip className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Attach File</span>
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button 
+                onClick={handleFileAttachment} 
+                variant="outline" 
+                size="sm"
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20 w-full"
+                data-testid="button-attach-file"
+              >
+                <Paperclip className="w-4 h-4 mr-1 sm:mr-2" />
+                <span className="text-xs sm:text-sm">Attach File</span>
+              </Button>
+              <Button 
+                onClick={handleSendEmail}
+                disabled={sendEmailMutation.isPending}
+                className="bg-white/20 hover:bg-white/30 text-white border border-white/20 w-full"
+                data-testid="button-send-email"
+              >
+                <Send className="w-4 h-4 mr-1 sm:mr-2" />
+                <span className="text-xs sm:text-sm">{sendEmailMutation.isPending ? 'Sending...' : 'Send'}</span>
+              </Button>
+            </div>
           </div>
         </DialogHeader>
 
@@ -753,22 +764,6 @@ export function EmailComposerModal({
               data-testid="textarea-email-body"
             />
           </div>
-        </div>
-
-        {/* Sticky Send Button for Mobile */}
-        <div className="sticky bottom-0 p-3 sm:p-4 bg-white border-t flex items-center justify-between gap-2">
-          <div className="text-xs sm:text-sm text-muted-foreground">
-            {attachments.length > 0 && `${attachments.length} attachment${attachments.length > 1 ? 's' : ''}`}
-          </div>
-          <Button 
-            onClick={handleSendEmail}
-            disabled={sendEmailMutation.isPending}
-            className="bg-green-600 hover:bg-green-700 text-white min-w-[100px]"
-            data-testid="button-send-email-bottom"
-          >
-            <Send className="w-4 h-4 mr-2" />
-            {sendEmailMutation.isPending ? 'Sending...' : 'Send'}
-          </Button>
         </div>
       </DialogContent>
 
