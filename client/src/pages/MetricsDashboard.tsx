@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useQuery } from "@tanstack/react-query";
 import { 
   Clock,
@@ -118,30 +119,36 @@ export default function MetricsDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 p-2 sm:p-4 md:p-6 overflow-x-hidden w-full max-w-full">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 w-full min-w-0">
-        
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">Business Metrics Dashboard</h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-1">Comprehensive overview of key performance indicators</p>
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 overflow-x-hidden w-full max-w-full">
+      {/* Top Header with Sidebar Toggle */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-2 sm:px-4 py-2 flex items-center gap-3">
+        <SidebarTrigger data-testid="button-sidebar-toggle" />
+        <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate flex-1">Business Metrics</h1>
+      </div>
+
+      <div className="p-2 sm:p-4 md:p-6">
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 w-full min-w-0">
+          
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm sm:text-base text-gray-600 mt-1">Comprehensive overview of key performance indicators</p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleExportData('analytics')}
+                disabled={isExporting}
+                data-testid="button-export-metrics"
+                className="w-full sm:w-auto"
+              >
+                <Download className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export Metrics'}</span>
+                <span className="sm:hidden">Export</span>
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleExportData('analytics')}
-              disabled={isExporting}
-              data-testid="button-export-metrics"
-              className="w-full sm:w-auto"
-            >
-              <Download className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export Metrics'}</span>
-              <span className="sm:hidden">Export</span>
-            </Button>
-          </div>
-        </div>
 
         {/* Key Metrics Section */}
         <div className="mb-6">
