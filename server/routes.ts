@@ -2576,6 +2576,39 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // NEW MOBILE-SPECIFIC ENDPOINT - bypasses all caching
+  app.get('/api/jobs/:jobId/diary-mobile', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      
+      // Ultra-aggressive no-cache headers
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      
+      let entries = await storage.getJobDiaryEntriesByJob(jobId);
+      
+      // Transform entries to add photoUrl field
+      const transformedEntries = entries.map((entry: any) => {
+        if (entry.photos && entry.photos.length > 0) {
+          return {
+            ...entry,
+            photoUrl: entry.photos[0],
+            // Also add mobile-specific flag
+            isMobile: true
+          };
+        }
+        return { ...entry, isMobile: true };
+      });
+      
+      console.log(`📱 MOBILE diary fetch for job ${jobId}:`, transformedEntries.length, 'entries');
+      res.json({ success: true, data: transformedEntries, mobile: true });
+    } catch (error) {
+      console.error('Error fetching mobile diary:', error);
+      res.status(500).json({ success: false, message: 'Error fetching diary entries' });
+    }
+  });
+
   // Get job diary entries
   app.get('/api/jobs/:jobId/diary', async (req: Request, res: Response) => {
     try {
@@ -2604,7 +2637,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
       
       console.log(`📖 Fetching diary entries for job ${jobId}:`, entries.length);
-      res.json({ success: true, data: entries });
+      
+      // Transform entries to add photoUrl field for mobile compatibility
+      const transformedEntries = entries.map((entry: any) => {
+        if (entry.photos && entry.photos.length > 0) {
+          return {
+            ...entry,
+            photoUrl: entry.photos[0] // Add direct photoUrl field
+          };
+        }
+        return entry;
+      });
+      
+      res.json({ success: true, data: transformedEntries });
     } catch (error) {
       console.error('Error fetching job diary entries:', error);
       res.status(500).json({ success: false, message: 'Error fetching diary entries' });

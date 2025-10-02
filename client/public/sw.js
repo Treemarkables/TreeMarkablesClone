@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v4';
-const STATIC_CACHE = 'treemarkables-static-v4';
-const API_CACHE = 'treemarkables-api-v4';
+const CACHE_NAME = 'treemarkables-v5-mobile-fix';
+const STATIC_CACHE = 'treemarkables-static-v5-mobile-fix';
+const API_CACHE = 'treemarkables-api-v5-mobile-fix';
 
 const urlsToCache = [
   '/',
@@ -13,27 +13,38 @@ const urlsToCache = [
 
 // Install event - cache critical assets
 self.addEventListener('install', function(event) {
+  console.log('[SW v5] Installing - FORCING immediate activation');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        console.log('[SW v5] Installed - skipping waiting');
+        return self.skipWaiting();
+      })
   );
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches  
 self.addEventListener('activate', function(event) {
+  console.log('[SW v5] Activating - deleting ALL old caches');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
+      console.log('[SW v5] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          if (cacheName !== STATIC_CACHE && cacheName !== API_CACHE) {
+          // Delete ANY cache that's not v5
+          if (!cacheName.includes('v5-mobile-fix')) {
+            console.log('[SW v5] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      console.log('[SW v5] Taking control of all clients');
+      return self.clients.claim();
+    })
   );
 });
 
@@ -45,10 +56,15 @@ self.addEventListener('fetch', function(event) {
   if (url.pathname.startsWith('/api/')) {
     // NEVER cache diary endpoints - always fetch fresh
     if (url.pathname.includes('/diary')) {
+      console.log('[SW v5] Diary request - fetching fresh from network:', url.pathname);
       event.respondWith(
         fetch(event.request)
+          .then(response => {
+            console.log('[SW v5] Diary response received:', response.status);
+            return response;
+          })
           .catch(function(error) {
-            console.error('Diary fetch failed:', error);
+            console.error('[SW v5] Diary fetch failed:', error);
             throw error; // Don't fallback to cache for diary
           })
       );
