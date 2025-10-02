@@ -513,13 +513,13 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0 overflow-x-hidden">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-foreground">Safety Management</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground truncate">Safety Management</h2>
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'incidents' | 'assessments' | 'compliance')}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-3 gap-1">
           <TabsTrigger value="incidents" data-testid="tab-incidents">
             <Shield className="w-4 h-4 mr-2" />
             Safety Incidents
@@ -534,9 +534,9 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="incidents" className="space-y-6">
+        <TabsContent value="incidents" className="space-y-4 sm:space-y-6">
           {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 w-full max-w-full">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Incidents</CardTitle>
@@ -607,7 +607,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
                   </div>
                   <Form {...newIncidentForm}>
                     <form onSubmit={newIncidentForm.handleSubmit(onSubmitNewIncident)} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <FormField
                           control={newIncidentForm.control}
                           name="type"
@@ -889,7 +889,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
           {selectedIncident && (
             <Form {...editIncidentForm}>
               <form onSubmit={editIncidentForm.handleSubmit(onSubmitEditIncident)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <FormField
                     control={editIncidentForm.control}
                     name="type"
@@ -1173,7 +1173,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
               <CardTitle>Risk Assessment Summary</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600">{riskAssessments.length}</div>
                   <div className="text-sm text-muted-foreground">Total Assessments</div>

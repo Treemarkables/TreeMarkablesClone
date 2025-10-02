@@ -167,19 +167,19 @@ export function WorkflowAutomation() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0 overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Workflow className="h-6 w-6 text-blue-600" />
-            Workflow Automation
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2 truncate">
+            <Workflow className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
+            <span className="truncate">Workflow Automation</span>
           </h2>
-          <p className="text-gray-600 mt-1">
+          <p className="text-sm text-gray-600 mt-1">
             Automate your business processes with intelligent workflows
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           <Button 
             variant="outline" 
             onClick={() => setShowTestDialog(true)}
@@ -199,7 +199,7 @@ export function WorkflowAutomation() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 w-full max-w-full">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
