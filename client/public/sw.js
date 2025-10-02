@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v2';
-const STATIC_CACHE = 'treemarkables-static-v2';
-const API_CACHE = 'treemarkables-api-v2';
+const CACHE_NAME = 'treemarkables-v3';
+const STATIC_CACHE = 'treemarkables-static-v3';
+const API_CACHE = 'treemarkables-api-v3';
 
 const urlsToCache = [
   '/',
@@ -56,6 +56,28 @@ self.addEventListener('fetch', function(event) {
           return response;
         })
         .catch(function() {
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+  
+  // Object storage (photos) - network first for fresh content
+  if (url.pathname.startsWith('/objects/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(function(response) {
+          // Cache successful responses for offline access
+          if (response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(STATIC_CACHE).then(function(cache) {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(function() {
+          // Fallback to cache if offline
           return caches.match(event.request);
         })
     );
