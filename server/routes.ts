@@ -95,9 +95,9 @@ const csvUpload = multer({
 const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-// Image upload configuration for job photos
+// Image upload configuration for job photos (using memory storage for object storage)
 const imageUpload = multer({
-  dest: 'uploads/photos/',
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit per image
     files: 10 // Maximum 10 files at once
@@ -2668,19 +2668,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      // Upload to object storage for persistence
+      // Upload to object storage for persistence (file is in memory)
       const photoStorage = new PhotoStorageService();
-      const fileBuffer = fs.readFileSync(req.file.path);
       const photoUrl = await photoStorage.uploadPhoto(
-        fileBuffer,
+        req.file.buffer,
         req.file.originalname,
         req.file.mimetype
       );
-
-      // Clean up temp file
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
 
       // Create diary entry with photo
       const diaryEntry = await storage.createJobDiaryEntry({
@@ -2701,12 +2695,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       });
     } catch (error) {
       console.error('Error uploading photo:', error);
-      
-      // Clean up file if it exists
-      if (req.file?.path && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
       res.status(500).json({ 
         success: false, 
         message: error instanceof Error ? error.message : 'Error uploading photo' 
