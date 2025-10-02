@@ -118,8 +118,8 @@ export default function MetricsDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 p-2 sm:p-4 md:p-6 overflow-x-hidden">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 p-2 sm:p-4 md:p-6 overflow-x-hidden w-full max-w-full">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 w-full min-w-0">
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
