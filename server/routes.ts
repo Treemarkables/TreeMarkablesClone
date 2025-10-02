@@ -2582,6 +2582,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const { jobId } = req.params;
       const { entryType } = req.query;
       
+      // Set aggressive no-cache headers to prevent mobile browser caching
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
+      
       // Handle temporary job IDs
       if (jobId.startsWith('temp-')) {
         const tempEntries = (global as any).tempDiaryEntries?.get(jobId) || [];
@@ -2597,6 +2603,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         entries = await storage.getJobDiaryEntriesByJob(jobId);
       }
       
+      console.log(`📖 Fetching diary entries for job ${jobId}:`, entries.length);
       res.json({ success: true, data: entries });
     } catch (error) {
       console.error('Error fetching job diary entries:', error);
