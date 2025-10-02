@@ -185,21 +185,21 @@ export default function Integrations() {
   }
 
   return (
-    <div className="h-full bg-gray-50 dark:bg-gray-900">
+    <div className="h-full bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <Settings className="h-6 w-6 text-orange-600" />
-                Integrations
+        <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 truncate">
+                <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600 flex-shrink-0" />
+                <span className="truncate">Integrations</span>
               </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Connect and manage your external service integrations
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Button 
                 variant="outline" 
                 size="sm"
@@ -222,8 +222,8 @@ export default function Integrations() {
         </div>
 
         {/* Status Summary */}
-        <div className="px-6 py-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
-          <div className="flex items-center gap-6">
+        <div className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+          <div className="flex items-center gap-3 sm:gap-6 flex-wrap">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-600" />
               <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -243,10 +243,10 @@ export default function Integrations() {
       </div>
 
       {/* Content */}
-      <div className="p-6">
+      <div className="p-3 sm:p-4 md:p-6">
         {/* Category Filter */}
-        <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="mb-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:grid-cols-6">
+        <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="mb-4 sm:mb-6">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 gap-1">
             <TabsTrigger value="all" data-testid="tab-all">All</TabsTrigger>
             <TabsTrigger value="email" data-testid="tab-email">Email</TabsTrigger>
             <TabsTrigger value="messaging" data-testid="tab-messaging">Messaging</TabsTrigger>
@@ -257,7 +257,7 @@ export default function Integrations() {
         </Tabs>
 
         {/* Integrations Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 w-full max-w-full">
           {filteredIntegrations.map((integration) => {
             const StatusIcon = getStatusIcon(integration.status);
             

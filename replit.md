@@ -17,7 +17,7 @@ Preferred communication style: Simple, everyday language.
 - **Styling**: Tailwind CSS (custom design system, professional orange/blue theme, light/dark mode)
 - **State Management**: TanStack Query
 - **Form Handling**: React Hook Form with Zod validation
-- **Design System**: Mobile-first responsive design, Inter, Source Sans Pro, and Merriweather fonts.
+- **Design System**: Mobile-first responsive design, Inter, Source Sans Pro, and Merriweather fonts. All pages fully optimized for mobile with responsive layouts preventing horizontal scrolling.
 
 ### Backend
 - **Runtime**: Node.js with Express
@@ -58,6 +58,7 @@ Preferred communication style: Simple, everyday language.
 - **Secure Password Authentication System**: Role-based (admin/crew) server-controlled session authentication with bcrypt hashing. Environment-aware login.
 - **Email-to-Job-Diary Integration**: Email webhook intelligently routes customer replies with job/quote references directly to job diaries as "email" type entries.
 - **Mobile App Integration**: Native mobile API with Bearer token authentication for call recording uploads, OpenAI Whisper transcription, customer phone matching, and automated job creation with diary logging. Includes comprehensive API documentation.
+- **Progressive Web App (PWA)**: Full PWA support with swipeable photo carousel, pull-to-refresh functionality, and iPhone-optimized layouts. All pages (Job Dashboard, Analytics, Invoices, Integrations, Safety, Workflows) are fully responsive with no horizontal scrolling.
 
 ## External Dependencies
 
