@@ -764,6 +764,13 @@ export function GlobalJobCard({
     enabled: !!editingJob?.id,
   });
 
+  // Fetch all equipment for quick-add dropdown
+  const { data: equipmentData } = useQuery({
+    queryKey: ["/api/equipment"],
+  });
+  
+  const allEquipment = Array.isArray((equipmentData as any)?.data) ? (equipmentData as any).data : [];
+
   // Create proposal mutation
   const createProposalMutation = useMutation({
     mutationFn: async () => {
@@ -2942,10 +2949,88 @@ export function GlobalJobCard({
 
                   {sidebarTab === 'equipment' && (
                     <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Package className="w-5 h-5 text-blue-600" />
-                        <h3 className="text-lg font-semibold text-gray-800">Equipment Checklist</h3>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-5 h-5 text-blue-600" />
+                          <h3 className="text-lg font-semibold text-gray-800">Equipment Checklist</h3>
+                        </div>
                       </div>
+
+                      {/* Quick Add Equipment Dropdown */}
+                      {editingJob && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">Add Equipment</label>
+                          <Select
+                            value=""
+                            onValueChange={async (equipmentId) => {
+                              if (!editingJob?.id || !equipmentId) return;
+                              
+                              const selectedEquip = allEquipment.find((e: any) => e.id === equipmentId);
+                              if (!selectedEquip) return;
+
+                              const currentChecklist = editingJob.equipmentChecklist || [];
+                              
+                              // Check if already added
+                              if (currentChecklist.some((item: any) => item.equipment === selectedEquip.name)) {
+                                toast({
+                                  title: "Already Added",
+                                  description: `${selectedEquip.name} is already on this job`,
+                                  variant: "destructive"
+                                });
+                                return;
+                              }
+
+                              const newItem = {
+                                id: `equip-${Date.now()}`,
+                                equipment: selectedEquip.name,
+                                checked: false,
+                                checkedAt: undefined,
+                                checkedBy: undefined,
+                              };
+
+                              const updatedChecklist = [...currentChecklist, newItem];
+
+                              try {
+                                await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                  equipmentChecklist: updatedChecklist,
+                                });
+
+                                queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+
+                                toast({
+                                  title: "Equipment Added",
+                                  description: `${selectedEquip.name} added to job`,
+                                });
+                              } catch (error) {
+                                console.error('Error adding equipment:', error);
+                                toast({
+                                  title: "Error",
+                                  description: "Failed to add equipment",
+                                  variant: "destructive"
+                                });
+                              }
+                            }}
+                            data-testid="select-add-equipment"
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select equipment to add..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {allEquipment.length > 0 ? (
+                                allEquipment.map((equip: any) => (
+                                  <SelectItem key={equip.id} value={equip.id}>
+                                    {equip.name}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="none" disabled>
+                                  No equipment available
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
                       {editingJob && (editingJob.equipmentChecklist && editingJob.equipmentChecklist.length > 0) ? (
                         <div className="space-y-2">
