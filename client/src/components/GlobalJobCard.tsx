@@ -3048,80 +3048,177 @@ export function GlobalJobCard({
 
                       {editingJob && (editingJob.equipmentChecklist && editingJob.equipmentChecklist.length > 0) ? (
                         <div className="space-y-1 md:space-y-2">
-                          {editingJob.equipmentChecklist.map((item: any) => (
+                          {editingJob.equipmentChecklist.map((item: any, index: number) => (
                             <div
                               key={item.id}
-                              className="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                              className="p-2 md:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                               data-testid={`equipment-item-${item.id}`}
                             >
-                              <Checkbox
-                                checked={item.checked || false}
-                                onCheckedChange={async (checked) => {
-                                  if (!editingJob?.id) return;
+                              <div className="flex items-center gap-2 md:gap-3">
+                                <Checkbox
+                                  checked={item.checked || false}
+                                  onCheckedChange={async (checked) => {
+                                    if (!editingJob?.id) return;
 
-                                  const now = new Date().toISOString();
-                                  const updatedChecklist = editingJob.equipmentChecklist.map((i: any) =>
-                                    i.id === item.id
-                                      ? {
-                                          ...i,
-                                          checked: checked as boolean,
-                                          checkedAt: checked ? now : undefined,
-                                          checkedBy: checked ? 'Staff' : undefined,
-                                        }
-                                      : i
-                                  );
+                                    const now = new Date().toISOString();
+                                    const updatedChecklist = editingJob.equipmentChecklist.map((i: any) =>
+                                      i.id === item.id
+                                        ? {
+                                            ...i,
+                                            checked: checked as boolean,
+                                            checkedAt: checked ? now : undefined,
+                                            checkedBy: checked ? 'Staff' : undefined,
+                                          }
+                                        : i
+                                    );
 
-                                  try {
-                                    // Update the equipment checklist
-                                    await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
-                                      equipmentChecklist: updatedChecklist,
-                                    });
+                                    try {
+                                      // Update the equipment checklist
+                                      await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                        equipmentChecklist: updatedChecklist,
+                                      });
 
-                                    // Create diary entry
-                                    await apiRequest('POST', `/api/jobs/${editingJob.id}/diary`, {
-                                      entryType: 'equipment',
-                                      entryText: checked
-                                        ? `Equipment checked: ${item.equipment} by Staff`
-                                        : `Equipment unchecked: ${item.equipment}`,
-                                      metadata: {
-                                        equipmentId: item.id,
-                                        equipmentName: item.equipment,
-                                        action: checked ? 'checked' : 'unchecked',
-                                        checkedBy: 'Staff',
-                                      },
-                                    });
+                                      // Create diary entry
+                                      await apiRequest('POST', `/api/jobs/${editingJob.id}/diary`, {
+                                        entryType: 'equipment',
+                                        entryText: checked
+                                          ? `Equipment checked: ${item.equipment} by Staff`
+                                          : `Equipment unchecked: ${item.equipment}`,
+                                        metadata: {
+                                          equipmentId: item.id,
+                                          equipmentName: item.equipment,
+                                          action: checked ? 'checked' : 'unchecked',
+                                          checkedBy: 'Staff',
+                                        },
+                                      });
 
-                                    // Invalidate queries to refresh data
-                                    queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-                                    queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+                                      // Invalidate queries to refresh data
+                                      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+                                      queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
 
-                                    toast({
-                                      title: checked ? 'Equipment Checked' : 'Equipment Unchecked',
-                                      description: `${item.equipment} has been ${checked ? 'checked' : 'unchecked'} and logged to diary`,
-                                    });
-                                  } catch (error) {
-                                    console.error('Error updating equipment:', error);
-                                    toast({
-                                      title: 'Error',
-                                      description: 'Failed to update equipment checklist',
-                                      variant: 'destructive',
-                                    });
-                                  }
-                                }}
-                                data-testid={`checkbox-equipment-${item.id}`}
-                              />
-                              <div className="flex-1">
-                                <p className="text-sm md:text-base font-medium text-gray-800">{item.equipment}</p>
-                                {item.checked && item.checkedAt && (
-                                  <p className="text-[10px] md:text-xs text-gray-500 mt-1">
-                                    Checked by {item.checkedBy || 'Staff'} on{' '}
-                                    {format(new Date(item.checkedAt), 'MMM d, yyyy h:mm a')}
-                                  </p>
+                                      toast({
+                                        title: checked ? 'Equipment Checked' : 'Equipment Unchecked',
+                                        description: `${item.equipment} has been ${checked ? 'checked' : 'unchecked'} and logged to diary`,
+                                      });
+                                    } catch (error) {
+                                      console.error('Error updating equipment:', error);
+                                      toast({
+                                        title: 'Error',
+                                        description: 'Failed to update equipment checklist',
+                                        variant: 'destructive',
+                                      });
+                                    }
+                                  }}
+                                  data-testid={`checkbox-equipment-${item.id}`}
+                                />
+                                <div className="flex-1">
+                                  <p className="text-sm md:text-base font-medium text-gray-800">{item.equipment}</p>
+                                  {item.checked && item.checkedAt && (
+                                    <p className="text-[10px] md:text-xs text-gray-500 mt-1">
+                                      Checked by {item.checkedBy || 'Staff'} on{' '}
+                                      {format(new Date(item.checkedAt), 'MMM d, yyyy h:mm a')}
+                                    </p>
+                                  )}
+                                </div>
+                                {item.checked && (
+                                  <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
                                 )}
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 md:h-8 md:w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={async () => {
+                                    if (!editingJob?.id) return;
+
+                                    const updatedChecklist = editingJob.equipmentChecklist.filter(
+                                      (i: any) => i.id !== item.id
+                                    );
+
+                                    try {
+                                      // Optimistically update cache
+                                      queryClient.setQueryData(['/api/jobs'], (oldData: any) => {
+                                        if (!oldData?.data) return oldData;
+                                        return {
+                                          ...oldData,
+                                          data: oldData.data.map((j: any) => 
+                                            j.id === editingJob.id 
+                                              ? { ...j, equipmentChecklist: updatedChecklist }
+                                              : j
+                                          )
+                                        };
+                                      });
+
+                                      // Update server
+                                      await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                        equipmentChecklist: updatedChecklist,
+                                      });
+
+                                      toast({
+                                        title: "Equipment Removed",
+                                        description: `${item.equipment} removed from job`,
+                                      });
+                                    } catch (error) {
+                                      console.error('Error removing equipment:', error);
+                                      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+                                      toast({
+                                        title: "Error",
+                                        description: "Failed to remove equipment",
+                                        variant: "destructive"
+                                      });
+                                    }
+                                  }}
+                                  data-testid={`button-delete-equipment-${item.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
                               </div>
-                              {item.checked && (
-                                <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
-                              )}
+                              
+                              {/* Notes section */}
+                              <div className="mt-2">
+                                <Textarea
+                                  placeholder="Add notes..."
+                                  value={item.notes || ''}
+                                  onChange={async (e) => {
+                                    if (!editingJob?.id) return;
+                                    
+                                    const newNotes = e.target.value;
+                                    const updatedChecklist = editingJob.equipmentChecklist.map((i: any) =>
+                                      i.id === item.id ? { ...i, notes: newNotes } : i
+                                    );
+
+                                    // Optimistically update cache
+                                    queryClient.setQueryData(['/api/jobs'], (oldData: any) => {
+                                      if (!oldData?.data) return oldData;
+                                      return {
+                                        ...oldData,
+                                        data: oldData.data.map((j: any) => 
+                                          j.id === editingJob.id 
+                                            ? { ...j, equipmentChecklist: updatedChecklist }
+                                            : j
+                                        )
+                                      };
+                                    });
+
+                                    // Debounce server update
+                                    if (window.equipmentNotesTimeout) {
+                                      clearTimeout(window.equipmentNotesTimeout);
+                                    }
+                                    
+                                    (window as any).equipmentNotesTimeout = setTimeout(async () => {
+                                      try {
+                                        await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                          equipmentChecklist: updatedChecklist,
+                                        });
+                                      } catch (error) {
+                                        console.error('Error saving equipment notes:', error);
+                                        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+                                      }
+                                    }, 500);
+                                  }}
+                                  className="text-xs md:text-sm min-h-[60px]"
+                                  data-testid={`textarea-equipment-notes-${item.id}`}
+                                />
+                              </div>
                             </div>
                           ))}
                         </div>
