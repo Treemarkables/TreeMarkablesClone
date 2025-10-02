@@ -1287,7 +1287,7 @@ export function GlobalJobCard({
               </h1>
             </div>
             
-            {/* Right: Close Button (Mobile), Save Button & Auto-save Indicator */}
+            {/* Right: Actions Menu (Mobile), Close Button (Mobile), Save Button & Auto-save Indicator */}
             <div className="flex items-center gap-1.5 sm:gap-3">
               {/* Auto-save status - Hide on mobile */}
               {mode === 'edit' && (
@@ -1305,6 +1305,96 @@ export function GlobalJobCard({
                   ) : null}
                 </div>
               )}
+              
+              {/* Actions Menu - Mobile only */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="md:hidden h-7 w-7 text-white hover:bg-white/20" 
+                    data-testid="button-actions-menu-mobile"
+                  >
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={handleEmailClick} data-testid="menu-item-email-mobile">
+                    <Mail className="w-4 h-4 mr-2" />
+                    Email
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsSMSComposerOpen(true)} data-testid="menu-item-sms-mobile">
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    SMS
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleCallClick} data-testid="menu-item-call-mobile">
+                    <Phone className="w-4 h-4 mr-2" />
+                    Call
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleScheduleClick} data-testid="menu-item-schedule-mobile">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Schedule
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleQuoteClick} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-quote-mobile">
+                    <Receipt className="w-4 h-4 mr-2" />
+                    Quote
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleInvoiceClick} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-invoice-mobile">
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Invoice
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => {
+                      if (!selectedCustomer?.id) {
+                        toast({
+                          title: "Customer Required",
+                          description: "Please select a customer before creating a proposal.",
+                          variant: "destructive"
+                        });
+                        return;
+                      }
+                      setIsProposalBuilderOpen(true);
+                    }}
+                    data-testid="menu-item-proposal-mobile"
+                  >
+                    <Presentation className="w-4 h-4 mr-2" />
+                    Proposal
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setIsTimeTrackingOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-time-mobile">
+                    <Clock className="w-4 h-4 mr-2" />
+                    Time Tracking
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsProfitTrackerOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-profit-mobile">
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Profit Tracker
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsPhotoCaptureOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-camera-mobile">
+                    <Camera className="w-4 h-4 mr-2" />
+                    Camera
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => sendToXeroMutation.mutate()}
+                    disabled={
+                      !editingJob?.id || 
+                      mode === 'create' || 
+                      editingJob?.status !== 'completed' || 
+                      editingJob?.xeroStatus === 'sent' ||
+                      sendToXeroMutation.isPending
+                    }
+                    data-testid="menu-item-send-xero-mobile"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    {sendToXeroMutation.isPending 
+                      ? 'Sending...' 
+                      : editingJob?.xeroStatus === 'sent' 
+                      ? 'Sent to Xero' 
+                      : 'Send to Xero'}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               
               {/* Close button - Mobile only */}
               <Button 
