@@ -199,7 +199,7 @@ export default function History() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-x-hidden w-full max-w-full min-w-0">
       {/* Header - Mobile Responsive */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border-b bg-white gap-3 sm:gap-0">
         <div className="flex items-center gap-2">
@@ -278,7 +278,7 @@ export default function History() {
       </div>
 
       {/* Jobs Table - Desktop / Mobile Cards */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto w-full max-w-full">
         {isMobile ? (
           /* Mobile Card Layout */
           <div className="p-3 space-y-3">

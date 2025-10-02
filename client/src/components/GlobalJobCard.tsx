@@ -1278,20 +1278,20 @@ export function GlobalJobCard({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-full h-full max-w-full flex flex-col p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[95vh] sm:rounded-xl">
         {/* ServiceM8-style Header */}
-        <div className="bg-orange-500 border-b border-orange-600 px-3 sm:px-4 py-2.5 flex-shrink-0 sm:rounded-t-xl">
-          <div className="flex items-center justify-between gap-4">
+        <div className="bg-orange-500 border-b border-orange-600 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2.5 flex-shrink-0 sm:rounded-t-xl">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Left: Job Title */}
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-white truncate tracking-tight" data-testid="text-job-title">
+            <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
+              <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white truncate tracking-tight" data-testid="text-job-title">
                 {mode === "create" ? "New Job" : `Job #${editingJob?.jobNumber || "3314"}`}
               </h1>
             </div>
             
             {/* Right: Close Button (Mobile), Save Button & Auto-save Indicator */}
-            <div className="flex items-center gap-3">
-              {/* Auto-save status */}
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              {/* Auto-save status - Hide on mobile */}
               {mode === 'edit' && (
-                <div className="text-xs text-white/80 flex items-center gap-1.5">
+                <div className="hidden sm:flex text-xs text-white/80 items-center gap-1.5">
                   {isAutoSaving ? (
                     <>
                       <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
@@ -1310,17 +1310,17 @@ export function GlobalJobCard({
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="md:hidden h-9 w-9 text-white hover:bg-white/20" 
+                className="md:hidden h-7 w-7 text-white hover:bg-white/20" 
                 onClick={onClose}
                 data-testid="button-close-mobile"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </Button>
               
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 sm:px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
+                className="h-7 sm:h-9 px-2 sm:px-3 md:px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
                 onClick={handleSave}
                 disabled={createJobMutation.isPending || updateJobMutation.isPending || isAutoSaving}
                 data-testid="button-save"
@@ -1332,8 +1332,8 @@ export function GlobalJobCard({
         </div>
 
         {/* Action Buttons Bar - Below Orange Header */}
-        <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2 flex-shrink-0">
-          <div className="flex items-center justify-between gap-2">
+        <div className="bg-white border-b border-gray-200 px-2 sm:px-3 md:px-4 py-1 sm:py-2 flex-shrink-0">
+          <div className="flex items-center justify-between gap-1 sm:gap-2">
             {/* Action Buttons - Hide on mobile */}
             <div className="hidden md:flex items-center gap-2 flex-wrap">
               <Button 
