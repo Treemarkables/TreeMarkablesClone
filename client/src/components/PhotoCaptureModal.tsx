@@ -29,17 +29,34 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
       formData.append('authorName', 'User');
       formData.append('description', 'Photo added');
 
-      const response = await fetch(`/api/jobs/${jobId}/photos`, {
+      // CRITICAL: Add timestamp to bypass ALL caching layers (service worker, browser, iOS)
+      const timestamp = Date.now();
+      const url = `/api/jobs/${jobId}/photos?_bypass=${timestamp}`;
+      
+      console.log('📸 Uploading photo with cache bypass:', url);
+
+      const response = await fetch(url, {
         method: 'POST',
         body: formData,
+        // Force no caching at any level
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
       });
+
+      console.log('📸 Upload response status:', response.status);
 
       if (!response.ok) {
         const error = await response.json();
+        console.error('📸 Upload failed:', error);
         throw new Error(error.message || 'Failed to upload photo');
       }
 
-      return response.json();
+      const result = await response.json();
+      console.log('📸 Upload success:', result);
+      return result;
     },
     onSuccess: (data) => {
       toast({
