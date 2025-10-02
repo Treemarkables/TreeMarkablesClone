@@ -2489,6 +2489,30 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // PATCH handler for partial job updates (like equipmentChecklist)
+  app.patch('/api/jobs/:id', async (req: Request, res: Response) => {
+    try {
+      const validation = insertJobSchema.partial().safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid update data',
+          errors: validation.error.errors 
+        });
+      }
+
+      const job = await storage.updateJob(req.params.id, validation.data);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      res.json({ success: true, data: job });
+    } catch (error) {
+      console.error('Error patching job:', error);
+      res.status(500).json({ success: false, message: 'Error updating job' });
+    }
+  });
+
   // Bulk delete jobs endpoint
   app.delete('/api/jobs/bulk-delete', async (req: Request, res: Response) => {
     try {
