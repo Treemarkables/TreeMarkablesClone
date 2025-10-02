@@ -162,16 +162,6 @@ export function JobDiarySection({
         diaryResponse.data.forEach((entry: any) => {
           const photoUrl = entry.photos && entry.photos.length > 0 ? entry.photos[0] : undefined;
           
-          // Debug logging for photo entries
-          if (entry.entryType === 'photo') {
-            console.log('Photo entry:', { 
-              id: entry.id, 
-              entryType: entry.entryType,
-              photos: entry.photos,
-              photoUrl 
-            });
-          }
-          
           entries.push({
             id: entry.id,
             type: entry.entryType === 'note' ? 'note' : 
@@ -675,30 +665,31 @@ export function JobDiarySection({
                             {entry.content}
                           </div>
                           
-                          {(() => {
-                            const shouldShowPhoto = entry.type === 'photo' && entry.photoUrl;
-                            console.log('Photo render check:', { 
-                              entryId: entry.id,
-                              type: entry.type, 
-                              photoUrl: entry.photoUrl, 
-                              shouldShowPhoto 
-                            });
-                            return shouldShowPhoto ? (
-                              <div className="mt-3">
-                                <img 
-                                  src={entry.photoUrl} 
-                                  alt="Job photo" 
-                                  className="max-w-full h-auto rounded-lg cursor-pointer hover-elevate"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const photoIndex = allPhotos.indexOf(entry.photoUrl || '');
-                                    setViewingPhotoIndex(photoIndex >= 0 ? photoIndex : 0);
-                                  }}
-                                  data-testid="img-diary-photo"
-                                />
+                          {entry.type === 'photo' && entry.photoUrl && (
+                            <div className="mt-3">
+                              <img 
+                                src={entry.photoUrl} 
+                                alt="Job photo" 
+                                className="max-w-full h-auto rounded-lg cursor-pointer hover-elevate"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const photoIndex = allPhotos.indexOf(entry.photoUrl || '');
+                                  setViewingPhotoIndex(photoIndex >= 0 ? photoIndex : 0);
+                                }}
+                                onError={(e) => {
+                                  console.error('Image failed to load:', entry.photoUrl);
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                                onLoad={() => {
+                                  console.log('Image loaded successfully:', entry.photoUrl);
+                                }}
+                                data-testid="img-diary-photo"
+                              />
+                              <div className="text-xs text-gray-500 mt-1">
+                                Photo URL: {entry.photoUrl}
                               </div>
-                            ) : null;
-                          })()}
+                            </div>
+                          )}
                         </>
                       )}
                       
