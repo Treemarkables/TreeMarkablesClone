@@ -47,8 +47,8 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
         description: "Photo uploaded successfully",
       });
       
-      // Invalidate queries to refresh diary and job data (matches JobDiary query key)
-      queryClient.invalidateQueries({ queryKey: ['job-diary', jobId] });
+      // Invalidate ALL diary queries for this job (including all filter types)
+      queryClient.invalidateQueries({ queryKey: ['job-diary'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       
       // Reset and close
