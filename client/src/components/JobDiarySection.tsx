@@ -725,7 +725,7 @@ export function JobDiarySection({
                             {entry.content}
                           </div>
                           
-                          {entry.type === 'photo' && entry.photoUrl && (
+                          {entry.photoUrl && (
                             <div className="mt-3">
                               <img 
                                 src={entry.photoUrl} 
@@ -745,9 +745,6 @@ export function JobDiarySection({
                                 }}
                                 data-testid="img-diary-photo"
                               />
-                              <div className="text-xs text-gray-500 mt-1">
-                                Photo URL: {entry.photoUrl}
-                              </div>
                             </div>
                           )}
                         </>
