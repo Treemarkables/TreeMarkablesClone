@@ -436,15 +436,26 @@ export function EmailComposerModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-        <DialogHeader className="flex-row items-center justify-between space-y-0 pb-4 border-b bg-gradient-to-r from-green-500 to-emerald-500 text-white p-4 rounded-t-lg -m-6 mb-4">
-          <div className="flex items-center gap-2">
-            <Mail className="w-5 h-5" />
-            <DialogTitle className="text-lg font-semibold text-white">New Email</DialogTitle>
+      <DialogContent className="max-w-full sm:max-w-4xl h-[90vh] flex flex-col p-0">
+        <DialogHeader className="flex-shrink-0 bg-gradient-to-r from-green-500 to-emerald-500 text-white p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
+              <DialogTitle className="text-base sm:text-lg font-semibold text-white">New Email</DialogTitle>
+            </div>
+            <Button 
+              onClick={onClose} 
+              variant="ghost" 
+              size="sm"
+              className="text-white hover:bg-white/20 h-8 w-8 p-0"
+              data-testid="button-close-email"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select value={emailData.selectedTemplate} onValueChange={handleTemplateSelect}>
-              <SelectTrigger className="w-48 bg-white/10 border-white/20 text-white">
+              <SelectTrigger className="w-full sm:w-48 bg-white/10 border-white/20 text-white text-sm">
                 <SelectValue placeholder="Email Templates" />
               </SelectTrigger>
               <SelectContent>
@@ -459,79 +470,61 @@ export function EmailComposerModal({
               onClick={handleFileAttachment} 
               variant="outline" 
               size="sm"
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+              className="bg-white/10 border-white/20 text-white hover:bg-white/20 flex-1 sm:flex-none"
               data-testid="button-attach-file"
             >
-              <Paperclip className="w-4 h-4 mr-2" />
-              Attach File
-            </Button>
-            <Button 
-              onClick={handleSendEmail}
-              disabled={sendEmailMutation.isPending}
-              className="bg-white/20 hover:bg-white/30 text-white border border-white/20"
-              data-testid="button-send-email"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              {sendEmailMutation.isPending ? 'Sending...' : 'Send'}
-            </Button>
-            <Button 
-              onClick={onClose} 
-              variant="ghost" 
-              size="sm"
-              className="text-white hover:bg-white/20"
-              data-testid="button-close-email"
-            >
-              <X className="w-4 h-4" />
+              <Paperclip className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Attach File</span>
             </Button>
           </div>
         </DialogHeader>
 
-        <div className="flex-1 flex flex-col space-y-4 overflow-y-auto">
+        <div className="flex-1 flex flex-col gap-3 sm:gap-4 overflow-y-auto p-3 sm:p-4">
           {/* Email Fields */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-3 items-center">
-              <Label htmlFor="email-to" className="col-span-1 text-right">To:</Label>
+          <div className="space-y-2 sm:space-y-3">
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 sm:items-center">
+              <Label htmlFor="email-to" className="text-sm sm:col-span-1 sm:text-right">To:</Label>
               <Input
                 id="email-to"
                 name="email-to"
                 value={emailData.to}
                 onChange={(e) => setEmailData(prev => ({ ...prev, to: e.target.value }))}
-                className="col-span-11"
+                className="sm:col-span-11"
                 placeholder="recipient@email.com"
                 data-testid="input-email-to"
               />
             </div>
             
-            <div className="grid grid-cols-12 gap-3 items-center">
-              <Label htmlFor="email-cc" className="col-span-1 text-right">CC:</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 sm:items-center">
+              <Label htmlFor="email-cc" className="text-sm sm:col-span-1 sm:text-right">CC:</Label>
               <Input
                 id="email-cc"
                 name="email-cc"
                 value={emailData.cc}
                 onChange={(e) => setEmailData(prev => ({ ...prev, cc: e.target.value }))}
-                className="col-span-11"
+                className="sm:col-span-11"
                 placeholder="cc@email.com (optional)"
                 data-testid="input-email-cc"
               />
             </div>
 
-            <div className="grid grid-cols-12 gap-3 items-center">
-              <Label htmlFor="email-subject" className="col-span-1 text-right">Subject:</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 sm:items-center">
+              <Label htmlFor="email-subject" className="text-sm sm:col-span-1 sm:text-right">Subject:</Label>
               <Input
                 id="email-subject"
                 name="email-subject"
                 value={emailData.subject}
                 onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
-                className="col-span-11"
+                className="sm:col-span-11"
                 data-testid="input-email-subject"
               />
             </div>
 
             {/* Attachments */}
             {attachments.length > 0 && (
-              <div className="grid grid-cols-12 gap-3 items-center">
-                <Label className="col-span-1 text-right">Attached:</Label>
-                <div className="col-span-11 flex gap-2 flex-wrap">
+              <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 sm:items-center">
+                <Label className="text-sm sm:col-span-1 sm:text-right">Attached:</Label>
+                <div className="sm:col-span-11 flex gap-2 flex-wrap">
                   {attachments.map((attachment, index) => {
                     const getAttachmentVariant = (type: string) => {
                       switch (type) {
@@ -569,26 +562,26 @@ export function EmailComposerModal({
           </div>
 
           {/* Smart Attachments Section */}
-          <div className="border rounded-lg bg-gray-50 p-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Smart Attachments</h3>
+          <div className="border rounded-lg bg-gray-50 p-2 sm:p-4">
+            <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Smart Attachments</h3>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
               {/* Invoice PDF */}
               {invoiceData && (
                 <div 
-                  className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  className="relative p-2 sm:p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
                   onClick={() => handleDocumentPreview('invoice', invoiceData)}
                   data-testid="attachment-invoice-pdf"
                 >
                   <div className="flex flex-col items-center text-center">
-                    <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center mb-2">
-                      <FileText className="w-4 h-4 text-white" />
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-red-500 rounded flex items-center justify-center mb-1 sm:mb-2">
+                      <FileText className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
                     </div>
-                    <div className="text-xs font-medium text-gray-900 mb-1">
+                    <div className="text-[10px] sm:text-xs font-medium text-gray-900 mb-0.5 sm:mb-1 truncate w-full">
                       Invoice #{invoiceData.invoiceNumber}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      for ${invoiceData.totalAmount || invoiceData.amount || '0.00'}
+                    <div className="text-[10px] sm:text-xs text-gray-500 truncate w-full">
+                      ${invoiceData.totalAmount || invoiceData.amount || '0.00'}
                     </div>
                   </div>
                 </div>
@@ -659,9 +652,9 @@ export function EmailComposerModal({
                   <img 
                     src={photoUrl} 
                     alt={`Before photo ${index + 1}`}
-                    className="w-full h-16 object-cover rounded mb-1"
+                    className="w-full h-12 sm:h-16 object-cover rounded mb-0.5 sm:mb-1"
                   />
-                  <div className="text-xs text-center text-gray-600">Before {index + 1}</div>
+                  <div className="text-[10px] sm:text-xs text-center text-gray-600">Before {index + 1}</div>
                 </div>
               ))}
 
@@ -684,9 +677,9 @@ export function EmailComposerModal({
                   <img 
                     src={photoUrl} 
                     alt={`After photo ${index + 1}`}
-                    className="w-full h-16 object-cover rounded mb-1"
+                    className="w-full h-12 sm:h-16 object-cover rounded mb-0.5 sm:mb-1"
                   />
-                  <div className="text-xs text-center text-gray-600">After {index + 1}</div>
+                  <div className="text-[10px] sm:text-xs text-center text-gray-600">After {index + 1}</div>
                 </div>
               ))}
 
@@ -700,7 +693,7 @@ export function EmailComposerModal({
           </div>
 
           {/* Formatting Toolbar */}
-          <div className="flex items-center gap-1 p-2 border-b border-gray-200">
+          <div className="flex items-center gap-0.5 sm:gap-1 p-1 sm:p-2 border-b border-gray-200 flex-wrap">
             <Button
               type="button"
               variant="ghost"
@@ -761,12 +754,28 @@ export function EmailComposerModal({
             />
           </div>
         </div>
+
+        {/* Sticky Send Button for Mobile */}
+        <div className="sticky bottom-0 p-3 sm:p-4 bg-white border-t flex items-center justify-between gap-2">
+          <div className="text-xs sm:text-sm text-muted-foreground">
+            {attachments.length > 0 && `${attachments.length} attachment${attachments.length > 1 ? 's' : ''}`}
+          </div>
+          <Button 
+            onClick={handleSendEmail}
+            disabled={sendEmailMutation.isPending}
+            className="bg-green-600 hover:bg-green-700 text-white min-w-[100px]"
+            data-testid="button-send-email-bottom"
+          >
+            <Send className="w-4 h-4 mr-2" />
+            {sendEmailMutation.isPending ? 'Sending...' : 'Send'}
+          </Button>
+        </div>
       </DialogContent>
 
       {/* Document Preview Modal */}
       {showPreview.type && showPreview.data && (
         <Dialog open={!!showPreview.type} onOpenChange={() => setShowPreview({ type: null, data: null })}>
-          <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+          <DialogContent className="max-w-full sm:max-w-4xl h-[90vh] flex flex-col p-3 sm:p-6">
             <DialogHeader className="flex-row items-center justify-between space-y-0 pb-4 border-b">
               <div className="flex items-center gap-2">
                 <Eye className="w-5 h-5" />
