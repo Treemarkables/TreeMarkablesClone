@@ -363,6 +363,7 @@ export default function MetricsDashboard() {
             </CardContent>
           </Card>
         </div>
+        </div>
       </div>
     </div>
   );
