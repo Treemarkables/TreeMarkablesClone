@@ -2948,18 +2948,18 @@ export function GlobalJobCard({
                   )}
 
                   {sidebarTab === 'equipment' && (
-                    <div className="space-y-4">
+                    <div className="space-y-2 md:space-y-4 p-2 md:p-0">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <Package className="w-5 h-5 text-blue-600" />
-                          <h3 className="text-lg font-semibold text-gray-800">Equipment Checklist</h3>
+                          <Package className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
+                          <h3 className="text-base md:text-lg font-semibold text-gray-800">Equipment Checklist</h3>
                         </div>
                       </div>
 
                       {/* Quick Add Equipment Dropdown */}
                       {editingJob && (
                         <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">Add Equipment</label>
+                          <label className="text-xs md:text-sm font-medium text-gray-700">Add Equipment</label>
                           <Select
                             value=""
                             onValueChange={async (equipmentId) => {
@@ -3047,11 +3047,11 @@ export function GlobalJobCard({
                       )}
 
                       {editingJob && (editingJob.equipmentChecklist && editingJob.equipmentChecklist.length > 0) ? (
-                        <div className="space-y-2">
+                        <div className="space-y-1 md:space-y-2">
                           {editingJob.equipmentChecklist.map((item: any) => (
                             <div
                               key={item.id}
-                              className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                              className="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                               data-testid={`equipment-item-${item.id}`}
                             >
                               <Checkbox
@@ -3111,25 +3111,25 @@ export function GlobalJobCard({
                                 data-testid={`checkbox-equipment-${item.id}`}
                               />
                               <div className="flex-1">
-                                <p className="font-medium text-gray-800">{item.equipment}</p>
+                                <p className="text-sm md:text-base font-medium text-gray-800">{item.equipment}</p>
                                 {item.checked && item.checkedAt && (
-                                  <p className="text-xs text-gray-500 mt-1">
+                                  <p className="text-[10px] md:text-xs text-gray-500 mt-1">
                                     Checked by {item.checkedBy || 'Staff'} on{' '}
                                     {format(new Date(item.checkedAt), 'MMM d, yyyy h:mm a')}
                                   </p>
                                 )}
                               </div>
                               {item.checked && (
-                                <CheckCircle className="w-5 h-5 text-green-600" />
+                                <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
                               )}
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="text-center py-12 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                          <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                          <p className="text-lg font-medium">No equipment assigned to this job</p>
-                          <p className="text-sm text-gray-400 mt-2">Equipment items will appear here when added to the job</p>
+                        <div className="text-center py-8 md:py-12 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                          <Package className="w-8 h-8 md:w-12 md:h-12 mx-auto mb-3 md:mb-4 opacity-50" />
+                          <p className="text-base md:text-lg font-medium">No equipment assigned to this job</p>
+                          <p className="text-xs md:text-sm text-gray-400 mt-1 md:mt-2">Equipment items will appear here when added to the job</p>
                         </div>
                       )}
                     </div>

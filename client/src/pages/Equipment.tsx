@@ -417,12 +417,12 @@ export default function Equipment() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-2 md:p-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Equipment Management</h1>
-          <p className="text-gray-600 mt-1">Track and manage your equipment inventory</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Equipment Management</h1>
+          <p className="text-sm md:text-base text-gray-600 mt-1">Track and manage your equipment inventory</p>
           {(overdueCheckouts.length > 0 || overdueMaintenance.length > 0) && (
             <div className="mt-2 space-y-1">
               {overdueCheckouts.length > 0 && (
@@ -455,7 +455,7 @@ export default function Equipment() {
             
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="name"
@@ -496,7 +496,7 @@ export default function Equipment() {
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
                     name="brand"
@@ -546,7 +546,7 @@ export default function Equipment() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="status"
@@ -596,7 +596,7 @@ export default function Equipment() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="currentLocation"
@@ -881,7 +881,7 @@ export default function Equipment() {
               </CardHeader>
               
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2">
                     <Settings className="h-4 w-4 text-gray-400" />
                     <span>Type:</span>
@@ -1320,7 +1320,7 @@ export default function Equipment() {
                           <div>
                             <h4 className="font-semibold">{checkout.equipmentName || 'Equipment'}</h4>
                             <p className="text-sm text-gray-600">Checked out to: {checkout.checkedOutTo || checkout.checkedOutBy}</p>
-                            <div className="grid grid-cols-2 gap-4 mt-2 text-sm text-gray-500">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 text-sm text-gray-500">
                               <div>
                                 <span className="font-medium">Checked out:</span> {new Date(checkout.checkoutTime).toLocaleDateString()}
                               </div>
@@ -1403,7 +1403,7 @@ export default function Equipment() {
                               <h4 className="font-semibold">{record.equipmentName || 'Equipment'}</h4>
                               <p className="text-sm text-gray-600">Type: {record.maintenanceType}</p>
                               <p className="text-sm text-gray-600">{record.description}</p>
-                              <div className="grid grid-cols-2 gap-4 mt-2 text-sm text-gray-500">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 text-sm text-gray-500">
                                 <div>
                                   <span className="font-medium">Performed by:</span> {record.performedBy || 'N/A'}
                                 </div>
@@ -1453,7 +1453,7 @@ export default function Equipment() {
 
               <Form {...checkoutForm}>
                 <form onSubmit={checkoutForm.handleSubmit(onCheckout)} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={checkoutForm.control}
                       name="checkedOutBy"
@@ -1483,7 +1483,7 @@ export default function Equipment() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={checkoutForm.control}
                       name="expectedReturnTime"
@@ -1577,7 +1577,7 @@ export default function Equipment() {
 
               <Form {...checkinForm}>
                 <form onSubmit={checkinForm.handleSubmit(onCheckin)} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={checkinForm.control}
                       name="returnCondition"
@@ -1688,7 +1688,7 @@ export default function Equipment() {
 
               <Form {...maintenanceForm}>
                 <form onSubmit={maintenanceForm.handleSubmit(onMaintenance)} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={maintenanceForm.control}
                       name="maintenanceType"
@@ -1746,7 +1746,7 @@ export default function Equipment() {
                     )}
                   />
 
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField
                       control={maintenanceForm.control}
                       name="cost"
