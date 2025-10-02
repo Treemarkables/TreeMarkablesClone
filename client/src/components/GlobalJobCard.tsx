@@ -3036,36 +3036,6 @@ export function GlobalJobCard({
                     </div>
                   )}
                 </div>
-
-                {/* Right Panel - Activity Diary - Hidden on Mobile */}
-                <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
-                  {editingJob && (
-                    <JobDiarySection 
-                      jobId={editingJob.id}
-                      isServiceM8Style={true}
-                      onQuoteClick={(quoteNumber) => {
-                        // Open quote modal
-                        setIsQuoteModalOpen(true);
-                      }}
-                      onInvoiceClick={(invoiceNumber) => {
-                        // Open invoice modal
-                        setIsInvoiceModalOpen(true);
-                      }}
-                      onProposalClick={(proposalNumber) => {
-                        // Open proposal builder
-                        setIsProposalBuilderOpen(true);
-                      }}
-                    />
-                  )}
-                  {!editingJob && (
-                    <div className="p-4">
-                      <div className="text-center py-8 text-gray-500">
-                        <FileText className="w-8 h-8 mx-auto mb-2" />
-                        <p className="text-sm">Activity diary will appear here after saving the job.</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
 
                 {/* Line Items & Pricing - Only show in Billing tab */}
