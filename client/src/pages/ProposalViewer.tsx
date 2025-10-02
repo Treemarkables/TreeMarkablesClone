@@ -144,60 +144,64 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">
-                Proposal #{proposal.proposalNumber || proposal.id}
-              </h1>
-              <p className="text-sm text-gray-600">
-                {customer?.name || 'Customer'} - {new Date(proposal.createdAt).toLocaleDateString()}
-              </p>
+      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <Link href="/">
+                <Button variant="outline" size="sm" className="shrink-0">
+                  <ArrowLeft className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Back</span>
+                </Button>
+              </Link>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-base sm:text-xl font-semibold text-gray-900 truncate">
+                  Proposal #{proposal.proposalNumber || proposal.id}
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-600 truncate">
+                  {customer?.name || 'Customer'} - {new Date(proposal.createdAt).toLocaleDateString()}
+                </p>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex gap-2">
-            {!isAccepted && !isExpired && (
-              <Button 
-                onClick={handleAcceptProposal}
-                disabled={acceptProposalMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 text-white"
-                data-testid="button-accept-proposal"
-              >
-                {acceptProposalMutation.isPending ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                    Accepting...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    Accept Proposal
-                  </>
-                )}
+            
+            <div className="flex gap-2 shrink-0">
+              {!isAccepted && !isExpired && (
+                <Button 
+                  onClick={handleAcceptProposal}
+                  disabled={acceptProposalMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
+                  size="sm"
+                  data-testid="button-accept-proposal"
+                >
+                  {acceptProposalMutation.isPending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin sm:mr-2" />
+                      <span className="hidden sm:inline">Accepting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Accept</span>
+                      <span className="sm:hidden">Accept Proposal</span>
+                    </>
+                  )}
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="hidden sm:flex">
+                <Mail className="w-4 h-4 mr-2" />
+                Email
               </Button>
-            )}
-            <Button variant="outline" size="sm">
-              <Mail className="w-4 h-4 mr-2" />
-              Email
-            </Button>
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Download PDF
-            </Button>
+              <Button variant="outline" size="sm" className="hidden sm:flex">
+                <Download className="w-4 h-4 mr-2" />
+                Download PDF
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Proposal Content */}
-      <div className="max-w-4xl mx-auto py-6 px-4">
+      <div className="max-w-4xl mx-auto py-4 sm:py-6 px-2 sm:px-4">
         {/* Status Banner */}
         {isAccepted && (
           <div className="bg-green-100 border border-green-300 rounded-lg p-4 mb-6">
