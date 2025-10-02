@@ -1,26 +1,23 @@
-const CACHE_NAME = 'treemarkables-v5-mobile-fix';
-const STATIC_CACHE = 'treemarkables-static-v5-mobile-fix';
-const API_CACHE = 'treemarkables-api-v5-mobile-fix';
+const CACHE_NAME = 'treemarkables-v6-html-fix';
+const STATIC_CACHE = 'treemarkables-static-v6-html-fix';
+const API_CACHE = 'treemarkables-api-v6-html-fix';
 
+// ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
-  '/',
-  '/job-dashboard',
-  '/dispatch',
-  '/customers',
   '/tree-icon-192.png',
   '/tree-icon-512.png'
 ];
 
 // Install event - cache critical assets
 self.addEventListener('install', function(event) {
-  console.log('[SW v5] Installing - FORCING immediate activation');
+  console.log('[SW v6] Installing - HTML never cached - FORCING immediate activation');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('[SW v5] Installed - skipping waiting');
+        console.log('[SW v6] Installed - skipping waiting');
         return self.skipWaiting();
       })
   );
@@ -28,21 +25,21 @@ self.addEventListener('install', function(event) {
 
 // Activate event - clean up old caches  
 self.addEventListener('activate', function(event) {
-  console.log('[SW v5] Activating - deleting ALL old caches');
+  console.log('[SW v6] Activating - deleting ALL old caches including v5');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
-      console.log('[SW v5] Found caches:', cacheNames);
+      console.log('[SW v6] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          // Delete ANY cache that's not v5
-          if (!cacheName.includes('v5-mobile-fix')) {
-            console.log('[SW v5] DELETING old cache:', cacheName);
+          // Delete ANY cache that's not v6
+          if (!cacheName.includes('v6-html-fix')) {
+            console.log('[SW v6] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[SW v5] Taking control of all clients');
+      console.log('[SW v6] Taking control of all clients');
       return self.clients.claim();
     })
   );
@@ -56,15 +53,15 @@ self.addEventListener('fetch', function(event) {
   if (url.pathname.startsWith('/api/')) {
     // NEVER cache diary endpoints - always fetch fresh
     if (url.pathname.includes('/diary')) {
-      console.log('[SW v5] Diary request - fetching fresh from network:', url.pathname);
+      console.log('[SW v6] Diary request - fetching fresh from network:', url.pathname);
       event.respondWith(
         fetch(event.request)
           .then(response => {
-            console.log('[SW v5] Diary response received:', response.status);
+            console.log('[SW v6] Diary response received:', response.status);
             return response;
           })
           .catch(function(error) {
-            console.error('[SW v5] Diary fetch failed:', error);
+            console.error('[SW v6] Diary fetch failed:', error);
             throw error; // Don't fallback to cache for diary
           })
       );
@@ -112,12 +109,22 @@ self.addEventListener('fetch', function(event) {
     return;
   }
   
-  // Navigation requests - serve cached index for offline SPA routing
+  // Navigation requests - ALWAYS fetch fresh HTML (never cache index.html)
   if (event.request.mode === 'navigate') {
+    console.log('[SW v6] Navigation request - fetching fresh HTML:', event.request.url);
     event.respondWith(
-      fetch(event.request)
-        .catch(function() {
-          return caches.match('/') || caches.match('/index.html');
+      fetch(event.request, { cache: 'reload' })
+        .then(function(response) {
+          console.log('[SW v6] Fresh HTML loaded:', response.status);
+          return response;
+        })
+        .catch(function(error) {
+          console.error('[SW v6] HTML fetch failed:', error);
+          // Show offline page instead of cached stale HTML
+          return new Response('Offline - please check your connection', {
+            status: 503,
+            headers: { 'Content-Type': 'text/html' }
+          });
         })
     );
     return;
