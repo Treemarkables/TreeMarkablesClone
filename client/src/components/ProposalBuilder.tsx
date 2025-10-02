@@ -853,14 +853,14 @@ export function ProposalBuilder({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-5xl h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader className="flex-shrink-0 pb-4">
-            <div className="flex items-center justify-between">
+        <DialogContent className="max-w-full sm:max-w-5xl h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
+          <DialogHeader className="flex-shrink-0 pb-2 sm:pb-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <DialogTitle className="text-2xl font-bold text-primary">
+                <DialogTitle className="text-lg sm:text-2xl font-bold text-primary">
                   {mode === "edit" ? "Edit Proposal" : "Create Proposal"}
                 </DialogTitle>
-                <p className="text-muted-foreground">
+                <p className="text-sm text-muted-foreground hidden sm:block">
                   Build your professional proposal with multiple sections
                 </p>
               </div>
@@ -1497,14 +1497,14 @@ export function ProposalBuilder({
       {/* Preview Modal */}
       {showPreview && (
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
-          <DialogContent className="max-w-6xl h-[90vh] overflow-hidden flex flex-col">
-            <DialogHeader className="flex-shrink-0 pb-4">
-              <div className="flex items-center justify-between">
+          <DialogContent className="max-w-full sm:max-w-6xl h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
+            <DialogHeader className="flex-shrink-0 pb-2 sm:pb-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <DialogTitle className="text-2xl font-bold text-primary">
+                  <DialogTitle className="text-lg sm:text-2xl font-bold text-primary">
                     Proposal Preview
                   </DialogTitle>
-                  <p className="text-muted-foreground">
+                  <p className="text-sm text-muted-foreground hidden sm:block">
                     Preview of your proposal as it will appear to customers
                   </p>
                 </div>
@@ -1546,10 +1546,10 @@ export function ProposalBuilder({
       {/* Email Dialog */}
       {showEmailDialog && (
         <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Mail className="w-5 h-5 text-blue-600" />
+          <DialogContent className="max-w-full sm:max-w-2xl p-4 sm:p-6">
+            <DialogHeader className="pb-2 sm:pb-4">
+              <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                 Send Proposal Email
               </DialogTitle>
             </DialogHeader>
