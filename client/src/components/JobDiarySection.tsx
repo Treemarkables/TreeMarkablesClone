@@ -124,6 +124,10 @@ export function JobDiarySection({
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null);
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   
+  // Touch swipe state for photo gallery
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  
   // Forms
   const noteForm = useForm<NoteFormData>({
     resolver: zodResolver(noteSchema),
@@ -498,6 +502,37 @@ export function JobDiarySection({
       return `${phone.substring(0, 3)} ${phone.substring(3, 5)} ${phone.substring(5, 8)} ${phone.substring(8)}`;
     }
     return phone;
+  };
+
+  // Swipe handlers for photo gallery navigation
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    if (viewingPhotoIndex !== null) {
+      if (isLeftSwipe && viewingPhotoIndex < allPhotos.length - 1) {
+        // Swipe left - show next photo
+        setViewingPhotoIndex(viewingPhotoIndex + 1);
+      }
+      if (isRightSwipe && viewingPhotoIndex > 0) {
+        // Swipe right - show previous photo
+        setViewingPhotoIndex(viewingPhotoIndex - 1);
+      }
+    }
   };
 
   return (
@@ -1041,7 +1076,12 @@ export function JobDiarySection({
           </DialogHeader>
           
           {viewingPhotoIndex !== null && allPhotos[viewingPhotoIndex] && (
-            <div className="flex-1 flex items-center justify-center p-4 relative overflow-hidden">
+            <div 
+              className="flex-1 flex items-center justify-center p-4 relative overflow-hidden touch-pan-y"
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+            >
               {/* Previous Button */}
               {allPhotos.length > 1 && viewingPhotoIndex > 0 && (
                 <Button
@@ -1059,8 +1099,9 @@ export function JobDiarySection({
               <img 
                 src={allPhotos[viewingPhotoIndex]} 
                 alt={`Job photo ${viewingPhotoIndex + 1}`}
-                className="max-w-full max-h-full object-contain rounded-lg"
+                className="max-w-full max-h-full object-contain rounded-lg select-none"
                 data-testid="img-photo-viewer"
+                draggable="false"
               />
               
               {/* Next Button */}
