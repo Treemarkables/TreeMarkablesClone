@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v3';
-const STATIC_CACHE = 'treemarkables-static-v3';
-const API_CACHE = 'treemarkables-api-v3';
+const CACHE_NAME = 'treemarkables-v4';
+const STATIC_CACHE = 'treemarkables-static-v4';
+const API_CACHE = 'treemarkables-api-v4';
 
 const urlsToCache = [
   '/',
@@ -43,6 +43,18 @@ self.addEventListener('fetch', function(event) {
   
   // API requests - network first, fallback to cache
   if (url.pathname.startsWith('/api/')) {
+    // NEVER cache diary endpoints - always fetch fresh
+    if (url.pathname.includes('/diary')) {
+      event.respondWith(
+        fetch(event.request)
+          .catch(function(error) {
+            console.error('Diary fetch failed:', error);
+            throw error; // Don't fallback to cache for diary
+          })
+      );
+      return;
+    }
+    
     event.respondWith(
       fetch(event.request)
         .then(function(response) {
