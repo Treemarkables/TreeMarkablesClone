@@ -35,7 +35,9 @@ import {
   Save,
   X,
   Camera,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 // ServiceM8 API response types (matches server/services/servicem8-api.ts)
@@ -118,7 +120,7 @@ export function JobDiarySection({
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState<string>("");
-  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
+  const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null);
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   
   // Forms
@@ -246,6 +248,17 @@ export function JobDiarySection({
       return entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     },
   });
+
+  // Collect all photos from diary entries for gallery view
+  const allPhotos = React.useMemo(() => {
+    const photos: string[] = [];
+    diaryEntries.forEach(entry => {
+      if (entry.photoUrl) {
+        photos.push(entry.photoUrl);
+      }
+    });
+    return photos;
+  }, [diaryEntries]);
 
   // Function to handle opening proposals from diary entries
   const handleOpenProposal = async (proposalNumber: string) => {
@@ -595,7 +608,7 @@ export function JobDiarySection({
                                 // Store the reply-to email in a ref or state if needed
                                 setTimeout(() => {
                                   const emailInput = document.querySelector('[data-testid="input-email-to"]') as HTMLInputElement;
-                                  if (emailInput) emailInput.value = entry.metadata.emailAddress || '';
+                                  if (emailInput) emailInput.value = entry.metadata?.emailAddress || '';
                                 }, 100);
                               }
                             }}
@@ -658,7 +671,8 @@ export function JobDiarySection({
                                 className="max-w-full h-auto rounded-lg cursor-pointer hover-elevate"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setViewingPhotoUrl(entry.photoUrl || null);
+                                  const photoIndex = allPhotos.indexOf(entry.photoUrl || '');
+                                  setViewingPhotoIndex(photoIndex >= 0 ? photoIndex : 0);
                                 }}
                                 data-testid="img-diary-photo"
                               />
@@ -933,45 +947,102 @@ export function JobDiarySection({
         />
       )}
 
-      {/* Photo Viewer Modal */}
-      <Dialog open={!!viewingPhotoUrl} onOpenChange={(open) => !open && setViewingPhotoUrl(null)}>
-        <DialogContent className="max-w-4xl w-full p-0">
-          <DialogHeader className="p-6 pb-4">
-            <DialogTitle>Job Photo</DialogTitle>
-            <DialogDescription>Click download to save to your device</DialogDescription>
-          </DialogHeader>
-          {viewingPhotoUrl && (
-            <div className="p-6 pt-0">
-              <img 
-                src={viewingPhotoUrl} 
-                alt="Job photo full size" 
-                className="w-full h-auto rounded-lg"
-              />
-              <div className="flex gap-2 mt-4">
-                <Button 
-                  className="flex-1" 
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = viewingPhotoUrl;
-                    link.download = `job-photo-${Date.now()}.jpg`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }}
-                  data-testid="button-download-photo"
-                >
-                  Download Photo
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setViewingPhotoUrl(null)}
-                  data-testid="button-close-photo"
-                >
-                  Close
-                </Button>
+      {/* Photo Viewer Modal with Gallery Navigation */}
+      <Dialog open={viewingPhotoIndex !== null} onOpenChange={(open) => !open && setViewingPhotoIndex(null)}>
+        <DialogContent className="max-w-6xl w-full p-0 h-[90vh] flex flex-col">
+          <DialogHeader className="p-4 border-b flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle>Job Photos</DialogTitle>
+                <DialogDescription>
+                  {viewingPhotoIndex !== null && `Photo ${viewingPhotoIndex + 1} of ${allPhotos.length}`}
+                </DialogDescription>
               </div>
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => setViewingPhotoIndex(null)}
+                data-testid="button-close-photo"
+              >
+                Close
+              </Button>
+            </div>
+          </DialogHeader>
+          
+          {viewingPhotoIndex !== null && allPhotos[viewingPhotoIndex] && (
+            <div className="flex-1 flex items-center justify-center p-4 relative overflow-hidden">
+              {/* Previous Button */}
+              {allPhotos.length > 1 && viewingPhotoIndex > 0 && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white"
+                  onClick={() => setViewingPhotoIndex(viewingPhotoIndex - 1)}
+                  data-testid="button-previous-photo"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </Button>
+              )}
+              
+              {/* Photo */}
+              <img 
+                src={allPhotos[viewingPhotoIndex]} 
+                alt={`Job photo ${viewingPhotoIndex + 1}`}
+                className="max-w-full max-h-full object-contain rounded-lg"
+                data-testid="img-photo-viewer"
+              />
+              
+              {/* Next Button */}
+              {allPhotos.length > 1 && viewingPhotoIndex < allPhotos.length - 1 && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white"
+                  onClick={() => setViewingPhotoIndex(viewingPhotoIndex + 1)}
+                  data-testid="button-next-photo"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </Button>
+              )}
             </div>
           )}
+          
+          <div className="p-4 border-t flex-shrink-0 flex gap-2">
+            <Button 
+              className="flex-1" 
+              onClick={() => {
+                if (viewingPhotoIndex !== null && allPhotos[viewingPhotoIndex]) {
+                  const link = document.createElement('a');
+                  link.href = allPhotos[viewingPhotoIndex];
+                  link.download = `job-photo-${viewingPhotoIndex + 1}-${Date.now()}.jpg`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }
+              }}
+              data-testid="button-download-photo"
+            >
+              Download Photo
+            </Button>
+            
+            {/* Photo Counter and Navigation Dots */}
+            {allPhotos.length > 1 && (
+              <div className="flex items-center gap-2 px-4">
+                {allPhotos.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setViewingPhotoIndex(index)}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      index === viewingPhotoIndex 
+                        ? 'bg-primary w-6' 
+                        : 'bg-gray-300 hover:bg-gray-400'
+                    }`}
+                    data-testid={`button-photo-dot-${index}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
