@@ -28,6 +28,16 @@ async function getCredentials() {
     throw new Error('Twilio not connected');
   }
   
+  console.log('🔍 Twilio connection settings retrieved:', {
+    hasAccountSid: !!connectionSettings.settings.account_sid,
+    hasAuthToken: !!connectionSettings.settings.auth_token,
+    hasApiKey: !!connectionSettings.settings.api_key,
+    hasApiKeySecret: !!connectionSettings.settings.api_key_secret,
+    hasPhoneNumber: !!connectionSettings.settings.phone_number,
+    accountSidPrefix: connectionSettings.settings.account_sid?.substring(0, 10),
+    phoneNumber: connectionSettings.settings.phone_number
+  });
+  
   return {
     accountSid: connectionSettings.settings.account_sid,
     authToken: connectionSettings.settings.auth_token,
