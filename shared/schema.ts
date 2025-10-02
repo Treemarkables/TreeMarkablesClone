@@ -2463,3 +2463,77 @@ export type Material = typeof materials.$inferSelect;
 
 export type InsertService = z.infer<typeof insertServiceSchema>;
 export type Service = typeof services.$inferSelect;
+
+// Review Management Tables
+export const reviewRequests = pgTable("review_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id).notNull(),
+  customerId: varchar("customer_id").references(() => customers.id).notNull(),
+  
+  // Unique token for public review link
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  
+  // Request tracking
+  status: text("status").notNull().default("pending"), // pending, sent, submitted, skipped
+  sentAt: timestamp("sent_at"),
+  sentBy: text("sent_by"), // Staff member who sent it
+  sentVia: text("sent_via"), // sms, email, both
+  
+  // Customer info (snapshot at time of request)
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email"),
+  customerPhone: text("customer_phone"),
+  jobNumber: text("job_number"),
+  jobAddress: text("job_address"),
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const reviewSubmissions = pgTable("review_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: varchar("request_id").references(() => reviewRequests.id).notNull(),
+  jobId: varchar("job_id").references(() => jobs.id).notNull(),
+  customerId: varchar("customer_id").references(() => customers.id).notNull(),
+  
+  // Review content
+  rating: integer("rating").notNull(), // 1-5 stars
+  comment: text("comment"),
+  
+  // Posting status
+  postedToGoogle: boolean("posted_to_google").default(false),
+  postedToFacebook: boolean("posted_to_facebook").default(false),
+  googlePostStatus: text("google_post_status"), // pending, posted, failed, held
+  facebookPostStatus: text("facebook_post_status"), // pending, posted, failed, held
+  googlePostedAt: timestamp("google_posted_at"),
+  facebookPostedAt: timestamp("facebook_posted_at"),
+  
+  // Internal tracking
+  internalStatus: text("internal_status").default("pending_review"), // pending_review, approved, held, rejected
+  reviewedBy: text("reviewed_by"), // Staff member who reviewed
+  reviewedAt: timestamp("reviewed_at"),
+  internalNotes: text("internal_notes"),
+  
+  submittedAt: timestamp("submitted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Review Schemas
+export const insertReviewRequestSchema = createInsertSchema(reviewRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertReviewSubmissionSchema = createInsertSchema(reviewSubmissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ReviewRequest = typeof reviewRequests.$inferSelect;
+export type InsertReviewRequest = z.infer<typeof insertReviewRequestSchema>;
+
+export type ReviewSubmission = typeof reviewSubmissions.$inferSelect;
+export type InsertReviewSubmission = z.infer<typeof insertReviewSubmissionSchema>;
