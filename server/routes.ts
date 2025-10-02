@@ -2687,6 +2687,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         description: req.body.description || 'Photo added',
         authorName: req.body.authorName || 'User',
         photoUrl,
+        photos: [photoUrl], // Add photo to array for gallery display
         isPrivate: false
       });
 
