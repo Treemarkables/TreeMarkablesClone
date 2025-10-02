@@ -3,6 +3,17 @@ import twilio from 'twilio';
 let connectionSettings: any;
 
 async function getCredentials() {
+  if (process.env.TWILIO_ACCOUNT_SID && (process.env.TWILIO_AUTH_TOKEN || (process.env.TWILIO_API_KEY && process.env.TWILIO_API_KEY_SECRET))) {
+    console.log('🔍 Using Twilio credentials from Secrets');
+    return {
+      accountSid: process.env.TWILIO_ACCOUNT_SID,
+      authToken: process.env.TWILIO_AUTH_TOKEN,
+      apiKey: process.env.TWILIO_API_KEY,
+      apiKeySecret: process.env.TWILIO_API_KEY_SECRET,
+      phoneNumber: process.env.TWILIO_PHONE_NUMBER
+    };
+  }
+
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
@@ -28,7 +39,7 @@ async function getCredentials() {
     throw new Error('Twilio not connected');
   }
   
-  console.log('🔍 Twilio connection settings retrieved:', {
+  console.log('🔍 Twilio connection settings retrieved from connector:', {
     hasAccountSid: !!connectionSettings.settings.account_sid,
     hasAuthToken: !!connectionSettings.settings.auth_token,
     hasApiKey: !!connectionSettings.settings.api_key,
