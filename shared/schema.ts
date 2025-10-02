@@ -57,6 +57,7 @@ export const equipmentChecklistItemSchema = z.object({
   checked: z.boolean().default(false),
   checkedAt: z.string().optional(),
   checkedBy: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 export type EquipmentChecklistItem = z.infer<typeof equipmentChecklistItemSchema>;
