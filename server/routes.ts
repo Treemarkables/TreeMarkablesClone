@@ -2456,7 +2456,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
 
-      const job = await storage.updateJob(req.params.id, validation.data);
+      // Preserve equipmentChecklist if not in the update payload
+      const updateData = { ...validation.data };
+      if (!updateData.equipmentChecklist && oldJob?.equipmentChecklist) {
+        updateData.equipmentChecklist = oldJob.equipmentChecklist;
+      }
+
+      const job = await storage.updateJob(req.params.id, updateData);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
