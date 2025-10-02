@@ -142,9 +142,15 @@ export function JobDiarySection({
   // Fetch diary entries (combining local and ServiceM8 sources)
   const { data: diaryEntries = [], isLoading } = useQuery({
     queryKey: ['/api/jobs', jobId, 'diary-timeline'],
+    staleTime: 0, // Always consider data stale
+    gcTime: 0, // Don't cache in memory
+    refetchOnMount: 'always', // Always refetch on mount
+    refetchOnWindowFocus: true, // Refetch when window regains focus
     queryFn: async (): Promise<DiaryEntry[]> => {
       // Add cache-busting timestamp to force fresh data
       const timestamp = Date.now();
+      console.log('Fetching diary with timestamp:', timestamp);
+      
       const [localResponse, servicem8Response] = await Promise.all([
         // Fetch local diary data (original endpoints)
         Promise.all([
