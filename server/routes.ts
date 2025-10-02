@@ -2456,9 +2456,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
 
-      // Preserve equipmentChecklist if not in the update payload
+      // Preserve equipmentChecklist if not in the update payload or empty
       const updateData = { ...validation.data };
-      if (!updateData.equipmentChecklist && oldJob?.equipmentChecklist) {
+      if ((!updateData.equipmentChecklist || updateData.equipmentChecklist.length === 0) && oldJob?.equipmentChecklist && oldJob.equipmentChecklist.length > 0) {
+        console.log('🔧 Preserving equipmentChecklist:', oldJob.equipmentChecklist);
         updateData.equipmentChecklist = oldJob.equipmentChecklist;
       }
 
