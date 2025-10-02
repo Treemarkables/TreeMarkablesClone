@@ -1331,11 +1331,11 @@ export function GlobalJobCard({
           </div>
         </div>
 
-        {/* Action Buttons Bar - Below Orange Header */}
-        <div className="bg-white border-b border-gray-200 px-2 sm:px-3 md:px-4 py-1 sm:py-2 flex-shrink-0">
-          <div className="flex items-center justify-between gap-1 sm:gap-2">
-            {/* Action Buttons - Hide on mobile */}
-            <div className="hidden md:flex items-center gap-2 flex-wrap">
+        {/* Action Buttons Bar - Desktop Only */}
+        <div className="hidden md:block bg-white border-b border-gray-200 px-3 md:px-4 py-2 flex-shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
               <Button 
                 variant="ghost" 
                 size="sm" 
