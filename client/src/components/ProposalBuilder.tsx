@@ -877,15 +877,15 @@ export function ProposalBuilder({
 
           <div className="flex-1 overflow-auto">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-8">
               
               {/* Proposal Information Section */}
               <Card>
                 <CardHeader>
                   <CardTitle>Proposal Information</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <CardContent className="space-y-4 p-3 sm:p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     <FormField
                       control={form.control}
                       name="title"
@@ -1039,7 +1039,7 @@ export function ProposalBuilder({
                           </div>
                         </CardHeader>
                         
-                        <CardContent className="space-y-6">
+                        <CardContent className="space-y-4 sm:space-y-6 p-3 sm:p-6">
                           {/* Section Description */}
                           <div>
                             <label className="text-sm font-medium mb-2 block">Description</label>
@@ -1084,7 +1084,7 @@ export function ProposalBuilder({
                             </div>
 
                             {section.photos.length > 0 && (
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-4">
                                 {section.photos.map((photo) => (
                                   <div key={photo.id} className="relative group">
                                     <img
@@ -1119,7 +1119,7 @@ export function ProposalBuilder({
                               <CardHeader>
                                 <CardTitle className="text-base">Add Line Item</CardTitle>
                               </CardHeader>
-                              <CardContent className="space-y-4">
+                              <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6">
                                 {/* Basic Details */}
                                 <div>
                                   <Input
@@ -1132,7 +1132,7 @@ export function ProposalBuilder({
 
                                 {/* Pricing Type Selection */}
                                 <div className="space-y-3">
-                                  <div className="flex items-center space-x-4">
+                                  <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                                     <label className="flex items-center space-x-2">
                                       <input
                                         type="radio"
@@ -1179,7 +1179,7 @@ export function ProposalBuilder({
 
                                   {/* Normal Pricing Fields */}
                                   {currentLineItem.pricingType === "normal" && (
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                       <Input
                                         type="number"
                                         placeholder="Quantity"
@@ -1262,11 +1262,13 @@ export function ProposalBuilder({
                                           <h5 className="font-medium mb-2">Choice Options ({currentLineItem.choices.length})</h5>
                                           <div className="space-y-2">
                                             {currentLineItem.choices.map((choice) => (
-                                              <div key={choice.id} className="flex items-center justify-between p-2 border rounded">
-                                                <div>
-                                                  <span className="font-medium">{choice.label}</span>
-                                                  {choice.isDefault && <Badge variant="secondary" className="ml-2">Default</Badge>}
-                                                  <div className="text-sm text-muted-foreground">
+                                              <div key={choice.id} className="flex flex-wrap items-center justify-between gap-2 p-2 border rounded">
+                                                <div className="flex-1 min-w-0">
+                                                  <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="font-medium">{choice.label}</span>
+                                                    {choice.isDefault && <Badge variant="secondary">Default</Badge>}
+                                                  </div>
+                                                  <div className="text-sm text-muted-foreground break-words">
                                                     {choice.description} - ${choice.price.toFixed(2)}
                                                   </div>
                                                 </div>
@@ -1315,17 +1317,17 @@ export function ProposalBuilder({
                               <div className="space-y-2">
                                 {section.lineItems.map((item) => (
                                   <Card key={item.id} className="border-l-2 border-l-muted">
-                                    <CardContent className="p-4">
-                                      <div className="flex items-start justify-between">
-                                        <div className="flex items-start space-x-3 flex-1">
+                                    <CardContent className="p-3 sm:p-4">
+                                      <div className="flex flex-wrap items-start justify-between gap-2">
+                                        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
                                           <Checkbox
                                             checked={item.selected}
                                             onCheckedChange={() => toggleLineItemSelection(section.id, item.id!)}
                                             data-testid={`checkbox-line-item-${item.id}`}
                                             className="mt-1"
                                           />
-                                          <div className="flex-1">
-                                            <div className="font-medium">{item.description}</div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="font-medium break-words">{item.description}</div>
                                             
                                             {/* Fixed Price Item */}
                                             {item.pricingType === "fixed" && (
@@ -1406,8 +1408,8 @@ export function ProposalBuilder({
                 <CardHeader>
                   <CardTitle>Proposal Summary</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <CardContent className="p-3 sm:p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                     {/* Cost Summary */}
                     <div className="space-y-4">
                       <div className="flex justify-between">
@@ -1448,7 +1450,7 @@ export function ProposalBuilder({
               </Card>
 
               {/* Form Actions */}
-              <div className="flex justify-between pt-4">
+              <div className="flex flex-wrap justify-between gap-2 pt-4">
                 <Button
                   type="button"
                   variant="outline"
@@ -1459,7 +1461,7 @@ export function ProposalBuilder({
                   <Eye className="h-4 w-4" />
                   Preview
                 </Button>
-                <div className="flex space-x-4">
+                <div className="flex flex-wrap gap-2 sm:gap-4">
                   <Button
                     type="button"
                     variant="outline"
