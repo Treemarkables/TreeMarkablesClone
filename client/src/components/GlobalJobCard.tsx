@@ -2995,7 +2995,9 @@ export function GlobalJobCard({
                                   equipmentChecklist: updatedChecklist,
                                 });
 
-                                queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+                                // Force refetch of jobs to update UI
+                                await queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+                                await queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
 
                                 toast({
                                   title: "Equipment Added",
