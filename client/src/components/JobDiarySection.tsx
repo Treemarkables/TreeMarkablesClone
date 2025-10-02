@@ -157,6 +157,9 @@ export function JobDiarySection({
     gcTime: 0, // Don't cache in memory
     refetchOnMount: 'always', // Always refetch on mount
     refetchOnWindowFocus: true, // Refetch when window regains focus
+    networkMode: 'always', // CRITICAL: Force query on iOS PWAs that falsely report offline
+    retry: true,
+    retryOnMount: true,
     queryFn: async (): Promise<DiaryEntry[]> => {
       // Add cache-busting timestamp to force fresh data
       const timestamp = Date.now();
