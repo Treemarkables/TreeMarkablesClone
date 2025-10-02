@@ -74,10 +74,6 @@ class SMSService {
         return true;
       }
 
-      console.log(`📱 DEBUG - Account SID being used: ${(this.client as any).accountSid?.substring(0, 15)}...`);
-      console.log(`📱 DEBUG - From phone: ${this.fromPhone}`);
-      console.log(`📱 DEBUG - To phone: ${normalizedPhone}`);
-
       const message = await this.client.messages.create({
         body: params.message,
         from: this.fromPhone,
