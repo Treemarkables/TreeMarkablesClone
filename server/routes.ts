@@ -3518,37 +3518,28 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       });
       
       if (customer) {
+        console.log(`✅ Found customer: ${customer.name} (${customer.id})`);
+        
         // Get most recent job for this customer
         const jobs = await storage.getJobsByCustomer(customer.id);
         const recentJob = jobs[0]; // Most recent job
         
-        // Log to communications table
-        await storage.createCommunication({
-          customerId: customer.id,
-          jobId: recentJob?.id,
-          type: 'sms',
-          direction: 'inbound',
-          subject: 'Customer SMS Reply',
-          content: Body,
-          phoneNumber: From,
-          timestamp: new Date().toISOString(),
-          status: 'received'
-        });
-        
         // Log to job diary if job exists
         if (recentJob) {
+          console.log(`📝 Logging to job #${recentJob.jobNumber} diary...`);
           await storage.createJobDiaryEntry({
             jobId: recentJob.id,
             entryType: 'note',
-            title: '📱 SMS Received',
+            title: '📱 Customer SMS Reply',
             description: `SMS received from ${customer.name} (${From})\n\nMessage: ${Body}`,
             authorName: customer.name,
             authorRole: 'customer',
             tags: ['sms', 'communication', 'customer-reply']
           });
+          console.log(`✅ SMS logged to job #${recentJob.jobNumber} diary`);
+        } else {
+          console.log(`⚠️ No jobs found for customer ${customer.name}`);
         }
-        
-        console.log(`📱 SMS logged for customer ${customer.name}${recentJob ? ` in job #${recentJob.jobNumber}` : ''}`);
       } else {
         console.warn(`📱 Received SMS from unknown number: ${From}`);
       }
