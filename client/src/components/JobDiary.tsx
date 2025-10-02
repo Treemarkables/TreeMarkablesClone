@@ -26,7 +26,8 @@ import {
   Edit,
   Trash2,
   Eye,
-  EyeOff
+  EyeOff,
+  Mail
 } from "lucide-react";
 
 interface JobDiaryEntry {
@@ -66,7 +67,9 @@ const entryTypeConfig = {
   weather: { icon: Cloud, color: "bg-gray-100 text-gray-800", label: "Weather" },
   equipment: { icon: Wrench, color: "bg-orange-100 text-orange-800", label: "Equipment" },
   safety: { icon: Shield, color: "bg-yellow-100 text-yellow-800", label: "Safety" },
-  completion: { icon: CheckCircle, color: "bg-emerald-100 text-emerald-800", label: "Completion" }
+  completion: { icon: CheckCircle, color: "bg-emerald-100 text-emerald-800", label: "Completion" },
+  photo: { icon: Camera, color: "bg-indigo-100 text-indigo-800", label: "Photo" },
+  email: { icon: Mail, color: "bg-cyan-100 text-cyan-800", label: "Email" }
 };
 
 export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInvoiceClick, onProposalClick }: JobDiaryProps) {
@@ -87,6 +90,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch diary entries');
       const result = await response.json();
+      console.log('Diary entries loaded:', result.data.filter((e: any) => e.entryType === 'photo'));
       return result.data;
     }
   });
