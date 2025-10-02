@@ -546,32 +546,33 @@ export function JobDiarySection({
     <PullToRefresh onRefresh={handleRefresh} enabled={true}>
       <div className={`h-full flex flex-col ${className}`}>
         {/* Header */}
-        <div className="flex-shrink-0 p-4 border-b bg-gray-50 dark:bg-gray-900">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Job Diary</h3>
+        <div className="flex-shrink-0 p-2 border-b bg-gray-50 dark:bg-gray-900">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Job Diary</h3>
             <div className="flex gap-1">
               <Button 
                 size="icon" 
                 variant="ghost"
                 onClick={handleRefresh}
                 data-testid="button-refresh-diary"
+                className="h-7 w-7"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-3 h-3" />
               </Button>
-              <Button size="icon" variant="ghost">
-                <Settings className="w-4 h-4" />
+              <Button size="icon" variant="ghost" className="h-7 w-7">
+                <Settings className="w-3 h-3" />
               </Button>
             </div>
           </div>
         
         {/* Quick Note Input */}
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <div className="flex-1 relative">
-            <StickyNote className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <StickyNote className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
             <Input 
               ref={quickNoteInputRef}
-              placeholder="Type a job note here..."
-              className="pl-10 pr-10"
+              placeholder="Add note..."
+              className="pl-8 pr-8 h-8 text-sm"
               onKeyPress={(e) => {
                 if (e.key === 'Enter' && e.currentTarget.value.trim()) {
                   createNoteMutation.mutate({ content: e.currentTarget.value.trim() });
@@ -583,14 +584,15 @@ export function JobDiarySection({
             <Button 
               size="icon" 
               variant="ghost" 
-              className="absolute right-1 top-1/2 transform -translate-y-1/2"
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6"
             >
-              <Paperclip className="w-4 h-4" />
+              <Paperclip className="w-3 h-3" />
             </Button>
           </div>
           <Button 
             size="icon"
             variant="ghost"
+            className="h-8 w-8"
             onClick={() => {
               const input = quickNoteInputRef.current;
               if (input && input.value.trim()) {
@@ -604,23 +606,23 @@ export function JobDiarySection({
             }}
             data-testid="button-add-note"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3 h-3" />
           </Button>
         </div>
       </div>
 
       {/* Timeline */}
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 p-2">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="text-sm text-muted-foreground">Loading diary entries...</div>
+          <div className="flex items-center justify-center py-4">
+            <div className="text-xs text-muted-foreground">Loading...</div>
           </div>
         ) : diaryEntries.length === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="text-sm text-muted-foreground">No diary entries yet</div>
+          <div className="flex items-center justify-center py-4">
+            <div className="text-xs text-muted-foreground">No entries yet</div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2">
             {diaryEntries.map((entry) => {
               const docInfo = extractDocumentInfo(entry);
               const isClickable = docInfo && (
@@ -642,20 +644,20 @@ export function JobDiarySection({
               };
               
               return (
-                <div key={entry.id} className="flex gap-3" data-testid={`diary-entry-${entry.type}`}>
+                <div key={entry.id} className="flex gap-2" data-testid={`diary-entry-${entry.type}`}>
                   {/* Icon */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getEntryColor(entry.type)} flex-shrink-0`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${getEntryColor(entry.type)} flex-shrink-0`}>
                     {getEntryIcon(entry.type)}
                   </div>
                   
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div 
-                      className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border ${isClickable ? 'cursor-pointer hover-elevate active-elevate-2' : ''}`}
+                      className={`bg-white dark:bg-gray-800 rounded-lg p-2 shadow-sm border ${isClickable ? 'cursor-pointer hover-elevate active-elevate-2' : ''}`}
                       onClick={isClickable ? handleEntryClick : undefined}
                     >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h4 className="font-medium text-sm text-gray-900 dark:text-white">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h4 className="font-medium text-xs text-gray-900 dark:text-white">
                           {entry.type === 'sms' && entry.metadata?.phoneNumber && (
                             <>SMS Message to {formatPhoneNumber(entry.metadata.phoneNumber)}</>
                           )}
@@ -675,7 +677,7 @@ export function JobDiarySection({
                           <Button 
                             size="icon" 
                             variant="ghost" 
-                            className="h-6 w-6"
+                            className="h-5 w-5"
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditingEntryId(entry.id);
@@ -683,27 +685,27 @@ export function JobDiarySection({
                             }}
                             data-testid={`button-edit-entry-${entry.id}`}
                           >
-                            <Edit className="w-3 h-3" />
+                            <Edit className="w-2.5 h-2.5" />
                           </Button>
                         )}
                       </div>
                       
-                      <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-4">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {format(new Date(entry.timestamp), 'h:mm a dd/MM/yyyy')}
+                      <div className="text-[10px] text-muted-foreground mb-1 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center gap-0.5">
+                            <Clock className="w-2.5 h-2.5" />
+                            {format(new Date(entry.timestamp), 'h:mm a dd/MM/yy')}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            by {entry.author}
+                          <span className="flex items-center gap-0.5">
+                            <User className="w-2.5 h-2.5" />
+                            {entry.author}
                           </span>
                         </div>
                         {entry.type === 'email' && entry.metadata?.emailAddress && (
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 text-xs"
+                            className="h-5 text-[10px]"
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveComposer('email');
@@ -718,18 +720,18 @@ export function JobDiarySection({
                             }}
                             data-testid={`button-reply-email-${entry.id}`}
                           >
-                            <Mail className="w-3 h-3 mr-1" />
+                            <Mail className="w-2.5 h-2.5 mr-0.5" />
                             Reply
                           </Button>
                         )}
                       </div>
                       
                       {editingEntryId === entry.id ? (
-                        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
                           <Textarea
                             value={editingContent}
                             onChange={(e) => setEditingContent(e.target.value)}
-                            className="text-sm min-h-[80px]"
+                            className="text-xs min-h-[60px]"
                             placeholder="Edit note content..."
                             data-testid="textarea-edit-note"
                           />
@@ -763,12 +765,12 @@ export function JobDiarySection({
                         </div>
                       ) : (
                         <>
-                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                          <div className="text-xs text-gray-700 dark:text-gray-300">
                             {entry.content}
                           </div>
                           
                           {entry.photoUrl && (
-                            <div className="mt-3">
+                            <div className="mt-2">
                               <img 
                                 src={entry.photoUrl} 
                                 alt="Job photo" 
@@ -819,16 +821,17 @@ export function JobDiarySection({
       </ScrollArea>
 
       {/* Quick Actions */}
-      <div className="flex-shrink-0 p-4 border-t bg-gray-50 dark:bg-gray-900">
-        <div className="flex gap-2">
+      <div className="flex-shrink-0 p-2 border-t bg-gray-50 dark:bg-gray-900">
+        <div className="flex gap-1">
           <Button 
             size="sm" 
             variant="outline"
             onClick={() => setActiveComposer('sms')}
             disabled={!customerPhone}
             data-testid="button-send-sms"
+            className="h-7 text-xs"
           >
-            <MessageSquare className="w-4 h-4 mr-1" />
+            <MessageSquare className="w-3 h-3 mr-1" />
             SMS
           </Button>
           <Button 
@@ -837,12 +840,13 @@ export function JobDiarySection({
             onClick={() => setActiveComposer('email')}
             disabled={!customerEmail}
             data-testid="button-send-email"
+            className="h-7 text-xs"
           >
-            <Mail className="w-4 h-4 mr-1" />
+            <Mail className="w-3 h-3 mr-1" />
             Email
           </Button>
-          <Button size="sm" variant="outline" data-testid="button-call-customer">
-            <Phone className="w-4 h-4 mr-1" />
+          <Button size="sm" variant="outline" data-testid="button-call-customer" className="h-7 text-xs">
+            <Phone className="w-3 h-3 mr-1" />
             Call
           </Button>
         </div>
