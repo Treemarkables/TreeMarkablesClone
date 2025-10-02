@@ -143,15 +143,17 @@ export function JobDiarySection({
   const { data: diaryEntries = [], isLoading } = useQuery({
     queryKey: ['/api/jobs', jobId, 'diary-timeline'],
     queryFn: async (): Promise<DiaryEntry[]> => {
+      // Add cache-busting timestamp to force fresh data
+      const timestamp = Date.now();
       const [localResponse, servicem8Response] = await Promise.all([
         // Fetch local diary data (original endpoints)
         Promise.all([
-          apiRequest('GET', `/api/jobs/${jobId}/diary`).then(res => res.json()),
-          apiRequest('GET', `/api/communications?jobId=${jobId}`).then(res => res.json()),
-          apiRequest('GET', `/api/proposals?jobId=${jobId}`).then(res => res.json())
+          apiRequest('GET', `/api/jobs/${jobId}/diary?_t=${timestamp}`).then(res => res.json()),
+          apiRequest('GET', `/api/communications?jobId=${jobId}&_t=${timestamp}`).then(res => res.json()),
+          apiRequest('GET', `/api/proposals?jobId=${jobId}&_t=${timestamp}`).then(res => res.json())
         ]),
         // Fetch ServiceM8 diary data (with error handling)
-        apiRequest('GET', `/api/servicem8/jobs/${jobId}/diary`).then(res => res.json()).catch(() => ({ data: [] }))
+        apiRequest('GET', `/api/servicem8/jobs/${jobId}/diary?_t=${timestamp}`).then(res => res.json()).catch(() => ({ data: [] }))
       ]);
 
       const [diaryResponse, communicationsResponse, proposalsResponse] = localResponse;
