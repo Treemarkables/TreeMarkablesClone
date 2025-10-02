@@ -137,32 +137,32 @@ export default function Invoices() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="w-full max-w-full min-w-0 overflow-x-hidden p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <FileText className="h-6 w-6" />
-          <h1 className="text-3xl font-bold" data-testid="heading-invoices">Invoices</h1>
+          <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
+          <h1 className="text-2xl sm:text-3xl font-bold truncate" data-testid="heading-invoices">Invoices</h1>
         </div>
-        <p className="text-muted-foreground" data-testid="text-invoices-description">
+        <p className="text-sm text-muted-foreground" data-testid="text-invoices-description">
           Manage and send completed job invoices to Xero
         </p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by job number, customer, or address..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-10 w-full"
             data-testid="input-search-invoices"
           />
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
-        <TabsList className="grid w-full max-w-md grid-cols-3" data-testid="tabs-invoice-filter">
+        <TabsList className="grid w-full grid-cols-3 max-w-full" data-testid="tabs-invoice-filter">
           <TabsTrigger value="all" data-testid="tab-all-invoices">
             All ({completedJobs.length})
           </TabsTrigger>
@@ -188,24 +188,26 @@ export default function Invoices() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full max-w-full">
               {filteredJobs.map((job) => (
-                <Card key={job.id} className="hover-elevate" data-testid={`card-invoice-${job.id}`}>
+                <Card key={job.id} className="hover-elevate min-w-0" data-testid={`card-invoice-${job.id}`}>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-4">
                     <div className="space-y-1 flex-1 min-w-0">
-                      <CardTitle className="text-lg truncate" data-testid={`text-job-number-${job.id}`}>
+                      <CardTitle className="text-base sm:text-lg truncate" data-testid={`text-job-number-${job.id}`}>
                         {job.jobNumber}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground truncate" data-testid={`text-customer-${job.id}`}>
                         {job.customer?.name || 'Unknown Customer'}
                       </p>
                     </div>
-                    {getStatusBadge(job.xeroStatus)}
+                    <div className="flex-shrink-0">
+                      {getStatusBadge(job.xeroStatus)}
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div>
-                        <p className="text-sm font-medium" data-testid={`text-job-title-${job.id}`}>
+                    <div className="space-y-2 min-w-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" data-testid={`text-job-title-${job.id}`}>
                           {job.title || 'Untitled Job'}
                         </p>
                         <p className="text-sm text-muted-foreground truncate" data-testid={`text-address-${job.id}`}>
