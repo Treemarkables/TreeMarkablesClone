@@ -24,12 +24,13 @@ async function getCredentials() {
     }
   ).then(res => res.json()).then(data => data.items?.[0]);
 
-  if (!connectionSettings || (!connectionSettings.settings.account_sid || !connectionSettings.settings.api_key || !connectionSettings.settings.api_key_secret)) {
+  if (!connectionSettings || !connectionSettings.settings.account_sid) {
     throw new Error('Twilio not connected');
   }
   
   return {
     accountSid: connectionSettings.settings.account_sid,
+    authToken: connectionSettings.settings.auth_token,
     apiKey: connectionSettings.settings.api_key,
     apiKeySecret: connectionSettings.settings.api_key_secret,
     phoneNumber: connectionSettings.settings.phone_number
@@ -37,10 +38,17 @@ async function getCredentials() {
 }
 
 export async function getTwilioClient() {
-  const { accountSid, apiKey, apiKeySecret } = await getCredentials();
-  return twilio(apiKey, apiKeySecret, {
-    accountSid: accountSid
-  });
+  const { accountSid, authToken, apiKey, apiKeySecret } = await getCredentials();
+  
+  if (apiKey && apiKeySecret) {
+    return twilio(apiKey, apiKeySecret, {
+      accountSid: accountSid
+    });
+  } else if (authToken) {
+    return twilio(accountSid, authToken);
+  } else {
+    throw new Error('Twilio credentials not configured - need either API Key or Auth Token');
+  }
 }
 
 export async function getTwilioFromPhoneNumber() {
