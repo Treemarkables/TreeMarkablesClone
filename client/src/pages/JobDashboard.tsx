@@ -786,7 +786,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
           </TabsContent>
 
           {/* Analytics Tab */}
-          <TabsContent value="analytics" className="flex-1 overflow-auto">
+          <TabsContent value="analytics" className="flex-1 overflow-auto overflow-x-hidden w-full max-w-full">
             <PerformanceAnalytics />
           </TabsContent>
 

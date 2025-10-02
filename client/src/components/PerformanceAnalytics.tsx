@@ -279,17 +279,17 @@ export function PerformanceAnalytics({ compact = false }: PerformanceAnalyticsPr
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+    <div className="space-y-6 w-full max-w-full min-w-0 overflow-x-hidden">
+      <Card className="w-full max-w-full">
+        <CardHeader className="w-full max-w-full">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 w-full max-w-full min-w-0">
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
               Performance Analytics & Crew Productivity
             </CardTitle>
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto flex-wrap">
               <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                <SelectTrigger className="w-32" data-testid="period-select">
+                <SelectTrigger className="w-full sm:w-32" data-testid="period-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -300,7 +300,7 @@ export function PerformanceAnalytics({ compact = false }: PerformanceAnalyticsPr
                 </SelectContent>
               </Select>
               <Select value={selectedTeam} onValueChange={setSelectedTeam}>
-                <SelectTrigger className="w-32" data-testid="team-select">
+                <SelectTrigger className="w-full sm:w-32" data-testid="team-select">
                   <SelectValue placeholder="All Teams" />
                 </SelectTrigger>
                 <SelectContent>
@@ -313,8 +313,8 @@ export function PerformanceAnalytics({ compact = false }: PerformanceAnalyticsPr
           </div>
         </CardHeader>
 
-        <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <CardContent className="w-full max-w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full max-w-full">
             {/* Monthly Productivity Chart */}
             <Card>
               <CardHeader>
@@ -408,9 +408,9 @@ export function PerformanceAnalytics({ compact = false }: PerformanceAnalyticsPr
           </div>
 
           {/* Individual Performance Cards */}
-          <div className="mt-6">
+          <div className="mt-6 w-full max-w-full">
             <h3 className="text-lg font-semibold mb-4">Individual Performance</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-full">
               {mockCrewPerformance.map((crew) => (
                 <Card key={crew.id} className="hover-elevate" data-testid={`crew-performance-${crew.id}`}>
                   <CardContent className="p-4">
@@ -504,9 +504,9 @@ export function PerformanceAnalytics({ compact = false }: PerformanceAnalyticsPr
           </div>
 
           {/* Team Performance Summary */}
-          <div className="mt-6">
+          <div className="mt-6 w-full max-w-full">
             <h3 className="text-lg font-semibold mb-4">Team Performance Summary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-full">
               {mockTeamMetrics.map((team, index) => (
                 <Card key={index} data-testid={`team-metrics-${index}`}>
                   <CardContent className="p-4">
