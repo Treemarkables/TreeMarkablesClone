@@ -230,6 +230,21 @@ process.on('unhandledRejection', (reason, promise) => {
       throw err;
     });
 
+    // CRITICAL: Force no-cache for PWA files BEFORE any file serving middleware
+    // This must run first to prevent iOS from caching sw.js, manifest, and index.html
+    app.use((req, res, next) => {
+      const noCacheFiles = ['/sw.js', '/manifest.webmanifest', '/index.html'];
+      
+      if (noCacheFiles.some(file => req.path === file || req.path.endsWith(file))) {
+        log(`🚫 Forcing no-cache for critical PWA file: ${req.path}`, "startup");
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+      }
+      next();
+    });
+
     // Setup Vite dev server or static file serving with error handling
     const nodeEnv = app.get("env") || process.env.NODE_ENV || "development";
     log(`Environment: ${nodeEnv}`, "startup");
