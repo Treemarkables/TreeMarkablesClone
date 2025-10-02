@@ -3496,9 +3496,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       console.log(`📱 Incoming SMS from ${From}: ${Body}`);
       
+      // Normalize incoming phone number for comparison
+      const normalizePhone = (phone: string): string => {
+        const cleaned = phone.replace(/\D/g, '');
+        if (cleaned.startsWith('64')) return `+${cleaned}`;
+        if (cleaned.startsWith('0')) return `+64${cleaned.substring(1)}`;
+        if (cleaned.length === 9 || cleaned.length === 10) return `+64${cleaned}`;
+        return phone;
+      };
+      
+      const normalizedFrom = normalizePhone(From);
+      console.log(`📱 Normalized incoming phone: ${From} -> ${normalizedFrom}`);
+      
       // Find customer by phone number
       const customers = await storage.getAllCustomers();
-      const customer = customers.find(c => c.phone === From || c.normalizedPhone === From.replace(/\D/g, ''));
+      const customer = customers.find(c => {
+        if (!c.phone) return false;
+        const normalizedCustomerPhone = normalizePhone(c.phone);
+        console.log(`📱 Comparing: ${normalizedFrom} === ${normalizedCustomerPhone} (customer: ${c.name})`);
+        return normalizedCustomerPhone === normalizedFrom;
+      });
       
       if (customer) {
         // Get most recent job for this customer
