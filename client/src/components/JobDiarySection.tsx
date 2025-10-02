@@ -37,7 +37,8 @@ import {
   Camera,
   Image as ImageIcon,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 // ServiceM8 API response types (matches server/services/servicem8-api.ts)
@@ -151,7 +152,7 @@ export function JobDiarySection({
   }, [isMobile, jobId, queryClient]);
 
   // Fetch diary entries (combining local and ServiceM8 sources)
-  const { data: diaryEntries = [], isLoading } = useQuery({
+  const { data: diaryEntries = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/jobs', jobId, 'diary-timeline'],
     staleTime: 0, // Always consider data stale
     gcTime: 0, // Don't cache in memory
@@ -478,9 +479,22 @@ export function JobDiarySection({
       <div className="flex-shrink-0 p-4 border-b bg-gray-50 dark:bg-gray-900">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Job Diary</h3>
-          <Button size="icon" variant="ghost">
-            <Settings className="w-4 h-4" />
-          </Button>
+          <div className="flex gap-1">
+            <Button 
+              size="icon" 
+              variant="ghost"
+              onClick={() => {
+                queryClient.removeQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+                refetch();
+              }}
+              data-testid="button-refresh-diary"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+            <Button size="icon" variant="ghost">
+              <Settings className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
         
         {/* Quick Note Input */}
