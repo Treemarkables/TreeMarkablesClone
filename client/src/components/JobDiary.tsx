@@ -805,25 +805,26 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
       {/* Full-Page Photo View */}
       {selectedPhoto && (
         <div 
-          className="fixed inset-0 z-50 bg-black flex items-center justify-center"
+          className="fixed inset-0 z-50 bg-black flex items-center justify-center p-4 sm:p-8"
           onClick={() => setSelectedPhoto(null)}
           data-testid="fullpage-photo-overlay"
         >
           <button
             onClick={() => setSelectedPhoto(null)}
-            className="absolute top-4 right-4 z-10 bg-white/10 text-white rounded-full p-3 hover:bg-white/20 active:bg-white/30 transition-colors"
+            className="absolute top-2 right-2 sm:top-4 sm:right-4 z-10 bg-white/10 text-white rounded-full p-3 sm:p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-white/20 active:bg-white/30 transition-colors touch-manipulation"
             data-testid="button-close-photo"
+            aria-label="Close photo"
           >
-            <span className="sr-only">Close</span>
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           <img
             src={selectedPhoto}
             alt="Full size diary photo"
-            className="max-w-full max-h-full w-auto h-auto object-contain"
+            className="max-w-full max-h-full w-auto h-auto object-contain touch-manipulation"
             onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: 'calc(100vh - 2rem)' }}
           />
         </div>
       )}
