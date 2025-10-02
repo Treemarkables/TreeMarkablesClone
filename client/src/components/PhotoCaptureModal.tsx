@@ -48,7 +48,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
       });
       
       // Invalidate ALL diary queries for this job (including all filter types)
-      queryClient.invalidateQueries({ queryKey: ['job-diary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       
       // Reset and close
