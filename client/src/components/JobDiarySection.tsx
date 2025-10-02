@@ -167,8 +167,19 @@ export function JobDiarySection({
       
       // Add local diary entries
       if (diaryResponse.data) {
+        console.log('📊 Raw diary response data:', JSON.stringify(diaryResponse.data, null, 2));
+        
         diaryResponse.data.forEach((entry: any) => {
+          console.log('🔍 Processing entry:', {
+            id: entry.id,
+            entryType: entry.entryType,
+            photos: entry.photos,
+            photosType: typeof entry.photos,
+            photosLength: entry.photos?.length
+          });
+          
           const photoUrl = entry.photos && entry.photos.length > 0 ? entry.photos[0] : undefined;
+          console.log('📸 Extracted photoUrl:', photoUrl);
           
           entries.push({
             id: entry.id,
