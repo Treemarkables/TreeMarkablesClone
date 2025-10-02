@@ -437,25 +437,25 @@ export function EmailComposerModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-full sm:max-w-4xl h-[90vh] flex flex-col p-0">
-        <DialogHeader className="flex-shrink-0 bg-gradient-to-r from-green-500 to-emerald-500 text-white p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
-              <DialogTitle className="text-base sm:text-lg font-semibold text-white">New Email</DialogTitle>
+        <DialogHeader className="flex-shrink-0 bg-gradient-to-r from-green-500 to-emerald-500 text-white p-2">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <DialogTitle className="text-sm sm:text-base font-semibold text-white">New Email</DialogTitle>
             </div>
             <Button 
               onClick={onClose} 
               variant="ghost" 
               size="sm"
-              className="text-white hover:bg-white/20 h-8 w-8 p-0"
+              className="text-white hover:bg-white/20 h-6 w-6 p-0"
               data-testid="button-close-email"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </Button>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
             <Select value={emailData.selectedTemplate} onValueChange={handleTemplateSelect}>
-              <SelectTrigger className="w-full bg-white/10 border-white/20 text-white text-sm">
+              <SelectTrigger className="w-full bg-white/10 border-white/20 text-white text-xs h-7">
                 <SelectValue placeholder="Email Templates" />
               </SelectTrigger>
               <SelectContent>
@@ -466,25 +466,25 @@ export function EmailComposerModal({
                 ))}
               </SelectContent>
             </Select>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1">
               <Button 
                 onClick={handleFileAttachment} 
                 variant="outline" 
                 size="sm"
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20 w-full"
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20 w-full h-7 text-xs"
                 data-testid="button-attach-file"
               >
-                <Paperclip className="w-4 h-4 mr-1 sm:mr-2" />
-                <span className="text-xs sm:text-sm">Attach File</span>
+                <Paperclip className="w-3 h-3 mr-1" />
+                <span>Attach</span>
               </Button>
               <Button 
                 onClick={handleSendEmail}
                 disabled={sendEmailMutation.isPending}
-                className="bg-white/20 hover:bg-white/30 text-white border border-white/20 w-full"
+                className="bg-white/20 hover:bg-white/30 text-white border border-white/20 w-full h-7 text-xs"
                 data-testid="button-send-email"
               >
-                <Send className="w-4 h-4 mr-1 sm:mr-2" />
-                <span className="text-xs sm:text-sm">{sendEmailMutation.isPending ? 'Sending...' : 'Send'}</span>
+                <Send className="w-3 h-3 mr-1" />
+                <span>{sendEmailMutation.isPending ? 'Sending...' : 'Send'}</span>
               </Button>
             </div>
           </div>
