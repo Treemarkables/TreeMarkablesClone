@@ -207,7 +207,9 @@ export function JobDiarySection({
       // Add local diary entries
       if (diaryResponse.data) {
         diaryResponse.data.forEach((entry: any) => {
-          const photoUrl = entry.photos && entry.photos.length > 0 ? entry.photos[0] : undefined;
+          // CRITICAL FIX: Use entry.photoUrl directly (it's a string, not an array)
+          // The database column is photo_url, which comes through as photoUrl in the API response
+          const photoUrl = entry.photoUrl || undefined;
           
           entries.push({
             id: entry.id,
