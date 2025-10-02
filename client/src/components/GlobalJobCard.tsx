@@ -2991,13 +2991,23 @@ export function GlobalJobCard({
                               const updatedChecklist = [...currentChecklist, newItem];
 
                               try {
+                                // Optimistically update local cache first
+                                queryClient.setQueryData(['/api/jobs'], (oldData: any) => {
+                                  if (!oldData?.data) return oldData;
+                                  return {
+                                    ...oldData,
+                                    data: oldData.data.map((j: any) => 
+                                      j.id === editingJob.id 
+                                        ? { ...j, equipmentChecklist: updatedChecklist }
+                                        : j
+                                    )
+                                  };
+                                });
+
+                                // Then update server
                                 await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
                                   equipmentChecklist: updatedChecklist,
                                 });
-
-                                // Force refetch of jobs to update UI
-                                await queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-                                await queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
 
                                 toast({
                                   title: "Equipment Added",
@@ -3005,6 +3015,8 @@ export function GlobalJobCard({
                                 });
                               } catch (error) {
                                 console.error('Error adding equipment:', error);
+                                // Revert optimistic update on error
+                                queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
                                 toast({
                                   title: "Error",
                                   description: "Failed to add equipment",
