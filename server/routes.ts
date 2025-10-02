@@ -73,6 +73,7 @@ import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
+import { PhotoStorageService } from "./photoStorage";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -2655,7 +2656,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Upload photo and create diary entry
+  // Upload photo and create diary entry (using Object Storage for persistence)
   app.post('/api/jobs/:jobId/photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
@@ -2667,17 +2668,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      // Create unique filename with timestamp
-      const timestamp = Date.now();
-      const fileExtension = path.extname(path.basename(req.file.originalname)).toLowerCase();
-      const filename = `${timestamp}${fileExtension}`;
-      const filepath = path.join(photosDir, filename);
+      // Upload to object storage for persistence
+      const photoStorage = new PhotoStorageService();
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const photoUrl = await photoStorage.uploadPhoto(
+        fileBuffer,
+        req.file.originalname,
+        req.file.mimetype
+      );
 
-      // Move file from temp location to final destination
-      fs.renameSync(req.file.path, filepath);
-
-      // Create the photo URL (relative path for serving)
-      const photoUrl = `/uploads/photos/${filename}`;
+      // Clean up temp file
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
 
       // Create diary entry with photo
       const diaryEntry = await storage.createJobDiaryEntry({
@@ -2708,6 +2711,20 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         success: false, 
         message: error instanceof Error ? error.message : 'Error uploading photo' 
       });
+    }
+  });
+
+  // Serve photos from object storage
+  app.get('/objects/photos/:filename', async (req: Request, res: Response) => {
+    try {
+      const photoPath = `/objects/photos/${req.params.filename}`;
+      const photoStorage = new PhotoStorageService();
+      await photoStorage.downloadPhoto(photoPath, res);
+    } catch (error) {
+      console.error('Error serving photo:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Error serving photo' });
+      }
     }
   });
 
