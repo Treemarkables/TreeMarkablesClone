@@ -107,6 +107,21 @@ function resolveAndServeStatic(app: express.Express) {
 function setupStaticServing(app: express.Express, staticPath: string) {
   log(`Setting up Express static serving for: ${staticPath}`, "static");
   
+  // CRITICAL: Force no-cache for PWA files to prevent iOS from using stale cached versions
+  // iOS caches sw.js aggressively, which causes old JavaScript bundles to persist even after PWA reinstall
+  app.use((req, res, next) => {
+    const noCacheFiles = ['/sw.js', '/manifest.webmanifest', '/index.html'];
+    
+    if (noCacheFiles.some(file => req.path === file || req.path.endsWith(file))) {
+      log(`🚫 Forcing no-cache for critical PWA file: ${req.path}`, "static");
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
+    }
+    next();
+  });
+  
   // Serve static files with proper options
   app.use(express.static(staticPath, {
     fallthrough: true,
