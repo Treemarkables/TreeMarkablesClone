@@ -3036,6 +3036,34 @@ export function GlobalJobCard({
                     </div>
                   )}
                 </div>
+
+                {/* Right Panel - Activity Diary - Only show when NOT in diary tab */}
+                {sidebarTab !== 'diary' && (
+                  <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
+                    {editingJob && (
+                      <JobDiarySection 
+                        jobId={editingJob.id}
+                        onQuoteClick={(quoteNumber) => {
+                          setIsQuoteModalOpen(true);
+                        }}
+                        onInvoiceClick={(invoiceNumber) => {
+                          setIsInvoiceModalOpen(true);
+                        }}
+                        onProposalClick={(proposalNumber) => {
+                          setIsProposalBuilderOpen(true);
+                        }}
+                      />
+                    )}
+                    {!editingJob && (
+                      <div className="p-4">
+                        <div className="text-center py-8 text-gray-500">
+                          <FileText className="w-8 h-8 mx-auto mb-2" />
+                          <p className="text-sm">Activity diary will appear here after saving the job.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
                 {/* Line Items & Pricing - Only show in Billing tab */}
