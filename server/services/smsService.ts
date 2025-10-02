@@ -6,6 +6,24 @@ interface SMSParams {
   message: string;
 }
 
+function normalizePhoneNumber(phone: string): string {
+  const cleaned = phone.replace(/\D/g, '');
+  
+  if (cleaned.startsWith('64')) {
+    return `+${cleaned}`;
+  }
+  
+  if (cleaned.startsWith('0')) {
+    return `+64${cleaned.substring(1)}`;
+  }
+  
+  if (cleaned.length === 9 || cleaned.length === 10) {
+    return `+64${cleaned}`;
+  }
+  
+  return phone;
+}
+
 class SMSService {
   private client: Twilio | null = null;
   private isConfigured: boolean = false;
@@ -43,9 +61,12 @@ class SMSService {
     try {
       await this.ensureConfigured();
 
+      const normalizedPhone = normalizePhoneNumber(params.to);
+      console.log(`📱 Normalizing phone: ${params.to} -> ${normalizedPhone}`);
+
       if (!this.isConfigured || !this.client) {
         console.log('\n=== SMS NOTIFICATION (Mock Mode) ===');
-        console.log(`To: ${params.to}`);
+        console.log(`To: ${normalizedPhone}`);
         console.log(`From: ${this.fromPhone || 'Treemarkables'}`);
         console.log(`Message: ${params.message}`);
         console.log('Time:', new Date().toLocaleString());
@@ -56,10 +77,10 @@ class SMSService {
       const message = await this.client.messages.create({
         body: params.message,
         from: this.fromPhone,
-        to: params.to,
+        to: normalizedPhone,
       });
 
-      console.log(`📱 SMS sent successfully to ${params.to}, SID: ${message.sid}`);
+      console.log(`📱 SMS sent successfully to ${normalizedPhone}, SID: ${message.sid}`);
       return true;
     } catch (error) {
       console.error('📱 Twilio SMS error:', error);
