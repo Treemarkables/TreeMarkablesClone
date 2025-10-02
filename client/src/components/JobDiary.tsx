@@ -73,6 +73,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
   const [showNewEntryDialog, setShowNewEntryDialog] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
   const [showPrivateEntries, setShowPrivateEntries] = useState(true);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -687,6 +688,38 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                         </div>
                         <p className="text-gray-700 mb-4">{entry.description}</p>
                         
+                        {/* Photo Gallery */}
+                        {entry.photos && entry.photos.length > 0 && (
+                          <div className="mb-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Camera className="h-4 w-4 text-gray-500" />
+                              <span className="text-sm font-medium text-gray-700">
+                                {entry.photos.length} {entry.photos.length === 1 ? 'Photo' : 'Photos'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                              {entry.photos.map((photo, index) => (
+                                <button
+                                  key={index}
+                                  onClick={() => setSelectedPhoto(photo)}
+                                  className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 hover-elevate active-elevate-2 active:opacity-80 transition-opacity"
+                                  data-testid={`button-view-photo-${index}`}
+                                >
+                                  <img
+                                    src={photo}
+                                    alt={`Diary photo ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 active:bg-opacity-20 transition-opacity flex items-center justify-center pointer-events-none">
+                                    <Eye className="h-8 w-8 text-white drop-shadow-lg opacity-60 md:opacity-0 md:hover:opacity-100 transition-opacity" />
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                           <div className="flex items-center gap-1">
                             <User className="h-4 w-4 text-gray-400" />
@@ -769,6 +802,31 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
           })}
         </div>
       )}
+
+      {/* Photo Lightbox Modal */}
+      <Dialog open={!!selectedPhoto} onOpenChange={(open) => !open && setSelectedPhoto(null)}>
+        <DialogContent className="max-w-4xl w-full p-0">
+          <div className="relative">
+            <button
+              onClick={() => setSelectedPhoto(null)}
+              className="absolute top-4 right-4 z-10 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 transition-colors"
+              data-testid="button-close-photo"
+            >
+              <span className="sr-only">Close</span>
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            {selectedPhoto && (
+              <img
+                src={selectedPhoto}
+                alt="Full size diary photo"
+                className="w-full h-auto max-h-[80vh] object-contain bg-black"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
