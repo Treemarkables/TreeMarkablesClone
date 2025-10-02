@@ -188,7 +188,7 @@ export default function Equipment() {
 
   // Add equipment mutation
   const addEquipmentMutation = useMutation({
-    mutationFn: (data: EquipmentFormData) => apiRequest("/api/equipment", "POST", data),
+    mutationFn: (data: EquipmentFormData) => apiRequest("POST", "/api/equipment", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
       setIsAddEquipmentOpen(false);
@@ -209,7 +209,7 @@ export default function Equipment() {
   // Checkout equipment mutation
   const checkoutMutation = useMutation({
     mutationFn: (data: CheckoutFormData & { equipmentId: string }) => 
-      apiRequest("/api/equipment/checkout", "POST", data),
+      apiRequest("POST", "/api/equipment/checkout", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
       queryClient.invalidateQueries({ queryKey: ["/api/equipment/checkouts"] });
@@ -233,7 +233,7 @@ export default function Equipment() {
   const checkinMutation = useMutation({
     mutationFn: (data: CheckinFormData & { checkoutId: string }) => {
       const { checkoutId, ...checkinData } = data;
-      return apiRequest(`/api/equipment/checkin/${checkoutId}`, "PUT", checkinData);
+      return apiRequest("PUT", `/api/equipment/checkin/${checkoutId}`, checkinData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
@@ -257,7 +257,7 @@ export default function Equipment() {
   // Add maintenance record mutation
   const maintenanceMutation = useMutation({
     mutationFn: (data: any) => 
-      apiRequest("/api/equipment/maintenance", "POST", data),
+      apiRequest("POST", "/api/equipment/maintenance", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
       queryClient.invalidateQueries({ queryKey: ["/api/maintenance"] });
