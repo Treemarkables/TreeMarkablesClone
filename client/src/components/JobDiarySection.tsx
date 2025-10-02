@@ -149,7 +149,6 @@ export function JobDiarySection({
     queryFn: async (): Promise<DiaryEntry[]> => {
       // Add cache-busting timestamp to force fresh data
       const timestamp = Date.now();
-      console.log('Fetching diary with timestamp:', timestamp);
       
       const [localResponse, servicem8Response] = await Promise.all([
         // Fetch local diary data (original endpoints)
@@ -167,19 +166,8 @@ export function JobDiarySection({
       
       // Add local diary entries
       if (diaryResponse.data) {
-        console.log('📊 Raw diary response data:', JSON.stringify(diaryResponse.data, null, 2));
-        
         diaryResponse.data.forEach((entry: any) => {
-          console.log('🔍 Processing entry:', {
-            id: entry.id,
-            entryType: entry.entryType,
-            photos: entry.photos,
-            photosType: typeof entry.photos,
-            photosLength: entry.photos?.length
-          });
-          
           const photoUrl = entry.photos && entry.photos.length > 0 ? entry.photos[0] : undefined;
-          console.log('📸 Extracted photoUrl:', photoUrl);
           
           entries.push({
             id: entry.id,
