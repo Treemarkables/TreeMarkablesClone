@@ -151,9 +151,34 @@ export function JobDiarySection({
     }
   }, [isMobile, jobId, queryClient]);
 
+  // Check for bootstrap data (from index.html pre-fetch)
+  const bootstrapData = (window as any).__DIARY_BOOTSTRAP__;
+  const hasBootstrap = bootstrapData?.jobId === jobId && bootstrapData?.data;
+  
+  useEffect(() => {
+    if (hasBootstrap) {
+      console.log('✅ Using bootstrap diary data:', bootstrapData.data.length, 'entries');
+    }
+  }, [hasBootstrap, bootstrapData]);
+
   // Fetch diary entries (combining local and ServiceM8 sources)
   const { data: diaryEntries = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/jobs', jobId, 'diary-timeline'],
+    // Use bootstrap data as initial data if available
+    initialData: hasBootstrap ? (() => {
+      console.log('🚀 Seeding React Query with bootstrap data');
+      // Transform bootstrap data to DiaryEntry format
+      return bootstrapData.data.map((entry: any) => ({
+        id: entry.id,
+        type: entry.entryType || 'note',
+        title: entry.title,
+        content: entry.description,
+        author: entry.authorName || 'System',
+        timestamp: entry.createdAt,
+        photoUrl: entry.photoUrl || (entry.photos && entry.photos[0]),
+        metadata: entry.metadata || {}
+      }));
+    })() : undefined,
     staleTime: 0, // Always consider data stale
     gcTime: 0, // Don't cache in memory
     refetchOnMount: 'always', // Always refetch on mount

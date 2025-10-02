@@ -408,6 +408,18 @@ export function GlobalJobCard({
     return null;
   }, [mode, jobId, job, jobs]);
 
+  // Store last viewed job ID in localStorage for PWA bootstrap
+  useEffect(() => {
+    if (editingJob?.id) {
+      try {
+        localStorage.setItem('lastViewedJobId', editingJob.id);
+        console.log('📱 Stored last viewed job ID:', editingJob.id);
+      } catch (e) {
+        console.error('Failed to store last viewed job ID:', e);
+      }
+    }
+  }, [editingJob?.id]);
+
   // Form setup
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
