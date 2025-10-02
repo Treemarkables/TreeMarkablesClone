@@ -1,31 +1,97 @@
-const CACHE_NAME = 'treemarkables-v1';
+const CACHE_NAME = 'treemarkables-v2';
+const STATIC_CACHE = 'treemarkables-static-v2';
+const API_CACHE = 'treemarkables-api-v2';
+
 const urlsToCache = [
   '/',
   '/job-dashboard',
-  '/src/main.tsx',
-  '/src/index.css',
-  'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Source+Sans+Pro:ital,wght@0,200..900;1,200..900&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap'
+  '/dispatch',
+  '/customers',
+  '/tree-icon-192.png',
+  '/tree-icon-512.png'
 ];
 
+// Install event - cache critical assets
 self.addEventListener('install', function(event) {
   event.waitUntil(
-    caches.open(CACHE_NAME)
+    caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
+      .then(() => self.skipWaiting())
   );
 });
 
+// Activate event - clean up old caches
+self.addEventListener('activate', function(event) {
+  event.waitUntil(
+    caches.keys().then(function(cacheNames) {
+      return Promise.all(
+        cacheNames.map(function(cacheName) {
+          if (cacheName !== STATIC_CACHE && cacheName !== API_CACHE) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Fetch event - network first for API, cache first for assets
 self.addEventListener('fetch', function(event) {
+  const url = new URL(event.request.url);
+  
+  // API requests - network first, fallback to cache
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(function(response) {
+          // Only cache successful GET requests
+          if (event.request.method === 'GET' && response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(API_CACHE).then(function(cache) {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(function() {
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+  
+  // Navigation requests - serve cached index for offline SPA routing
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .catch(function() {
+          return caches.match('/') || caches.match('/index.html');
+        })
+    );
+    return;
+  }
+  
+  // Static assets - cache first, fallback to network
   event.respondWith(
     caches.match(event.request)
       .then(function(response) {
         if (response) {
           return response;
         }
-        return fetch(event.request);
-      }
-    )
+        return fetch(event.request)
+          .then(function(response) {
+            // Cache successful responses
+            if (response.status === 200) {
+              const responseClone = response.clone();
+              caches.open(STATIC_CACHE).then(function(cache) {
+                cache.put(event.request, responseClone);
+              });
+            }
+            return response;
+          });
+      })
   );
 });
 

@@ -53,6 +53,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
@@ -359,6 +360,7 @@ function App() {
       <TooltipProvider>
         <AuthProvider>
           <Toaster />
+          <InstallPrompt />
           <Router />
         </AuthProvider>
       </TooltipProvider>
