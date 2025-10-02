@@ -41,6 +41,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
+import { PullToRefresh } from "@/components/PullToRefresh";
 // ServiceM8 API response types (matches server/services/servicem8-api.ts)
 interface ServiceM8DiaryEntry {
   id: string;
@@ -535,29 +536,33 @@ export function JobDiarySection({
     }
   };
 
+  // Pull to refresh handler
+  const handleRefresh = async () => {
+    queryClient.removeQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+    await refetch();
+  };
+
   return (
-    <div className={`h-full flex flex-col ${className}`}>
-      {/* Header */}
-      <div className="flex-shrink-0 p-4 border-b bg-gray-50 dark:bg-gray-900">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Job Diary</h3>
-          <div className="flex gap-1">
-            <Button 
-              size="icon" 
-              variant="ghost"
-              onClick={() => {
-                queryClient.removeQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
-                refetch();
-              }}
-              data-testid="button-refresh-diary"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-            <Button size="icon" variant="ghost">
-              <Settings className="w-4 h-4" />
-            </Button>
+    <PullToRefresh onRefresh={handleRefresh} enabled={true}>
+      <div className={`h-full flex flex-col ${className}`}>
+        {/* Header */}
+        <div className="flex-shrink-0 p-4 border-b bg-gray-50 dark:bg-gray-900">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Job Diary</h3>
+            <div className="flex gap-1">
+              <Button 
+                size="icon" 
+                variant="ghost"
+                onClick={handleRefresh}
+                data-testid="button-refresh-diary"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+              <Button size="icon" variant="ghost">
+                <Settings className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
-        </div>
         
         {/* Quick Note Input */}
         <div className="flex gap-2">
@@ -1158,5 +1163,6 @@ export function JobDiarySection({
         </DialogContent>
       </Dialog>
     </div>
+    </PullToRefresh>
   );
 }
