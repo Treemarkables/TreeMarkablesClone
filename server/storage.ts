@@ -2460,14 +2460,49 @@ class DatabaseStorage implements IStorage {
   async deleteProposalLineItemChoice(id: string): Promise<void> { }
   async deleteProposalLineItemChoicesByLineItem(lineItemId: string): Promise<void> { }
 
-  async createEquipment(equipment: InsertEquipment): Promise<Equipment> { throw new Error("Not implemented"); }
-  async getEquipment(id: string): Promise<Equipment | undefined> { return undefined; }
-  async updateEquipment(id: string, updates: UpdateEquipment): Promise<Equipment> { throw new Error("Not implemented"); }
-  async getAllEquipment(): Promise<Equipment[]> { return []; }
-  async getAvailableEquipment(): Promise<Equipment[]> { return []; }
-  async getEquipmentByType(type: string): Promise<Equipment[]> { return []; }
-  async getEquipmentByStatus(status: string): Promise<Equipment[]> { return []; }
-  async deleteEquipment(id: string): Promise<void> { }
+  async createEquipment(equipment: InsertEquipment): Promise<Equipment> {
+    const [newEquipment] = await db.insert(schema.equipment).values(equipment).returning();
+    return newEquipment;
+  }
+  
+  async getEquipment(id: string): Promise<Equipment | undefined> {
+    const [equipment] = await db.select().from(schema.equipment).where(eq(schema.equipment.id, id));
+    return equipment;
+  }
+  
+  async updateEquipment(id: string, updates: UpdateEquipment): Promise<Equipment> {
+    const [updated] = await db.update(schema.equipment)
+      .set(updates)
+      .where(eq(schema.equipment.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getAllEquipment(): Promise<Equipment[]> {
+    return await db.select().from(schema.equipment).orderBy(desc(schema.equipment.createdAt));
+  }
+  
+  async getAvailableEquipment(): Promise<Equipment[]> {
+    return await db.select().from(schema.equipment)
+      .where(eq(schema.equipment.status, 'available'))
+      .orderBy(desc(schema.equipment.createdAt));
+  }
+  
+  async getEquipmentByType(type: string): Promise<Equipment[]> {
+    return await db.select().from(schema.equipment)
+      .where(eq(schema.equipment.type, type))
+      .orderBy(desc(schema.equipment.createdAt));
+  }
+  
+  async getEquipmentByStatus(status: string): Promise<Equipment[]> {
+    return await db.select().from(schema.equipment)
+      .where(eq(schema.equipment.status, status))
+      .orderBy(desc(schema.equipment.createdAt));
+  }
+  
+  async deleteEquipment(id: string): Promise<void> {
+    await db.delete(schema.equipment).where(eq(schema.equipment.id, id));
+  }
 
   async createEquipmentMaintenance(maintenance: InsertEquipmentMaintenance): Promise<EquipmentMaintenance> { throw new Error("Not implemented"); }
   async getEquipmentMaintenance(id: string): Promise<EquipmentMaintenance | undefined> { return undefined; }
