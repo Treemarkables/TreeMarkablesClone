@@ -46,6 +46,7 @@ import ProposalViewer from "@/pages/ProposalViewer";
 import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
 import PublicReview from "@/pages/PublicReview";
+import ActivityDashboard from "@/pages/ActivityDashboard";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code } from "lucide-react";
@@ -207,6 +208,11 @@ function Router() {
       <Route path="/review/:token" component={PublicReview}/>
       
       {/* Dashboard pages with sidebar */}
+      <Route path="/overview">
+        <SidebarLayout>
+          <ActivityDashboard />
+        </SidebarLayout>
+      </Route>
       <Route path="/pipeline">
         <SidebarLayout>
           <Pipeline />

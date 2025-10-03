@@ -44,10 +44,10 @@ interface AppSidebarProps {
 const dashboardItems = [
   {
     title: "Overview",
-    url: "/job-dashboard",
+    url: "/overview",
     icon: Home,
     value: "overview",
-    isTab: true
+    isTab: false
   },
   {
     title: "All Jobs",
