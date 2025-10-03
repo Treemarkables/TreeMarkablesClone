@@ -383,83 +383,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
           </div>
         )}
 
-        {/* Labor Costs Section */}
-        <div className="space-y-4">
-          {hasStaffTimeEntries ? (
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-blue-900">Labor Costs (from Staff Time)</Label>
-                <Badge className="bg-blue-200 text-blue-800">Read-only</Badge>
-              </div>
-              <div className="text-2xl font-bold text-blue-800 mb-3">
-                ${staffTimeLaborCost.toFixed(2)}
-              </div>
-              <div className="text-sm text-blue-700">
-                Calculated from {staffTimeEntries.length} staff time entries
-              </div>
-              <div className="text-xs text-blue-600 mt-1">
-                Total Hours: {staffTimeEntries.reduce((sum: number, entry: any) => {
-                  const hours = Number(entry.hours) || 0;
-                  return sum + hours;
-                }, 0).toFixed(2)}h
-              </div>
-            </div>
-          ) : (
-            <>
-              {calculationMode === 'manual' ? (
-                <div>
-                  <Label htmlFor="laborCosts">Additional Costs ($)</Label>
-                  <Input
-                    id="laborCosts"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.laborCosts || ''}
-                    onChange={(e) => handleInputChange('laborCosts', e.target.value)}
-                    placeholder="Enter additional costs"
-                    data-testid="input-labor-costs"
-                  />
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="laborHours">Labor Hours</Label>
-                    <Input
-                      id="laborHours"
-                      type="number"
-                      step="0.25"
-                      min="0"
-                      value={formData.laborHours || ''}
-                      onChange={(e) => handleInputChange('laborHours', e.target.value)}
-                      placeholder="Hours worked"
-                      data-testid="input-labor-hours"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="hourlyRate">Hourly Rate ($)</Label>
-                    <Input
-                      id="hourlyRate"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.hourlyRate || ''}
-                      onChange={(e) => handleInputChange('hourlyRate', e.target.value)}
-                      placeholder="Rate per hour"
-                      data-testid="input-hourly-rate"
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {!hasStaffTimeEntries && calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate && (
-            <div className="bg-gray-50 p-3 rounded">
-              <span className="text-sm text-gray-600">Calculated Labor Cost: </span>
-              <span className="font-semibold">${calculatedLaborCosts.toFixed(2)}</span>
-            </div>
-          )}
-        </div>
 
         {/* Cost Summary */}
         <div className="bg-gray-50 p-4 rounded-lg">
@@ -470,7 +393,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
               <span>${totalAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Labor Costs:</span>
+              <span>Additional Costs:</span>
               <span>${(hasStaffTimeEntries ? staffTimeLaborCost : (calculationMode === 'hourly' ? calculatedLaborCosts : laborCosts)).toFixed(2)}</span>
             </div>
             <div className="flex justify-between">

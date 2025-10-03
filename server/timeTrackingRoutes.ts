@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { timeTrackingService } from "./timeTrackingService";
+import { storage } from "./storage";
 import {
   dailyTimeFormSchema,
   staffRateFormSchema,
@@ -144,14 +145,15 @@ export function setupTimeTrackingRoutes(app: any) {
   app.post('/api/time-entries/:jobId', async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
-      const { entries, rounding, travelTime } = req.body;
+      const { entries, rounding, travelTime, additionalCosts } = req.body;
       
       console.log('POST /api/time-entries/:jobId called with:', {
         jobId,
         entriesCount: entries?.length,
         entries: entries,
         rounding,
-        travelTime
+        travelTime,
+        additionalCosts
       });
       
       if (!entries || !Array.isArray(entries)) {
@@ -213,6 +215,22 @@ export function setupTimeTrackingRoutes(app: any) {
       }
       
       console.log('Successfully created', createdEntries.length, 'time entries');
+      
+      // Update job with additional costs if provided
+      if (additionalCosts !== undefined && additionalCosts !== null) {
+        try {
+          const job = await storage.getJob(jobId);
+          if (job) {
+            await storage.updateJob(jobId, {
+              laborCosts: additionalCosts.toString()
+            });
+            console.log('Updated job laborCosts to:', additionalCosts);
+          }
+        } catch (error) {
+          console.error('Error updating job labor costs:', error);
+          // Don't fail the whole request if this fails
+        }
+      }
       
       res.json({ 
         success: true, 
