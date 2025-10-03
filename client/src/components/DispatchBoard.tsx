@@ -588,7 +588,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           assignedTeam: assignedTeam,
           teamId: teamId,
           staffId: staffId,
-          specialInstructions: apiJob.specialInstructions
+          specialInstructions: apiJob.specialInstructions,
+          lastActivityAt: apiJob.lastActivityAt
         });
       });
     }
@@ -621,7 +622,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           assignedTeam: apiJob.assignedTeam || [],
           teamId: undefined,
           staffId: undefined,
-          specialInstructions: apiJob.specialInstructions
+          specialInstructions: apiJob.specialInstructions,
+          lastActivityAt: apiJob.lastActivityAt
         });
       });
     }
@@ -777,7 +779,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return deepSearchResults;
     }
 
-    return jobs
+    const sorted = jobs
       .filter(job => {
         // Show all jobs including completed (only exclude unsuccessful)
         return job.status !== 'unsuccessful';
@@ -823,6 +825,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return jobNumberB - jobNumberA;
       })
       .slice(0, 60); // Limit to 60 latest jobs - completed jobs included until they age out
+    
+    return sorted;
   };
 
   // Job Mutations
