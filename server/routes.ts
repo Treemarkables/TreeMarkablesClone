@@ -11477,7 +11477,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           const response = await fetch(apiUrl, {
             headers: {
               'Accept': 'application/json',
-              'Authorization': `Bearer ${apiKey}`,
+              'addy-api-key': apiKey,
               'User-Agent': 'Treemarkables-Web-App/1.0'
             },
             timeout: 5000 // 5 second timeout
