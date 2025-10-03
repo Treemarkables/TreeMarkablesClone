@@ -266,9 +266,12 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       // Step 2: Create invoice in Xero
       try {
         // Convert job line items to Xero format
+        console.log('DEBUG: job.lineItems =', JSON.stringify(job.lineItems));
         const jobLineItems = job.lineItems || [];
+        console.log('DEBUG: jobLineItems length =', jobLineItems.length);
         
         if (jobLineItems.length === 0) {
+          console.error('❌ No line items found on job');
           return res.status(400).json({ 
             success: false, 
             message: 'Job must have at least one line item to create an invoice' 
@@ -282,6 +285,8 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           accountCode: '200', // Sales account - adjust as needed
           taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
         }));
+        
+        console.log('DEBUG: Xero lineItems =', JSON.stringify(lineItems));
         
         const invoice = {
           type: 'ACCREC' as any, // Accounts Receivable (sales invoice)
