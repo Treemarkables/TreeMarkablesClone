@@ -438,7 +438,7 @@ export default function Equipment() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-6 p-2 md:p-0 pb-24 min-h-full">
+    <div className="w-full max-w-full min-w-0 overflow-x-hidden p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
         <div>
