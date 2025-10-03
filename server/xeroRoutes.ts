@@ -310,6 +310,18 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           sentToXeroDate: new Date(),
         });
         
+        // Create diary entry for Xero send
+        await storage.createJobDiary({
+          jobId,
+          type: 'note',
+          content: `Invoice #${xeroInvoice.invoiceNumber || xeroInvoice.invoiceID} sent to Xero successfully. Total: $${job.totalAmount || '0.00'}`,
+          metadata: {
+            xeroInvoiceId: xeroInvoice.invoiceID,
+            xeroInvoiceNumber: xeroInvoice.invoiceNumber,
+            action: 'sent_to_xero'
+          }
+        });
+        
         res.json({ 
           success: true, 
           message: 'Invoice sent to Xero successfully',
