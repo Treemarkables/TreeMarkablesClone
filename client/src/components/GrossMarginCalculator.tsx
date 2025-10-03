@@ -201,11 +201,13 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   // Materials costs come from the actual cost fields in line items
   const materialsCosts = jobLineItemsCosts;
   
-  const laborCosts = hasStaffTimeEntries ? staffTimeLaborCost : (formData.laborCosts || 0);
+  // Separate staff costs from additional costs
+  const staffCosts = staffTimeLaborCost;
+  const additionalCosts = formData.laborCosts || 0;
   const otherCosts = formData.otherCosts || 0;
   const costOfGoods = job?.costOfGoods ? parseFloat(job.costOfGoods) : 0;
   // Include tracked expenses in total costs
-  const totalCosts = laborCosts + materialsCosts + otherCosts + costOfGoods + totalExpenses;
+  const totalCosts = staffCosts + additionalCosts + materialsCosts + otherCosts + costOfGoods + totalExpenses;
   const calculatedLaborCosts = (formData.laborHours || 0) * (formData.hourlyRate || 0);
   
   // Calculate gross margin in real-time
@@ -393,8 +395,12 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
               <span>${totalAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
+              <span>Staff Costs:</span>
+              <span>${staffCosts.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
               <span>Additional Costs:</span>
-              <span>${(hasStaffTimeEntries ? staffTimeLaborCost : (calculationMode === 'hourly' ? calculatedLaborCosts : laborCosts)).toFixed(2)}</span>
+              <span>${additionalCosts.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span>Materials Costs:</span>
