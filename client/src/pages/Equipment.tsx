@@ -1127,7 +1127,7 @@ export default function Equipment() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {(Array.from(new Set(equipment.map((item: any) => item.type))) as string[]).map((type: string) => {
+                {(Array.from(new Set(equipment.map((item: any) => item.type).filter(Boolean))) as string[]).map((type: string) => {
                   const typeEquipment = equipment.filter((item: any) => item.type === type);
                   const inUseCount = typeEquipment.filter((item: any) => item.status === 'in_use').length;
                   const utilizationRate = typeEquipment.length > 0 ? (inUseCount / typeEquipment.length) * 100 : 0;
@@ -1135,7 +1135,7 @@ export default function Equipment() {
                   return (
                     <div key={type} className="space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="font-medium capitalize">{type.replace('_', ' ')}</span>
+                        <span className="font-medium capitalize">{type?.replace('_', ' ')}</span>
                         <span className="text-gray-600">{inUseCount}/{typeEquipment.length} ({Math.round(utilizationRate)}%)</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
