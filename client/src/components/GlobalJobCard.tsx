@@ -1476,7 +1476,7 @@ export function GlobalJobCard({
                 onClick={handleEmailClick} 
                 data-testid="button-email"
               >
-                <MdEmail className="w-full h-auto max-w-[160px] max-h-[160px] text-blue-500" />
+                <MdEmail className="w-full h-auto max-w-[128px] max-h-[128px] text-blue-500" />
                 <span className="text-[10px] mt-1 whitespace-nowrap">Email</span>
               </Button>
               <Button 
@@ -1486,7 +1486,7 @@ export function GlobalJobCard({
                 onClick={() => setIsSMSComposerOpen(true)} 
                 data-testid="button-sms"
               >
-                <MdSms className="w-full h-auto max-w-[160px] max-h-[160px] text-blue-500" />
+                <MdSms className="w-full h-auto max-w-[128px] max-h-[128px] text-blue-500" />
                 <span className="text-[10px] mt-1 whitespace-nowrap">SMS</span>
               </Button>
               <Button 
@@ -1496,7 +1496,7 @@ export function GlobalJobCard({
                 onClick={handleCallClick} 
                 data-testid="button-call"
               >
-                <MdPhone className="w-full h-auto max-w-[160px] max-h-[160px] text-green-500" />
+                <MdPhone className="w-full h-auto max-w-[128px] max-h-[128px] text-green-500" />
                 <span className="text-[10px] mt-1 whitespace-nowrap">Call</span>
               </Button>
               <Button 
@@ -1506,7 +1506,7 @@ export function GlobalJobCard({
                 onClick={handleScheduleClick} 
                 data-testid="button-schedule"
               >
-                <MdCalendarToday className="w-full h-auto max-w-[160px] max-h-[160px] text-red-500" />
+                <MdCalendarToday className="w-full h-auto max-w-[128px] max-h-[128px] text-red-500" />
                 <span className="text-[10px] mt-1 whitespace-nowrap">Schedule</span>
               </Button>
               <Button 
@@ -1516,7 +1516,7 @@ export function GlobalJobCard({
                 onClick={handleQueueClick} 
                 data-testid="button-queue"
               >
-                <MdDescription className="w-full h-auto max-w-[160px] max-h-[160px] text-blue-600" />
+                <MdDescription className="w-full h-auto max-w-[128px] max-h-[128px] text-blue-600" />
                 <span className="text-[10px] mt-1 whitespace-nowrap">Queue</span>
               </Button>
               <DropdownMenu>
@@ -1527,7 +1527,7 @@ export function GlobalJobCard({
                     className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col [&_svg]:!w-full [&_svg]:!h-auto" 
                     data-testid="button-send"
                   >
-                    <MdSend className="w-full h-auto max-w-[160px] max-h-[160px] text-orange-500" />
+                    <MdSend className="w-full h-auto max-w-[128px] max-h-[128px] text-orange-500" />
                     <span className="text-[10px] mt-1 whitespace-nowrap">Send</span>
                   </Button>
                 </DropdownMenuTrigger>
@@ -1583,7 +1583,7 @@ export function GlobalJobCard({
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
               >
-                <MdAttachMoney className="w-full h-auto max-w-[160px] max-h-[160px] text-teal-500" />
+                <MdAttachMoney className="w-full h-auto max-w-[128px] max-h-[128px] text-teal-500" />
                 <span className="text-[10px] mt-1 whitespace-nowrap">Profit</span>
               </Button>
               <Button 
@@ -1594,7 +1594,7 @@ export function GlobalJobCard({
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
               >
-                <MdAccessTime className="w-full h-auto max-w-[160px] max-h-[160px] text-purple-500" />
+                <MdAccessTime className="w-full h-auto max-w-[128px] max-h-[128px] text-purple-500" />
                 <span className="text-[10px] mt-1 whitespace-nowrap">Time</span>
               </Button>
               <Button 
@@ -1605,7 +1605,7 @@ export function GlobalJobCard({
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
               >
-                <MdCameraAlt className="w-full h-auto max-w-[160px] max-h-[160px] text-pink-500" />
+                <MdCameraAlt className="w-full h-auto max-w-[128px] max-h-[128px] text-pink-500" />
                 <span className="text-[10px] mt-1 whitespace-nowrap">Camera</span>
               </Button>
               <DropdownMenu>
@@ -1616,7 +1616,7 @@ export function GlobalJobCard({
                     className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col [&_svg]:!w-full [&_svg]:!h-auto" 
                     data-testid="button-more"
                   >
-                    <MdMoreHoriz className="w-full h-auto max-w-[160px] max-h-[160px] text-green-600" />
+                    <MdMoreHoriz className="w-full h-auto max-w-[128px] max-h-[128px] text-green-600" />
                     <span className="text-[10px] mt-1 whitespace-nowrap">More</span>
                   </Button>
                 </DropdownMenuTrigger>
