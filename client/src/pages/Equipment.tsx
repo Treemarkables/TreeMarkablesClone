@@ -684,99 +684,99 @@ export default function Equipment() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-2">
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100">
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">Total Equipment</p>
-                <p className="text-2xl font-bold text-blue-900" data-testid="stat-total-equipment">{stats.total}</p>
+                <p className="text-xs font-medium text-blue-600">Total Equipment</p>
+                <p className="text-lg font-bold text-blue-900" data-testid="stat-total-equipment">{stats.total}</p>
               </div>
-              <Package className="h-8 w-8 text-blue-600" />
+              <Package className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-r from-green-50 to-green-100">
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-600">Available</p>
-                <p className="text-2xl font-bold text-green-900" data-testid="stat-available-equipment">{stats.available}</p>
+                <p className="text-xs font-medium text-green-600">Available</p>
+                <p className="text-lg font-bold text-green-900" data-testid="stat-available-equipment">{stats.available}</p>
               </div>
-              <CheckCircle className="h-8 w-8 text-green-600" />
+              <CheckCircle className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100">
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">In Use</p>
-                <p className="text-2xl font-bold text-blue-900" data-testid="stat-inuse-equipment">{stats.inUse}</p>
+                <p className="text-xs font-medium text-blue-600">In Use</p>
+                <p className="text-lg font-bold text-blue-900" data-testid="stat-inuse-equipment">{stats.inUse}</p>
               </div>
-              <Clock className="h-8 w-8 text-blue-600" />
+              <Clock className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100">
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-yellow-600">Maintenance</p>
-                <p className="text-2xl font-bold text-yellow-900" data-testid="stat-maintenance-equipment">{stats.maintenance}</p>
+                <p className="text-xs font-medium text-yellow-600">Maintenance</p>
+                <p className="text-lg font-bold text-yellow-900" data-testid="stat-maintenance-equipment">{stats.maintenance}</p>
               </div>
-              <Wrench className="h-8 w-8 text-yellow-600" />
+              <Wrench className="h-5 w-5 text-yellow-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-r from-gray-50 to-gray-100">
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Retired</p>
-                <p className="text-2xl font-bold text-gray-900" data-testid="stat-retired-equipment">{stats.retired}</p>
+                <p className="text-xs font-medium text-gray-600">Retired</p>
+                <p className="text-lg font-bold text-gray-900" data-testid="stat-retired-equipment">{stats.retired}</p>
               </div>
-              <XCircle className="h-8 w-8 text-gray-600" />
+              <XCircle className="h-5 w-5 text-gray-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100">
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">Active Checkouts</p>
-                <p className="text-2xl font-bold text-blue-900" data-testid="stat-active-checkouts">{stats.activeCheckouts}</p>
+                <p className="text-xs font-medium text-blue-600">Active Checkouts</p>
+                <p className="text-lg font-bold text-blue-900" data-testid="stat-active-checkouts">{stats.activeCheckouts}</p>
               </div>
-              <LogOut className="h-8 w-8 text-blue-600" />
+              <LogOut className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className={`bg-gradient-to-r ${overdueCheckouts.length > 0 ? 'from-red-50 to-red-100' : 'from-gray-50 to-gray-100'}`}>
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-sm font-medium ${overdueCheckouts.length > 0 ? 'text-red-600' : 'text-gray-600'}`}>Overdue</p>
-                <p className={`text-2xl font-bold ${overdueCheckouts.length > 0 ? 'text-red-900' : 'text-gray-900'}`} data-testid="stat-overdue-checkouts">{stats.overdueCheckouts}</p>
+                <p className={`text-xs font-medium ${overdueCheckouts.length > 0 ? 'text-red-600' : 'text-gray-600'}`}>Overdue</p>
+                <p className={`text-lg font-bold ${overdueCheckouts.length > 0 ? 'text-red-900' : 'text-gray-900'}`} data-testid="stat-overdue-checkouts">{stats.overdueCheckouts}</p>
               </div>
-              <AlertTriangle className={`h-8 w-8 ${overdueCheckouts.length > 0 ? 'text-red-600' : 'text-gray-600'}`} />
+              <AlertTriangle className={`h-5 w-5 ${overdueCheckouts.length > 0 ? 'text-red-600' : 'text-gray-600'}`} />
             </div>
           </CardContent>
         </Card>
 
         <Card className={`bg-gradient-to-r ${overdueMaintenance.length > 0 ? 'from-orange-50 to-orange-100' : 'from-gray-50 to-gray-100'}`}>
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-sm font-medium ${overdueMaintenance.length > 0 ? 'text-orange-600' : 'text-gray-600'}`}>Overdue Maintenance</p>
-                <p className={`text-2xl font-bold ${overdueMaintenance.length > 0 ? 'text-orange-900' : 'text-gray-900'}`} data-testid="stat-overdue-maintenance">{stats.overdueMaintenance}</p>
+                <p className={`text-xs font-medium ${overdueMaintenance.length > 0 ? 'text-orange-600' : 'text-gray-600'}`}>Overdue Maintenance</p>
+                <p className={`text-lg font-bold ${overdueMaintenance.length > 0 ? 'text-orange-900' : 'text-gray-900'}`} data-testid="stat-overdue-maintenance">{stats.overdueMaintenance}</p>
               </div>
-              <Wrench className={`h-8 w-8 ${overdueMaintenance.length > 0 ? 'text-orange-600' : 'text-gray-600'}`} />
+              <Wrench className={`h-5 w-5 ${overdueMaintenance.length > 0 ? 'text-orange-600' : 'text-gray-600'}`} />
             </div>
           </CardContent>
         </Card>
