@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
+import { MdStickyNote2 } from "react-icons/md";
 // ServiceM8 API response types (matches server/services/servicem8-api.ts)
 interface ServiceM8DiaryEntry {
   id: string;
@@ -483,7 +484,7 @@ export function JobDiarySection({
     }
     
     switch (type) {
-      case 'note': return <StickyNote className="w-7 h-7 text-amber-500" />;
+      case 'note': return <MdStickyNote2 className="w-7 h-7 text-yellow-400" />;
       case 'sms': return <MessageSquare className="w-7 h-7 text-blue-500" />;
       case 'email': return <Mail className="w-7 h-7 text-gray-500" />;
       case 'job_event': return <CheckCircle className="w-7 h-7 text-green-500" />;
@@ -586,7 +587,7 @@ export function JobDiarySection({
         {/* Quick Note Input */}
         <div className="flex gap-0.5">
           <div className="flex-1 relative">
-            <StickyNote className="absolute left-1.5 top-1/2 transform -translate-y-1/2 w-2.5 h-2.5 text-gray-400" />
+            <MdStickyNote2 className="absolute left-1.5 top-1/2 transform -translate-y-1/2 w-2.5 h-2.5 text-yellow-400" />
             <Input 
               ref={quickNoteInputRef}
               placeholder="Add note..."
