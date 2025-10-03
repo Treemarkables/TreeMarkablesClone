@@ -507,6 +507,22 @@ export function JobDiarySection({
     return phone;
   };
 
+  const cleanDiaryContent = (content: string, type: DiaryEntry['type']) => {
+    // Remove redundant prefixes from diary content
+    let cleaned = content;
+    
+    // Remove "SMS sent to [name]" prefix
+    cleaned = cleaned.replace(/^SMS sent to [^\n]+\n\n/i, '');
+    
+    // Remove "Email sent to [email]" prefix
+    cleaned = cleaned.replace(/^Email sent to [^\n]+\n\n/i, '');
+    
+    // Remove "Message:" prefix
+    cleaned = cleaned.replace(/^Message:\s*/i, '');
+    
+    return cleaned.trim();
+  };
+
   // Swipe handlers for photo gallery navigation
   const minSwipeDistance = 50;
 
@@ -659,33 +675,11 @@ export function JobDiarySection({
                       onClick={isClickable ? handleEntryClick : undefined}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <h4 className="font-medium text-xs text-gray-900 dark:text-white truncate flex-1 min-w-0">
-                          {entry.type === 'sms' && entry.metadata?.phoneNumber && (
-                            <>SMS Message to {formatPhoneNumber(entry.metadata.phoneNumber)}</>
-                          )}
-                          {entry.type === 'email' && entry.metadata?.emailAddress && (
-                            <>
-                              {docInfo?.type === 'invoice' ? (
-                                <>Invoice Email</>
-                              ) : (
-                                <>Email to {entry.metadata.emailAddress}</>
-                              )}
-                            </>
-                          )}
-                          {entry.type === 'note' && <>Note</>}
-                          {entry.type === 'job_event' && <>Job Created</>}
-                          {entry.type === 'proposal' && entry.metadata?.proposalNumber && (
-                            <>Proposal {entry.metadata.proposalNumber}</>
-                          )}
-                          {entry.type === 'photo' && (
-                            <><Camera className="w-4 h-4 inline mr-1" />Photo Added</>
-                          )}
-                        </h4>
                         {entry.type === 'note' && editingEntryId !== entry.id && (
                           <Button 
                             size="icon" 
                             variant="ghost" 
-                            className="h-5 w-5"
+                            className="h-5 w-5 ml-auto"
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditingEntryId(entry.id);
@@ -794,7 +788,7 @@ export function JobDiarySection({
                             </div>
                           ) : (
                             <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-line break-words overflow-hidden">
-                              {entry.content}
+                              {cleanDiaryContent(entry.content, entry.type)}
                             </div>
                           )}
                           
