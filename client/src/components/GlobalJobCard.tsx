@@ -1300,6 +1300,9 @@ export function GlobalJobCard({
           
           await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
           hasUserChangedRef.current = false;
+          
+          // Invalidate jobs query to refresh the list
+          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         } catch (error) {
           console.error('Failed to save changes on close:', error);
         }
