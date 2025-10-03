@@ -3653,8 +3653,8 @@ export function GlobalJobCard({
                     data-testid="button-save-quote" 
                     className="bg-green-600 hover:bg-green-700 text-white h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <FileText className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Save</span>
+                    <FileText className="w-4 h-4 mr-1" />
+                    <span>Save</span>
                   </Button>
                   <Button 
                     variant="outline" 
@@ -3668,8 +3668,8 @@ export function GlobalJobCard({
                     data-testid="button-copy-quote"
                     className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Copy className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Copy</span>
+                    <Copy className="w-4 h-4 mr-1" />
+                    <span>Copy</span>
                   </Button>
                   <Button 
                     variant="outline" 
@@ -3681,8 +3681,8 @@ export function GlobalJobCard({
                     data-testid="button-email-quote"
                     className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Mail className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Email</span>
+                    <Mail className="w-4 h-4 mr-1" />
+                    <span>Email</span>
                   </Button>
                   <Button 
                     variant="outline" 
@@ -3696,8 +3696,8 @@ export function GlobalJobCard({
                     data-testid="button-download-quote"
                     className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Download className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">PDF</span>
+                    <Download className="w-4 h-4 mr-1" />
+                    <span>PDF</span>
                   </Button>
                 </div>
               </div>
@@ -3751,8 +3751,8 @@ export function GlobalJobCard({
                     data-testid="button-save-invoice" 
                     className="bg-green-600 hover:bg-green-700 text-white h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Save className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Save</span>
+                    <Save className="w-4 h-4 mr-1" />
+                    <span>Save</span>
                   </Button>
                   <Button 
                     variant="outline" 
@@ -3766,8 +3766,8 @@ export function GlobalJobCard({
                     data-testid="button-copy-invoice"
                     className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Copy className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Copy</span>
+                    <Copy className="w-4 h-4 mr-1" />
+                    <span>Copy</span>
                   </Button>
                   <Button 
                     variant="outline" 
@@ -3779,8 +3779,8 @@ export function GlobalJobCard({
                     data-testid="button-email-invoice"
                     className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Mail className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Email</span>
+                    <Mail className="w-4 h-4 mr-1" />
+                    <span>Email</span>
                   </Button>
                   <Button 
                     variant="outline" 
@@ -3794,8 +3794,8 @@ export function GlobalJobCard({
                     data-testid="button-download-invoice"
                     className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Download className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">PDF</span>
+                    <Download className="w-4 h-4 mr-1" />
+                    <span>PDF</span>
                   </Button>
                 </div>
               </div>
