@@ -77,6 +77,7 @@ import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
 import { PhotoStorageService } from "./photoStorage";
+import { googleCalendarService } from "./services/googleCalendarService";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -6011,6 +6012,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Don't fail the request if diary entry creation fails
       }
 
+      // Sync to Google Calendar
+      try {
+        const googleEventId = await googleCalendarService.syncJobToCalendar(job, created);
+        if (googleEventId) {
+          console.log(`✅ Job synced to Google Calendar: ${googleEventId}`);
+        }
+      } catch (calendarError) {
+        console.error('❌ Error syncing to Google Calendar:', calendarError);
+        // Don't fail the request if calendar sync fails
+      }
+
       res.json({
         success: true,
         data: created,
@@ -6106,6 +6118,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     try {
       const validatedData = insertScheduleEventSchema.parse(req.body);
       const event = await storage.createScheduleEvent(validatedData);
+      
+      // Sync to Google Calendar
+      try {
+        const googleEventId = await googleCalendarService.syncScheduleEventToCalendar(event);
+        if (googleEventId) {
+          console.log(`✅ Schedule event synced to Google Calendar: ${googleEventId}`);
+        }
+      } catch (calendarError) {
+        console.error('❌ Error syncing schedule event to Google Calendar:', calendarError);
+        // Don't fail the request if calendar sync fails
+      }
+      
       res.json({
         success: true,
         data: event,
