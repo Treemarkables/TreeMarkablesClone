@@ -467,18 +467,6 @@ export function EmailComposerModal({
             </Button>
           </div>
           <div className="flex flex-col gap-1 mt-1">
-            <Select value={emailData.selectedTemplate} onValueChange={handleTemplateSelect}>
-              <SelectTrigger className="w-full text-xs h-7">
-                <SelectValue placeholder="Email Templates" />
-              </SelectTrigger>
-              <SelectContent>
-                {EMAIL_TEMPLATES.map(template => (
-                  <SelectItem key={template.id} value={template.id}>
-                    {template.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <div className="flex gap-2 justify-center">
               <Button 
                 onClick={handleFileAttachment} 
@@ -501,6 +489,18 @@ export function EmailComposerModal({
                 <span>{sendEmailMutation.isPending ? 'Sending...' : 'Send'}</span>
               </Button>
             </div>
+            <Select value={emailData.selectedTemplate} onValueChange={handleTemplateSelect}>
+              <SelectTrigger className="w-full text-xs h-7">
+                <SelectValue placeholder="Email Templates" />
+              </SelectTrigger>
+              <SelectContent>
+                {EMAIL_TEMPLATES.map(template => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </DialogHeader>
 
