@@ -1239,12 +1239,68 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>
         </CardHeader>
         
-        {/* Mobile Header - Simple Title Only */}
-        <CardHeader className="md:hidden">
+        {/* Mobile Header - With Search */}
+        <CardHeader className="md:hidden space-y-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Calendar className="h-5 w-5" />
             Jobs ({getTodaysJobs().length})
           </CardTitle>
+          
+          {/* Job Search Field for Mobile */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={isDeepSearchActive ? "Deep search results..." : "Search by customer, job #, address..."}
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (!isDeepSearchActive) {
+                    // Normal search - let the regular filtering handle it
+                  }
+                }}
+                className="pl-10 bg-white"
+                data-testid="mobile-job-search-input"
+              />
+              {isDeepSearchActive && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 px-2"
+                  onClick={() => {
+                    setIsDeepSearchActive(false);
+                    setDeepSearchResults([]);
+                    setSearchQuery('');
+                  }}
+                  data-testid="btn-clear-deep-search-mobile"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            
+            {/* Deep Search Button for Mobile */}
+            {searchQuery.trim() && !isDeepSearchActive && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => performDeepSearch(searchQuery)}
+                data-testid="btn-deep-search-mobile"
+              >
+                <Search className="h-3 w-3 mr-2" />
+                Deep Search All Jobs
+              </Button>
+            )}
+            
+            {/* Deep Search Status for Mobile */}
+            {isDeepSearchActive && (
+              <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                <SearchX className="h-3 w-3" />
+                Deep search: {deepSearchResults.length} total jobs found
+              </div>
+            )}
+          </div>
         </CardHeader>
 
         <CardContent>
@@ -1795,62 +1851,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 </div>
               );
             })()}
-            
-            {/* Job Search Field for Mobile */}
-            <div className="space-y-2 mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={isDeepSearchActive ? "Deep search results..." : "Search by customer, job #, address..."}
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    if (!isDeepSearchActive) {
-                      // Normal search - let the regular filtering handle it
-                    }
-                  }}
-                  className="pl-10 bg-white"
-                  data-testid="mobile-job-search-input"
-                />
-                {isDeepSearchActive && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 px-2"
-                    onClick={() => {
-                      setIsDeepSearchActive(false);
-                      setDeepSearchResults([]);
-                      setSearchQuery('');
-                    }}
-                    data-testid="btn-clear-deep-search-mobile"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-              
-              {/* Deep Search Button for Mobile */}
-              {searchQuery.trim() && !isDeepSearchActive && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => performDeepSearch(searchQuery)}
-                  data-testid="btn-deep-search-mobile"
-                >
-                  <Search className="h-3 w-3 mr-2" />
-                  Deep Search All Jobs
-                </Button>
-              )}
-              
-              {/* Deep Search Status for Mobile */}
-              {isDeepSearchActive && (
-                <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                  <SearchX className="h-3 w-3" />
-                  Deep search: {deepSearchResults.length} total jobs found
-                </div>
-              )}
-            </div>
             
             {/* Mobile Jobs Cards */}
             <div className="space-y-3">
