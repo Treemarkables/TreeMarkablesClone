@@ -38,7 +38,8 @@ import {
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  Receipt
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -473,7 +474,12 @@ export function JobDiarySection({
   });
 
   // Helper functions
-  const getEntryIcon = (type: DiaryEntry['type']) => {
+  const getEntryIcon = (type: DiaryEntry['type'], docInfo?: { type: string; number: string } | null) => {
+    // Special case: invoice emails get invoice icon
+    if (type === 'email' && docInfo?.type === 'invoice') {
+      return <Receipt className="w-7 h-7 text-green-600" />;
+    }
+    
     switch (type) {
       case 'note': return <StickyNote className="w-7 h-7 text-amber-500" />;
       case 'sms': return <MessageSquare className="w-7 h-7 text-blue-500" />;
@@ -641,7 +647,7 @@ export function JobDiarySection({
                 <div key={entry.id} className="flex gap-3" data-testid={`diary-entry-${entry.type}`}>
                   {/* Icon */}
                   <div className="flex items-start justify-center pt-1 flex-shrink-0">
-                    {getEntryIcon(entry.type)}
+                    {getEntryIcon(entry.type, docInfo)}
                   </div>
                   
                   {/* Content */}
