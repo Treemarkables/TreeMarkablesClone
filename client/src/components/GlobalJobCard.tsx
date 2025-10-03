@@ -3646,12 +3646,12 @@ export function GlobalJobCard({
           <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
             <DialogHeader className="p-3 sm:p-6 border-b">
               <div className="flex justify-center sm:justify-end">
-                <div className="flex gap-2">
+                <div className="flex gap-1 sm:gap-2 w-full sm:w-auto">
                   <Button 
                     size="sm" 
                     onClick={handleSaveQuote} 
                     data-testid="button-save-quote" 
-                    className="bg-green-600 hover:bg-green-700 text-white h-9 text-sm px-4 flex-1 sm:flex-none"
+                    className="bg-green-600 hover:bg-green-700 text-white h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >
                     <FileText className="w-4 h-4 mr-1" />
                     <span>Save</span>
@@ -3666,7 +3666,7 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-copy-quote"
-                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
+                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >
                     <Copy className="w-4 h-4 mr-1" />
                     <span>Copy</span>
@@ -3679,7 +3679,7 @@ export function GlobalJobCard({
                       handleEmailClick('quote');
                     }} 
                     data-testid="button-email-quote"
-                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
+                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >
                     <Mail className="w-4 h-4 mr-1" />
                     <span>Email</span>
@@ -3694,7 +3694,7 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-download-quote"
-                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
+                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >
                     <Download className="w-4 h-4 mr-1" />
                     <span>PDF</span>
@@ -3739,7 +3739,7 @@ export function GlobalJobCard({
           <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
             <DialogHeader className="p-3 sm:p-6 border-b">
               <div className="flex justify-center sm:justify-end">
-                <div className="flex gap-2">
+                <div className="flex gap-1 sm:gap-2 w-full sm:w-auto">
                   <Button 
                     size="sm" 
                     onClick={() => {
@@ -3749,7 +3749,7 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-save-invoice" 
-                    className="bg-green-600 hover:bg-green-700 text-white h-9 text-sm px-4 flex-1 sm:flex-none"
+                    className="bg-green-600 hover:bg-green-700 text-white h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >
                     <Save className="w-4 h-4 mr-1" />
                     <span>Save</span>
@@ -3764,7 +3764,7 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-copy-invoice"
-                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
+                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >
                     <Copy className="w-4 h-4 mr-1" />
                     <span>Copy</span>
@@ -3777,7 +3777,7 @@ export function GlobalJobCard({
                       handleEmailClick();
                     }} 
                     data-testid="button-email-invoice"
-                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
+                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >
                     <Mail className="w-4 h-4 mr-1" />
                     <span>Email</span>
@@ -3792,7 +3792,7 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-download-invoice"
-                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
+                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >
                     <Download className="w-4 h-4 mr-1" />
                     <span>PDF</span>
