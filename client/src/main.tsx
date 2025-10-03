@@ -5,11 +5,16 @@ import "./index.css";
 
 // Service worker registration
 if ('serviceWorker' in navigator) {
-  if (import.meta.env.DEV) {
-    // Clear any service workers in development to prevent caching issues
-    navigator.serviceWorker.getRegistrations().then(registrations => {
-      registrations.forEach(registration => registration.unregister());
+  // ALWAYS clear service workers on load to prevent infinite reload bugs
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(registration => {
+      console.log('🧹 Unregistering service worker:', registration.scope);
+      registration.unregister();
     });
+  });
+  
+  if (import.meta.env.DEV) {
+    // Development mode - keep service workers disabled
   } else {
     // Register service worker in production for PWA functionality
     // CRITICAL: Add version parameter to force iOS to fetch new service worker on each deployment
