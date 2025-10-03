@@ -450,6 +450,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     assignedTo: '',
     notes: ''
   });
+  const [showDescriptionPopup, setShowDescriptionPopup] = useState(false);
+  const [descriptionPopupJob, setDescriptionPopupJob] = useState<JobAssignment | null>(null);
 
   // Fetch jobs from backend API
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
@@ -1943,7 +1945,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       {job.address || 'No address specified'}
                     </div>
                     
-                    <div className="text-sm text-gray-700 leading-relaxed mb-3 break-words" data-testid={`mobile-job-description-${job.id}`}>
+                    <div 
+                      className="text-sm text-gray-700 leading-relaxed mb-3 break-words cursor-pointer hover:text-gray-900" 
+                      data-testid={`mobile-job-description-${job.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDescriptionPopupJob(job);
+                        setShowDescriptionPopup(true);
+                      }}
+                    >
                       {(() => {
                         const rawDescription = job.description || job.notes;
                         
@@ -2590,6 +2600,60 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   {updateJobMutation.isPending ? 'Scheduling...' : 'Schedule Job'}
                 </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Job Description Popup - Mobile */}
+      {showDescriptionPopup && descriptionPopupJob && (
+        <Dialog open={showDescriptionPopup} onOpenChange={setShowDescriptionPopup}>
+          <DialogContent className="w-[90vw] max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-center">Job Description</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <div className="text-sm text-gray-900 whitespace-pre-wrap break-words">
+                {(() => {
+                  const rawDescription = descriptionPopupJob.description || descriptionPopupJob.notes;
+                  
+                  if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
+                    if (descriptionPopupJob.status === 'lead') {
+                      return 'New lead - details pending';
+                    }
+                    if (descriptionPopupJob.status === 'quote' || descriptionPopupJob.status === 'quoted') {
+                      return 'Quote request - description to be added';
+                    }
+                    return descriptionPopupJob.serviceType || 'Description to be added';
+                  }
+                  
+                  if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
+                    return descriptionPopupJob.serviceType || 'Description to be added';
+                  }
+                  
+                  return rawDescription;
+                })()}
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => setShowDescriptionPopup(false)}
+                data-testid="btn-description-cancel"
+              >
+                Cancel
+              </Button>
+              <Button 
+                className="flex-1"
+                onClick={() => {
+                  setShowDescriptionPopup(false);
+                  handleEditJob(descriptionPopupJob);
+                }}
+                data-testid="btn-description-save"
+              >
+                Save
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
