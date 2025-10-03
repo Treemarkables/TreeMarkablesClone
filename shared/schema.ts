@@ -408,6 +408,7 @@ export const jobs = pgTable("jobs", {
   
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  lastActivityAt: timestamp("last_activity_at"),
 });
 
 // Job Diary Entries
