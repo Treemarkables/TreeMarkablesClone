@@ -1679,7 +1679,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           <div className="flex items-start gap-3 p-3 pl-6">
                             {/* Status Avatar */}
                             <div 
-                              className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm relative z-10"
+                              className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px] relative z-10"
                               style={{ backgroundColor: getJobStatusColorValue(job) }}
                             >
                               {getStatusInitials(job)}
@@ -1813,7 +1813,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       >
                         <div className="flex items-start gap-3">
                           <div 
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[18px] flex-shrink-0"
                             style={{ backgroundColor: getJobStatusColorValue(job) }}
                           >
                             {getStatusInitials(job)}
@@ -1870,7 +1870,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   <div className="flex items-start gap-3 mb-2">
                     {/* Status Avatar Circle */}
                     <div 
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-[18px] flex-shrink-0"
                       style={{ backgroundColor: getJobStatusColorValue(job) }}
                     >
                       {getStatusInitials(job)}
