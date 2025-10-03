@@ -479,12 +479,12 @@ export function EmailComposerModal({
                 ))}
               </SelectContent>
             </Select>
-            <div className="grid grid-cols-2 gap-1">
+            <div className="flex gap-2 justify-center">
               <Button 
                 onClick={handleFileAttachment} 
                 variant="outline" 
                 size="sm"
-                className="bg-blue-500 hover:bg-blue-600 text-white border-blue-500 w-full h-7 text-xs"
+                className="bg-blue-500 hover:bg-blue-600 text-white border-blue-500 h-7 text-xs px-4"
                 data-testid="button-attach-file"
               >
                 <Paperclip className="w-3 h-3 mr-1" />
@@ -493,7 +493,8 @@ export function EmailComposerModal({
               <Button 
                 onClick={handleSendEmail}
                 disabled={sendEmailMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 text-white w-full h-7 text-xs"
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-4"
                 data-testid="button-send-email"
               >
                 <Send className="w-3 h-3 mr-1" />
