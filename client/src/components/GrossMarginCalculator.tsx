@@ -357,39 +357,31 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     <Card>
       <CardContent className="space-y-6 pt-6">
         {/* Job Revenue from Line Items - Read Only */}
-        <div className="space-y-4">
-          {job?.lineItems && job.lineItems.length > 0 ? (
-            <div className="space-y-2">
-              {job.lineItems.map((item: any, index: number) => (
-                <Card key={index} className="p-3 bg-gray-50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="font-medium">{item.description}</div>
-                      <div className="text-sm text-gray-600">
-                        {item.quantity} × ${parseFloat(item.unitPrice || 0).toFixed(2)} = ${(item.quantity * parseFloat(item.unitPrice || 0)).toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="text-sm font-semibold">
-                      ${(item.quantity * parseFloat(item.unitPrice || 0)).toFixed(2)}
+        {job?.lineItems && job.lineItems.length > 0 && (
+          <div className="space-y-2">
+            {job.lineItems.map((item: any, index: number) => (
+              <Card key={index} className="p-3 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="font-medium">{item.description}</div>
+                    <div className="text-sm text-gray-600">
+                      {item.quantity} × ${parseFloat(item.unitPrice || 0).toFixed(2)} = ${(item.quantity * parseFloat(item.unitPrice || 0)).toFixed(2)}
                     </div>
                   </div>
-                </Card>
-              ))}
-              <div className="text-right pt-2 border-t">
-                <div className="text-sm text-gray-600">Total Revenue</div>
-                <div className="text-lg font-bold text-green-700">
-                  ${jobLineItemsTotal.toFixed(2)}
+                  <div className="text-sm font-semibold">
+                    ${(item.quantity * parseFloat(item.unitPrice || 0)).toFixed(2)}
+                  </div>
                 </div>
+              </Card>
+            ))}
+            <div className="text-right pt-2 border-t">
+              <div className="text-sm text-gray-600">Total Revenue</div>
+              <div className="text-lg font-bold text-green-700">
+                ${jobLineItemsTotal.toFixed(2)}
               </div>
             </div>
-          ) : (
-            <div className="text-center py-4 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-              <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No line items found</p>
-              <p className="text-sm">Add pricing items in the Job Card to track revenue</p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Labor Costs Section */}
         <div className="space-y-4">
