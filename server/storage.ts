@@ -311,6 +311,8 @@ export interface IStorage {
     totalRevenue: number;
     jobsCompleted: number;
     averageJobValue: number;
+    totalCosts: number;
+    grossMargin: number;
     monthlyTrend: { month: string; revenue: number; jobs: number }[];
   }>;
   
@@ -1857,10 +1859,54 @@ class DatabaseStorage implements IStorage {
   }
 
   async getRevenueStats(fromDate?: Date, toDate?: Date): Promise<any> {
+    // Get all completed jobs
+    const allJobs = await this.getAllJobs();
+    const completedJobs = allJobs.filter(job => job.status === 'completed');
+    
+    // Filter by date range if provided
+    let filteredJobs = completedJobs;
+    if (fromDate || toDate) {
+      filteredJobs = completedJobs.filter(job => {
+        if (!job.completedDate) return false;
+        const completedDate = new Date(job.completedDate);
+        if (fromDate && completedDate < fromDate) return false;
+        if (toDate && completedDate > toDate) return false;
+        return true;
+      });
+    }
+    
+    // Calculate totals
+    let totalRevenue = 0;
+    let totalCosts = 0;
+    
+    for (const job of filteredJobs) {
+      // Calculate revenue from line items
+      const jobRevenue = (job.lineItems || []).reduce((sum: number, item: any) => {
+        return sum + (item.total || 0);
+      }, 0);
+      totalRevenue += jobRevenue;
+      
+      // Calculate costs: line item costs + staff time labor cost + additional costs
+      const itemCosts = (job.lineItems || []).reduce((sum: number, item: any) => {
+        return sum + (item.totalCost || 0);
+      }, 0);
+      
+      const laborCost = job.staffTimeLaborCost || 0;
+      const additionalCosts = job.laborCosts || 0;
+      
+      totalCosts += itemCosts + laborCost + additionalCosts;
+    }
+    
+    const grossMargin = totalRevenue > 0 
+      ? ((totalRevenue - totalCosts) / totalRevenue) * 100 
+      : 0;
+    
     return {
-      totalRevenue: 0,
-      jobsCompleted: 0,
-      averageJobValue: 0,
+      totalRevenue,
+      jobsCompleted: filteredJobs.length,
+      averageJobValue: filteredJobs.length > 0 ? totalRevenue / filteredJobs.length : 0,
+      totalCosts,
+      grossMargin,
       monthlyTrend: []
     };
   }
