@@ -387,32 +387,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
         <div className="space-y-4">
           {!hasStaffTimeEntries && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="calculation-mode">Calculation Method</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Button
-                      type="button"
-                      variant={calculationMode === 'manual' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setCalculationMode('manual')}
-                      data-testid="button-manual-calculation"
-                    >
-                      Manual Entry
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={calculationMode === 'hourly' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setCalculationMode('hourly')}
-                      data-testid="button-hourly-calculation"
-                    >
-                      Hours × Rate
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
               {/* Staff Assignment for Labor Tracking */}
               {employees.length > 0 && (
                 <div className="space-y-3">
