@@ -168,6 +168,11 @@ export default function Integrations() {
   const { data: facebookStatus } = useQuery({
     queryKey: ['/api/facebook/status'],
   });
+
+  // Get Google Calendar status
+  const { data: googleCalendarStatus } = useQuery({
+    queryKey: ['/api/google-calendar/status'],
+  });
   
   // Connect to Xero mutation (Custom Connection)
   const connectMutation = useMutation({
@@ -211,7 +216,7 @@ export default function Integrations() {
     },
   });
   
-  // Build integrations list with real Xero and Facebook status
+  // Build integrations list with real Xero, Facebook, and Google Calendar status
   const integrations = availableIntegrations.map(integration => {
     if (integration.id === 'xero' && xeroStatus?.connected) {
       return {
@@ -228,6 +233,14 @@ export default function Integrations() {
         status: 'connected' as const,
         isEnabled: true,
         pageName: facebookStatus.pageName,
+      };
+    }
+    if (integration.id === 'google-calendar' && googleCalendarStatus?.connected) {
+      return {
+        ...integration,
+        status: 'connected' as const,
+        isEnabled: true,
+        calendarEmail: googleCalendarStatus.calendarEmail,
       };
     }
     return integration;
@@ -392,9 +405,9 @@ export default function Integrations() {
                             <StatusIcon className="h-3 w-3 mr-1" />
                             {integration.status.charAt(0).toUpperCase() + integration.status.slice(1)}
                           </Badge>
-                          {(integration.tenantName || integration.pageName) && (
+                          {(integration.tenantName || integration.pageName || integration.calendarEmail) && (
                             <span className="text-xs text-gray-500">
-                              {integration.tenantName || integration.pageName}
+                              {integration.tenantName || integration.pageName || integration.calendarEmail}
                             </span>
                           )}
                         </div>
