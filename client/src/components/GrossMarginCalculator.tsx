@@ -356,17 +356,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   return (
     <Card>
       <CardContent className="space-y-6 pt-6">
-        {/* Revenue Information */}
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
-            Job Revenue
-          </h3>
-          <div className="text-2xl font-bold text-blue-800">
-            ${totalAmount.toFixed(2)}
-          </div>
-        </div>
-
         {/* Job Revenue from Line Items - Read Only */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
