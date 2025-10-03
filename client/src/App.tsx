@@ -200,7 +200,11 @@ function Router() {
           </SidebarLayout>
         )}
       </Route>
-      <Route path="/metrics" component={MetricsDashboard}/>
+      <Route path="/metrics">
+        <SidebarLayout>
+          <MetricsDashboard />
+        </SidebarLayout>
+      </Route>
       <Route path="/customer-portal" component={CustomerPortal}/>
       <Route path="/proposal/:proposalId" component={ProposalViewer}/>
       <Route path="/quote/:quoteId" component={QuoteViewer}/>
