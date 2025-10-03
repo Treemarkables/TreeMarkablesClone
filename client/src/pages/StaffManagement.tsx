@@ -839,19 +839,26 @@ export default function StaffManagement() {
 
   const staff = staffData?.data || [];
 
-  // Filter staff based on search and filters
-  const filteredStaff = staff.filter(member => {
-    const matchesSearch = 
-      member.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.position.toLowerCase().includes(searchTerm.toLowerCase());
+  // Filter and sort staff based on search and filters
+  const filteredStaff = staff
+    .filter(member => {
+      const matchesSearch = 
+        member.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.position.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesRole = roleFilter === 'all' || member.role === roleFilter;
-    const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
+      const matchesRole = roleFilter === 'all' || member.role === roleFilter;
+      const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
 
-    return matchesSearch && matchesRole && matchesStatus;
-  });
+      return matchesSearch && matchesRole && matchesStatus;
+    })
+    .sort((a, b) => {
+      // Sort by creation date descending (newest first)
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
 
   // Create staff mutation
   const createStaffMutation = useMutation({
@@ -871,9 +878,9 @@ export default function StaffManagement() {
       setRoleFilter('all');
       setStatusFilter('all');
       
-      // Scroll to bottom to show the new staff member
+      // Scroll to top to show the new staff member (sorted newest first)
       setTimeout(() => {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }, 100);
     },
     onError: (error: any) => {
