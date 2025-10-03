@@ -22,6 +22,7 @@ import {
   type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
   type Invoice, type InsertInvoice, type ServiceRequest, type InsertServiceRequest,
   type CustomerAuth, type InsertCustomerAuth,
+  type XeroConnection, type InsertXeroConnection,
   // Business Intelligence types
   type BusinessReport, type InsertBusinessReport,
   type KpiMetric, type InsertKpiMetric,
@@ -587,9 +588,17 @@ export interface IStorage {
   getCustomerPhotos(customerId: string, jobId?: string): Promise<Photo[]>;
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   getInvoice(id: string): Promise<Invoice | undefined>;
+  updateInvoice(id: string, updates: Partial<InsertInvoice>): Promise<Invoice>;
   createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest>;
   getServiceRequest(id: string): Promise<ServiceRequest | undefined>;
   getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]>;
+  
+  // Xero Integration
+  createXeroConnection(connection: InsertXeroConnection): Promise<XeroConnection>;
+  getXeroConnection(tenantId: string): Promise<XeroConnection | undefined>;
+  getActiveXeroConnection(): Promise<XeroConnection | undefined>;
+  updateXeroConnection(tenantId: string, updates: Partial<InsertXeroConnection>): Promise<XeroConnection>;
+  deleteXeroConnection(tenantId: string): Promise<void>;
 
   // Safety Incident Management
   getSafetyIncidents(): Promise<SafetyIncident[]>;
@@ -2826,9 +2835,51 @@ class DatabaseStorage implements IStorage {
     return result;
   }
   async getInvoice(id: string): Promise<Invoice | undefined> { return undefined; }
+  async updateInvoice(id: string, updates: Partial<InsertInvoice>): Promise<Invoice> {
+    const [result] = await db.update(schema.invoices)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.invoices.id, id))
+      .returning();
+    return result;
+  }
   async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> { throw new Error("Not implemented"); }
   async getServiceRequest(id: string): Promise<ServiceRequest | undefined> { return undefined; }
   async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> { return []; }
+  
+  // Xero Integration Implementation
+  async createXeroConnection(connection: InsertXeroConnection): Promise<XeroConnection> {
+    const [result] = await db.insert(schema.xeroConnections).values(connection).returning();
+    return result;
+  }
+  
+  async getXeroConnection(tenantId: string): Promise<XeroConnection | undefined> {
+    const [result] = await db.select()
+      .from(schema.xeroConnections)
+      .where(eq(schema.xeroConnections.tenantId, tenantId))
+      .limit(1);
+    return result;
+  }
+  
+  async getActiveXeroConnection(): Promise<XeroConnection | undefined> {
+    const [result] = await db.select()
+      .from(schema.xeroConnections)
+      .where(eq(schema.xeroConnections.isActive, true))
+      .limit(1);
+    return result;
+  }
+  
+  async updateXeroConnection(tenantId: string, updates: Partial<InsertXeroConnection>): Promise<XeroConnection> {
+    const [result] = await db.update(schema.xeroConnections)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.xeroConnections.tenantId, tenantId))
+      .returning();
+    return result;
+  }
+  
+  async deleteXeroConnection(tenantId: string): Promise<void> {
+    await db.delete(schema.xeroConnections)
+      .where(eq(schema.xeroConnections.tenantId, tenantId));
+  }
 
   async getSafetyIncidents(): Promise<SafetyIncident[]> { return []; }
   async getSafetyIncident(id: string): Promise<SafetyIncident | undefined> { return undefined; }

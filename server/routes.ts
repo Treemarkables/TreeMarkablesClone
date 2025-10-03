@@ -52,6 +52,7 @@ import Papa from "papaparse";
 import path from "path";
 import bcrypt from "bcrypt";
 import OpenAI from "openai";
+import { registerXeroRoutes } from "./xeroRoutes";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -384,6 +385,11 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ========================================
+  // XERO INTEGRATION ROUTES
+  // ========================================
+  registerXeroRoutes(app, storage);
+  
   // ========================================
   // AUTHENTICATION ENDPOINTS
   // ========================================
