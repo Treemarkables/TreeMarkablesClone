@@ -657,7 +657,7 @@ export function JobDiarySection({
                       onClick={isClickable ? handleEntryClick : undefined}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <h4 className="font-medium text-xs text-gray-900 dark:text-white">
+                        <h4 className="font-medium text-xs text-gray-900 dark:text-white truncate flex-1 min-w-0">
                           {entry.type === 'sms' && entry.metadata?.phoneNumber && (
                             <>SMS Message to {formatPhoneNumber(entry.metadata.phoneNumber)}</>
                           )}
@@ -690,15 +690,15 @@ export function JobDiarySection({
                         )}
                       </div>
                       
-                      <div className="text-[10px] text-muted-foreground mb-1 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="flex items-center gap-0.5">
-                            <Clock className="w-2.5 h-2.5" />
+                      <div className="text-[10px] text-muted-foreground mb-1 flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="flex items-center gap-0.5 whitespace-nowrap">
+                            <Clock className="w-2.5 h-2.5 flex-shrink-0" />
                             {format(new Date(entry.timestamp), 'h:mm a dd/MM/yy')}
                           </span>
-                          <span className="flex items-center gap-0.5">
-                            <User className="w-2.5 h-2.5" />
-                            {entry.author}
+                          <span className="flex items-center gap-0.5 truncate min-w-0">
+                            <User className="w-2.5 h-2.5 flex-shrink-0" />
+                            <span className="truncate">{entry.author}</span>
                           </span>
                         </div>
                         {entry.type === 'email' && entry.metadata?.emailAddress && (
@@ -765,7 +765,7 @@ export function JobDiarySection({
                         </div>
                       ) : (
                         <>
-                          <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-line">
+                          <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-line break-words overflow-hidden">
                             {entry.content}
                           </div>
                           
@@ -774,7 +774,7 @@ export function JobDiarySection({
                               <img 
                                 src={entry.photoUrl} 
                                 alt="Job photo" 
-                                className="max-w-[40%] h-auto rounded-lg cursor-pointer hover-elevate"
+                                className="w-full sm:max-w-[40%] h-auto rounded-lg cursor-pointer hover-elevate"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const photoIndex = allPhotos.indexOf(entry.photoUrl || '');
@@ -795,14 +795,14 @@ export function JobDiarySection({
                       )}
                       
                       {entry.type === 'proposal' && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="text-xs whitespace-nowrap">
                             {entry.metadata?.status || 'draft'}
                           </Badge>
                           <Button 
                             size="sm" 
                             variant="ghost" 
-                            className="text-xs h-6"
+                            className="text-xs h-6 whitespace-nowrap"
                             onClick={() => entry.metadata?.proposalNumber && handleOpenProposal(entry.metadata.proposalNumber)}
                             data-testid="button-view-proposal"
                           >
@@ -822,14 +822,14 @@ export function JobDiarySection({
 
       {/* Quick Actions */}
       <div className="flex-shrink-0 p-2 border-t bg-gray-50 dark:bg-gray-900">
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           <Button 
             size="sm" 
             variant="outline"
             onClick={() => setActiveComposer('sms')}
             disabled={!customerPhone}
             data-testid="button-send-sms"
-            className="h-7 text-xs"
+            className="h-7 text-xs flex-1 min-w-[80px] whitespace-nowrap"
           >
             <MessageSquare className="w-3 h-3 mr-1" />
             SMS
@@ -840,12 +840,12 @@ export function JobDiarySection({
             onClick={() => setActiveComposer('email')}
             disabled={!customerEmail}
             data-testid="button-send-email"
-            className="h-7 text-xs"
+            className="h-7 text-xs flex-1 min-w-[80px] whitespace-nowrap"
           >
             <Mail className="w-3 h-3 mr-1" />
             Email
           </Button>
-          <Button size="sm" variant="outline" data-testid="button-call-customer" className="h-7 text-xs">
+          <Button size="sm" variant="outline" data-testid="button-call-customer" className="h-7 text-xs flex-1 min-w-[80px] whitespace-nowrap">
             <Phone className="w-3 h-3 mr-1" />
             Call
           </Button>
