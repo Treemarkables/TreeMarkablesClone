@@ -573,25 +573,25 @@ export function EmailComposerModal({
           </div>
 
           {/* Smart Attachments Section */}
-          <div className="border rounded-lg bg-gray-50 p-2 sm:p-4">
-            <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Smart Attachments</h3>
+          <div className="border rounded-lg bg-gray-50 p-1 sm:p-4">
+            <h3 className="text-[10px] sm:text-sm font-medium text-gray-700 mb-1 sm:mb-3">Smart Attachments</h3>
             
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1 sm:gap-3">
               {/* Invoice PDF */}
               {invoiceData && (
                 <div 
-                  className="relative p-2 sm:p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  className="relative p-1 sm:p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
                   onClick={() => handleDocumentPreview('invoice', invoiceData)}
                   data-testid="attachment-invoice-pdf"
                 >
                   <div className="flex flex-col items-center text-center">
-                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-red-500 rounded flex items-center justify-center mb-1 sm:mb-2">
-                      <FileText className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+                    <div className="w-5 h-5 sm:w-8 sm:h-8 bg-red-500 rounded flex items-center justify-center mb-0.5 sm:mb-2">
+                      <FileText className="w-2.5 h-2.5 sm:w-4 sm:h-4 text-white" />
                     </div>
-                    <div className="text-[10px] sm:text-xs font-medium text-gray-900 mb-0.5 sm:mb-1 truncate w-full">
+                    <div className="text-[9px] sm:text-xs font-medium text-gray-900 mb-0 sm:mb-1 truncate w-full">
                       Invoice #{invoiceData.invoiceNumber}
                     </div>
-                    <div className="text-[10px] sm:text-xs text-gray-500 truncate w-full">
+                    <div className="text-[9px] sm:text-xs text-gray-500 truncate w-full">
                       ${invoiceData.totalAmount || invoiceData.amount || '0.00'}
                     </div>
                   </div>
@@ -601,22 +601,19 @@ export function EmailComposerModal({
               {/* Quote PDF */}
               {quoteData && (
                 <div 
-                  className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  className="relative p-1 sm:p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
                   onClick={() => handleDocumentPreview('quote', quoteData)}
                   data-testid="attachment-quote-pdf"
                 >
                   <div className="flex flex-col items-center text-center">
-                    <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mb-2">
-                      <FileText className="w-4 h-4 text-white" />
+                    <div className="w-5 h-5 sm:w-8 sm:h-8 bg-blue-500 rounded flex items-center justify-center mb-0.5 sm:mb-2">
+                      <FileText className="w-2.5 h-2.5 sm:w-4 sm:h-4 text-white" />
                     </div>
-                    <div className="text-xs font-medium text-gray-900 mb-1">
+                    <div className="text-[9px] sm:text-xs font-medium text-gray-900 mb-0 sm:mb-1 truncate w-full">
                       Quote #{quoteData.quoteNumber}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      for ${quoteData.totalAmount || '0.00'}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      Valid until {quoteData.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : 'N/A'}
+                    <div className="text-[9px] sm:text-xs text-gray-500 truncate w-full">
+                      ${quoteData.totalAmount || '0.00'}
                     </div>
                   </div>
                 </div>
@@ -625,19 +622,19 @@ export function EmailComposerModal({
               {/* Proposal PDF */}
               {proposalData && (
                 <div 
-                  className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                  className="relative p-1 sm:p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
                   onClick={() => handleDocumentPreview('proposal', proposalData)}
                   data-testid="attachment-proposal-pdf"
                 >
                   <div className="flex flex-col items-center text-center">
-                    <div className="w-8 h-8 bg-purple-500 rounded flex items-center justify-center mb-2">
-                      <FileText className="w-4 h-4 text-white" />
+                    <div className="w-5 h-5 sm:w-8 sm:h-8 bg-purple-500 rounded flex items-center justify-center mb-0.5 sm:mb-2">
+                      <FileText className="w-2.5 h-2.5 sm:w-4 sm:h-4 text-white" />
                     </div>
-                    <div className="text-xs font-medium text-gray-900 mb-1">
+                    <div className="text-[9px] sm:text-xs font-medium text-gray-900 mb-0 sm:mb-1 truncate w-full">
                       Proposal #{proposalData.proposalNumber || 'PROP-' + job?.jobNumber}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      Professional tree service proposal
+                    <div className="text-[9px] sm:text-xs text-gray-500 truncate w-full">
+                      Professional proposal
                     </div>
                   </div>
                 </div>
@@ -647,7 +644,7 @@ export function EmailComposerModal({
               {jobPhotos?.beforePhotos?.map((photoUrl: string, index: number) => (
                 <div
                   key={`before-${index}`}
-                  className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                  className={`relative p-1 sm:p-2 border rounded-lg cursor-pointer transition-colors ${
                     selectedPhotos.includes(photoUrl) 
                       ? 'border-blue-500 bg-blue-50' 
                       : 'border-gray-200 bg-white hover:bg-gray-50'
@@ -656,23 +653,23 @@ export function EmailComposerModal({
                   data-testid={`photo-before-${index}`}
                 >
                   {selectedPhotos.includes(photoUrl) && (
-                    <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
+                    <div className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                      <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
                     </div>
                   )}
                   <img 
                     src={photoUrl} 
                     alt={`Before photo ${index + 1}`}
-                    className="w-full h-12 sm:h-16 object-cover rounded mb-0.5 sm:mb-1"
+                    className="w-full h-10 sm:h-16 object-cover rounded mb-0.5 sm:mb-1"
                   />
-                  <div className="text-[10px] sm:text-xs text-center text-gray-600">Before {index + 1}</div>
+                  <div className="text-[9px] sm:text-xs text-center text-gray-600">Before {index + 1}</div>
                 </div>
               ))}
 
               {jobPhotos?.afterPhotos?.map((photoUrl: string, index: number) => (
                 <div
                   key={`after-${index}`}
-                  className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                  className={`relative p-1 sm:p-2 border rounded-lg cursor-pointer transition-colors ${
                     selectedPhotos.includes(photoUrl) 
                       ? 'border-blue-500 bg-blue-50' 
                       : 'border-gray-200 bg-white hover:bg-gray-50'
@@ -681,22 +678,22 @@ export function EmailComposerModal({
                   data-testid={`photo-after-${index}`}
                 >
                   {selectedPhotos.includes(photoUrl) && (
-                    <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
+                    <div className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                      <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
                     </div>
                   )}
                   <img 
                     src={photoUrl} 
                     alt={`After photo ${index + 1}`}
-                    className="w-full h-12 sm:h-16 object-cover rounded mb-0.5 sm:mb-1"
+                    className="w-full h-10 sm:h-16 object-cover rounded mb-0.5 sm:mb-1"
                   />
-                  <div className="text-[10px] sm:text-xs text-center text-gray-600">After {index + 1}</div>
+                  <div className="text-[9px] sm:text-xs text-center text-gray-600">After {index + 1}</div>
                 </div>
               ))}
 
               {/* Show message when no photos available */}
               {(!jobPhotos?.beforePhotos?.length && !jobPhotos?.afterPhotos?.length && !invoiceData && !quoteData && !proposalData) && (
-                <div className="col-span-full text-center py-4 text-gray-500 text-sm">
+                <div className="col-span-full text-center py-2 sm:py-4 text-[10px] sm:text-sm text-gray-500">
                   No attachments available for this job
                 </div>
               )}
