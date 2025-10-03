@@ -1723,7 +1723,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               </div>
                               
                               {/* Job Description */}
-                              <div className="text-xs text-gray-700 leading-relaxed" data-testid={`servicem8-job-description-${job.id}`}>
+                              <div className="text-sm text-gray-700 leading-relaxed" data-testid={`servicem8-job-description-${job.id}`}>
                                 {(() => {
                                   // Try job.description first (API field), then job.notes (fallback)
                                   const rawDescription = job.description || job.notes;
@@ -1894,7 +1894,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       {job.address || 'No address specified'}
                     </div>
                     
-                    <div className="text-xs text-gray-700 leading-relaxed mb-3" data-testid={`mobile-job-description-${job.id}`}>
+                    <div className="text-sm text-gray-700 leading-relaxed mb-3" data-testid={`mobile-job-description-${job.id}`}>
                       {(() => {
                         const rawDescription = job.description || job.notes;
                         
