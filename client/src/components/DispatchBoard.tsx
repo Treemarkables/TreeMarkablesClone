@@ -648,6 +648,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
   };
 
+  // Check if job has recent activity (within last hour)
+  const hasRecentActivity = (job: JobAssignment) => {
+    if (!job.lastActivityAt) return false;
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    return new Date(job.lastActivityAt) > oneHourAgo;
+  };
+
   // Get status initials for job circles
   const getStatusInitials = (job: JobAssignment) => {
     // Check service type first for leads and quotes
@@ -793,7 +800,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                jobId.includes(query);
       })
       .sort((a, b) => {
-        // Sort by highest job number (descending)
+        // First, prioritize jobs with recent activity (lastActivityAt)
+        const activityA = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+        const activityB = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+        
+        if (activityA !== activityB) {
+          return activityB - activityA; // Most recent activity first
+        }
+        
+        // Then sort by highest job number (descending)
         const jobNumberA = parseInt(a.jobNumber || '0', 10);
         const jobNumberB = parseInt(b.jobNumber || '0', 10);
         return jobNumberB - jobNumberA;
@@ -1677,12 +1692,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           <div className="absolute left-14 top-6 w-2 h-2 bg-blue-400 rounded-full border-2 border-white z-10" />
                           
                           <div className="flex items-start gap-3 p-3 pl-6">
-                            {/* Status Avatar */}
-                            <div 
-                              className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px] relative z-10"
-                              style={{ backgroundColor: getJobStatusColorValue(job) }}
-                            >
-                              {getStatusInitials(job)}
+                            {/* Status Avatar with Activity Indicator */}
+                            <div className="relative flex-shrink-0">
+                              <div 
+                                className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px] relative z-10"
+                                style={{ backgroundColor: getJobStatusColorValue(job) }}
+                              >
+                                {getStatusInitials(job)}
+                              </div>
+                              {hasRecentActivity(job) && (
+                                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse z-20" 
+                                     title="Recent activity"
+                                     data-testid={`activity-indicator-desktop-${job.id}`} />
+                              )}
                             </div>
                             
                             {/* Job Content */}
@@ -1812,11 +1834,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         data-testid={`mobile-unscheduled-job-${job.id}`}
                       >
                         <div className="flex items-start gap-3">
-                          <div 
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[18px] flex-shrink-0"
-                            style={{ backgroundColor: getJobStatusColorValue(job) }}
-                          >
-                            {getStatusInitials(job)}
+                          <div className="relative flex-shrink-0">
+                            <div 
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[18px]"
+                              style={{ backgroundColor: getJobStatusColorValue(job) }}
+                            >
+                              {getStatusInitials(job)}
+                            </div>
+                            {hasRecentActivity(job) && (
+                              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white animate-pulse" 
+                                   title="Recent activity"
+                                   data-testid={`activity-indicator-unscheduled-${job.id}`} />
+                            )}
                           </div>
                           
                           <div className="flex-1 min-w-0">
@@ -1868,12 +1897,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   data-testid={`mobile-job-card-${job.id}`}
                 >
                   <div className="flex items-start gap-3 mb-2">
-                    {/* Status Avatar Circle */}
-                    <div 
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-[18px] flex-shrink-0"
-                      style={{ backgroundColor: getJobStatusColorValue(job) }}
-                    >
-                      {getStatusInitials(job)}
+                    {/* Status Avatar Circle with Activity Indicator */}
+                    <div className="relative flex-shrink-0">
+                      <div 
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-[18px]"
+                        style={{ backgroundColor: getJobStatusColorValue(job) }}
+                      >
+                        {getStatusInitials(job)}
+                      </div>
+                      {hasRecentActivity(job) && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" 
+                             title="Recent activity"
+                             data-testid={`activity-indicator-${job.id}`} />
+                      )}
                     </div>
                     
                     <div className="flex-1 min-w-0">
