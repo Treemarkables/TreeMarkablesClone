@@ -394,6 +394,7 @@ export function JobDiarySection({
       noteForm.reset();
       setActiveComposer(null);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
     },
     onError: (error: any) => {
       toast({ 
@@ -419,6 +420,7 @@ export function JobDiarySection({
       smsForm.reset();
       setActiveComposer(null);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
     },
     onError: (error: any) => {
       toast({ 
@@ -445,6 +447,7 @@ export function JobDiarySection({
       emailForm.reset();
       setActiveComposer(null);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
     },
     onError: (error: any) => {
       toast({ 
@@ -466,6 +469,7 @@ export function JobDiarySection({
       setEditingEntryId(null);
       setEditingContent("");
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
     },
     onError: (error: any) => {
       toast({ 
