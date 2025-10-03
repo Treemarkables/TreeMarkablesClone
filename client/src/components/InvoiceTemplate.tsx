@@ -161,39 +161,39 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       <Card className="shadow-lg">
         <CardContent className="p-0">
           {/* Header with Treemarkables Branding */}
-          <div className="bg-gradient-to-r from-orange-500 to-blue-600 p-8 text-white">
-            <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-3xl font-bold mb-2">{template.companyName || 'Treemarkables'}</h1>
-                <p className="text-orange-100 text-lg">Professional Tree Services</p>
-                <div className="mt-4 space-y-1 text-orange-100">
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4" />
-                    <span>{template.companyPhone || '+64 6 867 1234'}</span>
+          <div className="bg-gradient-to-r from-orange-500 to-blue-600 p-2 sm:p-8 text-white">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-2 sm:gap-0">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-base sm:text-3xl font-bold mb-0.5 sm:mb-2 truncate">{template.companyName || 'Treemarkables LTD'}</h1>
+                <p className="text-orange-100 text-xs sm:text-lg">Professional Tree Services</p>
+                <div className="mt-1 sm:mt-4 space-y-0 sm:space-y-1 text-[10px] sm:text-sm text-orange-100">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="break-all">{template.companyPhone || '027 216 6882'}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <MailIcon className="w-4 h-4" />
-                    <span>{template.companyEmail || 'info@treemarkables.co.nz'}</span>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <MailIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="break-all">{template.companyEmail || 'invoices@treemarkables.nz'}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4" />
-                    <span>{template.companyAddress || 'Gisborne, New Zealand'}</span>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="break-all">{template.companyAddress || 'Hauroa rd\nGisborne, 4010'}</span>
                   </div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="bg-white/20 rounded-lg p-4 backdrop-blur-sm">
-                  <h2 className="text-2xl font-bold">INVOICE</h2>
-                  <div className="mt-2 space-y-1 text-sm">
+              <div className="text-left sm:text-right flex-shrink-0">
+                <div className="bg-white/20 rounded-lg p-1.5 sm:p-4 backdrop-blur-sm">
+                  <h2 className="text-base sm:text-2xl font-bold mb-0.5 sm:mb-2">INVOICE</h2>
+                  <div className="mt-1 sm:mt-2 space-y-0 sm:space-y-1 text-[10px] sm:text-sm">
                     <p><strong>Number:</strong> {invoice.invoiceNumber}</p>
                     <p><strong>Issue Date:</strong> {format(issueDate, 'dd MMM yyyy')}</p>
                     <p><strong>Due Date:</strong> {format(dueDate, 'dd MMM yyyy')}</p>
-                    <div className="mt-2">
-                      <Badge className={getStatusColor(invoice.status)}>
+                    <div className="mt-1 sm:mt-2">
+                      <Badge className={`${getStatusColor(invoice.status)} text-[10px] sm:text-sm`}>
                         {invoice.status.toUpperCase()}
                       </Badge>
                       {isOverdue && (
-                        <Badge className="ml-2 bg-red-500 text-white">
+                        <Badge className="ml-1 sm:ml-2 bg-red-500 text-white text-[10px] sm:text-sm">
                           OVERDUE
                         </Badge>
                       )}
@@ -206,7 +206,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
           {/* Customer Information */}
           {customer && (
-            <div className="p-8 border-b border-gray-200">
+            <div className="p-3 sm:p-8 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Bill To</h3>
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -238,7 +238,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           )}
 
           {/* Invoice Details and Payment Status */}
-          <div className="p-8 border-b border-gray-200">
+          <div className="p-3 sm:p-8 border-b border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Payment Terms */}
               <div>
@@ -305,7 +305,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
           {/* Line Items */}
           {hasLineItems ? (
-            <div className="p-8 border-b border-gray-200">
+            <div className="p-3 sm:p-8 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
@@ -339,7 +339,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           ) : (
             // Fallback for invoices without line items
-            <div className="p-8 border-b border-gray-200">
+            <div className="p-3 sm:p-8 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-gray-700">Professional Tree Services</p>
@@ -349,7 +349,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           )}
 
           {/* Totals */}
-          <div className="p-8 border-b border-gray-200">
+          <div className="p-3 sm:p-8 border-b border-gray-200">
             <div className="flex justify-end">
               <div className="w-full max-w-sm space-y-3">
                 <div className="flex justify-between text-gray-700">
@@ -384,7 +384,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
           {/* Notes */}
           {invoice.notes && (
-            <div className="p-8 border-b border-gray-200">
+            <div className="p-3 sm:p-8 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Notes</h3>
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-notes">
@@ -395,7 +395,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           )}
 
           {/* Payment Instructions */}
-          <div className="p-8 border-b border-gray-200">
+          <div className="p-3 sm:p-8 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Instructions</h3>
             <div className="bg-blue-50 rounded-lg p-4">
               <p className="text-gray-700 text-sm">
@@ -411,7 +411,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           </div>
 
           {/* Footer */}
-          <div className="p-8 pt-6">
+          <div className="p-3 sm:p-8 pt-6">
             <div className="text-center text-sm text-gray-600">
               <p>Thank you for choosing {template.companyName || 'Treemarkables'}!</p>
               <p className="mt-1">Professional tree services you can trust.</p>
