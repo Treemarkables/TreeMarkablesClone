@@ -1949,6 +1949,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       type="button"
                       className="text-sm text-gray-700 leading-relaxed mb-3 break-words cursor-pointer hover:text-gray-900 active:text-blue-600 text-left w-full bg-transparent border-0 p-0" 
                       data-testid={`mobile-job-description-${job.id}`}
+                      onPointerDownCapture={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
