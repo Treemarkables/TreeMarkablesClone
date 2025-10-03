@@ -118,7 +118,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   const isPartiallyPaid = paidAmount > 0 && paidAmount < totalAmount;
 
   return (
-    <div ref={ref} className={`max-w-4xl mx-auto bg-white ${className}`}>
+    <div ref={ref} className={`w-full max-w-4xl mx-auto bg-white ${className}`}>
       {/* Action Bar */}
       {showActions && (
         <div className="flex justify-between items-center mb-6 p-4 bg-gray-50 rounded-lg">

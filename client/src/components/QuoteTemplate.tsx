@@ -246,8 +246,8 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
           {hasLineItems ? (
             <div className="mb-6 sm:mb-8">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Service Items</h3>
-              <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden min-w-[600px]">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">Description</th>
