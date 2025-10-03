@@ -1953,42 +1953,52 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       {job.address || 'No address specified'}
                     </div>
                     
-                    <button 
-                      type="button"
-                      className="text-sm text-gray-700 leading-relaxed mb-3 break-words cursor-pointer hover:text-gray-900 active:text-blue-600 text-left w-full bg-transparent border-0 p-0" 
-                      data-testid={`mobile-job-description-${job.id}`}
-                      data-description-trigger="true"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setDescriptionPopupJob(job);
-                        setShowDescriptionPopup(true);
-                      }}
-                    >
-                      {(() => {
-                        const rawDescription = job.description || job.notes;
-                        
-                        if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
-                          if (job.status === 'lead') {
-                            return 'New lead - details pending';
+                    <div className="relative mb-3">
+                      <div 
+                        className="text-sm text-gray-700 leading-relaxed break-words" 
+                        data-testid={`mobile-job-description-${job.id}`}
+                      >
+                        {(() => {
+                          const rawDescription = job.description || job.notes;
+                          
+                          if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
+                            if (job.status === 'lead') {
+                              return 'New lead - details pending';
+                            }
+                            if (job.status === 'quote' || job.status === 'quoted') {
+                              return 'Quote request - description to be added';
+                            }
+                            return job.serviceType || 'Description to be added';
                           }
-                          if (job.status === 'quote' || job.status === 'quoted') {
-                            return 'Quote request - description to be added';
+                          
+                          if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
+                            return job.serviceType || 'Description to be added';
                           }
-                          return job.serviceType || 'Description to be added';
-                        }
-                        
-                        if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
-                          return job.serviceType || 'Description to be added';
-                        }
-                        
-                        const description = rawDescription.length > 100 
-                          ? `${rawDescription.substring(0, 100)}...`
-                          : rawDescription;
-                        
-                        return description;
-                      })()}
-                    </button>
+                          
+                          const description = rawDescription.length > 100 
+                            ? `${rawDescription.substring(0, 100)}...`
+                            : rawDescription;
+                          
+                          return description;
+                        })()}
+                      </div>
+                      <div 
+                        className="absolute inset-0 cursor-pointer z-10"
+                        data-description-trigger="true"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setDescriptionPopupJob(job);
+                          setShowDescriptionPopup(true);
+                        }}
+                        onTouchEnd={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setDescriptionPopupJob(job);
+                          setShowDescriptionPopup(true);
+                        }}
+                      />
+                    </div>
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
