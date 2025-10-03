@@ -20,6 +20,25 @@ if ('serviceWorker' in navigator) {
         .then(registration => {
           console.log('✅ Service Worker registered successfully:', registration.scope);
           console.log('📦 Service Worker version:', SW_VERSION);
+          
+          // Check for updates every 30 seconds
+          setInterval(() => {
+            registration.update();
+          }, 30000);
+          
+          // Listen for updates
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            console.log('🔄 New service worker found, installing...');
+            
+            newWorker?.addEventListener('statechange', () => {
+              if (newWorker.state === 'activated') {
+                console.log('✅ New service worker activated, reloading page...');
+                // Automatically reload to get the latest version
+                window.location.reload();
+              }
+            });
+          });
         })
         .catch(error => {
           console.error('❌ Service Worker registration failed:', error);
