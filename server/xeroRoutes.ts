@@ -23,7 +23,7 @@ const xeroClient = new XeroClient({
   clientId: process.env.XERO_CLIENT_ID!,
   clientSecret: process.env.XERO_CLIENT_SECRET!,
   redirectUris: [getRedirectUri()],
-  scopes: 'openid profile email accounting.settings accounting.transactions accounting.contacts offline_access'.split(' '),
+  scopes: 'openid profile email accounting.transactions accounting.contacts offline_access'.split(' '),
   httpTimeout: 3000,
 });
 
