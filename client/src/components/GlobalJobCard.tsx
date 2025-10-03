@@ -1470,6 +1470,18 @@ export function GlobalJobCard({
             <div className="flex items-center gap-2 flex-wrap">
               <Button 
                 variant="ghost" 
+                size="sm" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
+                onClick={() => setSidebarTab('details')}
+                data-testid="button-details-tab"
+              >
+                <div className="flex items-center gap-1.5">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">Details</span>
+                </div>
+              </Button>
+              <Button 
+                variant="ghost" 
                 size="icon" 
                 className="hover-elevate active-elevate-2" 
                 onClick={handleEmailClick} 
