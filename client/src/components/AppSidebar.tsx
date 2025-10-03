@@ -82,13 +82,6 @@ const dashboardItems = [
 // Business management items
 const businessItems = [
   {
-    title: "Quotes",
-    url: "/job-dashboard",
-    icon: FileText,
-    value: "quotes",
-    isTab: true
-  },
-  {
     title: "Invoices",
     url: "/invoices",
     icon: FileText,

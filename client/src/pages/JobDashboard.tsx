@@ -15,7 +15,6 @@ import { EquipmentTracker } from '@/components/EquipmentTracker';
 import CommunicationsManagement from './CommunicationsManagement';
 import Opportunities from './Opportunities';
 import Integrations from './Integrations';
-import QuoteManagement from '@/components/QuoteManagement';
 import { DispatchBoard } from '@/components/DispatchBoard';
 import { SafetyReporting } from '@/components/SafetyReporting';
 import JobTemplateManagement from '@/components/JobTemplateManagement';
@@ -813,11 +812,6 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
           {/* Job Templates Tab */}
           <TabsContent value="templates" className="flex-1 overflow-auto">
             <JobTemplateManagement />
-          </TabsContent>
-
-          {/* Quotes Tab */}
-          <TabsContent value="quotes" className="flex-1 overflow-auto">
-            <QuoteManagement />
           </TabsContent>
 
           {/* Analytics Tab */}
