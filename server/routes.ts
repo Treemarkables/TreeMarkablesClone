@@ -8335,6 +8335,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               }
               
               // Create new conversation if none exists for this sender
+              let isNewConversation = false;
               if (!conversation) {
                 conversation = await storage.createConversation({
                   title: senderName,
@@ -8343,6 +8344,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                   priority: 'medium',
                   lastMessageBy: 'customer'
                 });
+                isNewConversation = true;
               }
               
               // Save message to conversation
@@ -8356,10 +8358,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 externalId: messageData.mid
               });
               
-              // Update conversation
+              // Update conversation with timestamp and unread count
               await storage.updateConversation(conversation.id, {
-                lastMessageBy: 'customer'
-              });
+                lastMessageBy: 'customer',
+                lastMessageAt: new Date(),
+                unreadCount: (conversation.unreadCount || 0) + 1
+              } as any);
+              
+              // Create notification for new Facebook message
+              const notificationData = {
+                title: isNewConversation ? 'New Facebook Conversation' : 'New Facebook Message',
+                message: `${senderName}: ${messageData.text.substring(0, 100)}${messageData.text.length > 100 ? '...' : ''}`,
+                type: 'message_received' as const,
+                priority: 'medium' as const,
+                isRead: false,
+                actionUrl: `/conversation/${conversation.id}`,
+                metadata: { conversationId: conversation.id, entityType: 'conversation' }
+              };
+              await storage.createNotification(notificationData);
+              console.log(`🔔 Notification created for Facebook message in conversation ${conversation.id}`);
             }
           }
         }

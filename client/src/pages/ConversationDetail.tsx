@@ -197,7 +197,7 @@ export default function ConversationDetail() {
         <p className="text-gray-500">Conversation not found</p>
         <Button 
           variant="outline" 
-          onClick={() => setLocation('/job-dashboard')}
+          onClick={() => setLocation('/opportunities')}
           className="mt-4"
         >
           Back to Conversations
@@ -215,7 +215,7 @@ export default function ConversationDetail() {
             variant="ghost" 
             size="icon"
             className="flex-shrink-0"
-            onClick={() => setLocation('/job-dashboard')}
+            onClick={() => setLocation('/opportunities')}
             data-testid="button-back"
           >
             <ArrowLeft className="h-5 w-5" />
