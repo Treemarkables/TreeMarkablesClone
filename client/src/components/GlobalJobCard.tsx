@@ -3644,16 +3644,16 @@ export function GlobalJobCard({
       {isQuoteModalOpen && editingJob && quoteTemplate && (
         <Dialog open={isQuoteModalOpen} onOpenChange={setIsQuoteModalOpen}>
           <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
-            <DialogHeader className="p-2 sm:p-6 border-b">
+            <DialogHeader className="p-3 sm:p-6 border-b">
               <div className="flex justify-center sm:justify-end">
-                <div className="flex gap-1 sm:gap-2">
+                <div className="flex gap-2">
                   <Button 
                     size="sm" 
                     onClick={handleSaveQuote} 
                     data-testid="button-save-quote" 
-                    className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-2 sm:px-3"
+                    className="bg-green-600 hover:bg-green-700 text-white h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <FileText className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                    <FileText className="w-4 h-4 sm:mr-1" />
                     <span className="hidden sm:inline">Save</span>
                   </Button>
                   <Button 
@@ -3666,9 +3666,9 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-copy-quote"
-                    className="h-7 text-xs px-2 sm:px-3"
+                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Copy className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                    <Copy className="w-4 h-4 sm:mr-1" />
                     <span className="hidden sm:inline">Copy</span>
                   </Button>
                   <Button 
@@ -3679,9 +3679,9 @@ export function GlobalJobCard({
                       handleEmailClick('quote');
                     }} 
                     data-testid="button-email-quote"
-                    className="h-7 text-xs px-2 sm:px-3"
+                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Mail className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                    <Mail className="w-4 h-4 sm:mr-1" />
                     <span className="hidden sm:inline">Email</span>
                   </Button>
                   <Button 
@@ -3694,9 +3694,9 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-download-quote"
-                    className="h-7 text-xs px-2 sm:px-3"
+                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Download className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                    <Download className="w-4 h-4 sm:mr-1" />
                     <span className="hidden sm:inline">PDF</span>
                   </Button>
                 </div>
@@ -3737,9 +3737,9 @@ export function GlobalJobCard({
       {isInvoiceModalOpen && editingJob && invoiceTemplate && (
         <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
           <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
-            <DialogHeader className="p-2 sm:p-6 border-b">
+            <DialogHeader className="p-3 sm:p-6 border-b">
               <div className="flex justify-center sm:justify-end">
-                <div className="flex gap-1 sm:gap-2">
+                <div className="flex gap-2">
                   <Button 
                     size="sm" 
                     onClick={() => {
@@ -3749,9 +3749,9 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-save-invoice" 
-                    className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-2 sm:px-3"
+                    className="bg-green-600 hover:bg-green-700 text-white h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Save className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                    <Save className="w-4 h-4 sm:mr-1" />
                     <span className="hidden sm:inline">Save</span>
                   </Button>
                   <Button 
@@ -3764,9 +3764,9 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-copy-invoice"
-                    className="h-7 text-xs px-2 sm:px-3"
+                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Copy className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                    <Copy className="w-4 h-4 sm:mr-1" />
                     <span className="hidden sm:inline">Copy</span>
                   </Button>
                   <Button 
@@ -3777,9 +3777,9 @@ export function GlobalJobCard({
                       handleEmailClick();
                     }} 
                     data-testid="button-email-invoice"
-                    className="h-7 text-xs px-2 sm:px-3"
+                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Mail className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                    <Mail className="w-4 h-4 sm:mr-1" />
                     <span className="hidden sm:inline">Email</span>
                   </Button>
                   <Button 
@@ -3792,9 +3792,9 @@ export function GlobalJobCard({
                       });
                     }} 
                     data-testid="button-download-invoice"
-                    className="h-7 text-xs px-2 sm:px-3"
+                    className="h-9 text-sm px-4 flex-1 sm:flex-none"
                   >
-                    <Download className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                    <Download className="w-4 h-4 sm:mr-1" />
                     <span className="hidden sm:inline">PDF</span>
                   </Button>
                 </div>
