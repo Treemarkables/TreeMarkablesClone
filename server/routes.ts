@@ -11746,6 +11746,200 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // ========================================
+  // ACTIVITY DASHBOARD
+  // ========================================
+  
+  // Get activity dashboard data
+  app.get("/api/activity-dashboard", async (req, res) => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dayAfterTomorrow = new Date(tomorrow);
+      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+
+      // Get today's jobs
+      const allJobs = await storage.getAllJobs();
+      const todaysJobs = allJobs.filter(job => {
+        if (!job.scheduledDate) return false;
+        const jobDate = new Date(job.scheduledDate);
+        return jobDate >= today && jobDate < tomorrow;
+      });
+
+      // Get tomorrow's jobs
+      const tomorrowsJobs = allJobs.filter(job => {
+        if (!job.scheduledDate) return false;
+        const jobDate = new Date(job.scheduledDate);
+        return jobDate >= tomorrow && jobDate < dayAfterTomorrow;
+      });
+
+      // Calculate profit margin for today
+      let totalRevenue = 0;
+      let totalCosts = 0;
+      
+      for (const job of todaysJobs) {
+        // Calculate revenue from line items
+        const jobRevenue = (job.lineItems || []).reduce((sum: number, item: any) => {
+          return sum + (item.total || 0);
+        }, 0);
+        totalRevenue += jobRevenue;
+
+        // Calculate costs from line items
+        const itemCosts = (job.lineItems || []).reduce((sum: number, item: any) => {
+          return sum + (item.totalCost || 0);
+        }, 0);
+        
+        // Add labor costs and additional costs
+        const laborCost = job.staffTimeLaborCost || 0;
+        const additionalCosts = job.laborCosts || 0;
+        
+        totalCosts += itemCosts + laborCost + additionalCosts;
+      }
+
+      const profitMargin = totalRevenue > 0 
+        ? ((totalRevenue - totalCosts) / totalRevenue) * 100 
+        : 0;
+
+      // Job status breakdown
+      const statusBreakdown = todaysJobs.reduce((acc: any, job) => {
+        acc[job.status] = (acc[job.status] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Get staff bookings for today (time entries)
+      const allTimeEntries = await storage.getAllTimeEntries();
+      const todaysTimeEntries = allTimeEntries.filter(entry => {
+        if (!entry.date) return false;
+        const entryDate = new Date(entry.date);
+        return entryDate >= today && entryDate < tomorrow;
+      });
+
+      // Group time entries by staff member
+      const staffBookings = todaysTimeEntries.reduce((acc: any, entry) => {
+        if (!acc[entry.employeeId]) {
+          acc[entry.employeeId] = {
+            employeeId: entry.employeeId,
+            employeeName: entry.employeeName,
+            totalHours: 0,
+            jobs: []
+          };
+        }
+        acc[entry.employeeId].totalHours += entry.hoursWorked || 0;
+        if (entry.jobId && !acc[entry.employeeId].jobs.includes(entry.jobId)) {
+          acc[entry.employeeId].jobs.push(entry.jobId);
+        }
+        return acc;
+      }, {});
+
+      // Pending actions
+      const conversations = await storage.getAllConversations({ status: 'open' });
+      const unansweredConversations = conversations.filter(c => 
+        c.lastMessageBy === 'customer' && (c.unreadCount || 0) > 0
+      ).length;
+
+      const allQuotes = await storage.getAllQuotes();
+      const pendingQuotes = allQuotes.filter(q => q.status === 'draft' || q.status === 'sent').length;
+
+      const allInvoices = await storage.getAllInvoices();
+      const overdueInvoices = allInvoices.filter(inv => {
+        if (inv.status === 'paid') return false;
+        if (!inv.dueDate) return false;
+        return new Date(inv.dueDate) < today;
+      }).length;
+
+      const allIncidents = await storage.getAllSafetyIncidents();
+      const pendingIncidents = allIncidents.filter(inc => 
+        inc.investigationStatus === 'pending' || inc.investigationStatus === 'in_progress'
+      ).length;
+
+      // Recent activity feed (last 10 activities)
+      const recentActivities = await storage.getRecentActivity(10);
+
+      // Performance indicators
+      const completedToday = todaysJobs.filter(j => j.status === 'completed').length;
+      const totalScheduledToday = todaysJobs.length;
+      const completionRate = totalScheduledToday > 0 
+        ? (completedToday / totalScheduledToday) * 100 
+        : 0;
+
+      // Calculate average job completion time (for completed jobs today)
+      const completedJobsToday = todaysJobs.filter(j => j.status === 'completed');
+      let avgCompletionTime = 0;
+      if (completedJobsToday.length > 0) {
+        const totalTime = completedJobsToday.reduce((sum, job) => {
+          if (job.completedDate && job.scheduledDate) {
+            const scheduled = new Date(job.scheduledDate).getTime();
+            const completed = new Date(job.completedDate).getTime();
+            return sum + (completed - scheduled);
+          }
+          return sum;
+        }, 0);
+        avgCompletionTime = totalTime / completedJobsToday.length / (1000 * 60 * 60); // Convert to hours
+      }
+
+      // Customer response time (average time to first response in conversations)
+      const recentConvos = conversations.slice(0, 20);
+      let avgResponseTime = 0;
+      if (recentConvos.length > 0) {
+        const responseTimes = [];
+        for (const convo of recentConvos) {
+          const messages = await storage.getConversationMessages(convo.id);
+          if (messages.length >= 2) {
+            const firstMsg = messages[0];
+            const firstResponse = messages.find(m => m.direction === 'outbound');
+            if (firstResponse && firstMsg.createdAt && firstResponse.createdAt) {
+              const responseTime = new Date(firstResponse.createdAt).getTime() - new Date(firstMsg.createdAt).getTime();
+              responseTimes.push(responseTime);
+            }
+          }
+        }
+        if (responseTimes.length > 0) {
+          avgResponseTime = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length / (1000 * 60); // Convert to minutes
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          todaysJobs: {
+            total: todaysJobs.length,
+            jobs: todaysJobs,
+            statusBreakdown
+          },
+          tomorrowsJobs: {
+            total: tomorrowsJobs.length,
+            jobs: tomorrowsJobs.slice(0, 5) // Preview only first 5
+          },
+          financials: {
+            totalRevenue,
+            totalCosts,
+            profit: totalRevenue - totalCosts,
+            profitMargin: profitMargin.toFixed(2)
+          },
+          staffBookings: Object.values(staffBookings),
+          pendingActions: {
+            unansweredConversations,
+            pendingQuotes,
+            overdueInvoices,
+            pendingIncidents,
+            total: unansweredConversations + pendingQuotes + overdueInvoices + pendingIncidents
+          },
+          recentActivities,
+          performanceIndicators: {
+            completionRate: completionRate.toFixed(1),
+            avgCompletionTimeHours: avgCompletionTime.toFixed(1),
+            avgResponseTimeMinutes: avgResponseTime.toFixed(0)
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching activity dashboard:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch activity dashboard data" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
