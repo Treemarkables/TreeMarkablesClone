@@ -237,8 +237,8 @@ export function EmailComposerModal({
         .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
         .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "")
         .replace("{contactName}", "Treemarkables Team")
-        .replace("{contactPhone}", "0272166882")
-        .replace("{companySignature}", "\n\nTreemarkables LTD\nQualified Arborists\nGisborne, New Zealand\nPhone: 0272166882\nEmail: quotes@treemarkables.nz");
+        .replace("{contactPhone}", '<a href="tel:0272166882">0272166882</a>')
+        .replace("{companySignature}", "\n\nTreemarkables LTD\nQualified Arborists\nGisborne, New Zealand\nPhone: " + '<a href="tel:0272166882">0272166882</a>' + "\nEmail: " + '<a href="mailto:quotes@treemarkables.nz">quotes@treemarkables.nz</a>');
 
       setEmailData({
         to: billingEmail || "",
