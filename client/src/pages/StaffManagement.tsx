@@ -865,6 +865,16 @@ export default function StaffManagement() {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
       setIsAddDialogOpen(false);
+      
+      // Clear filters to ensure the new staff member is visible
+      setSearchTerm('');
+      setRoleFilter('all');
+      setStatusFilter('all');
+      
+      // Scroll to bottom to show the new staff member
+      setTimeout(() => {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      }, 100);
     },
     onError: (error: any) => {
       toast({
