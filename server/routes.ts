@@ -2697,6 +2697,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
 
       const entry = await storage.createJobDiaryEntry(validation.data);
+      
+      // Update job's lastActivityAt to move it to top of dispatch board
+      try {
+        await storage.updateJob(jobId, { 
+          lastActivityAt: new Date() 
+        });
+        console.log(`📌 Job ${jobId} moved to top of dispatch board due to diary activity`);
+      } catch (error) {
+        console.error('Error updating job lastActivityAt:', error);
+      }
+      
       res.json({ success: true, data: entry });
     } catch (error) {
       console.error('Error creating job diary entry:', error);
