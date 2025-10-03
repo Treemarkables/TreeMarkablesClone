@@ -14,9 +14,25 @@ import {
   FileText,
   Download,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  BarChart3,
+  Send
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface DashboardStats {
   totalLeads: number;
@@ -54,6 +70,10 @@ interface QuoteAnalytics {
 export default function MetricsDashboard() {
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [customReportDialog, setCustomReportDialog] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState<string>("");
+  const [reportDateRange, setReportDateRange] = useState<string>("30");
+  const [reportFormat, setReportFormat] = useState<string>("pdf");
   const { toast } = useToast();
 
   // Format currency helper
@@ -111,6 +131,93 @@ export default function MetricsDashboard() {
       setIsExporting(false);
     }
   };
+
+  // Custom report handler
+  const handleCustomReport = (metricName: string) => {
+    setSelectedMetric(metricName);
+    setCustomReportDialog(true);
+  };
+
+  const handleGenerateReport = async () => {
+    try {
+      const response = await fetch('/api/custom-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          metric: selectedMetric,
+          dateRange: reportDateRange,
+          format: reportFormat
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Report generation failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${selectedMetric.toLowerCase().replace(/\s+/g, '_')}_report_${new Date().toISOString().split('T')[0]}.${reportFormat}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Report Generated",
+        description: `${selectedMetric} report has been generated successfully.`
+      });
+      setCustomReportDialog(false);
+    } catch (error) {
+      toast({
+        title: "Report Generation Failed",
+        description: "There was an error generating the report.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Metric Card Component with Custom Report Button
+  const MetricCard = ({ 
+    title, 
+    value, 
+    subtitle, 
+    icon: Icon, 
+    testId,
+    colorful = false,
+    valueColor = ""
+  }: {
+    title: string;
+    value: string | number;
+    subtitle: string;
+    icon: any;
+    testId: string;
+    colorful?: boolean;
+    valueColor?: string;
+  }) => (
+    <Card className={`hover-elevate ${colorful ? 'card-colorful' : ''}`} data-testid={testId}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => handleCustomReport(title)}
+            data-testid={`button-report-${testId}`}
+          >
+            <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-bold ${valueColor}`}>{value}</div>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      </CardContent>
+    </Card>
+  );
 
   if (statsLoading || revenueLoading || quotesLoading) {
     return (
@@ -170,144 +277,101 @@ export default function MetricsDashboard() {
           </div>
           
           <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 ${kpiCollapsed ? 'hidden md:grid' : ''}`}>
-            <Card className="hover-elevate card-colorful" data-testid="card-total-revenue">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(dashboardStats?.totalRevenue || 0)}</div>
-                <p className="text-xs text-muted-foreground">
-                  {dashboardStats?.totalJobs || 0} jobs completed
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Total Revenue"
+              value={formatCurrency(dashboardStats?.totalRevenue || 0)}
+              subtitle={`${dashboardStats?.totalJobs || 0} jobs completed`}
+              icon={DollarSign}
+              testId="card-total-revenue"
+              colorful={true}
+            />
 
-            <Card className="hover-elevate" data-testid="card-active-leads">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Leads</CardTitle>
-                <Target className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{dashboardStats?.totalLeads || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  {dashboardStats?.conversionRate?.toFixed(1) || 0}% conversion rate
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Active Leads"
+              value={dashboardStats?.totalLeads || 0}
+              subtitle={`${dashboardStats?.conversionRate?.toFixed(1) || 0}% conversion rate`}
+              icon={Target}
+              testId="card-active-leads"
+            />
 
-            <Card className="hover-elevate" data-testid="card-avg-quote">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Avg Quote Value</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(dashboardStats?.averageQuoteValue || 0)}</div>
-                <p className="text-xs text-muted-foreground">
-                  {quoteAnalytics?.totalQuotes || 0} quotes sent
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Quotes Sent"
+              value={quoteAnalytics?.totalQuotes || 0}
+              subtitle={`${quoteAnalytics?.pendingQuotes || 0} pending responses`}
+              icon={Send}
+              testId="card-quotes-sent"
+            />
 
-            <Card className="hover-elevate" data-testid="card-missed-calls">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Missed Calls</CardTitle>
-                <PhoneCall className="h-4 w-4 text-orange-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">{dashboardStats?.missedCalls || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Potential leads lost
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Avg Quote Value"
+              value={formatCurrency(dashboardStats?.averageQuoteValue || 0)}
+              subtitle={`${((quoteAnalytics?.acceptedQuotes || 0) / Math.max(quoteAnalytics?.totalQuotes || 1, 1) * 100).toFixed(0)}% acceptance rate`}
+              icon={FileText}
+              testId="card-avg-quote"
+            />
 
-            <Card className="hover-elevate" data-testid="card-response-time">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Avg Response Time</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {quoteAnalytics?.averageResponseTime 
-                    ? `${(quoteAnalytics.averageResponseTime / 60).toFixed(1)} hrs` 
-                    : "2.4 hrs"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Lead to first contact
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Missed Calls"
+              value={dashboardStats?.missedCalls || 0}
+              subtitle="Potential leads lost"
+              icon={PhoneCall}
+              testId="card-missed-calls"
+              valueColor="text-orange-600"
+            />
 
-            <Card className="hover-elevate" data-testid="card-quote-acceptance">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Quote Acceptance</CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {quoteAnalytics?.totalQuotes ? 
-                    ((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(1) 
-                    : 0}%
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Quotes accepted
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Avg Response Time"
+              value={quoteAnalytics?.averageResponseTime 
+                ? `${(quoteAnalytics.averageResponseTime / 60).toFixed(1)} hrs` 
+                : "2.4 hrs"}
+              subtitle="Lead to first contact"
+              icon={Clock}
+              testId="card-response-time"
+            />
 
-            <Card className="hover-elevate" data-testid="card-customer-retention">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Customer Retention</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {dashboardStats?.customerRetention 
-                    ? `${dashboardStats.customerRetention}%` 
-                    : "85%"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Repeat customers
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Quote Acceptance"
+              value={quoteAnalytics?.totalQuotes ? 
+                `${((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(1)}%`
+                : "0%"}
+              subtitle="Quotes accepted"
+              icon={CheckCircle}
+              testId="card-quote-acceptance"
+            />
 
-            <Card className="hover-elevate" data-testid="card-first-time-fix">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">First Time Fix</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {dashboardStats?.firstTimeFix 
-                    ? `${dashboardStats.firstTimeFix}%` 
-                    : "92%"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Jobs completed first visit
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Customer Retention"
+              value={dashboardStats?.customerRetention 
+                ? `${dashboardStats.customerRetention}%` 
+                : "85%"}
+              subtitle="Repeat customers"
+              icon={Users}
+              testId="card-customer-retention"
+            />
 
-            <Card className="hover-elevate card-colorful" data-testid="card-gross-margin">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Gross Margin</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {revenueStats?.grossMargin !== undefined 
-                    ? `${revenueStats.grossMargin.toFixed(1)}%` 
-                    : "0%"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {revenueStats?.totalRevenue && revenueStats?.totalCosts 
-                    ? `${formatCurrency(revenueStats.totalRevenue - revenueStats.totalCosts)} profit`
-                    : "All completed jobs"}
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="First Time Fix"
+              value={dashboardStats?.firstTimeFix 
+                ? `${dashboardStats.firstTimeFix}%` 
+                : "92%"}
+              subtitle="Jobs completed first visit"
+              icon={TrendingUp}
+              testId="card-first-time-fix"
+            />
+
+            <MetricCard
+              title="Gross Margin"
+              value={revenueStats?.grossMargin !== undefined 
+                ? `${revenueStats.grossMargin.toFixed(1)}%` 
+                : "0%"}
+              subtitle={revenueStats?.totalRevenue && revenueStats?.totalCosts 
+                ? `${formatCurrency(revenueStats.totalRevenue - revenueStats.totalCosts)} profit`
+                : "All completed jobs"}
+              icon={TrendingUp}
+              testId="card-gross-margin"
+              colorful={true}
+              valueColor="text-green-600"
+            />
           </div>
         </div>
 
@@ -386,6 +450,64 @@ export default function MetricsDashboard() {
         </div>
         </div>
       </div>
+
+      {/* Custom Report Dialog */}
+      <Dialog open={customReportDialog} onOpenChange={setCustomReportDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generate Custom Report</DialogTitle>
+            <DialogDescription>
+              Create a custom report for {selectedMetric}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Date Range</label>
+              <Select value={reportDateRange} onValueChange={setReportDateRange}>
+                <SelectTrigger data-testid="select-date-range">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">Last 7 days</SelectItem>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="90">Last 90 days</SelectItem>
+                  <SelectItem value="365">Last year</SelectItem>
+                  <SelectItem value="all">All time</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Export Format</label>
+              <Select value={reportFormat} onValueChange={setReportFormat}>
+                <SelectTrigger data-testid="select-export-format">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pdf">PDF Report</SelectItem>
+                  <SelectItem value="csv">CSV Spreadsheet</SelectItem>
+                  <SelectItem value="xlsx">Excel Spreadsheet</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setCustomReportDialog(false)}
+              data-testid="button-cancel-report"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleGenerateReport}
+              data-testid="button-generate-report"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Generate Report
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
