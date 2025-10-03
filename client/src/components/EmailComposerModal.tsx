@@ -185,7 +185,7 @@ export function EmailComposerModal({
   useEffect(() => {
     if (isOpen && job && customer) {
       const billingEmail = customer.billingContactEmail || customer.email || customer.jobContactEmail;
-      const customerName = customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+      const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.name || "Valued Customer";
       
       // Auto-attach appropriate document if available
       const attachmentsList: TypedAttachment[] = [];
@@ -237,8 +237,8 @@ export function EmailComposerModal({
         .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
         .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "")
         .replace("{contactName}", "Treemarkables Team")
-        .replace("{contactPhone}", customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
-        .replace("{companySignature}", "\n\nTreemarkables LTD\nCertified Arborists\nGisborne, New Zealand\nPhone: 027-XXX-XXXX\nEmail: info@treemarkables.co.nz");
+        .replace("{contactPhone}", "0272166882")
+        .replace("{companySignature}", "\n\nTreemarkables LTD\nCertified Arborists\nGisborne, New Zealand\nPhone: 0272166882\nEmail: quotes@treemarkables.nz");
 
       setEmailData({
         to: billingEmail || "",
