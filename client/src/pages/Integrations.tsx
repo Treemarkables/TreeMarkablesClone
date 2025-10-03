@@ -105,11 +105,10 @@ const availableIntegrations: Integration[] = [
     description: 'Manage Facebook page messages and interactions',
     category: 'messaging',
     icon: MessageSquare,
-    status: 'error',
+    status: 'available',
     isEnabled: false,
-    lastSync: '2024-12-19T15:45:00.000Z',
     features: ['Page messages', 'Comment management', 'Review monitoring', 'Post scheduling'],
-    setupRequired: false
+    setupRequired: true
   },
   {
     id: 'google-calendar',
