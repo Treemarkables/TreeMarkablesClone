@@ -11474,7 +11474,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       if (apiKey && apiSecret) {
         try {
-          const apiUrl = `https://api.addy.co.nz/address?key=${encodeURIComponent(apiKey)}&secret=${encodeURIComponent(apiSecret)}&q=${encodeURIComponent(sanitizedQuery)}&limit=${limitNum}`;
+          const apiUrl = `https://api-nz.addysolutions.com/search?key=${encodeURIComponent(apiKey)}&secret=${encodeURIComponent(apiSecret)}&s=${encodeURIComponent(sanitizedQuery)}&max=${limitNum}`;
           const response = await fetch(apiUrl, {
             headers: {
               'Accept': 'application/json',
@@ -11485,13 +11485,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
           if (response.ok) {
             const data = await response.json();
-            console.log(`[Address Search] API Response:`, JSON.stringify(data, null, 2));
-            // Addy API returns array directly, not wrapped in object
-            const addresses = Array.isArray(data) ? data : [];
-            console.log(`[Address Search] API success: ${addresses.length} results`);
+            console.log(`[Address Search] API success: ${data.addresses?.length || 0} results from ${data.matched || 0} matches`);
             return res.json({ 
               success: true, 
-              addresses: addresses
+              addresses: data.addresses || []
             });
           } else {
             const errorText = await response.text();
