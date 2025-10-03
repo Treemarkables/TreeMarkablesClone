@@ -264,9 +264,9 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
           <X className="h-4 w-4" />
         </Button>
         
-        <div className="space-y-4 pt-8">
+        <div className="space-y-4">
           {/* Add Time Form - Always Visible */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 space-y-3">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 space-y-3 pt-10">
             <h4 className="font-medium text-blue-900 text-sm sm:text-base">Add Staff Time Entry</h4>
             
             <div className="grid grid-cols-1 gap-3">
