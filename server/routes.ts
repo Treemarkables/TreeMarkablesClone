@@ -11859,13 +11859,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         return new Date(job.invoiceDueDate) < today;
       }).length;
 
-      const allIncidents = await storage.getAllSafetyIncidents();
+      const allIncidents = await storage.getSafetyIncidents();
       const pendingIncidents = allIncidents.filter(inc => 
         inc.investigationStatus === 'pending' || inc.investigationStatus === 'in_progress'
       ).length;
 
       // Recent activity feed (last 10 activities)
-      const recentActivities = await storage.getRecentActivity(10);
+      const recentActivities = await storage.getAllActivities(10);
 
       // Performance indicators
       const completedToday = todaysJobs.filter(j => j.status === 'completed').length;
