@@ -1692,7 +1692,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   <h3 className="font-bold text-gray-900 text-sm mb-1" data-testid={`servicem8-job-customer-${job.id}`}>
                                     {customerName}
                                   </h3>
-                                  <div className="text-xs text-gray-600 mb-1">
+                                  <div className="text-xs text-gray-600 mb-1 font-semibold">
                                     {job.address || 'No address specified'}
                                   </div>
                                   {/* Job date info */}
@@ -1829,7 +1829,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               </div>
                             </div>
                             
-                            <div className="text-xs text-gray-600 mb-1">
+                            <div className="text-xs text-gray-600 mb-1 font-semibold">
                               {job.address || 'No address'}
                             </div>
                             
@@ -1890,7 +1890,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   
                   
                   <div className="ml-13"> {/* Align with content next to avatar */}
-                    <div className="text-xs text-gray-600 mb-2">
+                    <div className="text-xs text-gray-600 mb-2 font-semibold">
                       {job.address || 'No address specified'}
                     </div>
                     
@@ -2024,7 +2024,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
-                        <span className="truncate">{job.address || 'No address'}</span>
+                        <span className="truncate font-semibold">{job.address || 'No address'}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Phone className="h-3 w-3" />
