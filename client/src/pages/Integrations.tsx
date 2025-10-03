@@ -1,5 +1,8 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +32,7 @@ interface Integration {
   id: string;
   name: string;
   description: string;
-  category: 'email' | 'messaging' | 'calendar' | 'crm' | 'marketing' | 'analytics';
+  category: 'email' | 'messaging' | 'calendar' | 'crm' | 'marketing' | 'analytics' | 'accounting';
   icon: any;
   status: 'connected' | 'disconnected' | 'error' | 'available';
   isEnabled: boolean;
@@ -37,6 +40,7 @@ interface Integration {
   connectionCount?: number;
   features: string[];
   setupRequired?: boolean;
+  tenantName?: string;
 }
 
 const availableIntegrations: Integration[] = [
@@ -117,22 +121,84 @@ const availableIntegrations: Integration[] = [
     isEnabled: false,
     features: ['Calendar sync', 'Appointment booking', 'Availability management', 'Reminders'],
     setupRequired: true
+  },
+  {
+    id: 'xero',
+    name: 'Xero Accounting',
+    description: 'Sync invoices and financial data with Xero accounting software',
+    category: 'accounting',
+    icon: Download,
+    status: 'available',
+    isEnabled: false,
+    features: ['Invoice sync', 'Contact management', 'GST handling', 'Financial reporting'],
+    setupRequired: false
   }
 ];
 
 export default function Integrations() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [location] = useLocation();
+  const { toast } = useToast();
   
-  // Mock query for integrations status
-  const { data: integrationsData, isLoading, refetch } = useQuery({
-    queryKey: ['/api/integrations'],
-    queryFn: async () => {
-      // TODO: Replace with real API call
-      return { success: true, data: availableIntegrations };
+  // Check for Xero connection success/error from URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('xero_connected') === 'true') {
+      toast({
+        title: "Connected to Xero",
+        description: "Your Xero account has been successfully connected.",
+      });
+      // Clean up URL
+      window.history.replaceState({}, '', '/integrations');
+    } else if (params.get('error')) {
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Xero. Please try again.",
+        variant: "destructive",
+      });
+      window.history.replaceState({}, '', '/integrations');
     }
+  }, [location]);
+  
+  // Get Xero status
+  const { data: xeroStatus } = useQuery({
+    queryKey: ['/api/xero/status'],
   });
-
-  const integrations = integrationsData?.data || availableIntegrations;
+  
+  // Disconnect from Xero mutation
+  const disconnectMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/xero/disconnect', {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/xero/status'] });
+      toast({
+        title: "Disconnected",
+        description: "Successfully disconnected from Xero",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to disconnect from Xero",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Build integrations list with real Xero status
+  const integrations = availableIntegrations.map(integration => {
+    if (integration.id === 'xero' && xeroStatus?.connected) {
+      return {
+        ...integration,
+        status: 'connected' as const,
+        isEnabled: true,
+        lastSync: xeroStatus.lastSynced,
+        tenantName: xeroStatus.tenantName,
+      };
+    }
+    return integration;
+  });
 
   const filteredIntegrations = integrations.filter(integration => 
     selectedCategory === 'all' || integration.category === selectedCategory
@@ -159,13 +225,22 @@ export default function Integrations() {
   };
 
   const handleConnect = (integrationId: string) => {
-    // TODO: Implement actual connection logic
-    console.log('Connecting to:', integrationId);
+    if (integrationId === 'xero') {
+      // Redirect to Xero OAuth flow
+      window.location.href = '/api/xero/connect';
+    } else {
+      // TODO: Implement other integrations
+      console.log('Connecting to:', integrationId);
+    }
   };
 
   const handleDisconnect = (integrationId: string) => {
-    // TODO: Implement disconnection logic
-    console.log('Disconnecting from:', integrationId);
+    if (integrationId === 'xero') {
+      disconnectMutation.mutate();
+    } else {
+      // TODO: Implement other disconnections
+      console.log('Disconnecting from:', integrationId);
+    }
   };
 
   const handleToggle = (integrationId: string, enabled: boolean) => {
@@ -246,8 +321,9 @@ export default function Integrations() {
       <div className="p-3 sm:p-4 md:p-6">
         {/* Category Filter */}
         <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="mb-4 sm:mb-6">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 gap-1">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1">
             <TabsTrigger value="all" data-testid="tab-all">All</TabsTrigger>
+            <TabsTrigger value="accounting" data-testid="tab-accounting">Accounting</TabsTrigger>
             <TabsTrigger value="email" data-testid="tab-email">Email</TabsTrigger>
             <TabsTrigger value="messaging" data-testid="tab-messaging">Messaging</TabsTrigger>
             <TabsTrigger value="calendar" data-testid="tab-calendar">Calendar</TabsTrigger>
@@ -271,13 +347,20 @@ export default function Integrations() {
                       </div>
                       <div>
                         <CardTitle className="text-lg">{integration.name}</CardTitle>
-                        <Badge 
-                          variant="secondary" 
-                          className={`mt-1 text-xs ${getStatusColor(integration.status)}`}
-                        >
-                          <StatusIcon className="h-3 w-3 mr-1" />
-                          {integration.status.charAt(0).toUpperCase() + integration.status.slice(1)}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge 
+                            variant="secondary" 
+                            className={`mt-1 text-xs ${getStatusColor(integration.status)}`}
+                          >
+                            <StatusIcon className="h-3 w-3 mr-1" />
+                            {integration.status.charAt(0).toUpperCase() + integration.status.slice(1)}
+                          </Badge>
+                          {integration.tenantName && (
+                            <span className="text-xs text-gray-500">
+                              {integration.tenantName}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     
