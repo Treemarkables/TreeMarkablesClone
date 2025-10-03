@@ -658,47 +658,50 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // Handle actual API status values
     switch (job.status) {
       case 'completed': return 'C';
-      case 'unsuccessful': return 'U'; // Unsuccessful
-      case 'scheduled': return 'S'; // Scheduled
-      case 'work_order': return 'WO'; // Work Order
-      case 'quote': return 'Q'; // Quote
-      case 'lead': return 'L'; // Lead
-      default: return 'WO'; // Default to Work Order
+      case 'unsuccessful': return 'U';
+      case 'scheduled': return 'S';
+      case 'work_order': return 'WO';
+      case 'work order': return 'WO';
+      case 'quote': return 'Q';
+      case 'lead': return 'L';
+      default: return 'WO';
     }
   };
 
   // Get status color for job circles
   const getJobStatusColor = (job: JobAssignment) => {
     const serviceType = job.serviceType?.toLowerCase() || '';
-    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return 'bg-blue-500';
-    if (serviceType.includes('quote') || serviceType.includes('proposal')) return 'bg-purple-500';
+    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return 'bg-cyan-600';
+    if (serviceType.includes('quote') || serviceType.includes('proposal')) return 'bg-purple-600';
     
     switch (job.status) {
-      case 'completed': return 'bg-green-500';
-      case 'unsuccessful': return 'bg-red-500'; // Unsuccessful
-      case 'work_order': return 'bg-green-500'; // Work Order
-      case 'scheduled': return 'bg-orange-500';
-      case 'quote': return 'bg-purple-500';
-      case 'lead': return 'bg-blue-500';
-      default: return 'bg-gray-500';
+      case 'completed': return 'bg-green-600';
+      case 'unsuccessful': return 'bg-red-600';
+      case 'work_order': return 'bg-blue-600';
+      case 'work order': return 'bg-blue-600';
+      case 'scheduled': return 'bg-orange-600';
+      case 'quote': return 'bg-purple-600';
+      case 'lead': return 'bg-cyan-600';
+      default: return 'bg-gray-600';
     }
   };
 
   // Get actual color values for inline styles
   const getJobStatusColorValue = (job: JobAssignment) => {
     const serviceType = job.serviceType?.toLowerCase() || '';
-    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return '#3b82f6'; // blue-500
-    if (serviceType.includes('quote') || serviceType.includes('proposal')) return '#8b5cf6'; // purple-500
+    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return '#0891b2'; // cyan-600
+    if (serviceType.includes('quote') || serviceType.includes('proposal')) return '#9333ea'; // purple-600
     
     // Handle actual API status values
     switch (job.status) {
-      case 'completed': return '#10b981'; // green-500
-      case 'unsuccessful': return '#ef4444'; // red-500 - Unsuccessful
-      case 'work_order': return '#10b981'; // green-500 - Work Order
-      case 'scheduled': return '#f97316'; // orange-500
-      case 'quote': return '#8b5cf6'; // purple-500  
-      case 'lead': return '#3b82f6'; // blue-500
-      default: return '#6b7280'; // gray-500
+      case 'completed': return '#16a34a'; // green-600
+      case 'unsuccessful': return '#dc2626'; // red-600
+      case 'work_order': return '#2563eb'; // blue-600
+      case 'work order': return '#2563eb'; // blue-600
+      case 'scheduled': return '#ea580c'; // orange-600
+      case 'quote': return '#9333ea'; // purple-600
+      case 'lead': return '#0891b2'; // cyan-600
+      default: return '#4b5563'; // gray-600
     }
   };
 
