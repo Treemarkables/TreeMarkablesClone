@@ -1908,7 +1908,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <div
                   key={job.id}
                   className="p-3 sm:p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
-                  onClick={() => handleEditJob(job)}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest('[data-description-trigger]')) {
+                      return;
+                    }
+                    handleEditJob(job);
+                  }}
                   data-testid={`mobile-job-card-${job.id}`}
                 >
                   <div className="flex items-start gap-3 mb-2">
@@ -1949,14 +1954,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       type="button"
                       className="text-sm text-gray-700 leading-relaxed mb-3 break-words cursor-pointer hover:text-gray-900 active:text-blue-600 text-left w-full bg-transparent border-0 p-0" 
                       data-testid={`mobile-job-description-${job.id}`}
-                      onPointerDownCapture={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                      }}
-                      onTouchStart={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                      }}
+                      data-description-trigger="true"
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
