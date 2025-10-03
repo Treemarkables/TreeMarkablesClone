@@ -1467,67 +1467,67 @@ export function GlobalJobCard({
         <div className="hidden md:block bg-white border-b border-gray-200 px-3 md:px-4 py-2 flex-shrink-0">
           <div className="flex items-center justify-between gap-2">
             {/* Action Buttons */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap">
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 hover-elevate active-elevate-2" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={handleEmailClick} 
                 data-testid="button-email"
               >
-                <Mail className="w-4 h-4 mr-2 text-blue-500" />
-                <span>Email</span>
+                <Mail className="w-5 h-5 mr-1.5 text-blue-500" fill="currentColor" />
+                <span className="text-xs">Email</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 hover-elevate active-elevate-2" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={() => setIsSMSComposerOpen(true)} 
                 data-testid="button-sms"
               >
-                <MessageSquare className="w-4 h-4 mr-2 text-blue-500" />
-                <span>SMS</span>
+                <MessageSquare className="w-5 h-5 mr-1.5 text-blue-500" fill="currentColor" />
+                <span className="text-xs">SMS</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 hover-elevate active-elevate-2" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={handleCallClick} 
                 data-testid="button-call"
               >
-                <Phone className="w-4 h-4 mr-2 text-green-500" />
-                <span>Call</span>
+                <Phone className="w-5 h-5 mr-1.5 text-green-500" fill="currentColor" />
+                <span className="text-xs">Call</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 hover-elevate active-elevate-2" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={handleScheduleClick} 
                 data-testid="button-schedule"
               >
-                <Calendar className="w-4 h-4 mr-2 text-red-500" />
-                <span>Schedule</span>
+                <Calendar className="w-5 h-5 mr-1.5 text-red-500" fill="currentColor" />
+                <span className="text-xs">Schedule</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 hover-elevate active-elevate-2" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={handleQueueClick} 
                 data-testid="button-queue"
               >
-                <FileText className="w-4 h-4 mr-2 text-blue-600" />
-                <span>Queue</span>
+                <FileText className="w-5 h-5 mr-1.5 text-blue-600" fill="currentColor" />
+                <span className="text-xs">Queue</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-9 px-3 hover-elevate active-elevate-2" 
+                    className="h-9 px-2 hover-elevate active-elevate-2" 
                     data-testid="button-send"
                   >
-                    <Send className="w-4 h-4 mr-2 text-orange-500" />
-                    <span>Send</span>
+                    <Send className="w-5 h-5 mr-1.5 text-orange-500" fill="currentColor" />
+                    <span className="text-xs">Send</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -1577,46 +1577,46 @@ export function GlobalJobCard({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 hover-elevate active-elevate-2" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={() => setIsProfitTrackerOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
               >
-                <DollarSign className="w-4 h-4 mr-2 text-teal-500" />
-                <span>Profit</span>
+                <DollarSign className="w-5 h-5 mr-1.5 text-teal-500" fill="currentColor" />
+                <span className="text-xs">Profit</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 hover-elevate active-elevate-2" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={() => setIsTimeTrackingOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
               >
-                <Clock className="w-4 h-4 mr-2 text-purple-500" />
-                <span>Time</span>
+                <Clock className="w-5 h-5 mr-1.5 text-purple-500" fill="currentColor" />
+                <span className="text-xs">Time</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 hover-elevate active-elevate-2" 
+                className="h-9 px-2 hover-elevate active-elevate-2" 
                 onClick={() => setIsPhotoCaptureOpen(true)}
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
               >
-                <Camera className="w-4 h-4 mr-2 text-pink-500" />
-                <span>Camera</span>
+                <Camera className="w-5 h-5 mr-1.5 text-pink-500" fill="currentColor" />
+                <span className="text-xs">Camera</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-9 px-3 hover-elevate active-elevate-2" 
+                    className="h-9 px-2 hover-elevate active-elevate-2" 
                     data-testid="button-more"
                   >
-                    <MoreHorizontal className="w-4 h-4 mr-2 text-green-600" />
-                    <span>More</span>
+                    <MoreHorizontal className="w-5 h-5 mr-1.5 text-green-600" fill="currentColor" />
+                    <span className="text-xs">More</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
