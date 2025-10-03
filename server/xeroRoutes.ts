@@ -5,22 +5,51 @@ import type { IStorage } from './storage';
 const router = Router();
 
 // Initialize Xero client
+// Get the base URL from environment or construct from Replit domain
+const getRedirectUri = () => {
+  if (process.env.XERO_REDIRECT_URI) {
+    return process.env.XERO_REDIRECT_URI;
+  }
+  // For Replit environments
+  if (process.env.REPLIT_DOMAINS) {
+    const domain = process.env.REPLIT_DOMAINS.split(',')[0];
+    return `https://${domain}/api/xero/callback`;
+  }
+  // Fallback to production domain
+  return 'https://www.treemarkables.co.nz/api/xero/callback';
+};
+
 const xeroClient = new XeroClient({
   clientId: process.env.XERO_CLIENT_ID!,
   clientSecret: process.env.XERO_CLIENT_SECRET!,
-  redirectUris: ['https://www.treemarkables.co.nz/api/xero/callback'],
+  redirectUris: [getRedirectUri()],
   scopes: 'openid profile email accounting.settings accounting.transactions accounting.contacts offline_access'.split(' '),
   httpTimeout: 3000,
 });
 
 export function registerXeroRoutes(app: any, storage: IStorage) {
+  // Log the redirect URI being used
+  const redirectUri = getRedirectUri();
+  console.log('🔗 Xero OAuth Redirect URI:', redirectUri);
+  
+  // Endpoint to get redirect URI (for debugging)
+  app.get('/api/xero/redirect-uri', (req: Request, res: Response) => {
+    res.json({
+      success: true,
+      redirectUri,
+      message: 'Add this redirect URI to your Xero app configuration'
+    });
+  });
+  
   // Initiate Xero OAuth connection
   app.get('/api/xero/connect', async (req: Request, res: Response) => {
     try {
+      console.log('🔐 Initiating Xero OAuth with redirect URI:', redirectUri);
       const consentUrl = await xeroClient.buildConsentUrl();
+      console.log('✅ Consent URL generated:', consentUrl);
       res.redirect(consentUrl);
     } catch (error) {
-      console.error('Error initiating Xero connection:', error);
+      console.error('❌ Error initiating Xero connection:', error);
       res.status(500).json({ success: false, message: 'Failed to initiate Xero connection' });
     }
   });
