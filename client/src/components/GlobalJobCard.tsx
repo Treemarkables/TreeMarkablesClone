@@ -3646,7 +3646,7 @@ export function GlobalJobCard({
           <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
             <DialogHeader className="p-3 sm:p-6 border-b">
               <div className="flex justify-center sm:justify-end">
-                <div className="flex gap-1 sm:gap-2 flex-wrap">
+                <div className="flex gap-1 sm:gap-2">
                   <Button 
                     size="sm" 
                     onClick={handleSaveQuote} 
