@@ -11473,11 +11473,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       if (apiKey) {
         try {
-          const apiUrl = `https://api.addy.co.nz/address?q=${encodeURIComponent(sanitizedQuery)}&limit=${limitNum}`;
+          const apiUrl = `https://api.addy.co.nz/address?key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(sanitizedQuery)}&limit=${limitNum}`;
           const response = await fetch(apiUrl, {
             headers: {
               'Accept': 'application/json',
-              'addy-api-key': apiKey,
               'User-Agent': 'Treemarkables-Web-App/1.0'
             },
             timeout: 5000 // 5 second timeout
