@@ -254,7 +254,17 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-full h-full overflow-y-auto sm:max-w-4xl sm:max-h-[90vh] sm:h-auto">
-        <div className="space-y-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="absolute right-2 top-2 h-8 w-8 z-10"
+          data-testid="button-close-modal"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        
+        <div className="space-y-4 pt-8">
           {/* Add Time Form - Always Visible */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 space-y-3">
             <h4 className="font-medium text-blue-900 text-sm sm:text-base">Add Staff Time Entry</h4>
