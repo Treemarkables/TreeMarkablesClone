@@ -925,6 +925,7 @@ export const businessSettings = pgTable("business_settings", {
   dataRetentionDays: integer("data_retention_days").default(365),
   autoBackupTime: text("auto_backup_time").default("02:00"), // 24hr format
   exportFormat: text("export_format").default("csv"), // csv, excel, json
+  metricsStartDate: timestamp("metrics_start_date"), // Jobs created before this date are excluded from metrics
   
   // Integration Management
   servicem8Enabled: boolean("servicem8_enabled").default(false),

@@ -39,6 +39,7 @@ import StaffManagement from "@/pages/StaffManagement";
 import TemplateManagement from "@/pages/TemplateManagement";
 import Developer from "@/pages/Developer";
 import Calendar from "@/pages/Calendar";
+import SettingsPreferences from "@/pages/SettingsPreferences";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import JobTemplateManagement from "@/components/JobTemplateManagement";
@@ -348,10 +349,7 @@ function Router() {
       </Route>
       <Route path="/settings/preferences">
         <SidebarLayout>
-          <SettingsPlaceholder 
-            title="Preferences"
-            description="Time zones, currency, date formats and defaults"
-          />
+          <SettingsPreferences />
         </SidebarLayout>
       </Route>
       
