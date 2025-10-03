@@ -1472,18 +1472,6 @@ export function GlobalJobCard({
                 variant="ghost" 
                 size="sm" 
                 className="h-9 px-2 hover-elevate active-elevate-2" 
-                onClick={() => setSidebarTab('details')}
-                data-testid="button-details-tab"
-              >
-                <div className="flex items-center gap-1.5">
-                  <FileText className="w-5 h-5 text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">Details</span>
-                </div>
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="hover-elevate active-elevate-2" 
                 onClick={handleEmailClick} 
                 data-testid="button-email"
               >
@@ -1496,10 +1484,7 @@ export function GlobalJobCard({
                 onClick={() => setIsSMSComposerOpen(true)} 
                 data-testid="button-sms"
               >
-                <div className="flex items-center gap-1.5">
-                  <MessageSquare className="w-5 h-5 text-blue-500" />
-                  <span className="text-sm font-medium text-gray-700">SMS</span>
-                </div>
+                <MessageSquare className="w-5 h-5 text-blue-500" />
               </Button>
               <Button 
                 variant="ghost" 
@@ -1508,10 +1493,7 @@ export function GlobalJobCard({
                 onClick={handleCallClick} 
                 data-testid="button-call"
               >
-                <div className="flex items-center gap-1.5">
-                  <Phone className="w-5 h-5 text-green-500" />
-                  <span className="text-sm font-medium text-gray-700">Call</span>
-                </div>
+                <Phone className="w-5 h-5 text-green-500" />
               </Button>
               <Button 
                 variant="ghost" 
@@ -1520,10 +1502,7 @@ export function GlobalJobCard({
                 onClick={handleScheduleClick} 
                 data-testid="button-schedule"
               >
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="w-5 h-5 text-red-500" />
-                  <span className="text-sm font-medium text-gray-700">Schedule</span>
-                </div>
+                <Calendar className="w-5 h-5 text-red-500" />
               </Button>
               <Button 
                 variant="ghost" 
@@ -1532,10 +1511,7 @@ export function GlobalJobCard({
                 onClick={handleQueueClick} 
                 data-testid="button-queue"
               >
-                <div className="flex items-center gap-1.5">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  <span className="text-sm font-medium text-gray-700">Queue</span>
-                </div>
+                <FileText className="w-5 h-5 text-blue-600" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1545,10 +1521,7 @@ export function GlobalJobCard({
                     className="h-9 px-2 hover-elevate active-elevate-2" 
                     data-testid="button-send"
                   >
-                    <div className="flex items-center gap-1.5">
-                      <Send className="w-5 h-5 text-orange-500" />
-                      <span className="text-sm font-medium text-gray-700">Form</span>
-                    </div>
+                    <Send className="w-5 h-5 text-orange-500" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -1603,10 +1576,7 @@ export function GlobalJobCard({
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
               >
-                <div className="flex items-center gap-1.5">
-                  <DollarSign className="w-5 h-5 text-teal-500" />
-                  <span className="text-sm font-medium text-gray-700">Proposal</span>
-                </div>
+                <DollarSign className="w-5 h-5 text-teal-500" />
               </Button>
               <Button 
                 variant="ghost" 
@@ -1616,10 +1586,7 @@ export function GlobalJobCard({
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
               >
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-5 h-5 text-purple-500" />
-                  <span className="text-sm font-medium text-gray-700">Time</span>
-                </div>
+                <Clock className="w-5 h-5 text-purple-500" />
               </Button>
               <Button 
                 variant="ghost" 
@@ -1629,10 +1596,7 @@ export function GlobalJobCard({
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
               >
-                <div className="flex items-center gap-1.5">
-                  <Camera className="w-5 h-5 text-pink-500" />
-                  <span className="text-sm font-medium text-gray-700">Camera</span>
-                </div>
+                <Camera className="w-5 h-5 text-pink-500" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1642,10 +1606,7 @@ export function GlobalJobCard({
                     className="h-9 px-2 hover-elevate active-elevate-2" 
                     data-testid="button-more"
                   >
-                    <div className="flex items-center gap-1.5">
-                      <MoreHorizontal className="w-5 h-5 text-green-600" />
-                      <span className="text-sm font-medium text-gray-700">More</span>
-                    </div>
+                    <MoreHorizontal className="w-5 h-5 text-green-600" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
