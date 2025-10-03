@@ -1324,7 +1324,11 @@ export function GlobalJobCard({
         <div className={`border-b px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 flex-shrink-0 sm:rounded-t-xl ${
           editingJob?.status === 'completed' ? 'bg-green-600 border-green-700' :
           editingJob?.status === 'work order' ? 'bg-blue-600 border-blue-700' :
-          'bg-orange-500 border-orange-600'
+          editingJob?.status === 'quote' ? 'bg-purple-600 border-purple-700' :
+          editingJob?.status === 'lead' ? 'bg-cyan-600 border-cyan-700' :
+          editingJob?.status === 'scheduled' ? 'bg-orange-600 border-orange-700' :
+          editingJob?.status === 'unsuccessful' ? 'bg-red-600 border-red-700' :
+          'bg-gray-600 border-gray-700'
         }`}>
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Left: Job Title & Status */}
@@ -1337,7 +1341,11 @@ export function GlobalJobCard({
                   className={`text-xs whitespace-nowrap ${
                     editingJob.status === 'completed' ? 'bg-green-700 hover:bg-green-800 text-white' :
                     editingJob.status === 'work order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
-                    'bg-orange-600 hover:bg-orange-700 text-white'
+                    editingJob.status === 'quote' ? 'bg-purple-700 hover:bg-purple-800 text-white' :
+                    editingJob.status === 'lead' ? 'bg-cyan-700 hover:bg-cyan-800 text-white' :
+                    editingJob.status === 'scheduled' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
+                    editingJob.status === 'unsuccessful' ? 'bg-red-700 hover:bg-red-800 text-white' :
+                    'bg-gray-700 hover:bg-gray-800 text-white'
                   }`}
                   data-testid="badge-job-status"
                 >
