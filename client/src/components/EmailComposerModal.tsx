@@ -492,41 +492,41 @@ export function EmailComposerModal({
 
         <div className="flex-1 flex flex-col gap-3 sm:gap-4 overflow-y-auto p-3 sm:p-4">
           {/* Email Fields */}
-          <div className="space-y-2 sm:space-y-3">
-            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 sm:items-center">
-              <Label htmlFor="email-to" className="text-sm sm:col-span-1 sm:text-right">To:</Label>
+          <div className="space-y-1 sm:space-y-3">
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
+              <Label htmlFor="email-to" className="text-[10px] sm:text-sm sm:col-span-1 sm:text-right">To:</Label>
               <Input
                 id="email-to"
                 name="email-to"
                 value={emailData.to}
                 onChange={(e) => setEmailData(prev => ({ ...prev, to: e.target.value }))}
-                className="sm:col-span-11"
+                className="sm:col-span-11 h-7 sm:h-9 text-xs sm:text-sm"
                 placeholder="recipient@email.com"
                 data-testid="input-email-to"
               />
             </div>
             
-            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 sm:items-center">
-              <Label htmlFor="email-cc" className="text-sm sm:col-span-1 sm:text-right">CC:</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
+              <Label htmlFor="email-cc" className="text-[10px] sm:text-sm sm:col-span-1 sm:text-right">CC:</Label>
               <Input
                 id="email-cc"
                 name="email-cc"
                 value={emailData.cc}
                 onChange={(e) => setEmailData(prev => ({ ...prev, cc: e.target.value }))}
-                className="sm:col-span-11"
+                className="sm:col-span-11 h-7 sm:h-9 text-xs sm:text-sm"
                 placeholder="cc@email.com (optional)"
                 data-testid="input-email-cc"
               />
             </div>
 
-            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 sm:items-center">
-              <Label htmlFor="email-subject" className="text-sm sm:col-span-1 sm:text-right">Subject:</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
+              <Label htmlFor="email-subject" className="text-[10px] sm:text-sm sm:col-span-1 sm:text-right">Subject:</Label>
               <Input
                 id="email-subject"
                 name="email-subject"
                 value={emailData.subject}
                 onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
-                className="sm:col-span-11"
+                className="sm:col-span-11 h-7 sm:h-9 text-xs sm:text-sm"
                 data-testid="input-email-subject"
               />
             </div>
