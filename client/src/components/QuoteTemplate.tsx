@@ -94,18 +94,18 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
   const isExpired = expiryDate && expiryDate < new Date();
 
   return (
-    <div ref={ref} className={`max-w-4xl mx-auto bg-white ${className}`}>
+    <div ref={ref} className={`w-full max-w-4xl mx-auto bg-white ${className}`}>
       {/* Action Bar */}
       {showActions && (
-        <div className="flex justify-between items-center mb-6 p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center gap-3">
-            <FileText className="w-5 h-5 text-orange-600" />
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
             <div>
-              <h3 className="font-semibold text-gray-900">Quote #{quote.quoteNumber}</h3>
-              <p className="text-sm text-gray-600">Using template: {template.name}</p>
+              <h3 className="text-sm sm:text-base font-semibold text-gray-900">Quote #{quote.quoteNumber}</h3>
+              <p className="text-xs sm:text-sm text-gray-600">Using template: {template.name}</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1 sm:gap-2 flex-wrap">
             {onSave && (
               <Button size="sm" onClick={onSave} data-testid="button-save-quote" className="bg-green-600 hover:bg-green-700 text-white">
                 <FileText className="w-4 h-4 mr-2" />
@@ -135,24 +135,24 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
       )}
 
       {/* Quote Document */}
-      <Card className="shadow-lg border-0">
+      <Card className="shadow-lg border-0 overflow-hidden">
         {/* Header */}
         <CardHeader 
-          className="p-8 pb-6"
+          className="p-4 pb-3 sm:p-8 sm:pb-6"
           style={{ 
             background: `linear-gradient(135deg, ${template.primaryColor || '#f97316'} 0%, ${template.secondaryColor || '#3b82f6'} 100%)`,
             color: 'white'
           }}
         >
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-3xl font-bold mb-2" data-testid="text-company-name">
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-0">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2 truncate" data-testid="text-company-name">
                 {template.companyName || 'Treemarkables LTD'}
               </h1>
-              <p className="text-lg opacity-90">Professional Tree Services</p>
-              <div className="mt-4 space-y-1 text-sm opacity-90">
-                <p data-testid="text-company-address">{template.companyAddress || 'Hauroa rd\nGisborne, 4010'}</p>
-                <p data-testid="text-company-contact">
+              <p className="text-sm sm:text-lg opacity-90">Professional Tree Services</p>
+              <div className="mt-2 sm:mt-4 space-y-0.5 sm:space-y-1 text-xs sm:text-sm opacity-90">
+                <p data-testid="text-company-address" className="whitespace-pre-line">{template.companyAddress || 'Hauroa rd\nGisborne, 4010'}</p>
+                <p data-testid="text-company-contact" className="break-all">
                   Phone: {template.companyPhone || '027 216 6882'} | Email: {template.companyEmail || 'quotes@treemarkables.nz'}
                 </p>
                 {template.gstNumber && (
@@ -160,10 +160,10 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
                 )}
               </div>
             </div>
-            <div className="text-right">
-              <div className="bg-white/20 rounded-lg p-4 backdrop-blur-sm">
-                <h2 className="text-2xl font-bold mb-2">QUOTE</h2>
-                <Badge className={`${getStatusColor(quote.status)} border-0`} data-testid="badge-quote-status">
+            <div className="text-left sm:text-right flex-shrink-0">
+              <div className="bg-white/20 rounded-lg p-2 sm:p-4 backdrop-blur-sm">
+                <h2 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">QUOTE</h2>
+                <Badge className={`${getStatusColor(quote.status)} border-0 text-xs`} data-testid="badge-quote-status">
                   {quote.status.toUpperCase()}
                 </Badge>
               </div>
@@ -171,12 +171,12 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
           </div>
         </CardHeader>
 
-        <CardContent className="p-8">
+        <CardContent className="p-4 sm:p-8">
           {/* Quote Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quote Details</h3>
-              <div className="space-y-2 text-sm">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Quote Details</h3>
+              <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Quote Number:</span>
                   <span className="font-semibold" data-testid="text-quote-number">{quote.quoteNumber}</span>
@@ -200,8 +200,8 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Details</h3>
-              <div className="space-y-2 text-sm">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Customer Details</h3>
+              <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                 <div>
                   <span className="text-gray-600">Name:</span>
                   <p className="font-semibold" data-testid="text-customer-name">
@@ -232,10 +232,10 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
 
           {/* Quote Description */}
           {quote.description && (
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Description</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 whitespace-pre-wrap" data-testid="text-quote-description">
+            <div className="mb-6 sm:mb-8">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Service Description</h3>
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-700 whitespace-pre-wrap" data-testid="text-quote-description">
                   {quote.description}
                 </p>
               </div>
@@ -244,27 +244,27 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
 
           {/* Line Items or Service Summary */}
           {hasLineItems ? (
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Items</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
+            <div className="mb-6 sm:mb-8">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Service Items</h3>
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden min-w-[600px]">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-900">Description</th>
-                      <th className="border border-gray-200 px-4 py-3 text-center font-semibold text-gray-900">Qty</th>
-                      <th className="border border-gray-200 px-4 py-3 text-center font-semibold text-gray-900">Unit</th>
-                      <th className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">Unit Price (inc GST)</th>
-                      <th className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">Total (inc GST)</th>
+                      <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">Description</th>
+                      <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900">Qty</th>
+                      <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900">Unit</th>
+                      <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900">Unit Price (inc GST)</th>
+                      <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900">Total (inc GST)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {lineItems.map((item, index) => (
                       <tr key={item.id} className="even:bg-gray-50" data-testid={`row-line-item-${index}`}>
-                        <td className="border border-gray-200 px-4 py-3 text-gray-900">{item.description}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.quantity}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.unit || 'each'}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-right text-gray-700">{formatCurrency(item.unitPrice)}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(item.total)}</td>
+                        <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900">{item.description}</td>
+                        <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700">{item.quantity}</td>
+                        <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700">{item.unit || 'each'}</td>
+                        <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm text-gray-700">{formatCurrency(item.unitPrice)}</td>
+                        <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900">{formatCurrency(item.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -273,37 +273,37 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
             </div>
           ) : (
             // Show service summary when no line items
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Summary</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
+            <div className="mb-6 sm:mb-8">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Service Summary</h3>
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-700">Total Service Cost:</span>
-                  <span className="text-xl font-bold text-gray-900" data-testid="text-service-total">
+                  <span className="text-sm sm:text-base text-gray-700">Total Service Cost:</span>
+                  <span className="text-lg sm:text-xl font-bold text-gray-900" data-testid="text-service-total">
                     {formatCurrency(totalAmount)}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600 mt-2">
+                <p className="text-xs sm:text-sm text-gray-600 mt-1.5 sm:mt-2">
                   Total amount including GST as quoted
                 </p>
               </div>
             </div>
           )}
 
-          <Separator className="my-8" />
+          <Separator className="my-6 sm:my-8" />
 
           {/* Totals */}
           <div className="flex justify-end">
-            <div className="w-full max-w-sm space-y-3">
-              <div className="flex justify-between text-gray-700">
+            <div className="w-full max-w-sm space-y-2 sm:space-y-3">
+              <div className="flex justify-between text-sm sm:text-base text-gray-700">
                 <span>Subtotal (excl GST):</span>
                 <span data-testid="text-subtotal">{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-gray-700">
+              <div className="flex justify-between text-sm sm:text-base text-gray-700">
                 <span>GST (15%):</span>
                 <span data-testid="text-gst-amount">{formatCurrency(gstAmount)}</span>
               </div>
               <Separator />
-              <div className="flex justify-between text-xl font-bold text-gray-900">
+              <div className="flex justify-between text-lg sm:text-xl font-bold text-gray-900">
                 <span>Total (inc GST):</span>
                 <span data-testid="text-total-amount">{formatCurrency(totalAmount)}</span>
               </div>
@@ -312,9 +312,9 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
 
           {/* Terms and Conditions */}
           {(quote.terms || template.paymentTerms) && (
-            <div className="mt-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Terms & Conditions</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
+            <div className="mt-6 sm:mt-8">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Terms & Conditions</h3>
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
                 <p className="text-gray-700 text-sm whitespace-pre-wrap" data-testid="text-quote-terms">
                   {quote.terms || template.paymentTerms || 'Payment due within 7 days of acceptance.'}
                 </p>

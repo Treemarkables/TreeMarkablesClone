@@ -3643,11 +3643,11 @@ export function GlobalJobCard({
       {/* Quote Management Modal */}
       {isQuoteModalOpen && editingJob && quoteTemplate && (
         <Dialog open={isQuoteModalOpen} onOpenChange={setIsQuoteModalOpen}>
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <h2 className="text-lg font-semibold">Quote Preview - {editingJob?.title || 'Job'}</h2>
+          <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="p-3 sm:p-6 border-b">
+              <h2 className="text-base sm:text-lg font-semibold">Quote Preview - {editingJob?.title || 'Job'}</h2>
             </DialogHeader>
-            <div className="p-6">
+            <div className="p-3 sm:p-6">
               <QuoteTemplate
                 template={quoteTemplate}
                 quote={{
