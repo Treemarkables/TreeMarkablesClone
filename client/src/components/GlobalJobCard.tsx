@@ -3736,11 +3736,71 @@ export function GlobalJobCard({
       {/* Invoice Management Modal */}
       {isInvoiceModalOpen && editingJob && invoiceTemplate && (
         <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <h2 className="text-lg font-semibold">Invoice Preview - {editingJob?.title || 'Job'}</h2>
+          <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="p-3 sm:p-6 border-b">
+              <div className="flex justify-center sm:justify-end">
+                <div className="flex gap-1 sm:gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      toast({
+                        title: "Copied",
+                        description: "Invoice details copied to clipboard.",
+                      });
+                    }} 
+                    data-testid="button-copy-invoice"
+                    className="h-7 text-xs"
+                  >
+                    <Copy className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    Copy
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      setIsInvoiceModalOpen(false);
+                      handleEmailClick();
+                    }} 
+                    data-testid="button-email-invoice"
+                    className="h-7 text-xs"
+                  >
+                    <Mail className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    Email
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      toast({
+                        title: "Download Started",
+                        description: "Invoice PDF download will be available soon.",
+                      });
+                    }} 
+                    data-testid="button-download-invoice"
+                    className="h-7 text-xs"
+                  >
+                    <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    PDF
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={() => {
+                      toast({
+                        title: "Add Payment",
+                        description: "Payment tracking functionality will be available soon.",
+                      });
+                    }} 
+                    data-testid="button-add-payment"
+                    className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
+                  >
+                    <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    Payment
+                  </Button>
+                </div>
+              </div>
             </DialogHeader>
-            <div className="p-6">
+            <div className="p-3 sm:p-6">
               <InvoiceTemplate
                 template={invoiceTemplate}
                 invoice={{
@@ -3767,29 +3827,7 @@ export function GlobalJobCard({
                   category: 'service',
                   taxable: true
                 })) || []}
-                showActions={true}
-                onEmail={() => {
-                  setIsInvoiceModalOpen(false);
-                  handleEmailClick();
-                }}
-                onDownload={() => {
-                  toast({
-                    title: "Download Started",
-                    description: "Invoice PDF download will be available soon.",
-                  });
-                }}
-                onCopy={() => {
-                  toast({
-                    title: "Copied",
-                    description: "Invoice details copied to clipboard.",
-                  });
-                }}
-                onAddPayment={() => {
-                  toast({
-                    title: "Add Payment",
-                    description: "Payment tracking functionality will be available soon.",
-                  });
-                }}
+                showActions={false}
               />
             </div>
           </DialogContent>
