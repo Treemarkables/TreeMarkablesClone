@@ -435,54 +435,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               </div>
             </div>
           )}
-
-          {/* Bottom Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium whitespace-nowrap">Rounding:</span>
-                <Select value={rounding} onValueChange={setRounding}>
-                  <SelectTrigger className="w-full sm:w-24 min-h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="15min">15 min</SelectItem>
-                    <SelectItem value="30min">30 min</SelectItem>
-                    <SelectItem value="1hour">1 hour</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium whitespace-nowrap">Travel Time:</span>
-                <Select value={travelTime} onValueChange={setTravelTime}>
-                  <SelectTrigger className="w-full sm:w-28 min-h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="included">Included</SelectItem>
-                    <SelectItem value="excluded">Excluded</SelectItem>
-                    <SelectItem value="separate">Separate</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <Button variant="outline" onClick={onClose} data-testid="button-cancel" className="w-full sm:w-auto min-h-11">
-                Cancel
-              </Button>
-              <Button 
-                onClick={saveAllEntries} 
-                className="bg-orange-500 hover:bg-orange-600 text-white w-full sm:w-auto min-h-11"
-                disabled={pendingEntries.length === 0}
-                data-testid="button-save"
-              >
-                Save All ({pendingEntries.length})
-              </Button>
-            </div>
-          </div>
         </div>
       </DialogContent>
     </Dialog>
