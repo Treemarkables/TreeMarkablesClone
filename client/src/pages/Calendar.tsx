@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -57,6 +58,8 @@ export default function Calendar() {
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobWithCustomer | null>(null);
   const [smsMessage, setSmsMessage] = useState("");
+  const [showJobEditDialog, setShowJobEditDialog] = useState(false);
+  const [jobToEdit, setJobToEdit] = useState<JobWithCustomer | null>(null);
   const { toast } = useToast();
 
   // Fetch jobs/appointments
@@ -122,8 +125,18 @@ export default function Calendar() {
     },
   });
 
+  // Handle job edit click
+  const handleEditJob = (job: JobWithCustomer, e?: React.MouseEvent) => {
+    // Prevent event bubbling if triggered from a button
+    e?.stopPropagation();
+    setJobToEdit(job);
+    setShowJobEditDialog(true);
+  };
+
   // Handle SMS button click
-  const handleSendSms = (job: JobWithCustomer) => {
+  const handleSendSms = (job: JobWithCustomer, e?: React.MouseEvent) => {
+    // Prevent event bubbling if triggered from a button
+    e?.stopPropagation();
     setSelectedJob(job);
     const customerName = job.customer?.name || "Customer";
     const jobTitle = job.title || "your appointment";
@@ -420,7 +433,8 @@ export default function Calendar() {
                       {selectedDateAppointments.map(appointment => (
                         <Card
                           key={appointment.id}
-                          className="hover-elevate"
+                          className="hover-elevate cursor-pointer"
+                          onClick={() => handleEditJob(appointment)}
                           data-testid={`appointment-card-${appointment.id}`}
                         >
                           <CardHeader className="pb-3">
@@ -477,7 +491,7 @@ export default function Calendar() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleSendSms(appointment)}
+                                  onClick={(e) => handleSendSms(appointment, e)}
                                   data-testid={`button-send-sms-${appointment.id}`}
                                 >
                                   <MessageSquare className="h-4 w-4 mr-1" />
@@ -515,7 +529,8 @@ export default function Calendar() {
               {selectedDateAppointments.map(appointment => (
                 <Card
                   key={appointment.id}
-                  className="hover-elevate"
+                  className="hover-elevate cursor-pointer"
+                  onClick={() => handleEditJob(appointment)}
                   data-testid={`mobile-appointment-${appointment.id}`}
                 >
                   <CardContent className="p-3">
@@ -548,7 +563,7 @@ export default function Calendar() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleSendSms(appointment)}
+                            onClick={(e) => handleSendSms(appointment, e)}
                             data-testid={`button-send-sms-mobile-${appointment.id}`}
                           >
                             <MessageSquare className="h-4 w-4" />
@@ -614,6 +629,33 @@ export default function Calendar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Job Edit Dialog */}
+      {jobToEdit && (
+        <GlobalJobCard
+          isOpen={showJobEditDialog}
+          onClose={() => {
+            setShowJobEditDialog(false);
+            setJobToEdit(null);
+          }}
+          mode="edit"
+          job={jobToEdit}
+          onJobCreated={() => {
+            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+            setShowJobEditDialog(false);
+            setJobToEdit(null);
+          }}
+          onJobUpdated={() => {
+            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+            setShowJobEditDialog(false);
+            setJobToEdit(null);
+            toast({
+              title: "Job Updated",
+              description: "The job has been updated successfully.",
+            });
+          }}
+        />
+      )}
     </div>
   );
 }
