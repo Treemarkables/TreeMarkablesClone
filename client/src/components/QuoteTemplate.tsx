@@ -138,19 +138,19 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
       <Card className="shadow-lg border-0 overflow-hidden">
         {/* Header */}
         <CardHeader 
-          className="p-4 pb-3 sm:p-8 sm:pb-6"
+          className="p-2 pb-1.5 sm:p-8 sm:pb-6"
           style={{ 
             background: `linear-gradient(135deg, ${template.primaryColor || '#f97316'} 0%, ${template.secondaryColor || '#3b82f6'} 100%)`,
             color: 'white'
           }}
         >
-          <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-0">
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-1.5 sm:gap-0">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2 truncate" data-testid="text-company-name">
+              <h1 className="text-base sm:text-3xl font-bold mb-0.5 sm:mb-2 truncate" data-testid="text-company-name">
                 {template.companyName || 'Treemarkables LTD'}
               </h1>
-              <p className="text-sm sm:text-lg opacity-90">Professional Tree Services</p>
-              <div className="mt-2 sm:mt-4 space-y-0.5 sm:space-y-1 text-xs sm:text-sm opacity-90">
+              <p className="text-xs sm:text-lg opacity-90">Professional Tree Services</p>
+              <div className="mt-1 sm:mt-4 space-y-0 sm:space-y-1 text-[10px] sm:text-sm opacity-90">
                 <p data-testid="text-company-address" className="whitespace-pre-line">{template.companyAddress || 'Hauroa rd\nGisborne, 4010'}</p>
                 <p data-testid="text-company-contact" className="break-all">
                   Phone: {template.companyPhone || '027 216 6882'} | Email: {template.companyEmail || 'quotes@treemarkables.nz'}
@@ -161,9 +161,9 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
               </div>
             </div>
             <div className="text-left sm:text-right flex-shrink-0">
-              <div className="bg-white/20 rounded-lg p-2 sm:p-4 backdrop-blur-sm">
-                <h2 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">QUOTE</h2>
-                <Badge className={`${getStatusColor(quote.status)} border-0 text-xs`} data-testid="badge-quote-status">
+              <div className="bg-white/20 rounded-lg p-1.5 sm:p-4 backdrop-blur-sm">
+                <h2 className="text-base sm:text-2xl font-bold mb-0.5 sm:mb-2">QUOTE</h2>
+                <Badge className={`${getStatusColor(quote.status)} border-0 text-[10px] sm:text-sm`} data-testid="badge-quote-status">
                   {quote.status.toUpperCase()}
                 </Badge>
               </div>
