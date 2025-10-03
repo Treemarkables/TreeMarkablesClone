@@ -165,6 +165,27 @@ export default function Integrations() {
     queryKey: ['/api/xero/status'],
   });
   
+  // Connect to Xero mutation (Custom Connection)
+  const connectMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/xero/connect', {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/xero/status'] });
+      toast({
+        title: "Connected to Xero",
+        description: `Successfully connected to ${data.tenantName || 'Xero'}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Connection Failed",
+        description: error.message || "Make sure you have authorized the Custom Connection in Xero first.",
+        variant: "destructive",
+      });
+    },
+  });
+  
   // Disconnect from Xero mutation
   const disconnectMutation = useMutation({
     mutationFn: async () => {
@@ -226,8 +247,8 @@ export default function Integrations() {
 
   const handleConnect = (integrationId: string) => {
     if (integrationId === 'xero') {
-      // Redirect to Xero OAuth flow
-      window.location.href = '/api/xero/connect';
+      // Connect using Custom Connection client credentials
+      connectMutation.mutate();
     } else {
       // TODO: Implement other integrations
       console.log('Connecting to:', integrationId);
