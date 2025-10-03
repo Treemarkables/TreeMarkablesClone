@@ -3741,6 +3741,20 @@ export function GlobalJobCard({
               <div className="flex justify-center sm:justify-end">
                 <div className="flex gap-1 sm:gap-2">
                   <Button 
+                    size="sm" 
+                    onClick={() => {
+                      toast({
+                        title: "Invoice Saved",
+                        description: "Invoice has been saved successfully.",
+                      });
+                    }} 
+                    data-testid="button-save-invoice" 
+                    className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
+                  >
+                    <Save className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    Save Invoice
+                  </Button>
+                  <Button 
                     variant="outline" 
                     size="sm" 
                     onClick={() => {
@@ -3782,20 +3796,6 @@ export function GlobalJobCard({
                   >
                     <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                     PDF
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    onClick={() => {
-                      toast({
-                        title: "Add Payment",
-                        description: "Payment tracking functionality will be available soon.",
-                      });
-                    }} 
-                    data-testid="button-add-payment"
-                    className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
-                  >
-                    <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                    Payment
                   </Button>
                 </div>
               </div>
