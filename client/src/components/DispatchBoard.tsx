@@ -1946,10 +1946,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     </div>
                     
                     <div 
-                      className="text-sm text-gray-700 leading-relaxed mb-3 break-words cursor-pointer hover:text-gray-900" 
+                      className="text-sm text-gray-700 leading-relaxed mb-3 break-words cursor-pointer hover:text-gray-900 active:text-blue-600" 
                       data-testid={`mobile-job-description-${job.id}`}
                       onClick={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
+                        setDescriptionPopupJob(job);
+                        setShowDescriptionPopup(true);
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
                         setDescriptionPopupJob(job);
                         setShowDescriptionPopup(true);
                       }}
