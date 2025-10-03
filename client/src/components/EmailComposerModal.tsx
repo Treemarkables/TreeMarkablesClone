@@ -185,7 +185,20 @@ export function EmailComposerModal({
   useEffect(() => {
     if (isOpen && job && customer) {
       const billingEmail = customer.billingContactEmail || customer.email || customer.jobContactEmail;
-      const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.name || "Valued Customer";
+      
+      // Format name as "FirstName LastName" - handle various data formats
+      let customerName = "Valued Customer";
+      if (customer.firstName && customer.lastName) {
+        customerName = `${customer.firstName} ${customer.lastName}`.trim();
+      } else if (customer.name) {
+        // If name is stored as "LastName, FirstName", swap it to "FirstName LastName"
+        if (customer.name.includes(',')) {
+          const parts = customer.name.split(',').map((p: string) => p.trim());
+          customerName = parts.length === 2 ? `${parts[1]} ${parts[0]}` : customer.name;
+        } else {
+          customerName = customer.name;
+        }
+      }
       
       // Auto-attach appropriate document if available
       const attachmentsList: TypedAttachment[] = [];
@@ -237,8 +250,8 @@ export function EmailComposerModal({
         .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
         .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "")
         .replace("{contactName}", "Treemarkables Team")
-        .replace("{contactPhone}", '<a href="tel:0272166882">0272166882</a>')
-        .replace("{companySignature}", "\n\nTreemarkables LTD\nQualified Arborists\nGisborne, New Zealand\nPhone: " + '<a href="tel:0272166882">0272166882</a>' + "\nEmail: " + '<a href="mailto:quotes@treemarkables.nz">quotes@treemarkables.nz</a>');
+        .replace("{contactPhone}", "0272166882")
+        .replace("{companySignature}", "\n\nTreemarkables LTD\nQualified Arborists\nGisborne, New Zealand\nPhone: 0272166882\nEmail: quotes@treemarkables.nz");
 
       setEmailData({
         to: billingEmail || "",
