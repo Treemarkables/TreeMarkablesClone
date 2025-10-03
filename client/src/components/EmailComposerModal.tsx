@@ -438,7 +438,7 @@ export function EmailComposerModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-full sm:max-w-4xl h-[90vh] flex flex-col p-0">
         <DialogHeader className="flex-shrink-0 border-b p-2">
-          <div className="flex items-center justify-end sm:justify-between gap-2 mb-1">
+          <div className="flex items-center justify-end sm:justify-between gap-2">
             <div className="hidden sm:flex items-center gap-1.5">
               <Mail className="w-4 h-4" />
               <DialogTitle className="text-base font-semibold">New Email</DialogTitle>
@@ -453,7 +453,7 @@ export function EmailComposerModal({
               <X className="w-3.5 h-3.5" />
             </Button>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 mt-1">
             <Select value={emailData.selectedTemplate} onValueChange={handleTemplateSelect}>
               <SelectTrigger className="w-full text-xs h-7">
                 <SelectValue placeholder="Email Templates" />
