@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -254,15 +254,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-full h-full overflow-y-auto sm:max-w-4xl sm:max-h-[90vh] sm:h-auto">
-        <DialogHeader className="flex flex-row items-center justify-between pb-4 border-b">
-          <DialogTitle className="text-base sm:text-lg font-semibold">
-            Job #{jobNumber} Recorded Time
-          </DialogTitle>
-          <Button variant="ghost" size="icon" onClick={onClose} data-testid="button-close-modal" className="shrink-0 h-11 w-11">
-            <X className="h-5 w-5" />
-          </Button>
-        </DialogHeader>
-
         <div className="space-y-4">
           {/* Add Time Form - Always Visible */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 space-y-3">
