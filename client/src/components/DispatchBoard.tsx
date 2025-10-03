@@ -772,8 +772,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     return jobs
       .filter(job => {
-        // Show all jobs except completed and unsuccessful
-        return job.status !== 'completed' && job.status !== 'unsuccessful';
+        // Show all jobs including completed (only exclude unsuccessful)
+        return job.status !== 'unsuccessful';
       })
       .filter(job => {
         // Apply search filter
@@ -798,7 +798,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const jobNumberB = parseInt(b.jobNumber || '0', 10);
         return jobNumberB - jobNumberA;
       })
-      .slice(0, 60); // Limit to 60 latest jobs
+      .slice(0, 60); // Limit to 60 latest jobs - completed jobs included until they age out
   };
 
   // Job Mutations
