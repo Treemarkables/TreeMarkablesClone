@@ -11486,10 +11486,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           if (response.ok) {
             const data = await response.json();
             console.log(`[Address Search] API Response:`, JSON.stringify(data, null, 2));
-            console.log(`[Address Search] API success: ${data.addresses?.length || 0} results`);
+            // Addy API returns array directly, not wrapped in object
+            const addresses = Array.isArray(data) ? data : [];
+            console.log(`[Address Search] API success: ${addresses.length} results`);
             return res.json({ 
               success: true, 
-              addresses: data.addresses || []
+              addresses: addresses
             });
           } else {
             const errorText = await response.text();
