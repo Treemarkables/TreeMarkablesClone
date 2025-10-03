@@ -356,38 +356,37 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
           {/* Pending Entries List */}
           {pendingEntries.length > 0 && (
             <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
-                <h4 className="font-medium text-gray-900">
+              <div className="bg-gray-50 border-b border-gray-200 px-2 py-1.5">
+                <h4 className="font-medium text-gray-900 text-sm">
                   Pending Entries ({pendingEntries.length})
                 </h4>
               </div>
               
               <div className="divide-y divide-gray-100">
                 {pendingEntries.map((entry) => (
-                  <div key={entry.id} className="p-3 sm:p-4 hover:bg-gray-50 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between" data-testid={`entry-${entry.id}`}>
-                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div key={entry.id} className="p-2 hover:bg-gray-50 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between" data-testid={`entry-${entry.id}`}>
+                    <div className="flex-1 grid grid-cols-3 gap-2">
                       <div>
-                        <div className="text-xs text-gray-500">Staff</div>
-                        <div className="font-medium text-sm sm:text-base">{entry.staffName}</div>
+                        <div className="text-[10px] text-gray-500">Staff</div>
+                        <div className="font-medium text-xs">{entry.staffName}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-500">Rate Type</div>
-                        <div className="text-sm">{availableRates.find((r: any) => r.itemNumber === entry.rate)?.name || entry.rate}</div>
+                        <div className="text-[10px] text-gray-500">Rate</div>
+                        <div className="text-xs">{availableRates.find((r: any) => r.itemNumber === entry.rate)?.name || entry.rate}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-500">Duration</div>
-                        <div className="text-sm font-medium">{formatDuration(entry.duration)}</div>
+                        <div className="text-[10px] text-gray-500">Time</div>
+                        <div className="text-xs font-medium">{formatDuration(entry.duration)}</div>
                       </div>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => removePendingEntry(entry.id)}
-                      className="sm:ml-4 text-red-600 hover:text-red-800 hover:bg-red-50 w-full sm:w-auto min-h-11"
+                      className="text-red-600 hover:text-red-800 hover:bg-red-50 h-7 px-2"
                       data-testid={`button-remove-${entry.id}`}
                     >
-                      <Trash2 className="h-4 w-4 sm:mr-0 mr-2" />
-                      <span className="sm:hidden">Remove</span>
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
                 ))}  
@@ -398,27 +397,27 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
           {/* Existing Saved Entries */}
           {existingEntries.length > 0 && (
             <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-3">
-                <h4 className="font-medium text-emerald-900">
+              <div className="bg-emerald-50 border-b border-emerald-200 px-2 py-1.5">
+                <h4 className="font-medium text-emerald-900 text-sm">
                   Saved Today ({existingEntries.length})
                 </h4>
               </div>
               
               <div className="divide-y divide-gray-100">
                 {existingEntries.map((entry: any) => (
-                  <div key={entry.id} className="p-3 sm:p-4 bg-white">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div key={entry.id} className="p-2 bg-white">
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <div className="text-xs text-gray-500">Staff</div>
-                        <div className="font-medium text-sm sm:text-base">{entry.employeeName}</div>
+                        <div className="text-[10px] text-gray-500">Staff</div>
+                        <div className="font-medium text-xs">{entry.employeeName}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-500">Rate Type</div>
-                        <div className="text-sm">{entry.lineItemName}</div>
+                        <div className="text-[10px] text-gray-500">Rate</div>
+                        <div className="text-xs">{entry.lineItemName}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-500">Duration</div>
-                        <div className="text-sm font-medium">{formatDuration(entry.hours)}</div>
+                        <div className="text-[10px] text-gray-500">Time</div>
+                        <div className="text-xs font-medium">{formatDuration(entry.hours)}</div>
                       </div>
                     </div>
                   </div>
