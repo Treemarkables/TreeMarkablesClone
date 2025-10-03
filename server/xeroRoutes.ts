@@ -265,20 +265,23 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       
       // Step 2: Create invoice in Xero
       try {
-        const lineItems = [];
+        // Convert job line items to Xero format
+        const jobLineItems = job.lineItems || [];
         
-        // Add job amount as line item
-        const amount = job.totalAmount ? parseFloat(job.totalAmount as string) : 0;
-        
-        if (amount > 0) {
-          lineItems.push({
-            description: job.description || job.title || 'Tree Service',
-            quantity: 1,
-            unitAmount: amount,
-            accountCode: '200', // Sales account - adjust as needed
-            taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
+        if (jobLineItems.length === 0) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Job must have at least one line item to create an invoice' 
           });
         }
+        
+        const lineItems = jobLineItems.map((item: any) => ({
+          description: item.description || 'Tree Service',
+          quantity: item.quantity || 1,
+          unitAmount: parseFloat(item.unitPrice || item.total || 0),
+          accountCode: '200', // Sales account - adjust as needed
+          taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
+        }));
         
         const invoice = {
           type: 'ACCREC' as any, // Accounts Receivable (sales invoice)
