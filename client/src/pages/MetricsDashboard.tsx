@@ -36,6 +36,8 @@ interface RevenueStats {
   totalRevenue: number;
   jobsCompleted: number;
   averageJobValue: number;
+  totalCosts: number;
+  grossMargin: number;
   monthlyTrend: { month: string; revenue: number; jobs: number }[];
 }
 
@@ -284,6 +286,25 @@ export default function MetricsDashboard() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Jobs completed first visit
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate card-colorful" data-testid="card-gross-margin">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Gross Margin</CardTitle>
+                <TrendingUp className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {revenueStats?.grossMargin !== undefined 
+                    ? `${revenueStats.grossMargin.toFixed(1)}%` 
+                    : "0%"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {revenueStats?.totalRevenue && revenueStats?.totalCosts 
+                    ? `${formatCurrency(revenueStats.totalRevenue - revenueStats.totalCosts)} profit`
+                    : "All completed jobs"}
                 </p>
               </CardContent>
             </Card>
