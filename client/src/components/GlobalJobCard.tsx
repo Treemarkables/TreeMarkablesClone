@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
 import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive } from "lucide-react";
+import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { AddressAutocomplete } from "./AddressAutocomplete";
@@ -1475,7 +1476,7 @@ export function GlobalJobCard({
                 onClick={handleEmailClick} 
                 data-testid="button-email"
               >
-                <Mail className="w-5 h-5 mr-1.5 text-blue-500" fill="currentColor" />
+                <MdEmail className="w-6 h-6 mr-1.5 text-blue-500" />
                 <span className="text-xs">Email</span>
               </Button>
               <Button 
@@ -1485,7 +1486,7 @@ export function GlobalJobCard({
                 onClick={() => setIsSMSComposerOpen(true)} 
                 data-testid="button-sms"
               >
-                <MessageSquare className="w-5 h-5 mr-1.5 text-blue-500" fill="currentColor" />
+                <MdSms className="w-6 h-6 mr-1.5 text-blue-500" />
                 <span className="text-xs">SMS</span>
               </Button>
               <Button 
@@ -1495,7 +1496,7 @@ export function GlobalJobCard({
                 onClick={handleCallClick} 
                 data-testid="button-call"
               >
-                <Phone className="w-5 h-5 mr-1.5 text-green-500" fill="currentColor" />
+                <MdPhone className="w-6 h-6 mr-1.5 text-green-500" />
                 <span className="text-xs">Call</span>
               </Button>
               <Button 
@@ -1505,7 +1506,7 @@ export function GlobalJobCard({
                 onClick={handleScheduleClick} 
                 data-testid="button-schedule"
               >
-                <Calendar className="w-5 h-5 mr-1.5 text-red-500" fill="currentColor" />
+                <MdCalendarToday className="w-6 h-6 mr-1.5 text-red-500" />
                 <span className="text-xs">Schedule</span>
               </Button>
               <Button 
@@ -1515,7 +1516,7 @@ export function GlobalJobCard({
                 onClick={handleQueueClick} 
                 data-testid="button-queue"
               >
-                <FileText className="w-5 h-5 mr-1.5 text-blue-600" fill="currentColor" />
+                <MdDescription className="w-6 h-6 mr-1.5 text-blue-600" />
                 <span className="text-xs">Queue</span>
               </Button>
               <DropdownMenu>
@@ -1526,7 +1527,7 @@ export function GlobalJobCard({
                     className="h-9 px-2 hover-elevate active-elevate-2" 
                     data-testid="button-send"
                   >
-                    <Send className="w-5 h-5 mr-1.5 text-orange-500" fill="currentColor" />
+                    <MdSend className="w-6 h-6 mr-1.5 text-orange-500" />
                     <span className="text-xs">Send</span>
                   </Button>
                 </DropdownMenuTrigger>
@@ -1582,7 +1583,7 @@ export function GlobalJobCard({
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
               >
-                <DollarSign className="w-5 h-5 mr-1.5 text-teal-500" fill="currentColor" />
+                <MdAttachMoney className="w-6 h-6 mr-1.5 text-teal-500" />
                 <span className="text-xs">Profit</span>
               </Button>
               <Button 
@@ -1593,7 +1594,7 @@ export function GlobalJobCard({
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
               >
-                <Clock className="w-5 h-5 mr-1.5 text-purple-500" fill="currentColor" />
+                <MdAccessTime className="w-6 h-6 mr-1.5 text-purple-500" />
                 <span className="text-xs">Time</span>
               </Button>
               <Button 
@@ -1604,7 +1605,7 @@ export function GlobalJobCard({
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
               >
-                <Camera className="w-5 h-5 mr-1.5 text-pink-500" fill="currentColor" />
+                <MdCameraAlt className="w-6 h-6 mr-1.5 text-pink-500" />
                 <span className="text-xs">Camera</span>
               </Button>
               <DropdownMenu>
@@ -1615,7 +1616,7 @@ export function GlobalJobCard({
                     className="h-9 px-2 hover-elevate active-elevate-2" 
                     data-testid="button-more"
                   >
-                    <MoreHorizontal className="w-5 h-5 mr-1.5 text-green-600" fill="currentColor" />
+                    <MdMoreHoriz className="w-6 h-6 mr-1.5 text-green-600" />
                     <span className="text-xs">More</span>
                   </Button>
                 </DropdownMenuTrigger>
