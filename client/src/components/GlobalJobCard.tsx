@@ -3645,7 +3645,63 @@ export function GlobalJobCard({
         <Dialog open={isQuoteModalOpen} onOpenChange={setIsQuoteModalOpen}>
           <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
             <DialogHeader className="p-3 sm:p-6 border-b">
-              <h2 className="text-base sm:text-lg font-semibold">Quote Preview - {editingJob?.title || 'Job'}</h2>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <h2 className="text-base sm:text-lg font-semibold">Quote Preview - {editingJob?.title || 'Job'}</h2>
+                <div className="flex gap-1 sm:gap-2 flex-wrap">
+                  <Button 
+                    size="sm" 
+                    onClick={handleSaveQuote} 
+                    data-testid="button-save-quote" 
+                    className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
+                  >
+                    <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    Save Quote
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      toast({
+                        title: "Copied",
+                        description: "Quote details copied to clipboard.",
+                      });
+                    }} 
+                    data-testid="button-copy-quote"
+                    className="h-7 text-xs"
+                  >
+                    <Copy className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    Copy
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      setIsQuoteModalOpen(false);
+                      handleEmailClick('quote');
+                    }} 
+                    data-testid="button-email-quote"
+                    className="h-7 text-xs"
+                  >
+                    <Mail className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    Email
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      toast({
+                        title: "Download Started",
+                        description: "Quote PDF download will be available soon.",
+                      });
+                    }} 
+                    data-testid="button-download-quote"
+                    className="h-7 text-xs"
+                  >
+                    <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    PDF
+                  </Button>
+                </div>
+              </div>
             </DialogHeader>
             <div className="p-3 sm:p-6">
               <QuoteTemplate
@@ -3671,24 +3727,7 @@ export function GlobalJobCard({
                   unit: 'each',
                   total: item.total
                 })) || []}
-                showActions={true}
-                onSave={handleSaveQuote}
-                onEmail={() => {
-                  setIsQuoteModalOpen(false);
-                  handleEmailClick('quote');
-                }}
-                onDownload={() => {
-                  toast({
-                    title: "Download Started",
-                    description: "Quote PDF download will be available soon.",
-                  });
-                }}
-                onCopy={() => {
-                  toast({
-                    title: "Copied",
-                    description: "Quote details copied to clipboard.",
-                  });
-                }}
+                showActions={false}
               />
             </div>
           </DialogContent>
