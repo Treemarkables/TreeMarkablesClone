@@ -11489,12 +11489,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               success: true, 
               addresses: data.addresses || []
             });
-          } else if (response.status === 401) {
-            console.error('[Address Search] API authentication failed - check API key');
-          } else if (response.status === 429) {
-            console.warn('[Address Search] API rate limit exceeded');
           } else {
-            console.warn(`[Address Search] API error: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            console.error(`[Address Search] API error ${response.status}: ${errorText}`);
+            if (response.status === 401) {
+              console.error('[Address Search] API authentication failed - check API key format and validity');
+            } else if (response.status === 429) {
+              console.warn('[Address Search] API rate limit exceeded');
+            }
           }
         } catch (apiError) {
           if (apiError instanceof Error) {
