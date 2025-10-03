@@ -1191,8 +1191,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="space-y-4 overflow-x-hidden">
+      <Card className="overflow-x-hidden">
         {/* Desktop Header - Hidden on Mobile */}
         <CardHeader className="hidden md:block">
           <div className="flex items-center justify-between">
@@ -1334,7 +1334,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="overflow-x-hidden">
           {/* Desktop Time Grid View */}
           <div className="hidden md:flex gap-4 h-[700px]">
             {/* Team/Staff Column */}
@@ -1818,7 +1818,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>
           
           {/* Mobile Jobs List - Direct Display */}
-          <div className="md:hidden space-y-3">
+          <div className="md:hidden space-y-3 overflow-x-hidden">
             {/* Unscheduled Jobs Section - Mobile */}
             {(() => {
               const unscheduledJobs = getTodaysJobs().filter((job: any) => 
@@ -1898,7 +1898,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             })()}
             
             {/* Mobile Jobs Cards */}
-            <div className="space-y-3">
+            <div className="space-y-3 overflow-x-hidden">
               {getTodaysJobs().map((job, index) => {
               const customerName = job.customerName || 'Unknown Customer';
               
