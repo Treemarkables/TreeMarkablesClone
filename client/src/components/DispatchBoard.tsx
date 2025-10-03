@@ -1334,7 +1334,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="overflow-x-hidden">
           {/* Desktop Time Grid View */}
           <div className="hidden md:flex gap-4 h-[700px]">
             {/* Team/Staff Column */}
@@ -1905,7 +1905,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               return (
                 <div
                   key={job.id}
-                  className="p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="p-3 sm:p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
                   onClick={() => handleEditJob(job)}
                   data-testid={`mobile-job-card-${job.id}`}
                 >
@@ -1926,11 +1926,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     </div>
                     
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <h3 className="font-bold text-gray-900 text-sm" data-testid={`mobile-job-customer-${job.id}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-bold text-gray-900 text-sm truncate" data-testid={`mobile-job-customer-${job.id}`}>
                           {customerName}
                         </h3>
-                        <div className="text-xs font-medium text-gray-500" data-testid={`mobile-job-number-${job.id}`}>
+                        <div className="text-xs font-medium text-gray-500 flex-shrink-0" data-testid={`mobile-job-number-${job.id}`}>
                           #{job.jobId || '0000'}
                         </div>
                       </div>
@@ -1938,12 +1938,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   </div>
                   
                   
-                  <div className="ml-13"> {/* Align with content next to avatar */}
-                    <div className="text-xs text-gray-600 mb-2 font-semibold">
+                  <div className="ml-0 sm:ml-13"> {/* Align with content next to avatar */}
+                    <div className="text-xs text-gray-600 mb-2 font-semibold break-words">
                       {job.address || 'No address specified'}
                     </div>
                     
-                    <div className="text-sm text-gray-700 leading-relaxed mb-3" data-testid={`mobile-job-description-${job.id}`}>
+                    <div className="text-sm text-gray-700 leading-relaxed mb-3 break-words" data-testid={`mobile-job-description-${job.id}`}>
                       {(() => {
                         const rawDescription = job.description || job.notes;
                         
