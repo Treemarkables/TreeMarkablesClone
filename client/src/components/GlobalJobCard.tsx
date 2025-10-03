@@ -1301,13 +1301,18 @@ export function GlobalJobCard({
           await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
           hasUserChangedRef.current = false;
           
-          // Invalidate jobs query to refresh the list
-          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+          // Invalidate jobs query and wait for it to refetch
+          await queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+          
+          // Close after save and refresh complete
+          onClose();
         } catch (error) {
           console.error('Failed to save changes on close:', error);
+          onClose();
         }
+      } else {
+        onClose();
       }
-      onClose();
     }
   };
 
