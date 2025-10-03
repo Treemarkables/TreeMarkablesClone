@@ -640,7 +640,7 @@ export function JobDiarySection({
             <div className="text-xs text-muted-foreground">No entries yet</div>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {diaryEntries.map((entry) => {
               const docInfo = extractDocumentInfo(entry);
               const isClickable = docInfo && (
