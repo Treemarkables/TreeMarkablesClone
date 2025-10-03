@@ -358,17 +358,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       <CardContent className="space-y-6 pt-6">
         {/* Job Revenue from Line Items - Read Only */}
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            <h3 className="font-semibold">Job Line Items</h3>
-            <Badge variant="outline" className="text-xs">
-              {job?.lineItems?.length || 0} items
-            </Badge>
-            <Badge className="bg-blue-100 text-blue-800 text-xs">
-              Managed in Job Card
-            </Badge>
-          </div>
-
           {job?.lineItems && job.lineItems.length > 0 ? (
             <div className="space-y-2">
               {job.lineItems.map((item: any, index: number) => (
