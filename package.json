@@ -94,6 +94,7 @@
     "vite-plugin-pwa": "^1.0.3",
     "wouter": "^3.3.5",
     "ws": "^8.18.0",
+    "xero-node": "^13.1.0",
     "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0"
   },

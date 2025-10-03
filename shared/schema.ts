@@ -1913,6 +1913,24 @@ export const invoices = pgTable("invoices", {
   status: text("status").notNull(), // pending, paid, overdue, cancelled
   items: jsonb("items").notNull(), // Array of {description, quantity, rate, amount}
   notes: text("notes"),
+  xeroInvoiceId: text("xero_invoice_id"), // Xero invoice ID for synced invoices
+  xeroSyncedAt: timestamp("xero_synced_at"), // When invoice was last synced to Xero
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Xero OAuth2 Integration
+export const xeroConnections = pgTable("xero_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: text("tenant_id").notNull().unique(), // Xero organization/tenant ID
+  tenantName: text("tenant_name"), // Organization name for display
+  accessToken: text("access_token").notNull(), // OAuth2 access token
+  refreshToken: text("refresh_token").notNull(), // OAuth2 refresh token
+  expiresAt: timestamp("expires_at").notNull(), // When access token expires
+  idToken: text("id_token"), // OpenID Connect ID token
+  scope: text("scope"), // Granted scopes
+  isActive: boolean("is_active").default(true), // Connection status
+  lastSyncedAt: timestamp("last_synced_at"), // Last successful API call
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1948,6 +1966,12 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   updatedAt: true,
 });
 
+export const insertXeroConnectionSchema = createInsertSchema(xeroConnections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertServiceRequestSchema = createInsertSchema(serviceRequests).omit({
   id: true,
   createdAt: true,
@@ -1965,6 +1989,8 @@ export const insertCustomerAuthSchema = createInsertSchema(customerAuth).omit({
 // Types for Customer Portal
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type XeroConnection = typeof xeroConnections.$inferSelect;
+export type InsertXeroConnection = z.infer<typeof insertXeroConnectionSchema>;
 export type ServiceRequest = typeof serviceRequests.$inferSelect;
 export type InsertServiceRequest = z.infer<typeof insertServiceRequestSchema>;
 export type CustomerAuth = typeof customerAuth.$inferSelect;
