@@ -1909,7 +1909,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   key={job.id}
                   className="p-3 sm:p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
                   onClick={(e) => {
-                    if ((e.target as HTMLElement).closest('[data-description-trigger]')) {
+                    const target = e.target as HTMLElement;
+                    if (target.hasAttribute('data-description-trigger') || target.closest('[data-description-trigger]')) {
+                      e.stopPropagation();
+                      e.preventDefault();
                       return;
                     }
                     handleEditJob(job);
