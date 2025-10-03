@@ -1986,16 +1986,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         className="absolute inset-0 cursor-pointer z-10"
                         data-description-trigger="true"
                         onClick={(e) => {
+                          console.log('Description overlay onClick fired');
                           e.stopPropagation();
                           e.preventDefault();
                           setDescriptionPopupJob(job);
                           setShowDescriptionPopup(true);
                         }}
                         onTouchEnd={(e) => {
+                          console.log('Description overlay onTouchEnd fired');
                           e.stopPropagation();
                           e.preventDefault();
                           setDescriptionPopupJob(job);
                           setShowDescriptionPopup(true);
+                        }}
+                        onTouchStart={(e) => {
+                          console.log('Description overlay onTouchStart fired');
+                          e.stopPropagation();
+                          e.preventDefault();
                         }}
                       />
                     </div>
