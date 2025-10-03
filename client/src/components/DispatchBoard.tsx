@@ -805,7 +805,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const activityB = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
         
         if (activityA !== activityB) {
-          return activityB - activityA; // Most recent activity first
+          return activityB - activityA; // Most recent activity first (descending by timestamp)
         }
         
         // Then sort by highest job number (descending)
