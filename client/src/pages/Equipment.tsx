@@ -40,14 +40,15 @@ import {
   Undo2,
   TrendingUp,
   PieChart,
-  Table as TableIcon
+  Table as TableIcon,
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // Equipment form schema
 const equipmentFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  type: z.string().min(1, "Type is required"),
+  type: z.string().optional(),
   brand: z.string().optional(),
   model: z.string().optional(),
   year: z.number().optional(),
@@ -275,6 +276,26 @@ export default function Equipment() {
       toast({
         title: "Error",
         description: "Failed to add maintenance record",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete equipment mutation
+  const deleteEquipmentMutation = useMutation({
+    mutationFn: (equipmentId: string) => 
+      apiRequest("DELETE", `/api/equipment/${equipmentId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
+      toast({
+        title: "Success",
+        description: "Equipment deleted successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete equipment",
         variant: "destructive",
       });
     },
@@ -956,6 +977,15 @@ export default function Equipment() {
                       data-testid={`button-maintenance-${item.id}`}
                     >
                       <Wrench className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size={isMobile ? "icon" : "sm"}
+                      className={isMobile ? "h-11 w-11" : ""}
+                      onClick={() => deleteEquipmentMutation.mutate(item.id)}
+                      data-testid={`button-delete-${item.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
