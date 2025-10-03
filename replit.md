@@ -59,7 +59,7 @@ Preferred communication style: Simple, everyday language.
 - **Email-to-Job-Diary Integration**: Email webhook intelligently routes customer replies with job/quote references directly to job diaries as "email" type entries.
 - **Mobile App Integration**: Native mobile API with Bearer token authentication for call recording uploads, OpenAI Whisper transcription, customer phone matching, and automated job creation with diary logging. Includes comprehensive API documentation.
 - **Progressive Web App (PWA)**: Full PWA support with swipeable photo carousel, pull-to-refresh functionality, and iPhone-optimized layouts. All pages (Job Dashboard, Analytics, Invoices, Integrations, Safety, Workflows) are fully responsive with no horizontal scrolling.
-- **Xero Accounting Integration**: Full OAuth2 integration with Xero for automated invoice syncing. Features include automatic token refresh, contact provisioning, GST handling, and real-time sync status tracking. Accessible via Integrations page and Invoices page with one-click "Send to Xero" functionality.
+- **Xero Accounting Integration**: Custom Connection integration with Xero for automated invoice syncing (client credentials flow, $5-10 NZD/month subscription). Features include automatic token refresh, contact provisioning, GST handling, and real-time sync status tracking. Accessible via Integrations page and Invoices page with one-click "Send to Xero" functionality.
 
 ## External Dependencies
 
