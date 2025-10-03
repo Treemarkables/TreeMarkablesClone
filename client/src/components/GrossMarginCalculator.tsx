@@ -355,26 +355,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Calculator className="h-6 w-6" />
-            Gross Margin Calculator
-          </div>
-          {job?.grossMarginCalculated ? (
-            <Badge className="bg-green-100 text-green-800">
-              <CheckCircle className="h-4 w-4 mr-1" />
-              Complete
-            </Badge>
-          ) : (
-            <Badge className="bg-orange-100 text-orange-800">
-              <AlertCircle className="h-4 w-4 mr-1" />
-              Required for Invoice
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 pt-6">
         {/* Revenue Information */}
         <div className="bg-blue-50 p-4 rounded-lg">
           <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
