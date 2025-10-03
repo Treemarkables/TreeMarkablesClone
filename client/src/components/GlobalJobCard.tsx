@@ -2147,10 +2147,17 @@ export function GlobalJobCard({
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input 
-                                    {...field}
+                                  <AddressAutocomplete 
+                                    value={field.value || ""}
+                                    onChange={field.onChange}
+                                    onAddressSelect={(parsed) => {
+                                      form.setValue('address', parsed.fullAddress);
+                                      if (parsed.city) form.setValue('city', parsed.city);
+                                      if (parsed.region) form.setValue('region', parsed.region);
+                                    }}
                                     className="h-8 text-sm" 
-                                    placeholder="Job site address"
+                                    placeholder="Start typing address..."
+                                    data-testid="input-job-address"
                                   />
                                 </FormControl>
                               </FormItem>
