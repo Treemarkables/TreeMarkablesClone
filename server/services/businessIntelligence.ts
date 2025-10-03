@@ -148,19 +148,34 @@ export interface FinancialMetrics {
 class BusinessIntelligenceService {
   // Core Business Intelligence calculation methods
   
-  async calculateDashboardStats(jobs: Job[], customers: Customer[], quotes: Quote[], equipment: Equipment[]): Promise<DashboardStats> {
+  // Helper method to filter jobs by metrics start date
+  private filterJobsByMetricsDate(jobs: Job[], metricsStartDate?: Date | null): Job[] {
+    if (!metricsStartDate) {
+      return jobs;
+    }
+    return jobs.filter(job => {
+      if (!job.createdAt) return false;
+      const jobCreatedAt = new Date(job.createdAt);
+      return jobCreatedAt >= metricsStartDate;
+    });
+  }
+  
+  async calculateDashboardStats(jobs: Job[], customers: Customer[], quotes: Quote[], equipment: Equipment[], metricsStartDate?: Date | null): Promise<DashboardStats> {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     
+    // Filter jobs by metrics start date
+    const filteredJobs = this.filterJobsByMetricsDate(jobs, metricsStartDate);
+    
     // Calculate total revenue
-    const totalRevenue = jobs
+    const totalRevenue = filteredJobs
       .filter(job => job.status === 'completed' && job.totalAmount)
       .reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
     
     // Calculate monthly growth
-    const currentMonthRevenue = jobs
+    const currentMonthRevenue = filteredJobs
       .filter(job => 
         job.status === 'completed' && 
         job.completedDate && 
@@ -168,7 +183,7 @@ class BusinessIntelligenceService {
       )
       .reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
     
-    const lastMonthRevenue = jobs
+    const lastMonthRevenue = filteredJobs
       .filter(job => 
         job.status === 'completed' && 
         job.completedDate && 
@@ -187,13 +202,13 @@ class BusinessIntelligenceService {
     const conversionRate = totalQuotes > 0 ? (acceptedQuotes / totalQuotes) * 100 : 0;
     
     // Calculate average job value
-    const completedJobs = jobs.filter(job => job.status === 'completed' && job.totalAmount);
+    const completedJobs = filteredJobs.filter(job => job.status === 'completed' && job.totalAmount);
     const averageJobValue = completedJobs.length > 0
       ? completedJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0) / completedJobs.length
       : 0;
     
     // Calculate active projects
-    const activeProjects = jobs.filter(job => 
+    const activeProjects = filteredJobs.filter(job => 
       ['work_order', 'in_progress', 'scheduled'].includes(job.status)
     ).length;
     
@@ -205,14 +220,14 @@ class BusinessIntelligenceService {
     // Calculate repeat customer rate
     const customerJobCounts = customers.map(customer => ({
       customerId: customer.id,
-      jobCount: jobs.filter(job => job.customerId === customer.id).length
+      jobCount: filteredJobs.filter(job => job.customerId === customer.id).length
     }));
     const repeatCustomers = customerJobCounts.filter(c => c.jobCount > 1).length;
     const repeatCustomerRate = customers.length > 0 ? (repeatCustomers / customers.length) * 100 : 0;
     
     return {
       totalRevenue,
-      totalJobs: jobs.length,
+      totalJobs: filteredJobs.length,
       totalCustomers: customers.length,
       totalQuotes: quotes.length,
       averageJobValue,
@@ -226,8 +241,10 @@ class BusinessIntelligenceService {
     };
   }
   
-  async calculateRevenueAnalytics(jobs: Job[], customers: Customer[]): Promise<RevenueAnalytics> {
-    const completedJobs = jobs.filter(job => job.status === 'completed' && job.totalAmount);
+  async calculateRevenueAnalytics(jobs: Job[], customers: Customer[], metricsStartDate?: Date | null): Promise<RevenueAnalytics> {
+    // Filter jobs by metrics start date
+    const filteredJobs = this.filterJobsByMetricsDate(jobs, metricsStartDate);
+    const completedJobs = filteredJobs.filter(job => job.status === 'completed' && job.totalAmount);
     
     // Total revenue
     const totalRevenue = completedJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
@@ -338,10 +355,13 @@ class BusinessIntelligenceService {
     };
   }
   
-  async calculateOperationalAnalytics(jobs: Job[], equipment: Equipment[], teams: any[]): Promise<OperationalAnalytics> {
+  async calculateOperationalAnalytics(jobs: Job[], equipment: Equipment[], teams: any[], metricsStartDate?: Date | null): Promise<OperationalAnalytics> {
+    // Filter jobs by metrics start date
+    const filteredJobs = this.filterJobsByMetricsDate(jobs, metricsStartDate);
+    
     // Jobs by status
     const statusCounts = new Map<string, number>();
-    jobs.forEach(job => {
+    filteredJobs.forEach(job => {
       statusCounts.set(job.status, (statusCounts.get(job.status) || 0) + 1);
     });
     
@@ -349,11 +369,11 @@ class BusinessIntelligenceService {
       .map(([status, count]) => ({
         status,
         count,
-        percentage: (count / jobs.length) * 100
+        percentage: (count / filteredJobs.length) * 100
       }));
     
     // Average job duration
-    const completedJobsWithDuration = jobs.filter(job => 
+    const completedJobsWithDuration = filteredJobs.filter(job => 
       job.status === 'completed' && 
       job.scheduledDate && 
       job.completedDate
@@ -375,10 +395,10 @@ class BusinessIntelligenceService {
     }));
     
     return {
-      totalJobs: jobs.length,
+      totalJobs: filteredJobs.length,
       jobsByStatus,
       averageJobDuration,
-      jobCompletionRate: jobs.filter(j => j.status === 'completed').length / jobs.length * 100,
+      jobCompletionRate: filteredJobs.length > 0 ? filteredJobs.filter(j => j.status === 'completed').length / filteredJobs.length * 100 : 0,
       onTimeCompletionRate: 92, // Would need actual deadline tracking
       equipmentUtilization,
       teamPerformance: [], // Would need team performance data
@@ -388,7 +408,9 @@ class BusinessIntelligenceService {
     };
   }
   
-  async calculateCustomerAnalytics(customers: Customer[], jobs: Job[], communications: Communication[]): Promise<CustomerAnalytics> {
+  async calculateCustomerAnalytics(customers: Customer[], jobs: Job[], communications: Communication[], metricsStartDate?: Date | null): Promise<CustomerAnalytics> {
+    // Filter jobs by metrics start date
+    const filteredJobs = this.filterJobsByMetricsDate(jobs, metricsStartDate);
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
@@ -400,7 +422,7 @@ class BusinessIntelligenceService {
     
     // Active customers (customers with jobs in last year)
     const activeCustomerIds = new Set(
-      jobs.filter(job => job.createdAt && new Date(job.createdAt) >= oneYearAgo)
+      filteredJobs.filter(job => job.createdAt && new Date(job.createdAt) >= oneYearAgo)
         .map(job => job.customerId)
         .filter(Boolean)
     );
@@ -408,7 +430,7 @@ class BusinessIntelligenceService {
     
     // Customer lifetime value calculation
     const customerLifetimeValues = customers.map(customer => {
-      const customerJobs = jobs.filter(job => job.customerId === customer.id && job.status === 'completed');
+      const customerJobs = filteredJobs.filter(job => job.customerId === customer.id && job.status === 'completed');
       const lifetimeValue = customerJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
       return { customerId: customer.id, lifetimeValue, jobCount: customerJobs.length };
     });

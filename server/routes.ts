@@ -8818,9 +8818,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const customers = await storage.getAllCustomers();
       const quotes = await storage.getAllQuotes();
       const equipment = await storage.getAllEquipment();
+      const settings = await storage.getBusinessSettings();
       
       const dashboardStats = await businessIntelligenceService.calculateDashboardStats(
-        jobs, customers, quotes, equipment
+        jobs, customers, quotes, equipment, settings.metricsStartDate ? new Date(settings.metricsStartDate) : null
       );
       
       res.json({ success: true, data: dashboardStats });
@@ -8835,8 +8836,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     try {
       const jobs = await storage.getAllJobs();
       const customers = await storage.getAllCustomers();
+      const settings = await storage.getBusinessSettings();
       
-      const revenueAnalytics = await businessIntelligenceService.calculateRevenueAnalytics(jobs, customers);
+      const revenueAnalytics = await businessIntelligenceService.calculateRevenueAnalytics(
+        jobs, customers, settings.metricsStartDate ? new Date(settings.metricsStartDate) : null
+      );
       
       res.json({ success: true, data: revenueAnalytics });
     } catch (error) {
@@ -8851,9 +8855,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const jobs = await storage.getAllJobs();
       const equipment = await storage.getAllEquipment();
       const teams = await storage.getAllTeams();
+      const settings = await storage.getBusinessSettings();
       
       const operationalAnalytics = await businessIntelligenceService.calculateOperationalAnalytics(
-        jobs, equipment, teams
+        jobs, equipment, teams, settings.metricsStartDate ? new Date(settings.metricsStartDate) : null
       );
       
       res.json({ success: true, data: operationalAnalytics });
@@ -8869,9 +8874,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const customers = await storage.getAllCustomers();
       const jobs = await storage.getAllJobs();
       const communications = await storage.getAllCommunications();
+      const settings = await storage.getBusinessSettings();
       
       const customerAnalytics = await businessIntelligenceService.calculateCustomerAnalytics(
-        customers, jobs, communications
+        customers, jobs, communications, settings.metricsStartDate ? new Date(settings.metricsStartDate) : null
       );
       
       res.json({ success: true, data: customerAnalytics });
@@ -11766,12 +11772,32 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const dayAfterTomorrow = new Date(tomorrow);
       dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
 
+      // Get business settings for metrics filtering
+      const settings = await storage.getBusinessSettings();
+      const metricsStartDate = settings.metricsStartDate ? new Date(settings.metricsStartDate) : null;
+
       // Get today's jobs
       const allJobs = await storage.getAllJobs();
+      
+      // Filter jobs for metrics (exclude jobs created before metrics start date)
+      const jobsForMetrics = metricsStartDate 
+        ? allJobs.filter(job => {
+            if (!job.createdAt) return false;
+            return new Date(job.createdAt) >= metricsStartDate;
+          })
+        : allJobs;
+      
       const todaysJobs = allJobs.filter(job => {
         if (!job.scheduledDate) return false;
         const jobDate = new Date(job.scheduledDate);
         return jobDate >= today && jobDate < tomorrow;
+      });
+      
+      // Filter today's jobs for metrics calculations
+      const todaysJobsForMetrics = todaysJobs.filter(job => {
+        if (!metricsStartDate) return true;
+        if (!job.createdAt) return false;
+        return new Date(job.createdAt) >= metricsStartDate;
       });
 
       // Get tomorrow's jobs
@@ -11781,11 +11807,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         return jobDate >= tomorrow && jobDate < dayAfterTomorrow;
       });
 
-      // Calculate profit margin for today
+      // Calculate profit margin for today (using filtered jobs)
       let totalRevenue = 0;
       let totalCosts = 0;
       
-      for (const job of todaysJobs) {
+      for (const job of todaysJobsForMetrics) {
         // Calculate revenue from line items
         const jobRevenue = (job.lineItems || []).reduce((sum: number, item: any) => {
           return sum + (item.total || 0);
@@ -11808,8 +11834,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         ? ((totalRevenue - totalCosts) / totalRevenue) * 100 
         : 0;
 
-      // Job status breakdown
-      const statusBreakdown = todaysJobs.reduce((acc: any, job) => {
+      // Job status breakdown (using filtered jobs for metrics)
+      const statusBreakdown = todaysJobsForMetrics.reduce((acc: any, job) => {
         acc[job.status] = (acc[job.status] || 0) + 1;
         return acc;
       }, {});
@@ -11873,15 +11899,15 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Recent activity feed (last 10 activities)
       const recentActivities = await storage.getAllActivities(10);
 
-      // Performance indicators
-      const completedToday = todaysJobs.filter(j => j.status === 'completed').length;
-      const totalScheduledToday = todaysJobs.length;
+      // Performance indicators (using filtered jobs for metrics)
+      const completedToday = todaysJobsForMetrics.filter(j => j.status === 'completed').length;
+      const totalScheduledToday = todaysJobsForMetrics.length;
       const completionRate = totalScheduledToday > 0 
         ? (completedToday / totalScheduledToday) * 100 
         : 0;
 
-      // Calculate average job completion time (for completed jobs today)
-      const completedJobsToday = todaysJobs.filter(j => j.status === 'completed');
+      // Calculate average job completion time (for completed jobs today, using filtered jobs)
+      const completedJobsToday = todaysJobsForMetrics.filter(j => j.status === 'completed');
       let avgCompletionTime = 0;
       if (completedJobsToday.length > 0) {
         const totalTime = completedJobsToday.reduce((sum, job) => {
