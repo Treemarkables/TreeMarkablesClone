@@ -72,17 +72,6 @@ class NotificationService {
       return;
     }
 
-    // Create internal notification
-    await this.createInternalNotification({
-      title: `Job Status Updated: ${job.title}`,
-      message: `Job "${job.title}" status changed from ${oldStatus} to ${newStatus}`,
-      type: 'job_status_change',
-      priority: 'medium',
-      jobId: job.id,
-      customerId: job.customerId,
-      actionUrl: `/job-dashboard?job=${job.id}`
-    });
-
     // Send customer notifications based on preferences
     await this.sendCustomerNotifications(customer, {
       type: 'job_status_update',
