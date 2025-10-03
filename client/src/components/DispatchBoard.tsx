@@ -1860,7 +1860,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               return (
                 <div
                   key={job.id}
-                  className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => handleEditJob(job)}
                   data-testid={`mobile-job-card-${job.id}`}
                 >
