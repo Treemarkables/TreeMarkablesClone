@@ -1470,15 +1470,12 @@ export function GlobalJobCard({
             <div className="flex items-center gap-2 flex-wrap">
               <Button 
                 variant="ghost" 
-                size="sm" 
-                className="h-9 px-2 hover-elevate active-elevate-2" 
+                size="icon" 
+                className="hover-elevate active-elevate-2" 
                 onClick={handleEmailClick} 
                 data-testid="button-email"
               >
-                <div className="flex items-center gap-1.5">
-                  <Mail className="w-5 h-5 text-blue-500" />
-                  <span className="text-sm font-medium text-gray-700">Email</span>
-                </div>
+                <Mail className="w-5 h-5 text-blue-500" />
               </Button>
               <Button 
                 variant="ghost" 
