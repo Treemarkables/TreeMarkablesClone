@@ -1283,42 +1283,36 @@ export function GlobalJobCard({
 
   // Handle dialog close - save pending changes before closing
   const handleDialogClose = (open: boolean) => {
-    if (!open) {
-      // Dialog is closing - check if there are unsaved changes
-      if (mode === 'edit' && editingJob?.id && hasUserChangedRef.current) {
-        // Save changes asynchronously and then close
-        const saveAndClose = async () => {
-          try {
-            const formData = form.getValues();
-            
-            // Map new customer fields to job contact fields for backend compatibility
-            if (formData.isNewCustomer && formData.newCustomerName) {
-              const names = formData.newCustomerName.split(' ');
-              formData.jobContactFirstName = names[0] || '';
-              formData.jobContactLastName = names.slice(1).join(' ') || '';
-              formData.jobContactEmail = formData.newCustomerEmail || '';
-              formData.jobContactPhone = formData.newCustomerPhone || '';
-            }
-            
-            console.log('Saving changes on close...');
-            await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
-            hasUserChangedRef.current = false;
-            console.log('Save complete, invalidating queries...');
-            
-            // Invalidate and refetch jobs
-            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-            queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
-          } catch (error) {
-            console.error('Failed to save changes on close:', error);
-          } finally {
-            onClose();
+    if (!open && mode === 'edit' && editingJob?.id) {
+      // Always save when closing in edit mode (form may have changed)
+      const saveAndClose = async () => {
+        try {
+          const formData = form.getValues();
+          
+          // Map new customer fields to job contact fields for backend compatibility
+          if (formData.isNewCustomer && formData.newCustomerName) {
+            const names = formData.newCustomerName.split(' ');
+            formData.jobContactFirstName = names[0] || '';
+            formData.jobContactLastName = names.slice(1).join(' ') || '';
+            formData.jobContactEmail = formData.newCustomerEmail || '';
+            formData.jobContactPhone = formData.newCustomerPhone || '';
           }
-        };
-        
-        saveAndClose();
-      } else {
-        onClose();
-      }
+          
+          await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
+          hasUserChangedRef.current = false;
+          
+          // Invalidate queries to refresh the list
+          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        } catch (error) {
+          console.error('Failed to save on close:', error);
+        } finally {
+          onClose();
+        }
+      };
+      
+      saveAndClose();
+    } else {
+      onClose();
     }
   };
 
