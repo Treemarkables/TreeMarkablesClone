@@ -461,46 +461,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
           )}
         </div>
 
-        {/* Materials and Other Costs */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="materialsCosts" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Materials Costs ($)
-              <Badge className="bg-blue-100 text-blue-800 text-xs">
-                From Job Line Items
-              </Badge>
-            </Label>
-            <Input
-              id="materialsCosts"
-              type="number"
-              step="0.01"
-              min="0"
-              value={materialsCosts.toFixed(2)}
-              placeholder="Calculated from line items"
-              data-testid="input-materials-costs"
-              readOnly
-              className="bg-gray-50"
-            />
-          </div>
-          <div>
-            <Label htmlFor="otherCosts" className="flex items-center gap-2">
-              <Wrench className="h-4 w-4" />
-              Other Costs ($)
-            </Label>
-            <Input
-              id="otherCosts"
-              type="number"
-              step="0.01"
-              min="0"
-              value={formData.otherCosts || ''}
-              onChange={(e) => handleInputChange('otherCosts', e.target.value)}
-              placeholder="Equipment, permits, etc."
-              data-testid="input-other-costs"
-            />
-          </div>
-        </div>
-
         {/* Cost Summary */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h3 className="font-semibold mb-3">Cost Breakdown</h3>
