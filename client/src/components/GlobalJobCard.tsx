@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { AddressAutocomplete } from "./AddressAutocomplete";
@@ -1605,13 +1605,24 @@ export function GlobalJobCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem 
+                    onClick={() => handleEmailClick('invoice')}
+                    disabled={!editingJob?.id || mode === 'create'}
+                    data-testid="menu-item-email-invoice"
+                  >
+                    <Mail className="w-4 h-4 mr-2" />
+                    Email Invoice
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handlePrintClick}>
+                    <Printer className="w-4 h-4 mr-2" />
                     Print
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleDuplicateClick}>
+                    <Copy className="w-4 h-4 mr-2" />
                     Duplicate Job
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleArchiveClick}>
+                    <Archive className="w-4 h-4 mr-2" />
                     Archive
                   </DropdownMenuItem>
                   <DropdownMenuItem 
