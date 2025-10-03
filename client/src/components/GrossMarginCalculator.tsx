@@ -385,16 +385,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
 
         {/* Labor Costs Section */}
         <div className="space-y-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Clock className="h-5 w-5" />
-            <h3 className="font-semibold">Labor Costs</h3>
-            {hasStaffTimeEntries && (
-              <Badge className="bg-blue-100 text-blue-800 text-xs">
-                Auto from Staff Time
-              </Badge>
-            )}
-          </div>
-          
           {!hasStaffTimeEntries && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
