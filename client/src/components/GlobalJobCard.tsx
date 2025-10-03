@@ -1323,7 +1323,7 @@ export function GlobalJobCard({
         {/* ServiceM8-style Header */}
         <div className={`border-b px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 flex-shrink-0 sm:rounded-t-xl ${
           editingJob?.status === 'completed' ? 'bg-green-600 border-green-700' :
-          editingJob?.status === 'work_order' ? 'bg-blue-600 border-blue-700' :
+          editingJob?.status === 'work order' ? 'bg-blue-600 border-blue-700' :
           'bg-orange-500 border-orange-600'
         }`}>
           <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -1336,12 +1336,12 @@ export function GlobalJobCard({
                 <Badge 
                   className={`text-xs whitespace-nowrap ${
                     editingJob.status === 'completed' ? 'bg-green-700 hover:bg-green-800 text-white' :
-                    editingJob.status === 'work_order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
+                    editingJob.status === 'work order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
                     'bg-orange-600 hover:bg-orange-700 text-white'
                   }`}
                   data-testid="badge-job-status"
                 >
-                  {editingJob.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  {editingJob.status.charAt(0).toUpperCase() + editingJob.status.slice(1)}
                 </Badge>
               )}
             </div>
