@@ -11470,10 +11470,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       // Use Addy.co.nz API for New Zealand addresses
       const apiKey = process.env.ADDY_API_KEY;
+      const apiSecret = process.env.ADDY_API_SECRET;
       
-      if (apiKey) {
+      if (apiKey && apiSecret) {
         try {
-          const apiUrl = `https://api.addy.co.nz/address?key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(sanitizedQuery)}&limit=${limitNum}`;
+          const apiUrl = `https://api.addy.co.nz/address?key=${encodeURIComponent(apiKey)}&secret=${encodeURIComponent(apiSecret)}&q=${encodeURIComponent(sanitizedQuery)}&limit=${limitNum}`;
           const response = await fetch(apiUrl, {
             headers: {
               'Accept': 'application/json',
