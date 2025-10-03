@@ -701,6 +701,54 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Google Calendar status endpoint
+  app.get('/api/google-calendar/status', async (req: Request, res: Response) => {
+    try {
+      const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+      const xReplitToken = process.env.REPL_IDENTITY 
+        ? 'repl ' + process.env.REPL_IDENTITY 
+        : process.env.WEB_REPL_RENEWAL 
+        ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+        : null;
+
+      if (!xReplitToken || !hostname) {
+        return res.json({ 
+          connected: false,
+          message: 'Google Calendar connector not available'
+        });
+      }
+
+      const connectionSettings = await fetch(
+        'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-calendar',
+        {
+          headers: {
+            'Accept': 'application/json',
+            'X_REPLIT_TOKEN': xReplitToken
+          }
+        }
+      ).then(r => r.json()).then(data => data.items?.[0]);
+
+      if (!connectionSettings || !connectionSettings.settings?.access_token) {
+        return res.json({ 
+          connected: false,
+          message: 'Google Calendar not connected'
+        });
+      }
+
+      return res.json({ 
+        connected: true,
+        calendarEmail: connectionSettings.settings?.email || 'Connected'
+      });
+
+    } catch (error) {
+      console.error('Google Calendar status check error:', error);
+      return res.json({ 
+        connected: false,
+        message: 'Error checking Google Calendar status'
+      });
+    }
+  });
+
   // Google Places reviews endpoint (replaces Google Business Profile)
   app.get('/api/reviews/google', async (req: Request, res: Response) => {
     try {
