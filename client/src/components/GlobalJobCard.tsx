@@ -1321,13 +1321,29 @@ export function GlobalJobCard({
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogContent className="w-full h-full max-w-full flex flex-col p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[95vh] sm:rounded-xl">
         {/* ServiceM8-style Header */}
-        <div className="bg-orange-500 border-b border-orange-600 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2.5 flex-shrink-0 sm:rounded-t-xl">
+        <div className={`border-b px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 flex-shrink-0 sm:rounded-t-xl ${
+          editingJob?.status === 'completed' ? 'bg-green-600 border-green-700' :
+          editingJob?.status === 'work_order' ? 'bg-blue-600 border-blue-700' :
+          'bg-orange-500 border-orange-600'
+        }`}>
           <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Left: Job Title */}
+            {/* Left: Job Title & Status */}
             <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
               <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white truncate tracking-tight" data-testid="text-job-title">
                 {mode === "create" ? "New Job" : `Job #${editingJob?.jobNumber || "3314"}`}
               </h1>
+              {mode === 'edit' && editingJob?.status && (
+                <Badge 
+                  className={`text-xs whitespace-nowrap ${
+                    editingJob.status === 'completed' ? 'bg-green-700 hover:bg-green-800 text-white' :
+                    editingJob.status === 'work_order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
+                    'bg-orange-600 hover:bg-orange-700 text-white'
+                  }`}
+                  data-testid="badge-job-status"
+                >
+                  {editingJob.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </Badge>
+              )}
             </div>
             
             {/* Right: Actions Menu (Mobile), Close Button (Mobile), Save Button & Auto-save Indicator */}
