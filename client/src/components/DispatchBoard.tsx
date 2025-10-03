@@ -1945,19 +1945,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       {job.address || 'No address specified'}
                     </div>
                     
-                    <div 
-                      className="text-sm text-gray-700 leading-relaxed mb-3 break-words cursor-pointer hover:text-gray-900 active:text-blue-600" 
+                    <button 
+                      type="button"
+                      className="text-sm text-gray-700 leading-relaxed mb-3 break-words cursor-pointer hover:text-gray-900 active:text-blue-600 text-left w-full bg-transparent border-0 p-0" 
                       data-testid={`mobile-job-description-${job.id}`}
                       onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setDescriptionPopupJob(job);
-                        setShowDescriptionPopup(true);
-                      }}
-                      onTouchStart={(e) => {
-                        e.stopPropagation();
-                      }}
-                      onTouchEnd={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
                         setDescriptionPopupJob(job);
@@ -1987,7 +1979,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         
                         return description;
                       })()}
-                    </div>
+                    </button>
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
