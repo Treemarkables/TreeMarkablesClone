@@ -102,6 +102,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['job-diary', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       setShowNewEntryDialog(false);
       toast({
         title: "Success",
