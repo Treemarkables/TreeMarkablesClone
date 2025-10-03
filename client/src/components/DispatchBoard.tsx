@@ -1877,17 +1877,35 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               {job.address || 'No address'}
                             </div>
                             
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className={`text-xs ${
-                                job.status === 'quote' ? 'border-orange-500 text-orange-500' :
-                                job.status === 'lead' ? 'border-blue-500 text-blue-500' :
-                                'border-gray-500 text-gray-500'
-                              }`}>
-                                {job.status}
-                              </Badge>
-                              <Badge variant="secondary" className="text-xs">
-                                {job.priority}
-                              </Badge>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                {(() => {
+                                  const statusFormatted = job.status === 'work order' ? 'Work Order' : 
+                                                          job.status === 'completed' ? 'Completed' :
+                                                          job.status === 'scheduled' ? 'Scheduled' :
+                                                          job.status === 'unsuccessful' ? 'Unsuccessful' :
+                                                          job.status;
+
+                                  if (job.status === 'quote') {
+                                    return (
+                                      <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs">
+                                        quote
+                                      </Badge>
+                                    );
+                                  } else if (job.status === 'lead') {
+                                    return (
+                                      <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
+                                        lead
+                                      </Badge>
+                                    );
+                                  } else {
+                                    return (
+                                      <span className="text-xs text-gray-500">{statusFormatted}</span>
+                                    );
+                                  }
+                                })()}
+                              </div>
+                              <span className="text-xs text-gray-500">{job.priority}</span>
                             </div>
                           </div>
                         </div>
@@ -1986,34 +2004,49 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         className="absolute inset-0 cursor-pointer z-10"
                         data-description-trigger="true"
                         onClick={(e) => {
-                          console.log('Description overlay onClick fired');
                           e.stopPropagation();
                           e.preventDefault();
                           setDescriptionPopupJob(job);
                           setShowDescriptionPopup(true);
                         }}
                         onTouchEnd={(e) => {
-                          console.log('Description overlay onTouchEnd fired');
                           e.stopPropagation();
                           e.preventDefault();
                           setDescriptionPopupJob(job);
                           setShowDescriptionPopup(true);
-                        }}
-                        onTouchStart={(e) => {
-                          console.log('Description overlay onTouchStart fired');
-                          e.stopPropagation();
-                          e.preventDefault();
                         }}
                       />
                     </div>
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 capitalize">{job.status}</span>
+                        {(() => {
+                          const statusFormatted = job.status === 'work order' ? 'Work Order' : 
+                                                  job.status === 'completed' ? 'Completed' :
+                                                  job.status === 'scheduled' ? 'Scheduled' :
+                                                  job.status === 'unsuccessful' ? 'Unsuccessful' :
+                                                  job.status;
+
+                          if (job.status === 'quote') {
+                            return (
+                              <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs">
+                                quote
+                              </Badge>
+                            );
+                          } else if (job.status === 'lead') {
+                            return (
+                              <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
+                                lead
+                              </Badge>
+                            );
+                          } else {
+                            return (
+                              <span className="text-xs text-gray-500">{statusFormatted}</span>
+                            );
+                          }
+                        })()}
                       </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {job.priority}
-                      </Badge>
+                      <span className="text-xs text-gray-500">{job.priority}</span>
                     </div>
                   </div>
                 </div>
