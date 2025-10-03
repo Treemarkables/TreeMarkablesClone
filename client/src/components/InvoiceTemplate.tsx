@@ -161,39 +161,39 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       <Card className="shadow-lg">
         <CardContent className="p-0">
           {/* Header with Treemarkables Branding */}
-          <div className="bg-gradient-to-r from-orange-500 to-blue-600 p-2 sm:p-8 text-white">
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-2 sm:gap-0">
+          <div className="bg-gradient-to-r from-orange-500 to-blue-600 p-1 sm:p-3 text-white">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-1 sm:gap-0">
               <div className="flex-1 min-w-0">
-                <h1 className="text-base sm:text-3xl font-bold mb-0.5 sm:mb-2 truncate">{template.companyName || 'Treemarkables LTD'}</h1>
-                <p className="text-orange-100 text-xs sm:text-lg">Professional Tree Services</p>
-                <div className="mt-1 sm:mt-4 space-y-0 sm:space-y-1 text-[10px] sm:text-sm text-orange-100">
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
+                <h1 className="text-xs sm:text-lg font-bold mb-0 sm:mb-1 truncate">{template.companyName || 'Treemarkables LTD'}</h1>
+                <p className="text-orange-100 text-[8px] sm:text-xs">Professional Tree Services</p>
+                <div className="mt-0.5 sm:mt-1.5 space-y-0 text-[8px] sm:text-xs text-orange-100">
+                  <div className="flex items-center gap-0.5 sm:gap-1">
+                    <Phone className="w-2 h-2 sm:w-3 sm:h-3" />
                     <span className="break-all">{template.companyPhone || '027 216 6882'}</span>
                   </div>
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <MailIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <div className="flex items-center gap-0.5 sm:gap-1">
+                    <MailIcon className="w-2 h-2 sm:w-3 sm:h-3" />
                     <span className="break-all">{template.companyEmail || 'invoices@treemarkables.nz'}</span>
                   </div>
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <div className="flex items-center gap-0.5 sm:gap-1">
+                    <MapPin className="w-2 h-2 sm:w-3 sm:h-3" />
                     <span className="break-all">{template.companyAddress || 'Hauroa rd\nGisborne, 4010'}</span>
                   </div>
                 </div>
               </div>
               <div className="text-left sm:text-right flex-shrink-0">
-                <div className="bg-white/20 rounded-lg p-1.5 sm:p-4 backdrop-blur-sm">
-                  <h2 className="text-base sm:text-2xl font-bold mb-0.5 sm:mb-2">INVOICE</h2>
-                  <div className="mt-1 sm:mt-2 space-y-0 sm:space-y-1 text-[10px] sm:text-sm">
+                <div className="bg-white/20 rounded p-1 sm:p-1.5 backdrop-blur-sm">
+                  <h2 className="text-xs sm:text-base font-bold mb-0 sm:mb-0.5">INVOICE</h2>
+                  <div className="mt-0.5 space-y-0 text-[8px] sm:text-xs">
                     <p><strong>Number:</strong> {invoice.invoiceNumber}</p>
                     <p><strong>Issue Date:</strong> {format(issueDate, 'dd MMM yyyy')}</p>
                     <p><strong>Due Date:</strong> {format(dueDate, 'dd MMM yyyy')}</p>
-                    <div className="mt-1 sm:mt-2">
-                      <Badge className={`${getStatusColor(invoice.status)} text-[10px] sm:text-sm`}>
+                    <div className="mt-0.5">
+                      <Badge className={`${getStatusColor(invoice.status)} text-[7px] sm:text-[10px] px-1 py-0`}>
                         {invoice.status.toUpperCase()}
                       </Badge>
                       {isOverdue && (
-                        <Badge className="ml-1 sm:ml-2 bg-red-500 text-white text-[10px] sm:text-sm">
+                        <Badge className="ml-0.5 sm:ml-1 bg-red-500 text-white text-[7px] sm:text-[10px] px-1 py-0">
                           OVERDUE
                         </Badge>
                       )}
