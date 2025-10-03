@@ -5589,6 +5589,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         bodyData.hourlyRate = bodyData.hourlyRate.toString();
       }
       
+      // Convert empty strings to undefined for all fields
+      Object.keys(bodyData).forEach(key => {
+        if (bodyData[key] === '' || bodyData[key] === 'dd/mm/yyyy') {
+          bodyData[key] = undefined;
+        }
+      });
+      
+      // Convert hireDate if it's a string (and not empty/undefined)
+      if (bodyData.hireDate && typeof bodyData.hireDate === 'string') {
+        bodyData.hireDate = new Date(bodyData.hireDate);
+      }
+      
       const validatedData = insertEmployeeSchema.parse(bodyData);
       const employee = await storage.createEmployee(validatedData);
       res.json({
