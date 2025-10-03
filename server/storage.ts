@@ -2581,7 +2581,30 @@ class DatabaseStorage implements IStorage {
   async getInventoryTransactions(inventoryId: string): Promise<InventoryTransaction[]> { return []; }
   async getTransactionsByType(type: string): Promise<InventoryTransaction[]> { return []; }
 
-  async getBusinessSettings(): Promise<BusinessSettings> { throw new Error("Not implemented"); }
+  async getBusinessSettings(): Promise<BusinessSettings> {
+    // Return default business settings for now
+    return {
+      id: 'default',
+      businessName: 'Tree Services Co.',
+      businessEmail: 'info@treeservices.com',
+      businessPhone: '555-123-4567',
+      businessAddress: '123 Main Street',
+      workingHours: { start: '08:00', end: '17:00' },
+      timezone: 'Pacific/Auckland',
+      currency: 'NZD',
+      taxRate: 15,
+      invoicePrefix: 'INV-',
+      quotePrefix: 'QTE-',
+      jobPrefix: 'JOB-',
+      autoInvoiceOnComplete: false,
+      requireQuoteApproval: true,
+      defaultPaymentTerms: 30,
+      defaultWarrantyPeriod: 90,
+      enableNotifications: true,
+      enableEmailReminders: true,
+      enableSmsReminders: false
+    };
+  }
   async updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings> { throw new Error("Not implemented"); }
   async resetBusinessSettings(): Promise<BusinessSettings> { throw new Error("Not implemented"); }
 
