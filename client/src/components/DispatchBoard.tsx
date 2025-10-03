@@ -1334,7 +1334,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>
         </CardHeader>
 
-        <CardContent className="overflow-x-hidden">
+        <CardContent>
           {/* Desktop Time Grid View */}
           <div className="hidden md:flex gap-4 h-[700px]">
             {/* Team/Staff Column */}
