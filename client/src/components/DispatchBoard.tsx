@@ -672,7 +672,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const getJobStatusColor = (job: JobAssignment) => {
     const serviceType = job.serviceType?.toLowerCase() || '';
     if (serviceType.includes('lead') || serviceType.includes('inquiry')) return 'bg-cyan-600';
-    if (serviceType.includes('quote') || serviceType.includes('proposal')) return 'bg-purple-600';
+    if (serviceType.includes('quote') || serviceType.includes('proposal')) return 'bg-orange-600';
     
     switch (job.status) {
       case 'completed': return 'bg-green-600';
@@ -680,7 +680,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       case 'work_order': return 'bg-blue-600';
       case 'work order': return 'bg-blue-600';
       case 'scheduled': return 'bg-orange-600';
-      case 'quote': return 'bg-purple-600';
+      case 'quote': return 'bg-orange-600';
       case 'lead': return 'bg-cyan-600';
       default: return 'bg-gray-600';
     }
@@ -690,7 +690,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const getJobStatusColorValue = (job: JobAssignment) => {
     const serviceType = job.serviceType?.toLowerCase() || '';
     if (serviceType.includes('lead') || serviceType.includes('inquiry')) return '#0891b2'; // cyan-600
-    if (serviceType.includes('quote') || serviceType.includes('proposal')) return '#9333ea'; // purple-600
+    if (serviceType.includes('quote') || serviceType.includes('proposal')) return '#ea580c'; // orange-600
     
     // Handle actual API status values
     switch (job.status) {
@@ -699,7 +699,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       case 'work_order': return '#2563eb'; // blue-600
       case 'work order': return '#2563eb'; // blue-600
       case 'scheduled': return '#ea580c'; // orange-600
-      case 'quote': return '#9333ea'; // purple-600
+      case 'quote': return '#ea580c'; // orange-600
       case 'lead': return '#0891b2'; // cyan-600
       default: return '#4b5563'; // gray-600
     }
@@ -1835,7 +1835,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className={`text-xs ${
-                                job.status === 'quote' ? 'border-purple-500 text-purple-500' :
+                                job.status === 'quote' ? 'border-orange-500 text-orange-500' :
                                 job.status === 'lead' ? 'border-blue-500 text-blue-500' :
                                 'border-gray-500 text-gray-500'
                               }`}>
@@ -2011,7 +2011,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       <Badge 
                         variant="outline" 
                         className={`text-xs ${
-                          job.status === 'quote' ? 'border-purple-500 text-purple-500' :
+                          job.status === 'quote' ? 'border-orange-500 text-orange-500' :
                           job.status === 'lead' ? 'border-blue-500 text-blue-500' :
                           'border-gray-500 text-gray-500'
                         }`}
