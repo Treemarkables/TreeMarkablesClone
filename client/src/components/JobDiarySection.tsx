@@ -765,7 +765,7 @@ export function JobDiarySection({
                         </div>
                       ) : (
                         <>
-                          <div className="text-xs text-gray-700 dark:text-gray-300">
+                          <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-line">
                             {entry.content}
                           </div>
                           
