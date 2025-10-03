@@ -2453,16 +2453,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         jobs = await storage.getAllJobs();
       }
       
-      // Debug: Check if lastActivityAt is being returned
-      if (jobs.length > 0) {
-        console.log('🔍 Sample job data:', {
-          id: jobs[0].id,
-          jobNumber: jobs[0].jobNumber,
-          lastActivityAt: jobs[0].lastActivityAt,
-          hasLastActivityAt: 'lastActivityAt' in jobs[0]
-        });
-      }
-      
       res.json({ success: true, data: jobs });
     } catch (error) {
       console.error('Error fetching jobs:', error);
