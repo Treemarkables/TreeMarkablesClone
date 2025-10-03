@@ -161,7 +161,7 @@ export default function Integrations() {
   }, [location]);
   
   // Get Xero status
-  const { data: xeroStatus } = useQuery({
+  const { data: xeroStatus, isLoading } = useQuery({
     queryKey: ['/api/xero/status'],
   });
   
@@ -247,6 +247,10 @@ export default function Integrations() {
     // TODO: Implement enable/disable logic
     console.log('Toggling integration:', integrationId, enabled);
   };
+  
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/xero/status'] });
+  };
 
   if (isLoading) {
     return (
@@ -278,7 +282,7 @@ export default function Integrations() {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => refetch()}
+                onClick={handleRefresh}
                 data-testid="button-refresh-integrations"
               >
                 <RefreshCw className="h-4 w-4 mr-1" />
