@@ -358,10 +358,12 @@ export function JobDiarySection({
       return { type: 'quote', number: quoteMatch[0] };
     }
     
-    // Check for invoice
+    // Check for invoice (with or without invoice number)
     const invoiceMatch = (entry.title + ' ' + entry.content).match(/INV-\d+/i);
-    if ((content.includes('invoice') || content.includes('inv-')) && invoiceMatch) {
-      return { type: 'invoice', number: invoiceMatch[0] };
+    if (content.includes('invoice') || content.includes('inv-')) {
+      // If we found an invoice number, use it; otherwise use a placeholder
+      const invoiceNumber = invoiceMatch ? invoiceMatch[0] : 'latest';
+      return { type: 'invoice', number: invoiceNumber };
     }
     
     // Check for proposal
