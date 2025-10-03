@@ -654,7 +654,13 @@ export function JobDiarySection({
                             <>SMS Message to {formatPhoneNumber(entry.metadata.phoneNumber)}</>
                           )}
                           {entry.type === 'email' && entry.metadata?.emailAddress && (
-                            <>Email to {entry.metadata.emailAddress}</>
+                            <>
+                              {docInfo?.type === 'invoice' ? (
+                                <>Invoice Email</>
+                              ) : (
+                                <>Email to {entry.metadata.emailAddress}</>
+                              )}
+                            </>
                           )}
                           {entry.type === 'note' && <>Note</>}
                           {entry.type === 'job_event' && <>Job Created</>}
@@ -757,9 +763,30 @@ export function JobDiarySection({
                         </div>
                       ) : (
                         <>
-                          <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-line break-words overflow-hidden">
-                            {entry.content}
-                          </div>
+                          {/* Special handling for invoice emails */}
+                          {entry.type === 'email' && docInfo?.type === 'invoice' ? (
+                            <div className="text-xs text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                              <span>Invoice sent</span>
+                              <Button
+                                size="sm"
+                                variant="link"
+                                className="h-auto p-0 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onInvoiceClick) {
+                                    onInvoiceClick(docInfo.number);
+                                  }
+                                }}
+                                data-testid="button-view-invoice-link"
+                              >
+                                Invoice #{docInfo.number}
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-line break-words overflow-hidden">
+                              {entry.content}
+                            </div>
+                          )}
                           
                           {entry.photoUrl && (
                             <div className="mt-2">
