@@ -661,6 +661,46 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Facebook status endpoint
+  app.get('/api/facebook/status', async (req: Request, res: Response) => {
+    try {
+      const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
+      const pageId = process.env.FACEBOOK_PAGE_ID;
+      
+      if (!pageAccessToken || !pageId) {
+        return res.json({ 
+          connected: false,
+          message: 'Facebook credentials not configured'
+        });
+      }
+
+      // Quick test to verify token is valid by fetching page info
+      const url = `https://graph.facebook.com/v18.0/${pageId}?access_token=${pageAccessToken}&fields=name`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        return res.json({ 
+          connected: false,
+          message: 'Facebook token invalid or expired'
+        });
+      }
+
+      return res.json({ 
+        connected: true,
+        pageName: data.name,
+        pageId: pageId
+      });
+
+    } catch (error) {
+      console.error('Facebook status check error:', error);
+      return res.json({ 
+        connected: false,
+        message: 'Error checking Facebook status'
+      });
+    }
+  });
+
   // Google Places reviews endpoint (replaces Google Business Profile)
   app.get('/api/reviews/google', async (req: Request, res: Response) => {
     try {

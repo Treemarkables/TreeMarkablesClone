@@ -163,6 +163,11 @@ export default function Integrations() {
   const { data: xeroStatus, isLoading } = useQuery({
     queryKey: ['/api/xero/status'],
   });
+
+  // Get Facebook status
+  const { data: facebookStatus } = useQuery({
+    queryKey: ['/api/facebook/status'],
+  });
   
   // Connect to Xero mutation (Custom Connection)
   const connectMutation = useMutation({
@@ -206,7 +211,7 @@ export default function Integrations() {
     },
   });
   
-  // Build integrations list with real Xero status
+  // Build integrations list with real Xero and Facebook status
   const integrations = availableIntegrations.map(integration => {
     if (integration.id === 'xero' && xeroStatus?.connected) {
       return {
@@ -215,6 +220,14 @@ export default function Integrations() {
         isEnabled: true,
         lastSync: xeroStatus.lastSynced,
         tenantName: xeroStatus.tenantName,
+      };
+    }
+    if (integration.id === 'facebook' && facebookStatus?.connected) {
+      return {
+        ...integration,
+        status: 'connected' as const,
+        isEnabled: true,
+        pageName: facebookStatus.pageName,
       };
     }
     return integration;
@@ -379,9 +392,9 @@ export default function Integrations() {
                             <StatusIcon className="h-3 w-3 mr-1" />
                             {integration.status.charAt(0).toUpperCase() + integration.status.slice(1)}
                           </Badge>
-                          {integration.tenantName && (
+                          {(integration.tenantName || integration.pageName) && (
                             <span className="text-xs text-gray-500">
-                              {integration.tenantName}
+                              {integration.tenantName || integration.pageName}
                             </span>
                           )}
                         </div>
