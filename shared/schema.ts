@@ -1431,7 +1431,7 @@ export type UpdateProposalLineItemChoice = z.infer<typeof updateProposalLineItem
 export const equipment = pgTable("equipment", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  type: text("type").notNull(), // vehicle, chainsaw, chipper, bucket_truck, stump_grinder, safety_gear
+  type: text("type"), // vehicle, chainsaw, chipper, bucket_truck, stump_grinder, safety_gear
   brand: text("brand"),
   model: text("model"),
   year: integer("year"),
