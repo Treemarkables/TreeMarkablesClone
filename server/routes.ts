@@ -11809,12 +11809,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }, {});
 
       // Get staff bookings for today (time entries)
-      const allTimeEntries = await storage.getAllTimeEntries();
-      const todaysTimeEntries = allTimeEntries.filter(entry => {
-        if (!entry.date) return false;
-        const entryDate = new Date(entry.date);
-        return entryDate >= today && entryDate < tomorrow;
-      });
+      // Get time entries from time tracking service
+      const todayStr = format(today, 'yyyy-MM-dd');
+      const allEmployees = await storage.getActiveEmployees();
+      const todaysTimeEntries: any[] = [];
+      
+      for (const employee of allEmployees) {
+        try {
+          const employeeEntries = await storage.getDailyTimeEntry(employee.id, todayStr);
+          if (employeeEntries && employeeEntries.timeEntries && employeeEntries.timeEntries.length > 0) {
+            todaysTimeEntries.push(...employeeEntries.timeEntries);
+          }
+        } catch (error) {
+          // Employee may not have entries for today - skip
+        }
+      }
 
       // Group time entries by staff member
       const staffBookings = todaysTimeEntries.reduce((acc: any, entry) => {
@@ -11842,11 +11851,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const allQuotes = await storage.getAllQuotes();
       const pendingQuotes = allQuotes.filter(q => q.status === 'draft' || q.status === 'sent').length;
 
-      const allInvoices = await storage.getAllInvoices();
-      const overdueInvoices = allInvoices.filter(inv => {
-        if (inv.status === 'paid') return false;
-        if (!inv.dueDate) return false;
-        return new Date(inv.dueDate) < today;
+      // Count overdue invoices from jobs (jobs with invoices that are past due)
+      const overdueInvoices = allJobs.filter(job => {
+        if (!job.invoiceDate) return false; // Not invoiced
+        if (job.invoiceStatus === 'paid' || job.invoiceStatus === 'cancelled') return false;
+        if (!job.invoiceDueDate) return false;
+        return new Date(job.invoiceDueDate) < today;
       }).length;
 
       const allIncidents = await storage.getAllSafetyIncidents();
