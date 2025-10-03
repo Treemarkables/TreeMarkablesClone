@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     >
       <div className="flex flex-col h-screen">
         {showDevBanner && (
-          <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between">
+          <div className="bg-white text-gray-800 px-4 py-2 flex items-center justify-between border-b">
             <div className="flex items-center gap-2">
               <User className="w-4 h-4" />
               <span className="text-sm font-medium">Dev Mode - Login As:</span>
@@ -150,14 +150,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 <span className="font-semibold" data-testid="text-current-user">
                   {currentUser.firstName} {currentUser.lastName}
                 </span>
-                <span className="px-2 py-0.5 bg-white/20 rounded text-xs" data-testid="text-user-role">
+                <span className="px-2 py-0.5 bg-gray-100 rounded text-xs" data-testid="text-user-role">
                   {currentUser.role.toUpperCase()}
                 </span>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={logout}
-                  className="ml-2 h-7 bg-white/10 hover:bg-white/20 text-white"
+                  className="ml-2 h-7"
                   data-testid="button-logout"
                 >
                   <LogOut className="w-3 h-3 mr-1" />
