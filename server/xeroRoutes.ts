@@ -171,7 +171,188 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
     };
   }
   
-  // Send invoice to Xero
+  // Send job invoice to Xero (used by Invoices page)
+  app.post('/api/xero/send-invoice', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.body;
+      
+      if (!jobId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Job ID is required' 
+        });
+      }
+      
+      // Get Xero client
+      const xeroSetup = await getValidXeroClient();
+      if (!xeroSetup) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Not connected to Xero. Please connect first.' 
+        });
+      }
+      
+      const { client, tenantId } = xeroSetup;
+      
+      // Get job from database
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Job not found' 
+        });
+      }
+      
+      // Check if already synced
+      if (job.xeroInvoiceId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invoice already synced to Xero',
+          xeroInvoiceId: job.xeroInvoiceId 
+        });
+      }
+      
+      // Get customer
+      const customer = await storage.getCustomer(job.customerId);
+      if (!customer) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Customer not found' 
+        });
+      }
+      
+      // Find or create contact in Xero
+      let xeroContactId: string;
+      
+      try {
+        // Search for existing contact by email
+        const contactsResponse = await client.accountingApi.getContacts(
+          tenantId,
+          undefined, // modifiedAfter
+          `EmailAddress="${customer.email}"`,
+          undefined,
+          1
+        );
+        
+        if (contactsResponse.body.contacts && contactsResponse.body.contacts.length > 0) {
+          xeroContactId = contactsResponse.body.contacts[0].contactID!;
+        } else {
+          // Create new contact
+          const newContact = {
+            name: customer.name,
+            emailAddress: customer.email,
+            phones: customer.phone ? [{
+              phoneType: 'MOBILE' as const,
+              phoneNumber: customer.phone,
+            }] : [],
+            addresses: customer.address ? [{
+              addressType: 'STREET' as const,
+              addressLine1: customer.address,
+            }] : [],
+          };
+          
+          const createResponse = await client.accountingApi.createContacts(
+            tenantId,
+            { contacts: [newContact] }
+          );
+          
+          xeroContactId = createResponse.body.contacts![0].contactID!;
+        }
+      } catch (error) {
+        console.error('Error with Xero contact:', error);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Failed to create/find contact in Xero' 
+        });
+      }
+      
+      // Map job line items to Xero format
+      const lineItems = (job.lineItems as any[] || []).map((item: any) => ({
+        description: item.description || 'Service',
+        quantity: item.quantity || 1,
+        unitAmount: item.unitPrice || item.priceExGst || 0,
+        accountCode: '200', // Default revenue account
+        taxType: item.priceIncludesTax ? 'NONE' : 'OUTPUT', // GST handling
+      }));
+      
+      // If no line items, create a single line item from job total
+      if (lineItems.length === 0 && job.subtotal) {
+        lineItems.push({
+          description: job.title || job.description || 'Tree removal service',
+          quantity: 1,
+          unitAmount: parseFloat(job.subtotal),
+          accountCode: '200',
+          taxType: 'OUTPUT',
+        });
+      }
+      
+      // Create invoice in Xero
+      try {
+        const invoiceDate = job.completedDate || new Date();
+        const dueDate = new Date(invoiceDate);
+        dueDate.setDate(dueDate.getDate() + 30); // 30 days payment terms
+        
+        const xeroInvoice = {
+          type: 'ACCREC' as const, // Accounts Receivable (sales invoice)
+          contact: {
+            contactID: xeroContactId,
+          },
+          lineItems,
+          date: invoiceDate.toISOString().split('T')[0],
+          dueDate: dueDate.toISOString().split('T')[0],
+          reference: job.jobNumber,
+          status: 'AUTHORISED' as const, // Approved and ready to send
+          lineAmountTypes: 'Exclusive' as const, // Tax exclusive amounts
+        };
+        
+        const invoiceResponse = await client.accountingApi.createInvoices(
+          tenantId,
+          { invoices: [xeroInvoice] }
+        );
+        
+        const createdInvoice = invoiceResponse.body.invoices![0];
+        const xeroInvoiceId = createdInvoice.invoiceID!;
+        
+        // Update job with Xero info
+        await storage.updateJob(jobId, {
+          xeroInvoiceId,
+          xeroStatus: 'sent',
+          sentToXeroDate: new Date(),
+        });
+        
+        res.json({
+          success: true,
+          message: 'Invoice sent to Xero successfully',
+          xeroInvoiceId,
+          xeroInvoiceNumber: createdInvoice.invoiceNumber,
+        });
+      } catch (error: any) {
+        console.error('Error creating invoice in Xero:', error);
+        
+        // Update job with error status
+        await storage.updateJob(jobId, {
+          xeroStatus: 'error',
+        });
+        
+        const errorMessage = error.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message 
+          || error.message 
+          || 'Failed to create invoice in Xero';
+        
+        res.status(500).json({ 
+          success: false, 
+          message: errorMessage 
+        });
+      }
+    } catch (error) {
+      console.error('Error sending job invoice to Xero:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to send invoice to Xero' 
+      });
+    }
+  });
+  
+  // Send separate invoice record to Xero (for future use)
   app.post('/api/xero/send-invoice/:invoiceId', async (req: Request, res: Response) => {
     try {
       const { invoiceId } = req.params;
