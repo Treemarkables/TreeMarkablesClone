@@ -473,28 +473,20 @@ export function JobDiarySection({
   // Helper functions
   const getEntryIcon = (type: DiaryEntry['type']) => {
     switch (type) {
-      case 'note': return <StickyNote className="w-4 h-4" />;
-      case 'sms': return <MessageSquare className="w-4 h-4" />;
-      case 'email': return <Mail className="w-4 h-4" />;
-      case 'job_event': return <CheckCircle className="w-4 h-4" />;
-      case 'proposal': return <Presentation className="w-4 h-4" />;
-      case 'call': return <Phone className="w-4 h-4" />;
-      case 'photo': return <Camera className="w-4 h-4" />;
-      default: return <FileText className="w-4 h-4" />;
+      case 'note': return <StickyNote className="w-7 h-7 text-amber-500" />;
+      case 'sms': return <MessageSquare className="w-7 h-7 text-blue-500" />;
+      case 'email': return <Mail className="w-7 h-7 text-gray-500" />;
+      case 'job_event': return <CheckCircle className="w-7 h-7 text-green-500" />;
+      case 'proposal': return <Presentation className="w-7 h-7 text-indigo-500" />;
+      case 'call': return <Phone className="w-7 h-7 text-orange-500" />;
+      case 'photo': return <Camera className="w-7 h-7 text-purple-500" />;
+      default: return <FileText className="w-7 h-7 text-gray-500" />;
     }
   };
 
   const getEntryColor = (type: DiaryEntry['type']) => {
-    switch (type) {
-      case 'note': return "bg-yellow-100 text-yellow-800";
-      case 'sms': return "bg-blue-100 text-blue-800";
-      case 'email': return "bg-gray-100 text-gray-800";
-      case 'job_event': return "bg-green-100 text-green-800";
-      case 'proposal': return "bg-purple-100 text-purple-800";
-      case 'call': return "bg-orange-100 text-orange-800";
-      case 'photo': return "bg-indigo-100 text-indigo-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
+    // No background needed - icons are now colored
+    return "";
   };
 
   const formatPhoneNumber = (phone: string) => {
@@ -644,9 +636,9 @@ export function JobDiarySection({
               };
               
               return (
-                <div key={entry.id} className="flex gap-2" data-testid={`diary-entry-${entry.type}`}>
+                <div key={entry.id} className="flex gap-3" data-testid={`diary-entry-${entry.type}`}>
                   {/* Icon */}
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${getEntryColor(entry.type)} flex-shrink-0`}>
+                  <div className="flex items-start justify-center pt-1 flex-shrink-0">
                     {getEntryIcon(entry.type)}
                   </div>
                   
