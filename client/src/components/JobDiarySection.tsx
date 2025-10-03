@@ -15,6 +15,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   MessageSquare,
   Mail,
@@ -118,6 +119,7 @@ export function JobDiarySection({
 }: JobDiarySectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { currentUser } = useAuth();
   const [activeComposer, setActiveComposer] = useState<'note' | 'sms' | 'email' | null>(null);
   const [proposalDialogOpen, setProposalDialogOpen] = useState(false);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
@@ -382,7 +384,7 @@ export function JobDiarySection({
         entryType: 'note',
         title: 'Job Note',
         description: data.content,
-        authorName: 'Current User', // Replace with actual user
+        authorName: currentUser?.name || 'System',
         isPrivate: data.isPrivate
       });
     },
