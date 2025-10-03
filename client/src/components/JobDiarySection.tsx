@@ -389,12 +389,13 @@ export function JobDiarySection({
         isPrivate: data.isPrivate
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({ title: "Success", description: "Note added successfully" });
       noteForm.reset();
       setActiveComposer(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
     },
     onError: (error: any) => {
       toast({ 

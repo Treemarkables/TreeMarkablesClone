@@ -100,9 +100,11 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
     mutationFn: async (entryData: any) => {
       return await apiRequest('POST', `/api/jobs/${jobId}/diary`, entryData);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['job-diary', jobId] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['job-diary', jobId] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      // Force refetch
+      await queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
       setShowNewEntryDialog(false);
       toast({
         title: "Success",
