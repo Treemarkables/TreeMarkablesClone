@@ -1471,57 +1471,63 @@ export function GlobalJobCard({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-2 hover-elevate active-elevate-2" 
+                className="h-9 px-3 hover-elevate active-elevate-2" 
                 onClick={handleEmailClick} 
                 data-testid="button-email"
               >
-                <Mail className="w-5 h-5 text-blue-500" />
+                <Mail className="w-4 h-4 mr-2 text-blue-500" />
+                <span>Email</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-2 hover-elevate active-elevate-2" 
+                className="h-9 px-3 hover-elevate active-elevate-2" 
                 onClick={() => setIsSMSComposerOpen(true)} 
                 data-testid="button-sms"
               >
-                <MessageSquare className="w-5 h-5 text-blue-500" />
+                <MessageSquare className="w-4 h-4 mr-2 text-blue-500" />
+                <span>SMS</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-2 hover-elevate active-elevate-2" 
+                className="h-9 px-3 hover-elevate active-elevate-2" 
                 onClick={handleCallClick} 
                 data-testid="button-call"
               >
-                <Phone className="w-5 h-5 text-green-500" />
+                <Phone className="w-4 h-4 mr-2 text-green-500" />
+                <span>Call</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-2 hover-elevate active-elevate-2" 
+                className="h-9 px-3 hover-elevate active-elevate-2" 
                 onClick={handleScheduleClick} 
                 data-testid="button-schedule"
               >
-                <Calendar className="w-5 h-5 text-red-500" />
+                <Calendar className="w-4 h-4 mr-2 text-red-500" />
+                <span>Schedule</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-2 hover-elevate active-elevate-2" 
+                className="h-9 px-3 hover-elevate active-elevate-2" 
                 onClick={handleQueueClick} 
                 data-testid="button-queue"
               >
-                <FileText className="w-5 h-5 text-blue-600" />
+                <FileText className="w-4 h-4 mr-2 text-blue-600" />
+                <span>Queue</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-9 px-2 hover-elevate active-elevate-2" 
+                    className="h-9 px-3 hover-elevate active-elevate-2" 
                     data-testid="button-send"
                   >
-                    <Send className="w-5 h-5 text-orange-500" />
+                    <Send className="w-4 h-4 mr-2 text-orange-500" />
+                    <span>Send</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -1571,42 +1577,46 @@ export function GlobalJobCard({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-2 hover-elevate active-elevate-2" 
+                className="h-9 px-3 hover-elevate active-elevate-2" 
                 onClick={() => setIsProfitTrackerOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
               >
-                <DollarSign className="w-5 h-5 text-teal-500" />
+                <DollarSign className="w-4 h-4 mr-2 text-teal-500" />
+                <span>Profit</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-2 hover-elevate active-elevate-2" 
+                className="h-9 px-3 hover-elevate active-elevate-2" 
                 onClick={() => setIsTimeTrackingOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
               >
-                <Clock className="w-5 h-5 text-purple-500" />
+                <Clock className="w-4 h-4 mr-2 text-purple-500" />
+                <span>Time</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-2 hover-elevate active-elevate-2" 
+                className="h-9 px-3 hover-elevate active-elevate-2" 
                 onClick={() => setIsPhotoCaptureOpen(true)}
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
               >
-                <Camera className="w-5 h-5 text-pink-500" />
+                <Camera className="w-4 h-4 mr-2 text-pink-500" />
+                <span>Camera</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-9 px-2 hover-elevate active-elevate-2" 
+                    className="h-9 px-3 hover-elevate active-elevate-2" 
                     data-testid="button-more"
                   >
-                    <MoreHorizontal className="w-5 h-5 text-green-600" />
+                    <MoreHorizontal className="w-4 h-4 mr-2 text-green-600" />
+                    <span>More</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
