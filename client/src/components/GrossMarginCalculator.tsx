@@ -408,7 +408,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
             <>
               {calculationMode === 'manual' ? (
                 <div>
-                  <Label htmlFor="laborCosts">Labor Costs ($)</Label>
+                  <Label htmlFor="laborCosts">Additional Costs ($)</Label>
                   <Input
                     id="laborCosts"
                     type="number"
@@ -416,7 +416,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                     min="0"
                     value={formData.laborCosts || ''}
                     onChange={(e) => handleInputChange('laborCosts', e.target.value)}
-                    placeholder="Enter total labor costs"
+                    placeholder="Enter additional costs"
                     data-testid="input-labor-costs"
                   />
                 </div>
