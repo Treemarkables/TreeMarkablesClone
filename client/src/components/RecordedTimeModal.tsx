@@ -46,6 +46,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   const [rounding, setRounding] = useState("none");
   const [travelTime, setTravelTime] = useState("included");
   const [useManualInput, setUseManualInput] = useState(false);
+  const [additionalCosts, setAdditionalCosts] = useState('');
   const [newEntry, setNewEntry] = useState({
     staffId: '',
     rate: '',
@@ -116,12 +117,27 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     }
   }, [isOpen, jobId, refetchTimeEntries, refetchMaterials]);
 
+  // Load current job data for additional costs
+  const { data: jobData } = useQuery({
+    queryKey: ['/api/jobs', jobId],
+    enabled: isOpen && !!jobId,
+  });
+
+  // Initialize additional costs from job data
+  useEffect(() => {
+    if (isOpen && jobData) {
+      const currentCosts = (jobData as any)?.laborCosts || '';
+      setAdditionalCosts(currentCosts);
+    }
+  }, [isOpen, jobData]);
+
   // Reset form when modal closes
   useEffect(() => {
     if (!isOpen) {
       setPendingEntries([]);
       setNewEntry({ staffId: '', rate: '', duration: '1' });
       setUseManualInput(false);
+      setAdditionalCosts('');
     }
   }, [isOpen]);
 
@@ -220,7 +236,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       await apiRequest('POST', `/api/time-entries/${jobId}`, {
         entries: formattedEntries,
         rounding,
-        travelTime
+        travelTime,
+        additionalCosts: additionalCosts ? parseFloat(additionalCosts) : 0
       });
       
       // Invalidate related queries
@@ -433,6 +450,39 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Additional Costs */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4 space-y-3">
+            <h4 className="font-medium text-amber-900 text-sm sm:text-base">Additional Costs</h4>
+            <div>
+              <label className="text-sm font-medium">Other Job Costs ($)</label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={additionalCosts}
+                onChange={(e) => setAdditionalCosts(e.target.value)}
+                placeholder="Enter additional costs (materials, equipment, etc.)"
+                className="min-h-11"
+                data-testid="input-additional-costs"
+              />
+              <p className="text-xs text-gray-600 mt-1">Track costs beyond staff time (materials, equipment rentals, permits, etc.)</p>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          {pendingEntries.length > 0 && (
+            <div className="sticky bottom-0 bg-white border-t pt-4 flex justify-end gap-2">
+              <Button
+                onClick={saveAllEntries}
+                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 w-full sm:w-auto min-h-11"
+                data-testid="button-save-all"
+              >
+                <CheckCircle className="h-4 w-4" />
+                Save All Entries
+              </Button>
             </div>
           )}
         </div>
