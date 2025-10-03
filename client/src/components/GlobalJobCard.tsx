@@ -1281,8 +1281,35 @@ export function GlobalJobCard({
     }
   };
 
+  // Handle dialog close - save pending changes before closing
+  const handleDialogClose = async (open: boolean) => {
+    if (!open) {
+      // Dialog is closing - check if there are unsaved changes
+      if (mode === 'edit' && editingJob?.id && hasUserChangedRef.current) {
+        try {
+          const formData = form.getValues();
+          
+          // Map new customer fields to job contact fields for backend compatibility
+          if (formData.isNewCustomer && formData.newCustomerName) {
+            const names = formData.newCustomerName.split(' ');
+            formData.jobContactFirstName = names[0] || '';
+            formData.jobContactLastName = names.slice(1).join(' ') || '';
+            formData.jobContactEmail = formData.newCustomerEmail || '';
+            formData.jobContactPhone = formData.newCustomerPhone || '';
+          }
+          
+          await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
+          hasUserChangedRef.current = false;
+        } catch (error) {
+          console.error('Failed to save changes on close:', error);
+        }
+      }
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogContent className="w-full h-full max-w-full flex flex-col p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[95vh] sm:rounded-xl">
         {/* ServiceM8-style Header */}
         <div className="bg-orange-500 border-b border-orange-600 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2.5 flex-shrink-0 sm:rounded-t-xl">
