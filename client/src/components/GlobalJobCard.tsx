@@ -1468,67 +1468,67 @@ export function GlobalJobCard({
         <div className="hidden md:block bg-white border-b border-gray-200 px-3 md:px-4 py-2 flex-shrink-0">
           <div className="flex items-center justify-between gap-2">
             {/* Action Buttons */}
-            <div className="flex items-center gap-0.5 flex-nowrap overflow-x-auto">
+            <div className="flex items-center justify-between w-full">
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                 onClick={handleEmailClick} 
                 data-testid="button-email"
               >
-                <MdEmail className="w-16 h-16 text-blue-500" />
-                <span className="text-[8px] whitespace-nowrap">Email</span>
+                <MdEmail className="w-32 h-32 text-blue-500" />
+                <span className="text-[10px] mt-1 whitespace-nowrap">Email</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                 onClick={() => setIsSMSComposerOpen(true)} 
                 data-testid="button-sms"
               >
-                <MdSms className="w-16 h-16 text-blue-500" />
-                <span className="text-[8px] whitespace-nowrap">SMS</span>
+                <MdSms className="w-32 h-32 text-blue-500" />
+                <span className="text-[10px] mt-1 whitespace-nowrap">SMS</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                 onClick={handleCallClick} 
                 data-testid="button-call"
               >
-                <MdPhone className="w-16 h-16 text-green-500" />
-                <span className="text-[8px] whitespace-nowrap">Call</span>
+                <MdPhone className="w-32 h-32 text-green-500" />
+                <span className="text-[10px] mt-1 whitespace-nowrap">Call</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                 onClick={handleScheduleClick} 
                 data-testid="button-schedule"
               >
-                <MdCalendarToday className="w-16 h-16 text-red-500" />
-                <span className="text-[8px] whitespace-nowrap">Schedule</span>
+                <MdCalendarToday className="w-32 h-32 text-red-500" />
+                <span className="text-[10px] mt-1 whitespace-nowrap">Schedule</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                 onClick={handleQueueClick} 
                 data-testid="button-queue"
               >
-                <MdDescription className="w-16 h-16 text-blue-600" />
-                <span className="text-[8px] whitespace-nowrap">Queue</span>
+                <MdDescription className="w-32 h-32 text-blue-600" />
+                <span className="text-[10px] mt-1 whitespace-nowrap">Queue</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                    className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                     data-testid="button-send"
                   >
-                    <MdSend className="w-16 h-16 text-orange-500" />
-                    <span className="text-[8px] whitespace-nowrap">Send</span>
+                    <MdSend className="w-32 h-32 text-orange-500" />
+                    <span className="text-[10px] mt-1 whitespace-nowrap">Send</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -1578,46 +1578,46 @@ export function GlobalJobCard({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                 onClick={() => setIsProfitTrackerOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
               >
-                <MdAttachMoney className="w-16 h-16 text-teal-500" />
-                <span className="text-[8px] whitespace-nowrap">Profit</span>
+                <MdAttachMoney className="w-32 h-32 text-teal-500" />
+                <span className="text-[10px] mt-1 whitespace-nowrap">Profit</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                 onClick={() => setIsTimeTrackingOpen(true)} 
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
               >
-                <MdAccessTime className="w-16 h-16 text-purple-500" />
-                <span className="text-[8px] whitespace-nowrap">Time</span>
+                <MdAccessTime className="w-32 h-32 text-purple-500" />
+                <span className="text-[10px] mt-1 whitespace-nowrap">Time</span>
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                 onClick={() => setIsPhotoCaptureOpen(true)}
                 disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
               >
-                <MdCameraAlt className="w-16 h-16 text-pink-500" />
-                <span className="text-[8px] whitespace-nowrap">Camera</span>
+                <MdCameraAlt className="w-32 h-32 text-pink-500" />
+                <span className="text-[10px] mt-1 whitespace-nowrap">Camera</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-auto py-0.5 px-1 hover-elevate active-elevate-2 flex-col min-w-0" 
+                    className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col" 
                     data-testid="button-more"
                   >
-                    <MdMoreHoriz className="w-16 h-16 text-green-600" />
-                    <span className="text-[8px] whitespace-nowrap">More</span>
+                    <MdMoreHoriz className="w-32 h-32 text-green-600" />
+                    <span className="text-[10px] mt-1 whitespace-nowrap">More</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
