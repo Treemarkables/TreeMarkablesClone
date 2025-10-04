@@ -580,12 +580,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           }
         }
 
+        // Safari-safe date parsing for duration calculation
+        const startDateTime = new Date(firstAssignment.startTime);
+        const endDateTime = new Date(firstAssignment.endTime);
+        const calculatedDuration = !isNaN(startDateTime.getTime()) && !isNaN(endDateTime.getTime())
+          ? (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60)
+          : 2; // Default to 2 hours if parsing fails
+
+        // Safari-safe customer name lookup
+        const customerName = apiJob.customerId && customerMap.has(apiJob.customerId)
+          ? customerMap.get(apiJob.customerId)
+          : apiJob.title || 'Unknown Customer';
+
         jobAssignments.push({
           id: apiJob.id,
           jobId: apiJob.jobNumber,
           jobNumber: apiJob.jobNumber,
           customerId: apiJob.customerId,
-          customerName: customerMap.get(apiJob.customerId) || apiJob.title || 'Unknown Customer',
+          customerName: customerName,
           customerPhone: '',
           address: apiJob.address,
           serviceType: apiJob.serviceType || '',
@@ -594,7 +606,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           priority: apiJob.priority,
           startTime: firstAssignment.startTime,
           endTime: firstAssignment.endTime,
-          duration: (new Date(firstAssignment.endTime).getTime() - new Date(firstAssignment.startTime).getTime()) / (1000 * 60 * 60),
+          duration: calculatedDuration,
           notes: firstAssignment.notes || apiJob.specialInstructions || apiJob.notes || '',
           assignedTeam: assignedTeam,
           teamId: teamId,
@@ -611,16 +623,39 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // Skip if already processed with staff assignment
         if (processedJobs.has(apiJob.id)) return;
 
-        const startTime = apiJob.scheduledDate || new Date().toISOString();
+        // Safari-safe date handling
         const estimatedDuration = apiJob.estimatedDuration || 2;
-        const endTime = new Date(new Date(startTime).getTime() + (estimatedDuration * 60 * 60 * 1000)).toISOString();
+        let startTime: string;
+        let endTime: string;
+        
+        if (apiJob.scheduledDate) {
+          // Validate the scheduled date
+          const scheduledDateTime = new Date(apiJob.scheduledDate);
+          if (!isNaN(scheduledDateTime.getTime())) {
+            startTime = apiJob.scheduledDate;
+            endTime = new Date(scheduledDateTime.getTime() + (estimatedDuration * 60 * 60 * 1000)).toISOString();
+          } else {
+            // Invalid date, use current time
+            startTime = new Date().toISOString();
+            endTime = new Date(Date.now() + (estimatedDuration * 60 * 60 * 1000)).toISOString();
+          }
+        } else {
+          // No scheduled date, use current time
+          startTime = new Date().toISOString();
+          endTime = new Date(Date.now() + (estimatedDuration * 60 * 60 * 1000)).toISOString();
+        }
+
+        // Safari-safe customer name lookup
+        const customerName = apiJob.customerId && customerMap.has(apiJob.customerId)
+          ? customerMap.get(apiJob.customerId)
+          : apiJob.title || 'Unknown Customer';
 
         jobAssignments.push({
           id: apiJob.id,
           jobId: apiJob.jobNumber,
           jobNumber: apiJob.jobNumber,
           customerId: apiJob.customerId,
-          customerName: customerMap.get(apiJob.customerId) || apiJob.title || 'Unknown Customer',
+          customerName: customerName,
           customerPhone: '',
           address: apiJob.address,
           serviceType: apiJob.serviceType || '',
@@ -665,8 +700,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Check if job has recent activity (within last hour)
   const hasRecentActivity = (job: JobAssignment) => {
     if (!job.lastActivityAt) return false;
+    // Safari-safe date parsing
+    const lastActivity = new Date(job.lastActivityAt);
+    if (isNaN(lastActivity.getTime())) return false;
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    return new Date(job.lastActivityAt) > oneHourAgo;
+    return lastActivity > oneHourAgo;
   };
 
   // Get status initials for job circles
@@ -734,7 +772,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         teamMembers.some(member => member.id === assignedId)
       );
       if (!hasTeamMember && job.teamId !== teamId) return false;
-      return isSameDay(new Date(job.startTime), selectedDate);
+      // Safari-safe date parsing
+      const jobStartTime = new Date(job.startTime);
+      if (isNaN(jobStartTime.getTime())) return false;
+      return isSameDay(jobStartTime, selectedDate);
     });
   };
 
@@ -744,7 +785,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       // Check if staff member is in assigned team or directly assigned
       const isAssigned = job.assignedTeam?.includes(staffId);
       if (!isAssigned && job.staffId !== staffId) return false;
-      return isSameDay(new Date(job.startTime), selectedDate);
+      // Safari-safe date parsing
+      const jobStartTime = new Date(job.startTime);
+      if (isNaN(jobStartTime.getTime())) return false;
+      return isSameDay(jobStartTime, selectedDate);
     });
   };
 
@@ -963,10 +1007,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Handle scheduling functionality
   const handleScheduleJob = (job: JobAssignment) => {
     setJobToSchedule(job);
+    // Safari-safe date parsing
+    const startTime = new Date(job.startTime);
+    const endTime = new Date(job.endTime);
+    const now = new Date();
+    
     setSchedulingData({
-      date: format(new Date(job.startTime), 'yyyy-MM-dd'),
-      startTime: format(new Date(job.startTime), 'HH:mm'),
-      endTime: format(new Date(job.endTime), 'HH:mm'),
+      date: !isNaN(startTime.getTime()) ? format(startTime, 'yyyy-MM-dd') : format(now, 'yyyy-MM-dd'),
+      startTime: !isNaN(startTime.getTime()) ? format(startTime, 'HH:mm') : '09:00',
+      endTime: !isNaN(endTime.getTime()) ? format(endTime, 'HH:mm') : '17:00',
       assignedTo: job.teamId || job.staffId || '',
       notes: job.notes || ''
     });
@@ -1576,7 +1625,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     {jobFilterOptions.map((option) => {
                       const IconComponent = option.icon;
                       const filteredCount = jobs.filter(job => {
-                        const isToday = isSameDay(new Date(job.startTime), selectedDate);
+                        // Safari-safe date parsing
+                        const jobStartTime = new Date(job.startTime);
+                        if (isNaN(jobStartTime.getTime())) return false;
+                        const isToday = isSameDay(jobStartTime, selectedDate);
                         if (!isToday) return false;
                         
                         switch (option.value) {
@@ -1587,8 +1639,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           case 'quotes': return job.serviceType?.toLowerCase().includes('quote') || false;
                           case 'work_orders': return (job.status === 'scheduled' || job.status === 'in_progress') && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
                           case 'unscheduled':
-                            const jobDate = new Date(job.startTime);
-                            const isDefaultTime = jobDate.getHours() === 9 && jobDate.getMinutes() === 0;
+                            const isDefaultTime = jobStartTime.getHours() === 9 && jobStartTime.getMinutes() === 0;
                             return isDefaultTime || (!job.assignedTeam?.length && !job.teamId && !job.staffId);
                           case 'in_progress': return job.status === 'in_progress' || job.status === 'scheduled';
                           case 'completed': return job.status === 'completed' || job.status === 'cancelled';
@@ -1754,7 +1805,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   </div>
                                   {/* Job date info */}
                                   <div className="text-xs text-gray-500">
-                                    {job.startTime ? format(new Date(job.startTime), 'MMM dd, yyyy') : format(selectedDate, 'MMM dd, yyyy')}
+                                    {(() => {
+                                      if (!job.startTime) return format(selectedDate, 'MMM dd, yyyy');
+                                      const jobDate = new Date(job.startTime);
+                                      return !isNaN(jobDate.getTime()) 
+                                        ? format(jobDate, 'MMM dd, yyyy')
+                                        : format(selectedDate, 'MMM dd, yyyy');
+                                    })()}
                                   </div>
                                 </div>
                                 <div className="text-right flex-shrink-0">
