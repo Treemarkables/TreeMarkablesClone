@@ -72,7 +72,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
 
   return (
     <SidebarProvider style={style as React.CSSProperties} defaultOpen={!isMobile}>
-      <div className="flex min-h-screen w-full md:h-screen">
+      <div className="flex min-h-full w-full md:h-full">
         <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0">
           {/* Mobile header - just sidebar toggle */}
