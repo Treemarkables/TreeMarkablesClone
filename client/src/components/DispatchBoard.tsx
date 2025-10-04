@@ -453,70 +453,76 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     notes: ''
   });
 
-  // Fetch jobs from backend API with localStorage fallback
+  // Fetch jobs from backend API with localStorage persistence
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: ['/api/jobs'],
+    initialData: () => {
+      const cached = localStorage.getItem('dispatch_jobs_cache');
+      return cached ? JSON.parse(cached) : undefined;
+    },
     queryFn: async () => {
-      const response = await fetch('/api/jobs');
-      if (!response.ok) {
-        // If 401, try to use cached data from localStorage
-        if (response.status === 401) {
-          const cached = localStorage.getItem('dispatch_jobs_cache');
-          if (cached) {
-            return JSON.parse(cached);
-          }
-        }
-        throw new Error('Failed to fetch jobs');
+      try {
+        const response = await fetch('/api/jobs');
+        if (!response.ok) throw new Error('Failed to fetch jobs');
+        const data = await response.json();
+        localStorage.setItem('dispatch_jobs_cache', JSON.stringify(data));
+        return data;
+      } catch (error) {
+        const cached = localStorage.getItem('dispatch_jobs_cache');
+        if (cached) return JSON.parse(cached);
+        throw error;
       }
-      const data = await response.json();
-      // Cache successful responses
-      localStorage.setItem('dispatch_jobs_cache', JSON.stringify(data));
-      return data;
-    }
+    },
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
-  // Fetch customers for name lookup with localStorage fallback
+  // Fetch customers for name lookup with localStorage persistence
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],
+    initialData: () => {
+      const cached = localStorage.getItem('dispatch_customers_cache');
+      return cached ? JSON.parse(cached) : undefined;
+    },
     queryFn: async () => {
-      const response = await fetch('/api/customers');
-      if (!response.ok) {
-        // If 401, try to use cached data from localStorage
-        if (response.status === 401) {
-          const cached = localStorage.getItem('dispatch_customers_cache');
-          if (cached) {
-            return JSON.parse(cached);
-          }
-        }
-        throw new Error('Failed to fetch customers');
+      try {
+        const response = await fetch('/api/customers');
+        if (!response.ok) throw new Error('Failed to fetch customers');
+        const data = await response.json();
+        localStorage.setItem('dispatch_customers_cache', JSON.stringify(data));
+        return data;
+      } catch (error) {
+        const cached = localStorage.getItem('dispatch_customers_cache');
+        if (cached) return JSON.parse(cached);
+        throw error;
       }
-      const data = await response.json();
-      // Cache successful responses
-      localStorage.setItem('dispatch_customers_cache', JSON.stringify(data));
-      return data;
-    }
+    },
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
-  // Fetch staff assignments for dispatch board with localStorage fallback
+  // Fetch staff assignments for dispatch board with localStorage persistence
   const { data: staffAssignmentsData } = useQuery({
     queryKey: ['/api/staff-assignments'],
+    initialData: () => {
+      const cached = localStorage.getItem('dispatch_assignments_cache');
+      return cached ? JSON.parse(cached) : undefined;
+    },
     queryFn: async () => {
-      const response = await fetch('/api/staff-assignments');
-      if (!response.ok) {
-        // If 401, try to use cached data from localStorage
-        if (response.status === 401) {
-          const cached = localStorage.getItem('dispatch_assignments_cache');
-          if (cached) {
-            return JSON.parse(cached);
-          }
-        }
-        throw new Error('Failed to fetch staff assignments');
+      try {
+        const response = await fetch('/api/staff-assignments');
+        if (!response.ok) throw new Error('Failed to fetch staff assignments');
+        const data = await response.json();
+        localStorage.setItem('dispatch_assignments_cache', JSON.stringify(data));
+        return data;
+      } catch (error) {
+        const cached = localStorage.getItem('dispatch_assignments_cache');
+        if (cached) return JSON.parse(cached);
+        throw error;
       }
-      const data = await response.json();
-      // Cache successful responses
-      localStorage.setItem('dispatch_assignments_cache', JSON.stringify(data));
-      return data;
-    }
+    },
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
   // Create customer lookup map
