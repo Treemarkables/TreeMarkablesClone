@@ -1261,7 +1261,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         {/* Job Cards - Right Side (30%) */}
         <div className="w-[30%] h-full flex flex-col" data-testid="job-cards-container">
-          <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0">
+          <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0" style={{pointerEvents: 'auto'}}>
             <CardHeader className="flex-shrink-0 border-b pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Jobs</CardTitle>
@@ -1592,6 +1592,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     {/* Global Job Card Modal */}
     {showGlobalJobCard && (
       <GlobalJobCard
+        isOpen={showGlobalJobCard}
         mode={globalJobCardMode}
         jobId={jobToEdit?.id}
         onClose={() => {
