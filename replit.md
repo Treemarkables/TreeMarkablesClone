@@ -62,6 +62,17 @@ Preferred communication style: Simple, everyday language.
 - **Xero Accounting Integration**: Custom Connection integration with Xero for automated invoice syncing (client credentials flow, $5-10 NZD/month subscription). Features include automatic token refresh, contact provisioning, GST handling, and real-time sync status tracking. Accessible via Integrations page and Invoices page with one-click "Send to Xero" functionality.
 - **Addy.co.nz Address Autocomplete**: Real-time New Zealand address validation and autocomplete using Addy Solutions API. Features fuzzy matching for typos, official NZ Postal Address File (PAF) and LINZ database validation, and intelligent address parsing. Integrated into job creation forms via AddressAutocomplete component with debounced search and mock data fallback.
 
+## Critical Architecture Notes
+
+### Scrolling Fix (AuthContext)
+**Issue**: Pages were not scrolling because `AuthContext.tsx` wrapped the entire app with `h-screen` and `overflow-hidden`, constraining all content to viewport height.
+
+**Solution**: Changed AuthContext wrapper from:
+- `<div className="flex flex-col h-screen">` → `<div className="flex flex-col min-h-screen">`
+- Child container: removed `overflow-hidden` class
+
+This fix applies to ALL pages (public marketing pages and dashboard pages). The AuthContext must use `min-h-screen` instead of `h-screen` to allow vertical scrolling.
+
 ## External Dependencies
 
 ### Core Framework
