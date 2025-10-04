@@ -143,9 +143,12 @@ export default function ContactSection() {
   };
 
   const handleQuoteRequest = async () => {
+    console.log('🔵 Contact form submit button clicked');
+    
     // Validate form
     const validationError = validateForm();
     if (validationError) {
+      console.log('❌ Form validation failed:', validationError);
       toast({
         title: "Validation Error",
         description: validationError,
@@ -154,11 +157,19 @@ export default function ContactSection() {
       return;
     }
 
+    console.log('✅ Form validation passed, submitting...');
+
     // CAPTCHA disabled - form can be submitted without verification
 
     setIsSubmitting(true);
 
     try {
+      console.log('📤 Sending POST to /api/contact with data:', {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+      });
+      
       const response = await fetch('/api/contact', {
         method: 'POST',
         headers: {
