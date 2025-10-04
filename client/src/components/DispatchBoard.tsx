@@ -53,6 +53,7 @@ interface ApiResponse<T> {
 }
 import { GrossMarginCalculator } from '@/components/GrossMarginCalculator';
 import { StaffTimeTracker } from '@/components/StaffTimeTracker';
+import { CalendarGrid } from '@/components/CalendarGrid';
 import {
   DndContext,
   DragEndEvent,
@@ -1233,6 +1234,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   return (
     <div className="space-y-4 overflow-x-hidden">
+      {/* Calendar Grid - Desktop Only */}
+      <div className="hidden lg:block h-[600px]" data-testid="calendar-grid-container">
+        <Card className="h-full">
+          <CalendarGrid />
+        </Card>
+      </div>
+
       <Card className="overflow-x-hidden">
         {/* Desktop Header - Hidden on Mobile */}
         <CardHeader className="hidden md:block">
