@@ -150,7 +150,7 @@ export default function TreePruning() {
       />
       <Header />
       {/* Hero Section */}
-      <section className="relative min-h-screen overflow-hidden">
+      <section className="relative min-h-screen">
         {/* Video Background */}
         <video 
           autoPlay 
