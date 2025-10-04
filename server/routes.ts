@@ -3602,6 +3602,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 emailAddress: to
               }
             });
+            
+            // Update job's lastActivityAt to trigger activity indicator and sorting
+            await storage.updateJob(jobId, { lastActivityAt: new Date() });
             console.log(`📝 Email logged to job diary for job ${job?.jobNumber || jobId}`);
           } catch (diaryError) {
             console.error('Error creating job diary entry for email:', diaryError);
@@ -3710,6 +3713,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               authorRole: 'system',
               tags: ['sms', 'communication']
             });
+            
+            // Update job's lastActivityAt to trigger activity indicator and sorting
+            await storage.updateJob(jobId, { lastActivityAt: new Date() });
           } catch (diaryError) {
             console.warn('Failed to log SMS to job diary:', diaryError);
           }
@@ -3778,6 +3784,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             authorRole: 'customer',
             tags: ['sms', 'communication', 'customer-reply']
           });
+          
+          // Update job's lastActivityAt to trigger activity indicator and sorting
+          await storage.updateJob(recentJob.id, { lastActivityAt: new Date() });
           console.log(`✅ SMS logged to job #${recentJob.jobNumber} diary`);
         } else {
           console.log(`⚠️ No jobs found for customer ${customer.name}`);
@@ -8239,6 +8248,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               ...(isForwardingAddress && { forwardedBy })
             }
           });
+          
+          // Update job's lastActivityAt to trigger activity indicator and sorting
+          await storage.updateJob(job.id, { lastActivityAt: new Date() });
           jobFound = true;
           console.log(`📝 Email logged to job ${job.jobNumber} diary`);
         }
@@ -8267,6 +8279,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               ...(isForwardingAddress && { forwardedBy })
             }
           });
+          
+          // Update job's lastActivityAt to trigger activity indicator and sorting
+          await storage.updateJob(job.id, { lastActivityAt: new Date() });
           jobFound = true;
           console.log(`📝 Email logged to job ${job.jobNumber} diary (via quote ${quoteNumber})`);
         }
