@@ -290,7 +290,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
               </Button>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative">
+          <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col">
             {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
           </main>
         </div>
