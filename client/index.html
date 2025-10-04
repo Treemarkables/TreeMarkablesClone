@@ -22,9 +22,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Source+Sans+Pro:ital,wght@0,200..900;1,200..900&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap" rel="stylesheet">
     <style>
-      html { height: 100vh !important; }
-      body { height: 100% !important; overflow: auto !important; }
-      #root { min-height: 100% !important; }
+      /* Let content grow naturally - don't constrain height */
+      html, body {
+        min-height: 100vh;
+        overflow: visible;
+      }
+      #root {
+        min-height: 100vh;
+      }
     </style>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VK3PPB6SFW"></script>
@@ -110,29 +115,6 @@
       })();
     </script>
     
-    <script>
-      // Check rendering and scrolling
-      function checkScroll() {
-        const root = document.getElementById('root');
-        const body = document.body;
-        console.log('✅ SCROLL CHECK:', {
-          rootChildren: root.children.length,
-          bodyScrollHeight: body.scrollHeight,
-          bodyClientHeight: body.clientHeight,
-          canScroll: body.scrollHeight > body.clientHeight,
-          scrollWorking: window.scrollY >= 0
-        });
-        
-        if (body.scrollHeight <= body.clientHeight) {
-          console.warn('⚠️ Page too short to scroll. Content height:', body.scrollHeight + 'px');
-        } else {
-          console.log('✅ Page is scrollable!', body.scrollHeight, '>', body.clientHeight);
-        }
-      }
-      
-      setTimeout(checkScroll, 3000);
-      setTimeout(checkScroll, 5000);
-    </script>
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
