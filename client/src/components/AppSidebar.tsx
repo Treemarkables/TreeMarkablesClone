@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Link, useLocation, useRoute } from "wouter";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AppSidebarProps {
   activeTab: string;
@@ -76,6 +77,13 @@ const dashboardItems = [
     icon: BarChart3,
     value: "analytics",
     isTab: true
+  },
+  {
+    title: "Safety",
+    url: "/job-dashboard",
+    icon: Shield,
+    value: "safety",
+    isTab: true
   }
 ];
 
@@ -115,6 +123,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   const [location, setLocation] = useLocation();
   const { setOpen } = useSidebar();
   const isMobile = useIsMobile();
+  const { isAdmin, isCrew } = useAuth();
   
   const handleTabClick = (tabValue: string) => {
     // If not on job dashboard, navigate there first
@@ -129,16 +138,20 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     }
   };
 
+  // Filter items based on role - crew can only see All Jobs and Safety
+  const allowedCrewItems = ['jobs', 'safety'];
+  const filteredDashboardItems = isAdmin ? dashboardItems : dashboardItems.filter(item => allowedCrewItems.includes(item.value));
+
   return (
     <Sidebar>
 
       <SidebarContent>
         {/* Core Dashboard */}
         <SidebarGroup>
-          <SidebarGroupLabel>Core Dashboard</SidebarGroupLabel>
+          <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {dashboardItems.map((item) => (
+              {filteredDashboardItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
                   {item.isTab ? (
                     <SidebarMenuButton 
@@ -163,12 +176,13 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Business Management */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Business Management</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {businessItems.map((item) => (
+        {/* Business Management - Admin only */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Business Management</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {businessItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
                   {item.isTab ? (
                     <SidebarMenuButton
@@ -188,108 +202,103 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   )}
                 </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-        {/* Operations & Analysis */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Operations & Analysis</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/dispatch"}>
-                  <Link href="/dispatch" onClick={() => isMobile && setOpen(false)} data-testid="link-dispatch">
-                    <Calendar className="h-4 w-4" />
-                    <span>Dispatch Board</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/calendar"}>
-                  <Link href="/calendar" onClick={() => isMobile && setOpen(false)} data-testid="link-calendar">
-                    <CalendarDays className="h-4 w-4" />
-                    <span>Calendar</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={activeTab === "safety" && location === "/job-dashboard"}
-                  onClick={() => handleTabClick("safety")}
-                  data-testid="button-tab-safety"
-                >
-                  <Shield className="h-4 w-4" />
-                  <span>Safety</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/workflows"}>
-                  <Link href="/workflows" onClick={() => isMobile && setOpen(false)} data-testid="link-workflows">
-                    <Workflow className="h-4 w-4" />
-                    <span>Workflows</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/opportunities"}>
-                  <Link href="/opportunities" onClick={() => isMobile && setOpen(false)} data-testid="link-opportunities">
-                    <MessageSquare className="h-4 w-4" />
-                    <span>Conversations</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/reputation"}>
-                  <Link href="/reputation" onClick={() => isMobile && setOpen(false)} data-testid="link-reputation">
-                    <Star className="h-4 w-4" />
-                    <span>Reputation</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/inbox"}>
-                  <Link href="/inbox" onClick={() => isMobile && setOpen(false)} data-testid="link-inbox">
-                    <Inbox className="h-4 w-4" />
-                    <span>Inbox</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/metrics"}>
-                  <Link href="/metrics" onClick={() => isMobile && setOpen(false)} data-testid="link-metrics">
-                    <BarChart3 className="h-4 w-4" />
-                    <span>Metrics Dashboard</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Operations & Analysis - Admin only */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Operations & Analysis</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/dispatch"}>
+                    <Link href="/dispatch" onClick={() => isMobile && setOpen(false)} data-testid="link-dispatch">
+                      <Calendar className="h-4 w-4" />
+                      <span>Dispatch Board</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/calendar"}>
+                    <Link href="/calendar" onClick={() => isMobile && setOpen(false)} data-testid="link-calendar">
+                      <CalendarDays className="h-4 w-4" />
+                      <span>Calendar</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/workflows"}>
+                    <Link href="/workflows" onClick={() => isMobile && setOpen(false)} data-testid="link-workflows">
+                      <Workflow className="h-4 w-4" />
+                      <span>Workflows</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/opportunities"}>
+                    <Link href="/opportunities" onClick={() => isMobile && setOpen(false)} data-testid="link-opportunities">
+                      <MessageSquare className="h-4 w-4" />
+                      <span>Conversations</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/reputation"}>
+                    <Link href="/reputation" onClick={() => isMobile && setOpen(false)} data-testid="link-reputation">
+                      <Star className="h-4 w-4" />
+                      <span>Reputation</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/inbox"}>
+                    <Link href="/inbox" onClick={() => isMobile && setOpen(false)} data-testid="link-inbox">
+                      <Inbox className="h-4 w-4" />
+                      <span>Inbox</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/metrics"}>
+                    <Link href="/metrics" onClick={() => isMobile && setOpen(false)} data-testid="link-metrics">
+                      <BarChart3 className="h-4 w-4" />
+                      <span>Metrics Dashboard</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-blue-200">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              isActive={activeTab === "settings"}
-              onClick={() => {
-                onTabChange("settings");
-                if (isMobile) {
-                  setOpen(false);
-                }
-              }}
-            >
-              <button className="w-full justify-start" data-testid="button-tab-settings">
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
-              </button>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+      {isAdmin && (
+        <SidebarFooter className="border-t border-blue-200">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={activeTab === "settings"}
+                onClick={() => {
+                  onTabChange("settings");
+                  if (isMobile) {
+                    setOpen(false);
+                  }
+                }}
+              >
+                <button className="w-full justify-start" data-testid="button-tab-settings">
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }

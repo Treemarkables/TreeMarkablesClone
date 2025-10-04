@@ -57,10 +57,26 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { useAuth } from "@/contexts/AuthContext";
+import { Redirect } from "wouter";
+
+// Protected Route wrapper - redirects authenticated crew users to allowed pages
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isCrew, isAuthenticated } = useAuth();
+  
+  // Only redirect if user is authenticated AND is crew
+  if (isAuthenticated && isCrew) {
+    return <Redirect to="/job-dashboard" />;
+  }
+  
+  return <>{children}</>;
+}
 
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
-  const [activeTab, setActiveTab] = useState("overview");
+  const { isCrew } = useAuth();
+  // Initialize activeTab based on role: crew starts with "jobs", admin with "overview"
+  const [activeTab, setActiveTab] = useState(isCrew ? "jobs" : "overview");
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
@@ -245,9 +261,11 @@ function Router() {
         )}
       </Route>
       <Route path="/metrics">
-        <SidebarLayout>
-          <MetricsDashboard />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <MetricsDashboard />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/customer-portal" component={CustomerPortal}/>
       <Route path="/proposal/:proposalId" component={ProposalViewer}/>
@@ -255,98 +273,134 @@ function Router() {
       <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
       <Route path="/review/:token" component={PublicReview}/>
       
-      {/* Dashboard pages with sidebar */}
+      {/* Dashboard pages with sidebar - Admin only */}
       <Route path="/overview">
-        <SidebarLayout>
-          <ActivityDashboard />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <ActivityDashboard />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/pipeline">
-        <SidebarLayout>
-          <Pipeline />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Pipeline />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/opportunities">
-        <SidebarLayout>
-          <Opportunities />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Opportunities />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/reputation">
-        <SidebarLayout>
-          <Reputation />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Reputation />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/inbox">
-        <SidebarLayout>
-          <Inbox />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Inbox />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/integrations">
-        <SidebarLayout>
-          <Integrations />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Integrations />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/communications">
-        <SidebarLayout>
-          <CommunicationsManagement />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <CommunicationsManagement />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/conversation/:id">
-        <SidebarLayout>
-          <ConversationDetail />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <ConversationDetail />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/equipment">
-        <SidebarLayout>
-          <Equipment />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Equipment />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/invoices">
-        <SidebarLayout>
-          <Invoices />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Invoices />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/templates">
-        <SidebarLayout>
-          <TemplateManagement />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <TemplateManagement />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/dispatch">
-        <SidebarLayout>
-          <Dispatch />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Dispatch />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/calendar">
-        <SidebarLayout>
-          <Calendar />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Calendar />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/workflows">
-        <SidebarLayout>
-          <WorkflowAutomation />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <WorkflowAutomation />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       
-      {/* Account dropdown pages */}
+      {/* Account dropdown pages - Admin only */}
       <Route path="/history">
-        <SidebarLayout>
-          <History />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <History />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/clients">
-        <SidebarLayout>
-          <Clients />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Clients />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/materials-services">
-        <SidebarLayout>
-          <MaterialsServices />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <MaterialsServices />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/settings">
-        <SidebarLayout>
-          <Settings />
-        </SidebarLayout>
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Settings />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       
       {/* Settings sub-pages - placeholders */}

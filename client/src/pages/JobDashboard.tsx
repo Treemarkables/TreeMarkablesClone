@@ -25,6 +25,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Job, Lead, Customer } from "@shared/schema";
+import { useAuth } from "@/contexts/AuthContext";
 
 // API Response types
 interface ApiResponse<T> {
@@ -90,6 +91,17 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isCrew } = useAuth();
+  
+  // Allowed tabs for crew users
+  const allowedCrewTabs = ['jobs', 'safety'];
+  
+  // If crew user tries to access restricted tab, redirect to jobs tab and return null to prevent rendering
+  if (isCrew && !allowedCrewTabs.includes(activeTab)) {
+    // Use setTimeout to avoid setState during render
+    setTimeout(() => onTabChange?.('jobs'), 0);
+    return null;
+  }
 
   // Customer update mutation
   const updateCustomerMutation = useMutation({
