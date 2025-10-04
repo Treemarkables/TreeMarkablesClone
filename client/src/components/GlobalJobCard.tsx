@@ -125,6 +125,9 @@ export function GlobalJobCard({
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
   
+  // Description popup state
+  const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
+  
   // Profit tracking state
   const [isProfitTrackerOpen, setIsProfitTrackerOpen] = useState(false);
   
@@ -2181,8 +2184,11 @@ export function GlobalJobCard({
                                 <FormControl>
                                   <Textarea 
                                     {...field}
-                                    className="min-h-[90px] text-base font-medium" 
+                                    className="min-h-[90px] text-base font-medium cursor-pointer" 
                                     placeholder="Describe the work that needs to be done"
+                                    onClick={() => {
+                                      setDescriptionPopupOpen(true);
+                                    }}
                                   />
                                 </FormControl>
                               </FormItem>
@@ -4162,6 +4168,33 @@ export function GlobalJobCard({
                 </div>
               )}
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Job Description Popup - 50% Width */}
+      <Dialog open={descriptionPopupOpen} onOpenChange={setDescriptionPopupOpen}>
+        <DialogContent className="w-[50vw] max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-center">Job Description</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea 
+              value={form.watch('description') || ''}
+              onChange={(e) => form.setValue('description', e.target.value)}
+              className="min-h-[300px] text-base font-medium" 
+              placeholder="Describe the work that needs to be done"
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button 
+              variant="outline" 
+              className="flex-1"
+              onClick={() => setDescriptionPopupOpen(false)}
+              data-testid="btn-description-popup-close"
+            >
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
