@@ -111,27 +111,27 @@
     </script>
     
     <script>
-      // Diagnostic script
-      setTimeout(function() {
-        console.log('=== CONTENT DIAGNOSTIC ===');
+      // Check rendering and scrolling
+      function checkScroll() {
         const root = document.getElementById('root');
-        console.log('#root children:', root.children.length);
-        console.log('#root innerHTML length:', root.innerHTML.length);
-        console.log('document.body.scrollHeight:', document.body.scrollHeight);
-        console.log('Can body scroll?:', document.body.scrollHeight > document.body.clientHeight);
-        
-        // Check all divs with min-h-screen
-        const screens = document.querySelectorAll('[class*="min-h-screen"]');
-        console.log('Elements with min-h-screen:', screens.length);
-        screens.forEach(function(el, i) {
-          const s = window.getComputedStyle(el);
-          console.log('  Element', i, ':', {
-            height: s.height,
-            minHeight: s.minHeight,
-            scrollHeight: el.scrollHeight
-          });
+        const body = document.body;
+        console.log('✅ SCROLL CHECK:', {
+          rootChildren: root.children.length,
+          bodyScrollHeight: body.scrollHeight,
+          bodyClientHeight: body.clientHeight,
+          canScroll: body.scrollHeight > body.clientHeight,
+          scrollWorking: window.scrollY >= 0
         });
-      }, 2000);
+        
+        if (body.scrollHeight <= body.clientHeight) {
+          console.warn('⚠️ Page too short to scroll. Content height:', body.scrollHeight + 'px');
+        } else {
+          console.log('✅ Page is scrollable!', body.scrollHeight, '>', body.clientHeight);
+        }
+      }
+      
+      setTimeout(checkScroll, 3000);
+      setTimeout(checkScroll, 5000);
     </script>
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
