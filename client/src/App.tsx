@@ -161,7 +161,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
               </Button>
             </div>
           </header>
-          <main className="flex-1 md:overflow-y-auto w-full max-w-full min-w-0 relative">
+          <main className="flex-1 w-full max-w-full min-w-0 relative md:overflow-y-auto">
             {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
           </main>
         </div>
