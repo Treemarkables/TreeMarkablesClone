@@ -278,17 +278,17 @@
   }
 
   html {
-    height: 100vh;
+    height: 100vh !important;
   }
 
   body {
-    height: 100%;
-    overflow: auto;
+    height: 100% !important;
+    overflow: auto !important;
     @apply font-sans antialiased bg-background text-foreground;
   }
 
   #root {
-    min-height: 100%;
+    min-height: 100% !important;
   }
 }
 
