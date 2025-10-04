@@ -1247,9 +1247,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   }
 
   return (
-    <div className="p-4 flex flex-col flex-1 min-h-0">
+    <div className="p-4 flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* Desktop Layout: Calendar on left, Job cards on right */}
-      <div className="hidden lg:flex gap-4 flex-1 min-h-0 overflow-hidden" data-testid="dispatch-desktop-layout">
+      <div className="hidden lg:flex gap-4 flex-1 min-h-0" data-testid="dispatch-desktop-layout">
         {/* Calendar Grid - Left Side (70%) */}
         <div className="w-[70%] h-full" data-testid="calendar-grid-container">
           <Card className="h-full overflow-hidden">
