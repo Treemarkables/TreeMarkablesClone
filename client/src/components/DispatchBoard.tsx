@@ -539,13 +539,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       const assignmentsByJobAndDate = new Map<string, any[]>();
       
       staffAssignmentsData.data.forEach((assignment: any) => {
-        const dateKey = new Date(assignment.startTime).toDateString();
+        // Safari-safe date parsing
+        const startDate = new Date(assignment.startTime);
+        if (isNaN(startDate.getTime())) return; // Skip invalid dates
+        const dateKey = startDate.toDateString();
         const key = `${assignment.jobId}-${dateKey}`;
         
         if (!assignmentsByJobAndDate.has(key)) {
           assignmentsByJobAndDate.set(key, []);
         }
-        assignmentsByJobAndDate.get(key)?.push(assignment);
+        const dateArray = assignmentsByJobAndDate.get(key);
+        if (dateArray) {
+          dateArray.push(assignment);
+        }
       });
 
       // Create job assignments for each unique job-date combination
@@ -991,9 +997,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return;
     }
 
-    // Create new start and end times
-    const startDateTime = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
-    const endDateTime = new Date(`${schedulingData.date}T${schedulingData.endTime}`);
+    // Create new start and end times (Safari-compatible)
+    const startDateTime = new Date(`${schedulingData.date}T${schedulingData.startTime}:00`);
+    const endDateTime = new Date(`${schedulingData.date}T${schedulingData.endTime}:00`);
+    
+    // Validate dates are valid
+    if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+      toast({
+        title: "Invalid Date",
+        description: "Please enter valid date and time values.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     // Validate that end time is after start time
     if (endDateTime <= startDateTime) {
