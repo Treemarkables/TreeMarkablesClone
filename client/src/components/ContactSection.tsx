@@ -21,6 +21,8 @@ interface ContactFormData {
 }
 
 export default function ContactSection() {
+  console.log('🟢 ContactSection component rendered');
+  
   const [formData, setFormData] = useState<ContactFormData>({
     name: '',
     email: '',
