@@ -113,10 +113,29 @@ export function CalendarGrid() {
 
       // Check if job overlaps with this hour
       if (job.scheduledStartTime) {
-        const [startHour] = job.scheduledStartTime.split(':').map(Number);
-        const [endHour] = (job.scheduledEndTime || job.scheduledStartTime).split(':').map(Number);
+        const [startHour, startMinute = 0] = job.scheduledStartTime.split(':').map(Number);
         
-        return hour >= startHour && hour < (endHour || startHour + 1);
+        // If no end time, assume 1-hour duration
+        let endHour = startHour + 1;
+        let endMinute = startMinute;
+        
+        if (job.scheduledEndTime) {
+          const [h, m = 0] = job.scheduledEndTime.split(':').map(Number);
+          endHour = h;
+          endMinute = m;
+        }
+        
+        // Create time boundaries for the slot (e.g., 10:00 - 11:00)
+        const slotStart = hour;
+        const slotEnd = hour + 1;
+        
+        // Convert job times to decimal hours for comparison
+        const jobStartDecimal = startHour + (startMinute / 60);
+        const jobEndDecimal = endHour + (endMinute / 60);
+        
+        // Check if job overlaps with this hour slot
+        // Job overlaps if: job starts before slot ends AND job ends after slot starts
+        return jobStartDecimal < slotEnd && jobEndDecimal > slotStart;
       }
 
       return false;
