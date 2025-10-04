@@ -282,19 +282,6 @@
   }
 }
 
-/* Force scrolling - must be outside @layer to have priority */
-html {
-  height: 100vh !important;
-}
-
-body {
-  height: 100% !important;
-  overflow: auto !important;
-}
-
-#root {
-  min-height: 100% !important;
-}
 
 /**
  * Using the elevate system.
