@@ -1009,6 +1009,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   const handleEditJob = (job: JobAssignment) => {
+    console.log('🔵 Job card clicked:', job.jobNumber || job.id);
     setJobToEdit(job);
     setGlobalJobCardMode('edit');
     setShowGlobalJobCard(true);
