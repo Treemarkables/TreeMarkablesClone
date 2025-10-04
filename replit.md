@@ -74,6 +74,16 @@ Preferred communication style: Simple, everyday language.
 
 This fix applies to ALL pages (public marketing pages and dashboard pages). The AuthContext must use `min-h-screen` instead of `h-screen` to allow vertical scrolling.
 
+### Safari Refresh Button Fix
+**Issue**: Safari browser had persistent caching issues where hard refresh (Cmd+Shift+R) caused job cards to disappear from the Dispatch Board, even after implementing refetchQueries instead of invalidateQueries.
+
+**Solution**: Completely removed the refresh button for Safari users only:
+- Added Safari browser detection: `/^((?!chrome|android).)*safari/i.test(navigator.userAgent)`
+- Conditionally hide refresh button on both desktop and mobile headers when Safari is detected
+- Refresh button still available on Chrome and other browsers
+
+This prevents Safari-specific caching issues while maintaining refresh functionality for other browsers.
+
 ## External Dependencies
 
 ### Core Framework

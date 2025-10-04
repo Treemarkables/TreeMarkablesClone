@@ -82,6 +82,9 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   const { toast } = useToast();
   const isMobile = useIsMobile();
   
+  // Detect Safari browser
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  
   const handleRefresh = async () => {
     setIsRefreshing(true);
     
@@ -116,16 +119,19 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
           {/* Mobile header - sidebar toggle and refresh */}
           <header className="md:hidden flex items-center justify-between p-2 border-b bg-white">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              data-testid="button-mobile-refresh"
-              className="ml-auto"
-            >
-              <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </Button>
+            {/* Refresh Button - Hidden in Safari */}
+            {!isSafari && (
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                data-testid="button-mobile-refresh"
+                className="ml-auto"
+              >
+                <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+            )}
           </header>
           
           {/* Desktop header - full menu */}
@@ -136,16 +142,18 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
               {/* Notifications Bell */}
               <NotificationBell />
               
-              {/* Refresh Button */}
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                data-testid="button-desktop-refresh"
-              >
-                <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              </Button>
+              {/* Refresh Button - Hidden in Safari */}
+              {!isSafari && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  data-testid="button-desktop-refresh"
+                >
+                  <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </Button>
+              )}
               
               {/* Logout Button - Crew Only */}
               {isCrew && (
