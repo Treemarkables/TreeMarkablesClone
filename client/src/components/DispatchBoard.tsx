@@ -2091,8 +2091,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     const target = e.target as HTMLElement;
                     // Don't open job if clicking description trigger
                     if (target?.closest && target.closest('[data-description-trigger]')) {
+                      console.log('🚫 Parent card onClick prevented - clicked on description');
                       return;
                     }
+                    console.log('📂 Parent card onClick - opening full job edit');
                     handleEditJob(job);
                   }}
                   data-testid={`mobile-job-card-${job.id}`}
@@ -2137,9 +2139,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         data-testid={`mobile-job-description-${job.id}`}
                         data-description-trigger
                         onClick={(e) => {
+                          console.log('📝 Description clicked!', job.id);
                           e.stopPropagation();
+                          e.preventDefault();
                           setDescriptionPopupJob(job);
                           setShowDescriptionPopup(true);
+                          console.log('📝 Popup state set:', { showDescriptionPopup: true, jobId: job.id });
                         }}
                       >
                         {(() => {
