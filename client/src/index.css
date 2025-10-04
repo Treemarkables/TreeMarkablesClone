@@ -280,22 +280,6 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  /* Enable scrolling on mobile webviews */
-  @media (max-width: 768px) {
-    html, body {
-      overflow: auto !important;
-      height: auto !important;
-      -webkit-overflow-scrolling: touch;
-    }
-    
-    #root {
-      overflow: visible !important;
-      height: auto !important;
-      min-height: 100vh;
-    }
   }
 }
 
