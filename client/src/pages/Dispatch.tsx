@@ -2,7 +2,7 @@ import { DispatchBoard } from "@/components/DispatchBoard";
 
 export default function Dispatch() {
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="flex flex-col flex-1 overflow-hidden">
       <DispatchBoard />
     </div>
   );
