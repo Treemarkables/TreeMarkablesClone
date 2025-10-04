@@ -22,7 +22,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Source+Sans+Pro:ital,wght@0,200..900;1,200..900&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap" rel="stylesheet">
     <style>
-      body { margin: 0; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: auto;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+      #root {
+        width: 100%;
+        height: auto;
+      }
     </style>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VK3PPB6SFW"></script>
@@ -108,22 +119,6 @@
       })();
     </script>
     
-    <script>
-      // Check what's actually rendering
-      setTimeout(function() {
-        console.log('=== RENDER CHECK ===');
-        const root = document.getElementById('root');
-        const home = root.querySelector('[class*="min-h-screen"]');
-        if (home) {
-          console.log('Home page found, children:', home.children.length);
-          Array.from(home.children).forEach(function(child, i) {
-            console.log('  Section', i, ':', child.tagName, child.className.substring(0, 50), 'height:', child.offsetHeight + 'px');
-          });
-        }
-        console.log('Total body scrollHeight:', document.body.scrollHeight);
-        console.log('Total body clientHeight:', document.body.clientHeight);
-      }, 3000);
-    </script>
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
