@@ -85,12 +85,13 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     
-    // Selectively invalidate only critical queries to avoid Safari rendering issues
+    // Use refetchQueries instead of invalidateQueries to prevent Safari display issues
+    // This keeps the existing data visible while fetching new data
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] }),
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] }),
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications/summary'] }),
-      queryClient.invalidateQueries({ queryKey: ['/api/leads'] }),
+      queryClient.refetchQueries({ queryKey: ['/api/jobs'] }),
+      queryClient.refetchQueries({ queryKey: ['/api/customers'] }),
+      queryClient.refetchQueries({ queryKey: ['/api/notifications/summary'] }),
+      queryClient.refetchQueries({ queryKey: ['/api/leads'] }),
     ]);
     
     // Show success toast
