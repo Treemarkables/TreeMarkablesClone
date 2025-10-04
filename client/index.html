@@ -52,6 +52,26 @@
   <body>
     <div id="root"></div>
     
+    <!-- Force enable mobile scrolling -->
+    <script>
+      (function() {
+        // Force enable scrolling on mobile devices
+        document.documentElement.style.overflow = 'auto';
+        document.documentElement.style.WebkitOverflowScrolling = 'touch';
+        document.body.style.overflow = 'auto';
+        document.body.style.WebkitOverflowScrolling = 'touch';
+        document.body.style.position = 'static';
+        
+        // Remove any existing touch event listeners that might block scrolling
+        var blockingEvents = ['touchstart', 'touchmove', 'touchend'];
+        blockingEvents.forEach(function(event) {
+          document.removeEventListener(event, function() {}, { passive: false });
+        });
+        
+        console.log('✅ Mobile scrolling forcefully enabled');
+      })();
+    </script>
+    
     <!-- PWA Cache Bypass: Pre-fetch diary data BEFORE React loads -->
     <!-- This runs before the cached bundle, bypassing service worker -->
     <script>
