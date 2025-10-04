@@ -284,14 +284,11 @@
   body {
     height: 100%;
     overflow: auto;
+    @apply font-sans antialiased bg-background text-foreground;
   }
 
   #root {
     min-height: 100%;
-  }
-
-  body {
-    @apply font-sans antialiased bg-background text-foreground;
   }
 }
 
