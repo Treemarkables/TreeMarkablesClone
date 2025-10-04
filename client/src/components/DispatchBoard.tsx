@@ -1234,14 +1234,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   return (
     <div className="space-y-4 overflow-x-hidden">
-      {/* Calendar Grid - Desktop Only */}
-      <div className="hidden lg:block h-[600px]" data-testid="calendar-grid-container">
-        <Card className="h-full">
-          <CalendarGrid />
-        </Card>
-      </div>
+      {/* Desktop Layout: Calendar on left, Job cards on right */}
+      <div className="hidden lg:flex gap-4 h-[calc(100vh-200px)]" data-testid="dispatch-desktop-layout">
+        {/* Calendar Grid - Left Side */}
+        <div className="w-2/3 h-full" data-testid="calendar-grid-container">
+          <Card className="h-full">
+            <CalendarGrid />
+          </Card>
+        </div>
 
-      <Card className="overflow-x-hidden">
+        {/* Job Cards - Right Side */}
+        <div className="w-1/3 h-full overflow-y-auto" data-testid="job-cards-container">
+          <Card className="overflow-x-hidden h-full">
         {/* Desktop Header - Hidden on Mobile */}
         <CardHeader className="hidden md:block">
           <div className="flex items-center justify-between">
@@ -2149,6 +2153,47 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </div>
           </div>
         </CardContent>
+      </Card>
+        </div>
+      </div>
+
+      {/* Mobile Layout: Show original card with job list */}
+      <Card className="lg:hidden overflow-x-hidden">
+        {/* Mobile/Tablet Header */}
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Dispatch Board
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+                data-testid="prev-day-mobile"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedDate(new Date())}
+                data-testid="today-btn-mobile"
+              >
+                Today
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+                data-testid="next-day-mobile"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
       </Card>
 
       {/* Unscheduled Jobs Section */}
