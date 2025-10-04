@@ -1760,7 +1760,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               </div>
                               
                               {/* Job Description */}
-                              <div className="text-sm text-gray-700 leading-relaxed" data-testid={`servicem8-job-description-${job.id}`}>
+                              <div className="text-sm text-gray-700 leading-relaxed mb-2" data-testid={`servicem8-job-description-${job.id}`}>
                                 {(() => {
                                   // Try job.description first (API field), then job.notes (fallback)
                                   const rawDescription = job.description || job.notes;
@@ -1790,6 +1790,38 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   return description;
                                 })()
                                 }
+                              </div>
+                              
+                              {/* Status and Priority */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  {(() => {
+                                    const statusFormatted = job.status === 'work order' ? 'Work Order' : 
+                                                            job.status === 'completed' ? 'Completed' :
+                                                            job.status === 'scheduled' ? 'Scheduled' :
+                                                            job.status === 'unsuccessful' ? 'Unsuccessful' :
+                                                            job.status;
+
+                                    if (job.status === 'quote') {
+                                      return (
+                                        <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs">
+                                          quote
+                                        </Badge>
+                                      );
+                                    } else if (job.status === 'lead') {
+                                      return (
+                                        <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
+                                          lead
+                                        </Badge>
+                                      );
+                                    } else {
+                                      return (
+                                        <span className="text-xs text-gray-500">{statusFormatted}</span>
+                                      );
+                                    }
+                                  })()}
+                                </div>
+                                <span className="text-xs text-gray-500">{job.priority}</span>
                               </div>
                             </div>
                           </div>
