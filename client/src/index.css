@@ -283,12 +283,19 @@
   }
   
   /* Force unlimited height and enable scrolling */
-  html, body, #root {
+  html, body {
     height: auto !important;
     min-height: 100vh !important;
     max-height: none !important;
-    overflow: visible !important;
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;
+    position: static !important;
+  }
+  
+  #root {
+    min-height: 100vh !important;
+    height: auto !important;
   }
 }
 
