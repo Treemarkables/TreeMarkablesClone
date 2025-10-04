@@ -119,37 +119,6 @@
       })();
     </script>
     
-    <script>
-      setTimeout(function() {
-        console.log('=== DOM DIAGNOSTIC (4s delay) ===');
-        var root = document.getElementById('root');
-        console.log('Root children count:', root.children.length);
-        console.log('Root innerHTML length:', root.innerHTML.length);
-        
-        if (root.children.length > 0) {
-          var child = root.firstElementChild;
-          console.log('First child tagName:', child.tagName);
-          console.log('First child className:', child.className);
-          console.log('First child height:', child.offsetHeight + 'px');
-          console.log('First child scrollHeight:', child.scrollHeight + 'px');
-          console.log('First child display:', window.getComputedStyle(child).display);
-          console.log('First child position:', window.getComputedStyle(child).position);
-          console.log('First child overflow:', window.getComputedStyle(child).overflow);
-          console.log('First child maxHeight:', window.getComputedStyle(child).maxHeight);
-          
-          // Check grandchildren
-          if (child.children.length > 0) {
-            console.log('Grandchildren count:', child.children.length);
-            for (var i = 0; i < Math.min(child.children.length, 5); i++) {
-              var gc = child.children[i];
-              console.log('  Grandchild ' + i + ':', gc.tagName, gc.className.substring(0, 30), 'height=' + gc.offsetHeight + 'px');
-            }
-          }
-        } else {
-          console.log('ERROR: Root is empty! React did not render.');
-        }
-      }, 4000);
-    </script>
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>

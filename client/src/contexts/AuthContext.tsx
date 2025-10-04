@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
       }}
     >
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col min-h-screen">
         {showDevBanner && (
           <div className="bg-white text-gray-800 px-4 py-2 flex items-center justify-between border-b">
             <div className="flex items-center gap-2">
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             )}
           </div>
         )}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1">
           {children}
         </div>
       </div>
