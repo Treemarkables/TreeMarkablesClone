@@ -279,13 +279,24 @@
   }
 
   html {
-    overflow-y: scroll;
+    height: auto;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
   }
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    overflow-y: auto;
+    height: auto;
+    overflow-y: visible;
+    min-height: 100vh;
+    position: relative;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  #root {
+    height: auto;
     min-height: 100vh;
   }
 }
