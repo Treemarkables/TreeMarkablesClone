@@ -147,7 +147,8 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
                 <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
               </Button>
               
-              {/* Account Dropdown */}
+              {/* Account Dropdown - Admin Only */}
+              {!isCrew && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-1" data-testid="button-account-dropdown">
@@ -207,6 +208,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              )}
               
               {/* Global New Job Button */}
               <Button 
