@@ -49,8 +49,8 @@
     }
     </script>
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="overflow: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y pan-x !important; height: auto !important; min-height: 100vh !important;">
+    <div id="root" style="overflow: visible !important; height: auto !important; min-height: 100vh !important;"></div>
     
     <!-- PWA Cache Bypass: Pre-fetch diary data BEFORE React loads -->
     <!-- This runs before the cached bundle, bypassing service worker -->
