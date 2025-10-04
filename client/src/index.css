@@ -295,11 +295,6 @@
       min-height: 100vh;
       height: auto !important;
     }
-    
-    /* Remove any height constraints from flex containers */
-    .flex {
-      height: auto !important;
-    }
   }
 }
 
