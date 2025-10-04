@@ -278,15 +278,22 @@
   }
 
   html {
-    overflow-y: scroll;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-y pinch-zoom;
+    overflow-y: visible;
+    height: auto;
   }
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    overflow-y: scroll;
+    overflow-y: visible;
+    height: auto;
+    position: static;
     -webkit-overflow-scrolling: touch;
+  }
+  
+  #root {
+    overflow-y: visible;
+    height: auto;
+    position: static;
   }
 }
 
