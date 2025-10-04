@@ -1910,7 +1910,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </div>
                             
                             {/* Job Description */}
-                            <div className="text-sm text-gray-700 leading-relaxed mb-2">
+                            <div className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2">
                               {(() => {
                                 const rawDescription = job.description || job.notes;
                                 
@@ -1928,11 +1928,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   return job.serviceType || 'Description to be added';
                                 }
                                 
-                                const description = rawDescription.length > 120 
-                                  ? `${rawDescription.substring(0, 120)}...`
-                                  : rawDescription;
-                                
-                                return description;
+                                return rawDescription;
                               })()}
                             </div>
                             
@@ -2031,7 +2027,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       </div>
                       
                       {/* Job Description */}
-                      <div className="text-sm text-gray-700 leading-relaxed mb-2" data-testid={`mobile-job-description-${job.id}`}>
+                      <div className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2" data-testid={`mobile-job-description-${job.id}`}>
                         {(() => {
                           const rawDescription = job.description || job.notes;
                           
@@ -2049,11 +2045,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             return job.serviceType || 'Description to be added';
                           }
                           
-                          const description = rawDescription.length > 120 
-                            ? `${rawDescription.substring(0, 120)}...`
-                            : rawDescription;
-                          
-                          return description;
+                          return rawDescription;
                         })()}
                       </div>
                       
@@ -2192,7 +2184,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </div>
                           
                           {/* Job Description */}
-                          <div className="text-sm text-gray-700 leading-relaxed mb-2">
+                          <div className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2">
                             {(() => {
                               const rawDescription = job.description || job.notes;
                               
@@ -2210,11 +2202,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 return job.serviceType || 'Description to be added';
                               }
                               
-                              const description = rawDescription.length > 120 
-                                ? `${rawDescription.substring(0, 120)}...`
-                                : rawDescription;
-                              
-                              return description;
+                              return rawDescription;
                             })()}
                           </div>
                           
