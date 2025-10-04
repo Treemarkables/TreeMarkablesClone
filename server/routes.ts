@@ -702,6 +702,33 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Gmail status endpoint
+  app.get('/api/gmail/status', async (req: Request, res: Response) => {
+    try {
+      const gmailUser = process.env.GMAIL_USER;
+      const gmailPassword = process.env.GMAIL_APP_PASSWORD;
+      
+      if (!gmailUser || !gmailPassword) {
+        return res.json({ 
+          connected: false,
+          message: 'Gmail credentials not configured'
+        });
+      }
+
+      return res.json({ 
+        connected: true,
+        email: gmailUser
+      });
+
+    } catch (error) {
+      console.error('Gmail status check error:', error);
+      return res.json({ 
+        connected: false,
+        message: 'Error checking Gmail status'
+      });
+    }
+  });
+
   // Google Calendar status endpoint
   app.get('/api/google-calendar/status', async (req: Request, res: Response) => {
     try {
