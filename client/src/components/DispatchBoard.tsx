@@ -661,22 +661,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   // Get status initials for job circles
   const getStatusInitials = (job: JobAssignment) => {
-    // Check service type first for leads and quotes
-    const serviceType = job.serviceType?.toLowerCase() || '';
-    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return 'L';
-    if (serviceType.includes('quote') || serviceType.includes('proposal')) return 'Q';
+    // Use customer initials for all jobs
+    const customerName = job.customerName || 'Unknown';
+    const nameParts = customerName.trim().split(' ');
     
-    // Handle actual API status values
-    switch (job.status) {
-      case 'completed': return 'C';
-      case 'unsuccessful': return 'U';
-      case 'scheduled': return 'S';
-      case 'work_order': return 'WO';
-      case 'work order': return 'WO';
-      case 'quote': return 'Q';
-      case 'lead': return 'L';
-      default: return 'WO';
+    if (nameParts.length >= 2) {
+      // First and last name initials
+      return nameParts[0][0].toUpperCase() + nameParts[nameParts.length - 1][0].toUpperCase();
+    } else if (nameParts.length === 1 && nameParts[0].length > 0) {
+      // Single name - use first letter
+      return nameParts[0][0].toUpperCase();
     }
+    
+    return 'U'; // Unknown
   };
 
   // Get status color for job circles
@@ -2115,9 +2112,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         if (unscheduledJobs.length === 0) return null;
         
         return (
-          <Card data-testid="unscheduled-jobs-section">
+          <Card data-testid="unscheduled-jobs-section" className="overflow-x-hidden">
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+              <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-5 w-5 text-purple-500" />
                   <span>Unscheduled Jobs</span>
@@ -2130,6 +2127,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   variant="outline"
                   onClick={handleCreateJob}
                   data-testid="create-job-from-unscheduled"
+                  className="w-full sm:w-auto"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   New Job
