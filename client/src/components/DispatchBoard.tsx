@@ -519,13 +519,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return map;
   }, [staffAssignmentsData]);
 
-  // Force refresh the cache to get corrected data mapping
-  useEffect(() => {
-    // Invalidate caches to force refetch
-    queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
-  }, []); // Only run once on mount
-
   // Convert staff assignments to JobAssignment format for dispatch board
   const jobs: JobAssignment[] = useMemo(() => {
     const jobAssignments: JobAssignment[] = [];
