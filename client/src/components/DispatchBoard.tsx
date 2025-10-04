@@ -1247,6 +1247,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   }
 
   return (
+    <>
     <div className="flex flex-col flex-1 min-h-0">
       {/* Desktop Layout: Calendar on left, Job cards on right */}
       <div className="hidden lg:flex gap-4 flex-1 min-h-0 p-4 overflow-hidden" data-testid="dispatch-desktop-layout">
@@ -1586,5 +1587,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       </Card>
       </div>
     </div>
+
+    {/* Global Job Card Modal */}
+    {showGlobalJobCard && (
+      <GlobalJobCard
+        mode={globalJobCardMode}
+        jobId={jobToEdit?.id}
+        onClose={() => {
+          setShowGlobalJobCard(false);
+          setJobToEdit(null);
+        }}
+      />
+    )}
+  </>
   );
 }
