@@ -1499,19 +1499,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               return (
                                 <div
                                   key={job.id}
-                                  className={`absolute ${team.color} text-white rounded text-xs px-2 py-1 cursor-pointer hover:opacity-80 transition-opacity top-0.5 bottom-0.5 border-2 border-white shadow-sm`}
+                                  className={`absolute ${team.color} text-white rounded text-xs px-2 cursor-pointer hover:opacity-80 transition-opacity border-2 border-white shadow-sm h-9 flex flex-col justify-center overflow-hidden`}
                                   onClick={() => handleEditJob(job)}
                                   data-testid={`job-block-${job.id}`}
                                   style={{
                                     left: `${leftPercent}%`,
                                     width: `${widthPercent}%`,
-                                    minWidth: '80px'
+                                    minWidth: '80px',
+                                    top: '2px'
                                   }}
                                 >
-                                  <div className="font-semibold truncate text-[10px]">
+                                  <div className="font-semibold truncate text-[10px] leading-tight">
                                     {job.customerName}
                                   </div>
-                                  <div className="truncate text-[9px] opacity-90">
+                                  <div className="truncate text-[9px] opacity-90 leading-tight">
                                     {job.address || 'No address'}
                                   </div>
                                 </div>
@@ -1564,19 +1565,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               return (
                                 <div
                                   key={job.id}
-                                  className={`absolute ${staff.color} text-white rounded text-xs px-2 py-1 cursor-pointer hover:opacity-80 transition-opacity top-0.5 bottom-0.5 border-2 border-white shadow-sm`}
+                                  className={`absolute ${staff.color} text-white rounded text-xs px-2 cursor-pointer hover:opacity-80 transition-opacity border-2 border-white shadow-sm h-9 flex flex-col justify-center overflow-hidden`}
                                   onClick={() => handleEditJob(job)}
                                   data-testid={`job-block-${job.id}`}
                                   style={{
                                     left: `${leftPercent}%`,
                                     width: `${widthPercent}%`,
-                                    minWidth: '80px'
+                                    minWidth: '80px',
+                                    top: '2px'
                                   }}
                                 >
-                                  <div className="font-semibold truncate text-[10px]">
+                                  <div className="font-semibold truncate text-[10px] leading-tight">
                                     {job.customerName}
                                   </div>
-                                  <div className="truncate text-[9px] opacity-90">
+                                  <div className="truncate text-[9px] opacity-90 leading-tight">
                                     {job.address || 'No address'}
                                   </div>
                                 </div>
