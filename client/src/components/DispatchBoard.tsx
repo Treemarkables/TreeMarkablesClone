@@ -1824,7 +1824,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               
                               {/* Job Description */}
                               <div 
-                                className="text-sm text-gray-700 leading-relaxed mb-2" 
+                                className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2" 
                                 data-testid={`servicem8-job-description-${job.id}`}
                               >
                                 {(() => {
@@ -1848,12 +1848,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     return job.serviceType || 'Description to be added';
                                   }
                                   
-                                  // Truncate long descriptions
-                                  const description = rawDescription.length > 120 
-                                    ? `${rawDescription.substring(0, 120)}...`
-                                    : rawDescription;
-                                  
-                                  return description;
+                                  return rawDescription;
                                 })()
                                 }
                               </div>
@@ -1918,7 +1913,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>
           
           {/* Mobile Jobs List - Direct Display */}
-          <div className="md:hidden space-y-3 overflow-x-hidden">
+          <div className="md:hidden space-y-3 overflow-x-hidden w-full max-w-full">
             {/* Unscheduled Jobs Section - Mobile */}
             {(() => {
               const unscheduledJobs = getTodaysJobs().filter((job: any) => 
@@ -1942,7 +1937,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     {unscheduledJobs.map((job) => (
                       <div
                         key={`unscheduled-${job.id}`}
-                        className="p-3 border border-purple-200 rounded-lg bg-purple-50/50 hover:bg-purple-50 cursor-pointer transition-colors"
+                        className="p-3 border border-purple-200 rounded-lg bg-purple-50/50 hover:bg-purple-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
                         onClick={() => handleEditJob(job)}
                         data-testid={`mobile-unscheduled-job-${job.id}`}
                       >
@@ -2041,14 +2036,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             })()}
             
             {/* Mobile Jobs Cards */}
-            <div className="space-y-3 overflow-x-hidden">
+            <div className="space-y-3 overflow-x-hidden w-full max-w-full">
               {getTodaysJobs().map((job, index) => {
               const customerName = job.customerName || 'Unknown Customer';
               
               return (
                 <div
                   key={job.id}
-                  className="p-3 sm:p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
+                  className="p-3 sm:p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
                   onClick={() => handleEditJob(job)}
                   data-testid={`mobile-job-card-${job.id}`}
                 >
