@@ -282,6 +282,25 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
   
+  /* Mobile scrolling fix - Force document scrolling */
+  @media (max-width: 768px) {
+    html, body {
+      height: auto !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    #root {
+      min-height: 100vh;
+      height: auto !important;
+    }
+    
+    /* Remove any height constraints from flex containers */
+    .flex {
+      height: auto !important;
+    }
+  }
 }
 
 /**
