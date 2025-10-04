@@ -357,11 +357,9 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/dispatch">
-        <ProtectedRoute>
-          <SidebarLayout>
-            <Dispatch />
-          </SidebarLayout>
-        </ProtectedRoute>
+        <SidebarLayout>
+          <Dispatch />
+        </SidebarLayout>
       </Route>
       <Route path="/calendar">
         <ProtectedRoute>
