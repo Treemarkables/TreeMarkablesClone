@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v7-mutation-fix';
-const STATIC_CACHE = 'treemarkables-static-v7-mutation-fix';
-const API_CACHE = 'treemarkables-api-v7-mutation-fix';
+const CACHE_NAME = 'treemarkables-v8-scroll-fix';
+const STATIC_CACHE = 'treemarkables-static-v8-scroll-fix';
+const API_CACHE = 'treemarkables-api-v8-scroll-fix';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -31,9 +31,9 @@ self.addEventListener('activate', function(event) {
       console.log('[SW v7] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          // Delete ANY cache that's not v7
-          if (!cacheName.includes('v7-mutation-fix')) {
-            console.log('[SW v7] DELETING old cache:', cacheName);
+          // Delete ANY cache that's not v8
+          if (!cacheName.includes('v8-scroll-fix')) {
+            console.log('[SW v8] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
