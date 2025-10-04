@@ -75,6 +75,12 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
       <div className="flex h-screen w-full">
         <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0">
+          {/* Mobile header - just sidebar toggle */}
+          <header className="md:hidden flex items-center justify-between p-2 border-b bg-white">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+          </header>
+          
+          {/* Desktop header - full menu */}
           <header className="hidden md:flex items-center justify-between p-2 border-b bg-white">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             
