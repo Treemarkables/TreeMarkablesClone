@@ -1771,7 +1771,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         <div
                           key={job.id}
                           className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                          onClick={() => handleEditJob(job)}
+                          onClick={(e) => {
+                            const target = e.target as HTMLElement;
+                            if (target?.closest && target.closest('[data-description-trigger]')) {
+                              return;
+                            }
+                            handleEditJob(job);
+                          }}
                           data-testid={`servicem8-job-card-${job.id}`}
                         >
                           {/* Connection Line Dot */}
@@ -1963,7 +1969,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       <div
                         key={`unscheduled-${job.id}`}
                         className="p-3 border border-purple-200 rounded-lg bg-purple-50/50 hover:bg-purple-50 cursor-pointer transition-colors"
-                        onClick={() => handleEditJob(job)}
+                        onClick={(e) => {
+                          const target = e.target as HTMLElement;
+                          if (target?.closest && target.closest('[data-description-trigger]')) {
+                            return;
+                          }
+                          handleEditJob(job);
+                        }}
                         data-testid={`mobile-unscheduled-job-${job.id}`}
                       >
                         <div className="flex items-start gap-3">
@@ -2077,9 +2089,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   className="p-3 sm:p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
                   onClick={(e) => {
                     const target = e.target as HTMLElement;
-                    if (target.hasAttribute('data-description-trigger') || target.closest('[data-description-trigger]')) {
-                      e.stopPropagation();
-                      e.preventDefault();
+                    // Don't open job if clicking description trigger
+                    if (target?.closest && target.closest('[data-description-trigger]')) {
                       return;
                     }
                     handleEditJob(job);
@@ -2249,7 +2260,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <div
                       key={job.id}
                       className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => handleEditJob(job)}
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target?.closest && target.closest('[data-description-trigger]')) {
+                          return;
+                        }
+                        handleEditJob(job);
+                      }}
                       data-testid={`unscheduled-job-${job.id}`}
                     >
                       <div className="flex items-start gap-3 p-3">
