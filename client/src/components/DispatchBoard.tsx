@@ -1837,7 +1837,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               </div>
                               
                               {/* Job Description */}
-                              <div className="text-sm text-gray-700 leading-relaxed mb-2" data-testid={`servicem8-job-description-${job.id}`}>
+                              <div 
+                                className="text-sm text-gray-700 leading-relaxed mb-2 cursor-pointer hover:text-gray-900" 
+                                data-testid={`servicem8-job-description-${job.id}`}
+                                data-description-trigger
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDescriptionPopupJob(job);
+                                  setShowDescriptionPopup(true);
+                                }}
+                              >
                                 {(() => {
                                   // Try job.description first (API field), then job.notes (fallback)
                                   const rawDescription = job.description || job.notes;
@@ -1987,7 +1996,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </div>
                             
                             {/* Job Description */}
-                            <div className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2">
+                            <div 
+                              className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2 cursor-pointer hover:text-gray-900"
+                              data-description-trigger
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDescriptionPopupJob(job);
+                                setShowDescriptionPopup(true);
+                              }}
+                            >
                               {(() => {
                                 const rawDescription = job.description || job.notes;
                                 
@@ -2104,7 +2121,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       </div>
                       
                       {/* Job Description */}
-                      <div className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2" data-testid={`mobile-job-description-${job.id}`}>
+                      <div 
+                        className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2 cursor-pointer hover:text-gray-900" 
+                        data-testid={`mobile-job-description-${job.id}`}
+                        data-description-trigger
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDescriptionPopupJob(job);
+                          setShowDescriptionPopup(true);
+                        }}
+                      >
                         {(() => {
                           const rawDescription = job.description || job.notes;
                           
@@ -2261,7 +2287,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </div>
                           
                           {/* Job Description */}
-                          <div className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2">
+                          <div 
+                            className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2 cursor-pointer hover:text-gray-900"
+                            data-description-trigger
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDescriptionPopupJob(job);
+                              setShowDescriptionPopup(true);
+                            }}
+                          >
                             {(() => {
                               const rawDescription = job.description || job.notes;
                               
@@ -2797,10 +2831,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </Dialog>
       )}
 
-      {/* Job Description Popup - Mobile */}
+      {/* Job Description Popup - 50% Width */}
       {showDescriptionPopup && descriptionPopupJob && (
         <Dialog open={showDescriptionPopup} onOpenChange={setShowDescriptionPopup}>
-          <DialogContent className="w-[90vw] max-w-md">
+          <DialogContent className="w-[50vw] max-w-3xl">
             <DialogHeader>
               <DialogTitle className="text-center">Job Description</DialogTitle>
             </DialogHeader>
@@ -2832,9 +2866,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 variant="outline" 
                 className="flex-1"
                 onClick={() => setShowDescriptionPopup(false)}
-                data-testid="btn-description-cancel"
+                data-testid="btn-description-close"
               >
-                Cancel
+                Close
               </Button>
               <Button 
                 className="flex-1"
@@ -2842,9 +2876,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   setShowDescriptionPopup(false);
                   handleEditJob(descriptionPopupJob);
                 }}
-                data-testid="btn-description-save"
+                data-testid="btn-description-edit"
               >
-                Save
+                Open Job
               </Button>
             </div>
           </DialogContent>
