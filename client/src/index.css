@@ -277,19 +277,23 @@
     @apply border-border;
   }
 
-  html {
-    height: 100vh !important;
-  }
-
   body {
-    height: 100% !important;
-    overflow: auto !important;
     @apply font-sans antialiased bg-background text-foreground;
   }
+}
 
-  #root {
-    min-height: 100% !important;
-  }
+/* Force scrolling - must be outside @layer to have priority */
+html {
+  height: 100vh !important;
+}
+
+body {
+  height: 100% !important;
+  overflow: auto !important;
+}
+
+#root {
+  min-height: 100% !important;
 }
 
 /**
