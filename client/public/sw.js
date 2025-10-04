@@ -49,6 +49,16 @@ self.addEventListener('activate', function(event) {
 self.addEventListener('fetch', function(event) {
   const url = new URL(event.request.url);
   
+  // BYPASS Service Worker entirely for critical Dispatch Board endpoints
+  // These endpoints use localStorage fallback in React Query and must not be intercepted
+  if (url.pathname === '/api/jobs' || 
+      url.pathname === '/api/customers' || 
+      url.pathname === '/api/staff-assignments') {
+    console.log('[SW v9] BYPASSING Service Worker for localStorage-backed endpoint:', url.pathname);
+    // Don't call event.respondWith() - let the browser handle it directly
+    return;
+  }
+  
   // API requests - network first, fallback to cache
   if (url.pathname.startsWith('/api/')) {
     // CRITICAL: NEVER cache or return cached responses for POST/PUT/DELETE (mutations)
@@ -82,16 +92,6 @@ self.addEventListener('fetch', function(event) {
             throw error; // Don't fallback to cache for diary
           })
       );
-      return;
-    }
-    
-    // BYPASS Service Worker for critical Dispatch Board endpoints
-    // These endpoints use localStorage fallback in React Query
-    if (url.pathname === '/api/jobs' || 
-        url.pathname === '/api/customers' || 
-        url.pathname === '/api/staff-assignments') {
-      console.log('[SW v8] Bypassing SW for localStorage-backed endpoint:', url.pathname);
-      // Don't use event.respondWith() - let it go directly to the network
       return;
     }
     
