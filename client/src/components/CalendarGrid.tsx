@@ -263,7 +263,7 @@ export function CalendarGrid() {
               timeSlots.map(slot => (
                 <div
                   key={slot.hour}
-                  className="flex-1 min-w-[60px] border-r p-1 text-xs text-center font-medium text-gray-600"
+                  className="flex-1 min-w-[40px] border-r p-1 text-[10px] text-center font-medium text-gray-600 whitespace-nowrap overflow-hidden"
                   data-testid={`time-slot-${slot.hour}`}
                 >
                   {slot.label}
@@ -309,7 +309,7 @@ export function CalendarGrid() {
                   return (
                     <div
                       key={slot.hour}
-                      className="flex-1 min-w-[60px] border-r p-1 min-h-[60px] relative"
+                      className="flex-1 min-w-[40px] border-r p-1 min-h-[60px] relative overflow-hidden"
                       data-testid={`slot-${employee.id}-${slot.hour}`}
                     >
                       {jobs.map(job => (
