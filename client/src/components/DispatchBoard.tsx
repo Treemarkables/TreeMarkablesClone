@@ -2153,18 +2153,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </div>
           </div>
         </CardContent>
-      </Card>
+          </Card>
         </div>
       </div>
 
-      {/* Mobile Layout: Show original card with job list */}
+      {/* Mobile Layout: Show job cards in traditional list view */}
       <Card className="lg:hidden overflow-x-hidden">
-        {/* Mobile/Tablet Header */}
-        <CardHeader>
+        {/* Mobile Header - With Search */}
+        <CardHeader className="space-y-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
               <Calendar className="h-5 w-5" />
-              Dispatch Board
+              Jobs ({getTodaysJobs().length})
             </CardTitle>
             <div className="flex items-center gap-2">
               <Button
@@ -2193,7 +2193,167 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </Button>
             </div>
           </div>
+          
+          {/* Job Search Field for Mobile */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={isDeepSearchActive ? "Deep search results..." : "Search by customer, job #, address..."}
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (!isDeepSearchActive) {
+                    // Normal search - let the regular filtering handle it
+                  }
+                }}
+                className="pl-10 bg-white"
+                data-testid="mobile-job-search-input"
+              />
+              {isDeepSearchActive && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 px-2"
+                  onClick={() => {
+                    setIsDeepSearchActive(false);
+                    setDeepSearchResults([]);
+                    setSearchQuery('');
+                  }}
+                  data-testid="btn-clear-deep-search-mobile"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            
+            {/* Deep Search Button for Mobile */}
+            {searchQuery.trim() && !isDeepSearchActive && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => performDeepSearch(searchQuery)}
+                data-testid="btn-deep-search-mobile"
+              >
+                <Search className="h-3 w-3 mr-2" />
+                Deep Search All Jobs
+              </Button>
+            )}
+            
+            {/* Deep Search Status for Mobile */}
+            {isDeepSearchActive && (
+              <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                <SearchX className="h-3 w-3" />
+                Deep search: {deepSearchResults.length} total jobs found
+              </div>
+            )}
+          </div>
         </CardHeader>
+
+        <CardContent>
+          {/* Mobile Job Cards */}
+          <div className="space-y-0">
+            {getTodaysJobs().map((job: any) => {
+              const customerName = job.customerName || 'Unknown Customer';
+              
+              return (
+                <div
+                  key={job.id}
+                  className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => handleEditJob(job)}
+                  data-testid={`job-card-${job.id}`}
+                >
+                  <div className="flex items-start gap-3 p-3">
+                    {/* Status Avatar with Activity Indicator */}
+                    <div className="relative flex-shrink-0">
+                      <div 
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px] relative z-10"
+                        style={{ backgroundColor: getJobStatusColorValue(job) }}
+                      >
+                        {getStatusInitials(job)}
+                      </div>
+                      {hasRecentActivity(job) && (
+                        <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse z-20" 
+                             title="Recent activity"
+                             data-testid={`activity-indicator-${job.id}`} />
+                      )}
+                    </div>
+                    
+                    {/* Job Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-1">
+                        <div>
+                          <h3 className="font-bold text-gray-900 text-base mb-1">
+                            {customerName}
+                          </h3>
+                          <div className="text-xs text-gray-600 mb-1 font-semibold">
+                            {job.address || 'No address specified'}
+                          </div>
+                          {job.description && (
+                            <div className="text-xs text-gray-500 mb-2 line-clamp-2">
+                              {job.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
+                        {job.startTime && !job.startTime.includes('0000-00-00') && (
+                          <span>{job.startTime}</span>
+                        )}
+                        {job.assignedTo && <span>• {job.assignedTo}</span>}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const statusFormatted = job.status?.charAt(0).toUpperCase() + job.status?.slice(1);
+                            if (job.status === 'quote') {
+                              return (
+                                <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs">
+                                  quote
+                                </Badge>
+                              );
+                            } else if (job.status === 'lead') {
+                              return (
+                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
+                                  lead
+                                </Badge>
+                              );
+                            } else {
+                              return (
+                                <span className="text-xs text-gray-500">{statusFormatted}</span>
+                              );
+                            }
+                          })()}
+                        </div>
+                        <span className="text-xs text-gray-500">{job.priority}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {/* Empty State for Mobile */}
+            {getTodaysJobs().length === 0 && (
+              <div className="p-8 text-center text-gray-500">
+                <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm">No jobs scheduled for this date</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3"
+                  onClick={handleCreateJob}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create First Job
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
       </Card>
 
       {/* Unscheduled Jobs Section */}
