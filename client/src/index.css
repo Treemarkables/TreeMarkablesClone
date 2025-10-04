@@ -282,9 +282,13 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
   
-  /* iOS/mobile scrolling fix */
-  html, body {
-    -webkit-overflow-scrolling: touch;
+  /* Force unlimited height and enable scrolling */
+  html, body, #root {
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    overflow: visible !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 }
 
