@@ -452,8 +452,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     assignedTo: '',
     notes: ''
   });
-  const [showDescriptionPopup, setShowDescriptionPopup] = useState(false);
-  const [descriptionPopupJob, setDescriptionPopupJob] = useState<JobAssignment | null>(null);
 
   // Fetch jobs from backend API
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
@@ -1771,13 +1769,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         <div
                           key={job.id}
                           className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                          onClick={(e) => {
-                            const target = e.target as HTMLElement;
-                            if (target?.closest && target.closest('[data-description-trigger]')) {
-                              return;
-                            }
-                            handleEditJob(job);
-                          }}
+                          onClick={() => handleEditJob(job)}
                           data-testid={`servicem8-job-card-${job.id}`}
                         >
                           {/* Connection Line Dot */}
@@ -1844,14 +1836,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               
                               {/* Job Description */}
                               <div 
-                                className="text-sm text-gray-700 leading-relaxed mb-2 cursor-pointer hover:text-gray-900" 
+                                className="text-sm text-gray-700 leading-relaxed mb-2" 
                                 data-testid={`servicem8-job-description-${job.id}`}
-                                data-description-trigger
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDescriptionPopupJob(job);
-                                  setShowDescriptionPopup(true);
-                                }}
                               >
                                 {(() => {
                                   // Try job.description first (API field), then job.notes (fallback)
@@ -1969,13 +1955,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       <div
                         key={`unscheduled-${job.id}`}
                         className="p-3 border border-purple-200 rounded-lg bg-purple-50/50 hover:bg-purple-50 cursor-pointer transition-colors"
-                        onClick={(e) => {
-                          const target = e.target as HTMLElement;
-                          if (target?.closest && target.closest('[data-description-trigger]')) {
-                            return;
-                          }
-                          handleEditJob(job);
-                        }}
+                        onClick={() => handleEditJob(job)}
                         data-testid={`mobile-unscheduled-job-${job.id}`}
                       >
                         <div className="flex items-start gap-3">
@@ -2009,13 +1989,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             
                             {/* Job Description */}
                             <div 
-                              className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2 cursor-pointer hover:text-gray-900"
-                              data-description-trigger
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDescriptionPopupJob(job);
-                                setShowDescriptionPopup(true);
-                              }}
+                              className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2"
                             >
                               {(() => {
                                 const rawDescription = job.description || job.notes;
@@ -2087,14 +2061,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <div
                   key={job.id}
                   className="p-3 sm:p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
-                  onClick={(e) => {
-                    const target = e.target as HTMLElement;
-                    // Don't open job if clicking description trigger
-                    if (target?.closest && target.closest('[data-description-trigger]')) {
-                      return;
-                    }
-                    handleEditJob(job);
-                  }}
+                  onClick={() => handleEditJob(job)}
                   data-testid={`mobile-job-card-${job.id}`}
                 >
                   <div className="flex items-start gap-3">
@@ -2133,15 +2100,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       
                       {/* Job Description */}
                       <div 
-                        className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2 cursor-pointer hover:text-gray-900" 
+                        className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2" 
                         data-testid={`mobile-job-description-${job.id}`}
-                        data-description-trigger
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          setDescriptionPopupJob(job);
-                          setShowDescriptionPopup(true);
-                        }}
                       >
                         {(() => {
                           const rawDescription = job.description || job.notes;
@@ -2261,13 +2221,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <div
                       key={job.id}
                       className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={(e) => {
-                        const target = e.target as HTMLElement;
-                        if (target?.closest && target.closest('[data-description-trigger]')) {
-                          return;
-                        }
-                        handleEditJob(job);
-                      }}
+                      onClick={() => handleEditJob(job)}
                       data-testid={`unscheduled-job-${job.id}`}
                     >
                       <div className="flex items-start gap-3 p-3">
@@ -2306,13 +2260,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           
                           {/* Job Description */}
                           <div 
-                            className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2 cursor-pointer hover:text-gray-900"
-                            data-description-trigger
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDescriptionPopupJob(job);
-                              setShowDescriptionPopup(true);
-                            }}
+                            className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2"
                           >
                             {(() => {
                               const rawDescription = job.description || job.notes;
@@ -2844,60 +2792,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   {updateJobMutation.isPending ? 'Scheduling...' : 'Schedule Job'}
                 </Button>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Job Description Popup - 50% Width */}
-      {showDescriptionPopup && descriptionPopupJob && (
-        <Dialog open={showDescriptionPopup} onOpenChange={setShowDescriptionPopup}>
-          <DialogContent className="w-[50vw] max-w-3xl">
-            <DialogHeader>
-              <DialogTitle className="text-center">Job Description</DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-              <div className="text-sm text-gray-900 whitespace-pre-wrap break-words">
-                {(() => {
-                  const rawDescription = descriptionPopupJob.description || descriptionPopupJob.notes;
-                  
-                  if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
-                    if (descriptionPopupJob.status === 'lead') {
-                      return 'New lead - details pending';
-                    }
-                    if (descriptionPopupJob.status === 'quote' || descriptionPopupJob.status === 'quoted') {
-                      return 'Quote request - description to be added';
-                    }
-                    return descriptionPopupJob.serviceType || 'Description to be added';
-                  }
-                  
-                  if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
-                    return descriptionPopupJob.serviceType || 'Description to be added';
-                  }
-                  
-                  return rawDescription;
-                })()}
-              </div>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button 
-                variant="outline" 
-                className="flex-1"
-                onClick={() => setShowDescriptionPopup(false)}
-                data-testid="btn-description-close"
-              >
-                Close
-              </Button>
-              <Button 
-                className="flex-1"
-                onClick={() => {
-                  setShowDescriptionPopup(false);
-                  handleEditJob(descriptionPopupJob);
-                }}
-                data-testid="btn-description-edit"
-              >
-                Open Job
-              </Button>
             </div>
           </DialogContent>
         </Dialog>
