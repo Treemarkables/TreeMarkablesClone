@@ -72,7 +72,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
 
   return (
     <SidebarProvider style={style as React.CSSProperties} defaultOpen={!isMobile}>
-      <div className="flex min-h-full w-full md:h-full">
+      <div className="flex min-h-screen w-full">
         <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0">
           {/* Mobile header - just sidebar toggle */}
@@ -161,7 +161,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
               </Button>
             </div>
           </header>
-          <main className="flex-1 w-full max-w-full min-w-0 relative md:overflow-y-auto">
+          <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 relative">
             {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
           </main>
         </div>
