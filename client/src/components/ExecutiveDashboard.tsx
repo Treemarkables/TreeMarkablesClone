@@ -3,12 +3,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { 
   TrendingUp, TrendingDown, DollarSign, Users, Activity, 
   BarChart3, PieChart, Calendar, Download, Settings,
   Target, Award, CheckCircle, AlertTriangle
 } from "lucide-react";
 import { useState } from "react";
+import { format } from "date-fns";
 
 // Use shared types instead of local interfaces
 interface KpiMetric {
@@ -179,20 +182,57 @@ function RevenueChart({ data }: { data: RevenueAnalytics | undefined }) {
 // Main Executive Dashboard Component
 export function ExecutiveDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
+
+  // Build query params from date range
+  const buildQueryParams = () => {
+    const params = new URLSearchParams();
+    if (dateRange.from) {
+      params.append('from', dateRange.from.toISOString());
+    }
+    if (dateRange.to) {
+      params.append('to', dateRange.to.toISOString());
+    }
+    return params.toString();
+  };
 
   // Fetch KPI metrics
   const { data: kpis, isLoading: kpisLoading } = useQuery<KpiMetric[]>({
-    queryKey: ['/api/analytics/kpis'],
+    queryKey: ['/api/analytics/kpis', { from: dateRange.from?.toISOString() ?? null, to: dateRange.to?.toISOString() ?? null }],
+    queryFn: async () => {
+      const params = buildQueryParams();
+      const url = `/api/analytics/kpis${params ? `?${params}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch KPIs');
+      return res.json();
+    },
   });
 
   // Fetch dashboard stats
   const { data: dashboardStats, isLoading: dashboardLoading } = useQuery<DashboardStats>({
-    queryKey: ['/api/analytics/dashboard'],
+    queryKey: ['/api/analytics/dashboard', { from: dateRange.from?.toISOString() ?? null, to: dateRange.to?.toISOString() ?? null }],
+    queryFn: async () => {
+      const params = buildQueryParams();
+      const url = `/api/analytics/dashboard${params ? `?${params}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch dashboard stats');
+      return res.json();
+    },
   });
 
   // Fetch revenue analytics
   const { data: revenueAnalytics, isLoading: revenueLoading } = useQuery<RevenueAnalytics>({
-    queryKey: ['/api/analytics/revenue'],
+    queryKey: ['/api/analytics/revenue', { from: dateRange.from?.toISOString() ?? null, to: dateRange.to?.toISOString() ?? null }],
+    queryFn: async () => {
+      const params = buildQueryParams();
+      const url = `/api/analytics/revenue${params ? `?${params}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch revenue analytics');
+      return res.json();
+    },
   });
 
   const handleExportData = (type: string) => {
@@ -210,7 +250,7 @@ export function ExecutiveDashboard() {
           <h2 className="text-3xl font-bold tracking-tight">Executive Dashboard</h2>
           <Badge variant="secondary">Loading...</Badge>
         </div>
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <Card key={i} className="animate-pulse">
               <CardHeader className="space-y-0 pb-1 pt-3 px-3">
@@ -230,7 +270,7 @@ export function ExecutiveDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-amber-800 dark:text-amber-200">
             Executive Dashboard
@@ -240,6 +280,45 @@ export function ExecutiveDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" data-testid="button-date-range">
+                <Calendar className="w-4 h-4 mr-2" />
+                {dateRange.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "MMM d")} - {format(dateRange.to, "MMM d, yyyy")}
+                    </>
+                  ) : (
+                    format(dateRange.from, "MMM d, yyyy")
+                  )
+                ) : (
+                  "All Time"
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <CalendarComponent
+                mode="range"
+                selected={{ from: dateRange.from, to: dateRange.to }}
+                onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
+                numberOfMonths={2}
+                data-testid="calendar-date-range"
+              />
+              {dateRange.from && (
+                <div className="p-3 border-t flex justify-end">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setDateRange({ from: undefined, to: undefined })}
+                    data-testid="button-clear-dates"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
           <Button 
             variant="outline" 
             size="sm"
@@ -276,70 +355,70 @@ export function ExecutiveDashboard() {
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
           {/* High-Level Stats */}
-          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
             <Card className="hover-elevate">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                <DollarSign className="w-4 h-4 text-amber-600" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+                <CardTitle className="text-xs font-medium">Total Revenue</CardTitle>
+                <DollarSign className="w-3 h-3 text-amber-600" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="stat-total-revenue">
+              <CardContent className="px-3 pb-3">
+                <div className="text-xl font-bold" data-testid="stat-total-revenue">
                   {dashboardStats ? new Intl.NumberFormat('en-NZ', { 
                     style: 'currency', 
                     currency: 'NZD' 
                   }).format(dashboardStats.totalRevenue) : '--'}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[10px] text-muted-foreground">
                   {dashboardStats?.revenueGrowth ? (
                     <span className={dashboardStats.revenueGrowth > 0 ? 'text-green-600' : 'text-red-600'}>
-                      {dashboardStats.revenueGrowth > 0 ? '+' : ''}{dashboardStats.revenueGrowth.toFixed(1)}% from last month
+                      {dashboardStats.revenueGrowth > 0 ? '+' : ''}{dashboardStats.revenueGrowth.toFixed(1)}%
                     </span>
-                  ) : 'No comparison data'}
+                  ) : '--'}
                 </p>
               </CardContent>
             </Card>
 
             <Card className="hover-elevate">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
-                <Activity className="w-4 h-4 text-blue-600" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+                <CardTitle className="text-xs font-medium">Active Jobs</CardTitle>
+                <Activity className="w-3 h-3 text-blue-600" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="stat-active-jobs">
+              <CardContent className="px-3 pb-3">
+                <div className="text-xl font-bold" data-testid="stat-active-jobs">
                   {dashboardStats?.activeJobs || 0}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {dashboardStats?.totalJobs || 0} total jobs
+                <p className="text-[10px] text-muted-foreground">
+                  {dashboardStats?.totalJobs || 0} total
                 </p>
               </CardContent>
             </Card>
 
             <Card className="hover-elevate">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Customer Base</CardTitle>
-                <Users className="w-4 h-4 text-green-600" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+                <CardTitle className="text-xs font-medium">Customers</CardTitle>
+                <Users className="w-3 h-3 text-green-600" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="stat-total-customers">
+              <CardContent className="px-3 pb-3">
+                <div className="text-xl font-bold" data-testid="stat-total-customers">
                   {dashboardStats?.totalCustomers || 0}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Active customers
+                <p className="text-[10px] text-muted-foreground">
+                  Active
                 </p>
               </CardContent>
             </Card>
 
             <Card className="hover-elevate">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Equipment Utilization</CardTitle>
-                <Target className="w-4 h-4 text-purple-600" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+                <CardTitle className="text-xs font-medium">Equipment</CardTitle>
+                <Target className="w-3 h-3 text-purple-600" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="stat-equipment-utilization">
+              <CardContent className="px-3 pb-3">
+                <div className="text-xl font-bold" data-testid="stat-equipment-utilization">
                   {dashboardStats?.equipmentUtilization ? `${dashboardStats.equipmentUtilization.toFixed(1)}%` : '--'}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Average utilization rate
+                <p className="text-[10px] text-muted-foreground">
+                  Utilization
                 </p>
               </CardContent>
             </Card>
@@ -390,7 +469,7 @@ export function ExecutiveDashboard() {
 
         {/* Financial Tab */}
         <TabsContent value="financial" className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
             {filteredKpis('financial').map((kpi) => (
               <KpiCard key={kpi.id} metric={kpi} />
             ))}
@@ -401,7 +480,7 @@ export function ExecutiveDashboard() {
 
         {/* Operational Tab */}
         <TabsContent value="operational" className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
             {filteredKpis('operational').map((kpi) => (
               <KpiCard key={kpi.id} metric={kpi} />
             ))}
@@ -454,7 +533,7 @@ export function ExecutiveDashboard() {
 
         {/* Customer Tab */}
         <TabsContent value="customer" className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
             {filteredKpis('customer').map((kpi) => (
               <KpiCard key={kpi.id} metric={kpi} />
             ))}
