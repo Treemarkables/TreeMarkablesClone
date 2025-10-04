@@ -1258,7 +1258,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </div>
 
         {/* Job Cards - Right Side (30%) */}
-        <div className="w-[30%] h-full flex flex-col relative z-10" data-testid="job-cards-container">
+        <div className="w-[30%] h-full flex flex-col" data-testid="job-cards-container">
           <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0">
             <CardHeader className="flex-shrink-0 border-b pb-3">
               <div className="flex items-center justify-between">
