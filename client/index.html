@@ -115,6 +115,22 @@
       })();
     </script>
     
+    <script>
+      // Check what's actually rendering
+      setTimeout(function() {
+        console.log('=== RENDER CHECK ===');
+        const root = document.getElementById('root');
+        const home = root.querySelector('[class*="min-h-screen"]');
+        if (home) {
+          console.log('Home page found, children:', home.children.length);
+          Array.from(home.children).forEach(function(child, i) {
+            console.log('  Section', i, ':', child.tagName, child.className.substring(0, 50), 'height:', child.offsetHeight + 'px');
+          });
+        }
+        console.log('Total body scrollHeight:', document.body.scrollHeight);
+        console.log('Total body clientHeight:', document.body.clientHeight);
+      }, 3000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
