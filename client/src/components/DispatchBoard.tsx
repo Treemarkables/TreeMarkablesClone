@@ -95,6 +95,7 @@ interface Team {
 interface JobAssignment {
   id: string;
   jobId: string;
+  jobNumber?: string; // Job number for sorting and display
   customerId?: string; // Added for compatibility with GlobalJobCard
   teamId?: string; // Optional for team mode
   staffId?: string; // Optional for individual mode
@@ -111,6 +112,7 @@ interface JobAssignment {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
+  lastActivityAt?: string; // For activity-based sorting
 }
 
 type AssignmentMode = 'teams' | 'individual';
@@ -575,6 +577,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         jobAssignments.push({
           id: apiJob.id,
           jobId: apiJob.jobNumber,
+          jobNumber: apiJob.jobNumber,
           customerId: apiJob.customerId,
           customerName: customerMap.get(apiJob.customerId) || apiJob.title || 'Unknown Customer',
           customerPhone: '',
@@ -609,6 +612,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         jobAssignments.push({
           id: apiJob.id,
           jobId: apiJob.jobNumber,
+          jobNumber: apiJob.jobNumber,
           customerId: apiJob.customerId,
           customerName: customerMap.get(apiJob.customerId) || apiJob.title || 'Unknown Customer',
           customerPhone: '',
