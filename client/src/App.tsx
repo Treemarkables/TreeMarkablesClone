@@ -50,7 +50,7 @@ import PublicReview from "@/pages/PublicReview";
 import ActivityDashboard from "@/pages/ActivityDashboard";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -74,7 +74,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
-  const { isCrew } = useAuth();
+  const { isCrew, logout } = useAuth();
   // Initialize activeTab based on role: crew starts with "jobs", admin with "overview"
   const [activeTab, setActiveTab] = useState(isCrew ? "jobs" : "overview");
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
@@ -146,6 +146,20 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
               >
                 <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
               </Button>
+              
+              {/* Logout Button - Crew Only */}
+              {isCrew && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={logout}
+                  data-testid="button-crew-logout"
+                  className="flex items-center gap-1"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </Button>
+              )}
               
               {/* Account Dropdown - Admin Only */}
               {!isCrew && (
