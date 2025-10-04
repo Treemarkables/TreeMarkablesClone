@@ -453,33 +453,69 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     notes: ''
   });
 
-  // Fetch jobs from backend API
+  // Fetch jobs from backend API with localStorage fallback
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: ['/api/jobs'],
     queryFn: async () => {
       const response = await fetch('/api/jobs');
-      if (!response.ok) throw new Error('Failed to fetch jobs');
-      return response.json();
+      if (!response.ok) {
+        // If 401, try to use cached data from localStorage
+        if (response.status === 401) {
+          const cached = localStorage.getItem('dispatch_jobs_cache');
+          if (cached) {
+            return JSON.parse(cached);
+          }
+        }
+        throw new Error('Failed to fetch jobs');
+      }
+      const data = await response.json();
+      // Cache successful responses
+      localStorage.setItem('dispatch_jobs_cache', JSON.stringify(data));
+      return data;
     }
   });
 
-  // Fetch customers for name lookup
+  // Fetch customers for name lookup with localStorage fallback
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],
     queryFn: async () => {
       const response = await fetch('/api/customers');
-      if (!response.ok) throw new Error('Failed to fetch customers');
-      return response.json();
+      if (!response.ok) {
+        // If 401, try to use cached data from localStorage
+        if (response.status === 401) {
+          const cached = localStorage.getItem('dispatch_customers_cache');
+          if (cached) {
+            return JSON.parse(cached);
+          }
+        }
+        throw new Error('Failed to fetch customers');
+      }
+      const data = await response.json();
+      // Cache successful responses
+      localStorage.setItem('dispatch_customers_cache', JSON.stringify(data));
+      return data;
     }
   });
 
-  // Fetch staff assignments for dispatch board
+  // Fetch staff assignments for dispatch board with localStorage fallback
   const { data: staffAssignmentsData } = useQuery({
     queryKey: ['/api/staff-assignments'],
     queryFn: async () => {
       const response = await fetch('/api/staff-assignments');
-      if (!response.ok) throw new Error('Failed to fetch staff assignments');
-      return response.json();
+      if (!response.ok) {
+        // If 401, try to use cached data from localStorage
+        if (response.status === 401) {
+          const cached = localStorage.getItem('dispatch_assignments_cache');
+          if (cached) {
+            return JSON.parse(cached);
+          }
+        }
+        throw new Error('Failed to fetch staff assignments');
+      }
+      const data = await response.json();
+      // Cache successful responses
+      localStorage.setItem('dispatch_assignments_cache', JSON.stringify(data));
+      return data;
     }
   });
 
