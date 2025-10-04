@@ -1388,10 +1388,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       </div>
 
       {/* Mobile Layout: Show job cards in traditional list view */}
-      <div className="lg:hidden p-4">
-      <Card className="overflow-x-hidden">
+      <div className="lg:hidden p-4 flex flex-col h-full overflow-hidden">
+      <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0">
         {/* Mobile Header - With Search */}
-        <CardHeader className="space-y-3">
+        <CardHeader className="space-y-3 flex-shrink-0">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Calendar className="h-5 w-5" />
@@ -1482,7 +1482,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="flex-1 overflow-y-auto p-0">
           {/* Mobile Job Cards */}
           <div className="space-y-0">
             {getTodaysJobs().map((job: any) => {
