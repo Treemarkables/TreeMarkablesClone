@@ -395,41 +395,6 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
 
         <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full">
           
-          <TabsList className="flex flex-wrap w-full gap-1 mb-4 h-auto p-1">
-            <TabsTrigger value="communications" data-testid="tab-communications" className="flex items-center gap-1">
-              <MessageSquare className="w-4 h-4" />
-              <span className="hidden sm:inline">Communications</span>
-            </TabsTrigger>
-            <TabsTrigger value="opportunities" data-testid="tab-opportunities" className="flex items-center gap-1">
-              <TrendingUp className="w-4 h-4" />
-              <span className="hidden sm:inline">Opportunities</span>
-            </TabsTrigger>
-            <TabsTrigger value="equipment" data-testid="tab-equipment" className="flex items-center gap-1">
-              <Wrench className="w-4 h-4" />
-              <span className="hidden sm:inline">Equipment</span>
-            </TabsTrigger>
-            <TabsTrigger value="analytics" data-testid="tab-analytics" className="flex items-center gap-1">
-              <TrendingUp className="w-4 h-4" />
-              <span className="hidden sm:inline">Analytics</span>
-            </TabsTrigger>
-            <TabsTrigger value="integrations" data-testid="tab-integrations" className="flex items-center gap-1">
-              <Plug className="w-4 h-4" />
-              <span className="hidden sm:inline">Integrations</span>
-            </TabsTrigger>
-            <TabsTrigger value="safety" data-testid="tab-safety" className="flex items-center gap-1">
-              <Shield className="w-4 h-4" />
-              <span className="hidden sm:inline">Safety</span>
-            </TabsTrigger>
-            <TabsTrigger value="templates" data-testid="tab-templates" className="flex items-center gap-1">
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">Templates</span>
-            </TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings" className="flex items-center gap-1">
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Settings</span>
-            </TabsTrigger>
-          </TabsList>
-
           {/* Overview Tab */}
           <TabsContent value="overview" className="flex-1 overflow-auto">
             <div className="space-y-4">
