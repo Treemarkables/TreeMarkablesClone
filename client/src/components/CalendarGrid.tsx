@@ -284,11 +284,11 @@ export function CalendarGrid() {
           </div>
 
           {/* Staff Rows */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden flex flex-col">
           {employees.map(employee => (
             <div
               key={employee.id}
-              className="flex border-b hover:bg-gray-50"
+              className="flex flex-1 border-b hover:bg-gray-50"
               data-testid={`staff-row-${employee.id}`}
             >
               {/* Staff Name Column */}
