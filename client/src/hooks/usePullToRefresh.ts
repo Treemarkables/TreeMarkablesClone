@@ -19,6 +19,9 @@ export function usePullToRefresh({
   const scrollContainerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    // Temporarily disabled to fix mobile scrolling issues
+    return;
+    
     if (!enabled) return;
 
     let currentScrollContainer: HTMLElement | null = null;
