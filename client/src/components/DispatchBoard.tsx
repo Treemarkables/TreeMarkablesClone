@@ -1370,49 +1370,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         <CardContent className="overflow-x-hidden">
           {/* Desktop Time Grid View */}
-          <div className="hidden md:flex gap-4 h-[700px]">
-            {/* Team/Staff Column */}
-            <div className="w-32 border-r pr-3">
-              {/* Header to match time grid header height */}
-              <div className="h-[44px] flex items-center mb-2">
-                <h3 className="font-semibold text-xs text-muted-foreground">
-                  {assignmentMode === 'teams' ? 'TEAMS' : 'STAFF'}
-                </h3>
-              </div>
-              <div className="space-y-1">
-                {assignmentMode === 'teams' ? (
-                  // Teams Mode - Section Removed
-                  null
-                ) : (
-                  // Individual Staff Mode - exact height match with calendar rows
-                  staffMembers.map((staff: StaffMember) => {
-                    const staffJobs = getJobsForStaff(staff.id);
-                    const hasJobs = staffJobs.length > 0;
-                    
-                    return (
-                      <div
-                        key={staff.id}
-                        className={`flex items-center gap-2 h-11 rounded-md hover-elevate cursor-pointer px-2 border-l-4 ${staff.color.replace('bg-', 'border-l-')} ${!hasJobs ? 'opacity-40' : ''}`}
-                        data-testid={`staff-${staff.id}`}
-                      >
-                        <Avatar className="h-7 w-7">
-                          <AvatarFallback className={`${staff.color} text-white text-xs`}>
-                            {staff.name.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{staff.name}</div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                
-              </div>
-            </div>
-
+          <div className="hidden md:block h-[700px]">
             {/* Time Grid - Desktop Only */}
-            <div className="flex-1 overflow-x-auto max-w-full">
+            <div className="overflow-x-auto max-w-full h-full">
               <div className="min-w-[800px]">
                 {/* Time Headers */}
                 <div className="grid grid-cols-12 gap-1 mb-2 bg-white h-[44px]">
@@ -2006,29 +1966,29 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               );
             })()}
             
-            {/* Mobile Jobs Cards */}
-            <div className="space-y-3 overflow-x-hidden w-full max-w-full">
+            {/* Job Cards */}
+            <div className="space-y-0 overflow-x-hidden w-full max-w-full">
               {getTodaysJobs().map((job, index) => {
               const customerName = job.customerName || 'Unknown Customer';
               
               return (
                 <div
                   key={job.id}
-                  className="p-3 sm:p-4 pb-6 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
+                  className="p-2 border-b hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
                   onClick={() => handleEditJob(job)}
                   data-testid={`mobile-job-card-${job.id}`}
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-2">
                     {/* Status Avatar Circle with Activity Indicator */}
                     <div className="relative flex-shrink-0">
                       <div 
-                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px]"
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-[18px]"
                         style={{ backgroundColor: getJobStatusColorValue(job) }}
                       >
                         {getStatusInitials(job)}
                       </div>
                       {hasRecentActivity(job) && (
-                        <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse" 
+                        <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border border-white animate-pulse" 
                              title="Recent activity"
                              data-testid={`activity-indicator-${job.id}`} />
                       )}
@@ -2036,78 +1996,42 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     
                     {/* Job Content */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-1">
-                        <div>
-                          <h3 className="font-bold text-gray-900 text-base mb-1" data-testid={`mobile-job-customer-${job.id}`}>
+                      <div className="flex items-start justify-between mb-0.5">
+                        <div className="flex-1 min-w-0 pr-2">
+                          <h3 className="font-semibold text-gray-900 text-sm truncate" data-testid={`mobile-job-customer-${job.id}`}>
                             {customerName}
                           </h3>
-                          <div className="text-xs text-gray-600 mb-1 font-semibold break-words">
-                            {job.address || 'No address specified'}
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="text-xs font-medium text-gray-500 mb-1" data-testid={`mobile-job-number-${job.id}`}>
+                          <div className="text-[11px] text-gray-500 truncate">
                             #{job.jobId || '0000'}
                           </div>
                         </div>
                       </div>
-                      
-                      {/* Job Description */}
-                      <div 
-                        className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2" 
-                        data-testid={`mobile-job-description-${job.id}`}
-                      >
-                        {(() => {
-                          const rawDescription = job.description || job.notes;
-                          
-                          if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
-                            if (job.status === 'lead') {
-                              return 'New lead - details pending';
-                            }
-                            if (job.status === 'quote' || job.status === 'quoted') {
-                              return 'Quote request - description to be added';
-                            }
-                            return job.serviceType || 'Description to be added';
-                          }
-                          
-                          if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
-                            return job.serviceType || 'Description to be added';
-                          }
-                          
-                          return rawDescription;
-                        })()}
+                      <div className="text-[11px] text-gray-600 mb-1 truncate">
+                        {job.address || 'No address specified'}
                       </div>
-                      
-                      {/* Status and Priority */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const statusFormatted = job.status === 'work order' ? 'Work Order' : 
-                                                    job.status === 'completed' ? 'Completed' :
-                                                    job.status === 'scheduled' ? 'Scheduled' :
-                                                    job.status === 'unsuccessful' ? 'Unsuccessful' :
-                                                    job.status;
 
-                            if (job.status === 'quote') {
-                              return (
-                                <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs">
-                                  quote
-                                </Badge>
-                              );
-                            } else if (job.status === 'lead') {
-                              return (
-                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
-                                  lead
-                                </Badge>
-                              );
-                            } else {
-                              return (
-                                <span className="text-xs text-gray-500">{statusFormatted}</span>
-                              );
-                            }
-                          })()}
-                        </div>
-                        <span className="text-xs text-gray-500">{job.priority}</span>
+                      
+                      {/* Status, Time, and Priority */}
+                      <div className="flex items-center gap-2 text-[11px]">
+                        {job.startTime && !job.startTime.includes('0000-00-00') && (
+                          <span className="text-gray-500">{job.startTime}</span>
+                        )}
+                        {(() => {
+                          if (job.status === 'quote') {
+                            return (
+                              <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] px-1.5 py-0">
+                                quote
+                              </Badge>
+                            );
+                          } else if (job.status === 'lead') {
+                            return (
+                              <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-[10px] px-1.5 py-0">
+                                lead
+                              </Badge>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     </div>
                   </div>
