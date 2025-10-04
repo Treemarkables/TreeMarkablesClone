@@ -2128,17 +2128,31 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </div>
                         </div>
                       </div>
-                      <Badge 
-                        variant="outline" 
-                        className={`text-xs ${
-                          job.status === 'quote' ? 'border-orange-500 text-orange-500' :
-                          job.status === 'lead' ? 'border-blue-500 text-blue-500' :
-                          'border-gray-500 text-gray-500'
-                        }`}
-                        data-testid={`job-status-${job.id}`}
-                      >
-                        {job.status}
-                      </Badge>
+                      {(() => {
+                        const statusFormatted = job.status === 'work order' ? 'Work Order' : 
+                                                job.status === 'completed' ? 'Completed' :
+                                                job.status === 'scheduled' ? 'Scheduled' :
+                                                job.status === 'unsuccessful' ? 'Unsuccessful' :
+                                                job.status;
+
+                        if (job.status === 'quote') {
+                          return (
+                            <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs" data-testid={`job-status-${job.id}`}>
+                              quote
+                            </Badge>
+                          );
+                        } else if (job.status === 'lead') {
+                          return (
+                            <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs" data-testid={`job-status-${job.id}`}>
+                              lead
+                            </Badge>
+                          );
+                        } else {
+                          return (
+                            <span className="text-xs text-gray-500" data-testid={`job-status-${job.id}`}>{statusFormatted}</span>
+                          );
+                        }
+                      })()}
                     </div>
                     
                     <div className="space-y-1 text-xs text-muted-foreground">
