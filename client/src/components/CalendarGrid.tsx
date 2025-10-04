@@ -253,7 +253,7 @@ export function CalendarGrid() {
 
       {/* Calendar Grid */}
       <div className="flex-1 overflow-auto">
-        <div className="min-w-max">
+        <div className="w-full">
           {/* Time Header Row */}
           <div className="sticky top-0 z-10 flex bg-white border-b">
             <div className="w-32 flex-shrink-0 border-r bg-gray-50 font-semibold p-2">
@@ -263,7 +263,7 @@ export function CalendarGrid() {
               timeSlots.map(slot => (
                 <div
                   key={slot.hour}
-                  className="w-24 flex-shrink-0 border-r p-2 text-xs text-center font-medium text-gray-600"
+                  className="flex-1 min-w-[60px] border-r p-1 text-xs text-center font-medium text-gray-600"
                   data-testid={`time-slot-${slot.hour}`}
                 >
                   {slot.label}
@@ -309,7 +309,7 @@ export function CalendarGrid() {
                   return (
                     <div
                       key={slot.hour}
-                      className="w-24 flex-shrink-0 border-r p-1 min-h-[60px] relative"
+                      className="flex-1 min-w-[60px] border-r p-1 min-h-[60px] relative"
                       data-testid={`slot-${employee.id}-${slot.hour}`}
                     >
                       {jobs.map(job => (
