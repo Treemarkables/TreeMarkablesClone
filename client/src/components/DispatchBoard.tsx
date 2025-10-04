@@ -453,96 +453,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     notes: ''
   });
 
-  // Fetch jobs from backend API with localStorage persistence
+  // Fetch jobs from backend API
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: ['/api/jobs'],
-    queryFn: async () => {
-      try {
-        const response = await fetch('/api/jobs', {
-          credentials: 'include'
-        });
-        if (!response.ok) {
-          // Try localStorage on any error
-          const cached = localStorage.getItem('dispatch_jobs_cache');
-          if (cached) {
-            console.log('Using cached jobs from localStorage');
-            return JSON.parse(cached);
-          }
-          throw new Error('Failed to fetch jobs');
-        }
-        const data = await response.json();
-        localStorage.setItem('dispatch_jobs_cache', JSON.stringify(data));
-        console.log('Jobs loaded and cached:', data?.data?.length);
-        return data;
-      } catch (error) {
-        const cached = localStorage.getItem('dispatch_jobs_cache');
-        if (cached) {
-          console.log('Using cached jobs from localStorage (error fallback)');
-          return JSON.parse(cached);
-        }
-        throw error;
-      }
-    },
   });
 
-  // Fetch customers for name lookup with localStorage persistence
+  // Fetch customers for name lookup
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],
-    queryFn: async () => {
-      try {
-        const response = await fetch('/api/customers', {
-          credentials: 'include'
-        });
-        if (!response.ok) {
-          const cached = localStorage.getItem('dispatch_customers_cache');
-          if (cached) {
-            console.log('Using cached customers from localStorage');
-            return JSON.parse(cached);
-          }
-          throw new Error('Failed to fetch customers');
-        }
-        const data = await response.json();
-        localStorage.setItem('dispatch_customers_cache', JSON.stringify(data));
-        return data;
-      } catch (error) {
-        const cached = localStorage.getItem('dispatch_customers_cache');
-        if (cached) {
-          console.log('Using cached customers from localStorage (error fallback)');
-          return JSON.parse(cached);
-        }
-        throw error;
-      }
-    },
   });
 
-  // Fetch staff assignments for dispatch board with localStorage persistence
+  // Fetch staff assignments for dispatch board
   const { data: staffAssignmentsData } = useQuery({
     queryKey: ['/api/staff-assignments'],
-    queryFn: async () => {
-      try {
-        const response = await fetch('/api/staff-assignments', {
-          credentials: 'include'
-        });
-        if (!response.ok) {
-          const cached = localStorage.getItem('dispatch_assignments_cache');
-          if (cached) {
-            console.log('Using cached staff assignments from localStorage');
-            return JSON.parse(cached);
-          }
-          throw new Error('Failed to fetch staff assignments');
-        }
-        const data = await response.json();
-        localStorage.setItem('dispatch_assignments_cache', JSON.stringify(data));
-        return data;
-      } catch (error) {
-        const cached = localStorage.getItem('dispatch_assignments_cache');
-        if (cached) {
-          console.log('Using cached staff assignments from localStorage (error fallback)');
-          return JSON.parse(cached);
-        }
-        throw error;
-      }
-    },
   });
 
   // Create customer lookup map
