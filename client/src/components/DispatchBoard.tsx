@@ -770,10 +770,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         teamMembers.some(member => member.id === assignedId)
       );
       if (!hasTeamMember && job.teamId !== teamId) return false;
-      // Safari-safe date parsing
-      const jobStartTime = new Date(job.startTime);
-      if (isNaN(jobStartTime.getTime())) return false;
-      return isSameDay(jobStartTime, selectedDate);
+      return true;
     });
   };
 
@@ -783,10 +780,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       // Check if staff member is in assigned team or directly assigned
       const isAssigned = job.assignedTeam?.includes(staffId);
       if (!isAssigned && job.staffId !== staffId) return false;
-      // Safari-safe date parsing
-      const jobStartTime = new Date(job.startTime);
-      if (isNaN(jobStartTime.getTime())) return false;
-      return isSameDay(jobStartTime, selectedDate);
+      return true;
     });
   };
 
@@ -1623,12 +1617,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     {jobFilterOptions.map((option) => {
                       const IconComponent = option.icon;
                       const filteredCount = jobs.filter(job => {
-                        // Safari-safe date parsing
-                        const jobStartTime = new Date(job.startTime);
-                        if (isNaN(jobStartTime.getTime())) return false;
-                        const isToday = isSameDay(jobStartTime, selectedDate);
-                        if (!isToday) return false;
-                        
                         switch (option.value) {
                           case 'all': return true;
                           case 'action_required': return !job.assignedTeam?.length || job.status === 'scheduled' && !job.teamId && !job.staffId;
@@ -1636,9 +1624,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           case 'leads': return job.priority === 'low' || job.serviceType?.toLowerCase().includes('lead') || job.serviceType?.toLowerCase().includes('inquiry') || false;
                           case 'quotes': return job.serviceType?.toLowerCase().includes('quote') || false;
                           case 'work_orders': return (job.status === 'scheduled' || job.status === 'in_progress') && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
-                          case 'unscheduled':
-                            const isDefaultTime = jobStartTime.getHours() === 9 && jobStartTime.getMinutes() === 0;
-                            return isDefaultTime || (!job.assignedTeam?.length && !job.teamId && !job.staffId);
+                          case 'unscheduled': return !job.assignedTeam?.length && !job.teamId && !job.staffId;
                           case 'in_progress': return job.status === 'in_progress' || job.status === 'scheduled';
                           case 'completed': return job.status === 'completed' || job.status === 'cancelled';
                           default: return true;
