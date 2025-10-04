@@ -3713,11 +3713,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               authorRole: 'system',
               tags: ['sms', 'communication']
             });
+            console.log(`✅ SMS diary entry created for job ${jobId}`);
             
             // Update job's lastActivityAt to trigger activity indicator and sorting
+            console.log(`📌 Updating lastActivityAt for job ${jobId}...`);
             await storage.updateJob(jobId, { lastActivityAt: new Date() });
+            console.log(`✅ Job ${jobId} lastActivityAt updated - should move to top with activity indicator`);
           } catch (diaryError) {
-            console.warn('Failed to log SMS to job diary:', diaryError);
+            console.error('❌ Failed to log SMS to job diary:', diaryError);
           }
         }
       }
