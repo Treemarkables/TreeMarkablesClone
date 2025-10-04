@@ -12,6 +12,7 @@ interface AuthContextType {
   userRole: 'admin' | 'crew' | null;
   isAdmin: boolean;
   isCrew: boolean;
+  isAuthenticated: boolean;
   logout: () => void;
 }
 
@@ -65,10 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [meResponse, currentUser]);
 
-  const userRole = currentUser?.role as 'admin' | 'crew' | null;
-  const isAdmin = userRole === 'admin';
-  const isCrew = userRole === 'crew';
   const isDev = import.meta.env.DEV;
+  const isAuthenticated = !!currentUser;
+  const userRole = currentUser?.role as 'admin' | 'crew' | null;
+  
+  // In dev mode with no authenticated user, grant admin access
+  const isAdmin = isDev && !isAuthenticated ? true : userRole === 'admin';
+  const isCrew = userRole === 'crew';
   const [location] = useLocation();
 
   // Extract just the pathname without query params or hash
@@ -110,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userRole,
         isAdmin,
         isCrew,
+        isAuthenticated,
         logout,
       }}
     >
