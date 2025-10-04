@@ -50,7 +50,7 @@ import PublicReview from "@/pages/PublicReview";
 import ActivityDashboard from "@/pages/ActivityDashboard";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -62,8 +62,24 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    
+    // Clear all React Query cache and refetch
+    await queryClient.invalidateQueries();
+    
+    // Show success toast
+    toast({
+      title: "Data refreshed",
+      description: "All data has been reloaded from the server.",
+    });
+    
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
   
   const style = {
     "--sidebar-width": "12rem",
@@ -75,9 +91,19 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
       <div className="flex min-h-screen w-full">
         <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          {/* Mobile header - just sidebar toggle */}
+          {/* Mobile header - sidebar toggle and refresh */}
           <header className="md:hidden flex items-center justify-between p-2 border-b bg-white">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              data-testid="button-mobile-refresh"
+              className="ml-auto"
+            >
+              <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </Button>
           </header>
           
           {/* Desktop header - full menu */}
