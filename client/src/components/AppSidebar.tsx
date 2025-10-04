@@ -172,6 +172,16 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   )}
                 </SidebarMenuItem>
               ))}
+              
+              {/* Dispatch Board - Available to both crew and admin */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/dispatch"}>
+                  <Link href="/dispatch" onClick={() => isMobile && setOpen(false)} data-testid="link-dispatch">
+                    <Calendar className="h-4 w-4" />
+                    <span>Dispatch Board</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -214,14 +224,6 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
             <SidebarGroupLabel>Operations & Analysis</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/dispatch"}>
-                    <Link href="/dispatch" onClick={() => isMobile && setOpen(false)} data-testid="link-dispatch">
-                      <Calendar className="h-4 w-4" />
-                      <span>Dispatch Board</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/calendar"}>
                     <Link href="/calendar" onClick={() => isMobile && setOpen(false)} data-testid="link-calendar">
