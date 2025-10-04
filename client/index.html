@@ -49,8 +49,8 @@
     }
     </script>
   </head>
-  <body style="overflow: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y pan-x !important; height: auto !important; min-height: 100vh !important;">
-    <div id="root" style="overflow: visible !important; height: auto !important; min-height: 100vh !important;"></div>
+  <body>
+    <div id="root"></div>
     
     <!-- PWA Cache Bypass: Pre-fetch diary data BEFORE React loads -->
     <!-- This runs before the cached bundle, bypassing service worker -->
@@ -105,50 +105,33 @@
       })();
     </script>
     
-    <!-- Force enable scrolling -->
     <script>
-      (function() {
-        function forceEnableScroll() {
-          // Remove any height constraints
-          const elements = [document.documentElement, document.body, document.getElementById('root')];
-          elements.forEach(el => {
-            if (el) {
-              el.style.overflow = 'visible';
-              el.style.height = 'auto';
-              el.style.maxHeight = 'none';
-              el.style.position = 'static';
-              el.style.touchAction = 'pan-y pan-x';
-            }
+      // Diagnostic script to identify scroll blocker
+      setTimeout(function() {
+        console.log('=== SCROLL DIAGNOSTIC ===');
+        const els = [document.documentElement, document.body, document.getElementById('root')];
+        els.forEach(function(el, i) {
+          if (!el) return;
+          const s = window.getComputedStyle(el);
+          const name = ['html', 'body', '#root'][i];
+          console.log(name + ':', {
+            overflow: s.overflow,
+            overflowY: s.overflowY,
+            height: s.height,
+            maxHeight: s.maxHeight,
+            position: s.position,
+            touchAction: s.touchAction,
+            scrollHeight: el.scrollHeight,
+            clientHeight: el.clientHeight,
+            canScroll: el.scrollHeight > el.clientHeight
           });
-          
-          // Remove any blocking event listeners by replacing touchmove
-          const originalAddEventListener = EventTarget.prototype.addEventListener;
-          EventTarget.prototype.addEventListener = function(type, listener, options) {
-            if (type === 'touchmove' || type === 'wheel') {
-              // Force passive: true to allow scrolling
-              if (typeof options === 'object') {
-                options.passive = true;
-              } else {
-                options = { passive: true };
-              }
-            }
-            return originalAddEventListener.call(this, type, listener, options);
-          };
-        }
-        
-        // Run immediately
-        forceEnableScroll();
-        
-        // Run after DOM loads
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', forceEnableScroll);
-        }
-        
-        // Run after React renders
-        setTimeout(forceEnableScroll, 100);
-        setTimeout(forceEnableScroll, 500);
-        setTimeout(forceEnableScroll, 1000);
-      })();
+        });
+        console.log('window.scrollY:', window.scrollY);
+        window.scrollTo(0, 100);
+        setTimeout(function() {
+          console.log('After scroll attempt, window.scrollY:', window.scrollY);
+        }, 100);
+      }, 2000);
     </script>
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
