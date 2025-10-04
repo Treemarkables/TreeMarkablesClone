@@ -20,7 +20,7 @@ export function usePullToRefresh({
 
   useEffect(() => {
     // Temporarily disabled to fix mobile scrolling issues
-    return;
+    if (!enabled || true) return; // Force disabled
     
     if (!enabled) return;
 

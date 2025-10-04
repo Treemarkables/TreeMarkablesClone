@@ -278,18 +278,13 @@
     @apply border-border;
   }
 
-  html {
-    overflow: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y pan-x !important;
-  }
-
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    overflow: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y pan-x !important;
-    position: static !important;
+  }
+  
+  /* iOS/mobile scrolling fix */
+  html, body {
+    -webkit-overflow-scrolling: touch;
   }
 }
 
