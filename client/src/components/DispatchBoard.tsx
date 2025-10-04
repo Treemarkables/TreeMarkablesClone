@@ -1897,7 +1897,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between mb-1">
-                              <h3 className="font-bold text-gray-900 text-sm mb-1">
+                              <h3 className="font-bold text-gray-900 text-base mb-1">
                                 {job.customerName}
                               </h3>
                               <div className="text-xs font-medium text-gray-500">
@@ -2012,7 +2012,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between mb-1">
                         <div>
-                          <h3 className="font-bold text-gray-900 text-sm mb-1" data-testid={`mobile-job-customer-${job.id}`}>
+                          <h3 className="font-bold text-gray-900 text-base mb-1" data-testid={`mobile-job-customer-${job.id}`}>
                             {customerName}
                           </h3>
                           <div className="text-xs text-gray-600 mb-1 font-semibold break-words">
@@ -2169,7 +2169,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between mb-1">
                             <div>
-                              <h3 className="font-bold text-gray-900 text-sm mb-1">
+                              <h3 className="font-bold text-gray-900 text-base mb-1">
                                 {customerName}
                               </h3>
                               <div className="text-xs text-gray-600 mb-1 font-semibold">
