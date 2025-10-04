@@ -3706,7 +3706,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           try {
             await storage.createJobDiaryEntry({
               jobId: jobId,
-              entryType: 'note',
+              entryType: 'sms',
               title: '📱 SMS Sent',
               description: `SMS sent to ${customer?.name || phone}\n\nMessage: ${message}`,
               authorName: 'System',
@@ -3777,7 +3777,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           console.log(`📝 Logging to job #${recentJob.jobNumber} diary...`);
           await storage.createJobDiaryEntry({
             jobId: recentJob.id,
-            entryType: 'note',
+            entryType: 'sms',
             title: '📱 Customer SMS Reply',
             description: `SMS received from ${customer.name} (${From})\n\nMessage: ${Body}`,
             authorName: customer.name,
