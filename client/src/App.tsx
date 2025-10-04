@@ -114,6 +114,17 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
               {/* Notifications Bell */}
               <NotificationBell />
               
+              {/* Refresh Button */}
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                data-testid="button-desktop-refresh"
+              >
+                <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+              
               {/* Account Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
