@@ -426,7 +426,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isDeepSearchActive, setIsDeepSearchActive] = useState<boolean>(false);
   const [deepSearchResults, setDeepSearchResults] = useState<JobAssignment[]>([]);
-  const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('teams');
+  const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('individual');
   const [jobFilter, setJobFilter] = useState<string>('all');
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
@@ -1237,14 +1237,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       {/* Desktop Layout: Calendar on left, Job cards on right */}
       <div className="hidden lg:flex gap-4 h-[calc(100vh-200px)]" data-testid="dispatch-desktop-layout">
         {/* Calendar Grid - Left Side */}
-        <div className="w-2/3 h-full" data-testid="calendar-grid-container">
+        <div className="w-1/2 h-full" data-testid="calendar-grid-container">
           <Card className="h-full">
             <CalendarGrid />
           </Card>
         </div>
 
         {/* Job Cards - Right Side */}
-        <div className="w-1/3 h-full overflow-y-auto" data-testid="job-cards-container">
+        <div className="w-1/2 h-full overflow-y-auto" data-testid="job-cards-container">
           <Card className="overflow-x-hidden h-full">
         {/* Desktop Header - Hidden on Mobile */}
         <CardHeader className="hidden md:block">
@@ -1281,25 +1281,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               >
                 Today
               </Button>
-              <Select value={assignmentMode} onValueChange={(value: AssignmentMode) => setAssignmentMode(value)}>
-                <SelectTrigger className="w-full sm:w-[160px]" data-testid="assignment-mode-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="teams" data-testid="teams-mode">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      Teams
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="individual" data-testid="individual-mode">
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Individual Staff
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
 
               <div className="flex border rounded-md">
                 <Button
