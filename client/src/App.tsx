@@ -74,7 +74,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
-  const { isCrew, logout } = useAuth();
+  const { isCrew, isAdmin, logout } = useAuth();
   // Initialize activeTab based on role: crew starts with "jobs", admin with "overview"
   const [activeTab, setActiveTab] = useState(isCrew ? "jobs" : "overview");
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
