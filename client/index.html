@@ -105,6 +105,51 @@
       })();
     </script>
     
+    <!-- Force enable scrolling -->
+    <script>
+      (function() {
+        function forceEnableScroll() {
+          // Remove any height constraints
+          const elements = [document.documentElement, document.body, document.getElementById('root')];
+          elements.forEach(el => {
+            if (el) {
+              el.style.overflow = 'visible';
+              el.style.height = 'auto';
+              el.style.maxHeight = 'none';
+              el.style.position = 'static';
+              el.style.touchAction = 'pan-y pan-x';
+            }
+          });
+          
+          // Remove any blocking event listeners by replacing touchmove
+          const originalAddEventListener = EventTarget.prototype.addEventListener;
+          EventTarget.prototype.addEventListener = function(type, listener, options) {
+            if (type === 'touchmove' || type === 'wheel') {
+              // Force passive: true to allow scrolling
+              if (typeof options === 'object') {
+                options.passive = true;
+              } else {
+                options = { passive: true };
+              }
+            }
+            return originalAddEventListener.call(this, type, listener, options);
+          };
+        }
+        
+        // Run immediately
+        forceEnableScroll();
+        
+        // Run after DOM loads
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', forceEnableScroll);
+        }
+        
+        // Run after React renders
+        setTimeout(forceEnableScroll, 100);
+        setTimeout(forceEnableScroll, 500);
+        setTimeout(forceEnableScroll, 1000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
