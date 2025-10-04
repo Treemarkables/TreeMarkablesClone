@@ -2,32 +2,33 @@ import { useMemo } from "react";
 
 interface CustomerAvatarProps {
   customerName: string;
+  status?: string;
   size?: "sm" | "md" | "lg";
   className?: string;
 }
 
-// Generate consistent colors based on customer name
-const generateAvatarColor = (name: string): string => {
-  const colors = [
-    "bg-blue-500",
-    "bg-emerald-500", 
-    "bg-purple-500",
-    "bg-orange-500",
-    "bg-pink-500",
-    "bg-teal-500",
-    "bg-indigo-500",
-    "bg-amber-500",
-    "bg-red-500",
-    "bg-green-500",
-    "bg-cyan-500",
-    "bg-yellow-500"
-  ];
+// Generate colors based on job status (matching desktop dispatch board)
+const getStatusColor = (status?: string): string => {
+  if (!status) return "bg-purple-500"; // Default fallback
   
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const normalizedStatus = status.toLowerCase().replace(/\s+/g, '_');
+  
+  switch (normalizedStatus) {
+    case 'completed':
+      return 'bg-green-500';
+    case 'work_order':
+    case 'scheduled':
+      return 'bg-blue-500';
+    case 'quote':
+      return 'bg-orange-500';
+    case 'lead':
+    case 'inquiry':
+      return 'bg-cyan-500';
+    case 'unsuccessful':
+      return 'bg-red-500';
+    default:
+      return 'bg-purple-500';
   }
-  return colors[Math.abs(hash) % colors.length];
 };
 
 // Extract initials from customer name
@@ -42,9 +43,9 @@ const getInitials = (name: string): string => {
   }
 };
 
-export function CustomerAvatar({ customerName, size = "md", className = "" }: CustomerAvatarProps) {
+export function CustomerAvatar({ customerName, status, size = "md", className = "" }: CustomerAvatarProps) {
   const initials = useMemo(() => getInitials(customerName), [customerName]);
-  const bgColor = useMemo(() => generateAvatarColor(customerName), [customerName]);
+  const bgColor = useMemo(() => getStatusColor(status), [status]);
   
   const sizeClasses = {
     sm: "w-8 h-8 text-xs",

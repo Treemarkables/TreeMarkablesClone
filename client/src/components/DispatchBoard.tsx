@@ -697,22 +697,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
   };
 
-  // Get actual color values for inline styles
+  // Get actual color values for inline styles (matching desktop style)
   const getJobStatusColorValue = (job: JobAssignment) => {
     const serviceType = job.serviceType?.toLowerCase() || '';
-    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return '#0891b2'; // cyan-600
-    if (serviceType.includes('quote') || serviceType.includes('proposal')) return '#ea580c'; // orange-600
+    if (serviceType.includes('lead') || serviceType.includes('inquiry')) return '#06b6d4'; // cyan-500
+    if (serviceType.includes('quote') || serviceType.includes('proposal')) return '#f97316'; // orange-500
     
     // Handle actual API status values
     switch (job.status) {
-      case 'completed': return '#16a34a'; // green-600
-      case 'unsuccessful': return '#dc2626'; // red-600
-      case 'work_order': return '#2563eb'; // blue-600
-      case 'work order': return '#2563eb'; // blue-600
-      case 'scheduled': return '#ea580c'; // orange-600
-      case 'quote': return '#ea580c'; // orange-600
-      case 'lead': return '#0891b2'; // cyan-600
-      default: return '#4b5563'; // gray-600
+      case 'completed': return '#22c55e'; // green-500
+      case 'unsuccessful': return '#ef4444'; // red-500
+      case 'work_order': return '#3b82f6'; // blue-500
+      case 'work order': return '#3b82f6'; // blue-500
+      case 'scheduled': return '#3b82f6'; // blue-500 (same as work order)
+      case 'quote': return '#f97316'; // orange-500
+      case 'lead': return '#06b6d4'; // cyan-500
+      default: return '#6b7280'; // gray-500
     }
   };
 
