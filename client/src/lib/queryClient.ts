@@ -55,6 +55,8 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: Infinity,
       retry: false,
+      gcTime: Infinity, // Keep data in cache forever (even after errors)
+      networkMode: 'online', // Only run queries when online
     },
     mutations: {
       retry: false,
