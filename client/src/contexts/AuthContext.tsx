@@ -73,6 +73,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // In dev mode with no authenticated user, grant admin access
   const isAdmin = isDev && !isAuthenticated ? true : userRole === 'admin';
   const isCrew = userRole === 'crew';
+  
+  // Debug RBAC
+  if (isDev && isAuthenticated) {
+    console.log('RBAC Debug:', { 
+      currentUser: currentUser?.firstName + ' ' + currentUser?.lastName, 
+      userRole, 
+      isAdmin, 
+      isCrew, 
+      isAuthenticated 
+    });
+  }
+  
   const [location] = useLocation();
 
   // Extract just the pathname without query params or hash
