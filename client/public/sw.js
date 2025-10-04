@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v8-scroll-fix';
-const STATIC_CACHE = 'treemarkables-static-v8-scroll-fix';
-const API_CACHE = 'treemarkables-api-v8-scroll-fix';
+const CACHE_NAME = 'treemarkables-v9-safari-fix';
+const STATIC_CACHE = 'treemarkables-static-v9-safari-fix';
+const API_CACHE = 'treemarkables-api-v9-safari-fix';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -25,21 +25,21 @@ self.addEventListener('install', function(event) {
 
 // Activate event - clean up old caches  
 self.addEventListener('activate', function(event) {
-  console.log('[SW v7] Activating - deleting ALL old caches including v6');
+  console.log('[SW v9] Activating - deleting ALL old caches');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
-      console.log('[SW v7] Found caches:', cacheNames);
+      console.log('[SW v9] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          // Delete ANY cache that's not v8
-          if (!cacheName.includes('v8-scroll-fix')) {
-            console.log('[SW v8] DELETING old cache:', cacheName);
+          // Delete ANY cache that's not v9
+          if (!cacheName.includes('v9-safari-fix')) {
+            console.log('[SW v9] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[SW v7] Taking control of all clients');
+      console.log('[SW v9] Taking control of all clients');
       return self.clients.claim();
     })
   );
@@ -82,6 +82,16 @@ self.addEventListener('fetch', function(event) {
             throw error; // Don't fallback to cache for diary
           })
       );
+      return;
+    }
+    
+    // BYPASS Service Worker for critical Dispatch Board endpoints
+    // These endpoints use localStorage fallback in React Query
+    if (url.pathname === '/api/jobs' || 
+        url.pathname === '/api/customers' || 
+        url.pathname === '/api/staff-assignments') {
+      console.log('[SW v8] Bypassing SW for localStorage-backed endpoint:', url.pathname);
+      // Don't use event.respondWith() - let it go directly to the network
       return;
     }
     
