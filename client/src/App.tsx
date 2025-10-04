@@ -116,22 +116,68 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
       <div className="flex min-h-screen w-full">
         <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          {/* Mobile header - sidebar toggle and refresh */}
+          {/* Mobile header - sidebar toggle, refresh, and actions */}
           <header className="md:hidden flex items-center justify-between p-2 border-b bg-white">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            {/* Refresh Button - Hidden in Safari */}
-            {!isSafari && (
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                data-testid="button-mobile-refresh"
-                className="ml-auto"
-              >
-                <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              </Button>
-            )}
+            
+            <div className="flex items-center gap-2">
+              {/* Refresh Button - Hidden in Safari */}
+              {!isSafari && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  data-testid="button-mobile-refresh"
+                >
+                  <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </Button>
+              )}
+              
+              {/* Logout Button - Crew Only */}
+              {isCrew && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={logout}
+                  data-testid="button-crew-logout-mobile"
+                  className="flex items-center gap-1"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </Button>
+              )}
+              
+              {/* Account Dropdown - Admin Only */}
+              {isAdmin && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="flex items-center gap-1" data-testid="button-account-dropdown-mobile">
+                      Account
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem asChild>
+                      <Link href="/history" className="flex items-center w-full" data-testid="menu-history-mobile">
+                        <HistoryIcon className="w-4 h-4 mr-3 text-gray-600" />
+                        <div>
+                          <div className="font-medium">History</div>
+                          <div className="text-sm text-muted-foreground">Find any past job</div>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={logout} className="flex items-center" data-testid="menu-logout-mobile">
+                      <LogOut className="w-4 h-4 mr-3 text-red-600" />
+                      <div>
+                        <div className="font-medium">Logout</div>
+                        <div className="text-sm text-muted-foreground">Sign out of your account</div>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
           </header>
           
           {/* Desktop header - full menu */}
@@ -170,7 +216,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
               )}
               
               {/* Account Dropdown - Admin Only */}
-              {!isCrew && (
+              {isAdmin && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-1" data-testid="button-account-dropdown">
