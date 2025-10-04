@@ -34,7 +34,8 @@ import {
   Zap,
   GripVertical,
   Move,
-  SearchX
+  SearchX,
+  Clipboard
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
@@ -856,6 +857,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return sorted;
   };
 
+  const getUnscheduledJobs = () => {
+    return jobs.filter(job => 
+      job.status === 'quote' || 
+      job.status === 'lead' || 
+      !job.startTime || 
+      job.startTime.includes('0000-00-00')
+    ).sort((a, b) => {
+      const jobNumberA = parseInt(a.jobNumber || '0', 10);
+      const jobNumberB = parseInt(b.jobNumber || '0', 10);
+      return jobNumberB - jobNumberA;
+    });
+  };
+
   // Job Mutations
   const createJobMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -1245,819 +1259,128 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         {/* Job Cards - Right Side (30%) */}
         <div className="w-[30%] h-full overflow-y-auto" data-testid="job-cards-container">
-          <Card className="overflow-x-hidden h-full">
-        {/* Desktop Header - Hidden on Mobile */}
-        <CardHeader className="hidden md:block">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Dispatch Board
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedDate(subDays(selectedDate, 1))}
-                data-testid="prev-day"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="text-sm font-medium px-4" data-testid="current-date">
+          <Card className="overflow-x-hidden h-full flex flex-col">
+            <CardHeader className="flex-shrink-0 border-b pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Jobs</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+                    data-testid="prev-day"
+                    className="h-7 w-7"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+                    data-testid="next-day"
+                    className="h-7 w-7"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
                 {format(selectedDate, 'EEEE, MMMM dd, yyyy')}
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedDate(addDays(selectedDate, 1))}
-                data-testid="next-day"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedDate(new Date())}
-                data-testid="today-btn"
-              >
-                Today
-              </Button>
+            </CardHeader>
 
-              <div className="flex border rounded-md">
-                <Button
-                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('grid')}
-                  data-testid="grid-view"
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === 'list' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('list')}
-                  data-testid="list-view"
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        
-        {/* Mobile Header - With Search */}
-        <CardHeader className="md:hidden space-y-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Calendar className="h-5 w-5" />
-            Jobs ({getTodaysJobs().length})
-          </CardTitle>
-          
-          {/* Job Search Field for Mobile */}
-          <div className="space-y-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={isDeepSearchActive ? "Deep search results..." : "Search by customer, job #, address..."}
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (!isDeepSearchActive) {
-                    // Normal search - let the regular filtering handle it
-                  }
-                }}
-                className="pl-10 bg-white"
-                data-testid="mobile-job-search-input"
-              />
-              {isDeepSearchActive && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 px-2"
-                  onClick={() => {
-                    setIsDeepSearchActive(false);
-                    setDeepSearchResults([]);
-                    setSearchQuery('');
-                  }}
-                  data-testid="btn-clear-deep-search-mobile"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
-            
-            {/* Deep Search Button for Mobile */}
-            {searchQuery.trim() && !isDeepSearchActive && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full"
-                onClick={() => performDeepSearch(searchQuery)}
-                data-testid="btn-deep-search-mobile"
-              >
-                <Search className="h-3 w-3 mr-2" />
-                Deep Search All Jobs
-              </Button>
-            )}
-            
-            {/* Deep Search Status for Mobile */}
-            {isDeepSearchActive && (
-              <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                <SearchX className="h-3 w-3" />
-                Deep search: {deepSearchResults.length} total jobs found
-              </div>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent className="overflow-x-hidden">
-          {/* Desktop Time Grid View */}
-          <div className="hidden md:block h-[700px]">
-            {/* Time Grid - Desktop Only */}
-            <div className="overflow-x-auto max-w-full h-full">
-              <div className="min-w-[800px]">
-                {/* Time Headers */}
-                <div className="grid grid-cols-12 gap-1 mb-2 bg-white h-[44px]">
-                  {timeSlots.map((time) => (
-                    <div
-                      key={time}
-                      className="text-center text-xs font-medium text-gray-600 p-2 border-b border-gray-200 min-w-0 flex items-center justify-center overflow-hidden whitespace-nowrap"
-                      data-testid={`time-slot-${time}`}
-                    >
-                      {time}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Team/Staff Rows */}
-                <div className="space-y-1">
-                  {assignmentMode === 'teams' ? (
-                    // Teams Mode
-                    mockTeams.map((team) => {
-                      const teamJobs = getJobsForTeam(team.id);
-                      return (
-                        <div key={team.id} className="relative h-11" data-testid={`team-row-${team.id}`}>
-                          {/* Time Grid Background */}
-                          <div className="grid grid-cols-12 gap-1 h-full absolute inset-0 z-0">
-                            {timeSlots.map((time) => (
-                              <div
-                                key={`${team.id}-${time}`}
-                                className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
-                                data-testid={`time-cell-${team.id}-${time}`}
-                              />
-                            ))}
-                          </div>
-                          
-                          {/* Job Blocks */}
-                          <div className="relative h-full z-10">
-                            {teamJobs.map((job) => {
-                              // Parse time directly from ISO string to avoid timezone conversion
-                              // ISO format: "2025-10-23T09:00:00.000Z"
-                              const startTimeMatch = job.startTime.match(/T(\d{2}):(\d{2})/);
-                              const endTimeMatch = job.endTime.match(/T(\d{2}):(\d{2})/);
-                              
-                              const startHour = startTimeMatch ? parseInt(startTimeMatch[1]) : 0;
-                              const startMinutes = startTimeMatch ? parseInt(startTimeMatch[2]) : 0;
-                              const endHour = endTimeMatch ? parseInt(endTimeMatch[1]) : 0;
-                              const endMinutes = endTimeMatch ? parseInt(endTimeMatch[2]) : 0;
-                              
-                              // Calculate position and width as percentage of the 12-hour grid (7 AM to 7 PM)
-                              const totalMinutes = 12 * 60; // 7 AM to 7 PM = 12 hours = 720 minutes
-                              const jobStartMinutes = (startHour - 7) * 60 + startMinutes;
-                              const jobEndMinutes = (endHour - 7) * 60 + endMinutes;
-                              
-                              const leftPercent = Math.max(0, (jobStartMinutes / totalMinutes) * 100);
-                              const widthPercent = Math.min(100 - leftPercent, ((jobEndMinutes - jobStartMinutes) / totalMinutes) * 100);
-                              
-                              return (
-                                <div
-                                  key={job.id}
-                                  className={`absolute ${team.color} text-white rounded text-xs px-2 cursor-pointer hover:opacity-80 transition-opacity border-2 border-white shadow-sm h-9 flex flex-col justify-center overflow-hidden`}
-                                  onClick={() => handleEditJob(job)}
-                                  data-testid={`job-block-${job.id}`}
-                                  style={{
-                                    left: `${leftPercent}%`,
-                                    width: `${widthPercent}%`,
-                                    minWidth: '80px',
-                                    top: '2px'
-                                  }}
-                                >
-                                  <div className="font-semibold truncate text-[10px] leading-tight">
-                                    {job.customerName}
-                                  </div>
-                                  <div className="truncate text-[9px] opacity-90 leading-tight">
-                                    {job.address || 'No address'}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    // Individual Staff Mode
-                    staffMembers.map((staff: StaffMember) => {
-                      const staffJobs = getJobsForStaff(staff.id);
-                      const hasJobs = staffJobs.length > 0;
-                      
-                      return (
-                        <div key={staff.id} className="relative h-11" data-testid={`staff-row-${staff.id}`}>
-                          {/* Time Grid Background */}
-                          <div className={`grid grid-cols-12 gap-1 h-full absolute inset-0 z-0 ${!hasJobs ? 'opacity-30' : ''}`}>
-                            {timeSlots.map((time) => (
-                              <div
-                                key={`${staff.id}-${time}`}
-                                className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
-                                data-testid={`time-cell-${staff.id}-${time}`}
-                              />
-                            ))}
-                          </div>
-                          
-                          {/* Job Blocks */}
-                          <div className="relative h-full z-10">
-                            {staffJobs.map((job) => {
-                              // Parse time directly from ISO string to avoid timezone conversion
-                              // ISO format: "2025-10-23T09:00:00.000Z"
-                              const startTimeMatch = job.startTime.match(/T(\d{2}):(\d{2})/);
-                              const endTimeMatch = job.endTime.match(/T(\d{2}):(\d{2})/);
-                              
-                              const startHour = startTimeMatch ? parseInt(startTimeMatch[1]) : 0;
-                              const startMinutes = startTimeMatch ? parseInt(startTimeMatch[2]) : 0;
-                              const endHour = endTimeMatch ? parseInt(endTimeMatch[1]) : 0;
-                              const endMinutes = endTimeMatch ? parseInt(endTimeMatch[2]) : 0;
-                              
-                              // Calculate position and width as percentage of the 12-hour grid (7 AM to 7 PM)
-                              const totalMinutes = 12 * 60; // 7 AM to 7 PM = 12 hours = 720 minutes
-                              const jobStartMinutes = (startHour - 7) * 60 + startMinutes;
-                              const jobEndMinutes = (endHour - 7) * 60 + endMinutes;
-                              
-                              const leftPercent = Math.max(0, (jobStartMinutes / totalMinutes) * 100);
-                              const widthPercent = Math.min(100 - leftPercent, ((jobEndMinutes - jobStartMinutes) / totalMinutes) * 100);
-                              
-                              return (
-                                <div
-                                  key={job.id}
-                                  className={`absolute ${staff.color} text-white rounded text-xs px-2 cursor-pointer hover:opacity-80 transition-opacity border-2 border-white shadow-sm h-9 flex flex-col justify-center overflow-hidden`}
-                                  onClick={() => handleEditJob(job)}
-                                  data-testid={`job-block-${job.id}`}
-                                  style={{
-                                    left: `${leftPercent}%`,
-                                    width: `${widthPercent}%`,
-                                    minWidth: '80px',
-                                    top: '2px'
-                                  }}
-                                >
-                                  <div className="font-semibold truncate text-[10px] leading-tight">
-                                    {job.customerName}
-                                  </div>
-                                  <div className="truncate text-[9px] opacity-90 leading-tight">
-                                    {job.address || 'No address'}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* ServiceM8 Style Jobs Panel - Desktop */}
-            <div className="w-80 bg-gray-50 border-l flex flex-col h-[700px]">
-              {/* ServiceM8 Header */}
-              <div className="p-4 space-y-3 flex-shrink-0">
-                {/* ServiceM8 Style Filter Dropdown */}
-                <Select value={jobFilter} onValueChange={setJobFilter}>
-                  <SelectTrigger className="w-full bg-white" data-testid="servicem8-job-filter-select">
-                    <SelectValue>
-                      <div className="flex items-center gap-2">
-                        {(() => {
-                          const selectedFilter = jobFilterOptions.find(f => f.value === jobFilter);
-                          const IconComponent = selectedFilter?.icon || List;
-                          return (
-                            <>
-                              <IconComponent className="h-4 w-4" />
-                              <span>{selectedFilter?.label || 'All Jobs'}</span>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {jobFilterOptions.map((option) => {
-                      const IconComponent = option.icon;
-                      const filteredCount = jobs.filter(job => {
-                        switch (option.value) {
-                          case 'all': return true;
-                          case 'action_required': return !job.assignedTeam?.length || job.status === 'scheduled' && !job.teamId && !job.staffId;
-                          case 'for_review': return job.priority === 'urgent' || job.priority === 'high';
-                          case 'leads': return job.priority === 'low' || job.serviceType?.toLowerCase().includes('lead') || job.serviceType?.toLowerCase().includes('inquiry') || false;
-                          case 'quotes': return job.serviceType?.toLowerCase().includes('quote') || false;
-                          case 'work_orders': return (job.status === 'scheduled' || job.status === 'in_progress') && !job.serviceType?.toLowerCase().includes('quote') && !job.serviceType?.toLowerCase().includes('lead');
-                          case 'unscheduled': return !job.assignedTeam?.length && !job.teamId && !job.staffId;
-                          case 'in_progress': return job.status === 'in_progress' || job.status === 'scheduled';
-                          case 'completed': return job.status === 'completed' || job.status === 'cancelled';
-                          default: return true;
-                        }
-                      }).length;
-                      
-                      return (
-                        <SelectItem key={option.value} value={option.value} data-testid={`filter-option-${option.value}`}>
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex items-center gap-2">
-                              <IconComponent className="h-4 w-4" />
-                              <span>{option.label}</span>
-                            </div>
-                            {filteredCount > 0 && (
-                              <Badge variant="secondary" className="ml-2 text-xs">
-                                {filteredCount}
-                              </Badge>
-                            )}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+            <CardContent className="flex-1 overflow-y-auto p-0">
+              {/* Job Cards */}
+              <div className="space-y-0 overflow-x-hidden w-full max-w-full">
+                {getTodaysJobs().map((job, index) => {
+                const customerName = job.customerName || 'Unknown Customer';
                 
-                {/* Job Search Field */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder={isDeepSearchActive ? "Deep search results..." : "Search by customer, job #, address..."}
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        if (!isDeepSearchActive) {
-                          // Normal search - let the regular filtering handle it
-                        }
-                      }}
-                      className="pl-10 bg-white"
-                      data-testid="job-search-input"
-                    />
-                    {isDeepSearchActive && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 px-2"
-                        onClick={() => {
-                          setIsDeepSearchActive(false);
-                          setDeepSearchResults([]);
-                          setSearchQuery('');
-                        }}
-                        data-testid="btn-clear-deep-search"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {/* Deep Search Button - Always visible */}
-                  <Button
-                    size="sm"
-                    variant={isDeepSearchActive ? "default" : "outline"}
-                    className="w-full"
-                    onClick={() => {
-                      if (isDeepSearchActive) {
-                        // Clear deep search
-                        setIsDeepSearchActive(false);
-                        setDeepSearchResults([]);
-                        setSearchQuery('');
-                      } else {
-                        // Perform deep search with current query or show all jobs
-                        const query = searchQuery.trim() || '';
-                        if (query) {
-                          performDeepSearch(query);
-                        } else {
-                          // Show all jobs if no search query
-                          setIsDeepSearchActive(true);
-                          setDeepSearchResults(jobs.sort((a, b) => {
-                            const jobNumberA = parseInt(a.jobNumber || '0', 10);
-                            const jobNumberB = parseInt(b.jobNumber || '0', 10);
-                            return jobNumberB - jobNumberA;
-                          }));
-                        }
-                      }
-                    }}
-                    data-testid="btn-deep-search-toggle"
+                return (
+                  <div
+                    key={job.id}
+                    className="p-2 border-b hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
+                    onClick={() => handleEditJob(job)}
+                    data-testid={`desktop-job-card-${job.id}`}
                   >
-                    <Search className="h-3 w-3 mr-2" />
-                    {isDeepSearchActive ? "Clear Search" : "Search All Jobs"}
-                  </Button>
-                  
-                  {/* Conditional Deep Search Button for specific query */}
-                  {searchQuery.trim() && !isDeepSearchActive && (
+                    <div className="flex items-start gap-2">
+                      {/* Status Avatar Circle with Activity Indicator */}
+                      <div className="relative flex-shrink-0">
+                        <div 
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-[18px]"
+                          style={{ backgroundColor: getJobStatusColorValue(job) }}
+                        >
+                          {getStatusInitials(job)}
+                        </div>
+                        {hasRecentActivity(job) && (
+                          <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border border-white animate-pulse" 
+                               title="Recent activity"
+                               data-testid={`activity-indicator-${job.id}`} />
+                        )}
+                      </div>
+                      
+                      {/* Job Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-0.5">
+                          <div className="flex-1 min-w-0 pr-2">
+                            <h3 className="font-semibold text-gray-900 text-sm truncate" data-testid={`desktop-job-customer-${job.id}`}>
+                              {customerName}
+                            </h3>
+                            <div className="text-[11px] text-gray-500 truncate">
+                              #{job.jobId || '0000'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-[11px] text-gray-600 mb-1 truncate">
+                          {job.address || 'No address specified'}
+                        </div>
+
+                        
+                        {/* Status, Time, and Priority */}
+                        <div className="flex items-center gap-2 text-[11px]">
+                          {job.startTime && !job.startTime.includes('0000-00-00') && (
+                            <span className="text-gray-500">{job.startTime}</span>
+                          )}
+                          {(() => {
+                            if (job.status === 'quote') {
+                              return (
+                                <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] px-1.5 py-0">
+                                  quote
+                                </Badge>
+                              );
+                            } else if (job.status === 'lead') {
+                              return (
+                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-[10px] px-1.5 py-0">
+                                  lead
+                                </Badge>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              
+                {/* Empty State */}
+                {getTodaysJobs().length === 0 && (
+                  <div className="p-8 text-center text-gray-500">
+                    <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">No jobs scheduled for this date</p>
                     <Button
                       size="sm"
-                      variant="secondary"
-                      className="w-full"
-                      onClick={() => performDeepSearch(searchQuery)}
-                      data-testid="btn-deep-search"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={handleCreateJob}
                     >
-                      <Search className="h-3 w-3 mr-2" />
-                      Search "{searchQuery.slice(0, 20)}{searchQuery.length > 20 ? '...' : ''}"
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create First Job
                     </Button>
-                  )}
-                  
-                  {/* Deep Search Status */}
-                  {isDeepSearchActive && (
-                    <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                      <SearchX className="h-3 w-3" />
-                      Deep search: {deepSearchResults.length} total jobs found
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-
-              {/* ServiceM8 Style Job List */}
-              <div className="flex-1 overflow-y-scroll" style={{ maxHeight: '500px' }}>
-                <div className="relative">
-                  {/* Timeline Line */}
-                  <div className="absolute left-14 top-0 bottom-0 w-px bg-blue-200 z-0" />
-                  
-                  <div className="space-y-0">
-                    {getTodaysJobs().map((job, index) => {
-                      // Get customer from the jobs data or create a display name
-                      const customerName = job.customerName || 'Unknown Customer';
-                      
-                      return (
-                        <div
-                          key={job.id}
-                          className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                          onClick={() => handleEditJob(job)}
-                          data-testid={`servicem8-job-card-${job.id}`}
-                        >
-                          {/* Connection Line Dot */}
-                          <div className="absolute left-14 top-6 w-2 h-2 bg-blue-400 rounded-full border-2 border-white z-10" />
-                          
-                          <div className="flex items-start gap-3 p-3 pl-6">
-                            {/* Status Avatar with Activity Indicator */}
-                            <div className="relative flex-shrink-0">
-                              <div 
-                                className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px] relative z-10"
-                                style={{ backgroundColor: getJobStatusColorValue(job) }}
-                              >
-                                {getStatusInitials(job)}
-                              </div>
-                              {hasRecentActivity(job) && (
-                                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse z-20" 
-                                     title="Recent activity"
-                                     data-testid={`activity-indicator-desktop-${job.id}`} />
-                              )}
-                            </div>
-                            
-                            {/* Job Content */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between mb-1">
-                                <div>
-                                  <h3 className="font-bold text-gray-900 text-sm mb-1" data-testid={`servicem8-job-customer-${job.id}`}>
-                                    {customerName}
-                                  </h3>
-                                  <div className="text-xs text-gray-600 mb-1 font-semibold">
-                                    {job.address || 'No address specified'}
-                                  </div>
-                                  {/* Job date info */}
-                                  <div className="text-xs text-gray-500">
-                                    {(() => {
-                                      if (!job.startTime) return format(selectedDate, 'MMM dd, yyyy');
-                                      const jobDate = new Date(job.startTime);
-                                      return !isNaN(jobDate.getTime()) 
-                                        ? format(jobDate, 'MMM dd, yyyy')
-                                        : format(selectedDate, 'MMM dd, yyyy');
-                                    })()}
-                                  </div>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  <div className="text-xs font-medium text-gray-500 mb-1" data-testid={`servicem8-job-number-${job.id}`}>
-                                    #{job.jobId || '0000'}
-                                  </div>
-                                  {/* Status Indicator */}
-                                  <div className="flex items-center justify-end gap-1">
-                                    {job.status === 'completed' && (
-                                      <div className="w-2 h-2 bg-green-500 rounded-full" />
-                                    )}
-                                    {job.status === 'in_progress' && (
-                                      <div className="w-2 h-2 bg-yellow-500 rounded-full" />
-                                    )}
-                                    {job.status === 'scheduled' && (
-                                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                                    )}
-                                    {job.priority === 'urgent' && (
-                                      <div className="w-2 h-2 bg-red-500 rounded-full" />
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {/* Job Description */}
-                              <div 
-                                className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2" 
-                                data-testid={`servicem8-job-description-${job.id}`}
-                              >
-                                {(() => {
-                                  // Try job.description first (API field), then job.notes (fallback)
-                                  const rawDescription = job.description || job.notes;
-                                  
-                                  // Handle null/empty descriptions
-                                  if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
-                                    // For quote/lead jobs, provide contextual message
-                                    if (job.status === 'lead') {
-                                      return 'New lead - details pending';
-                                    }
-                                    if (job.status === 'quote' || job.status === 'quoted') {
-                                      return 'Quote request - description to be added';
-                                    }
-                                    return job.serviceType || 'Description to be added';
-                                  }
-                                  
-                                  // Filter out placeholder dates
-                                  if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
-                                    return job.serviceType || 'Description to be added';
-                                  }
-                                  
-                                  return rawDescription;
-                                })()
-                                }
-                              </div>
-                              
-                              {/* Status and Priority */}
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  {(() => {
-                                    const statusFormatted = job.status === 'work order' ? 'Work Order' : 
-                                                            job.status === 'completed' ? 'Completed' :
-                                                            job.status === 'scheduled' ? 'Scheduled' :
-                                                            job.status === 'unsuccessful' ? 'Unsuccessful' :
-                                                            job.status;
-
-                                    if (job.status === 'quote') {
-                                      return (
-                                        <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs">
-                                          quote
-                                        </Badge>
-                                      );
-                                    } else if (job.status === 'lead') {
-                                      return (
-                                        <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
-                                          lead
-                                        </Badge>
-                                      );
-                                    } else {
-                                      return (
-                                        <span className="text-xs text-gray-500">{statusFormatted}</span>
-                                      );
-                                    }
-                                  })()}
-                                </div>
-                                <span className="text-xs text-gray-500">{job.priority}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    
-                    {/* Empty State */}
-                    {getTodaysJobs().length === 0 && (
-                      <div className="p-8 text-center text-gray-500">
-                        <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                        <p className="text-sm">No jobs scheduled for this date</p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mt-3"
-                          onClick={handleCreateJob}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Create First Job
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Mobile Jobs List - Direct Display */}
-          <div className="md:hidden space-y-3 overflow-x-hidden w-full max-w-full">
-            {/* Unscheduled Jobs Section - Mobile */}
-            {(() => {
-              const unscheduledJobs = getTodaysJobs().filter((job: any) => 
-                job.status === 'quote' || job.status === 'lead' || !job.startTime || job.startTime.includes('0000-00-00')
-              );
-              
-              if (unscheduledJobs.length === 0) return null;
-              
-              return (
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-purple-500" />
-                      <h3 className="font-semibold text-sm">Unscheduled Jobs</h3>
-                      <Badge variant="secondary" className="text-xs" data-testid="unscheduled-jobs-count-mobile">
-                        {unscheduledJobs.length}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {unscheduledJobs.map((job) => (
-                      <div
-                        key={`unscheduled-${job.id}`}
-                        className="p-3 border border-purple-200 rounded-lg bg-purple-50/50 hover:bg-purple-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
-                        onClick={() => handleEditJob(job)}
-                        data-testid={`mobile-unscheduled-job-${job.id}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="relative flex-shrink-0">
-                            <div 
-                              className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px]"
-                              style={{ backgroundColor: getJobStatusColorValue(job) }}
-                            >
-                              {getStatusInitials(job)}
-                            </div>
-                            {hasRecentActivity(job) && (
-                              <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse" 
-                                   title="Recent activity"
-                                   data-testid={`activity-indicator-unscheduled-${job.id}`} />
-                            )}
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between mb-1">
-                              <h3 className="font-bold text-gray-900 text-base mb-1">
-                                {job.customerName}
-                              </h3>
-                              <div className="text-xs font-medium text-gray-500">
-                                #{(job as any).jobNumber || job.jobId}
-                              </div>
-                            </div>
-                            
-                            <div className="text-xs text-gray-600 mb-1 font-semibold">
-                              {job.address || 'No address'}
-                            </div>
-                            
-                            {/* Job Description */}
-                            <div 
-                              className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2"
-                            >
-                              {(() => {
-                                const rawDescription = job.description || job.notes;
-                                
-                                if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
-                                  if (job.status === 'lead') {
-                                    return 'New lead - details pending';
-                                  }
-                                  if (job.status === 'quote' || job.status === 'quoted') {
-                                    return 'Quote request - description to be added';
-                                  }
-                                  return job.serviceType || 'Description to be added';
-                                }
-                                
-                                if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
-                                  return job.serviceType || 'Description to be added';
-                                }
-                                
-                                return rawDescription;
-                              })()}
-                            </div>
-                            
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                {(() => {
-                                  const statusFormatted = job.status === 'work order' ? 'Work Order' : 
-                                                          job.status === 'completed' ? 'Completed' :
-                                                          job.status === 'scheduled' ? 'Scheduled' :
-                                                          job.status === 'unsuccessful' ? 'Unsuccessful' :
-                                                          job.status;
-
-                                  if (job.status === 'quote') {
-                                    return (
-                                      <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs">
-                                        quote
-                                      </Badge>
-                                    );
-                                  } else if (job.status === 'lead') {
-                                    return (
-                                      <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
-                                        lead
-                                      </Badge>
-                                    );
-                                  } else {
-                                    return (
-                                      <span className="text-xs text-gray-500">{statusFormatted}</span>
-                                    );
-                                  }
-                                })()}
-                              </div>
-                              <span className="text-xs text-gray-500">{job.priority}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="border-t my-4"></div>
-                </div>
-              );
-            })()}
-            
-            {/* Job Cards */}
-            <div className="space-y-0 overflow-x-hidden w-full max-w-full">
-              {getTodaysJobs().map((job, index) => {
-              const customerName = job.customerName || 'Unknown Customer';
-              
-              return (
-                <div
-                  key={job.id}
-                  className="p-2 border-b hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
-                  onClick={() => handleEditJob(job)}
-                  data-testid={`mobile-job-card-${job.id}`}
-                >
-                  <div className="flex items-start gap-2">
-                    {/* Status Avatar Circle with Activity Indicator */}
-                    <div className="relative flex-shrink-0">
-                      <div 
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-[18px]"
-                        style={{ backgroundColor: getJobStatusColorValue(job) }}
-                      >
-                        {getStatusInitials(job)}
-                      </div>
-                      {hasRecentActivity(job) && (
-                        <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border border-white animate-pulse" 
-                             title="Recent activity"
-                             data-testid={`activity-indicator-${job.id}`} />
-                      )}
-                    </div>
-                    
-                    {/* Job Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-0.5">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <h3 className="font-semibold text-gray-900 text-sm truncate" data-testid={`mobile-job-customer-${job.id}`}>
-                            {customerName}
-                          </h3>
-                          <div className="text-[11px] text-gray-500 truncate">
-                            #{job.jobId || '0000'}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-[11px] text-gray-600 mb-1 truncate">
-                        {job.address || 'No address specified'}
-                      </div>
-
-                      
-                      {/* Status, Time, and Priority */}
-                      <div className="flex items-center gap-2 text-[11px]">
-                        {job.startTime && !job.startTime.includes('0000-00-00') && (
-                          <span className="text-gray-500">{job.startTime}</span>
-                        )}
-                        {(() => {
-                          if (job.status === 'quote') {
-                            return (
-                              <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] px-1.5 py-0">
-                                quote
-                              </Badge>
-                            );
-                          } else if (job.status === 'lead') {
-                            return (
-                              <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-[10px] px-1.5 py-0">
-                                lead
-                              </Badge>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            
-              {/* Empty State for Mobile */}
-              {getTodaysJobs().length === 0 && (
-                <div className="p-8 text-center text-gray-500">
-                  <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm">No jobs scheduled for this date</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-3"
-                    onClick={handleCreateJob}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create First Job
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
+            </CardContent>
           </Card>
         </div>
       </div>
@@ -2240,8 +1563,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 </div>
               );
             })}
-            
-            {/* Empty State for Mobile */}
+
+            {/* Empty State */}
             {getTodaysJobs().length === 0 && (
               <div className="p-8 text-center text-gray-500">
                 <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
@@ -2261,620 +1584,125 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </CardContent>
       </Card>
 
-      {/* Unscheduled Jobs Section */}
-      {(() => {
-        const unscheduledJobs = getTodaysJobs().filter((job: any) => 
-          job.status === 'quote' || job.status === 'lead' || !job.startTime || job.startTime.includes('0000-00-00')
-        );
-        
-        if (unscheduledJobs.length === 0) return null;
-        
-        return (
-          <Card data-testid="unscheduled-jobs-section">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-purple-500" />
-                  <span>Unscheduled Jobs</span>
-                  <Badge variant="secondary" data-testid="unscheduled-jobs-count">
-                    {unscheduledJobs.length}
-                  </Badge>
+      {/* Unscheduled Jobs Section - Global */}
+      <Card className="overflow-x-hidden">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Clipboard className="h-5 w-5" />
+              Unscheduled Jobs <Badge variant="secondary" className="ml-2">{getUnscheduledJobs().length}</Badge>
+            </CardTitle>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleCreateJob}
+              data-testid="create-job-unscheduled"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Job
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-0">
+            {getUnscheduledJobs().map((job: any) => {
+              const customerName = job.customerName || 'Unknown Customer';
+              
+              return (
+                <div
+                  key={job.id}
+                  className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => handleEditJob(job)}
+                  data-testid={`unscheduled-job-card-${job.id}`}
+                >
+                  <div className="flex items-start gap-3 p-3">
+                    {/* Status Avatar with Activity Indicator */}
+                    <div className="relative flex-shrink-0">
+                      <div 
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px] relative z-10"
+                        style={{ backgroundColor: getJobStatusColorValue(job) }}
+                      >
+                        {getStatusInitials(job)}
+                      </div>
+                      {hasRecentActivity(job) && (
+                        <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse z-20" 
+                             title="Recent activity"
+                             data-testid={`activity-indicator-unscheduled-${job.id}`} />
+                      )}
+                    </div>
+                    
+                    {/* Job Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-1">
+                        <div>
+                          <h3 className="font-bold text-gray-900 text-base mb-1">
+                            {customerName}
+                          </h3>
+                          <div className="text-xs text-gray-600 mb-1 font-semibold">
+                            {job.address || 'No address specified'}
+                          </div>
+                          {job.description && (
+                            <div className="text-xs text-gray-500 mb-2 line-clamp-2">
+                              {job.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
+                        {job.serviceType && <span>{job.serviceType}</span>}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const statusFormatted = job.status?.charAt(0).toUpperCase() + job.status?.slice(1);
+                            if (job.status === 'quote') {
+                              return (
+                                <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs">
+                                  quote
+                                </Badge>
+                              );
+                            } else if (job.status === 'lead') {
+                              return (
+                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
+                                  lead
+                                </Badge>
+                              );
+                            } else {
+                              return (
+                                <span className="text-xs text-gray-500">{statusFormatted}</span>
+                              );
+                            }
+                          })()}
+                        </div>
+                        <span className="text-xs text-gray-500">{job.priority}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              );
+            })}
+
+            {/* Empty State */}
+            {getUnscheduledJobs().length === 0 && (
+              <div className="p-8 text-center text-gray-500">
+                <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm">No unscheduled jobs</p>
                 <Button
                   size="sm"
                   variant="outline"
+                  className="mt-3"
                   onClick={handleCreateJob}
-                  data-testid="create-job-from-unscheduled"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  New Job
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-0">
-                {unscheduledJobs.map((job) => {
-                  const customerName = job.customerName || 'Unknown Customer';
-                  
-                  return (
-                    <div
-                      key={job.id}
-                      className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => handleEditJob(job)}
-                      data-testid={`unscheduled-job-${job.id}`}
-                    >
-                      <div className="flex items-start gap-3 p-3">
-                        {/* Status Avatar with Activity Indicator */}
-                        <div className="relative flex-shrink-0">
-                          <div 
-                            className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px] relative z-10"
-                            style={{ backgroundColor: getJobStatusColorValue(job) }}
-                          >
-                            {getStatusInitials(job)}
-                          </div>
-                          {hasRecentActivity(job) && (
-                            <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse z-20" 
-                                 title="Recent activity"
-                                 data-testid={`activity-indicator-unscheduled-${job.id}`} />
-                          )}
-                        </div>
-                        
-                        {/* Job Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between mb-1">
-                            <div>
-                              <h3 className="font-bold text-gray-900 text-base mb-1">
-                                {customerName}
-                              </h3>
-                              <div className="text-xs text-gray-600 mb-1 font-semibold">
-                                {job.address || 'No address specified'}
-                              </div>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <div className="text-xs font-medium text-gray-500 mb-1">
-                                #{(job as any).jobNumber || job.jobId}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Job Description */}
-                          <div 
-                            className="text-sm text-gray-700 leading-relaxed mb-2 line-clamp-2"
-                          >
-                            {(() => {
-                              const rawDescription = job.description || job.notes;
-                              
-                              if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
-                                if (job.status === 'lead') {
-                                  return 'New lead - details pending';
-                                }
-                                if (job.status === 'quote' || job.status === 'quoted') {
-                                  return 'Quote request - description to be added';
-                                }
-                                return job.serviceType || 'Description to be added';
-                              }
-                              
-                              if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
-                                return job.serviceType || 'Description to be added';
-                              }
-                              
-                              return rawDescription;
-                            })()}
-                          </div>
-                          
-                          {/* Status and Priority */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {(() => {
-                                const statusFormatted = job.status === 'work order' ? 'Work Order' : 
-                                                        job.status === 'completed' ? 'Completed' :
-                                                        job.status === 'scheduled' ? 'Scheduled' :
-                                                        job.status === 'unsuccessful' ? 'Unsuccessful' :
-                                                        job.status;
-
-                                if (job.status === 'quote') {
-                                  return (
-                                    <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs" data-testid={`job-status-${job.id}`}>
-                                      quote
-                                    </Badge>
-                                  );
-                                } else if (job.status === 'lead') {
-                                  return (
-                                    <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs" data-testid={`job-status-${job.id}`}>
-                                      lead
-                                    </Badge>
-                                  );
-                                } else {
-                                  return (
-                                    <span className="text-xs text-gray-500" data-testid={`job-status-${job.id}`}>{statusFormatted}</span>
-                                  );
-                                }
-                              })()}
-                            </div>
-                            <span className="text-xs text-gray-500">{job.priority}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })()}
-
-      {/* Global Job Card */}
-      <GlobalJobCard 
-        isOpen={showGlobalJobCard}
-        mode={globalJobCardMode}
-        jobId={jobToEdit?.id || undefined}
-        customerId={jobToEdit?.customerId}
-        onClose={() => {
-          setShowGlobalJobCard(false);
-          setJobToEdit(null);
-          setGlobalJobCardMode('create');
-        }}
-        onJobCreated={(job) => {
-          // Refresh jobs data after creation/update
-          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-          toast({
-            title: globalJobCardMode === 'edit' ? "Job Updated" : "Job Created",
-            description: `${job.title} has been ${globalJobCardMode === 'edit' ? 'updated' : 'added to'} the dispatch board.`,
-          });
-        }}
-        onJobUpdated={(job) => {
-          // Refresh jobs data after update
-          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-          toast({
-            title: "Job Updated",
-            description: `${job.title} has been updated successfully.`,
-          });
-        }}
-      />
-
-      {/* Job Creation Modal */}
-      {showJobCreationModal && (
-        <Dialog open={showJobCreationModal} onOpenChange={setShowJobCreationModal}>
-          <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Plus className="h-5 w-5 text-primary" />
-                Create New Job
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              {/* Template Selection */}
-              <div>
-                <h4 className="font-semibold text-sm mb-3">Job Template (Optional)</h4>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Select Template to Auto-Fill Details
-                  </label>
-                  <Select 
-                    value={selectedTemplate} 
-                    onValueChange={handleTemplateSelection}
-                  >
-                    <SelectTrigger data-testid="select-template">
-                      <SelectValue placeholder="Choose a job template..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">
-                        <div className="flex items-center gap-2">
-                          <X className="w-4 h-4" />
-                          No Template
-                        </div>
-                      </SelectItem>
-                      {templates.map((template: JobTemplate) => (
-                        <SelectItem key={template.id} value={template.id}>
-                          <div className="flex items-center gap-2">
-                            <div className="flex flex-col">
-                              <span className="font-medium">{template.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {template.category} • {template.estimatedDuration}h • ${template.basePrice}
-                              </span>
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedTemplate && (
-                    <div className="mt-2 p-2 bg-blue-50 rounded-md">
-                      <div className="text-xs text-blue-700">
-                        ✓ Template applied! You can still modify any field below.
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Customer Information */}
-              <div>
-                <h4 className="font-semibold text-sm mb-3">Customer Information</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Customer Name *
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border rounded-md text-sm"
-                      placeholder="Enter customer name"
-                      value={newJobFormData.customerName}
-                      onChange={(e) => setNewJobFormData(prev => ({ ...prev, customerName: e.target.value }))}
-                      data-testid="input-customer-name"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      className="w-full px-3 py-2 border rounded-md text-sm"
-                      placeholder="(555) 123-4567"
-                      value={newJobFormData.customerPhone}
-                      onChange={(e) => setNewJobFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
-                      data-testid="input-customer-phone"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Service Address *
-                    </label>
-                    <AddressAutocomplete
-                      value={newJobFormData.address}
-                      onChange={(value) => setNewJobFormData(prev => ({ ...prev, address: value }))}
-                      placeholder="123 Main St, City"
-                      mode="full"
-                      className="text-sm"
-                      data-testid="input-address"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Job Details */}
-              <div>
-                <h4 className="font-semibold text-sm mb-3">Job Details</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Service Type *
-                    </label>
-                    <Select 
-                      value={newJobFormData.serviceType} 
-                      onValueChange={(value) => setNewJobFormData(prev => ({ ...prev, serviceType: value }))}
-                    >
-                      <SelectTrigger data-testid="select-service-type">
-                        <SelectValue placeholder="Select service type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Tree Removal">Tree Removal</SelectItem>
-                        <SelectItem value="Tree Pruning">Tree Pruning</SelectItem>
-                        <SelectItem value="Emergency Removal">Emergency Removal</SelectItem>
-                        <SelectItem value="Stump Grinding">Stump Grinding</SelectItem>
-                        <SelectItem value="Equipment Setup">Equipment Setup</SelectItem>
-                        <SelectItem value="Quote">Site Quote</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                        Start Time *
-                      </label>
-                      <input
-                        type="time"
-                        className="w-full px-3 py-2 border rounded-md text-sm"
-                        value={newJobFormData.startTime}
-                        onChange={(e) => setNewJobFormData(prev => ({ ...prev, startTime: e.target.value }))}
-                        data-testid="input-start-time"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                        End Time *
-                      </label>
-                      <input
-                        type="time"
-                        className="w-full px-3 py-2 border rounded-md text-sm"
-                        value={newJobFormData.endTime}
-                        onChange={(e) => setNewJobFormData(prev => ({ ...prev, endTime: e.target.value }))}
-                        data-testid="input-end-time"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Priority
-                    </label>
-                    <Select 
-                      value={newJobFormData.priority} 
-                      onValueChange={(value: JobAssignment['priority']) => setNewJobFormData(prev => ({ ...prev, priority: value }))}
-                    >
-                      <SelectTrigger data-testid="select-priority">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-green-500" />
-                            Low
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="medium">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                            Medium
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="high">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-orange-500" />
-                            High
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="urgent">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-red-500" />
-                            Urgent
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Assignment */}
-              <div>
-                <h4 className="font-semibold text-sm mb-3">
-                  {assignmentMode === 'teams' ? 'Team Assignment' : 'Staff Assignment'}
-                </h4>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    {assignmentMode === 'teams' ? 'Assign to Team' : 'Assign to Staff'}
-                  </label>
-                  <Select 
-                    value={newJobFormData.assignedTo} 
-                    onValueChange={(value) => setNewJobFormData(prev => ({ ...prev, assignedTo: value }))}
-                  >
-                    <SelectTrigger data-testid="select-assignment">
-                      <SelectValue placeholder={`Select ${assignmentMode === 'teams' ? 'team' : 'staff member'}`} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assignmentMode === 'teams' ? (
-                        mockTeams.map(team => (
-                          <SelectItem key={team.id} value={team.id}>
-                            <div className="flex items-center gap-2">
-                              <div className={`w-3 h-3 rounded-full ${team.color}`} />
-                              {team.name}
-                              <Badge variant="outline" className="text-xs ml-2">
-                                {getTeamMembers(team.id).length} members
-                              </Badge>
-                            </div>
-                          </SelectItem>
-                        ))
-                      ) : (
-                        staffMembers.map((staff: StaffMember) => (
-                          <SelectItem key={staff.id} value={staff.id}>
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-5 w-5">
-                                <AvatarFallback className={`${staff.color} text-white text-xs`}>
-                                  {staff.name.split(' ').map(n => n[0]).join('')}
-                                </AvatarFallback>
-                              </Avatar>
-                              {staff.name}
-                              <span className="text-xs text-muted-foreground ml-2">
-                                {staff.role}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Notes (Optional)
-                </label>
-                <textarea
-                  className="w-full px-3 py-2 border rounded-md text-sm resize-none"
-                  rows={3}
-                  placeholder="Add any special instructions or notes..."
-                  value={newJobFormData.notes}
-                  onChange={(e) => setNewJobFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  data-testid="textarea-notes"
-                />
-              </div>
-
-              {/* Form Actions */}
-              <div className="flex gap-2 pt-2">
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => {
-                    setShowJobCreationModal(false);
-                    setNewJobFormData({
-                      customerName: '',
-                      customerPhone: '',
-                      address: '',
-                      serviceType: '',
-                      startTime: '',
-                      endTime: '',
-                      priority: 'medium',
-                      notes: '',
-                      assignedTo: ''
-                    });
-                  }}
-                  data-testid="btn-cancel-job"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  className="flex-1"
-                  onClick={createNewJob}
-                  disabled={!newJobFormData.customerName || !newJobFormData.customerPhone || !newJobFormData.address || !newJobFormData.serviceType || !newJobFormData.startTime || !newJobFormData.endTime || !newJobFormData.assignedTo}
-                  data-testid="btn-create-job"
-                >
-                  Create Job
+                  Create First Job
                 </Button>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Job Scheduling Modal */}
-      {showSchedulingModal && jobToSchedule && (
-        <Dialog open={showSchedulingModal} onOpenChange={setShowSchedulingModal}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
-                Schedule Job #{jobToSchedule.jobId}
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              {/* Job Info */}
-              <div className="bg-orange-50 p-3 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className={`w-2 h-2 rounded-full ${getPriorityColor(jobToSchedule.priority)}`} />
-                  <span className="font-medium">{jobToSchedule.customerName}</span>
-                </div>
-                <p className="text-sm text-muted-foreground">{jobToSchedule.serviceType}</p>
-                <p className="text-xs text-muted-foreground">{jobToSchedule.address}</p>
-              </div>
-
-              {/* Scheduling Form */}
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="schedule-date">Date</Label>
-                  <Input
-                    id="schedule-date"
-                    type="date"
-                    value={schedulingData.date}
-                    onChange={(e) => setSchedulingData(prev => ({ ...prev, date: e.target.value }))}
-                    data-testid="input-schedule-date"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="schedule-start-time">Start Time</Label>
-                    <Input
-                      id="schedule-start-time"
-                      type="time"
-                      value={schedulingData.startTime}
-                      onChange={(e) => setSchedulingData(prev => ({ ...prev, startTime: e.target.value }))}
-                      data-testid="input-schedule-start-time"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="schedule-end-time">End Time</Label>
-                    <Input
-                      id="schedule-end-time"
-                      type="time"
-                      value={schedulingData.endTime}
-                      onChange={(e) => setSchedulingData(prev => ({ ...prev, endTime: e.target.value }))}
-                      data-testid="input-schedule-end-time"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="schedule-assignment">
-                    {assignmentMode === 'teams' ? 'Assign to Team' : 'Assign to Staff'}
-                  </Label>
-                  <Select 
-                    value={schedulingData.assignedTo} 
-                    onValueChange={(value) => setSchedulingData(prev => ({ ...prev, assignedTo: value }))}
-                  >
-                    <SelectTrigger data-testid="select-schedule-assignment">
-                      <SelectValue placeholder={`Select ${assignmentMode === 'teams' ? 'team' : 'staff member'}`} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assignmentMode === 'teams' ? (
-                        mockTeams.map(team => (
-                          <SelectItem key={team.id} value={team.id}>
-                            <div className="flex items-center gap-2">
-                              <div className={`w-3 h-3 rounded-full ${team.color}`} />
-                              {team.name}
-                              <Badge variant="outline" className="text-xs ml-2">
-                                {getTeamMembers(team.id).length} members
-                              </Badge>
-                            </div>
-                          </SelectItem>
-                        ))
-                      ) : (
-                        staffMembers.map((staff: StaffMember) => (
-                          <SelectItem key={staff.id} value={staff.id}>
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-5 w-5">
-                                <AvatarFallback className={`${staff.color} text-white text-xs`}>
-                                  {staff.name.split(' ').map(n => n[0]).join('')}
-                                </AvatarFallback>
-                              </Avatar>
-                              {staff.name}
-                              <span className="text-xs text-muted-foreground ml-2">
-                                {staff.role}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="schedule-notes">Notes (Optional)</Label>
-                  <Textarea
-                    id="schedule-notes"
-                    placeholder="Add any scheduling notes..."
-                    value={schedulingData.notes}
-                    onChange={(e) => setSchedulingData(prev => ({ ...prev, notes: e.target.value }))}
-                    rows={3}
-                    data-testid="textarea-schedule-notes"
-                  />
-                </div>
-              </div>
-
-              {/* Form Actions */}
-              <div className="flex gap-2 pt-2">
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => {
-                    setShowSchedulingModal(false);
-                    setJobToSchedule(null);
-                  }}
-                  data-testid="btn-cancel-schedule"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  className="flex-1"
-                  onClick={saveSchedule}
-                  disabled={!schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || !schedulingData.assignedTo || updateJobMutation.isPending}
-                  data-testid="btn-save-schedule"
-                >
-                  <Clock className="h-4 w-4 mr-1" />
-                  {updateJobMutation.isPending ? 'Scheduling...' : 'Schedule Job'}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
