@@ -277,7 +277,11 @@
     @apply border-border;
   }
 
-  html, body {
+  html {
+    height: 100vh;
+  }
+
+  body {
     height: 100%;
     overflow: auto;
   }
