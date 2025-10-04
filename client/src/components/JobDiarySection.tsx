@@ -567,7 +567,7 @@ export function JobDiarySection({
   };
 
   return (
-    <PullToRefresh onRefresh={handleRefresh} enabled={true}>
+    <PullToRefresh onRefresh={handleRefresh} enabled={false}>
       <div className={`h-full flex flex-col ${className}`}>
         {/* Header */}
         <div className="flex-shrink-0 p-2 border-b bg-gray-50 dark:bg-gray-900">
