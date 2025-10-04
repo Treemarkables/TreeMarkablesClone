@@ -282,21 +282,6 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
   
-  /* Force unlimited height and enable scrolling */
-  html, body {
-    height: auto !important;
-    min-height: 100vh !important;
-    max-height: none !important;
-    overflow-y: scroll !important;
-    overflow-x: hidden !important;
-    -webkit-overflow-scrolling: touch !important;
-    position: static !important;
-  }
-  
-  #root {
-    min-height: 100vh !important;
-    height: auto !important;
-  }
 }
 
 /**
