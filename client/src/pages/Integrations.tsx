@@ -173,6 +173,11 @@ export default function Integrations() {
   const { data: googleCalendarStatus } = useQuery({
     queryKey: ['/api/google-calendar/status'],
   });
+
+  // Get Gmail status
+  const { data: gmailStatus } = useQuery({
+    queryKey: ['/api/gmail/status'],
+  });
   
   // Connect to Xero mutation (Custom Connection)
   const connectMutation = useMutation({
@@ -216,7 +221,7 @@ export default function Integrations() {
     },
   });
   
-  // Build integrations list with real Xero, Facebook, and Google Calendar status
+  // Build integrations list with real Xero, Facebook, Gmail, and Google Calendar status
   const integrations = availableIntegrations.map(integration => {
     if (integration.id === 'xero' && xeroStatus?.connected) {
       return {
@@ -233,6 +238,14 @@ export default function Integrations() {
         status: 'connected' as const,
         isEnabled: true,
         pageName: facebookStatus.pageName,
+      };
+    }
+    if (integration.id === 'gmail' && gmailStatus?.connected) {
+      return {
+        ...integration,
+        status: 'connected' as const,
+        isEnabled: true,
+        email: gmailStatus.email,
       };
     }
     if (integration.id === 'google-calendar' && googleCalendarStatus?.connected) {
@@ -296,6 +309,9 @@ export default function Integrations() {
   
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['/api/xero/status'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/gmail/status'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/facebook/status'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/google-calendar/status'] });
   };
 
   if (isLoading) {
@@ -405,9 +421,9 @@ export default function Integrations() {
                             <StatusIcon className="h-3 w-3 mr-1" />
                             {integration.status.charAt(0).toUpperCase() + integration.status.slice(1)}
                           </Badge>
-                          {(integration.tenantName || integration.pageName || integration.calendarEmail) && (
+                          {(integration.tenantName || integration.pageName || integration.calendarEmail || (integration as any).email) && (
                             <span className="text-xs text-gray-500">
-                              {integration.tenantName || integration.pageName || integration.calendarEmail}
+                              {integration.tenantName || integration.pageName || integration.calendarEmail || (integration as any).email}
                             </span>
                           )}
                         </div>
