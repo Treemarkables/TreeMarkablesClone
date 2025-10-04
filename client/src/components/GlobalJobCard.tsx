@@ -2187,6 +2187,9 @@ export function GlobalJobCard({
                                     readOnly
                                     className="min-h-[90px] text-base font-medium cursor-pointer" 
                                     placeholder="Describe the work that needs to be done"
+                                    onTouchStart={() => {
+                                      setDescriptionPopupOpen(true);
+                                    }}
                                     onClick={() => {
                                       setDescriptionPopupOpen(true);
                                     }}
