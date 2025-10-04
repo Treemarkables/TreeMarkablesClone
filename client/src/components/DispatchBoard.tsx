@@ -2137,103 +2137,114 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {unscheduledJobs.map((job) => (
-                  <div
-                    key={job.id}
-                    className="border rounded-lg p-3 hover-elevate cursor-pointer"
-                    onClick={() => setSelectedJob(job)}
-                    data-testid={`unscheduled-job-${job.id}`}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <CustomerAvatar
-                          customerName={job.customerName}
-                          size="sm"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">
-                            {job.customerName}
+              <div className="space-y-0">
+                {unscheduledJobs.map((job) => {
+                  const customerName = job.customerName || 'Unknown Customer';
+                  
+                  return (
+                    <div
+                      key={job.id}
+                      className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => handleEditJob(job)}
+                      data-testid={`unscheduled-job-${job.id}`}
+                    >
+                      <div className="flex items-start gap-3 p-3">
+                        {/* Status Avatar with Activity Indicator */}
+                        <div className="relative flex-shrink-0">
+                          <div 
+                            className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px] relative z-10"
+                            style={{ backgroundColor: getJobStatusColorValue(job) }}
+                          >
+                            {getStatusInitials(job)}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            #{(job as any).jobNumber || job.jobId}
+                          {hasRecentActivity(job) && (
+                            <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse z-20" 
+                                 title="Recent activity"
+                                 data-testid={`activity-indicator-unscheduled-${job.id}`} />
+                          )}
+                        </div>
+                        
+                        {/* Job Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between mb-1">
+                            <div>
+                              <h3 className="font-bold text-gray-900 text-sm mb-1">
+                                {customerName}
+                              </h3>
+                              <div className="text-xs text-gray-600 mb-1 font-semibold">
+                                {job.address || 'No address specified'}
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <div className="text-xs font-medium text-gray-500 mb-1">
+                                #{(job as any).jobNumber || job.jobId}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Job Description */}
+                          <div className="text-sm text-gray-700 leading-relaxed mb-2">
+                            {(() => {
+                              const rawDescription = job.description || job.notes;
+                              
+                              if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
+                                if (job.status === 'lead') {
+                                  return 'New lead - details pending';
+                                }
+                                if (job.status === 'quote' || job.status === 'quoted') {
+                                  return 'Quote request - description to be added';
+                                }
+                                return job.serviceType || 'Description to be added';
+                              }
+                              
+                              if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
+                                return job.serviceType || 'Description to be added';
+                              }
+                              
+                              const description = rawDescription.length > 120 
+                                ? `${rawDescription.substring(0, 120)}...`
+                                : rawDescription;
+                              
+                              return description;
+                            })()}
+                          </div>
+                          
+                          {/* Status and Priority */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const statusFormatted = job.status === 'work order' ? 'Work Order' : 
+                                                        job.status === 'completed' ? 'Completed' :
+                                                        job.status === 'scheduled' ? 'Scheduled' :
+                                                        job.status === 'unsuccessful' ? 'Unsuccessful' :
+                                                        job.status;
+
+                                if (job.status === 'quote') {
+                                  return (
+                                    <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs" data-testid={`job-status-${job.id}`}>
+                                      quote
+                                    </Badge>
+                                  );
+                                } else if (job.status === 'lead') {
+                                  return (
+                                    <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs" data-testid={`job-status-${job.id}`}>
+                                      lead
+                                    </Badge>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="text-xs text-gray-500" data-testid={`job-status-${job.id}`}>{statusFormatted}</span>
+                                  );
+                                }
+                              })()}
+                            </div>
+                            <span className="text-xs text-gray-500">{job.priority}</span>
                           </div>
                         </div>
                       </div>
-                      {(() => {
-                        const statusFormatted = job.status === 'work order' ? 'Work Order' : 
-                                                job.status === 'completed' ? 'Completed' :
-                                                job.status === 'scheduled' ? 'Scheduled' :
-                                                job.status === 'unsuccessful' ? 'Unsuccessful' :
-                                                job.status;
-
-                        if (job.status === 'quote') {
-                          return (
-                            <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs" data-testid={`job-status-${job.id}`}>
-                              quote
-                            </Badge>
-                          );
-                        } else if (job.status === 'lead') {
-                          return (
-                            <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs" data-testid={`job-status-${job.id}`}>
-                              lead
-                            </Badge>
-                          );
-                        } else {
-                          return (
-                            <span className="text-xs text-gray-500" data-testid={`job-status-${job.id}`}>{statusFormatted}</span>
-                          );
-                        }
-                      })()}
                     </div>
-                    
-                    <div className="space-y-1 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        <span className="truncate font-semibold">{job.address || 'No address'}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        <span>{job.customerPhone || 'No phone'}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-2 pt-2 border-t">
-                      <div className="text-xs font-medium truncate">
-                        {job.serviceType || (job as any).title || 'No service type'}
-                      </div>
-                    </div>
-                    
-                    <div className="mt-2 flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 text-xs h-7"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleScheduleJob(job);
-                        }}
-                        data-testid={`schedule-job-${job.id}`}
-                      >
-                        <Clock className="h-3 w-3 mr-1" />
-                        Schedule
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 text-xs h-7"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditJob(job);
-                        }}
-                        data-testid={`edit-job-${job.id}`}
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
