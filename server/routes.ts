@@ -1184,49 +1184,38 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         userAgent
       };
 
-      // Save lead information (even if email fails)
-      let savedLead;
+      // Create conversation from contact form directly (bypass legacy lead saving)
       try {
-        savedLead = await storage.saveLead(leadSubmissionData);
-        console.log('Lead information saved successfully');
+        // Create conversation title from message (first 100 chars) or use default
+        const conversationTitle = message.trim().length > 0 
+          ? message.trim().substring(0, 100) + (message.length > 100 ? '...' : '')
+          : `New inquiry from ${name}`;
+
+        const conversation = await storage.createConversation({
+          title: conversationTitle,
+          status: 'open',
+          priority: 'medium',
+          source: 'web_form',
+          tags: ['contact-form', 'website']
+        });
+
+        // Create initial message in the conversation with contact details
+        const fullMessage = `Contact Form Submission\n\nName: ${name}\nEmail: ${email}\nPhone: ${phone || 'Not provided'}\nHow they heard about us: ${hearAbout || 'Not specified'}\n\nMessage:\n${message.trim()}`;
+
+        await storage.createConversationMessage({
+          conversationId: conversation.id,
+          type: 'message',
+          content: fullMessage,
+          direction: 'inbound',
+          fromName: name.trim(),
+          fromContact: email.trim().toLowerCase(),
+          platform: 'web_form'
+        });
+
+        console.log(`✅ Conversation created for contact form submission: ${conversation.id}`);
       } catch (error) {
-        console.error('Error saving lead information:', error);
-        // Continue with email sending even if lead saving fails
-      }
-
-      // Create conversation from contact form
-      if (savedLead) {
-        try {
-          // Create conversation title from message (first 100 chars) or use default
-          const conversationTitle = message.trim().length > 0 
-            ? message.trim().substring(0, 100) + (message.length > 100 ? '...' : '')
-            : `New inquiry from ${name}`;
-
-          const conversation = await storage.createConversation({
-            leadId: savedLead.id,
-            title: conversationTitle,
-            status: 'open',
-            priority: 'medium',
-            source: 'web_form',
-            tags: ['contact-form', 'website']
-          });
-
-          // Create initial message in the conversation
-          await storage.createConversationMessage({
-            conversationId: conversation.id,
-            type: 'message',
-            content: message.trim(),
-            direction: 'inbound',
-            fromName: name.trim(),
-            fromContact: email.trim().toLowerCase(),
-            platform: 'web_form'
-          });
-
-          console.log(`✅ Conversation created for contact form submission: ${conversation.id}`);
-        } catch (error) {
-          console.error('Error creating conversation from contact form:', error);
-          // Continue even if conversation creation fails
-        }
+        console.error('Error creating conversation from contact form:', error);
+        // Continue even if conversation creation fails
       }
 
       // Send webhook notification to Zapier (non-blocking) - TEMPORARILY DISABLED
