@@ -278,8 +278,16 @@
     @apply border-border;
   }
 
+  html {
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y pinch-zoom;
+  }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
