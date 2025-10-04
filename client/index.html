@@ -111,31 +111,26 @@
     </script>
     
     <script>
-      // Diagnostic script to identify scroll blocker
+      // Diagnostic script
       setTimeout(function() {
-        console.log('=== SCROLL DIAGNOSTIC ===');
-        const els = [document.documentElement, document.body, document.getElementById('root')];
-        els.forEach(function(el, i) {
-          if (!el) return;
+        console.log('=== CONTENT DIAGNOSTIC ===');
+        const root = document.getElementById('root');
+        console.log('#root children:', root.children.length);
+        console.log('#root innerHTML length:', root.innerHTML.length);
+        console.log('document.body.scrollHeight:', document.body.scrollHeight);
+        console.log('Can body scroll?:', document.body.scrollHeight > document.body.clientHeight);
+        
+        // Check all divs with min-h-screen
+        const screens = document.querySelectorAll('[class*="min-h-screen"]');
+        console.log('Elements with min-h-screen:', screens.length);
+        screens.forEach(function(el, i) {
           const s = window.getComputedStyle(el);
-          const name = ['html', 'body', '#root'][i];
-          console.log(name + ':', {
-            overflow: s.overflow,
-            overflowY: s.overflowY,
+          console.log('  Element', i, ':', {
             height: s.height,
-            maxHeight: s.maxHeight,
-            position: s.position,
-            touchAction: s.touchAction,
-            scrollHeight: el.scrollHeight,
-            clientHeight: el.clientHeight,
-            canScroll: el.scrollHeight > el.clientHeight
+            minHeight: s.minHeight,
+            scrollHeight: el.scrollHeight
           });
         });
-        console.log('window.scrollY:', window.scrollY);
-        window.scrollTo(0, 100);
-        setTimeout(function() {
-          console.log('After scroll attempt, window.scrollY:', window.scrollY);
-        }, 100);
       }, 2000);
     </script>
     <script type="module" src="/src/main.tsx"></script>
