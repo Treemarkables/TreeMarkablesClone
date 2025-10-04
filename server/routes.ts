@@ -1248,23 +1248,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       //   console.error('[webhook] Error sending to Zapier:', error);
       // }
 
-      // Send email with lead source information
-      const emailSent = await sendContactEmail(
-        contactValidation.data,
-        validatedLeadSource
-      );
+      // Email notifications disabled - conversations are created in Inbox instead
+      // const emailSent = await sendContactEmail(
+      //   contactValidation.data,
+      //   validatedLeadSource
+      // );
 
-      if (emailSent) {
-        res.json({ 
-          success: true, 
-          message: 'Thank you! We will contact you within 24 hours for your free quote.' 
-        });
-      } else {
-        res.status(500).json({ 
-          success: false, 
-          message: 'Sorry, there was an error sending your message. Please try again or call us directly.' 
-        });
-      }
+      res.json({ 
+        success: true, 
+        message: 'Thank you! We will contact you within 24 hours for your free quote.' 
+      });
 
     } catch (error) {
       console.error('Contact form error:', error);
