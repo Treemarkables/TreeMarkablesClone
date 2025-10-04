@@ -1905,8 +1905,35 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               </div>
                             </div>
                             
-                            <div className="text-xs text-gray-600 mb-2 font-semibold">
+                            <div className="text-xs text-gray-600 mb-1 font-semibold">
                               {job.address || 'No address'}
+                            </div>
+                            
+                            {/* Job Description */}
+                            <div className="text-sm text-gray-700 leading-relaxed mb-2">
+                              {(() => {
+                                const rawDescription = job.description || job.notes;
+                                
+                                if (!rawDescription || rawDescription === null || rawDescription.trim() === '') {
+                                  if (job.status === 'lead') {
+                                    return 'New lead - details pending';
+                                  }
+                                  if (job.status === 'quote' || job.status === 'quoted') {
+                                    return 'Quote request - description to be added';
+                                  }
+                                  return job.serviceType || 'Description to be added';
+                                }
+                                
+                                if (rawDescription === '0000-00-00 00:00:00' || rawDescription.includes('0000-00-00')) {
+                                  return job.serviceType || 'Description to be added';
+                                }
+                                
+                                const description = rawDescription.length > 120 
+                                  ? `${rawDescription.substring(0, 120)}...`
+                                  : rawDescription;
+                                
+                                return description;
+                              })()}
                             </div>
                             
                             <div className="flex items-center justify-between">
