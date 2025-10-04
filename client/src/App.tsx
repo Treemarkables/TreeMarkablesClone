@@ -85,13 +85,18 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     
-    // Clear all React Query cache and refetch
-    await queryClient.invalidateQueries();
+    // Selectively invalidate only critical queries to avoid Safari rendering issues
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications/summary'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/leads'] }),
+    ]);
     
     // Show success toast
     toast({
       title: "Data refreshed",
-      description: "All data has been reloaded from the server.",
+      description: "Job data has been reloaded from the server.",
     });
     
     setTimeout(() => setIsRefreshing(false), 500);
