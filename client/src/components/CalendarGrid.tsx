@@ -252,7 +252,7 @@ export function CalendarGrid() {
       </div>
 
       {/* Calendar Grid */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="w-full">
           {/* Time Header Row */}
           <div className="sticky top-0 z-10 flex bg-white border-b">

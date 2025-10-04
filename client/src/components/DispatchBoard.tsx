@@ -1236,15 +1236,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     <div className="space-y-4 overflow-x-hidden">
       {/* Desktop Layout: Calendar on left, Job cards on right */}
       <div className="hidden lg:flex gap-4 h-[calc(100vh-200px)]" data-testid="dispatch-desktop-layout">
-        {/* Calendar Grid - Left Side */}
-        <div className="w-1/2 h-full" data-testid="calendar-grid-container">
-          <Card className="h-full">
+        {/* Calendar Grid - Left Side (70%) */}
+        <div className="w-[70%] h-full" data-testid="calendar-grid-container">
+          <Card className="h-full overflow-hidden">
             <CalendarGrid />
           </Card>
         </div>
 
-        {/* Job Cards - Right Side */}
-        <div className="w-1/2 h-full overflow-y-auto" data-testid="job-cards-container">
+        {/* Job Cards - Right Side (30%) */}
+        <div className="w-[30%] h-full overflow-y-auto" data-testid="job-cards-container">
           <Card className="overflow-x-hidden h-full">
         {/* Desktop Header - Hidden on Mobile */}
         <CardHeader className="hidden md:block">
