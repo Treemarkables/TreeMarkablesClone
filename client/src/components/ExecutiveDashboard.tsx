@@ -42,7 +42,7 @@ interface RevenueAnalytics {
   seasonalTrends: Array<{ quarter: string; growth: number; }>;
 }
 
-// KPI Card Component
+// KPI Card Component - Compressed for more density
 function KpiCard({ metric }: { metric: KpiMetric }) {
   const formatValue = (value: number, unit: string) => {
     switch (unit) {
@@ -65,11 +65,11 @@ function KpiCard({ metric }: { metric: KpiMetric }) {
   const getTrendIcon = (trend: string) => {
     switch (trend) {
       case 'up':
-        return <TrendingUp className="w-4 h-4 text-green-600" />;
+        return <TrendingUp className="w-3 h-3 text-green-600" />;
       case 'down':
-        return <TrendingDown className="w-4 h-4 text-red-600" />;
+        return <TrendingDown className="w-3 h-3 text-red-600" />;
       default:
-        return <Activity className="w-4 h-4 text-yellow-600" />;
+        return <Activity className="w-3 h-3 text-yellow-600" />;
     }
   };
 
@@ -86,18 +86,18 @@ function KpiCard({ metric }: { metric: KpiMetric }) {
 
   return (
     <Card className="hover-elevate" data-testid={`kpi-card-${metric.id}`}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{metric.name}</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+        <CardTitle className="text-xs font-medium">{metric.name}</CardTitle>
         {getTrendIcon(metric.trend)}
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold" data-testid={`kpi-value-${metric.id}`}>
+      <CardContent className="px-3 pb-3">
+        <div className="text-xl font-bold" data-testid={`kpi-value-${metric.id}`}>
           {formatValue(metric.value, metric.unit)}
         </div>
         {metric.trendValue > 0 && (
-          <p className={`text-xs ${getTrendColor(metric.trend)}`}>
+          <p className={`text-[10px] ${getTrendColor(metric.trend)}`}>
             {metric.trend === 'up' ? '+' : metric.trend === 'down' ? '-' : ''}
-            {formatValue(metric.trendValue, metric.unit)} from last period
+            {formatValue(metric.trendValue, metric.unit)}
           </p>
         )}
       </CardContent>
@@ -210,15 +210,15 @@ export function ExecutiveDashboard() {
           <h2 className="text-3xl font-bold tracking-tight">Executive Dashboard</h2>
           <Badge variant="secondary">Loading...</Badge>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
             <Card key={i} className="animate-pulse">
-              <CardHeader className="space-y-0 pb-2">
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <CardHeader className="space-y-0 pb-1 pt-3 px-3">
+                <div className="h-3 bg-gray-200 rounded w-3/4"></div>
               </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-full"></div>
+              <CardContent className="px-3 pb-3">
+                <div className="h-6 bg-gray-200 rounded w-1/2 mb-1"></div>
+                <div className="h-2 bg-gray-200 rounded w-full"></div>
               </CardContent>
             </Card>
           ))}
@@ -276,7 +276,7 @@ export function ExecutiveDashboard() {
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
           {/* High-Level Stats */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
             <Card className="hover-elevate">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
