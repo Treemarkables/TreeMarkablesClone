@@ -253,7 +253,7 @@ export function CalendarGrid() {
 
       {/* Calendar Grid */}
       <div className="flex-1 overflow-hidden">
-        <div className="w-full">
+        <div className="w-full h-full flex flex-col">
           {/* Time Header Row */}
           <div className="sticky top-0 z-10 flex bg-white border-b">
             <div className="w-32 flex-shrink-0 border-r bg-gray-50 font-semibold p-2">
@@ -284,6 +284,7 @@ export function CalendarGrid() {
           </div>
 
           {/* Staff Rows */}
+          <div className="flex-1 overflow-hidden">
           {employees.map(employee => (
             <div
               key={employee.id}
@@ -364,6 +365,7 @@ export function CalendarGrid() {
               )}
             </div>
           ))}
+          </div>
         </div>
       </div>
 
