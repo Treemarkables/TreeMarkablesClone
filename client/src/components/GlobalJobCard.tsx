@@ -2184,6 +2184,7 @@ export function GlobalJobCard({
                                 <FormControl>
                                   <Textarea 
                                     {...field}
+                                    readOnly
                                     className="min-h-[90px] text-base font-medium cursor-pointer" 
                                     placeholder="Describe the work that needs to be done"
                                     onClick={() => {
