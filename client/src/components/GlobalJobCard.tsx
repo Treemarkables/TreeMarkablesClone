@@ -4172,9 +4172,9 @@ export function GlobalJobCard({
         </DialogContent>
       </Dialog>
 
-      {/* Job Description Popup - 50% Width */}
+      {/* Job Description Popup - Responsive Width */}
       <Dialog open={descriptionPopupOpen} onOpenChange={setDescriptionPopupOpen}>
-        <DialogContent className="w-[50vw] max-w-3xl">
+        <DialogContent className="w-[95vw] sm:w-[50vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-center">Job Description</DialogTitle>
           </DialogHeader>
@@ -4184,6 +4184,7 @@ export function GlobalJobCard({
               onChange={(e) => form.setValue('description', e.target.value)}
               className="min-h-[300px] text-base font-medium" 
               placeholder="Describe the work that needs to be done"
+              data-testid="textarea-description-popup"
             />
           </div>
           <div className="flex gap-2 pt-2">
