@@ -22,6 +22,10 @@ if (!process.env.ALLOW_EMPLOYEE_ID_LOGIN) {
 }
 
 const app = express();
+
+// Trust proxy - needed for secure cookies behind Replit's proxy
+app.set('trust proxy', 1);
+
 // Increase JSON payload limit for large CSV imports (ServiceM8 data can be huge)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
