@@ -358,13 +358,20 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           {/* Payment Instructions */}
           <div className="p-3 sm:p-8 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Instructions</h3>
-            <div className="bg-blue-50 rounded-lg p-4">
+            <div className="bg-blue-50 rounded-lg p-4 space-y-3">
+              <div>
+                <p className="text-gray-900 font-semibold text-sm mb-2">Bank Transfer Details:</p>
+                <div className="bg-white rounded p-3 space-y-1">
+                  <p className="text-gray-700 text-sm"><strong>Bank:</strong> ANZ</p>
+                  <p className="text-gray-700 text-sm"><strong>Account:</strong> 06 0637 0768850 00</p>
+                </div>
+              </div>
               <p className="text-gray-700 text-sm">
                 Please pay this invoice within {invoice.paymentTerms || template.paymentTerms || '7 days'} of the issue date.
-                For questions about this invoice, please contact us at {template.companyEmail || 'info@treemarkables.co.nz'}.
+                For questions about this invoice, please contact us at {template.companyPhone || '027 216 6882'}.
               </p>
               {template.gstNumber && (
-                <p className="text-gray-600 text-sm mt-2">
+                <p className="text-gray-600 text-sm">
                   <strong>GST Number:</strong> {template.gstNumber}
                 </p>
               )}
