@@ -392,26 +392,55 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
             </div>
           </div>
 
-          {/* Terms and Conditions */}
-          {(proposal.conclusion || template.paymentTerms) && (
-            <div className="p-4 sm:p-8 border-t border-gray-200">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Terms & Conditions</h3>
-              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                <p className="text-gray-700 text-xs sm:text-sm whitespace-pre-wrap break-words" data-testid="text-proposal-terms">
-                  {proposal.conclusion || template.paymentTerms || 'This proposal is valid for 30 days from the date above. Payment due within 7 days of acceptance.'}
-                </p>
+          {/* Payment Information */}
+          <div className="p-3 sm:p-8 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-w-md">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Payment Terms:</span>
+                <span className="font-medium">{template.paymentTerms || 'Payment due within 7 days'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Proposal Total:</span>
+                <span className="font-semibold">{formatCurrency(totals.total)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Amount Due:</span>
+                <span className="font-bold text-red-600">
+                  {formatCurrency(totals.total)}
+                </span>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Payment Instructions */}
+          <div className="p-3 sm:p-8 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Instructions</h3>
+            <div className="bg-blue-50 rounded-lg p-4 space-y-3">
+              <div>
+                <p className="text-gray-900 font-semibold text-sm mb-2">Bank Transfer Details:</p>
+                <div className="bg-white rounded p-3 space-y-1">
+                  <p className="text-gray-700 text-sm"><strong>Bank:</strong> ANZ</p>
+                  <p className="text-gray-700 text-sm"><strong>Account:</strong> 06 0637 0768850 00</p>
+                </div>
+              </div>
+              <p className="text-gray-700 text-sm">
+                Please pay this invoice within {template.paymentTerms || 'Payment due within 7 days'} of the issue date.
+                For questions about this invoice, please contact us at {template.companyPhone || '027 216 6882'}.
+              </p>
+              {template.gstNumber && (
+                <p className="text-gray-600 text-sm">
+                  <strong>GST Number:</strong> {template.gstNumber}
+                </p>
+              )}
+            </div>
+          </div>
 
           {/* Footer */}
-          <div className="p-4 sm:p-8 pt-4 sm:pt-6 border-t border-gray-200">
-            <div className="text-center text-xs sm:text-sm text-gray-600">
-              <p className="break-words">Thank you for considering {template.companyName || 'Treemarkables'}!</p>
-              <p className="mt-1">This proposal is valid until {expiryDate ? format(expiryDate, 'dd MMM yyyy') : '30 days from proposal date'}.</p>
-              {template.gstNumber && (
-                <p className="mt-1">GST Number: {template.gstNumber}</p>
-              )}
+          <div className="p-3 sm:p-8 pt-6">
+            <div className="text-center text-sm text-gray-600">
+              <p>Thank you for choosing {template.companyName || 'Treemarkables LTD'}!</p>
+              <p className="mt-1">Professional tree services you can trust.</p>
             </div>
           </div>
         </CardContent>
