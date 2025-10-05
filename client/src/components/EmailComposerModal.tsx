@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -468,6 +469,145 @@ export function EmailComposerModal({
           </div>
           <div className="flex flex-col gap-1 mt-1">
             <div className="flex gap-2 justify-center">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="bg-purple-500 hover:bg-purple-600 text-white border-purple-500 h-7 text-xs px-4"
+                    data-testid="button-smart-attachments"
+                  >
+                    <FileText className="w-3 h-3 mr-1" />
+                    <span>Smart Attachments</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[600px] max-h-[400px] overflow-y-auto" align="center">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">Smart Attachments</h3>
+                  <div className="grid grid-cols-4 gap-3">
+                    {/* Invoice PDF */}
+                    {invoiceData && (
+                      <div 
+                        className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleDocumentPreview('invoice', invoiceData)}
+                        data-testid="attachment-invoice-pdf"
+                      >
+                        <div className="flex flex-col items-center text-center">
+                          <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center mb-2">
+                            <FileText className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="text-xs font-medium text-gray-900 mb-1 truncate w-full">
+                            Invoice #{invoiceData.invoiceNumber}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate w-full">
+                            ${invoiceData.totalAmount || invoiceData.amount || '0.00'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Quote PDF */}
+                    {quoteData && (
+                      <div 
+                        className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleDocumentPreview('quote', quoteData)}
+                        data-testid="attachment-quote-pdf"
+                      >
+                        <div className="flex flex-col items-center text-center">
+                          <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mb-2">
+                            <FileText className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="text-xs font-medium text-gray-900 mb-1 truncate w-full">
+                            Quote #{quoteData.quoteNumber}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate w-full">
+                            ${quoteData.totalAmount || '0.00'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Proposal PDF */}
+                    {proposalData && (
+                      <div 
+                        className="relative p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleDocumentPreview('proposal', proposalData)}
+                        data-testid="attachment-proposal-pdf"
+                      >
+                        <div className="flex flex-col items-center text-center">
+                          <div className="w-8 h-8 bg-purple-500 rounded flex items-center justify-center mb-2">
+                            <FileText className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="text-xs font-medium text-gray-900 mb-1 truncate w-full">
+                            Proposal #{proposalData.proposalNumber || 'PROP-' + job?.jobNumber}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate w-full">
+                            Professional proposal
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Job Photos */}
+                    {jobPhotos?.beforePhotos?.map((photoUrl: string, index: number) => (
+                      <div
+                        key={`before-${index}`}
+                        className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                          selectedPhotos.includes(photoUrl) 
+                            ? 'border-blue-500 bg-blue-50' 
+                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                        }`}
+                        onClick={() => togglePhotoSelection(photoUrl)}
+                        data-testid={`photo-before-${index}`}
+                      >
+                        {selectedPhotos.includes(photoUrl) && (
+                          <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                            <Check className="w-3 h-3 text-white" />
+                          </div>
+                        )}
+                        <img 
+                          src={photoUrl} 
+                          alt={`Before photo ${index + 1}`}
+                          className="w-full h-16 object-cover rounded mb-1"
+                        />
+                        <div className="text-xs text-center text-gray-600">Before {index + 1}</div>
+                      </div>
+                    ))}
+
+                    {jobPhotos?.afterPhotos?.map((photoUrl: string, index: number) => (
+                      <div
+                        key={`after-${index}`}
+                        className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                          selectedPhotos.includes(photoUrl) 
+                            ? 'border-blue-500 bg-blue-50' 
+                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                        }`}
+                        onClick={() => togglePhotoSelection(photoUrl)}
+                        data-testid={`photo-after-${index}`}
+                      >
+                        {selectedPhotos.includes(photoUrl) && (
+                          <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                            <Check className="w-3 h-3 text-white" />
+                          </div>
+                        )}
+                        <img 
+                          src={photoUrl} 
+                          alt={`After photo ${index + 1}`}
+                          className="w-full h-16 object-cover rounded mb-1"
+                        />
+                        <div className="text-xs text-center text-gray-600">After {index + 1}</div>
+                      </div>
+                    ))}
+
+                    {/* Show message when no photos available */}
+                    {(!jobPhotos?.beforePhotos?.length && !jobPhotos?.afterPhotos?.length && !invoiceData && !quoteData && !proposalData) && (
+                      <div className="col-span-full text-center py-4 text-sm text-gray-500">
+                        No attachments available for this job
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              
               <Button 
                 onClick={handleFileAttachment} 
                 variant="outline" 
@@ -505,134 +645,6 @@ export function EmailComposerModal({
         </DialogHeader>
 
         <div className="flex-1 flex flex-col gap-3 sm:gap-4 overflow-y-auto p-3 sm:p-4">
-          {/* Smart Attachments Section - Moved to top */}
-          <div className="border rounded-lg bg-gray-50 p-1 sm:p-4">
-            <h3 className="text-[10px] sm:text-sm font-medium text-gray-700 mb-1 sm:mb-3">Smart Attachments</h3>
-            
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1 sm:gap-3">
-              {/* Invoice PDF */}
-              {invoiceData && (
-                <div 
-                  className="relative p-1 sm:p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
-                  onClick={() => handleDocumentPreview('invoice', invoiceData)}
-                  data-testid="attachment-invoice-pdf"
-                >
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-5 h-5 sm:w-8 sm:h-8 bg-red-500 rounded flex items-center justify-center mb-0.5 sm:mb-2">
-                      <FileText className="w-2.5 h-2.5 sm:w-4 sm:h-4 text-white" />
-                    </div>
-                    <div className="text-[9px] sm:text-xs font-medium text-gray-900 mb-0 sm:mb-1 truncate w-full">
-                      Invoice #{invoiceData.invoiceNumber}
-                    </div>
-                    <div className="text-[9px] sm:text-xs text-gray-500 truncate w-full">
-                      ${invoiceData.totalAmount || invoiceData.amount || '0.00'}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Quote PDF */}
-              {quoteData && (
-                <div 
-                  className="relative p-1 sm:p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
-                  onClick={() => handleDocumentPreview('quote', quoteData)}
-                  data-testid="attachment-quote-pdf"
-                >
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-5 h-5 sm:w-8 sm:h-8 bg-blue-500 rounded flex items-center justify-center mb-0.5 sm:mb-2">
-                      <FileText className="w-2.5 h-2.5 sm:w-4 sm:h-4 text-white" />
-                    </div>
-                    <div className="text-[9px] sm:text-xs font-medium text-gray-900 mb-0 sm:mb-1 truncate w-full">
-                      Quote #{quoteData.quoteNumber}
-                    </div>
-                    <div className="text-[9px] sm:text-xs text-gray-500 truncate w-full">
-                      ${quoteData.totalAmount || '0.00'}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Proposal PDF */}
-              {proposalData && (
-                <div 
-                  className="relative p-1 sm:p-3 border rounded-lg bg-white cursor-pointer hover:bg-gray-50"
-                  onClick={() => handleDocumentPreview('proposal', proposalData)}
-                  data-testid="attachment-proposal-pdf"
-                >
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-5 h-5 sm:w-8 sm:h-8 bg-purple-500 rounded flex items-center justify-center mb-0.5 sm:mb-2">
-                      <FileText className="w-2.5 h-2.5 sm:w-4 sm:h-4 text-white" />
-                    </div>
-                    <div className="text-[9px] sm:text-xs font-medium text-gray-900 mb-0 sm:mb-1 truncate w-full">
-                      Proposal #{proposalData.proposalNumber || 'PROP-' + job?.jobNumber}
-                    </div>
-                    <div className="text-[9px] sm:text-xs text-gray-500 truncate w-full">
-                      Professional proposal
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Job Photos */}
-              {jobPhotos?.beforePhotos?.map((photoUrl: string, index: number) => (
-                <div
-                  key={`before-${index}`}
-                  className={`relative p-1 sm:p-2 border rounded-lg cursor-pointer transition-colors ${
-                    selectedPhotos.includes(photoUrl) 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                  onClick={() => togglePhotoSelection(photoUrl)}
-                  data-testid={`photo-before-${index}`}
-                >
-                  {selectedPhotos.includes(photoUrl) && (
-                    <div className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
-                    </div>
-                  )}
-                  <img 
-                    src={photoUrl} 
-                    alt={`Before photo ${index + 1}`}
-                    className="w-full h-10 sm:h-16 object-cover rounded mb-0.5 sm:mb-1"
-                  />
-                  <div className="text-[9px] sm:text-xs text-center text-gray-600">Before {index + 1}</div>
-                </div>
-              ))}
-
-              {jobPhotos?.afterPhotos?.map((photoUrl: string, index: number) => (
-                <div
-                  key={`after-${index}`}
-                  className={`relative p-1 sm:p-2 border rounded-lg cursor-pointer transition-colors ${
-                    selectedPhotos.includes(photoUrl) 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                  onClick={() => togglePhotoSelection(photoUrl)}
-                  data-testid={`photo-after-${index}`}
-                >
-                  {selectedPhotos.includes(photoUrl) && (
-                    <div className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
-                    </div>
-                  )}
-                  <img 
-                    src={photoUrl} 
-                    alt={`After photo ${index + 1}`}
-                    className="w-full h-10 sm:h-16 object-cover rounded mb-0.5 sm:mb-1"
-                  />
-                  <div className="text-[9px] sm:text-xs text-center text-gray-600">After {index + 1}</div>
-                </div>
-              ))}
-
-              {/* Show message when no photos available */}
-              {(!jobPhotos?.beforePhotos?.length && !jobPhotos?.afterPhotos?.length && !invoiceData && !quoteData && !proposalData) && (
-                <div className="col-span-full text-center py-2 sm:py-4 text-[10px] sm:text-sm text-gray-500">
-                  No attachments available for this job
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Email Fields */}
           <div className="space-y-1 sm:space-y-3">
             <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
