@@ -1388,21 +1388,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       </div>
 
       {/* Mobile Layout: Show job cards in traditional list view */}
-      <div className="lg:hidden p-4 flex flex-col flex-1 min-h-0 overflow-hidden">
-      <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0">
+      <div className="lg:hidden p-2 sm:p-4 flex flex-col flex-1 min-h-0 overflow-x-hidden overflow-y-auto">
+      <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0 w-full max-w-full">
         {/* Mobile Header - With Search */}
         <CardHeader className="space-y-3 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Calendar className="h-5 w-5" />
-              Jobs ({getTodaysJobs().length})
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <CardTitle className="flex items-center gap-1.5 text-base sm:text-lg min-w-0 flex-shrink">
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+              <span className="truncate">Jobs ({getTodaysJobs().length})</span>
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 flex-shrink-0">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setSelectedDate(subDays(selectedDate, 1))}
                 data-testid="prev-day-mobile"
+                className="h-8 w-8 p-0"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -1411,6 +1412,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 size="sm"
                 onClick={() => setSelectedDate(new Date())}
                 data-testid="today-btn-mobile"
+                className="h-8 px-2 text-xs"
               >
                 Today
               </Button>
@@ -1419,6 +1421,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 size="sm"
                 onClick={() => setSelectedDate(addDays(selectedDate, 1))}
                 data-testid="next-day-mobile"
+                className="h-8 w-8 p-0"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -1482,20 +1485,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>
         </CardHeader>
 
-        <CardContent className="flex-1 overflow-y-auto p-0">
+        <CardContent className="flex-1 overflow-y-auto overflow-x-hidden p-0">
           {/* Mobile Job Cards */}
-          <div className="space-y-0">
+          <div className="space-y-0 w-full max-w-full">
             {getTodaysJobs().map((job: any) => {
               const customerName = job.customerName || 'Unknown Customer';
               
               return (
                 <div
                   key={job.id}
-                  className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full"
                   onClick={() => handleEditJob(job)}
                   data-testid={`job-card-${job.id}`}
                 >
-                  <div className="flex items-start gap-3 p-3">
+                  <div className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 min-w-0">
                     {/* Status Avatar with Activity Indicator */}
                     <div className="relative flex-shrink-0">
                       <div 
@@ -1512,54 +1515,54 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     </div>
                     
                     {/* Job Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-1">
-                        <div>
-                          <h3 className="font-bold text-gray-900 text-base mb-1">
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <div className="flex items-start justify-between mb-1 min-w-0">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-1 truncate">
                             {customerName}
                           </h3>
-                          <div className="text-xs text-gray-600 mb-1 font-semibold">
+                          <div className="text-xs text-gray-600 mb-1 font-semibold truncate">
                             {job.address || 'No address specified'}
                           </div>
                           {job.description && (
-                            <div className="text-xs text-gray-500 mb-2 line-clamp-2">
+                            <div className="text-xs text-gray-500 mb-2 line-clamp-2 break-words">
                               {job.description}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
+                      <div className="flex items-center gap-2 mb-2 text-xs text-gray-500 flex-wrap">
                         {job.startTime && !job.startTime.includes('0000-00-00') && (
-                          <span>{job.startTime}</span>
+                          <span className="whitespace-nowrap">{job.startTime}</span>
                         )}
-                        {job.assignedTo && <span>• {job.assignedTo}</span>}
+                        {job.assignedTo && <span className="truncate">• {job.assignedTo}</span>}
                       </div>
 
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
                           {(() => {
                             const statusFormatted = job.status?.charAt(0).toUpperCase() + job.status?.slice(1);
                             if (job.status === 'quote') {
                               return (
-                                <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs">
+                                <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs flex-shrink-0">
                                   quote
                                 </Badge>
                               );
                             } else if (job.status === 'lead') {
                               return (
-                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
+                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs flex-shrink-0">
                                   lead
                                 </Badge>
                               );
                             } else {
                               return (
-                                <span className="text-xs text-gray-500">{statusFormatted}</span>
+                                <span className="text-xs text-gray-500 truncate">{statusFormatted}</span>
                               );
                             }
                           })()}
                         </div>
-                        <span className="text-xs text-gray-500">{job.priority}</span>
+                        <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{job.priority}</span>
                       </div>
                     </div>
                   </div>
