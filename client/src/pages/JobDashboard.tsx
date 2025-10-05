@@ -84,7 +84,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   // Jobs pagination and search state
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [currentJobPage, setCurrentJobPage] = useState(1);
-  const [jobsPerPage, setJobsPerPage] = useState(100); // Show 100 jobs per page by default
+  const [jobsPerPage, setJobsPerPage] = useState(10); // Show 10 jobs per page by default for faster loading
   
   // Bulk selection state
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
