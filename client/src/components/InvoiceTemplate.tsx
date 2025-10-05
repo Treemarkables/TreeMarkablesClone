@@ -239,6 +239,11 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           {hasLineItems ? (
             <div className="p-3 sm:p-8 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
+              {description && (
+                <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                  <p className="text-gray-700 whitespace-pre-wrap">{description}</p>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
                   <thead className="bg-gray-50">
