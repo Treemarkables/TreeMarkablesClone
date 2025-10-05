@@ -2319,7 +2319,12 @@ class DatabaseStorage implements IStorage {
   }
 
   async getEmployeeByEmail(email: string): Promise<Employee | undefined> {
-    const [employee] = await db.select().from(schema.employees).where(eq(schema.employees.email, email));
+    // Order by role to prioritize admin over crew in case of duplicate emails
+    const [employee] = await db.select()
+      .from(schema.employees)
+      .where(eq(schema.employees.email, email))
+      .orderBy(sql`CASE WHEN ${schema.employees.role} = 'admin' THEN 0 WHEN ${schema.employees.role} = 'crew' THEN 1 ELSE 2 END`)
+      .limit(1);
     return employee || undefined;
   }
 
