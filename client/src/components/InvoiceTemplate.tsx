@@ -282,33 +282,6 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           )}
 
-          {/* Payment Information */}
-          <div className="p-3 sm:p-8 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-w-md">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Payment Terms:</span>
-                <span className="font-medium">{invoice.paymentTerms || template.paymentTerms || '7 days'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Invoice Total:</span>
-                <span className="font-semibold">{formatCurrency(totalAmount)}</span>
-              </div>
-              {paidAmount > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Amount Paid:</span>
-                  <span className="font-medium text-green-600">{formatCurrency(paidAmount)}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-gray-600">Amount Due:</span>
-                <span className={`font-bold ${remainingAmount === 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(remainingAmount)}
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* Totals */}
           <div className="p-3 sm:p-8 border-b border-gray-200">
             <div className="flex justify-end">
@@ -339,6 +312,33 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Information */}
+          <div className="p-3 sm:p-8 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-w-md">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Payment Terms:</span>
+                <span className="font-medium">{invoice.paymentTerms || template.paymentTerms || '7 days'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Invoice Total:</span>
+                <span className="font-semibold">{formatCurrency(totalAmount)}</span>
+              </div>
+              {paidAmount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Amount Paid:</span>
+                  <span className="font-medium text-green-600">{formatCurrency(paidAmount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-gray-600">Amount Due:</span>
+                <span className={`font-bold ${remainingAmount === 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(remainingAmount)}
+                </span>
               </div>
             </div>
           </div>
