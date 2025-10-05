@@ -175,7 +175,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                   </div>
                   <div className="flex items-center gap-0.5 sm:gap-1">
                     <MapPin className="w-2 h-2 sm:w-3 sm:h-3" />
-                    <span className="break-all">{template.companyAddress || 'Hauroa rd\nGisborne, 4010'}</span>
+                    <span className="break-all">{template.companyAddress || '213 Stanley road, Gisborne'}</span>
                   </div>
                 </div>
               </div>
