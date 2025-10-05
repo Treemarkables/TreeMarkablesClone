@@ -1512,17 +1512,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   onClick={() => handleEditJob(job)}
                   data-testid={`job-card-${job.id}`}
                 >
-                  <div className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 min-w-0">
+                  <div className="flex items-start gap-4 sm:gap-6 p-4 sm:p-6 min-w-0">
                     {/* Status Avatar with Activity Indicator */}
                     <div className="relative flex-shrink-0">
                       <div 
-                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[21px] relative z-10"
+                        className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-[42px] relative z-10"
                         style={{ backgroundColor: getJobStatusColorValue(job) }}
                       >
                         {getStatusInitials(job)}
                       </div>
                       {hasRecentActivity(job) && (
-                        <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse z-20" 
+                        <div className="absolute -top-2 -right-2 w-7 h-7 bg-green-500 rounded-full border-2 border-white animate-pulse z-20" 
                              title="Recent activity"
                              data-testid={`activity-indicator-${job.id}`} />
                       )}
@@ -1530,27 +1530,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     
                     {/* Job Content */}
                     <div className="flex-1 min-w-0 overflow-hidden">
-                      <div className="flex items-start justify-between mb-1 min-w-0 gap-2">
+                      <div className="flex items-start justify-between mb-2 min-w-0 gap-4">
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-1 truncate">
+                          <h3 className="font-bold text-gray-900 text-base sm:text-xl mb-2 truncate">
                             {customerName}
                           </h3>
-                          <div className="text-xs text-gray-600 mb-1 font-semibold truncate">
+                          <div className="text-sm text-gray-600 mb-2 font-semibold truncate">
                             {job.address || 'No address specified'}
                           </div>
                           {job.description && (
-                            <div className="text-xs text-gray-500 mb-2 line-clamp-2 break-words">
+                            <div className="text-sm text-gray-500 mb-4 line-clamp-2 break-words">
                               {job.description}
                             </div>
                           )}
                         </div>
-                        <div className="text-[16px] font-bold text-black leading-none flex-shrink-0">
+                        <div className="text-[32px] font-bold text-black leading-none flex-shrink-0">
                           {job.jobId || job.jobNumber || '0000'}
                         </div>
                       </div>
 
                       {job.assignedTo && (
-                        <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
+                        <div className="flex items-center gap-2 mb-4 text-sm text-gray-500">
                           <span className="truncate">{job.assignedTo}</span>
                         </div>
                       )}
@@ -1560,7 +1560,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           {(() => {
                             if (job.status === 'lead') {
                               return (
-                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs flex-shrink-0">
+                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-sm flex-shrink-0">
                                   lead
                                 </Badge>
                               );
@@ -1568,7 +1568,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             return null;
                           })()}
                         </div>
-                        <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{job.priority}</span>
+                        <span className="text-sm text-gray-500 whitespace-nowrap flex-shrink-0">{job.priority}</span>
                       </div>
                     </div>
                   </div>
