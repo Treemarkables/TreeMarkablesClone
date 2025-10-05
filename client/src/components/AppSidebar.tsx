@@ -17,7 +17,8 @@ import {
   Briefcase,
   Upload,
   BookOpen,
-  Shield
+  Shield,
+  LogOut
 } from "lucide-react";
 import {
   Sidebar,
@@ -123,7 +124,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   const [location, setLocation] = useLocation();
   const { setOpen } = useSidebar();
   const isMobile = useIsMobile();
-  const { isAdmin, isCrew } = useAuth();
+  const { logout, currentUser, isAdmin, isCrew } = useAuth();
   
   const handleTabClick = (tabValue: string) => {
     // If not on job dashboard, navigate there first
@@ -278,9 +279,9 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
         )}
       </SidebarContent>
 
-      {isAdmin && (
-        <SidebarFooter className="border-t border-blue-200">
-          <SidebarMenu>
+      <SidebarFooter className="border-t border-blue-200">
+        <SidebarMenu>
+          {isAdmin && (
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
@@ -298,9 +299,25 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 </button>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-      )}
+          )}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              onClick={() => {
+                logout();
+                if (isMobile) {
+                  setOpen(false);
+                }
+              }}
+            >
+              <button className="w-full justify-start" data-testid="button-logout">
+                <LogOut className="h-4 w-4" />
+                <span>Log Out</span>
+              </button>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }
