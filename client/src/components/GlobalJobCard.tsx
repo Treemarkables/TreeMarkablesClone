@@ -3617,14 +3617,10 @@ export function GlobalJobCard({
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-12 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                      <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 rounded-t-lg -m-4 mb-8">
-                        <h4 className="font-semibold">Items & Services</h4>
-                        <p className="text-orange-100 text-sm">Professional service breakdown with GST calculations</p>
-                      </div>
-                      <DollarSign className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg font-medium">No items added yet</p>
-                      <p className="text-sm text-gray-400">Click "Add Line Item" to start building your quote</p>
+                    <div className="text-center py-6 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                      <DollarSign className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                      <p className="text-sm font-medium">No items added yet</p>
+                      <p className="text-xs text-gray-400">Click "Add Line Item" to start building your quote</p>
                     </div>
                   )}
                 </div>
