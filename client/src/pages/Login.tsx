@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { useMutation } from '@tanstack/react-query';
-import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,29 +10,12 @@ import { Loader2, TreePine } from 'lucide-react';
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const { login, loginPending } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const loginMutation = useMutation({
-    mutationFn: async (credentials: { email: string; password: string }) => {
-      const res = await apiRequest('POST', '/api/auth/login', credentials);
-      return res.json();
-    },
-    onSuccess: (data) => {
-      if (data.success) {
-        queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-        setLocation('/job-dashboard');
-      } else {
-        setError(data.message || 'Login failed');
-      }
-    },
-    onError: (err: any) => {
-      setError(err.message || 'Invalid email or password');
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
@@ -42,7 +24,16 @@ export default function Login() {
       return;
     }
 
-    loginMutation.mutate({ email, password });
+    try {
+      const result = await login({ email, password });
+      if (result.success) {
+        setLocation('/job-dashboard');
+      } else {
+        setError(result.message || 'Login failed');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Invalid email or password');
+    }
   };
 
   return (
@@ -71,7 +62,7 @@ export default function Login() {
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={loginMutation.isPending}
+                disabled={loginPending}
                 data-testid="input-email"
                 autoComplete="email"
               />
@@ -86,7 +77,7 @@ export default function Login() {
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={loginMutation.isPending}
+                disabled={loginPending}
                 data-testid="input-password"
                 autoComplete="current-password"
               />
@@ -101,10 +92,10 @@ export default function Login() {
             <Button
               type="submit"
               className="w-full"
-              disabled={loginMutation.isPending}
+              disabled={loginPending}
               data-testid="button-login"
             >
-              {loginMutation.isPending ? (
+              {loginPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Signing in...
