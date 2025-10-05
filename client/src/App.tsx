@@ -3,7 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Login from "@/pages/Login";
@@ -52,7 +52,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -74,10 +74,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Sidebar layout wrapper for dashboard pages
-function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
+// Inner component that uses useSidebar hook
+function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const { isCrew, isAdmin, logout } = useAuth();
-  // Initialize activeTab based on role: crew starts with "jobs", admin with "overview"
   const [activeTab, setActiveTab] = useState(isCrew ? "jobs" : "overview");
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -85,6 +84,12 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   const isMobile = useIsMobile();
   const [location] = useLocation();
   const [dispatchDate, setDispatchDate] = useState(new Date());
+  const { setOpen } = useSidebar();
+  
+  // Sync sidebar state with viewport changes
+  useEffect(() => {
+    setOpen(!isMobile);
+  }, [isMobile, setOpen]);
   
   // Detect Safari browser
   const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -122,15 +127,9 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
     setTimeout(() => setIsRefreshing(false), 500);
   };
   
-  const style = {
-    "--sidebar-width": "12rem",
-    "--sidebar-width-icon": "3rem",
-  };
-
   return (
-    <SidebarProvider style={style as React.CSSProperties} defaultOpen={!isMobile}>
-      <div className="flex min-h-screen w-full">
-        <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+    <div className="flex min-h-screen w-full">
+      <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Mobile header - sidebar toggle, refresh, and actions */}
           <header className="md:hidden flex items-center justify-between p-2 border-b bg-white">
@@ -363,6 +362,23 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
           }}
         />
       </div>
+  );
+}
+
+// Sidebar layout wrapper for dashboard pages
+function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
+  const isMobile = useIsMobile();
+  
+  const style = {
+    "--sidebar-width": "12rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
+  return (
+    <SidebarProvider style={style as React.CSSProperties} defaultOpen={!isMobile}>
+      <SidebarContent>
+        {children}
+      </SidebarContent>
     </SidebarProvider>
   );
 }
