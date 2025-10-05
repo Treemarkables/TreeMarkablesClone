@@ -50,7 +50,7 @@ import PublicReview from "@/pages/PublicReview";
 import ActivityDashboard from "@/pages/ActivityDashboard";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -59,6 +59,8 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { useAuth } from "@/contexts/AuthContext";
 import { Redirect } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { addDays, subDays } from "date-fns";
 
 // Protected Route wrapper - redirects authenticated crew users to allowed pages
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -81,9 +83,23 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const [location] = useLocation();
+  const [dispatchDate, setDispatchDate] = useState(new Date());
   
   // Detect Safari browser
   const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  
+  // Check if we're on dispatch page
+  const isDispatchPage = location === '/dispatch';
+  
+  // Fetch jobs data for dispatch header
+  const { data: jobsResponse } = useQuery<{ success: boolean; data: any[] }>({
+    queryKey: ['/api/jobs'],
+    enabled: isDispatchPage,
+  });
+  
+  const jobs = jobsResponse?.data || [];
+  const jobCount = jobs.filter((job: any) => job.status !== 'unsuccessful').slice(0, 30).length;
   
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -118,7 +134,45 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Mobile header - sidebar toggle, refresh, and actions */}
           <header className="md:hidden flex items-center justify-between p-2 border-b bg-white">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <div className="flex items-center gap-2">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              
+              {/* Dispatch-specific: Jobs count and date navigation */}
+              {isDispatchPage && (
+                <>
+                  <div className="flex items-center gap-1 text-xs font-semibold">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    <span>Jobs ({jobCount})</span>
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDispatchDate(subDays(dispatchDate, 1))}
+                      className="h-6 w-6 p-0"
+                    >
+                      <ChevronLeft className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDispatchDate(new Date())}
+                      className="h-6 px-1.5 text-[10px]"
+                    >
+                      Today
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDispatchDate(addDays(dispatchDate, 1))}
+                      className="h-6 w-6 p-0"
+                    >
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
             
             <div className="flex items-center gap-2">
               {/* Refresh Button - Hidden in Safari */}
