@@ -5876,6 +5876,54 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Diagnostic endpoint to check account status
+  app.post('/api/employees/diagnostic', async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email is required'
+        });
+      }
+      
+      // Get ALL employees with this email (to see duplicates)
+      const allEmployees = await storage.getAllEmployees();
+      const matchingEmployees = allEmployees.filter(emp => emp.email === email);
+      
+      // Get the one that would be returned by getEmployeeByEmail
+      const selectedEmployee = await storage.getEmployeeByEmail(email);
+      
+      res.json({
+        success: true,
+        data: {
+          totalMatches: matchingEmployees.length,
+          allMatches: matchingEmployees.map(e => ({
+            id: e.id,
+            name: `${e.firstName} ${e.lastName}`,
+            email: e.email,
+            role: e.role,
+            createdAt: e.createdAt
+          })),
+          selectedByQuery: selectedEmployee ? {
+            id: selectedEmployee.id,
+            name: `${selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+            email: selectedEmployee.email,
+            role: selectedEmployee.role,
+            createdAt: selectedEmployee.createdAt
+          } : null
+        }
+      });
+    } catch (error) {
+      console.error('Diagnostic error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Diagnostic failed'
+      });
+    }
+  });
+
   // Emergency password reset (for recovery purposes)
   app.post('/api/employees/emergency-password-reset', async (req: Request, res: Response) => {
     try {
