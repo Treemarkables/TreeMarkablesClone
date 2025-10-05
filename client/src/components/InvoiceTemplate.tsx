@@ -282,68 +282,29 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           )}
 
-          {/* Invoice Details and Payment Status */}
+          {/* Payment Information */}
           <div className="p-3 sm:p-8 border-b border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Payment Terms */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Payment Terms:</span>
-                    <span className="font-medium">{invoice.paymentTerms || template.paymentTerms || '7 days'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Invoice Total:</span>
-                    <span className="font-semibold">{formatCurrency(totalAmount)}</span>
-                  </div>
-                  {paidAmount > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Amount Paid:</span>
-                      <span className="font-medium text-green-600">{formatCurrency(paidAmount)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Amount Due:</span>
-                    <span className={`font-bold ${remainingAmount === 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(remainingAmount)}
-                    </span>
-                  </div>
-                </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-w-md">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Payment Terms:</span>
+                <span className="font-medium">{invoice.paymentTerms || template.paymentTerms || '7 days'}</span>
               </div>
-
-              {/* Important Dates */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Important Dates</h3>
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-600" />
-                      <span className="text-gray-600">Issued:</span>
-                    </div>
-                    <span className="font-medium">{format(issueDate, 'dd MMM yyyy')}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-600" />
-                      <span className="text-gray-600">Due:</span>
-                    </div>
-                    <span className={`font-medium ${isOverdue ? 'text-red-600' : ''}`}>
-                      {format(dueDate, 'dd MMM yyyy')}
-                    </span>
-                  </div>
-                  {invoice.paidDate && (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-green-600" />
-                        <span className="text-gray-600">Paid:</span>
-                      </div>
-                      <span className="font-medium text-green-600">
-                        {format(new Date(invoice.paidDate), 'dd MMM yyyy')}
-                      </span>
-                    </div>
-                  )}
+              <div className="flex justify-between">
+                <span className="text-gray-600">Invoice Total:</span>
+                <span className="font-semibold">{formatCurrency(totalAmount)}</span>
+              </div>
+              {paidAmount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Amount Paid:</span>
+                  <span className="font-medium text-green-600">{formatCurrency(paidAmount)}</span>
                 </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-gray-600">Amount Due:</span>
+                <span className={`font-bold ${remainingAmount === 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(remainingAmount)}
+                </span>
               </div>
             </div>
           </div>
