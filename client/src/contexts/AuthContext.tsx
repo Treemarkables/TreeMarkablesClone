@@ -20,6 +20,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<Employee | null>(null);
+  const [, setLocation] = useLocation();
 
   const { data: employeesResponse } = useQuery<{ success: boolean; data: Employee[] }>({
     queryKey: ['/api/employees/active'],
@@ -53,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onSuccess: () => {
       setCurrentUserState(null);
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      setLocation('/');
     },
   });
 
