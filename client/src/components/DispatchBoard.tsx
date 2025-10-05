@@ -1327,9 +1327,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             <h3 className="font-semibold text-gray-900 text-sm truncate" data-testid={`desktop-job-customer-${job.id}`}>
                               {customerName}
                             </h3>
-                            <div className="text-[11px] text-gray-500 truncate">
-                              #{job.jobId || '0000'}
-                            </div>
                           </div>
                         </div>
                         <div className="text-[11px] text-gray-600 mb-1 truncate">
