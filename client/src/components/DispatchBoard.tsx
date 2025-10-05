@@ -1289,6 +1289,61 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               <div className="text-xs text-muted-foreground mt-1">
                 {format(selectedDate, 'EEEE, MMMM dd, yyyy')}
               </div>
+              
+              {/* Search Input - Desktop */}
+              <div className="mt-3 relative">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                <Input
+                  placeholder="Search jobs..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (isDeepSearchActive) {
+                      setIsDeepSearchActive(false);
+                      setDeepSearchResults([]);
+                    }
+                  }}
+                  className="pl-8 pr-8 h-8 text-sm"
+                  data-testid="desktop-job-search-input"
+                />
+                {isDeepSearchActive && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="absolute right-0.5 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                    onClick={() => {
+                      setIsDeepSearchActive(false);
+                      setDeepSearchResults([]);
+                      setSearchQuery('');
+                    }}
+                    data-testid="btn-clear-deep-search-desktop"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+              
+              {/* Deep Search Button - Desktop */}
+              {searchQuery.trim() && !isDeepSearchActive && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-7 text-xs mt-2"
+                  onClick={() => performDeepSearch(searchQuery)}
+                  data-testid="btn-deep-search-desktop"
+                >
+                  <Search className="h-3 w-3 mr-1" />
+                  Deep Search
+                </Button>
+              )}
+              
+              {/* Deep Search Status - Desktop */}
+              {isDeepSearchActive && (
+                <div className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-2">
+                  <SearchX className="h-3 w-3" />
+                  {deepSearchResults.length} results
+                </div>
+              )}
             </CardHeader>
 
             <CardContent className="flex-1 overflow-y-auto p-0">
