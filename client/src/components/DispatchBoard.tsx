@@ -1300,11 +1300,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 return (
                   <div
                     key={job.id}
-                    className="p-4 border-b hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
+                    className="p-4 border-b hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden h-[140px]"
                     onClick={() => handleEditJob(job)}
                     data-testid={`desktop-job-card-${job.id}`}
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-3 h-full">
                       {/* Status Avatar Circle with Activity Indicator */}
                       <div className="relative flex-shrink-0">
                         <div 
@@ -1321,7 +1321,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       </div>
                       
                       {/* Job Content */}
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 flex flex-col">
                         <div className="flex items-start justify-between mb-1 gap-2">
                           <div className="flex-1 min-w-0">
                             <h3 className="font-bold text-gray-900 text-base truncate" data-testid={`desktop-job-customer-${job.id}`}>
@@ -1335,20 +1335,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         <div className="text-xs text-gray-600 mb-1 font-semibold truncate">
                           {job.address || 'No address specified'}
                         </div>
-                        {job.description && (
-                          <div className="text-xs text-gray-500 mb-2 line-clamp-3 break-words">
-                            {job.description}
-                          </div>
-                        )}
-                        {job.assignedTo && (
-                          <div className="text-xs text-gray-500 mb-2 truncate">
-                            {job.assignedTo}
-                          </div>
-                        )}
+                        <div className="text-xs text-gray-500 mb-2 line-clamp-3 break-words h-[42px]">
+                          {job.description || '\u00A0'}
+                        </div>
+                        <div className="text-xs text-gray-500 mb-2 truncate h-[16px]">
+                          {job.assignedTo || '\u00A0'}
+                        </div>
 
                         
                         {/* Status and Priority */}
-                        <div className="flex items-center gap-2 text-xs">
+                        <div className="flex items-center gap-2 text-xs mt-auto">
                           {(() => {
                             if (job.status === 'lead') {
                               return (
