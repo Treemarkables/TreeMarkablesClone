@@ -2678,8 +2678,8 @@ export function GlobalJobCard({
                         )}
 
                         {/* ServiceM8-Style Line Items Table */}
-                        {lineItemFields.length > 0 ? (
-                          <div className="space-y-4">
+                        <div className="space-y-4">
+                          {lineItemFields.length > 0 && (
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
                               <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
                                 <h4 className="font-medium text-gray-800">Items & Services</h4>
@@ -2908,68 +2908,68 @@ export function GlobalJobCard({
                                 </div>
                               </div>
                             </div>
+                          )}
 
-                            {/* ServiceM8-Style Financial Summary */}
-                            <div className="grid grid-cols-2 gap-6">
-                              <div></div> {/* Left side spacer */}
-                              <div className="space-y-2 text-sm">
-                                {(() => {
-                                  const lineItems = form.watch('lineItems') || [];
-                                  const taxMode = form.watch('taxMode') || 'tax_exclusive';
-                                  const gstRate = 0.15; // 15% GST for New Zealand
-                                  const paidAmount = parseFloat(form.watch('paidAmount') || '0');
-                                  
-                                  const lineItemTotal = lineItems.reduce((sum: number, item: any) => {
-                                    const quantity = item.quantity || 1;
-                                    const unitPrice = item.unitPrice || 0;
-                                    return sum + (quantity * unitPrice);
-                                  }, 0);
-                                  
-                                  let subtotal: number;
-                                  let gstAmount: number;
-                                  let totalIncGst: number;
-                                  
-                                  if (taxMode === 'tax_inclusive') {
-                                    totalIncGst = lineItemTotal;
-                                    subtotal = totalIncGst / (1 + gstRate);
-                                    gstAmount = totalIncGst - subtotal;
-                                  } else {
-                                    subtotal = lineItemTotal;
-                                    gstAmount = subtotal * gstRate;
-                                    totalIncGst = subtotal + gstAmount;
-                                  }
-                                  
-                                  const balanceDue = totalIncGst - paidAmount;
-                                  
-                                  return (
-                                    <>
-                                      <div className="flex justify-between py-1">
-                                        <span className="text-gray-600 uppercase text-xs font-medium">SUBTOTAL</span>
-                                        <span className="font-mono">${subtotal.toFixed(2)}</span>
-                                      </div>
-                                      <div className="flex justify-between py-1">
-                                        <span className="text-gray-600 uppercase text-xs font-medium">GST</span>
-                                        <span className="font-mono">${gstAmount.toFixed(2)}</span>
-                                      </div>
-                                      <div className="flex justify-between py-1 font-semibold">
-                                        <span className="text-gray-900 uppercase text-xs font-medium">Total</span>
-                                        <span className="font-mono">${totalIncGst.toFixed(2)}</span>
-                                      </div>
-                                      <div className="flex justify-between py-1">
-                                        <span className="text-green-600 uppercase text-xs font-medium">Paid</span>
-                                        <span className="font-mono text-green-600">${paidAmount.toFixed(2)}</span>
-                                      </div>
-                                      <div className="flex justify-between py-1 font-semibold">
-                                        <span className="text-orange-600 uppercase text-xs font-medium">Balance Due</span>
-                                        <span className="font-mono text-orange-600">${balanceDue.toFixed(2)}</span>
-                                      </div>
-                                    </>
-                                  );
-                                })()}
-                              </div>
+                          {/* ServiceM8-Style Financial Summary */}
+                          <div className="grid grid-cols-2 gap-6">
+                            <div></div> {/* Left side spacer */}
+                            <div className="space-y-2 text-sm">
+                              {(() => {
+                                const lineItems = form.watch('lineItems') || [];
+                                const taxMode = form.watch('taxMode') || 'tax_exclusive';
+                                const gstRate = 0.15; // 15% GST for New Zealand
+                                const paidAmount = parseFloat(form.watch('paidAmount') || '0');
+                                
+                                const lineItemTotal = lineItems.reduce((sum: number, item: any) => {
+                                  const quantity = item.quantity || 1;
+                                  const unitPrice = item.unitPrice || 0;
+                                  return sum + (quantity * unitPrice);
+                                }, 0);
+                                
+                                let subtotal: number;
+                                let gstAmount: number;
+                                let totalIncGst: number;
+                                
+                                if (taxMode === 'tax_inclusive') {
+                                  totalIncGst = lineItemTotal;
+                                  subtotal = totalIncGst / (1 + gstRate);
+                                  gstAmount = totalIncGst - subtotal;
+                                } else {
+                                  subtotal = lineItemTotal;
+                                  gstAmount = subtotal * gstRate;
+                                  totalIncGst = subtotal + gstAmount;
+                                }
+                                
+                                const balanceDue = totalIncGst - paidAmount;
+                                
+                                return (
+                                  <>
+                                    <div className="flex justify-between py-1">
+                                      <span className="text-gray-600 uppercase text-xs font-medium">SUBTOTAL</span>
+                                      <span className="font-mono">${subtotal.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-1">
+                                      <span className="text-gray-600 uppercase text-xs font-medium">GST</span>
+                                      <span className="font-mono">${gstAmount.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-1 font-semibold">
+                                      <span className="text-gray-900 uppercase text-xs font-medium">Total</span>
+                                      <span className="font-mono">${totalIncGst.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-1">
+                                      <span className="text-green-600 uppercase text-xs font-medium">Paid</span>
+                                      <span className="font-mono text-green-600">${paidAmount.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-1 font-semibold">
+                                      <span className="text-orange-600 uppercase text-xs font-medium">Balance Due</span>
+                                      <span className="font-mono text-orange-600">${balanceDue.toFixed(2)}</span>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
-                        ) : null}
+                        </div>
                       </div>
                     </div>
                   )}
