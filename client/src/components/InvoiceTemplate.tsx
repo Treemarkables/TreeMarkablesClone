@@ -239,6 +239,53 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           )}
 
+          {/* Line Items */}
+          {hasLineItems ? (
+            <div className="p-3 sm:p-8 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-900">Description</th>
+                      <th className="border border-gray-200 px-4 py-3 text-center font-semibold text-gray-900">Qty</th>
+                      <th className="border border-gray-200 px-4 py-3 text-center font-semibold text-gray-900">Unit</th>
+                      <th className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">Unit Price</th>
+                      <th className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">Total (inc GST)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lineItems.map((item, index) => (
+                      <tr key={item.id} className="even:bg-gray-50" data-testid={`row-line-item-${index}`}>
+                        <td className="border border-gray-200 px-4 py-3 text-gray-900">
+                          <span className="font-medium">{item.description}</span>
+                          {item.category && (
+                            <p className="text-sm text-gray-600">{item.category}</p>
+                          )}
+                        </td>
+                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.quantity}</td>
+                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.unit || 'ea'}</td>
+                        <td className="border border-gray-200 px-4 py-3 text-right text-gray-700">{formatCurrency(item.unitPrice)}</td>
+                        <td className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(item.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            // Fallback for invoices without line items
+            <div className="p-3 sm:p-8 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-gray-700 whitespace-pre-wrap">{description || 'Professional Tree Services'}</p>
+                {!description && (
+                  <p className="text-sm text-gray-600 mt-2">Total amount includes all services as agreed</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Invoice Details and Payment Status */}
           <div className="p-3 sm:p-8 border-b border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -304,53 +351,6 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               </div>
             </div>
           </div>
-
-          {/* Line Items */}
-          {hasLineItems ? (
-            <div className="p-3 sm:p-8 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-900">Description</th>
-                      <th className="border border-gray-200 px-4 py-3 text-center font-semibold text-gray-900">Qty</th>
-                      <th className="border border-gray-200 px-4 py-3 text-center font-semibold text-gray-900">Unit</th>
-                      <th className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">Unit Price</th>
-                      <th className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">Total (inc GST)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineItems.map((item, index) => (
-                      <tr key={item.id} className="even:bg-gray-50" data-testid={`row-line-item-${index}`}>
-                        <td className="border border-gray-200 px-4 py-3 text-gray-900">
-                          <span className="font-medium">{item.description}</span>
-                          {item.category && (
-                            <p className="text-sm text-gray-600">{item.category}</p>
-                          )}
-                        </td>
-                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.quantity}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.unit || 'ea'}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-right text-gray-700">{formatCurrency(item.unitPrice)}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(item.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            // Fallback for invoices without line items
-            <div className="p-3 sm:p-8 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 whitespace-pre-wrap">{description || 'Professional Tree Services'}</p>
-                {!description && (
-                  <p className="text-sm text-gray-600 mt-2">Total amount includes all services as agreed</p>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Totals */}
           <div className="p-3 sm:p-8 border-b border-gray-200">
