@@ -84,6 +84,20 @@ This fix applies to ALL pages (public marketing pages and dashboard pages). The 
 
 This prevents Safari-specific caching issues while maintaining refresh functionality for other browsers.
 
+### Production Session Authentication Fix
+**Issue**: Sessions were not persisting in production after login. Users would log in successfully but immediately lose their session, appearing as "Not authenticated" on subsequent requests.
+
+**Root Cause**: Two issues prevented sessions from working in production:
+1. Sessions were not being explicitly saved before sending the login response
+2. Express wasn't trusting Replit's proxy headers, preventing secure cookies from being set properly over HTTPS
+
+**Solution**: 
+1. Added explicit session save callback in login endpoint (`req.session.save()`)
+2. Added `app.set('trust proxy', 1);` in `server/index.ts` to trust Replit's reverse proxy
+3. Session configuration uses `secure: true` cookies in production which requires proxy trust to work
+
+This is critical for production deployments behind reverse proxies like Replit's infrastructure.
+
 ## External Dependencies
 
 ### Core Framework
