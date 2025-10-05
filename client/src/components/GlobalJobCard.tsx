@@ -3487,14 +3487,8 @@ export function GlobalJobCard({
                   {/* ServiceM8-Style Items & Services Table */}
                   {lineItemFields.length > 0 ? (
                     <div className="space-y-4">
-                      {/* Table Header */}
-                      <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 rounded-t-lg">
-                        <h4 className="font-semibold">Items & Services</h4>
-                        <p className="text-orange-100 text-sm">Professional service breakdown with GST calculations</p>
-                      </div>
-                      
                       {/* Table */}
-                      <div className="overflow-x-auto border rounded-b-lg">
+                      <div className="overflow-x-auto border rounded-lg">
                         <table className="w-full text-xs">
                           <thead className="bg-gray-50 border-b">
                             <tr>
