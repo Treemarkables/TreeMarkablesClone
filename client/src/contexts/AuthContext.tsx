@@ -52,9 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return res.json();
     },
     onSuccess: () => {
+      const wasCrewUser = currentUser?.role === 'crew';
       setCurrentUserState(null);
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-      setLocation('/');
+      // Crew users go to login page, others go to home
+      setLocation(wasCrewUser ? '/login' : '/');
     },
   });
 
