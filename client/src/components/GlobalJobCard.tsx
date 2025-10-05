@@ -3544,62 +3544,6 @@ export function GlobalJobCard({
                           </tbody>
                         </table>
                       </div>
-                      
-                      {/* ServiceM8-Style Financial Summary */}
-                      <div className="grid grid-cols-2 gap-6">
-                        {/* Cost Breakdown */}
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <h5 className="font-medium text-gray-800 mb-3">Cost Breakdown</h5>
-                          <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Total Cost</span>
-                              <span className="font-mono text-red-600">
-                                ${form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitCost || 0)), 0).toFixed(2)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Total Revenue</span>
-                              <span className="font-mono text-green-600">
-                                ${form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toFixed(2)}
-                              </span>
-                            </div>
-                            <div className="border-t border-gray-200 pt-2 flex justify-between font-semibold">
-                              <span>Gross Profit</span>
-                              <span className="font-mono text-blue-600">
-                                ${(
-                                  form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0) -
-                                  form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitCost || 0)), 0)
-                                ).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* GST Calculation */}
-                        <div className="bg-blue-50 rounded-lg p-4">
-                          <h5 className="font-medium text-blue-800 mb-3">GST Calculation (15%)</h5>
-                          <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-blue-700">Subtotal (Ex GST)</span>
-                              <span className="font-mono">
-                                ${(form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0) / 1.15).toFixed(2)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-blue-700">GST (15%)</span>
-                              <span className="font-mono">
-                                ${(form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0) * 0.15 / 1.15).toFixed(2)}
-                              </span>
-                            </div>
-                            <div className="border-t border-blue-200 pt-2 flex justify-between font-semibold text-blue-900">
-                              <span>Total (Inc GST)</span>
-                              <span className="font-mono">
-                                ${form.watch('lineItems')?.reduce((sum: number, item: any) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   ) : null}
                 </div>
