@@ -352,6 +352,7 @@ export function GlobalJobCard({
     // Create line item with proper pricing using form field array
     const lineItem = {
       id: `item-${Date.now()}`,
+      itemCode: item.itemNumber || '',
       description: itemName,
       quantity: 1,
       unitPrice: unitPrice,
@@ -2650,7 +2651,7 @@ export function GlobalJobCard({
                                   
                                   return (
                                     <div key={field.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm">
-                                      <div className="col-span-2 text-gray-500">—</div>
+                                      <div className="col-span-2 text-gray-500">{field.itemCode || '—'}</div>
                                       <div className="col-span-2 font-medium text-gray-900">
                                         <div className="flex items-center gap-2">
                                           <div className="w-4 h-4 bg-gray-200 rounded flex-shrink-0"></div>
