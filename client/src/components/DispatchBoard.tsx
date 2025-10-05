@@ -1337,19 +1337,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         </div>
 
                         
-                        {/* Status, Time, and Priority */}
+                        {/* Status and Priority */}
                         <div className="flex items-center gap-2 text-[11px]">
-                          {job.startTime && !job.startTime.includes('0000-00-00') && (
-                            <span className="text-gray-500">{job.startTime}</span>
-                          )}
                           {(() => {
-                            if (job.status === 'quote') {
-                              return (
-                                <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] px-1.5 py-0">
-                                  quote
-                                </Badge>
-                              );
-                            } else if (job.status === 'lead') {
+                            if (job.status === 'lead') {
                               return (
                                 <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-[10px] px-1.5 py-0">
                                   lead
@@ -1497,34 +1488,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 mb-2 text-xs text-gray-500 flex-wrap">
-                        {job.startTime && !job.startTime.includes('0000-00-00') && (
-                          <span className="whitespace-nowrap">{job.startTime}</span>
-                        )}
-                        {job.assignedTo && <span className="truncate">• {job.assignedTo}</span>}
-                      </div>
+                      {job.assignedTo && (
+                        <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
+                          <span className="truncate">{job.assignedTo}</span>
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-between gap-2 min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
                           {(() => {
-                            const statusFormatted = job.status?.charAt(0).toUpperCase() + job.status?.slice(1);
-                            if (job.status === 'quote') {
-                              return (
-                                <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs flex-shrink-0">
-                                  quote
-                                </Badge>
-                              );
-                            } else if (job.status === 'lead') {
+                            if (job.status === 'lead') {
                               return (
                                 <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs flex-shrink-0">
                                   lead
                                 </Badge>
                               );
-                            } else {
-                              return (
-                                <span className="text-xs text-gray-500 truncate">{statusFormatted}</span>
-                              );
                             }
+                            return null;
                           })()}
                         </div>
                         <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{job.priority}</span>
