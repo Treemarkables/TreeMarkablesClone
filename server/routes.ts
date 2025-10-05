@@ -5876,6 +5876,49 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Emergency password reset (for recovery purposes)
+  app.post('/api/employees/emergency-password-reset', async (req: Request, res: Response) => {
+    try {
+      const { email, newPassword } = req.body;
+      
+      if (!email || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email and new password are required'
+        });
+      }
+      
+      // Find employee by email
+      const employee = await storage.getEmployeeByEmail(email);
+      
+      if (!employee) {
+        return res.status(404).json({
+          success: false,
+          message: 'Employee not found'
+        });
+      }
+      
+      // Hash the new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      
+      // Update employee with new password
+      await storage.updateEmployee(employee.id, {
+        password: hashedPassword
+      });
+      
+      res.json({
+        success: true,
+        message: `Password reset successfully for ${employee.firstName} ${employee.lastName}`
+      });
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error resetting password'
+      });
+    }
+  });
+
   // Admin-only: Clean up duplicate employee emails (prioritize admin role)
   app.post('/api/employees/cleanup-duplicates', async (req: Request, res: Response) => {
     try {
