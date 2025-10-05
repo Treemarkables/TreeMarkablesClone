@@ -1388,7 +1388,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       </div>
 
       {/* Mobile Layout: Show job cards in traditional list view */}
-      <div className="lg:hidden p-4 flex flex-col h-full overflow-hidden">
+      <div className="lg:hidden p-4 flex flex-col flex-1 min-h-0 overflow-hidden">
       <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0">
         {/* Mobile Header - With Search */}
         <CardHeader className="space-y-3 flex-shrink-0">
