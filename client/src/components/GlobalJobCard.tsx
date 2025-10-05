@@ -169,7 +169,7 @@ export function GlobalJobCard({
   const [newLineItem, setNewLineItem] = useState({
     description: '',
     quantity: 1,
-    unitPrice: 0,
+    unitPrice: '' as string | number,
     unitCost: 0
   });
   const [searchQuery, setSearchQuery] = useState("");
@@ -253,7 +253,9 @@ export function GlobalJobCard({
 
   // Line item management functions
   const addLineItem = () => {
-    if (!newLineItem.description || newLineItem.quantity <= 0 || newLineItem.unitPrice < 0 || newLineItem.unitCost < 0) {
+    const unitPriceNum = typeof newLineItem.unitPrice === 'string' ? parseFloat(newLineItem.unitPrice) : newLineItem.unitPrice;
+    
+    if (!newLineItem.description || newLineItem.quantity <= 0 || !unitPriceNum || unitPriceNum < 0 || newLineItem.unitCost < 0) {
       toast({
         title: "Validation Error", 
         description: "Please fill in all required fields. Prices and costs must be non-negative.",
@@ -266,9 +268,9 @@ export function GlobalJobCard({
       id: `item-${Date.now()}`,
       description: newLineItem.description,
       quantity: newLineItem.quantity,
-      unitPrice: newLineItem.unitPrice,
+      unitPrice: unitPriceNum,
       unitCost: newLineItem.unitCost || 0,
-      total: newLineItem.quantity * newLineItem.unitPrice,
+      total: newLineItem.quantity * unitPriceNum,
       totalCost: newLineItem.quantity * (newLineItem.unitCost || 0),
       taxRate: 15, // New Zealand GST
       priceIncludesTax: false // Default to tax exclusive
@@ -281,7 +283,7 @@ export function GlobalJobCard({
     setNewLineItem({
       description: '',
       quantity: 1,
-      unitPrice: 0,
+      unitPrice: '',
       unitCost: 0
     });
     setIsAddingLineItem(false);
@@ -382,7 +384,7 @@ export function GlobalJobCard({
     setNewLineItem({
       description: itemName,
       quantity: 1,
-      unitPrice: 0,
+      unitPrice: '',
       unitCost: 0
     });
     setIsAddingLineItem(true);
@@ -2607,7 +2609,7 @@ export function GlobalJobCard({
                                 size="sm"
                                 onClick={() => {
                                   setIsAddingLineItem(false);
-                                  setNewLineItem({ description: '', quantity: 1, unitPrice: 0, unitCost: 0 });
+                                  setNewLineItem({ description: '', quantity: 1, unitPrice: '', unitCost: 0 });
                                 }}
                               >
                                 ✕
@@ -2645,7 +2647,8 @@ export function GlobalJobCard({
                                   min="0"
                                   step="0.01"
                                   value={newLineItem.unitPrice}
-                                  onChange={(e) => setNewLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
+                                  onChange={(e) => setNewLineItem(prev => ({ ...prev, unitPrice: e.target.value === '' ? '' : parseFloat(e.target.value) }))}
+                                  placeholder="0.00"
                                   className="text-sm"
                                 />
                               </div>
