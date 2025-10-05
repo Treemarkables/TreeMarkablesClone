@@ -1322,14 +1322,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       
                       {/* Job Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between mb-0.5">
-                          <div className="flex-1 min-w-0 pr-2">
+                        <div className="flex items-start justify-between mb-0.5 gap-2">
+                          <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-gray-900 text-sm truncate" data-testid={`desktop-job-customer-${job.id}`}>
                               {customerName}
                             </h3>
-                            <div className="text-[11px] text-gray-500 truncate">
-                              #{job.jobId || '0000'}
-                            </div>
+                          </div>
+                          <div className="text-[44px] font-bold text-gray-400 leading-none flex-shrink-0">
+                            #{job.jobId || '0000'}
                           </div>
                         </div>
                         <div className="text-[11px] text-gray-600 mb-1 truncate">
@@ -1478,14 +1478,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     
                     {/* Job Content */}
                     <div className="flex-1 min-w-0 overflow-hidden">
-                      <div className="flex items-start justify-between mb-1 min-w-0">
+                      <div className="flex items-start justify-between mb-1 min-w-0 gap-2">
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-0.5 truncate">
+                          <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-1 truncate">
                             {customerName}
                           </h3>
-                          <div className="text-[10px] text-gray-500 mb-1 truncate">
-                            #{job.jobId || job.jobNumber || '0000'}
-                          </div>
                           <div className="text-xs text-gray-600 mb-1 font-semibold truncate">
                             {job.address || 'No address specified'}
                           </div>
@@ -1494,6 +1491,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               {job.description}
                             </div>
                           )}
+                        </div>
+                        <div className="text-[40px] font-bold text-gray-400 leading-none flex-shrink-0">
+                          #{job.jobId || job.jobNumber || '0000'}
                         </div>
                       </div>
 
