@@ -1340,7 +1340,7 @@ export function GlobalJobCard({
             {/* Left: Job Title & Status */}
             <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
               <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white truncate tracking-tight" data-testid="text-job-title">
-                {mode === "create" ? "New Job" : `Job #${editingJob?.jobNumber || "3314"}`}
+                {mode === "create" ? "New Job" : `Job ${editingJob?.jobNumber || "3314"}`}
               </h1>
               {mode === 'edit' && editingJob?.status && (
                 <Badge 
