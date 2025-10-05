@@ -1300,21 +1300,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 return (
                   <div
                     key={job.id}
-                    className="p-2 border-b hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
+                    className="p-4 border-b hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden"
                     onClick={() => handleEditJob(job)}
                     data-testid={`desktop-job-card-${job.id}`}
                   >
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-3">
                       {/* Status Avatar Circle with Activity Indicator */}
                       <div className="relative flex-shrink-0">
                         <div 
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-[18px]"
+                          className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-[22px]"
                           style={{ backgroundColor: getJobStatusColorValue(job) }}
                         >
                           {getStatusInitials(job)}
                         </div>
                         {hasRecentActivity(job) && (
-                          <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border border-white animate-pulse" 
+                          <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" 
                                title="Recent activity"
                                data-testid={`activity-indicator-${job.id}`} />
                         )}
@@ -1322,9 +1322,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       
                       {/* Job Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between mb-0.5 gap-2">
+                        <div className="flex items-start justify-between mb-1 gap-2">
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 text-sm truncate" data-testid={`desktop-job-customer-${job.id}`}>
+                            <h3 className="font-bold text-gray-900 text-base truncate" data-testid={`desktop-job-customer-${job.id}`}>
                               {customerName}
                             </h3>
                           </div>
@@ -1332,17 +1332,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             {job.jobId || '0000'}
                           </div>
                         </div>
-                        <div className="text-[11px] text-gray-600 mb-1 truncate">
+                        <div className="text-xs text-gray-600 mb-1 font-semibold truncate">
                           {job.address || 'No address specified'}
                         </div>
+                        {job.description && (
+                          <div className="text-xs text-gray-500 mb-2 line-clamp-3 break-words">
+                            {job.description}
+                          </div>
+                        )}
+                        {job.assignedTo && (
+                          <div className="text-xs text-gray-500 mb-2 truncate">
+                            {job.assignedTo}
+                          </div>
+                        )}
 
                         
                         {/* Status and Priority */}
-                        <div className="flex items-center gap-2 text-[11px]">
+                        <div className="flex items-center gap-2 text-xs">
                           {(() => {
                             if (job.status === 'lead') {
                               return (
-                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-[10px] px-1.5 py-0">
+                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
                                   lead
                                 </Badge>
                               );
