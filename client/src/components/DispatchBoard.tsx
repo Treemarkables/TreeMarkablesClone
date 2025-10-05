@@ -1267,6 +1267,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <CardTitle className="text-base">Jobs</CardTitle>
                 <div className="flex items-center gap-2">
                   <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleCreateJob}
+                    data-testid="create-job-button"
+                    className="h-7"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    New Job
+                  </Button>
+                  <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => setSelectedDate(subDays(selectedDate, 1))}
@@ -1442,8 +1452,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       {/* Mobile Layout: Show job cards in traditional list view */}
       <div className="lg:hidden p-2 sm:p-4 flex flex-col flex-1 min-h-0 overflow-x-hidden overflow-y-auto">
       <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0 w-full max-w-full">
-        {/* Mobile Header - Search Only */}
+        {/* Mobile Header - Search and Create Job */}
         <CardHeader className="space-y-1.5 flex-shrink-0 p-2">
+          {/* Create Job Button - Mobile */}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleCreateJob}
+            data-testid="create-job-button-mobile"
+            className="w-full h-8 text-xs"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Create New Job
+          </Button>
+          
           {/* Ultra Compact Job Search */}
           <div className="relative">
             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
