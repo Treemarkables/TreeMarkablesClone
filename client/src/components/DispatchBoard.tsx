@@ -1392,11 +1392,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0 w-full max-w-full">
         {/* Mobile Header - Ultra Compact */}
         <CardHeader className="space-y-1.5 sm:space-y-2 flex-shrink-0 p-2 sm:p-3">
-          <div className="flex items-center justify-between gap-1.5 sm:gap-2 min-w-0">
-            <CardTitle className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-semibold min-w-0 flex-shrink">
+          <div className="flex items-center justify-between gap-1 min-w-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 flex-1">
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-              <span className="truncate">Jobs ({getTodaysJobs().length})</span>
-            </CardTitle>
+              <span className="text-xs sm:text-sm font-semibold truncate">Jobs ({getTodaysJobs().length})</span>
+            </div>
             <div className="flex items-center gap-0.5 flex-shrink-0">
               <Button
                 variant="outline"
