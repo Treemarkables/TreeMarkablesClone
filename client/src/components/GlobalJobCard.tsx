@@ -2735,11 +2735,6 @@ export function GlobalJobCard({
                                                   onChange={(e) => {
                                                     const newQuantity = parseFloat(e.target.value) || 1;
                                                     quantityField.onChange(newQuantity);
-                                                    // Update total when quantity changes
-                                                    const currentItems = form.getValues('lineItems');
-                                                    currentItems[index].total = newQuantity * currentItems[index].unitPrice;
-                                                    currentItems[index].totalCost = newQuantity * currentItems[index].unitCost;
-                                                    form.setValue('lineItems', currentItems);
                                                   }}
                                                   className="w-16 h-8 text-center text-sm border-none bg-transparent p-0"
                                                 />
@@ -2817,10 +2812,6 @@ export function GlobalJobCard({
                                                   onChange={(e) => {
                                                     const newPrice = parseFloat(e.target.value) || 0;
                                                     priceField.onChange(newPrice);
-                                                    // Update total when price changes
-                                                    const currentItems = form.getValues('lineItems');
-                                                    currentItems[index].total = currentItems[index].quantity * newPrice;
-                                                    form.setValue('lineItems', currentItems);
                                                   }}
                                                   disabled={!isAdmin}
                                                   readOnly={!isAdmin}
