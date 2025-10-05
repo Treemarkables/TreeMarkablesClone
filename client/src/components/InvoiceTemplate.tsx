@@ -39,6 +39,7 @@ interface InvoiceTemplateProps {
   invoice: Invoice;
   customer?: Customer;
   lineItems?: InvoiceLineItem[];
+  description?: string;
   className?: string;
   showActions?: boolean;
   onEmail?: () => void;
@@ -52,6 +53,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   invoice,
   customer,
   lineItems = [],
+  description,
   className = '',
   showActions = false,
   onEmail,
@@ -342,8 +344,10 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             <div className="p-3 sm:p-8 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
               <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700">Professional Tree Services</p>
-                <p className="text-sm text-gray-600 mt-2">Total amount includes all services as agreed</p>
+                <p className="text-gray-700 whitespace-pre-wrap">{description || 'Professional Tree Services'}</p>
+                {!description && (
+                  <p className="text-sm text-gray-600 mt-2">Total amount includes all services as agreed</p>
+                )}
               </div>
             </div>
           )}

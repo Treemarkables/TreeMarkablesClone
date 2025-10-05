@@ -3872,6 +3872,7 @@ export function GlobalJobCard({
                   updatedAt: new Date().toISOString()
                 }}
                 customer={selectedCustomer || undefined}
+                description={formData?.description || editingJob.description || ''}
                 lineItems={formData?.lineItems?.map(item => ({
                   id: item.id,
                   description: item.description,
