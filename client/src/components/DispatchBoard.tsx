@@ -1390,11 +1390,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       {/* Mobile Layout: Show job cards in traditional list view */}
       <div className="lg:hidden p-2 sm:p-4 flex flex-col flex-1 min-h-0 overflow-x-hidden overflow-y-auto">
       <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0 w-full max-w-full">
-        {/* Mobile Header - Compact */}
-        <CardHeader className="space-y-2 flex-shrink-0 p-3">
-          <div className="flex items-center justify-between gap-2 min-w-0">
-            <CardTitle className="flex items-center gap-1.5 text-sm font-semibold min-w-0 flex-shrink">
-              <Calendar className="h-4 w-4 flex-shrink-0" />
+        {/* Mobile Header - Ultra Compact */}
+        <CardHeader className="space-y-1.5 sm:space-y-2 flex-shrink-0 p-2 sm:p-3">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2 min-w-0">
+            <CardTitle className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-semibold min-w-0 flex-shrink">
+              <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
               <span className="truncate">Jobs ({getTodaysJobs().length})</span>
             </CardTitle>
             <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -1403,16 +1403,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 size="sm"
                 onClick={() => setSelectedDate(subDays(selectedDate, 1))}
                 data-testid="prev-day-mobile"
-                className="h-7 w-7 p-0"
+                className="h-6 w-6 sm:h-7 sm:w-7 p-0"
               >
-                <ChevronLeft className="h-3.5 w-3.5" />
+                <ChevronLeft className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setSelectedDate(new Date())}
                 data-testid="today-btn-mobile"
-                className="h-7 px-2 text-[11px]"
+                className="h-6 px-1.5 sm:h-7 sm:px-2 text-[10px] sm:text-[11px]"
               >
                 Today
               </Button>
@@ -1421,18 +1421,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 size="sm"
                 onClick={() => setSelectedDate(addDays(selectedDate, 1))}
                 data-testid="next-day-mobile"
-                className="h-7 w-7 p-0"
+                className="h-6 w-6 sm:h-7 sm:w-7 p-0"
               >
-                <ChevronRight className="h-3.5 w-3.5" />
+                <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               </Button>
             </div>
           </div>
           
-          {/* Compact Job Search */}
+          {/* Ultra Compact Job Search */}
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Search className="absolute left-2 sm:left-2.5 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground" />
             <Input
-              placeholder={isDeepSearchActive ? "Deep search..." : "Search jobs..."}
+              placeholder={isDeepSearchActive ? "Deep search..." : "Search..."}
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -1440,14 +1440,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   // Normal search - let the regular filtering handle it
                 }
               }}
-              className="pl-8 pr-8 h-8 text-sm bg-white"
+              className="pl-7 pr-7 sm:pl-8 sm:pr-8 h-7 sm:h-8 text-xs sm:text-sm bg-white"
               data-testid="mobile-job-search-input"
             />
             {isDeepSearchActive && (
               <Button
                 size="sm"
                 variant="ghost"
-                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                className="absolute right-0.5 sm:right-1 top-1/2 transform -translate-y-1/2 h-5 w-5 sm:h-6 sm:w-6 p-0"
                 onClick={() => {
                   setIsDeepSearchActive(false);
                   setDeepSearchResults([]);
@@ -1455,29 +1455,29 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 }}
                 data-testid="btn-clear-deep-search-mobile"
               >
-                <X className="h-3 w-3" />
+                <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               </Button>
             )}
           </div>
           
-          {/* Deep Search Button - Compact */}
+          {/* Deep Search Button - Ultra Compact */}
           {searchQuery.trim() && !isDeepSearchActive && (
             <Button
               size="sm"
               variant="outline"
-              className="w-full h-7 text-[11px]"
+              className="w-full h-6 sm:h-7 text-[10px] sm:text-[11px]"
               onClick={() => performDeepSearch(searchQuery)}
               data-testid="btn-deep-search-mobile"
             >
-              <Search className="h-3 w-3 mr-1.5" />
+              <Search className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
               Deep Search
             </Button>
           )}
           
-          {/* Deep Search Status - Compact */}
+          {/* Deep Search Status - Ultra Compact */}
           {isDeepSearchActive && (
-            <div className="flex items-center gap-1.5 text-[11px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-              <SearchX className="h-3 w-3" />
+            <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] text-blue-600 bg-blue-50 px-1.5 sm:px-2 py-0.5 rounded">
+              <SearchX className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               {deepSearchResults.length} results
             </div>
           )}
