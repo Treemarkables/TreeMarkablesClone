@@ -507,8 +507,6 @@ export function GlobalJobCard({
         customerId: editingJob.customerId || '',
         leadSource: editingJob.leadSource || '',
         address: editingJob.address || '',
-        city: (editingJob.city ?? '') || '',
-        region: (editingJob.region ?? '') || '',
         totalAmount: editingJob.totalAmount || '0',
         paidAmount: editingJob.paidAmount || '0',
         notes: editingJob.notes || '',
@@ -551,11 +549,8 @@ export function GlobalJobCard({
       const sameAsJobAddress = values.sameAsJobAddress;
       
       // If "same as job address" is enabled and job address fields change, update billing fields
-      if (sameAsJobAddress && (name === 'address' || name === 'city' || name === 'region')) {
-        if (name === 'address') {
-          form.setValue('billingAddress', values.address || '');
-        }
-        // city and region are shared fields, so they're automatically in sync
+      if (sameAsJobAddress && name === 'address') {
+        form.setValue('billingAddress', values.address || '');
       }
     });
     
@@ -639,9 +634,7 @@ export function GlobalJobCard({
           name: customerName || 'New Customer',
           email: data.jobContactEmail || "",
           phone: data.jobContactPhone || "",
-          address: data.address || "",
-          city: data.city || "",
-          region: data.region || ""
+          address: data.address || ""
         };
         
         const customerResponse = await apiRequest('POST', '/api/customers', customerData);
@@ -2038,40 +2031,6 @@ export function GlobalJobCard({
                                 )}
                               />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <FormField
-                                control={form.control}
-                                name="newCustomerCity"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel className="text-xs font-medium text-gray-600">City</FormLabel>
-                                    <FormControl>
-                                      <Input 
-                                        {...field} 
-                                        placeholder="City"
-                                        data-testid="input-new-customer-city"
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name="newCustomerRegion"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel className="text-xs font-medium text-gray-600">Region</FormLabel>
-                                    <FormControl>
-                                      <Input 
-                                        {...field} 
-                                        placeholder="Region/State"
-                                        data-testid="input-new-customer-region"
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
                           </div>
                         )}
                       </div>
@@ -2121,6 +2080,7 @@ export function GlobalJobCard({
                                       <SelectContent>
                                         <SelectItem value="website">Website</SelectItem>
                                         <SelectItem value="referral">Referral</SelectItem>
+                                        <SelectItem value="repeat">Repeat</SelectItem>
                                         <SelectItem value="google">Google Search</SelectItem>
                                         <SelectItem value="facebook">Facebook</SelectItem>
                                         <SelectItem value="phone">Phone Call</SelectItem>
@@ -2153,8 +2113,6 @@ export function GlobalJobCard({
                                     onChange={field.onChange}
                                     onAddressSelect={(parsed) => {
                                       form.setValue('address', parsed.fullAddress);
-                                      if (parsed.city) form.setValue('city', parsed.city);
-                                      if (parsed.region) form.setValue('region', parsed.region);
                                     }}
                                     className="h-8 text-sm" 
                                     placeholder="Start typing address..."
@@ -2318,20 +2276,7 @@ export function GlobalJobCard({
                                         // If checked, copy job address to billing address
                                         if (checked) {
                                           const jobAddress = form.getValues('address') || '';
-                                          const jobCity = form.getValues('city') || '';
-                                          const jobRegion = form.getValues('region') || '';
-                                          
-                                          // Populate billing fields with job address data
                                           form.setValue('billingAddress', jobAddress);
-                                          
-                                          // Note: city and region are shared fields, so they're already populated
-                                          // Just ensure they have the job data
-                                          if (!form.getValues('city')) {
-                                            form.setValue('city', jobCity);
-                                          }
-                                          if (!form.getValues('region')) {
-                                            form.setValue('region', jobRegion);
-                                          }
                                         }
                                       }}
                                     />
@@ -2361,40 +2306,6 @@ export function GlobalJobCard({
                                 </FormItem>
                               )}
                             />
-                            <div className="grid grid-cols-2 gap-3">
-                              <FormField
-                                control={form.control}
-                                name="city"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormControl>
-                                      <Input 
-                                        {...field} 
-                                        className="h-8 text-sm" 
-                                        placeholder="City"
-                                        disabled={form.watch('sameAsJobAddress')}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name="region"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormControl>
-                                      <Input 
-                                        {...field} 
-                                        className="h-8 text-sm" 
-                                        placeholder="Region"
-                                        disabled={form.watch('sameAsJobAddress')}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
                           </div>
                         </div>
                       </div>
