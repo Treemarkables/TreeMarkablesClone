@@ -408,6 +408,12 @@ export const jobs = pgTable("jobs", {
   billingContactMobile: text("billing_contact_mobile"),
   sameAsJobAddress: boolean("same_as_job_address").default(true),
   
+  // Job Contact Information
+  jobContactFirstName: text("job_contact_first_name"),
+  jobContactLastName: text("job_contact_last_name"),
+  jobContactEmail: text("job_contact_email"),
+  jobContactPhone: text("job_contact_phone"),
+  
   // GST/Tax System (New Zealand 15% GST)
   taxMode: text("tax_mode").default('tax_exclusive'), // cost_markup, tax_inclusive, tax_exclusive
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default('15.00'), // 15% GST
