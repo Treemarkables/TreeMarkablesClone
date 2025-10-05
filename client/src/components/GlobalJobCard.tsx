@@ -1323,17 +1323,20 @@ export function GlobalJobCard({
     }
   };
 
+  // Get current status from form or editingJob
+  const currentStatus = editingJob?.status || form.watch('status');
+
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogContent className="w-full h-full max-w-full flex flex-col p-4 pb-6 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
         {/* ServiceM8-style Header */}
         <div className={`border-b px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 flex-shrink-0 sm:rounded-t-xl ${
-          editingJob?.status === 'completed' ? 'bg-green-600 border-green-700' :
-          editingJob?.status === 'work order' ? 'bg-blue-600 border-blue-700' :
-          editingJob?.status === 'quote' ? 'bg-orange-600 border-orange-700' :
-          editingJob?.status === 'lead' ? 'bg-cyan-600 border-cyan-700' :
-          editingJob?.status === 'scheduled' ? 'bg-orange-600 border-orange-700' :
-          editingJob?.status === 'unsuccessful' ? 'bg-red-600 border-red-700' :
+          currentStatus === 'completed' ? 'bg-green-600 border-green-700' :
+          currentStatus === 'work order' ? 'bg-blue-600 border-blue-700' :
+          currentStatus === 'quote' ? 'bg-orange-600 border-orange-700' :
+          currentStatus === 'lead' ? 'bg-cyan-600 border-cyan-700' :
+          currentStatus === 'scheduled' ? 'bg-orange-600 border-orange-700' :
+          currentStatus === 'unsuccessful' ? 'bg-red-600 border-red-700' :
           'bg-gray-600 border-gray-700'
         }`}>
           <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -1342,20 +1345,20 @@ export function GlobalJobCard({
               <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white truncate tracking-tight" data-testid="text-job-title">
                 {mode === "create" ? "New Job" : `Job ${editingJob?.jobNumber || "3314"}`}
               </h1>
-              {mode === 'edit' && editingJob?.status && (
+              {currentStatus && (
                 <Badge 
                   className={`text-xs whitespace-nowrap ${
-                    editingJob.status === 'completed' ? 'bg-green-700 hover:bg-green-800 text-white' :
-                    editingJob.status === 'work order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
-                    editingJob.status === 'quote' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
-                    editingJob.status === 'lead' ? 'bg-cyan-700 hover:bg-cyan-800 text-white' :
-                    editingJob.status === 'scheduled' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
-                    editingJob.status === 'unsuccessful' ? 'bg-red-700 hover:bg-red-800 text-white' :
+                    currentStatus === 'completed' ? 'bg-green-700 hover:bg-green-800 text-white' :
+                    currentStatus === 'work order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
+                    currentStatus === 'quote' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
+                    currentStatus === 'lead' ? 'bg-cyan-700 hover:bg-cyan-800 text-white' :
+                    currentStatus === 'scheduled' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
+                    currentStatus === 'unsuccessful' ? 'bg-red-700 hover:bg-red-800 text-white' :
                     'bg-gray-700 hover:bg-gray-800 text-white'
                   }`}
                   data-testid="badge-job-status"
                 >
-                  {editingJob.status.charAt(0).toUpperCase() + editingJob.status.slice(1)}
+                  {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
                 </Badge>
               )}
             </div>
