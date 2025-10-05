@@ -2457,9 +2457,9 @@ export function GlobalJobCard({
                       </div>
 
                       {/* Financial Summary */}
-                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                        <h4 className="font-medium text-gray-800 mb-3">Financial Summary</h4>
-                        <div className="space-y-2 text-sm">
+                      <div className="bg-gray-50 rounded-lg p-3 space-y-1">
+                        <h4 className="text-sm font-medium text-gray-800 mb-2">Financial Summary</h4>
+                        <div className="space-y-1 text-xs">
                           {(() => {
                             const lineItems = form.watch('lineItems') || [];
                             const taxMode = form.watch('taxMode') || 'tax_exclusive';
