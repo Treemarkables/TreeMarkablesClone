@@ -2232,7 +2232,7 @@ export const documentTemplates = pgTable("document_templates", {
   
   // Company Branding
   companyName: text("company_name").default("Treemarkables LTD"),
-  companyAddress: text("company_address").default("Hauroa rd\nGisborne, 4010"),
+  companyAddress: text("company_address").default("213 Stanley road, Gisborne"),
   companyEmail: text("company_email").default("quotes@treemarkables.nz"),
   companyPhone: text("company_phone").default("027 216 6882"),
   gstNumber: text("gst_number").default("131-047-592-GST004"),
