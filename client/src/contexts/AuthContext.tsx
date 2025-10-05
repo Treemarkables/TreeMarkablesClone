@@ -13,6 +13,8 @@ interface AuthContextType {
   isAdmin: boolean;
   isCrew: boolean;
   isAuthenticated: boolean;
+  login: (credentials: { employeeId?: string; email?: string; password?: string }) => Promise<any>;
+  loginPending: boolean;
   logout: () => void;
 }
 
@@ -61,6 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLocation(wasCrewUser ? '/login' : '/');
     },
   });
+
+  const login = async (credentials: { employeeId?: string; email?: string; password?: string }) => {
+    return loginMutation.mutateAsync(credentials);
+  };
 
   const logout = () => {
     logoutMutation.mutate();
@@ -133,6 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isCrew,
         isAuthenticated,
+        login,
+        loginPending: loginMutation.isPending,
         logout,
       }}
     >
