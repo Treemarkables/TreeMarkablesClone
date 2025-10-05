@@ -770,7 +770,7 @@ export function EmailComposerModal({
               name="email-body"
               value={emailData.body}
               onChange={(e) => setEmailData(prev => ({ ...prev, body: e.target.value }))}
-              className="w-full h-full resize-none border-0 focus-visible:ring-0 text-sm leading-relaxed"
+              className="w-full h-full resize-none border-0 focus-visible:ring-0 text-sm leading-relaxed pb-32"
               placeholder="Compose your email..."
               data-testid="textarea-email-body"
             />
