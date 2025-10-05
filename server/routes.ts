@@ -5876,6 +5876,69 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Admin-only: Clean up duplicate employee emails (prioritize admin role)
+  app.post('/api/employees/cleanup-duplicates', async (req: Request, res: Response) => {
+    try {
+      // Get all employees
+      const allEmployees = await storage.getAllEmployees();
+      
+      // Group by email
+      const emailGroups = new Map<string, typeof allEmployees>();
+      for (const emp of allEmployees) {
+        if (!emp.email) continue;
+        if (!emailGroups.has(emp.email)) {
+          emailGroups.set(emp.email, []);
+        }
+        emailGroups.get(emp.email)!.push(emp);
+      }
+      
+      // Find duplicates and delete crew duplicates, keeping admin
+      const duplicates: Array<{email: string, kept: any, deleted: any[]}> = [];
+      let deletedCount = 0;
+      
+      for (const [email, employees] of emailGroups.entries()) {
+        if (employees.length > 1) {
+          // Sort: admin first, then by createdAt
+          const sorted = employees.sort((a, b) => {
+            if (a.role === 'admin' && b.role !== 'admin') return -1;
+            if (a.role !== 'admin' && b.role === 'admin') return 1;
+            return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+          });
+          
+          const kept = sorted[0];
+          const toDelete = sorted.slice(1);
+          
+          // Delete duplicates
+          for (const emp of toDelete) {
+            await storage.deleteEmployee(emp.id);
+            deletedCount++;
+          }
+          
+          duplicates.push({
+            email,
+            kept: { id: kept.id, name: `${kept.firstName} ${kept.lastName}`, role: kept.role },
+            deleted: toDelete.map(e => ({ id: e.id, name: `${e.firstName} ${e.lastName}`, role: e.role }))
+          });
+        }
+      }
+      
+      res.json({
+        success: true,
+        message: `Cleaned up ${deletedCount} duplicate employee record(s)`,
+        data: {
+          deletedCount,
+          duplicates
+        }
+      });
+    } catch (error) {
+      console.error('Error cleaning up duplicate employees:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error cleaning up duplicate employees'
+      });
+    }
+  });
+
   // ========================================
   // JOB STAFF ASSIGNMENT ROUTES
   // ========================================
