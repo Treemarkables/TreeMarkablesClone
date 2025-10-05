@@ -1322,7 +1322,7 @@ export function GlobalJobCard({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-      <DialogContent className="w-full h-full max-w-full flex flex-col p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[95vh] sm:rounded-xl">
+      <DialogContent className="w-full h-full max-w-full flex flex-col p-4 pb-6 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[95vh] sm:rounded-xl">
         {/* ServiceM8-style Header */}
         <div className={`border-b px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 flex-shrink-0 sm:rounded-t-xl ${
           editingJob?.status === 'completed' ? 'bg-green-600 border-green-700' :
