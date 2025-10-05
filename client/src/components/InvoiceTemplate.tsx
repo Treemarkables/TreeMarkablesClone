@@ -174,10 +174,6 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                     <span className="break-all">{template.companyPhone || '027 216 6882'}</span>
                   </div>
                   <div className="flex items-center gap-0.5 sm:gap-1">
-                    <MailIcon className="w-2 h-2 sm:w-3 sm:h-3" />
-                    <span className="break-all">{template.companyEmail || 'invoices@treemarkables.nz'}</span>
-                  </div>
-                  <div className="flex items-center gap-0.5 sm:gap-1">
                     <MapPin className="w-2 h-2 sm:w-3 sm:h-3" />
                     <span className="break-all">{template.companyAddress || 'Hauroa rd\nGisborne, 4010'}</span>
                   </div>
