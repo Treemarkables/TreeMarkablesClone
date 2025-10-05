@@ -41,6 +41,18 @@ export const ServiceM8LineItemSchema = z.object({
 
 export type ServiceM8LineItem = z.infer<typeof ServiceM8LineItemSchema>;
 
+// Proposal section schema for ServiceM8-style proposals
+export const proposalSectionSchema = z.object({
+  id: z.string(),
+  type: z.enum(['text', 'media', 'lineItems']),
+  title: z.string(),
+  content: z.string().optional(), // Rich text HTML for text sections
+  mediaUrls: z.array(z.string()).optional(), // Photo/video URLs for media sections
+  order: z.number(),
+});
+
+export type ProposalSection = z.infer<typeof proposalSectionSchema>;
+
 // Checklist item schema for jobs
 export const checklistItemSchema = z.object({
   id: z.string(),
@@ -371,6 +383,12 @@ export const jobs = pgTable("jobs", {
   equipmentChecklist: jsonb("equipment_checklist").$type<EquipmentChecklistItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "uuid", "equipment": "Chainsaw", "checked": false, "checkedAt": "timestamp", "checkedBy": "name"}]
   notes: text("notes"), // Job notes and comments
   lineItems: jsonb("line_items").$type<ServiceM8LineItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number, "unitCost": number, "totalCost": number, "costExGst": number, "markup": number, "priceExGst": number, "totalExGst": number, "taxRate": number, "itemCode": string}]
+  
+  // ServiceM8-Style Proposal Sections
+  proposalTitle: text("proposal_title"),
+  proposalSections: jsonb("proposal_sections").notNull().default(sql`'[]'::jsonb`), // [{"id": "string", "type": "text" | "media" | "lineItems", "title": "string", "content": "string", "mediaUrls": ["string"], "order": number}]
+  proposalSent: boolean("proposal_sent").default(false),
+  proposalSentDate: timestamp("proposal_sent_date"),
   
   weatherDependent: boolean("weather_dependent").default(false),
   permitRequired: boolean("permit_required").default(false),
