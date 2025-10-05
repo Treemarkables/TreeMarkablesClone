@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -92,16 +92,6 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isCrew } = useAuth();
-  
-  // Allowed tabs for crew users
-  const allowedCrewTabs = ['jobs', 'safety'];
-  
-  // If crew user tries to access restricted tab, redirect to jobs tab and return null to prevent rendering
-  if (isCrew && !allowedCrewTabs.includes(activeTab)) {
-    // Use setTimeout to avoid setState during render
-    setTimeout(() => onTabChange?.('jobs'), 0);
-    return null;
-  }
 
   // Customer update mutation
   const updateCustomerMutation = useMutation({
@@ -219,6 +209,14 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   const { data: customersResponse, isLoading: customersLoading } = useQuery<ApiResponse<Customer>>({
     queryKey: ['/api/customers'],
   });
+
+  // Redirect crew users if they try to access restricted tabs
+  useEffect(() => {
+    const allowedCrewTabs = ['jobs', 'safety'];
+    if (isCrew && !allowedCrewTabs.includes(activeTab)) {
+      onTabChange?.('jobs');
+    }
+  }, [isCrew, activeTab, onTabChange]);
 
   // Extract data from API responses with type safety
   const jobs = jobsResponse?.data || [];
