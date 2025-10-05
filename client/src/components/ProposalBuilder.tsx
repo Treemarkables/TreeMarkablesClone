@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
@@ -21,28 +21,20 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { insertProposalSchema, insertProposalLineItemSchema, type ProposalLineItem } from "@shared/schema";
+import { insertProposalSchema } from "@shared/schema";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
+import { useProposalSections } from "@/hooks/proposal/useProposalSections";
+import { useProposalMutations } from "@/hooks/proposal/useProposalMutations";
+import { useLineItemDraft } from "@/hooks/proposal/useLineItemDraft";
+import { calculateProposalTotals, createInitialSectionFromJob } from "@/utils/proposal/helpers";
+import type { LineItem, ProposalSection as ProposalSectionType } from "@/types/proposal";
 
-// Extend shared schemas for form validation  
 const proposalFormSchema = insertProposalSchema.extend({
-  jobId: z.string().optional(), // Allow empty for draft proposals
+  jobId: z.string().optional(),
   totalAmount: z.number().min(0, "Total amount must be positive").optional(),
   taxRate: z.preprocess((val) => parseFloat(val as string) || 15, z.number().min(0).max(100).default(15)),
-  validUntil: z.string().optional(), // UI field that maps to expiryDays
+  validUntil: z.string().optional(),
 }).partial();
-
-// Simplified line item form schema
-const lineItemFormSchema = z.object({
-  description: z.string().min(1, "Description is required"),
-  quantity: z.preprocess((val) => parseFloat(val as string) || 0, z.number().min(0.01, "Quantity must be positive")),
-  unitPrice: z.preprocess((val) => parseFloat(val as string) || 0, z.number().min(0, "Unit price must be positive")),
-  unit: z.string().default("each"),
-  category: z.string().optional(),
-  notes: z.string().optional(),
-  isOptional: z.boolean().default(false),
-});
 
 interface ProposalBuilderProps {
   isOpen: boolean;
@@ -51,53 +43,6 @@ interface ProposalBuilderProps {
   customerId?: string;
   mode?: "create" | "edit";
   proposalId?: string;
-}
-
-interface LineItemChoice {
-  id: string;
-  label: string;
-  description: string;
-  price: number;
-  isDefault?: boolean;
-}
-
-type PricingType = 'normal' | 'choice' | 'fixed';
-
-interface LineItem {
-  id?: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  unit: string;
-  category?: string;
-  notes?: string;
-  isOptional: boolean;
-  selected: boolean; // For customer selection
-  // Pricing configuration
-  pricingType: PricingType;
-  choices: LineItemChoice[];
-  selectedChoiceId?: string;
-  fixedPrice?: number;
-}
-
-interface UploadedPhoto {
-  id: string;
-  url: string;
-  filename: string;
-  type: string;
-  category: string;
-  notes?: string;
-  capturedAt: string;
-}
-
-interface ProposalSectionData {
-  id: string;
-  title: string;
-  description: string;
-  photos: UploadedPhoto[];
-  lineItems: LineItem[];
-  sortOrder: number;
 }
 
 export function ProposalBuilder({ 
