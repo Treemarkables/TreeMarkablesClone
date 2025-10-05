@@ -505,88 +505,7 @@ export function EmailComposerModal({
         </DialogHeader>
 
         <div className="flex-1 flex flex-col gap-3 sm:gap-4 overflow-y-auto p-3 sm:p-4">
-          {/* Email Fields */}
-          <div className="space-y-1 sm:space-y-3">
-            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
-              <Label htmlFor="email-to" className="text-[10px] sm:text-sm sm:col-span-1 sm:text-right">To:</Label>
-              <Input
-                id="email-to"
-                name="email-to"
-                value={emailData.to}
-                onChange={(e) => setEmailData(prev => ({ ...prev, to: e.target.value }))}
-                className="sm:col-span-11 h-7 sm:h-9 text-xs sm:text-sm"
-                placeholder="recipient@email.com"
-                data-testid="input-email-to"
-              />
-            </div>
-            
-            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
-              <Label htmlFor="email-cc" className="text-[10px] sm:text-sm sm:col-span-1 sm:text-right">CC:</Label>
-              <Input
-                id="email-cc"
-                name="email-cc"
-                value={emailData.cc}
-                onChange={(e) => setEmailData(prev => ({ ...prev, cc: e.target.value }))}
-                className="sm:col-span-11 h-7 sm:h-9 text-xs sm:text-sm"
-                placeholder="cc@email.com (optional)"
-                data-testid="input-email-cc"
-              />
-            </div>
-
-            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
-              <Label htmlFor="email-subject" className="text-[10px] sm:text-sm sm:col-span-1 sm:text-right">Subject:</Label>
-              <Input
-                id="email-subject"
-                name="email-subject"
-                value={emailData.subject}
-                onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
-                className="sm:col-span-11 h-7 sm:h-9 text-xs sm:text-sm"
-                data-testid="input-email-subject"
-              />
-            </div>
-
-            {/* Attachments */}
-            {attachments.length > 0 && (
-              <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 sm:items-center">
-                <Label className="text-sm sm:col-span-1 sm:text-right">Attached:</Label>
-                <div className="sm:col-span-11 flex gap-2 flex-wrap">
-                  {attachments.map((attachment, index) => {
-                    const getAttachmentVariant = (type: string) => {
-                      switch (type) {
-                        case 'invoice': return 'destructive';
-                        case 'quote': return 'default';
-                        case 'proposal': return 'secondary';
-                        default: return 'outline';
-                      }
-                    };
-                    
-                    return (
-                      <Badge key={index} variant={getAttachmentVariant(attachment.type)} className="flex items-center gap-1">
-                        <FileText className="w-3 h-3" />
-                        {attachment.name}
-                        <X 
-                          className="w-3 h-3 ml-1 cursor-pointer hover:text-red-500" 
-                          onClick={() => removeAttachment(attachment.name)}
-                        />
-                      </Badge>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt,.zip"
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-            />
-          </div>
-
-          {/* Smart Attachments Section */}
+          {/* Smart Attachments Section - Moved to top */}
           <div className="border rounded-lg bg-gray-50 p-1 sm:p-4">
             <h3 className="text-[10px] sm:text-sm font-medium text-gray-700 mb-1 sm:mb-3">Smart Attachments</h3>
             
@@ -714,6 +633,87 @@ export function EmailComposerModal({
             </div>
           </div>
 
+          {/* Email Fields */}
+          <div className="space-y-1 sm:space-y-3">
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
+              <Label htmlFor="email-to" className="text-[10px] sm:text-sm sm:col-span-1 sm:text-right">To:</Label>
+              <Input
+                id="email-to"
+                name="email-to"
+                value={emailData.to}
+                onChange={(e) => setEmailData(prev => ({ ...prev, to: e.target.value }))}
+                className="sm:col-span-11 h-7 sm:h-9 text-xs sm:text-sm"
+                placeholder="recipient@email.com"
+                data-testid="input-email-to"
+              />
+            </div>
+            
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
+              <Label htmlFor="email-cc" className="text-[10px] sm:text-sm sm:col-span-1 sm:text-right">CC:</Label>
+              <Input
+                id="email-cc"
+                name="email-cc"
+                value={emailData.cc}
+                onChange={(e) => setEmailData(prev => ({ ...prev, cc: e.target.value }))}
+                className="sm:col-span-11 h-7 sm:h-9 text-xs sm:text-sm"
+                placeholder="cc@email.com (optional)"
+                data-testid="input-email-cc"
+              />
+            </div>
+
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-3 sm:items-center">
+              <Label htmlFor="email-subject" className="text-[10px] sm:text-sm sm:col-span-1 sm:text-right">Subject:</Label>
+              <Input
+                id="email-subject"
+                name="email-subject"
+                value={emailData.subject}
+                onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                className="sm:col-span-11 h-7 sm:h-9 text-xs sm:text-sm"
+                data-testid="input-email-subject"
+              />
+            </div>
+
+            {/* Attachments */}
+            {attachments.length > 0 && (
+              <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 sm:items-center">
+                <Label className="text-sm sm:col-span-1 sm:text-right">Attached:</Label>
+                <div className="sm:col-span-11 flex gap-2 flex-wrap">
+                  {attachments.map((attachment, index) => {
+                    const getAttachmentVariant = (type: string) => {
+                      switch (type) {
+                        case 'invoice': return 'destructive';
+                        case 'quote': return 'default';
+                        case 'proposal': return 'secondary';
+                        default: return 'outline';
+                      }
+                    };
+                    
+                    return (
+                      <Badge key={index} variant={getAttachmentVariant(attachment.type)} className="flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        {attachment.name}
+                        <X 
+                          className="w-3 h-3 ml-1 cursor-pointer hover:text-red-500" 
+                          onClick={() => removeAttachment(attachment.name)}
+                        />
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt,.zip"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+          </div>
+
           {/* Formatting Toolbar */}
           <div className="flex items-center gap-0.5 sm:gap-1 p-1 sm:p-2 border-b border-gray-200 flex-wrap">
             <Button
@@ -770,7 +770,7 @@ export function EmailComposerModal({
               name="email-body"
               value={emailData.body}
               onChange={(e) => setEmailData(prev => ({ ...prev, body: e.target.value }))}
-              className="w-full h-full resize-none border-0 focus-visible:ring-0 text-sm leading-relaxed pb-32"
+              className="w-full h-full resize-none border-0 focus-visible:ring-0 text-sm leading-relaxed pb-48"
               placeholder="Compose your email..."
               data-testid="textarea-email-body"
             />
