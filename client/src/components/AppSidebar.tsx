@@ -286,14 +286,17 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
               <SidebarMenuButton
                 asChild
                 isActive={activeTab === "settings"}
-                onClick={() => {
-                  onTabChange("settings");
-                  if (isMobile) {
-                    setOpen(false);
-                  }
-                }}
               >
-                <button className="w-full justify-start" data-testid="button-tab-settings">
+                <button 
+                  className="w-full justify-start" 
+                  data-testid="button-tab-settings"
+                  onClick={() => {
+                    onTabChange("settings");
+                    if (isMobile) {
+                      setOpen(false);
+                    }
+                  }}
+                >
                   <Settings className="h-4 w-4" />
                   <span>Settings</span>
                 </button>
@@ -301,16 +304,17 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
             </SidebarMenuItem>
           )}
           <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              onClick={() => {
-                logout();
-                if (isMobile) {
-                  setOpen(false);
-                }
-              }}
-            >
-              <button className="w-full justify-start" data-testid="button-logout">
+            <SidebarMenuButton asChild>
+              <button 
+                className="w-full justify-start" 
+                data-testid="button-logout"
+                onClick={() => {
+                  logout();
+                  if (isMobile) {
+                    setOpen(false);
+                  }
+                }}
+              >
                 <LogOut className="h-4 w-4" />
                 <span>Log Out</span>
               </button>
