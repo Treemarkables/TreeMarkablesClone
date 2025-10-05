@@ -171,37 +171,33 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       <Card className="shadow-lg">
         <CardContent className="p-0">
           {/* Header with Treemarkables Branding */}
-          <div className="bg-gradient-to-r from-orange-500 to-blue-600 p-4 sm:p-8 text-white">
-            <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+          <div className="bg-gradient-to-r from-orange-500 to-blue-600 p-1 sm:p-3 text-white">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-1 sm:gap-0">
               <div className="flex-1 min-w-0">
-                <h1 className="text-2xl sm:text-3xl font-bold mb-2 break-words">{template.companyName || 'Treemarkables'}</h1>
-                <p className="text-orange-100 text-base sm:text-lg">Professional Tree Services</p>
-                <div className="mt-3 sm:mt-4 space-y-1 text-sm sm:text-base text-orange-100">
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="break-all">{template.companyPhone || '+64 6 867 1234'}</span>
+                <h1 className="text-xs sm:text-lg font-bold mb-0 sm:mb-1 truncate">{template.companyName || 'Treemarkables LTD'}</h1>
+                <p className="text-orange-100 text-[8px] sm:text-xs">Professional Tree Services</p>
+                <div className="mt-0.5 sm:mt-1.5 space-y-0 text-[8px] sm:text-xs text-orange-100">
+                  <div className="flex items-center gap-0.5 sm:gap-1">
+                    <Phone className="w-2 h-2 sm:w-3 sm:h-3" />
+                    <span className="break-all">{template.companyPhone || '027 216 6882'}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <MailIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="break-all">{template.companyEmail || 'info@treemarkables.co.nz'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="break-words">{template.companyAddress || 'Gisborne, New Zealand'}</span>
+                  <div className="flex items-center gap-0.5 sm:gap-1">
+                    <MapPin className="w-2 h-2 sm:w-3 sm:h-3" />
+                    <span className="break-all">{template.companyAddress || '213 Stanley road, Gisborne'}</span>
                   </div>
                 </div>
               </div>
-              <div className="sm:text-right shrink-0">
-                <div className="bg-white/20 rounded-lg p-3 sm:p-4 backdrop-blur-sm">
-                  <h2 className="text-xl sm:text-2xl font-bold">PROPOSAL</h2>
-                  <div className="mt-2 space-y-1 text-xs sm:text-sm">
-                    <p className="break-all"><strong>Number:</strong> {proposal.proposalNumber || 'P-' + proposal.id}</p>
+              <div className="text-left sm:text-right flex-shrink-0">
+                <div className="bg-white/20 rounded p-1 sm:p-1.5 backdrop-blur-sm">
+                  <h2 className="text-xs sm:text-base font-bold mb-0 sm:mb-0.5">PROPOSAL</h2>
+                  <div className="mt-0.5 space-y-0 text-[8px] sm:text-xs">
+                    <p><strong>Number:</strong> {proposal.proposalNumber || 'PROP-' + proposal.id}</p>
                     <p><strong>Date:</strong> {format(new Date(proposal.createdAt || Date.now()), 'dd MMM yyyy')}</p>
                     {expiryDate && (
                       <p><strong>Valid Until:</strong> {format(expiryDate, 'dd MMM yyyy')}</p>
                     )}
-                    <div className="mt-2">
-                      <Badge className={getStatusColor(proposal.status || 'draft')}>
+                    <div className="mt-0.5">
+                      <Badge className={`${getStatusColor(proposal.status || 'draft')} text-[7px] sm:text-[10px] px-1 py-0`}>
                         {(proposal.status || 'draft').toUpperCase()}
                       </Badge>
                     </div>
