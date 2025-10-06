@@ -1221,22 +1221,22 @@ export function ProposalBuilder({
                           </div>
                         </CardHeader>
                         
-                        <CardContent className="space-y-4 sm:space-y-6 p-3 sm:p-6">
+                        <CardContent className="space-y-3 p-3 sm:p-4">
                           {/* Section Description */}
                           <div>
-                            <label className="text-sm font-medium mb-2 block">Description</label>
+                            <label className="text-sm font-medium mb-1.5 block">Description</label>
                             <Textarea
                               value={section.description}
                               onChange={(e) => updateSectionDescription(section.id, e.target.value)}
                               placeholder="Describe this section of work..."
-                              className="min-h-[100px] border-0 p-0 focus-visible:ring-0"
+                              className="min-h-[80px] border-0 p-0 focus-visible:ring-0"
                               data-testid={`textarea-section-description-${section.id}`}
                             />
                           </div>
 
                           {/* Section Photos */}
                           <div>
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center justify-between mb-2">
                               <label className="text-sm font-medium">Photos</label>
                               <div className="flex gap-2">
                                 <input
@@ -1277,13 +1277,13 @@ export function ProposalBuilder({
                             </div>
 
                             {section.photos.length > 0 && (
-                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-4">
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                                 {section.photos.map((photo) => (
                                   <div key={photo.id} className="relative group">
                                     <img
                                       src={photo.url}
                                       alt={photo.filename}
-                                      className="w-full h-24 object-cover rounded-lg border"
+                                      className="w-full h-20 object-cover rounded-lg border"
                                     />
                                     <Button
                                       type="button"
@@ -1303,16 +1303,16 @@ export function ProposalBuilder({
 
                           {/* Section Line Items */}
                           <div>
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center justify-between mb-2">
                               <label className="text-sm font-medium">Line Items</label>
                             </div>
 
                             {/* Add Line Item Form */}
-                            <Card className="mb-4">
-                              <CardHeader>
-                                <CardTitle className="text-base">Add Line Item</CardTitle>
+                            <Card className="mb-3">
+                              <CardHeader className="p-3">
+                                <CardTitle className="text-sm">Add Line Item</CardTitle>
                               </CardHeader>
-                              <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6">
+                              <CardContent className="space-y-2 p-3 pt-0">
                                 {/* Basic Details */}
                                 <div>
                                   <Input
@@ -1324,8 +1324,8 @@ export function ProposalBuilder({
                                 </div>
 
                                 {/* Pricing Type Selection */}
-                                <div className="space-y-3">
-                                  <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                                     <label className="flex items-center space-x-2">
                                       <input
                                         type="radio"
@@ -1372,7 +1372,7 @@ export function ProposalBuilder({
 
                                   {/* Normal Pricing Fields */}
                                   {currentLineItem.pricingType === "normal" && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                       <Input
                                         type="number"
                                         placeholder="Quantity"
@@ -1405,10 +1405,10 @@ export function ProposalBuilder({
 
                                   {/* Multiple Choice Options */}
                                   {currentLineItem.pricingType === "choice" && (
-                                    <div className="space-y-3">
-                                      <div className="border rounded-lg p-3">
-                                        <h5 className="font-medium mb-3">Add Choice Option</h5>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                                    <div className="space-y-2">
+                                      <div className="border rounded-lg p-2">
+                                        <h5 className="text-sm font-medium mb-2">Add Choice Option</h5>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
                                           <Input
                                             placeholder="Choice Label"
                                             value={currentChoice.label || ""}
@@ -1429,7 +1429,7 @@ export function ProposalBuilder({
                                             data-testid={`input-choice-price-${section.id}`}
                                           />
                                         </div>
-                                        <div className="flex items-center space-x-2 mb-3">
+                                        <div className="flex items-center space-x-2 mb-2">
                                           <Checkbox
                                             checked={currentChoice.isDefault || false}
                                             onCheckedChange={(checked) => setCurrentChoice(prev => ({ ...prev, isDefault: checked as boolean }))}
@@ -1452,16 +1452,16 @@ export function ProposalBuilder({
                                       {/* Current Choice Options */}
                                       {currentLineItem.choices && currentLineItem.choices.length > 0 && (
                                         <div>
-                                          <h5 className="font-medium mb-2">Choice Options ({currentLineItem.choices.length})</h5>
-                                          <div className="space-y-2">
+                                          <h5 className="text-sm font-medium mb-1.5">Choice Options ({currentLineItem.choices.length})</h5>
+                                          <div className="space-y-1.5">
                                             {currentLineItem.choices.map((choice) => (
-                                              <div key={choice.id} className="flex flex-wrap items-center justify-between gap-2 p-2 border rounded">
+                                              <div key={choice.id} className="flex flex-wrap items-center justify-between gap-2 p-1.5 border rounded text-sm">
                                                 <div className="flex-1 min-w-0">
                                                   <div className="flex flex-wrap items-center gap-2">
                                                     <span className="font-medium">{choice.label}</span>
                                                     {choice.isDefault && <Badge variant="secondary">Default</Badge>}
                                                   </div>
-                                                  <div className="text-sm text-muted-foreground break-words">
+                                                  <div className="text-xs text-muted-foreground break-words">
                                                     {choice.description} - ${choice.price.toFixed(2)}
                                                   </div>
                                                 </div>
@@ -1507,20 +1507,20 @@ export function ProposalBuilder({
 
                             {/* Line Items List */}
                             {section.lineItems.length > 0 && (
-                              <div className="space-y-2">
+                              <div className="space-y-1.5">
                                 {section.lineItems.map((item) => (
                                   <Card key={item.id} className="border-l-2 border-l-muted">
-                                    <CardContent className="p-3 sm:p-4">
+                                    <CardContent className="p-2 sm:p-3">
                                       <div className="flex flex-wrap items-start justify-between gap-2">
-                                        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+                                        <div className="flex items-start gap-2 flex-1 min-w-0">
                                           <Checkbox
                                             checked={item.selected}
                                             onCheckedChange={() => toggleLineItemSelection(section.id, item.id!)}
                                             data-testid={`checkbox-line-item-${item.id}`}
-                                            className="mt-1"
+                                            className="mt-0.5"
                                           />
                                           <div className="flex-1 min-w-0">
-                                            <div className="font-medium break-words">{item.description}</div>
+                                            <div className="text-sm font-medium break-words">{item.description}</div>
                                             
                                             {/* Fixed Price Item */}
                                             {item.pricingType === "fixed" && (
