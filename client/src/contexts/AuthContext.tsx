@@ -110,9 +110,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    console.log('🔍 Auth Effect - meResponse:', meResponse);
-    console.log('🔍 Auth Effect - currentUser:', currentUser);
-    
     // If server returns not authenticated
     if (meResponse?.success === false) {
       if (currentUser) {
