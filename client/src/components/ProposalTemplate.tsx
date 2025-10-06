@@ -177,7 +177,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                 <img 
                   src={new URL('@assets/new logo png_1757829817784.png', import.meta.url).href}
                   alt="Treemarkables Logo" 
-                  className="w-8 h-8 sm:w-16 sm:h-16 object-contain bg-white rounded p-0.5 sm:p-1 flex-shrink-0"
+                  className="w-40 h-40 sm:w-80 sm:h-80 object-contain bg-white rounded p-1 sm:p-2 flex-shrink-0"
                 />
                 <div className="flex-1 min-w-0">
                   <h1 className="text-xs sm:text-lg font-bold mb-0 sm:mb-1 truncate">{template.companyName || 'Treemarkables LTD'}</h1>

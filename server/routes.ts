@@ -3649,9 +3649,22 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Generate proposal acceptance URL - goes directly to acceptance page
       const proposalAcceptUrl = `https://${baseUrl.replace(/^https?:\/\//, '')}/proposal/${proposalId}/accept`;
       
+      // Read and convert logo to base64 for email embedding
+      let logoBase64 = '';
+      try {
+        const logoPath = path.join(__dirname, '..', 'attached_assets', 'new logo png_1757829817784.png');
+        if (fs.existsSync(logoPath)) {
+          const logoBuffer = fs.readFileSync(logoPath);
+          logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+        }
+      } catch (logoError) {
+        console.warn('Could not load logo for email:', logoError);
+      }
+
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Treemarkables Logo" style="width: 200px; height: 200px; object-fit: contain; margin-bottom: 20px; background: white; border-radius: 8px; padding: 10px;" />` : ''}
             <h1 style="color: #f59e0b; margin: 0;">Tree Service Proposal</h1>
             <p style="color: #6b7280; margin: 5px 0 0 0;">Professional Tree Care Services</p>
           </div>
