@@ -8787,9 +8787,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Clean email body for conversation display
       const cleanedBody = cleanEmailBody(actualText, html);
       
+      // Extract job/quote reference from TO address or subject line
+      // Check TO address first for patterns like: job-3316@jobs.treemarkables.co.nz
+      const toAddressJobMatch = to?.match(/job-(\d+)@/i);
+      
       // Extract job/quote reference from subject line (use actualSubject for forwarded emails)
       // Matches patterns like: "Job 12345", "QTE-3326", "#12345", "Quote QTE-3326"
-      const jobNumberMatch = actualSubject?.match(/\b(?:Job\s*#?\s*)?(\d{3,})\b/i);
+      const jobNumberMatch = toAddressJobMatch || actualSubject?.match(/\b(?:Job\s*#?\s*)?(\d{3,})\b/i);
       const quoteNumberMatch = actualSubject?.match(/\b(?:Quote\s*#?\s*)?(QTE-\d+)\b/i);
       
       let jobFound = false;
