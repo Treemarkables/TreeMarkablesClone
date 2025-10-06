@@ -205,6 +205,41 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
     }
   });
 
+  // Accept quote mutation - converts to work order
+  const acceptQuoteMutation = useMutation({
+    mutationFn: async (quoteId: string) => {
+      console.log('Accepting quote:', quoteId);
+      const response = await apiRequest('POST', `/api/quotes/${quoteId}/accept`);
+      return response;
+    },
+    onSuccess: (response: any) => {
+      console.log('Quote accepted successfully:', response);
+      const workOrder = response?.data?.workOrder;
+      const jobNumber = workOrder?.jobNumber || 'N/A';
+      
+      toast({
+        title: "Quote Accepted!",
+        description: `Quote has been accepted and converted to Work Order #${jobNumber}`,
+      });
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      
+      // Close the preview modal
+      setPreviewingQuote(null);
+    },
+    onError: (error: any) => {
+      console.error('Quote acceptance error:', error);
+      toast({
+        title: "Acceptance Failed",
+        description: error.message || "Failed to accept quote",
+        variant: "destructive"
+      });
+    }
+  });
+
   // Form setup
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
@@ -657,6 +692,8 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
               customer={Array.isArray(customers) ? customers.find((c: Customer) => c.id === previewingQuote.customerId) : undefined}
               lineItems={previewingQuote.lineItems ? JSON.parse(JSON.stringify(previewingQuote.lineItems)) : []}
               showActions={true}
+              onAccept={() => acceptQuoteMutation.mutate(previewingQuote.id)}
+              isAccepting={acceptQuoteMutation.isPending}
               onEmail={() => {
                 toast({
                   title: "Email Functionality",

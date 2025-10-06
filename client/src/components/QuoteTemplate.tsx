@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { FileText, Download, Mail, Copy } from 'lucide-react';
+import { FileText, Download, Mail, Copy, CheckCircle } from 'lucide-react';
 import type { DocumentTemplate, Quote, Customer } from '@shared/schema';
 
 interface LineItem {
@@ -27,6 +27,8 @@ interface QuoteTemplateProps {
   onEmail?: () => void;
   onDownload?: () => void;
   onCopy?: () => void;
+  onAccept?: () => void;
+  isAccepting?: boolean;
 }
 
 export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
@@ -39,7 +41,9 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
   onSave,
   onEmail,
   onDownload,
-  onCopy
+  onCopy,
+  onAccept,
+  isAccepting = false
 }, ref) => {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -97,7 +101,7 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
     <div ref={ref} className={`w-full max-w-4xl mx-auto bg-white ${className}`}>
       {/* Action Bar */}
       {showActions && (
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg border-b sticky top-0 bg-background z-10">
           <div className="flex items-center gap-2 sm:gap-3">
             <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
             <div>
@@ -106,8 +110,30 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
             </div>
           </div>
           <div className="flex gap-1 sm:gap-2 flex-wrap">
+            {onAccept && quote.status !== 'accepted' && !isExpired && (
+              <Button 
+                size="sm" 
+                onClick={onAccept} 
+                disabled={isAccepting}
+                data-testid="button-accept-quote" 
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {isAccepting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    <span className="hidden sm:inline">Accepting...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Accept & Create Work Order</span>
+                    <span className="sm:hidden">Accept</span>
+                  </>
+                )}
+              </Button>
+            )}
             {onSave && (
-              <Button size="sm" onClick={onSave} data-testid="button-save-quote" className="bg-green-600 hover:bg-green-700 text-white">
+              <Button size="sm" onClick={onSave} data-testid="button-save-quote" className="bg-blue-600 hover:bg-blue-700 text-white">
                 <FileText className="w-4 h-4 mr-2" />
                 Save Quote
               </Button>
