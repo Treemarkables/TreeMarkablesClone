@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
-  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare
+  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -854,6 +854,51 @@ export function ProposalBuilder({
     }
   });
 
+  // Accept proposal mutation - converts to work order
+  const acceptProposalMutation = useMutation({
+    mutationFn: async () => {
+      const previewData = getPreviewData();
+      const proposalId = previewData.proposal.id;
+      
+      if (!proposalId || proposalId.startsWith('preview-')) {
+        throw new Error('Please save the proposal first before accepting');
+      }
+
+      console.log('Accepting proposal:', proposalId);
+      const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
+      return response;
+    },
+    onSuccess: (response: any) => {
+      console.log('Proposal accepted successfully:', response);
+      const workOrder = response?.data?.workOrder;
+      const jobNumber = workOrder?.jobNumber || 'N/A';
+      
+      toast({
+        title: "Proposal Accepted!",
+        description: `Proposal has been accepted and converted to Work Order #${jobNumber}`,
+      });
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      
+      // Close the preview modal
+      setShowPreview(false);
+      
+      // Optionally close the proposal builder
+      onClose();
+    },
+    onError: (error: any) => {
+      console.error('Proposal acceptance error:', error);
+      toast({
+        title: "Acceptance Failed",
+        description: error.message || "Failed to accept proposal",
+        variant: "destructive"
+      });
+    }
+  });
+
   // Handle SMS form submission
   const handleSendSms = async () => {
     if (!smsForm.to.trim() || !smsForm.message.trim()) {
@@ -1676,9 +1721,9 @@ export function ProposalBuilder({
       {showPreview && (
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
           <DialogContent className="max-w-full sm:max-w-6xl h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
-            <DialogHeader className="flex-shrink-0 pb-2 sm:pb-4">
+            <DialogHeader className="flex-shrink-0 pb-2 sm:pb-4 border-b sticky top-0 bg-background z-10">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
+                <div className="flex-1">
                   <DialogTitle className="text-lg sm:text-2xl font-bold text-primary">
                     Proposal Preview
                   </DialogTitle>
@@ -1686,14 +1731,35 @@ export function ProposalBuilder({
                     Preview of your proposal as it will appear to customers
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowPreview(false)}
-                  data-testid="button-close-preview"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => acceptProposalMutation.mutate()}
+                    disabled={acceptProposalMutation.isPending}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    data-testid="button-accept-proposal"
+                  >
+                    {acceptProposalMutation.isPending ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        <span className="hidden sm:inline">Accepting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Accept & Create Work Order</span>
+                        <span className="sm:hidden">Accept</span>
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowPreview(false)}
+                    data-testid="button-close-preview"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </DialogHeader>
 
