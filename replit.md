@@ -115,6 +115,28 @@ This meant that when sessions expired or were cleared in the PWA, users would te
 
 **Security Impact**: This fix ensures that access control is consistent and cannot be bypassed. All users must log in with proper credentials and maintain valid sessions to access role-specific features.
 
+### Session Cookie Security Fix (Oct 6, 2025)
+**Issue**: Users had to log in every time the page refreshed. Session cookies were not persisting across page reloads, even though PostgreSQL session storage was properly configured.
+
+**Root Cause**: Session cookies were configured with `secure: false` in development mode, but Replit serves applications over HTTPS in both development and production environments. Browsers require `secure: true` for cookies served over HTTPS, so they were rejecting the session cookies on every request.
+
+**Solution**: 
+1. Changed session cookie configuration from `secure: process.env.NODE_ENV === 'production'` to `secure: true` for all environments
+2. This ensures browsers accept and persist session cookies since Replit always uses HTTPS
+3. Combined with `app.set('trust proxy', 1)` to work correctly behind Replit's reverse proxy
+
+**Result**: Sessions now persist for 30 days in development (7 days in production) across page refreshes, browser restarts, and server restarts.
+
+### Billing Section Padding Fix (Oct 6, 2025)
+**Issue**: The "Items & Services" table in the billing section was cramped against the edges of its container with no horizontal padding, making it difficult to read on both mobile and desktop.
+
+**Solution**: Added responsive horizontal padding to both billing section table containers:
+- `px-3` (12px) on mobile devices
+- `px-4` (16px) on larger screens (`sm:` breakpoint and above)
+- Applied to both instances of the billing line items table in GlobalJobCard.tsx
+
+**Result**: The billing tables now have proper breathing room on both sides, improving readability and visual consistency with the rest of the application.
+
 ## External Dependencies
 
 ### Core Framework
