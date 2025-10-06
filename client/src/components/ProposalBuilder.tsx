@@ -959,6 +959,9 @@ export function ProposalBuilder({
 
   // Auto-save functionality - debounced save every 3 seconds after changes
   useEffect(() => {
+    // DISABLED: Auto-save temporarily disabled to prevent data loss
+    return;
+    
     if (!isOpen || sections.length === 0) return;
 
     // Create snapshot of current state for comparison
