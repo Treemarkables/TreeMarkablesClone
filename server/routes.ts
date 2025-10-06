@@ -5694,39 +5694,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
-      // Generate photo URLs
+      // Generate photo URLs - images are pre-compressed on client side
       const photoUrls: string[] = [];
       const timestamp = Date.now();
       
       for (let i = 0; i < req.files.length; i++) {
         const file = req.files[i] as Express.Multer.File;
-        let fileExtension = path.extname(path.basename(file.originalname)).toLowerCase();
-        let fileBuffer = file.buffer;
+        const fileExtension = path.extname(path.basename(file.originalname)).toLowerCase();
         
-        // Convert HEIC/HEIF to JPEG for better compatibility
-        if (fileExtension === '.heic' || fileExtension === '.heif') {
-          console.log(`🔄 Converting HEIC to JPEG: ${file.originalname}`);
-          try {
-            const jpegBuffer = await heicConvert({
-              buffer: fileBuffer,
-              format: 'JPEG',
-              quality: 0.8
-            });
-            
-            fileBuffer = Buffer.from(jpegBuffer);
-            fileExtension = '.jpg';
-            console.log(`✅ Converted HEIC to JPEG: ${file.originalname} → .jpg`);
-          } catch (conversionError) {
-            console.error(`❌ HEIC conversion failed for ${file.originalname}, using original:`, conversionError);
-            // Keep original HEIC file if conversion fails
-          }
-        }
-        
+        // Client-side compression already handles HEIC conversion and resize
+        // Just save the file directly for faster uploads
         const newFileName = `${jobId}_${type}_${timestamp}_${i}${fileExtension}`;
         const newPath = path.join(photosDir, newFileName);
         
         // Write file from memory buffer to disk
-        fs.writeFileSync(newPath, fileBuffer);
+        fs.writeFileSync(newPath, file.buffer);
         
         // Store relative URL for database
         photoUrls.push(`/photos/${newFileName}`);
