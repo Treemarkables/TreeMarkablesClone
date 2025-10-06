@@ -3830,10 +3830,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       console.log(`📎 Total inline attachments prepared: ${emailAttachments.length} photos`);
 
       // Send email using EmailService with attachments
+      const fromEmail = replyToEmail || 'info@treemarkables.co.nz';
       const emailSuccess = await emailService.sendEmail({
         to,
         cc,
-        from: replyToEmail || 'info@treemarkables.co.nz', // Use job-specific email or fallback
+        from: `Treemarkables <${fromEmail}>`, // Display name "Treemarkables" with job-specific email
         replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
