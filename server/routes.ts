@@ -10696,27 +10696,60 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         acceptedDate: new Date()
       });
 
-      // Create work order (job) from proposal
-      const jobData = {
-        title: `Work Order from Proposal #${proposal.proposalNumber}`,
-        description: proposal.description || `Work based on accepted proposal #${proposal.proposalNumber}`,
-        customerId: proposal.customerId,
-        leadId: proposal.leadId,
-        quoteId: proposal.quoteId,
-        status: 'work_order',
-        priority: 'medium',
-        totalAmount: proposal.totalAmount,
-        subtotal: proposal.subtotal,
-        gstAmount: (proposal.totalAmount || 0) - (proposal.subtotal || 0),
-        jobType: 'proposal-conversion',
-        proposalId: id,
-        metricsEligible: true,
-        metricsStartDate: new Date()
-      };
-
-      // Generate job number
-      const jobNumber = await storage.getNextJobNumber();
-      const job = await storage.createJob({ ...jobData, jobNumber });
+      let job;
+      let jobNumber;
+      
+      // If proposal is linked to an existing job, update it to work_order status
+      if (proposal.jobId) {
+        const existingJob = await storage.getJob(proposal.jobId);
+        if (existingJob) {
+          // Update existing job to work_order status
+          job = await storage.updateJob(proposal.jobId, {
+            status: 'work_order',
+            totalAmount: proposal.totalAmount,
+            subtotal: proposal.subtotal,
+            gstAmount: (proposal.totalAmount || 0) - (proposal.subtotal || 0),
+          });
+          jobNumber = existingJob.jobNumber;
+          console.log(`✅ Updated existing job ${jobNumber} to work_order status`);
+        } else {
+          // Job not found, create new one
+          const jobData = {
+            title: `Work Order from Proposal #${proposal.proposalNumber}`,
+            description: proposal.description || `Work based on accepted proposal #${proposal.proposalNumber}`,
+            customerId: proposal.customerId,
+            leadId: proposal.leadId,
+            quoteId: proposal.quoteId,
+            status: 'work_order',
+            priority: 'medium',
+            totalAmount: proposal.totalAmount,
+            subtotal: proposal.subtotal,
+            gstAmount: (proposal.totalAmount || 0) - (proposal.subtotal || 0),
+            metricsEligible: true,
+            metricsStartDate: new Date()
+          };
+          jobNumber = await storage.getNextJobNumber();
+          job = await storage.createJob({ ...jobData, jobNumber });
+        }
+      } else {
+        // No linked job, create a new work order
+        const jobData = {
+          title: `Work Order from Proposal #${proposal.proposalNumber}`,
+          description: proposal.description || `Work based on accepted proposal #${proposal.proposalNumber}`,
+          customerId: proposal.customerId,
+          leadId: proposal.leadId,
+          quoteId: proposal.quoteId,
+          status: 'work_order',
+          priority: 'medium',
+          totalAmount: proposal.totalAmount,
+          subtotal: proposal.subtotal,
+          gstAmount: (proposal.totalAmount || 0) - (proposal.subtotal || 0),
+          metricsEligible: true,
+          metricsStartDate: new Date()
+        };
+        jobNumber = await storage.getNextJobNumber();
+        job = await storage.createJob({ ...jobData, jobNumber });
+      }
 
       // Create notification for business owner
       const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
