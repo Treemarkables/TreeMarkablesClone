@@ -3448,25 +3448,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
       
       console.log(`📧 Preparing email for proposal ${proposalId}`);
-      console.log(`📋 Found ${sections.length} sections`);
-      console.log(`📝 Found ${lineItems.length} line items`);
-      console.log(`📸 Section images:`, sections.map(s => ({ id: s.id, title: s.title, imageCount: s.images?.length || 0, images: s.images })));
-      
-      // Detailed debug for each section
-      for (const section of sections) {
-        console.log(`\n🔍 Section "${section.title}":`);
-        console.log(`   - Images array:`, section.images);
-        console.log(`   - Images is array:`, Array.isArray(section.images));
-        console.log(`   - Images length:`, section.images?.length || 0);
-        if (section.images && Array.isArray(section.images) && section.images.length > 0) {
-          console.log(`   ✅ Section has ${section.images.length} images`);
-          section.images.forEach((img, i) => {
-            console.log(`      Image ${i + 1}: ${img}`);
-          });
-        } else {
-          console.log(`   ❌ NO IMAGES - images value:`, JSON.stringify(section.images));
-        }
-      }
+      console.log(`📋 Found ${sections.length} sections with ${lineItems.length} line items`);
       
       // Group line items by section
       const sectionLineItems = new Map<string, any[]>();
@@ -3477,11 +3459,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           }
           sectionLineItems.get(item.sectionId)!.push(item);
         }
-      }
-      
-      console.log(`🗂️ Grouped line items into ${sectionLineItems.size} sections`);
-      for (const [sectionId, items] of sectionLineItems.entries()) {
-        console.log(`   Section ${sectionId}: ${items.length} items`);
       }
 
       // Calculate totals
@@ -3494,6 +3471,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
+      // Get base URL for absolute image paths (required for email clients)
+      const baseUrl = process.env.REPLIT_DEV_DOMAIN || `${req.protocol}://${req.get('host')}`;
+      
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
       const proposalNumber = proposal.proposalNumber || 'N/A';
@@ -3515,33 +3495,41 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             sectionsHtml += `<p style="color: #6b7280; line-height: 1.6; margin: 0 0 15px 0; white-space: pre-wrap;">${section.content}</p>`;
           }
           
-          // Show photos if they exist
+          // Show photos if they exist - using TABLE layout for email compatibility
           if (section.images && Array.isArray(section.images) && section.images.length > 0) {
             sectionsHtml += '<div style="margin: 15px 0;">';
             sectionsHtml += '<h5 style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">Documentation</h5>';
-            sectionsHtml += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">';
+            sectionsHtml += '<table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%;">';
+            sectionsHtml += '<tr>';
             
-            for (const imageUrl of section.images) {
-              // Build full URL for the image
-              const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${process.env.REPLIT_DEV_DOMAIN || 'http://0.0.0.0:5000'}${imageUrl}`;
+            for (let i = 0; i < section.images.length; i++) {
+              const imageUrl = section.images[i];
+              // Build absolute URL for the image (required for email clients)
+              const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${baseUrl}${imageUrl}`;
+              
               sectionsHtml += `
-                <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-                  <img src="${fullImageUrl}" alt="Documentation photo" style="width: 100%; height: auto; display: block;" />
-                </div>
+                <td style="padding: 5px; width: ${Math.floor(100 / Math.min(section.images.length, 3))}%;">
+                  <img src="${fullImageUrl}" alt="Documentation photo ${i + 1}" style="display: block; width: 100%; max-width: 200px; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" />
+                </td>
               `;
+              
+              // Start new row after every 3 images
+              if ((i + 1) % 3 === 0 && i < section.images.length - 1) {
+                sectionsHtml += '</tr><tr>';
+              }
             }
             
-            sectionsHtml += '</div></div>';
+            sectionsHtml += '</tr></table></div>';
           }
           
           // Show line items if they exist
           if (items.length > 0) {
-            sectionsHtml += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">';
+            sectionsHtml += '<table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">';
             sectionsHtml += `
               <tr style="background: #f9fafb;">
-                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb;">Service</th>
-                <th style="padding: 8px; text-align: center; border-bottom: 2px solid #e5e7eb;">Qty</th>
-                <th style="padding: 8px; text-align: right; border-bottom: 2px solid #e5e7eb;">Price</th>
+                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 600;">Service</th>
+                <th style="padding: 8px; text-align: center; border-bottom: 2px solid #e5e7eb; font-weight: 600;">Qty</th>
+                <th style="padding: 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600;">Price</th>
               </tr>
             `;
             
