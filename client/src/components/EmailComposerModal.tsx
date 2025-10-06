@@ -277,6 +277,38 @@ export function EmailComposerModal({
     setShowPreview({ type, data });
   };
 
+  // Fetch proposal sections for preview
+  const { data: proposalSections } = useQuery({
+    queryKey: [`/api/proposals/${showPreview.data?.id}/sections`],
+    enabled: showPreview.type === 'proposal' && !!showPreview.data?.id,
+  });
+
+  // Map sections from API response for ProposalTemplate
+  const mappedSections = proposalSections?.success 
+    ? (proposalSections.data || []).map((section: any) => ({
+        id: section.id,
+        title: section.title,
+        description: section.content || '',
+        photos: section.photos || [],
+        lineItems: (section.lineItems || []).map((item: any) => ({
+          id: item.id,
+          description: item.description || '',
+          quantity: parseFloat(item.quantity) || 1,
+          unitPrice: parseFloat(item.unitPrice) || 0,
+          totalPrice: parseFloat(item.totalPrice) || 0,
+          unit: item.unit || 'each',
+          category: item.category || 'service',
+          notes: item.notes || '',
+          isOptional: item.isOptional || false,
+          selected: item.selected !== undefined ? item.selected : true,
+          pricingType: item.pricingType || 'normal',
+          choices: item.choices || [],
+          selectedChoiceId: item.selectedChoiceId
+        })),
+        sortOrder: section.sortOrder || 0
+      }))
+    : [];
+
   // Handle file attachment
   const handleFileAttachment = () => {
     fileInputRef.current?.click();
@@ -896,6 +928,7 @@ export function EmailComposerModal({
                     }}
                     proposal={showPreview.data}
                     customer={customer}
+                    sections={mappedSections}
                     showActions={false}
                   />
                 )}
