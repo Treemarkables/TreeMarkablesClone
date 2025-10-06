@@ -3443,10 +3443,89 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         customer = await storage.getCustomer(proposal.customerId);
       }
 
+      // Get proposal sections and line items
+      const sections = await storage.getProposalSectionsByProposal(proposalId);
+      const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
+      
+      // Group line items by section
+      const sectionLineItems = new Map<string, any[]>();
+      for (const item of lineItems) {
+        if (item.sectionId) {
+          if (!sectionLineItems.has(item.sectionId)) {
+            sectionLineItems.set(item.sectionId, []);
+          }
+          sectionLineItems.get(item.sectionId)!.push(item);
+        }
+      }
+
+      // Calculate totals
+      let subtotal = 0;
+      for (const item of lineItems) {
+        if (item.selected) {
+          subtotal += parseFloat(item.totalPrice || '0');
+        }
+      }
+      const gst = subtotal * 0.15;
+      const total = subtotal + gst;
+
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
       const proposalNumber = proposal.proposalNumber || 'N/A';
-      const totalAmount = proposal.totalAmount || 0;
+
+      // Build line items HTML
+      let lineItemsHtml = '';
+      if (sections.length > 0) {
+        lineItemsHtml = '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px;">';
+        lineItemsHtml += '<h3 style="color: #374151; margin: 0 0 15px 0;">Services & Pricing</h3>';
+        
+        for (const section of sections) {
+          const items = sectionLineItems.get(section.id) || [];
+          if (items.length > 0) {
+            lineItemsHtml += `<h4 style="color: #4b5563; margin: 15px 0 10px 0;">${section.title}</h4>`;
+            lineItemsHtml += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">';
+            lineItemsHtml += `
+              <tr style="background: #f9fafb;">
+                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb;">Service</th>
+                <th style="padding: 8px; text-align: center; border-bottom: 2px solid #e5e7eb;">Qty</th>
+                <th style="padding: 8px; text-align: right; border-bottom: 2px solid #e5e7eb;">Price</th>
+              </tr>
+            `;
+            
+            for (const item of items) {
+              if (item.selected) {
+                const itemPrice = parseFloat(item.totalPrice || '0');
+                lineItemsHtml += `
+                  <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${item.description}</td>
+                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #f3f4f6;">${item.quantity} ${item.unit}</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f3f4f6;">$${itemPrice.toFixed(2)}</td>
+                  </tr>
+                `;
+              }
+            }
+            lineItemsHtml += '</table>';
+          }
+        }
+        
+        // Add totals
+        lineItemsHtml += '<table style="width: 100%; margin-top: 20px; border-top: 2px solid #e5e7eb; padding-top: 10px;">';
+        lineItemsHtml += `
+          <tr>
+            <td style="padding: 8px; text-align: right; color: #6b7280;">Subtotal (excl GST):</td>
+            <td style="padding: 8px; text-align: right; font-weight: bold; width: 120px;">$${subtotal.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; text-align: right; color: #6b7280;">GST (15%):</td>
+            <td style="padding: 8px; text-align: right; font-weight: bold;">$${gst.toFixed(2)}</td>
+          </tr>
+          <tr style="border-top: 2px solid #374151;">
+            <td style="padding: 8px; text-align: right; color: #374151; font-weight: bold; font-size: 16px;">Total (inc GST):</td>
+            <td style="padding: 8px; text-align: right; font-weight: bold; font-size: 16px; color: #f59e0b;">$${total.toFixed(2)}</td>
+          </tr>
+        `;
+        lineItemsHtml += '</table>';
+        lineItemsHtml += '</div>';
+      }
 
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -3458,34 +3537,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
             <h2 style="color: #374151; margin: 0 0 15px 0;">Dear ${customerName},</h2>
             <p style="color: #4b5563; line-height: 1.6; margin: 0 0 15px 0;">
-              ${message || `Thank you for your interest in our tree services. Please find attached your personalized proposal ${proposalNumber}.`}
+              ${message || `Thank you for your interest in our tree services. Please find your personalized proposal ${proposalNumber} below.`}
             </p>
             <p style="color: #4b5563; line-height: 1.6; margin: 0;">
               We look forward to working with you!
             </p>
           </div>
 
-          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="color: #374151; margin: 0 0 15px 0;">Proposal Summary</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr>
-                <td style="padding: 8px 0; color: #6b7280; border-bottom: 1px solid #f3f4f6;">Proposal Number:</td>
-                <td style="padding: 8px 0; color: #374151; font-weight: bold; border-bottom: 1px solid #f3f4f6;">${proposalNumber}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #6b7280; border-bottom: 1px solid #f3f4f6;">Total Amount:</td>
-                <td style="padding: 8px 0; color: #374151; font-weight: bold; border-bottom: 1px solid #f3f4f6;">$${parseFloat(totalAmount.toString()).toFixed(2)} NZD</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #6b7280;">Status:</td>
-                <td style="padding: 8px 0; color: #059669; font-weight: bold;">${proposal.status || 'Draft'}</td>
-              </tr>
-            </table>
-          </div>
+          ${lineItemsHtml}
 
           <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
             <p style="color: #92400e; margin: 0; font-size: 14px;">
-              <strong>Next Steps:</strong> Please review the attached proposal and contact us if you have any questions. We're happy to discuss any adjustments or schedule a consultation.
+              <strong>Next Steps:</strong> Please review the proposal and contact us if you have any questions. We're happy to discuss any adjustments or schedule a consultation.
             </p>
           </div>
 
@@ -10047,6 +10110,63 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       const validatedData = insertProposalSchema.parse(proposalData);
       const proposal = await storage.createProposal(validatedData);
+      
+      // Save proposal sections and line items if provided
+      if (req.body.sections && Array.isArray(req.body.sections)) {
+        for (const section of req.body.sections) {
+          // Create section
+          const createdSection = await storage.createProposalSection({
+            proposalId: proposal.id,
+            sectionType: 'custom',
+            title: section.title || 'Untitled Section',
+            content: section.description || '',
+            images: section.photos?.map((p: any) => p.url) || [],
+            sortOrder: section.sortOrder || 0,
+            isVisible: true
+          });
+          
+          // Create line items for this section
+          if (section.lineItems && Array.isArray(section.lineItems)) {
+            for (let i = 0; i < section.lineItems.length; i++) {
+              const item = section.lineItems[i];
+              const createdItem = await storage.createProposalLineItem({
+                proposalId: proposal.id,
+                sectionId: createdSection.id,
+                sourceType: 'fixed',
+                sourceId: null,
+                description: item.description || '',
+                quantity: item.quantity?.toString() || '1',
+                unitPrice: item.unitPrice?.toString() || '0',
+                totalPrice: item.totalPrice?.toString() || '0',
+                unit: item.unit || 'each',
+                category: item.category,
+                notes: item.notes,
+                sortOrder: i,
+                isOptional: item.isOptional || false,
+                pricingType: item.pricingType || 'normal',
+                selectedChoiceId: item.selectedChoiceId,
+                fixedPrice: item.fixedPrice?.toString(),
+                selected: item.selected !== false
+              });
+              
+              // Create choices for this line item if they exist
+              if (item.choices && Array.isArray(item.choices)) {
+                for (let j = 0; j < item.choices.length; j++) {
+                  const choice = item.choices[j];
+                  await storage.createProposalLineItemChoice({
+                    lineItemId: createdItem.id,
+                    label: choice.label || '',
+                    description: choice.description,
+                    price: choice.price?.toString() || '0',
+                    isDefault: choice.isDefault || false,
+                    sortOrder: j
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
       
       // If proposal is associated with a job, create a diary entry
       // Note: jobId is not part of insertProposalSchema, so use original request body

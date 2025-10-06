@@ -2499,26 +2499,117 @@ class DatabaseStorage implements IStorage {
     await db.delete(schema.proposals).where(eq(schema.proposals.id, id));
   }
 
-  async createProposalSection(section: InsertProposalSection): Promise<ProposalSection> { throw new Error("Not implemented"); }
-  async getProposalSection(id: string): Promise<ProposalSection | undefined> { return undefined; }
-  async updateProposalSection(id: string, updates: UpdateProposalSection): Promise<ProposalSection> { throw new Error("Not implemented"); }
-  async getProposalSectionsByProposal(proposalId: string): Promise<ProposalSection[]> { return []; }
-  async deleteProposalSection(id: string): Promise<void> { }
-  async reorderProposalSections(proposalId: string, sectionIds: string[]): Promise<ProposalSection[]> { return []; }
+  async createProposalSection(section: InsertProposalSection): Promise<ProposalSection> {
+    const [newSection] = await db.insert(schema.proposalSections).values(section).returning();
+    return newSection;
+  }
+  
+  async getProposalSection(id: string): Promise<ProposalSection | undefined> {
+    const [section] = await db.select().from(schema.proposalSections).where(eq(schema.proposalSections.id, id));
+    return section;
+  }
+  
+  async updateProposalSection(id: string, updates: UpdateProposalSection): Promise<ProposalSection> {
+    const [updated] = await db.update(schema.proposalSections)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.proposalSections.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getProposalSectionsByProposal(proposalId: string): Promise<ProposalSection[]> {
+    const sections = await db.select()
+      .from(schema.proposalSections)
+      .where(eq(schema.proposalSections.proposalId, proposalId))
+      .orderBy(schema.proposalSections.sortOrder);
+    return sections;
+  }
+  
+  async deleteProposalSection(id: string): Promise<void> {
+    await db.delete(schema.proposalSections).where(eq(schema.proposalSections.id, id));
+  }
+  
+  async reorderProposalSections(proposalId: string, sectionIds: string[]): Promise<ProposalSection[]> {
+    for (let i = 0; i < sectionIds.length; i++) {
+      await db.update(schema.proposalSections)
+        .set({ sortOrder: i })
+        .where(eq(schema.proposalSections.id, sectionIds[i]));
+    }
+    return this.getProposalSectionsByProposal(proposalId);
+  }
 
-  async createProposalLineItem(item: InsertProposalLineItem): Promise<ProposalLineItem> { throw new Error("Not implemented"); }
-  async getProposalLineItem(id: string): Promise<ProposalLineItem | undefined> { return undefined; }
-  async updateProposalLineItem(id: string, updates: UpdateProposalLineItem): Promise<ProposalLineItem> { throw new Error("Not implemented"); }
-  async getProposalLineItemsByProposal(proposalId: string): Promise<ProposalLineItem[]> { return []; }
-  async deleteProposalLineItem(id: string): Promise<void> { }
-  async reorderProposalLineItems(proposalId: string, itemIds: string[]): Promise<ProposalLineItem[]> { return []; }
+  async createProposalLineItem(item: InsertProposalLineItem): Promise<ProposalLineItem> {
+    const [newItem] = await db.insert(schema.proposalLineItems).values(item).returning();
+    return newItem;
+  }
+  
+  async getProposalLineItem(id: string): Promise<ProposalLineItem | undefined> {
+    const [item] = await db.select().from(schema.proposalLineItems).where(eq(schema.proposalLineItems.id, id));
+    return item;
+  }
+  
+  async updateProposalLineItem(id: string, updates: UpdateProposalLineItem): Promise<ProposalLineItem> {
+    const [updated] = await db.update(schema.proposalLineItems)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.proposalLineItems.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getProposalLineItemsByProposal(proposalId: string): Promise<ProposalLineItem[]> {
+    const items = await db.select()
+      .from(schema.proposalLineItems)
+      .where(eq(schema.proposalLineItems.proposalId, proposalId))
+      .orderBy(schema.proposalLineItems.sortOrder);
+    return items;
+  }
+  
+  async deleteProposalLineItem(id: string): Promise<void> {
+    await db.delete(schema.proposalLineItems).where(eq(schema.proposalLineItems.id, id));
+  }
+  
+  async reorderProposalLineItems(proposalId: string, itemIds: string[]): Promise<ProposalLineItem[]> {
+    for (let i = 0; i < itemIds.length; i++) {
+      await db.update(schema.proposalLineItems)
+        .set({ sortOrder: i })
+        .where(eq(schema.proposalLineItems.id, itemIds[i]));
+    }
+    return this.getProposalLineItemsByProposal(proposalId);
+  }
 
-  async createProposalLineItemChoice(choice: InsertProposalLineItemChoice): Promise<ProposalLineItemChoice> { throw new Error("Not implemented"); }
-  async getProposalLineItemChoice(id: string): Promise<ProposalLineItemChoice | undefined> { return undefined; }
-  async updateProposalLineItemChoice(id: string, updates: UpdateProposalLineItemChoice): Promise<ProposalLineItemChoice> { throw new Error("Not implemented"); }
-  async getProposalLineItemChoicesByLineItem(lineItemId: string): Promise<ProposalLineItemChoice[]> { return []; }
-  async deleteProposalLineItemChoice(id: string): Promise<void> { }
-  async deleteProposalLineItemChoicesByLineItem(lineItemId: string): Promise<void> { }
+  async createProposalLineItemChoice(choice: InsertProposalLineItemChoice): Promise<ProposalLineItemChoice> {
+    const [newChoice] = await db.insert(schema.proposalLineItemChoices).values(choice).returning();
+    return newChoice;
+  }
+  
+  async getProposalLineItemChoice(id: string): Promise<ProposalLineItemChoice | undefined> {
+    const [choice] = await db.select().from(schema.proposalLineItemChoices).where(eq(schema.proposalLineItemChoices.id, id));
+    return choice;
+  }
+  
+  async updateProposalLineItemChoice(id: string, updates: UpdateProposalLineItemChoice): Promise<ProposalLineItemChoice> {
+    const [updated] = await db.update(schema.proposalLineItemChoices)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.proposalLineItemChoices.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getProposalLineItemChoicesByLineItem(lineItemId: string): Promise<ProposalLineItemChoice[]> {
+    const choices = await db.select()
+      .from(schema.proposalLineItemChoices)
+      .where(eq(schema.proposalLineItemChoices.lineItemId, lineItemId))
+      .orderBy(schema.proposalLineItemChoices.sortOrder);
+    return choices;
+  }
+  
+  async deleteProposalLineItemChoice(id: string): Promise<void> {
+    await db.delete(schema.proposalLineItemChoices).where(eq(schema.proposalLineItemChoices.id, id));
+  }
+  
+  async deleteProposalLineItemChoicesByLineItem(lineItemId: string): Promise<void> {
+    await db.delete(schema.proposalLineItemChoices).where(eq(schema.proposalLineItemChoices.lineItemId, lineItemId));
+  }
 
   async createEquipment(equipment: InsertEquipment): Promise<Equipment> {
     const [newEquipment] = await db.insert(schema.equipment).values(equipment).returning();
