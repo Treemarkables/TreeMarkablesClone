@@ -1415,6 +1415,8 @@ export const insertProposalSectionSchema = createInsertSchema(proposalSections).
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  images: z.array(z.string()).optional(), // Accept any string path, not just URLs
 });
 
 export const updateProposalSectionSchema = insertProposalSectionSchema.partial();
