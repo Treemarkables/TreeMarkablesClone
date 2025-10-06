@@ -3630,11 +3630,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const customerEmail = customer?.email || job?.jobContactEmail || '';
       const customerPhone = customer?.phone || job?.jobContactPhone || '';
       
+      // Generate proposal acceptance URL
+      const proposalAcceptUrl = `https://${baseUrl.replace(/^https?:\/\//, '')}/proposal/${proposalId}`;
+      
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="color: #f59e0b; margin: 0;">Tree Service Proposal</h1>
             <p style="color: #6b7280; margin: 5px 0 0 0;">Professional Tree Care Services</p>
+          </div>
+
+          <!-- ACCEPT BUTTON - Prominent Call-to-Action -->
+          <div style="text-align: center; margin-bottom: 30px;">
+            <a href="${proposalAcceptUrl}" 
+               style="display: inline-block; background: #f59e0b; color: white; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: bold; font-size: 18px; box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
+              ✓ Accept This Proposal
+            </a>
+            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
+              Click to review and accept this proposal online
+            </p>
           </div>
 
           <!-- Customer Information -->
@@ -3664,9 +3678,20 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
           ${sectionsHtml}
 
+          <!-- ACCEPT BUTTON - Bottom of email for convenience -->
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${proposalAcceptUrl}" 
+               style="display: inline-block; background: #f59e0b; color: white; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: bold; font-size: 18px; box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
+              ✓ Accept This Proposal
+            </a>
+            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
+              Ready to get started? Click to accept this proposal
+            </p>
+          </div>
+
           <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
             <p style="color: #92400e; margin: 0; font-size: 14px;">
-              <strong>Next Steps:</strong> Please review the proposal and contact us if you have any questions. We're happy to discuss any adjustments or schedule a consultation.
+              <strong>Questions?</strong> Contact us if you have any questions about this proposal. We're happy to discuss any adjustments or schedule a consultation.
             </p>
           </div>
 
