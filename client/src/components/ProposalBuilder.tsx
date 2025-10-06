@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
-  Edit, Copy, Save, FolderPlus, GripVertical, Mail
+  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -148,6 +148,7 @@ export function ProposalBuilder({
   const [activeSectionId, setActiveSectionId] = useState('section-1');
   const [showPreview, setShowPreview] = useState(false);
   const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [showSmsDialog, setShowSmsDialog] = useState(false);
   const [showDiaryPhotoDialog, setShowDiaryPhotoDialog] = useState(false);
   const [currentPhotoSectionId, setCurrentPhotoSectionId] = useState<string>('');
   const [selectedDiaryPhotos, setSelectedDiaryPhotos] = useState<string[]>([]);
@@ -159,6 +160,10 @@ export function ProposalBuilder({
     to: '',
     cc: '',
     subject: '',
+    message: ''
+  });
+  const [smsForm, setSmsForm] = useState({
+    to: '',
     message: ''
   });
 
@@ -768,6 +773,68 @@ export function ProposalBuilder({
       cc: '',
       subject: `Tree Service Proposal ${proposalNumber}`,
       message: `Dear ${previewData.customer?.name || 'Valued Customer'},\n\nThank you for your interest in our tree services. Please find your personalized proposal attached.\n\nWe look forward to working with you!\n\nBest regards,\nProfessional Tree Care Services`
+    });
+  };
+
+  // Send SMS mutation
+  const sendSmsMutation = useMutation({
+    mutationFn: async (smsData: { to: string; message: string; jobId?: string; customerId?: string }) => {
+      console.log('Sending proposal SMS:', smsData);
+      const response = await apiRequest('POST', '/api/communications/sms', smsData);
+      return await response.json();
+    },
+    onSuccess: (response: any) => {
+      console.log('SMS sent successfully:', response);
+      toast({
+        title: "SMS Sent",
+        description: `Proposal SMS sent successfully to ${smsForm.to}`,
+      });
+      setShowSmsDialog(false);
+      setSmsForm({ to: '', message: '' });
+    },
+    onError: (error: any) => {
+      console.error('SMS sending error:', error);
+      toast({
+        title: "SMS Failed",
+        description: error.message || "Failed to send proposal SMS",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Handle SMS form submission
+  const handleSendSms = async () => {
+    if (!smsForm.to.trim() || !smsForm.message.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter phone number and message",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const previewData = getPreviewData();
+    
+    await sendSmsMutation.mutateAsync({
+      to: smsForm.to,
+      message: smsForm.message,
+      jobId: jobId,
+      customerId: customerId || previewData.customer?.id
+    });
+  };
+
+  // Initialize SMS form with customer data
+  const initializeSmsForm = () => {
+    const previewData = getPreviewData();
+    const formData = form.getValues();
+    const customerPhone = previewData.customer?.phone || '';
+    const customerName = previewData.customer?.name || 'Valued Customer';
+    const proposalTitle = formData.title || 'Tree Service Proposal';
+    const totalAmount = grandTotal.toFixed(2);
+    
+    setSmsForm({
+      to: customerPhone,
+      message: `Hi ${customerName}, your ${proposalTitle} is ready! Total: $${totalAmount} NZD. We look forward to working with you. - Treemarkables`
     });
   };
 
@@ -1573,16 +1640,31 @@ export function ProposalBuilder({
 
               {/* Form Actions */}
               <div className="flex flex-wrap justify-between gap-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handlePreview}
-                  data-testid="button-preview-proposal"
-                  className="flex items-center gap-2"
-                >
-                  <Eye className="h-4 w-4" />
-                  Preview
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePreview}
+                    data-testid="button-preview-proposal"
+                    className="flex items-center gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Preview
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      initializeSmsForm();
+                      setShowSmsDialog(true);
+                    }}
+                    data-testid="button-sms-proposal"
+                    className="flex items-center gap-2"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    SMS
+                  </Button>
+                </div>
                 <div className="flex flex-wrap gap-2 sm:gap-4">
                   <Button
                     type="button"
@@ -1754,6 +1836,84 @@ export function ProposalBuilder({
                       <>
                         <Send className="w-4 h-4 mr-2" />
                         Send Email
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* SMS Dialog */}
+      {showSmsDialog && (
+        <Dialog open={showSmsDialog} onOpenChange={setShowSmsDialog}>
+          <DialogContent className="max-w-full sm:max-w-2xl p-4 sm:p-6">
+            <DialogHeader className="pb-2 sm:pb-4">
+              <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                Send Proposal SMS
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Phone Number */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Phone Number *</label>
+                <Input
+                  type="tel"
+                  placeholder="+64 21 123 4567"
+                  value={smsForm.to}
+                  onChange={(e) => setSmsForm(prev => ({ ...prev, to: e.target.value }))}
+                  data-testid="input-sms-phone"
+                />
+              </div>
+
+              {/* Message */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Message *</label>
+                <Textarea
+                  placeholder="Enter your message..."
+                  value={smsForm.message}
+                  onChange={(e) => setSmsForm(prev => ({ ...prev, message: e.target.value }))}
+                  rows={6}
+                  maxLength={160}
+                  data-testid="textarea-sms-message"
+                />
+                <div className="text-xs text-gray-500 text-right">
+                  {smsForm.message.length} / 160 characters
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="text-xs text-gray-500">
+                  * Required fields
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSmsDialog(false)}
+                    disabled={sendSmsMutation.isPending}
+                    data-testid="button-cancel-sms"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSendSms}
+                    disabled={sendSmsMutation.isPending || !smsForm.to.trim() || !smsForm.message.trim()}
+                    data-testid="button-send-sms"
+                  >
+                    {sendSmsMutation.isPending ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Send SMS
                       </>
                     )}
                   </Button>
