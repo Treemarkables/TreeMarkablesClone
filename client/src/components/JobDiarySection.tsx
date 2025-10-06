@@ -823,7 +823,19 @@ export function JobDiarySection({
                         </>
                       )}
                       
-                      {(entry.type === 'proposal' || (entry.type === 'email' && entry.metadata?.proposalNumber)) && (
+                      {(() => {
+                        const shouldShowButton = entry.type === 'proposal' || (entry.type === 'email' && entry.metadata?.proposalNumber);
+                        if (entry.type === 'email') {
+                          console.log('📧 Email entry check:', {
+                            id: entry.id,
+                            title: entry.title,
+                            hasMetadata: !!entry.metadata,
+                            metadata: entry.metadata,
+                            shouldShowButton
+                          });
+                        }
+                        return shouldShowButton;
+                      })() && (
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
                           {entry.type === 'proposal' && (
                             <Badge variant="outline" className="text-xs whitespace-nowrap">
@@ -834,7 +846,17 @@ export function JobDiarySection({
                             size="sm" 
                             variant="ghost" 
                             className="text-xs h-6 whitespace-nowrap"
-                            onClick={() => entry.metadata?.proposalNumber && handleOpenProposal(entry.metadata.proposalNumber)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log('🔍 Proposal button clicked:', { 
+                                type: entry.type, 
+                                metadata: entry.metadata,
+                                proposalNumber: entry.metadata?.proposalNumber 
+                              });
+                              if (entry.metadata?.proposalNumber) {
+                                handleOpenProposal(entry.metadata.proposalNumber);
+                              }
+                            }}
                             data-testid="button-view-proposal"
                           >
                             <ExternalLink className="w-3 h-3 mr-1" />
