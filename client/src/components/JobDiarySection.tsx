@@ -823,11 +823,13 @@ export function JobDiarySection({
                         </>
                       )}
                       
-                      {entry.type === 'proposal' && (
+                      {(entry.type === 'proposal' || (entry.type === 'email' && entry.metadata?.proposalNumber)) && (
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline" className="text-xs whitespace-nowrap">
-                            {entry.metadata?.status || 'draft'}
-                          </Badge>
+                          {entry.type === 'proposal' && (
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">
+                              {entry.metadata?.status || 'draft'}
+                            </Badge>
+                          )}
                           <Button 
                             size="sm" 
                             variant="ghost" 
