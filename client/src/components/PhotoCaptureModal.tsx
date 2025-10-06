@@ -90,22 +90,13 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 100 * 1024 * 1024; // 100MB
     const validFiles: File[] = [];
     const newPreviewUrls: string[] = [];
 
     // Validate each file
     for (const file of files) {
-      // Validate file type
-      if (!allowedTypes.includes(file.type)) {
-        toast({
-          title: "Invalid file type",
-          description: `${file.name} is not a JPEG or PNG image`,
-          variant: "destructive",
-        });
-        continue;
-      }
+      // No file type restrictions - accept all file types
 
       // Validate file size
       if (file.size > maxSize) {
@@ -178,7 +169,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
           <input
             ref={cameraInputRef}
             type="file"
-            accept="image/*"
+            accept="*/*"
             capture="environment"
             onChange={handleFileSelect}
             className="hidden"
@@ -187,7 +178,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
           <input
             ref={libraryInputRef}
             type="file"
-            accept="image/*"
+            accept="*/*"
             multiple
             onChange={handleFileSelect}
             className="hidden"
