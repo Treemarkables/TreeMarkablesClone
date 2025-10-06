@@ -868,25 +868,6 @@ export function ProposalBuilder({
                     />
                   </div>
 
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Proposal Description</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            placeholder="Brief overview of the proposal..."
-                            className="min-h-[100px]"
-                            data-testid="textarea-proposal-description"
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
