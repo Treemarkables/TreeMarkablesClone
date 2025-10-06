@@ -414,6 +414,12 @@ function Router() {
       <Route path="/blog/:slug" component={BlogPost}/>
       <Route path="/summer-offer" component={SummerOffer}/>
       <Route path="/contact" component={Contact}/>
+      
+      {/* Redirect /dashboard to /job-dashboard for convenience */}
+      <Route path="/dashboard">
+        {() => <Redirect to="/job-dashboard" />}
+      </Route>
+      
       <Route path="/job-dashboard">
         {() => (
           <AuthenticatedRoute>
