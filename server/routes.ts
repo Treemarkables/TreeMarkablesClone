@@ -10242,6 +10242,70 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const validatedData = updateProposalSchema.parse(req.body);
       const proposal = await storage.updateProposal(req.params.id, validatedData);
       
+      // Delete existing sections and recreate them (simpler than updating)
+      if (req.body.sections && Array.isArray(req.body.sections)) {
+        // First, delete all existing sections for this proposal
+        const existingSections = await storage.getProposalSectionsByProposal(proposal.id);
+        for (const section of existingSections) {
+          await storage.deleteProposalSection(section.id);
+        }
+        
+        // Now create new sections
+        for (const section of req.body.sections) {
+          // Create section
+          const createdSection = await storage.createProposalSection({
+            proposalId: proposal.id,
+            sectionType: 'custom',
+            title: section.title || 'Untitled Section',
+            content: section.description || '',
+            images: section.photos?.map((p: any) => p.url) || [],
+            sortOrder: section.sortOrder || 0,
+            isVisible: true
+          });
+          
+          // Create line items for this section
+          if (section.lineItems && Array.isArray(section.lineItems)) {
+            for (let i = 0; i < section.lineItems.length; i++) {
+              const item = section.lineItems[i];
+              const createdItem = await storage.createProposalLineItem({
+                proposalId: proposal.id,
+                sectionId: createdSection.id,
+                sourceType: 'fixed',
+                sourceId: null,
+                description: item.description || '',
+                quantity: item.quantity?.toString() || '1',
+                unitPrice: item.unitPrice?.toString() || '0',
+                totalPrice: item.totalPrice?.toString() || '0',
+                unit: item.unit || 'each',
+                category: item.category,
+                notes: item.notes,
+                sortOrder: i,
+                isOptional: item.isOptional || false,
+                pricingType: item.pricingType || 'normal',
+                selectedChoiceId: item.selectedChoiceId,
+                fixedPrice: item.fixedPrice?.toString(),
+                selected: item.selected !== false
+              });
+              
+              // Create choices for this line item if they exist
+              if (item.choices && Array.isArray(item.choices)) {
+                for (let j = 0; j < item.choices.length; j++) {
+                  const choice = item.choices[j];
+                  await storage.createProposalLineItemChoice({
+                    lineItemId: createdItem.id,
+                    label: choice.label || '',
+                    description: choice.description,
+                    price: choice.price?.toString() || '0',
+                    isDefault: choice.isDefault || false,
+                    sortOrder: j
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+      
       res.json({
         success: true,
         data: proposal,
