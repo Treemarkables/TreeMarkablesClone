@@ -713,7 +713,7 @@ export function ProposalBuilder({
     mutationFn: async (data: any) => {
       if (draftProposalId) {
         // Update existing draft
-        const response = await apiRequest('PATCH', `/api/proposals/${draftProposalId}`, data);
+        const response = await apiRequest('PUT', `/api/proposals/${draftProposalId}`, data);
         return await response.json();
       } else {
         // Create new draft
