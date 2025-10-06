@@ -32,6 +32,7 @@ app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
 // Configure session middleware with memorystore
 const MemoryStore = createMemoryStore(session);
+const isDevelopment = process.env.NODE_ENV === 'development';
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
@@ -43,7 +44,9 @@ app.use(
     cookie: {
       secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      maxAge: isDevelopment 
+        ? 1000 * 60 * 60 * 24 * 30  // 30 days in development for convenience
+        : 1000 * 60 * 60 * 24 * 7,   // 7 days in production
       sameSite: 'lax',
     },
   })
