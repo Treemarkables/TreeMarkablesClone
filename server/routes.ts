@@ -2906,6 +2906,43 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Delete a photo from a diary entry
+  app.delete('/api/diary/:entryId/photos', async (req: Request, res: Response) => {
+    try {
+      const { entryId } = req.params;
+      const { photoUrl } = req.body;
+
+      if (!photoUrl) {
+        return res.status(400).json({ success: false, message: 'Photo URL is required' });
+      }
+
+      // Get the diary entry
+      const entry = await storage.getJobDiaryEntry(entryId);
+      if (!entry) {
+        return res.status(404).json({ success: false, message: 'Diary entry not found' });
+      }
+
+      // Remove the photo from the photos array
+      const updatedPhotos = (entry.photos || []).filter(p => p !== photoUrl);
+      
+      // Update the entry
+      await storage.updateJobDiaryEntry(entryId, {
+        photos: updatedPhotos,
+        // Also update photoUrl if it matches the deleted photo
+        ...(entry.photoUrl === photoUrl ? { photoUrl: updatedPhotos[0] || null } : {})
+      });
+
+      res.json({ 
+        success: true, 
+        message: 'Photo deleted successfully',
+        remainingPhotos: updatedPhotos.length
+      });
+    } catch (error) {
+      console.error('Error deleting photo from diary entry:', error);
+      res.status(500).json({ success: false, message: 'Error deleting photo' });
+    }
+  });
+
   // Upload photo and create diary entry (using Object Storage for persistence)
   app.post('/api/jobs/:jobId/photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
     try {
