@@ -671,26 +671,42 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                 className={`relative ${isClickable ? 'cursor-pointer hover-elevate active-elevate-2' : ''}`}
                 onClick={() => docInfo?.handler()}
               >
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 flex-1 min-w-0">
-                      <div className="flex-shrink-0">
-                        <div className={`p-2 rounded-lg ${config.color}`}>
-                          <IconComponent className="h-5 w-5" />
-                        </div>
+                {/* Delete Button - Absolutely Positioned */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm('Are you sure you want to delete this diary entry?')) {
+                      deleteEntryMutation.mutate(entry.id);
+                    }
+                  }}
+                  className="absolute top-4 right-4 z-10 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-500 dark:hover:bg-red-950"
+                  data-testid={`button-delete-entry-${entry.id}`}
+                  title="Delete entry"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
+
+                <CardContent className="p-6 pr-16">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0">
+                      <div className={`p-2 rounded-lg ${config.color}`}>
+                        <IconComponent className="h-5 w-5" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-lg font-semibold">{entry.title}</h3>
-                          <Badge variant="secondary" className={config.color}>
-                            {config.label}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <h3 className="text-lg font-semibold">{entry.title}</h3>
+                        <Badge variant="secondary" className={config.color}>
+                          {config.label}
+                        </Badge>
+                        {entry.isPrivate && (
+                          <Badge variant="outline" className="text-xs">
+                            <EyeOff className="h-3 w-3 mr-1" />
+                            Private
                           </Badge>
-                          {entry.isPrivate && (
-                            <Badge variant="outline" className="text-xs">
-                              <EyeOff className="h-3 w-3 mr-1" />
-                              Private
-                            </Badge>
-                          )}
+                        )}
                         </div>
                         <p className="text-gray-700 mb-4">{entry.description}</p>
                         
@@ -786,23 +802,6 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                           </div>
                         )}
                       </div>
-                    </div>
-                    <div className="flex items-start gap-2 flex-shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('Are you sure you want to delete this diary entry?')) {
-                            deleteEntryMutation.mutate(entry.id);
-                          }
-                        }}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-500 dark:hover:bg-red-950"
-                        data-testid={`button-delete-entry-${entry.id}`}
-                        title="Delete entry"
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </Button>
                     </div>
                   </div>
                 </CardContent>
