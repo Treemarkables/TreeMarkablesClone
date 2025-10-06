@@ -2822,24 +2822,35 @@ export function GlobalJobCard({
                     </div>
                   )}
 
-                  {sidebarTab === 'diary' && editingJob && (
-                    <JobDiarySection 
-                      jobId={editingJob.id}
-                      isServiceM8Style={true}
-                      onQuoteClick={(quoteNumber) => {
-                        setIsQuoteModalOpen(true);
-                      }}
-                      onInvoiceClick={(invoiceNumber) => {
-                        setIsInvoiceModalOpen(true);
-                      }}
-                      onProposalClick={(proposalNumber) => {
-                        // Find the proposal by number
-                        const proposals = jobProposalResponse?.data || [];
-                        const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
-                        setEditingProposalId(proposal?.id);
-                        setIsProposalBuilderOpen(true);
-                      }}
-                    />
+                  {sidebarTab === 'diary' && (
+                    <>
+                      {editingJob ? (
+                        <JobDiarySection 
+                          jobId={editingJob.id}
+                          isServiceM8Style={true}
+                          onQuoteClick={(quoteNumber) => {
+                            setIsQuoteModalOpen(true);
+                          }}
+                          onInvoiceClick={(invoiceNumber) => {
+                            setIsInvoiceModalOpen(true);
+                          }}
+                          onProposalClick={(proposalNumber) => {
+                            // Find the proposal by number
+                            const proposals = jobProposalResponse?.data || [];
+                            const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
+                            setEditingProposalId(proposal?.id);
+                            setIsProposalBuilderOpen(true);
+                          }}
+                        />
+                      ) : (
+                        <div className="p-4">
+                          <div className="text-center py-8 text-gray-500">
+                            <FileText className="w-8 h-8 mx-auto mb-2" />
+                            <p className="text-sm">Save the job to view activity diary</p>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {sidebarTab === 'equipment' && (
