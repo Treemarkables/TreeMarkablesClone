@@ -1746,7 +1746,7 @@ export function ProposalBuilder({
                     ) : (
                       <>
                         <CheckCircle className="h-4 w-4 sm:mr-2" />
-                        <span className="hidden sm:inline">Accept & Create Work Order</span>
+                        <span className="hidden sm:inline">Accept Quote</span>
                         <span className="sm:hidden">Accept</span>
                       </>
                     )}
