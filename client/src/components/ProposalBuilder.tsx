@@ -546,10 +546,18 @@ export function ProposalBuilder({
 
     try {
       if (jobId) {
-        // Upload to backend if we have a jobId
+        // Compress images before upload for 5-10x faster upload speed
+        const { compressImages } = await import('@/lib/imageCompression');
+        const compressedFiles = await compressImages(files, {
+          maxWidth: 1920,
+          maxHeight: 1920,
+          quality: 0.8
+        });
+
+        // Upload compressed images to backend
         const formData = new FormData();
-        for (let i = 0; i < files.length; i++) {
-          formData.append('photos', files[i]);
+        for (let i = 0; i < compressedFiles.length; i++) {
+          formData.append('photos', compressedFiles[i]);
         }
         formData.append('type', 'before'); // Fixed photo type
         formData.append('category', 'documentation');
