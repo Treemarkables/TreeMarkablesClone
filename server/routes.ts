@@ -3481,18 +3481,27 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const customerName = customer?.name || 'Valued Customer';
       const proposalNumber = proposal.proposalNumber || 'N/A';
 
-      // Build line items HTML
-      let lineItemsHtml = '';
+      // Build sections HTML with descriptions and line items
+      let sectionsHtml = '';
       if (sections.length > 0) {
-        lineItemsHtml = '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px;">';
-        lineItemsHtml += '<h3 style="color: #374151; margin: 0 0 15px 0;">Services & Pricing</h3>';
+        sectionsHtml = '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px;">';
+        sectionsHtml += '<h3 style="color: #374151; margin: 0 0 15px 0;">Proposal Details</h3>';
         
         for (const section of sections) {
           const items = sectionLineItems.get(section.id) || [];
+          
+          // Always show section title
+          sectionsHtml += `<h4 style="color: #4b5563; margin: 15px 0 10px 0;">${section.title}</h4>`;
+          
+          // Show section description if it exists
+          if (section.content) {
+            sectionsHtml += `<p style="color: #6b7280; line-height: 1.6; margin: 0 0 15px 0; white-space: pre-wrap;">${section.content}</p>`;
+          }
+          
+          // Show line items if they exist
           if (items.length > 0) {
-            lineItemsHtml += `<h4 style="color: #4b5563; margin: 15px 0 10px 0;">${section.title}</h4>`;
-            lineItemsHtml += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">';
-            lineItemsHtml += `
+            sectionsHtml += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">';
+            sectionsHtml += `
               <tr style="background: #f9fafb;">
                 <th style="padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb;">Service</th>
                 <th style="padding: 8px; text-align: center; border-bottom: 2px solid #e5e7eb;">Qty</th>
@@ -3503,7 +3512,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             for (const item of items) {
               if (item.selected) {
                 const itemPrice = parseFloat(item.totalPrice || '0');
-                lineItemsHtml += `
+                sectionsHtml += `
                   <tr>
                     <td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${item.description}</td>
                     <td style="padding: 8px; text-align: center; border-bottom: 1px solid #f3f4f6;">${item.quantity} ${item.unit}</td>
@@ -3512,28 +3521,30 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 `;
               }
             }
-            lineItemsHtml += '</table>';
+            sectionsHtml += '</table>';
           }
         }
         
-        // Add totals
-        lineItemsHtml += '<table style="width: 100%; margin-top: 20px; border-top: 2px solid #e5e7eb; padding-top: 10px;">';
-        lineItemsHtml += `
-          <tr>
-            <td style="padding: 8px; text-align: right; color: #6b7280;">Subtotal (excl GST):</td>
-            <td style="padding: 8px; text-align: right; font-weight: bold; width: 120px;">$${subtotal.toFixed(2)}</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px; text-align: right; color: #6b7280;">GST (15%):</td>
-            <td style="padding: 8px; text-align: right; font-weight: bold;">$${gst.toFixed(2)}</td>
-          </tr>
-          <tr style="border-top: 2px solid #374151;">
-            <td style="padding: 8px; text-align: right; color: #374151; font-weight: bold; font-size: 16px;">Total (inc GST):</td>
-            <td style="padding: 8px; text-align: right; font-weight: bold; font-size: 16px; color: #f59e0b;">$${total.toFixed(2)}</td>
-          </tr>
-        `;
-        lineItemsHtml += '</table>';
-        lineItemsHtml += '</div>';
+        // Add totals if there are any line items
+        if (lineItems.length > 0) {
+          sectionsHtml += '<table style="width: 100%; margin-top: 20px; border-top: 2px solid #e5e7eb; padding-top: 10px;">';
+          sectionsHtml += `
+            <tr>
+              <td style="padding: 8px; text-align: right; color: #6b7280;">Subtotal (excl GST):</td>
+              <td style="padding: 8px; text-align: right; font-weight: bold; width: 120px;">$${subtotal.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; text-align: right; color: #6b7280;">GST (15%):</td>
+              <td style="padding: 8px; text-align: right; font-weight: bold;">$${gst.toFixed(2)}</td>
+            </tr>
+            <tr style="border-top: 2px solid #374151;">
+              <td style="padding: 8px; text-align: right; color: #374151; font-weight: bold; font-size: 16px;">Total (inc GST):</td>
+              <td style="padding: 8px; text-align: right; font-weight: bold; font-size: 16px; color: #f59e0b;">$${total.toFixed(2)}</td>
+            </tr>
+          `;
+          sectionsHtml += '</table>';
+        }
+        sectionsHtml += '</div>';
       }
 
       const htmlContent = `
@@ -3553,7 +3564,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             </p>
           </div>
 
-          ${lineItemsHtml}
+          ${sectionsHtml}
 
           <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
             <p style="color: #92400e; margin: 0; font-size: 14px;">
