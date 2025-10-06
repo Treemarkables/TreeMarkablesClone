@@ -668,12 +668,12 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
             return (
               <Card 
                 key={entry.id} 
-                className={`overflow-hidden ${isClickable ? 'cursor-pointer hover-elevate active-elevate-2' : ''}`}
+                className={`relative ${isClickable ? 'cursor-pointer hover-elevate active-elevate-2' : ''}`}
                 onClick={() => docInfo?.handler()}
               >
                 <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4 flex-1">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 flex-1 min-w-0">
                       <div className="flex-shrink-0">
                         <div className={`p-2 rounded-lg ${config.color}`}>
                           <IconComponent className="h-5 w-5" />
@@ -787,19 +787,21 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-start gap-2 flex-shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (confirm('Are you sure you want to delete this diary entry?')) {
                             deleteEntryMutation.mutate(entry.id);
                           }
                         }}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-500 dark:hover:bg-red-950"
                         data-testid={`button-delete-entry-${entry.id}`}
+                        title="Delete entry"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-5 w-5" />
                       </Button>
                     </div>
                   </div>
