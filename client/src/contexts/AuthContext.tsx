@@ -10,6 +10,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isCrew: boolean;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (credentials: { employeeId?: string; email?: string; password?: string }) => Promise<any>;
   loginPending: boolean;
   logout: () => void;
@@ -21,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<Employee | null>(null);
   const [, setLocation] = useLocation();
 
-  const { data: meResponse } = useQuery<{ success: boolean; data: Employee | null }>({
+  const { data: meResponse, isLoading: authQueryLoading } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
       // Custom query function that handles 401 gracefully
@@ -153,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isCrew,
         isAuthenticated,
+        isLoading: authQueryLoading,
         login,
         loginPending: loginMutation.isPending,
         logout,
