@@ -103,13 +103,20 @@ export function CalendarGrid() {
   // Get jobs for a specific employee and time slot
   const getJobsForSlot = (employeeId: string, date: Date, hour: number) => {
     return allJobs.filter(job => {
-      // Check if job is assigned to this employee
-      if (!job.assignedTo?.includes(employeeId)) return false;
-
-      // Check if job is scheduled for this date
+      // Check if job is scheduled for this date (primary filter)
       if (!job.scheduledDate) return false;
       const jobDate = parseISO(job.scheduledDate);
       if (!isSameDay(jobDate, date)) return false;
+
+      // If job has employee assignment, check if this employee is assigned
+      // Otherwise, show job in the first employee row only (unassigned jobs)
+      if (job.assignedTo && job.assignedTo.length > 0) {
+        if (!job.assignedTo.includes(employeeId)) return false;
+      } else {
+        // For unassigned jobs, only show in first employee row to avoid duplication
+        const firstEmployeeId = employees[0]?.id;
+        if (employeeId !== firstEmployeeId) return false;
+      }
 
       // Check if job overlaps with this hour
       if (job.scheduledStartTime) {
@@ -136,9 +143,10 @@ export function CalendarGrid() {
         // Check if job overlaps with this hour slot
         // Job overlaps if: job starts before slot ends AND job ends after slot starts
         return jobStartDecimal < slotEnd && jobEndDecimal > slotStart;
+      } else {
+        // If no specific time, show job in first hour slot (7am) only
+        return hour === 7;
       }
-
-      return false;
     });
   };
 
