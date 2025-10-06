@@ -95,31 +95,16 @@ const csvUpload = multer({
   }
 });
 
-// Safe file extensions for images
-const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
 // Image upload configuration for job photos (using memory storage for object storage)
+// Accepts all file types - images, PDFs, documents, videos, etc.
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 20 * 1024 * 1024, // 20MB limit per image
-    files: 50 // Maximum 50 files at once
+    fileSize: 100 * 1024 * 1024, // 100MB limit per file
+    files: 100 // Maximum 100 files at once
   },
   fileFilter: (req, file, cb) => {
-    // Check MIME type
-    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      cb(new Error(`File type ${file.mimetype} not allowed. Only JPEG, PNG, and WebP images are permitted.`));
-      return;
-    }
-    
-    // Check file extension
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
-      cb(new Error(`File extension ${ext} not allowed. Only .jpg, .jpeg, .png, and .webp files are permitted.`));
-      return;
-    }
-    
+    // Accept all file types - no restrictions
     cb(null, true);
   }
 });
