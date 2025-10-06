@@ -392,27 +392,6 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
             </div>
           </div>
 
-          {/* Payment Information */}
-          <div className="p-3 sm:p-8 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-w-md">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Payment Terms:</span>
-                <span className="font-medium">{template.paymentTerms || 'Payment due within 7 days'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Proposal Total:</span>
-                <span className="font-semibold">{formatCurrency(totals.total)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Amount Due:</span>
-                <span className="font-bold text-red-600">
-                  {formatCurrency(totals.total)}
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* Payment Instructions */}
           <div className="p-3 sm:p-8 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Instructions</h3>
