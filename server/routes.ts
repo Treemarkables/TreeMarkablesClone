@@ -1300,6 +1300,61 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // POST /api/leads - Create a job lead (converts conversation to job with 'lead' status)
+  app.post('/api/leads', async (req: Request, res: Response) => {
+    try {
+      const { name, email, phone, address, notes, status } = req.body;
+      
+      // First, create or find the customer
+      let customer;
+      if (phone) {
+        customer = await storage.findCustomerByPhone(phone);
+      }
+      
+      if (!customer) {
+        const customerData = {
+          name: name || 'Unknown',
+          email: email || '',
+          phone: phone || '',
+          address: address || '',
+          contactPreference: 'email' as const,
+          notes: notes || ''
+        };
+        customer = await storage.createCustomer(customerData);
+      }
+      
+      // Create job with 'lead' status
+      const jobNumber = await storage.getNextJobNumber();
+      const jobData = {
+        customerId: customer.id,
+        jobNumber: jobNumber,
+        title: `Lead from ${name || 'conversation'}`,
+        description: notes || '',
+        address: address || 'Address not specified',
+        status: status || 'lead', // Default to 'lead' status for dispatch board
+        priority: 'medium' as const,
+        leadSource: 'website' as const,
+        totalAmount: '0.00',
+        metricsEligible: true,
+        metricsStartDate: new Date()
+      };
+      
+      const job = await storage.createJob(jobData);
+      
+      res.json({ 
+        success: true, 
+        data: job,
+        message: 'Job lead created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating job lead:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error creating job lead' 
+      });
+    }
+  });
+
   app.get('/api/leads', async (req: Request, res: Response) => {
     try {
       const { from, to } = req.query;
