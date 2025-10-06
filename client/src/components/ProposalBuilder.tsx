@@ -1129,7 +1129,42 @@ export function ProposalBuilder({
     };
   };
 
-  // Submit proposal
+  // Manual save handler (keeps modal open)
+  const handleManualSave = async () => {
+    const formData = form.getValues();
+    const proposalData = {
+      customerId: formData.customerId || customerId,
+      jobId: formData.jobId || jobId,
+      quoteId: formData.quoteId,
+      proposalNumber: draftProposalId ? undefined : `PROP-${Date.now()}`,
+      title: formData.title || 'Untitled Proposal',
+      description: formData.description,
+      totalAmount: grandTotal,
+      taxRate: formData.taxRate || 15,
+      status: 'draft',
+      deliveryMethod: formData.deliveryMethod || 'email',
+      notes: formData.notes,
+      createdBy: 'system',
+      sections: sections,
+    };
+
+    try {
+      await saveDraftMutation.mutateAsync(proposalData);
+      toast({
+        title: "Saved",
+        description: "Proposal saved successfully",
+      });
+    } catch (error) {
+      console.error('Manual save error:', error);
+      toast({
+        title: "Save Failed",
+        description: "Failed to save proposal",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Submit proposal (saves and closes modal)
   const onSubmit = async (data: any) => {
     try {
       const proposalData = {
@@ -1717,23 +1752,42 @@ export function ProposalBuilder({
                   >
                     Cancel
                   </Button>
-                <Button
-                  type="submit"
-                  disabled={createProposalMutation.isPending}
-                  data-testid="button-save-proposal"
-                >
-                  {createProposalMutation.isPending ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      {mode === "edit" ? "Update Proposal" : "Create Proposal"}
-                    </>
-                  )}
-                </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleManualSave}
+                    disabled={saveDraftMutation.isPending}
+                    data-testid="button-save-only-proposal"
+                  >
+                    {saveDraftMutation.isPending ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={createProposalMutation.isPending}
+                    data-testid="button-update-proposal"
+                  >
+                    {createProposalMutation.isPending ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        {mode === "edit" ? "Updating..." : "Creating..."}
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        {mode === "edit" ? "Update Proposal" : "Create Proposal"}
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
 
