@@ -10086,9 +10086,22 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Also get proposal sections
       const sections = await storage.getProposalSectionsByProposal(proposal.id);
       
+      // Map images → photos for frontend compatibility
+      const sectionsWithPhotos = sections.map(section => ({
+        ...section,
+        photos: (section.images || []).map((url: string) => ({
+          id: `photo-${Date.now()}-${Math.random()}`,
+          url,
+          filename: url.split('/').pop() || 'photo',
+          type: 'before' as const,
+          category: 'documentation' as const,
+          capturedAt: new Date().toISOString(),
+        }))
+      }));
+      
       res.json({
         success: true,
-        data: { ...proposal, sections }
+        data: { ...proposal, sections: sectionsWithPhotos }
       });
     } catch (error) {
       console.error('Error fetching proposal:', error);
@@ -10352,10 +10365,24 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   app.get('/api/proposals/:proposalId/sections', async (req: Request, res: Response) => {
     try {
       const sections = await storage.getProposalSectionsByProposal(req.params.proposalId);
+      
+      // Map images → photos for frontend compatibility
+      const sectionsWithPhotos = sections.map(section => ({
+        ...section,
+        photos: (section.images || []).map((url: string) => ({
+          id: `photo-${Date.now()}-${Math.random()}`,
+          url,
+          filename: url.split('/').pop() || 'photo',
+          type: 'before' as const,
+          category: 'documentation' as const,
+          capturedAt: new Date().toISOString(),
+        }))
+      }));
+      
       res.json({
         success: true,
-        data: sections,
-        count: sections.length
+        data: sectionsWithPhotos,
+        count: sectionsWithPhotos.length
       });
     } catch (error) {
       console.error('Error fetching proposal sections:', error);
