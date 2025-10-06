@@ -103,8 +103,8 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit per image
-    files: 10 // Maximum 10 files at once
+    fileSize: 20 * 1024 * 1024, // 20MB limit per image
+    files: 50 // Maximum 50 files at once
   },
   fileFilter: (req, file, cb) => {
     // Check MIME type
