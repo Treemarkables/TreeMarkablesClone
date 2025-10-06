@@ -3602,6 +3602,35 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       console.log(`📧 Proposal ${proposalNumber} email sent to ${to}`);
 
+      // Create diary entry for sent proposal email
+      if (proposal.jobId) {
+        try {
+          await storage.createJobDiaryEntry({
+            jobId: proposal.jobId,
+            entryType: 'email',
+            title: `Proposal Sent: ${proposalNumber}`,
+            description: `Proposal "${proposal.title || 'Tree Service Proposal'}" sent to ${to}${cc ? ` (CC: ${cc})` : ''}\n\nTotal: $${total.toFixed(2)} NZD`,
+            authorName: 'System',
+            metadata: {
+              proposalId,
+              proposalNumber,
+              recipient: to,
+              cc: cc || null,
+              total: total.toFixed(2)
+            }
+          });
+
+          // Update job's lastActivityAt to move it to top of list
+          await storage.updateJob(proposal.jobId, {
+            lastActivityAt: new Date()
+          });
+
+          console.log(`📝 Created diary entry for proposal ${proposalNumber} email`);
+        } catch (diaryError) {
+          console.error('Error creating diary entry for proposal email:', diaryError);
+        }
+      }
+
       res.json({
         success: true,
         message: 'Proposal email sent successfully',
