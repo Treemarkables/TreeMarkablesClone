@@ -2922,11 +2922,15 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       let fileName = req.file.originalname;
       let mimeType = req.file.mimetype;
 
+      console.log('📸 Photo upload - Original:', { fileName, mimeType, size: fileBuffer.length });
+
       // Convert HEIC to JPEG if necessary
       const isHeic = fileName.toLowerCase().endsWith('.heic') || 
                      fileName.toLowerCase().endsWith('.heif') ||
                      mimeType === 'image/heic' || 
                      mimeType === 'image/heif';
+      
+      console.log('📸 HEIC detection:', { isHeic, fileName, mimeType });
 
       if (isHeic) {
         try {

@@ -4,6 +4,8 @@
 import { Storage } from "@google-cloud/storage";
 import { randomUUID } from "crypto";
 import { Response } from "express";
+import heicConvert from "heic-convert";
+import sharp from "sharp";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
@@ -96,21 +98,68 @@ export class PhotoStorageService {
 
     try {
       const [metadata] = await file.getMetadata();
-      res.set({
-        "Content-Type": metadata.contentType || "image/jpeg",
-        "Content-Length": metadata.size,
-        "Cache-Control": "public, max-age=31536000",
-      });
+      const isHeic = photoPath.toLowerCase().endsWith('.heic') || 
+                     photoPath.toLowerCase().endsWith('.heif') ||
+                     metadata.contentType === 'image/heic' || 
+                     metadata.contentType === 'image/heif';
 
-      const stream = file.createReadStream();
-      stream.on("error", (err: Error) => {
-        console.error("Stream error:", err);
-        if (!res.headersSent) {
-          res.status(500).json({ error: "Error streaming file" });
+      // If HEIC, convert to JPEG on-the-fly
+      if (isHeic) {
+        console.log('🔄 Converting HEIC to JPEG on-the-fly:', photoPath);
+        
+        // Download the file to buffer
+        const [fileBuffer] = await file.download();
+        
+        try {
+          // Convert HEIC to JPEG
+          const jpegBuffer = await heicConvert({
+            buffer: fileBuffer,
+            format: 'JPEG',
+            quality: 0.9
+          });
+
+          // Optimize with sharp
+          const optimizedBuffer = await sharp(Buffer.from(jpegBuffer))
+            .jpeg({ quality: 90, progressive: true })
+            .toBuffer();
+
+          res.set({
+            "Content-Type": "image/jpeg",
+            "Content-Length": optimizedBuffer.length.toString(),
+            "Cache-Control": "public, max-age=31536000",
+          });
+
+          res.send(optimizedBuffer);
+          console.log('✅ HEIC converted and served as JPEG');
+        } catch (conversionError) {
+          console.error('❌ HEIC conversion failed:', conversionError);
+          // Fall back to serving original file
+          res.set({
+            "Content-Type": metadata.contentType || "image/jpeg",
+            "Content-Length": metadata.size,
+            "Cache-Control": "public, max-age=31536000",
+          });
+          const stream = file.createReadStream();
+          stream.pipe(res);
         }
-      });
+      } else {
+        // Serve non-HEIC files normally
+        res.set({
+          "Content-Type": metadata.contentType || "image/jpeg",
+          "Content-Length": metadata.size,
+          "Cache-Control": "public, max-age=31536000",
+        });
 
-      stream.pipe(res);
+        const stream = file.createReadStream();
+        stream.on("error", (err: Error) => {
+          console.error("Stream error:", err);
+          if (!res.headersSent) {
+            res.status(500).json({ error: "Error streaming file" });
+          }
+        });
+
+        stream.pipe(res);
+      }
     } catch (error) {
       console.error("Error downloading file:", error);
       if (!res.headersSent) {
