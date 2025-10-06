@@ -198,6 +198,7 @@ export default function ProposalAccept() {
               proposal={proposal}
               customer={customer}
               template={template}
+              sections={proposal.sections || []}
               showActions={false}
               className="border-0"
             />

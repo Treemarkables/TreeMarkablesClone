@@ -10405,7 +10405,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Get all line items for this proposal
       const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
       
-      // Map images → photos and attach line items to each section
+      // Fetch choices for each line item
+      const lineItemsWithChoices = await Promise.all(
+        allLineItems.map(async (item) => {
+          const choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
+          return {
+            ...item,
+            choices: choices || []
+          };
+        })
+      );
+      
+      // Map images → photos and attach line items with choices to each section
       const sectionsWithPhotosAndLineItems = sections.map(section => ({
         ...section,
         photos: (section.images || []).map((url: string) => ({
@@ -10416,7 +10427,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           category: 'documentation' as const,
           capturedAt: new Date().toISOString(),
         })),
-        lineItems: allLineItems.filter(item => item.sectionId === section.id)
+        lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id)
       }));
       
       res.json({
