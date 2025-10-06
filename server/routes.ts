@@ -10243,6 +10243,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Update proposal
   app.put('/api/proposals/:id', async (req: Request, res: Response) => {
     try {
+      console.log('📝 PUT proposal request body keys:', Object.keys(req.body));
+      console.log('📝 PUT proposal sections:', req.body.sections);
+      
       const validatedData = updateProposalSchema.parse(req.body);
       const proposal = await storage.updateProposal(req.params.id, validatedData);
       
