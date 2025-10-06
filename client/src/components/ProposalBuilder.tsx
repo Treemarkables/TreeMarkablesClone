@@ -932,6 +932,16 @@ export function ProposalBuilder({
       createdBy: 'system',
       sections: sections,
     };
+    
+    console.log('🔍 AUTO-SAVE DATA:', {
+      draftProposalId,
+      sectionsCount: sections.length,
+      sections: sections.map(s => ({
+        title: s.title,
+        lineItemsCount: s.lineItems?.length || 0,
+        lineItems: s.lineItems
+      }))
+    });
 
     try {
       const result = await saveDraftMutation.mutateAsync(draftData);
