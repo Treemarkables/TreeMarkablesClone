@@ -2841,15 +2841,6 @@ export function GlobalJobCard({
                       }}
                     />
                   )}
-                  
-                  {sidebarTab === 'diary' && !editingJob && (
-                    <div className="p-4">
-                      <div className="text-center py-8 text-gray-500">
-                        <FileText className="w-8 h-8 mx-auto mb-2" />
-                        <p className="text-sm">Activity diary will appear here after saving the job.</p>
-                      </div>
-                    </div>
-                  )}
 
                   {sidebarTab === 'equipment' && (
                     <div className="space-y-2 md:space-y-4 p-2 md:p-0">
@@ -3138,34 +3129,24 @@ export function GlobalJobCard({
                 </div>
 
                 {/* Right Panel - Activity Diary - Only show when NOT in diary tab */}
-                {sidebarTab !== 'diary' && (
+                {sidebarTab !== 'diary' && editingJob && (
                   <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
-                    {editingJob && (
-                      <JobDiarySection 
-                        jobId={editingJob.id}
-                        onQuoteClick={(quoteNumber) => {
-                          setIsQuoteModalOpen(true);
-                        }}
-                        onInvoiceClick={(invoiceNumber) => {
-                          setIsInvoiceModalOpen(true);
-                        }}
-                        onProposalClick={(proposalNumber) => {
-                          // Find the proposal by number
-                          const proposals = jobProposalResponse?.data || [];
-                          const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
-                          setEditingProposalId(proposal?.id);
-                          setIsProposalBuilderOpen(true);
-                        }}
-                      />
-                    )}
-                    {!editingJob && (
-                      <div className="p-4">
-                        <div className="text-center py-8 text-gray-500">
-                          <FileText className="w-8 h-8 mx-auto mb-2" />
-                          <p className="text-sm">Activity diary will appear here after saving the job.</p>
-                        </div>
-                      </div>
-                    )}
+                    <JobDiarySection 
+                      jobId={editingJob.id}
+                      onQuoteClick={(quoteNumber) => {
+                        setIsQuoteModalOpen(true);
+                      }}
+                      onInvoiceClick={(invoiceNumber) => {
+                        setIsInvoiceModalOpen(true);
+                      }}
+                      onProposalClick={(proposalNumber) => {
+                        // Find the proposal by number
+                        const proposals = jobProposalResponse?.data || [];
+                        const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
+                        setEditingProposalId(proposal?.id);
+                        setIsProposalBuilderOpen(true);
+                      }}
+                    />
                   </div>
                 )}
               </div>
@@ -3472,6 +3453,12 @@ export function GlobalJobCard({
           onClose={() => {
             setIsProposalBuilderOpen(false);
             setEditingProposalId(undefined);
+            // Refresh diary to show new proposal entry
+            if (editingJob?.id) {
+              queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary-timeline'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/proposals'] });
+            }
           }}
           jobId={editingJob?.id}
           customerId={selectedCustomer?.id}
