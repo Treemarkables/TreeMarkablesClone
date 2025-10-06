@@ -3450,6 +3450,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       console.log(`📧 Preparing email for proposal ${proposalId}`);
       console.log(`📋 Found ${sections.length} sections with ${lineItems.length} line items`);
       
+      // Debug: Log section images
+      sections.forEach((section, index) => {
+        console.log(`  Section ${index + 1} ("${section.title}"):`);
+        console.log(`    - Images array:`, section.images);
+        console.log(`    - Images length:`, section.images?.length || 0);
+      });
+      
       // Group line items by section
       const sectionLineItems = new Map<string, any[]>();
       for (const item of lineItems) {
