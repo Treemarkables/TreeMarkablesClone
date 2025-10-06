@@ -113,14 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // If server returns not authenticated
     if (meResponse?.success === false) {
       if (currentUser) {
-        console.warn('⚠️ Authentication mismatch detected - clearing stale user state and redirecting to login');
+        console.warn('⚠️ Authentication mismatch detected - clearing stale user state');
         setCurrentUserState(null);
         queryClient.clear();
-        
-        // Force redirect to login if not already there
-        if (window.location.pathname !== '/login') {
-          setLocation('/login');
-        }
       }
     } 
     // If server returns authenticated user data
@@ -130,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentUserState(meResponse.data);
       }
     }
-  }, [meResponse, currentUser, setLocation]);
+  }, [meResponse, currentUser]);
 
   const isAuthenticated = !!currentUser;
   const userRole = currentUser?.role as 'admin' | 'crew' | null;
