@@ -141,6 +141,28 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
     }
   });
 
+  // Delete photo from diary entry mutation
+  const deletePhotoMutation = useMutation({
+    mutationFn: async ({ entryId, photoUrl }: { entryId: string; photoUrl: string }) => {
+      return await apiRequest('DELETE', `/api/diary/${entryId}/photos`, { photoUrl });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['job-diary', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      toast({
+        title: "Success",
+        description: "Photo deleted successfully"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete photo",
+        variant: "destructive"
+      });
+    }
+  });
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -721,22 +743,46 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                               {entry.photos.map((photo, index) => (
-                                <button
+                                <div
                                   key={index}
-                                  onClick={() => setSelectedPhoto(photo)}
-                                  className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 hover-elevate active-elevate-2 active:opacity-80 transition-opacity"
-                                  data-testid={`button-view-photo-${index}`}
+                                  className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group"
                                 >
-                                  <img
-                                    src={photo}
-                                    alt={`Diary photo ${index + 1}`}
-                                    className="w-full h-full object-cover"
-                                    loading="lazy"
-                                  />
-                                  <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 active:bg-opacity-20 transition-opacity flex items-center justify-center pointer-events-none">
-                                    <Eye className="h-8 w-8 text-white drop-shadow-lg opacity-60 md:opacity-0 md:hover:opacity-100 transition-opacity" />
-                                  </div>
-                                </button>
+                                  <button
+                                    onClick={() => setSelectedPhoto(photo)}
+                                    className="w-full h-full hover-elevate active-elevate-2 active:opacity-80 transition-opacity"
+                                    data-testid={`button-view-photo-${index}`}
+                                  >
+                                    <img
+                                      src={photo}
+                                      alt={`Diary photo ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                    <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 active:bg-opacity-20 transition-opacity flex items-center justify-center pointer-events-none">
+                                      <Eye className="h-8 w-8 text-white drop-shadow-lg opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                  </button>
+                                  {/* Delete Photo Button */}
+                                  <Button
+                                    variant="destructive"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (confirm('Delete this photo from the diary entry?')) {
+                                        deletePhotoMutation.mutate({
+                                          entryId: entry.id,
+                                          photoUrl: photo
+                                        });
+                                      }
+                                    }}
+                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                    data-testid={`button-delete-photo-${index}`}
+                                    title="Delete photo"
+                                    disabled={deletePhotoMutation.isPending}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
                               ))}
                             </div>
                           </div>
