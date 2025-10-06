@@ -2545,9 +2545,11 @@ export function GlobalJobCard({
                                 <div className="text-xs text-gray-500">⋯</div>
                               </div>
                               
-                              {/* Table Header */}
-                              <div className="bg-gray-50 border-b border-gray-200">
-                                <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-600">
+                              {/* Scrollable Container for Mobile */}
+                              <div className="overflow-x-auto">
+                                {/* Table Header */}
+                                <div className="bg-gray-50 border-b border-gray-200 min-w-[800px]">
+                                  <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-600">
                                   <div className="col-span-2">Item Code</div>
                                   <div className="col-span-2">Item Name</div>
                                   <div className="col-span-1 text-center">Qty</div>
@@ -2557,21 +2559,21 @@ export function GlobalJobCard({
                                   <div className="col-span-2 text-right">Price</div>
                                   <div className="col-span-1 text-right">Total</div>
                                 </div>
-                              </div>
+                                </div>
 
-                              {/* Table Body */}
-                              <div className="bg-white">
-                                {lineItemFields.map((field, index) => {
-                                  const unitCost = field.unitCost || 0;
-                                  const quantity = field.quantity || 1;
-                                  const costExGst = quantity * unitCost;
-                                  const priceExGst = field.unitPrice || 0;
-                                  const totalExGst = quantity * priceExGst;
-                                  const markup = priceExGst - unitCost;
-                                  const markupPercent = unitCost > 0 ? ((markup / unitCost) * 100).toFixed(0) : '0';
-                                  
-                                  return (
-                                    <div key={field.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm">
+                                {/* Table Body */}
+                                <div className="bg-white min-w-[800px]">
+                                  {lineItemFields.map((field, index) => {
+                                    const unitCost = field.unitCost || 0;
+                                    const quantity = field.quantity || 1;
+                                    const costExGst = quantity * unitCost;
+                                    const priceExGst = field.unitPrice || 0;
+                                    const totalExGst = quantity * priceExGst;
+                                    const markup = priceExGst - unitCost;
+                                    const markupPercent = unitCost > 0 ? ((markup / unitCost) * 100).toFixed(0) : '0';
+                                    
+                                    return (
+                                      <div key={field.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm">
                                       <div className="col-span-2 text-gray-500">{field.itemCode || '—'}</div>
                                       <div className="col-span-2 font-medium text-gray-900">
                                         <div className="flex items-center gap-2">
@@ -2695,9 +2697,10 @@ export function GlobalJobCard({
                                           }
                                         })()} 
                                       </div>
-                                    </div>
-                                  );
-                                })}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
 
                               {/* Search Row */}
