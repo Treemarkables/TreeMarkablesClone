@@ -93,16 +93,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [meResponse, currentUser]);
 
-  const isDev = import.meta.env.DEV;
   const isAuthenticated = !!currentUser;
   const userRole = currentUser?.role as 'admin' | 'crew' | null;
   
-  // In dev mode with no authenticated user, grant admin access
-  const isAdmin = isDev && !isAuthenticated ? true : userRole === 'admin';
+  // No dev mode backdoor - must be logged in with admin role
+  const isAdmin = userRole === 'admin';
   const isCrew = userRole === 'crew';
   
   // Debug RBAC
-  if (isDev && isAuthenticated) {
+  if (isAuthenticated) {
     console.log('RBAC Debug:', { 
       currentUser: currentUser?.firstName + ' ' + currentUser?.lastName, 
       userRole, 

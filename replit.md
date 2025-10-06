@@ -98,6 +98,23 @@ This prevents Safari-specific caching issues while maintaining refresh functiona
 
 This is critical for production deployments behind reverse proxies like Replit's infrastructure.
 
+### PWA Authentication Security Fix (Jan 6, 2025)
+**Issue**: Access was switching unexpectedly in the PWA between admin and crew roles, causing security concerns and user confusion.
+
+**Root Cause**: Development mode backdoor in `AuthContext.tsx` granted admin access to unauthenticated users:
+```javascript
+const isAdmin = isDev && !isAuthenticated ? true : userRole === 'admin';
+```
+This meant that when sessions expired or were cleared in the PWA, users would temporarily gain admin access if running in dev mode.
+
+**Solution**: 
+1. Removed all dev mode authentication backdoors from `AuthContext.tsx`
+2. Enforced strict role-based authentication: `isAdmin = userRole === 'admin'`
+3. Users MUST be authenticated with proper admin role to access admin features
+4. No exceptions - authentication is now consistent across all environments
+
+**Security Impact**: This fix ensures that access control is consistent and cannot be bypassed. All users must log in with proper credentials and maintain valid sessions to access role-specific features.
+
 ## External Dependencies
 
 ### Core Framework
