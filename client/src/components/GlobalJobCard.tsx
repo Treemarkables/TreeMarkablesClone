@@ -1322,6 +1322,13 @@ export function GlobalJobCard({
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogContent className="w-full h-full max-w-full flex flex-col p-4 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
+        <DialogTitle className="sr-only">
+          {mode === "create" ? "Create New Job" : `Job ${editingJob?.jobNumber || ""}`}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {mode === "create" ? "Create a new job with customer details and specifications" : "View and edit job details, contacts, and settings"}
+        </DialogDescription>
+        
         {/* ServiceM8-style Header */}
         <div className={`border-b px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 flex-shrink-0 sm:rounded-t-xl ${
           currentStatus === 'completed' ? 'bg-green-600 border-green-700' :
