@@ -124,6 +124,7 @@ export function GlobalJobCard({
   
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
+  const [editingProposalId, setEditingProposalId] = useState<string | undefined>(undefined);
   
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
@@ -2832,6 +2833,10 @@ export function GlobalJobCard({
                         setIsInvoiceModalOpen(true);
                       }}
                       onProposalClick={(proposalNumber) => {
+                        // Find the proposal by number
+                        const proposals = jobProposalResponse?.data || [];
+                        const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
+                        setEditingProposalId(proposal?.id);
                         setIsProposalBuilderOpen(true);
                       }}
                     />
@@ -3145,6 +3150,10 @@ export function GlobalJobCard({
                           setIsInvoiceModalOpen(true);
                         }}
                         onProposalClick={(proposalNumber) => {
+                          // Find the proposal by number
+                          const proposals = jobProposalResponse?.data || [];
+                          const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
+                          setEditingProposalId(proposal?.id);
                           setIsProposalBuilderOpen(true);
                         }}
                       />
@@ -3460,9 +3469,14 @@ export function GlobalJobCard({
       {isProposalBuilderOpen && (
         <ProposalBuilder
           isOpen={isProposalBuilderOpen}
-          onClose={() => setIsProposalBuilderOpen(false)}
+          onClose={() => {
+            setIsProposalBuilderOpen(false);
+            setEditingProposalId(undefined);
+          }}
           jobId={editingJob?.id}
           customerId={selectedCustomer?.id}
+          mode={editingProposalId ? "edit" : "create"}
+          proposalId={editingProposalId}
           lineItems={formData?.lineItems || []}
         />
       )}
