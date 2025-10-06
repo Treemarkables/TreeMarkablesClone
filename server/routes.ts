@@ -3625,7 +3625,65 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         </div>
       `;
 
-      // Send email using EmailService
+      // Collect all photos from all sections and convert to email attachments
+      const emailAttachments = [];
+      const uniquePhotos = new Set<string>();
+      
+      for (const section of sections) {
+        if (section.images && Array.isArray(section.images)) {
+          for (const photoUrl of section.images) {
+            // Avoid duplicate photos
+            if (!uniquePhotos.has(photoUrl)) {
+              uniquePhotos.add(photoUrl);
+              
+              try {
+                // Convert relative URL to absolute file path
+                const fileName = path.basename(photoUrl);
+                const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
+                
+                console.log(`📎 Attempting to attach photo: ${fileName}`);
+                
+                // Check if file exists
+                if (fs.existsSync(filePath)) {
+                  // Read file and convert to base64
+                  const fileContent = fs.readFileSync(filePath);
+                  const base64Content = fileContent.toString('base64');
+                  
+                  // Determine file type
+                  const fileExtension = path.extname(fileName).toLowerCase();
+                  const mimeTypes: { [key: string]: string } = {
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.png': 'image/png',
+                    '.gif': 'image/gif',
+                    '.webp': 'image/webp',
+                    '.heic': 'image/heic',
+                    '.heif': 'image/heif'
+                  };
+                  const mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
+                  
+                  emailAttachments.push({
+                    content: base64Content,
+                    filename: fileName,
+                    type: mimeType,
+                    disposition: 'attachment'
+                  });
+                  
+                  console.log(`✅ Added photo attachment: ${fileName} (${mimeType})`);
+                } else {
+                  console.warn(`⚠️ Photo file not found: ${filePath}`);
+                }
+              } catch (photoError) {
+                console.error(`❌ Error processing photo ${photoUrl}:`, photoError);
+              }
+            }
+          }
+        }
+      }
+      
+      console.log(`📎 Total attachments prepared: ${emailAttachments.length} photos`);
+
+      // Send email using EmailService with attachments
       const emailSuccess = await emailService.sendEmail({
         to,
         cc,
@@ -3633,7 +3691,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
-        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
+        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`,
+        ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
       if (!emailSuccess) {
@@ -3643,7 +3702,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      console.log(`📧 Proposal ${proposalNumber} email sent to ${to}`);
+      console.log(`📧 Proposal ${proposalNumber} email sent to ${to}${emailAttachments.length > 0 ? ` with ${emailAttachments.length} photo attachment(s)` : ''}`);
 
       // Create diary entry for sent proposal email
       if (proposal.jobId) {
@@ -3652,14 +3711,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             jobId: proposal.jobId,
             entryType: 'email',
             title: `Proposal Sent: ${proposalNumber}`,
-            description: `Proposal "${proposal.title || 'Tree Service Proposal'}" sent to ${to}${cc ? ` (CC: ${cc})` : ''}\n\nTotal: $${total.toFixed(2)} NZD`,
+            description: `Proposal "${proposal.title || 'Tree Service Proposal'}" sent to ${to}${cc ? ` (CC: ${cc})` : ''}${
+              emailAttachments.length > 0 ? `\n\nAttachments: ${emailAttachments.length} photo(s)` : ''
+            }\n\nTotal: $${total.toFixed(2)} NZD`,
             authorName: 'System',
             metadata: {
               proposalId,
               proposalNumber,
               recipient: to,
               cc: cc || null,
-              total: total.toFixed(2)
+              total: total.toFixed(2),
+              photoAttachments: emailAttachments.length
             }
           });
 
