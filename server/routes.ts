@@ -5397,12 +5397,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Check if job exists
       const job = await storage.getJob(jobId);
       if (!job) {
-        // Clean up uploaded files if job doesn't exist
-        req.files.forEach((file: any) => {
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-        });
+        // No cleanup needed for memory storage
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
@@ -5416,8 +5411,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         const newFileName = `${jobId}_${type}_${timestamp}_${i}${fileExtension}`;
         const newPath = path.join(photosDir, newFileName);
         
-        // Move file to permanent location with descriptive name
-        fs.renameSync(file.path, newPath);
+        // Write file from memory buffer to disk
+        fs.writeFileSync(newPath, file.buffer);
         
         // Store relative URL for database
         photoUrls.push(`/photos/${newFileName}`);
@@ -5440,14 +5435,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         jobId
       });
     } catch (error) {
-      // Clean up uploaded files on error
-      if (req.files && Array.isArray(req.files)) {
-        req.files.forEach((file: any) => {
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-        });
-      }
+      // No cleanup needed for memory storage
       
       console.error('Error uploading job photos:', error);
       res.status(500).json({
