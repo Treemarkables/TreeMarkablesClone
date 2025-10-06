@@ -10248,6 +10248,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       // Delete existing sections and recreate them (simpler than updating)
       if (req.body.sections && Array.isArray(req.body.sections)) {
+        console.log('📝 PUT proposal - updating sections:', {
+          proposalId: proposal.id,
+          sectionCount: req.body.sections.length,
+          sections: req.body.sections.map((s: any) => ({
+            title: s.title,
+            lineItemCount: s.lineItems?.length || 0,
+            lineItems: s.lineItems
+          }))
+        });
+        
         // First, delete all existing sections for this proposal
         const existingSections = await storage.getProposalSectionsByProposal(proposal.id);
         for (const section of existingSections) {
@@ -10267,10 +10277,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             isVisible: true
           });
           
+          console.log(`  ✅ Created section ${createdSection.id}: ${section.title}`);
+          
           // Create line items for this section
           if (section.lineItems && Array.isArray(section.lineItems)) {
+            console.log(`  📋 Section has ${section.lineItems.length} line items to create`);
             for (let i = 0; i < section.lineItems.length; i++) {
               const item = section.lineItems[i];
+              console.log(`    Creating line item ${i + 1}:`, item.description);
               const createdItem = await storage.createProposalLineItem({
                 proposalId: proposal.id,
                 sectionId: createdSection.id,
@@ -10290,6 +10304,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 fixedPrice: item.fixedPrice?.toString(),
                 selected: item.selected !== false
               });
+              console.log(`    ✅ Created line item ${createdItem.id}`);
               
               // Create choices for this line item if they exist
               if (item.choices && Array.isArray(item.choices)) {
@@ -10306,8 +10321,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 }
               }
             }
+          } else {
+            console.log(`  ⚠️ Section has no line items or lineItems is not an array:`, section.lineItems);
           }
         }
+      } else {
+        console.log('⚠️ PUT proposal - no sections in request body');
       }
       
       res.json({
