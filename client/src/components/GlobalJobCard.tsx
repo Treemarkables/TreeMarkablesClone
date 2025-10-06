@@ -2537,7 +2537,7 @@ export function GlobalJobCard({
                         )}
 
                         {/* ServiceM8-Style Line Items Table */}
-                        <div className="space-y-4">
+                        <div className="space-y-4 px-3 sm:px-4">
                           {lineItemFields.length > 0 && (
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
                               <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
@@ -3163,7 +3163,7 @@ export function GlobalJobCard({
 
                 {/* Line Items & Pricing - Only show in Billing tab */}
                 {sidebarTab === 'billing' && (
-                <div className="space-y-4">
+                <div className="space-y-4 px-3 sm:px-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                       <DollarSign className="w-5 h-5" />
