@@ -20,9 +20,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<Employee | null>(null);
+  const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(false);
   const [, setLocation] = useLocation();
 
-  const { data: meResponse, isLoading: authQueryLoading } = useQuery<{ success: boolean; data: Employee | null }>({
+  const { data: meResponse, isLoading: authQueryLoading, isFetching } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
       // Custom query function that handles 401 gracefully
@@ -111,6 +112,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Mark initial check as complete once we have a response
+    if (meResponse !== undefined && !initialAuthCheckComplete) {
+      setInitialAuthCheckComplete(true);
+    }
+
     // If server returns not authenticated
     if (meResponse?.success === false) {
       if (currentUser) {
@@ -126,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentUserState(meResponse.data);
       }
     }
-  }, [meResponse, currentUser]);
+  }, [meResponse, currentUser, initialAuthCheckComplete]);
 
   const isAuthenticated = !!currentUser;
   const userRole = currentUser?.role as 'admin' | 'crew' | null;
@@ -154,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isCrew,
         isAuthenticated,
-        isLoading: authQueryLoading,
+        isLoading: !initialAuthCheckComplete || authQueryLoading,
         login,
         loginPending: loginMutation.isPending,
         logout,
