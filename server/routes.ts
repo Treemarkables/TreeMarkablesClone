@@ -3651,21 +3651,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             </p>
           </div>
 
-          <!-- Customer Information -->
-          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="color: #374151; margin: 0 0 15px 0; font-size: 18px;">${customerName}</h3>
-            ${customerEmail ? `
-              <p style="color: #6b7280; margin: 5px 0; display: flex; align-items: center;">
-                <span style="margin-right: 8px;">📧</span> ${customerEmail}
-              </p>
-            ` : ''}
-            ${customerPhone ? `
-              <p style="color: #6b7280; margin: 5px 0; display: flex; align-items: center;">
-                <span style="margin-right: 8px;">📞</span> ${customerPhone}
-              </p>
-            ` : ''}
-          </div>
-
           <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
             <h2 style="color: #374151; margin: 0 0 15px 0;">Dear ${customerName},</h2>
             <p style="color: #4b5563; line-height: 1.6; margin: 0 0 15px 0;">
@@ -3686,12 +3671,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             </a>
             <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
               Ready to get started? Click to accept this proposal
-            </p>
-          </div>
-
-          <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-            <p style="color: #92400e; margin: 0; font-size: 14px;">
-              <strong>Questions?</strong> Contact us if you have any questions about this proposal. We're happy to discuss any adjustments or schedule a consultation.
             </p>
           </div>
 
