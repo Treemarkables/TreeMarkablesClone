@@ -44,6 +44,7 @@ import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import JobTemplateManagement from "@/components/JobTemplateManagement";
 import ProposalViewer from "@/pages/ProposalViewer";
+import ProposalAccept from "@/pages/ProposalAccept";
 import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
 import PublicReview from "@/pages/PublicReview";
@@ -457,6 +458,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/customer-portal" component={CustomerPortal}/>
+      <Route path="/proposal/:proposalId/accept" component={ProposalAccept}/>
       <Route path="/proposal/:proposalId" component={ProposalViewer}/>
       <Route path="/quote/:quoteId" component={QuoteViewer}/>
       <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
