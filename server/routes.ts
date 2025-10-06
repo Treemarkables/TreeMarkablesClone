@@ -3629,24 +3629,54 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const preparePhotoAttachment = async (photoPath: string): Promise<{ filename: string; mimeType: string; data: Buffer } | null> => {
         try {
           const fileName = path.basename(photoPath);
-          const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
+          let fileContent: Buffer;
+          let mimeType: string;
           
-          if (!fs.existsSync(filePath)) {
-            console.warn(`⚠️ Photo file not found: ${filePath}`);
-            return null;
+          // Check if photo is in object storage
+          if (photoPath.startsWith('/objects/photos/')) {
+            console.log(`📦 Downloading photo from object storage: ${fileName}`);
+            const photoStorage = new PhotoStorageService();
+            const downloadResult = await photoStorage.downloadPhotoBuffer(photoPath);
+            
+            if (!downloadResult) {
+              console.warn(`⚠️ Photo not found in object storage: ${photoPath}`);
+              return null;
+            }
+            
+            fileContent = downloadResult.buffer;
+            mimeType = downloadResult.contentType;
+            console.log(`✅ Downloaded from object storage: ${fileName} (${mimeType})`);
+          } else {
+            // Fallback to filesystem for legacy photos
+            const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
+            
+            if (!fs.existsSync(filePath)) {
+              console.warn(`⚠️ Photo file not found: ${filePath}`);
+              return null;
+            }
+            
+            fileContent = fs.readFileSync(filePath);
+            
+            // Determine mime type from extension
+            const fileExtension = path.extname(fileName).toLowerCase();
+            const mimeTypes: { [key: string]: string } = {
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.png': 'image/png',
+              '.gif': 'image/gif',
+              '.webp': 'image/webp',
+              '.heic': 'image/heic',
+              '.heif': 'image/heif'
+            };
+            mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
           }
           
-          // Read file
-          let fileContent = fs.readFileSync(filePath);
           let finalFileName = fileName;
-          let mimeType = 'application/octet-stream';
-          
-          // Determine file type
           const fileExtension = path.extname(fileName).toLowerCase();
           
           // Check if HEIC/HEIF - convert to JPEG for email compatibility
-          if (fileExtension === '.heic' || fileExtension === '.heif') {
-            console.log(`🔄 Converting HEIC to JPEG: ${fileName}`);
+          if (fileExtension === '.heic' || fileExtension === '.heif' || mimeType === 'image/heic' || mimeType === 'image/heif') {
+            console.log(`🔄 Converting HEIC to JPEG for email: ${fileName}`);
             try {
               const jpegBuffer = await heicConvert({
                 buffer: fileContent,
@@ -3660,18 +3690,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               console.log(`✅ Converted HEIC to JPEG: ${finalFileName}`);
             } catch (conversionError) {
               console.error(`❌ HEIC conversion failed for ${fileName}, using original:`, conversionError);
-              mimeType = 'image/heic';
+              // Keep original if conversion fails
             }
-          } else {
-            // Map other file types
-            const mimeTypes: { [key: string]: string } = {
-              '.jpg': 'image/jpeg',
-              '.jpeg': 'image/jpeg',
-              '.png': 'image/png',
-              '.gif': 'image/gif',
-              '.webp': 'image/webp'
-            };
-            mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
           }
           
           return {
