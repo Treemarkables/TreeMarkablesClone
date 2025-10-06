@@ -2256,7 +2256,7 @@ export function GlobalJobCard({
                   {sidebarTab === 'billing' && (
                     <div className="space-y-6">
                       {/* ServiceM8 Billing Header */}
-                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 -m-4 mb-4">
+                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4">
                         <h3 className="font-semibold text-lg">Billing & Invoicing</h3>
                         <p className="text-blue-100 text-sm">Manage billing address, tax settings, and financial details</p>
                       </div>
