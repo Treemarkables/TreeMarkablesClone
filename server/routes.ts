@@ -3833,7 +3833,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const emailSuccess = await emailService.sendEmail({
         to,
         cc,
-        from: 'jullianhalley@hotmail.com',
+        from: replyToEmail || 'info@treemarkables.co.nz', // Use job-specific email or fallback
         replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
