@@ -3447,6 +3447,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const sections = await storage.getProposalSectionsByProposal(proposalId);
       const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
       
+      console.log(`📧 Preparing email for proposal ${proposalId}`);
+      console.log(`📋 Found ${sections.length} sections`);
+      console.log(`📝 Found ${lineItems.length} line items`);
+      
       // Group line items by section
       const sectionLineItems = new Map<string, any[]>();
       for (const item of lineItems) {
@@ -3456,6 +3460,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           }
           sectionLineItems.get(item.sectionId)!.push(item);
         }
+      }
+      
+      console.log(`🗂️ Grouped line items into ${sectionLineItems.size} sections`);
+      for (const [sectionId, items] of sectionLineItems.entries()) {
+        console.log(`   Section ${sectionId}: ${items.length} items`);
       }
 
       // Calculate totals
