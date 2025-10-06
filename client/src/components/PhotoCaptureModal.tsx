@@ -123,9 +123,8 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
   const handleClose = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (libraryInputRef.current) libraryInputRef.current.value = '';
     onClose();
   };
 
