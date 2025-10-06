@@ -10092,11 +10092,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
       
-      // Also get proposal sections
+      // Get proposal sections
       const sections = await storage.getProposalSectionsByProposal(proposal.id);
       
-      // Map images → photos for frontend compatibility
-      const sectionsWithPhotos = sections.map(section => ({
+      // Get all line items for this proposal
+      const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
+      
+      // Map images → photos and attach line items to each section
+      const sectionsWithPhotosAndLineItems = sections.map(section => ({
         ...section,
         photos: (section.images || []).map((url: string) => ({
           id: `photo-${Date.now()}-${Math.random()}`,
@@ -10105,12 +10108,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           type: 'before' as const,
           category: 'documentation' as const,
           capturedAt: new Date().toISOString(),
-        }))
+        })),
+        lineItems: allLineItems.filter(item => item.sectionId === section.id)
       }));
       
       res.json({
         success: true,
-        data: { ...proposal, sections: sectionsWithPhotos }
+        data: { ...proposal, sections: sectionsWithPhotosAndLineItems }
       });
     } catch (error) {
       console.error('Error fetching proposal:', error);
