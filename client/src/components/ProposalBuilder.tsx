@@ -154,19 +154,32 @@ export function ProposalBuilder({
       form.setValue('taxRate', proposal.taxRate || 15);
       form.setValue('deliveryMethod', proposal.deliveryMethod || 'email');
       
-      // Load sections with photos properly mapped
+      // Load sections with photos and line items properly mapped
       if (proposal.sections && Array.isArray(proposal.sections)) {
         const loadedSections = proposal.sections.map((section: any) => ({
           id: section.id,
           title: section.title,
           description: section.content || '',
           photos: section.photos || [], // Already mapped by backend
-          lineItems: [], // Will be loaded separately
+          lineItems: (section.lineItems || []).map((item: any) => ({
+            id: item.id,
+            description: item.description || '',
+            quantity: parseFloat(item.quantity) || 1,
+            unitPrice: parseFloat(item.unitPrice) || 0,
+            totalPrice: parseFloat(item.totalPrice) || 0,
+            unit: item.unit || 'each',
+            category: item.category || 'labor',
+            notes: item.notes || '',
+            isOptional: item.isOptional || false,
+            selected: item.selected !== false,
+            pricingType: item.pricingType || 'normal',
+            choices: [] // Choices would be loaded separately if needed
+          })),
           sortOrder: section.sortOrder || 0
         }));
         
         setSections(loadedSections);
-        console.log('Loaded sections with photos:', loadedSections);
+        console.log('Loaded sections with photos and line items:', loadedSections);
       }
     }
   }, [existingProposalData, mode, isOpen, form]);
@@ -932,16 +945,6 @@ export function ProposalBuilder({
       createdBy: 'system',
       sections: sections,
     };
-    
-    console.log('🔍 AUTO-SAVE DATA:', {
-      draftProposalId,
-      sectionsCount: sections.length,
-      sections: sections.map(s => ({
-        title: s.title,
-        lineItemsCount: s.lineItems?.length || 0,
-        lineItems: s.lineItems
-      }))
-    });
 
     try {
       const result = await saveDraftMutation.mutateAsync(draftData);
