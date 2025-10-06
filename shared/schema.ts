@@ -454,6 +454,7 @@ export const jobDiaryEntries = pgTable("job_diary_entries", {
   tags: text("tags").array(), // safety, urgent, customer-request, etc
   location: text("location"), // Specific location within job site
   isPrivate: boolean("is_private").default(false), // Internal notes only
+  metadata: jsonb("metadata"), // Flexible metadata for proposals, emails, invoices, etc
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
