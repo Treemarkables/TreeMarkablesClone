@@ -105,6 +105,41 @@ export function ProposalBuilder({
     enabled: !!activeCustomerId && isOpen,
   });
 
+  // Component state - must be declared before useEffect hooks
+  const [sections, setSections] = useState<ProposalSectionData[]>([
+    {
+      id: 'section-1',
+      title: 'Tree Removal Services',
+      description: '',
+      photos: [],
+      lineItems: [],
+      sortOrder: 1
+    }
+  ]);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [activeSectionId, setActiveSectionId] = useState('section-1');
+  const [showPreview, setShowPreview] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [showSmsDialog, setShowSmsDialog] = useState(false);
+  const [showDiaryPhotoDialog, setShowDiaryPhotoDialog] = useState(false);
+  const [currentPhotoSectionId, setCurrentPhotoSectionId] = useState<string>('');
+  const [selectedDiaryPhotos, setSelectedDiaryPhotos] = useState<string[]>([]);
+  const [draftProposalId, setDraftProposalId] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const lastSavedSnapshot = useRef<string | null>(null);
+  const [emailForm, setEmailForm] = useState({
+    to: '',
+    cc: '',
+    subject: '',
+    message: ''
+  });
+  const [smsForm, setSmsForm] = useState({
+    to: '',
+    message: ''
+  });
+
   // Initialize proposal with job data when available
   useEffect(() => {
     if (jobData && (jobData as any)?.success && (jobData as any)?.data && isOpen) {
@@ -145,6 +180,20 @@ export function ProposalBuilder({
       console.log('Proposal initialized with job data:', job);
     }
   }, [jobData, isOpen, form, customerId]);
+
+  // Initialize draftProposalId with existing proposalId when in edit mode
+  useEffect(() => {
+    if (mode === 'edit' && proposalId && isOpen && !draftProposalId) {
+      setDraftProposalId(proposalId);
+    }
+  }, [mode, proposalId, isOpen, draftProposalId]);
+
+  // Reset draftProposalId when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setDraftProposalId(null);
+    }
+  }, [isOpen]);
 
   // Load existing proposal data when in edit mode
   useEffect(() => {
@@ -191,41 +240,6 @@ export function ProposalBuilder({
       }
     }
   }, [existingProposalData, mode, isOpen, form]);
-
-  // Component state - sections-based approach
-  const [sections, setSections] = useState<ProposalSectionData[]>([
-    {
-      id: 'section-1',
-      title: 'Tree Removal Services',
-      description: '',
-      photos: [],
-      lineItems: [],
-      sortOrder: 1
-    }
-  ]);
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [activeSectionId, setActiveSectionId] = useState('section-1');
-  const [showPreview, setShowPreview] = useState(false);
-  const [showEmailDialog, setShowEmailDialog] = useState(false);
-  const [showSmsDialog, setShowSmsDialog] = useState(false);
-  const [showDiaryPhotoDialog, setShowDiaryPhotoDialog] = useState(false);
-  const [currentPhotoSectionId, setCurrentPhotoSectionId] = useState<string>('');
-  const [selectedDiaryPhotos, setSelectedDiaryPhotos] = useState<string[]>([]);
-  const [draftProposalId, setDraftProposalId] = useState<string | null>(null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
-  const lastSavedSnapshot = useRef<string | null>(null);
-  const [emailForm, setEmailForm] = useState({
-    to: '',
-    cc: '',
-    subject: '',
-    message: ''
-  });
-  const [smsForm, setSmsForm] = useState({
-    to: '',
-    message: ''
-  });
 
   // Line item form
   const [currentLineItem, setCurrentLineItem] = useState<Partial<LineItem>>({
@@ -801,7 +815,7 @@ export function ProposalBuilder({
     }
 
     // Use the actual saved draft proposal ID
-    const actualProposalId = draftProposalId || editingProposalId;
+    const actualProposalId = draftProposalId || proposalId;
     
     // Check if proposal is saved
     if (!actualProposalId) {
@@ -866,14 +880,14 @@ export function ProposalBuilder({
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
       // Use the actual saved draft proposal ID
-      const proposalId = draftProposalId || editingProposalId;
+      const actualProposalId = draftProposalId || proposalId;
       
-      if (!proposalId) {
+      if (!actualProposalId) {
         throw new Error('Please wait for the proposal to finish auto-saving, then try again');
       }
 
-      console.log('Accepting proposal:', proposalId);
-      const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
+      console.log('Accepting proposal:', actualProposalId);
+      const response = await apiRequest('POST', `/api/proposals/${actualProposalId}/accept`);
       return response;
     },
     onSuccess: (response: any) => {
