@@ -126,7 +126,7 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
                 ) : (
                   <>
                     <CheckCircle className="w-4 h-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Accept & Create Work Order</span>
+                    <span className="hidden sm:inline">Accept Quote</span>
                     <span className="sm:hidden">Accept</span>
                   </>
                 )}
