@@ -3590,7 +3590,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
-        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${parseFloat(totalAmount.toString()).toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
+        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
       });
 
       if (!emailSuccess) {
