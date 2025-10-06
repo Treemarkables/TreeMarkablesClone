@@ -3752,6 +3752,34 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             }
           }
           
+          // Compress images for email to reduce size (SendGrid has limits)
+          if (mimeType === 'image/jpeg' || mimeType === 'image/jpg' || mimeType === 'image/png') {
+            console.log(`📉 Compressing image for email: ${finalFileName}`);
+            try {
+              const compressedBuffer = await sharp(fileContent)
+                .resize(1200, 1200, { 
+                  fit: 'inside', 
+                  withoutEnlargement: true 
+                })
+                .jpeg({ quality: 60 }) // Lower quality for email
+                .toBuffer();
+              
+              const originalSize = (fileContent.length / 1024).toFixed(2);
+              const compressedSize = (compressedBuffer.length / 1024).toFixed(2);
+              console.log(`✅ Compressed ${finalFileName}: ${originalSize}KB → ${compressedSize}KB`);
+              
+              fileContent = compressedBuffer;
+              // Ensure filename ends with .jpg after compression
+              if (!finalFileName.match(/\.jpe?g$/i)) {
+                finalFileName = finalFileName.replace(/\.\w+$/i, '.jpg');
+              }
+              mimeType = 'image/jpeg';
+            } catch (compressionError) {
+              console.warn(`⚠️ Image compression failed for ${finalFileName}, using original:`, compressionError);
+              // Keep original if compression fails
+            }
+          }
+          
           return {
             filename: finalFileName,
             mimeType,
