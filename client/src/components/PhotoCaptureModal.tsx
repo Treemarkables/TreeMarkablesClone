@@ -249,7 +249,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
           )}
 
           {/* Action buttons */}
-          {selectedFile && (
+          {selectedFiles.length > 0 && (
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"

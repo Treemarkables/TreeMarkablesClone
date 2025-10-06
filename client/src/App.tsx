@@ -74,6 +74,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Authenticated Route wrapper - redirects unauthenticated users to login
+function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+  
+  return <>{children}</>;
+}
+
 // Inner component that uses useSidebar hook
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const { isCrew, isAdmin, logout } = useAuth();
@@ -399,11 +411,13 @@ function Router() {
       <Route path="/contact" component={Contact}/>
       <Route path="/job-dashboard">
         {() => (
-          <SidebarLayout>
-            {(activeTab, onTabChange) => (
-              <JobDashboard activeTab={activeTab} onTabChange={onTabChange} />
-            )}
-          </SidebarLayout>
+          <AuthenticatedRoute>
+            <SidebarLayout>
+              {(activeTab, onTabChange) => (
+                <JobDashboard activeTab={activeTab} onTabChange={onTabChange} />
+              )}
+            </SidebarLayout>
+          </AuthenticatedRoute>
         )}
       </Route>
       <Route path="/metrics">
