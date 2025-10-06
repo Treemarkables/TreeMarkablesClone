@@ -510,11 +510,11 @@ export function GlobalJobCard({
         totalAmount: editingJob.totalAmount || '0',
         paidAmount: editingJob.paidAmount || '0',
         notes: editingJob.notes || '',
-        // Contact fields from customer data
-        jobContactFirstName: firstName,
-        jobContactLastName: lastName,
-        jobContactEmail: editingJobCustomer?.email || '',
-        jobContactPhone: editingJobCustomer?.phone || '',
+        // Contact fields from job data (with customer as fallback)
+        jobContactFirstName: editingJob.jobContactFirstName || firstName,
+        jobContactLastName: editingJob.jobContactLastName || lastName,
+        jobContactEmail: editingJob.jobContactEmail || editingJobCustomer?.email || '',
+        jobContactPhone: editingJob.jobContactPhone || editingJobCustomer?.phone || '',
         billingContactPhone: editingJob.billingContactPhone || '',
         billingContactMobile: editingJob.billingContactMobile || '',
         billingAddress: editingJob.billingAddress || '',
