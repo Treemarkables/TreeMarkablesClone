@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { z } from "zod";
+import { apiRequest } from "@/lib/queryClient";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
@@ -150,6 +151,10 @@ export function ProposalBuilder({
   const [showDiaryPhotoDialog, setShowDiaryPhotoDialog] = useState(false);
   const [currentPhotoSectionId, setCurrentPhotoSectionId] = useState<string>('');
   const [selectedDiaryPhotos, setSelectedDiaryPhotos] = useState<string[]>([]);
+  const [draftProposalId, setDraftProposalId] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const lastSavedSnapshot = useRef<string | null>(null);
   const [emailForm, setEmailForm] = useState({
     to: '',
     cc: '',
@@ -659,6 +664,35 @@ export function ProposalBuilder({
     },
   });
 
+  // Auto-save draft mutation
+  const saveDraftMutation = useMutation({
+    mutationFn: async (data: any) => {
+      if (draftProposalId) {
+        // Update existing draft
+        const response = await apiRequest('PATCH', `/api/proposals/${draftProposalId}`, data);
+        return await response.json();
+      } else {
+        // Create new draft
+        const response = await apiRequest('POST', '/api/proposals', data);
+        return await response.json();
+      }
+    },
+    onSuccess: (response: any) => {
+      // Extract the proposal ID from the response
+      const proposalId = response?.data?.id || response?.id;
+      if (!draftProposalId && proposalId) {
+        setDraftProposalId(proposalId);
+        console.log('Draft proposal ID set to:', proposalId);
+      }
+      setAutoSaveStatus('saved');
+      setLastSavedAt(new Date());
+    },
+    onError: (error: any) => {
+      console.error('Auto-save error:', error);
+      setAutoSaveStatus('unsaved');
+    },
+  });
+
   // Send email mutation  
   const sendEmailMutation = useMutation({
     mutationFn: async (emailData: { proposalId: string; to: string; subject: string; message?: string; cc?: string }) => {
@@ -735,6 +769,72 @@ export function ProposalBuilder({
       subject: `Tree Service Proposal ${proposalNumber}`,
       message: `Dear ${previewData.customer?.name || 'Valued Customer'},\n\nThank you for your interest in our tree services. Please find your personalized proposal attached.\n\nWe look forward to working with you!\n\nBest regards,\nProfessional Tree Care Services`
     });
+  };
+
+  // Auto-save functionality - debounced save every 3 seconds after changes
+  useEffect(() => {
+    if (!isOpen || sections.length === 0) return;
+
+    // Create snapshot of current state for comparison
+    const formData = form.getValues();
+    const currentSnapshot = JSON.stringify({
+      sections,
+      formData: {
+        title: formData.title,
+        description: formData.description,
+        notes: formData.notes,
+        taxRate: formData.taxRate,
+      },
+    });
+
+    // Skip if data hasn't changed from last save
+    if (lastSavedSnapshot.current === currentSnapshot) {
+      return;
+    }
+
+    // Data has changed, mark as unsaved
+    setAutoSaveStatus('unsaved');
+
+    const timer = setTimeout(() => {
+      performAutoSave(currentSnapshot);
+    }, 3000); // 3 second debounce
+
+    return () => clearTimeout(timer);
+  }, [sections, form.watch()]);
+
+  const performAutoSave = async (snapshot: string) => {
+    const formData = form.getValues();
+    
+    // Don't save if no meaningful data
+    if (!formData.title && sections.length === 1 && sections[0].lineItems.length === 0) {
+      return;
+    }
+
+    setAutoSaveStatus('saving');
+
+    const draftData = {
+      customerId: formData.customerId || customerId,
+      jobId: formData.jobId || jobId,
+      proposalNumber: draftProposalId ? undefined : `DRAFT-${Date.now()}`,
+      title: formData.title || 'Untitled Proposal',
+      description: formData.description,
+      totalAmount: grandTotal,
+      taxRate: formData.taxRate || 15,
+      status: 'draft',
+      deliveryMethod: formData.deliveryMethod || 'email',
+      notes: formData.notes,
+      createdBy: 'system',
+      sections: sections,
+    };
+
+    try {
+      const result = await saveDraftMutation.mutateAsync(draftData);
+      // Save successful, store the snapshot
+      lastSavedSnapshot.current = snapshot;
+      console.log('Auto-save successful, snapshot stored');
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+    }
   };
 
   // Preview functionality
@@ -877,9 +977,22 @@ export function ProposalBuilder({
                 <DialogTitle className="text-lg sm:text-2xl font-bold text-primary">
                   {mode === "edit" ? "Edit Proposal" : "Create Proposal"}
                 </DialogTitle>
-                <p className="text-sm text-muted-foreground hidden sm:block">
-                  Build your professional proposal with multiple sections
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-muted-foreground hidden sm:block">
+                    Build your professional proposal with multiple sections
+                  </p>
+                  {autoSaveStatus === 'saving' && (
+                    <span className="text-xs text-blue-600 flex items-center gap-1">
+                      <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      Saving...
+                    </span>
+                  )}
+                  {autoSaveStatus === 'saved' && lastSavedAt && (
+                    <span className="text-xs text-green-600">
+                      ✓ Saved {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
               </div>
               <Button
                 variant="outline"
