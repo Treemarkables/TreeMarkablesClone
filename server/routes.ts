@@ -3498,6 +3498,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             sectionsHtml += `<p style="color: #6b7280; line-height: 1.6; margin: 0 0 15px 0; white-space: pre-wrap;">${section.content}</p>`;
           }
           
+          // Show photos if they exist
+          if (section.images && Array.isArray(section.images) && section.images.length > 0) {
+            sectionsHtml += '<div style="margin: 15px 0;">';
+            sectionsHtml += '<h5 style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">Documentation</h5>';
+            sectionsHtml += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">';
+            
+            for (const imageUrl of section.images) {
+              // Build full URL for the image
+              const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${process.env.REPLIT_DEV_DOMAIN || 'http://0.0.0.0:5000'}${imageUrl}`;
+              sectionsHtml += `
+                <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                  <img src="${fullImageUrl}" alt="Documentation photo" style="width: 100%; height: auto; display: block;" />
+                </div>
+              `;
+            }
+            
+            sectionsHtml += '</div></div>';
+          }
+          
           // Show line items if they exist
           if (items.length > 0) {
             sectionsHtml += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">';
@@ -3547,11 +3566,30 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         sectionsHtml += '</div>';
       }
 
+      // Get customer contact details for header
+      const customerEmail = customer?.email || job?.jobContactEmail || '';
+      const customerPhone = customer?.phone || job?.jobContactPhone || '';
+      
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="color: #f59e0b; margin: 0;">Tree Service Proposal</h1>
             <p style="color: #6b7280; margin: 5px 0 0 0;">Professional Tree Care Services</p>
+          </div>
+
+          <!-- Customer Information -->
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #374151; margin: 0 0 15px 0; font-size: 18px;">${customerName}</h3>
+            ${customerEmail ? `
+              <p style="color: #6b7280; margin: 5px 0; display: flex; align-items: center;">
+                <span style="margin-right: 8px;">📧</span> ${customerEmail}
+              </p>
+            ` : ''}
+            ${customerPhone ? `
+              <p style="color: #6b7280; margin: 5px 0; display: flex; align-items: center;">
+                <span style="margin-right: 8px;">📞</span> ${customerPhone}
+              </p>
+            ` : ''}
           </div>
 
           <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
