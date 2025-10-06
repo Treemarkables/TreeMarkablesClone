@@ -5666,7 +5666,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   }, express.static(path.join(__dirname, '..', 'uploads', 'photos')));
 
   // Upload photos for a job (before/after documentation)
-  app.post('/api/jobs/:jobId/photos/batch', imageUpload.array('photos', 10), async (req: Request, res: Response) => {
+  app.post('/api/jobs/:jobId/photos/batch', imageUpload.array('photos', 50), async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       const { type } = req.body; // 'before' or 'after'
