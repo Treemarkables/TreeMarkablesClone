@@ -3698,7 +3698,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
             <p style="color: #6b7280; font-size: 14px; margin: 0;">
               Professional Tree Care Services<br>
-              Email: jullianhalley@hotmail.com<br>
               Phone: Contact us for immediate assistance
             </p>
           </div>
