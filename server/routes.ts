@@ -3646,8 +3646,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const customerEmail = customer?.email || job?.jobContactEmail || '';
       const customerPhone = customer?.phone || job?.jobContactPhone || '';
       
-      // Generate proposal acceptance URL
-      const proposalAcceptUrl = `https://${baseUrl.replace(/^https?:\/\//, '')}/proposal/${proposalId}`;
+      // Generate proposal acceptance URL - goes directly to acceptance page
+      const proposalAcceptUrl = `https://${baseUrl.replace(/^https?:\/\//, '')}/proposal/${proposalId}/accept`;
       
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -3663,7 +3663,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               ✓ Accept This Proposal
             </a>
             <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
-              Click to review and accept this proposal online
+              Click to accept this proposal and create your work order
             </p>
           </div>
 
@@ -3686,7 +3686,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               ✓ Accept This Proposal
             </a>
             <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
-              Ready to get started? Click to accept this proposal
+              Ready to get started? Accept now and we'll schedule your service
             </p>
           </div>
 
