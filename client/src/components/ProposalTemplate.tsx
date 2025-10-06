@@ -173,17 +173,24 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
           {/* Header with Treemarkables Branding */}
           <div className="bg-gradient-to-r from-orange-500 to-blue-600 p-1 sm:p-3 text-white">
             <div className="flex flex-col sm:flex-row justify-between items-start gap-1 sm:gap-0">
-              <div className="flex-1 min-w-0">
-                <h1 className="text-xs sm:text-lg font-bold mb-0 sm:mb-1 truncate">{template.companyName || 'Treemarkables LTD'}</h1>
-                <p className="text-orange-100 text-[8px] sm:text-xs">Professional Tree Services</p>
-                <div className="mt-0.5 sm:mt-1.5 space-y-0 text-[8px] sm:text-xs text-orange-100">
-                  <div className="flex items-center gap-0.5 sm:gap-1">
-                    <Phone className="w-2 h-2 sm:w-3 sm:h-3" />
-                    <span className="break-all">{template.companyPhone || '027 216 6882'}</span>
-                  </div>
-                  <div className="flex items-center gap-0.5 sm:gap-1">
-                    <MapPin className="w-2 h-2 sm:w-3 sm:h-3" />
-                    <span className="break-all">{template.companyAddress || '213 Stanley road, Gisborne'}</span>
+              <div className="flex-1 min-w-0 flex items-start gap-2 sm:gap-3">
+                <img 
+                  src={new URL('@assets/new logo png_1757829817784.png', import.meta.url).href}
+                  alt="Treemarkables Logo" 
+                  className="w-8 h-8 sm:w-16 sm:h-16 object-contain bg-white rounded p-0.5 sm:p-1 flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-xs sm:text-lg font-bold mb-0 sm:mb-1 truncate">{template.companyName || 'Treemarkables LTD'}</h1>
+                  <p className="text-orange-100 text-[8px] sm:text-xs">Professional Tree Services</p>
+                  <div className="mt-0.5 sm:mt-1.5 space-y-0 text-[8px] sm:text-xs text-orange-100">
+                    <div className="flex items-center gap-0.5 sm:gap-1">
+                      <Phone className="w-2 h-2 sm:w-3 sm:h-3" />
+                      <span className="break-all">{template.companyPhone || '027 216 6882'}</span>
+                    </div>
+                    <div className="flex items-center gap-0.5 sm:gap-1">
+                      <MapPin className="w-2 h-2 sm:w-3 sm:h-3" />
+                      <span className="break-all">{template.companyAddress || '213 Stanley road, Gisborne'}</span>
+                    </div>
                   </div>
                 </div>
               </div>
