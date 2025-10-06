@@ -824,46 +824,43 @@ export function JobDiarySection({
                       )}
                       
                       {(() => {
-                        const shouldShowButton = entry.type === 'proposal' || (entry.type === 'email' && entry.metadata?.proposalNumber);
-                        if (entry.type === 'email') {
-                          console.log('📧 Email entry check:', {
-                            id: entry.id,
-                            title: entry.title,
-                            hasMetadata: !!entry.metadata,
-                            metadata: entry.metadata,
-                            shouldShowButton
-                          });
+                        // Extract proposal number from title if not in metadata (for old entries)
+                        let proposalNumber = entry.metadata?.proposalNumber;
+                        if (entry.type === 'email' && !proposalNumber && entry.title) {
+                          const match = entry.title.match(/PROP-\d+|DRAFT-\d+/);
+                          if (match) {
+                            proposalNumber = match[0];
+                          }
                         }
-                        return shouldShowButton;
-                      })() && (
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          {entry.type === 'proposal' && (
-                            <Badge variant="outline" className="text-xs whitespace-nowrap">
-                              {entry.metadata?.status || 'draft'}
-                            </Badge>
-                          )}
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="text-xs h-6 whitespace-nowrap"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              console.log('🔍 Proposal button clicked:', { 
-                                type: entry.type, 
-                                metadata: entry.metadata,
-                                proposalNumber: entry.metadata?.proposalNumber 
-                              });
-                              if (entry.metadata?.proposalNumber) {
-                                handleOpenProposal(entry.metadata.proposalNumber);
-                              }
-                            }}
-                            data-testid="button-view-proposal"
-                          >
-                            <ExternalLink className="w-3 h-3 mr-1" />
-                            View Proposal
-                          </Button>
-                        </div>
-                      )}
+                        
+                        const shouldShowButton = entry.type === 'proposal' || (entry.type === 'email' && proposalNumber);
+                        if (!shouldShowButton) return null;
+                        
+                        return (
+                          <div className="mt-2 flex items-center gap-2 flex-wrap">
+                            {entry.type === 'proposal' && (
+                              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                                {entry.metadata?.status || 'draft'}
+                              </Badge>
+                            )}
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-xs h-6 whitespace-nowrap"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (proposalNumber) {
+                                  handleOpenProposal(proposalNumber);
+                                }
+                              }}
+                              data-testid="button-view-proposal"
+                            >
+                              <ExternalLink className="w-3 h-3 mr-1" />
+                              View Proposal
+                            </Button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
