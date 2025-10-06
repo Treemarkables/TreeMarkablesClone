@@ -64,7 +64,16 @@ import { addDays, subDays } from "date-fns";
 
 // Protected Route wrapper - redirects unauthenticated users to login and crew users to allowed pages
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isCrew, isAuthenticated } = useAuth();
+  const { isCrew, isAuthenticated, isLoading } = useAuth();
+  
+  // Wait for auth check to complete before redirecting
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
   
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
@@ -81,7 +90,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 // Authenticated Route wrapper - redirects unauthenticated users to login
 function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  // Wait for auth check to complete before redirecting
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
   
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
