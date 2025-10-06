@@ -692,7 +692,7 @@ export function ProposalBuilder({
       if (!jobId) {
         throw new Error('Job ID required for photo upload');
       }
-      const response = await fetch(`/api/jobs/${jobId}/photos`, {
+      const response = await fetch(`/api/jobs/${jobId}/photos/batch`, {
         method: 'POST',
         body: formData,
       });
