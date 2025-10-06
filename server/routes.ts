@@ -3625,6 +3625,66 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         </div>
       `;
 
+      // Helper function to prepare photo attachment with HEIC conversion
+      const preparePhotoAttachment = async (photoPath: string): Promise<{ filename: string; mimeType: string; data: Buffer } | null> => {
+        try {
+          const fileName = path.basename(photoPath);
+          const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
+          
+          if (!fs.existsSync(filePath)) {
+            console.warn(`⚠️ Photo file not found: ${filePath}`);
+            return null;
+          }
+          
+          // Read file
+          let fileContent = fs.readFileSync(filePath);
+          let finalFileName = fileName;
+          let mimeType = 'application/octet-stream';
+          
+          // Determine file type
+          const fileExtension = path.extname(fileName).toLowerCase();
+          
+          // Check if HEIC/HEIF - convert to JPEG for email compatibility
+          if (fileExtension === '.heic' || fileExtension === '.heif') {
+            console.log(`🔄 Converting HEIC to JPEG: ${fileName}`);
+            try {
+              const jpegBuffer = await heicConvert({
+                buffer: fileContent,
+                format: 'JPEG',
+                quality: 0.8
+              });
+              
+              fileContent = Buffer.from(jpegBuffer);
+              finalFileName = fileName.replace(/\.(heic|heif)$/i, '.jpg');
+              mimeType = 'image/jpeg';
+              console.log(`✅ Converted HEIC to JPEG: ${finalFileName}`);
+            } catch (conversionError) {
+              console.error(`❌ HEIC conversion failed for ${fileName}, using original:`, conversionError);
+              mimeType = 'image/heic';
+            }
+          } else {
+            // Map other file types
+            const mimeTypes: { [key: string]: string } = {
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.png': 'image/png',
+              '.gif': 'image/gif',
+              '.webp': 'image/webp'
+            };
+            mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
+          }
+          
+          return {
+            filename: finalFileName,
+            mimeType,
+            data: fileContent
+          };
+        } catch (error) {
+          console.error(`❌ Error processing photo ${photoPath}:`, error);
+          return null;
+        }
+      };
+
       // Collect all photos from all sections and convert to email attachments
       const emailAttachments = [];
       const uniquePhotos = new Set<string>();
@@ -3636,45 +3696,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             if (!uniquePhotos.has(photoUrl)) {
               uniquePhotos.add(photoUrl);
               
-              try {
-                // Convert relative URL to absolute file path
-                const fileName = path.basename(photoUrl);
-                const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
+              console.log(`📎 Processing photo: ${path.basename(photoUrl)}`);
+              
+              const attachment = await preparePhotoAttachment(photoUrl);
+              if (attachment) {
+                emailAttachments.push({
+                  content: attachment.data.toString('base64'),
+                  filename: attachment.filename,
+                  type: attachment.mimeType,
+                  disposition: 'attachment'
+                });
                 
-                console.log(`📎 Attempting to attach photo: ${fileName}`);
-                
-                // Check if file exists
-                if (fs.existsSync(filePath)) {
-                  // Read file and convert to base64
-                  const fileContent = fs.readFileSync(filePath);
-                  const base64Content = fileContent.toString('base64');
-                  
-                  // Determine file type
-                  const fileExtension = path.extname(fileName).toLowerCase();
-                  const mimeTypes: { [key: string]: string } = {
-                    '.jpg': 'image/jpeg',
-                    '.jpeg': 'image/jpeg',
-                    '.png': 'image/png',
-                    '.gif': 'image/gif',
-                    '.webp': 'image/webp',
-                    '.heic': 'image/heic',
-                    '.heif': 'image/heif'
-                  };
-                  const mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
-                  
-                  emailAttachments.push({
-                    content: base64Content,
-                    filename: fileName,
-                    type: mimeType,
-                    disposition: 'attachment'
-                  });
-                  
-                  console.log(`✅ Added photo attachment: ${fileName} (${mimeType})`);
-                } else {
-                  console.warn(`⚠️ Photo file not found: ${filePath}`);
-                }
-              } catch (photoError) {
-                console.error(`❌ Error processing photo ${photoUrl}:`, photoError);
+                console.log(`✅ Added photo attachment: ${attachment.filename} (${attachment.mimeType})`);
               }
             }
           }
