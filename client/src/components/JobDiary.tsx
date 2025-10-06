@@ -673,19 +673,19 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
               >
                 {/* Delete Button - Absolutely Positioned */}
                 <Button
-                  variant="ghost"
-                  size="sm"
+                  variant="destructive"
+                  size="icon"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (confirm('Are you sure you want to delete this diary entry?')) {
                       deleteEntryMutation.mutate(entry.id);
                     }
                   }}
-                  className="absolute top-4 right-4 z-10 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-500 dark:hover:bg-red-950"
+                  className="absolute top-2 right-2 z-20 h-8 w-8"
                   data-testid={`button-delete-entry-${entry.id}`}
                   title="Delete entry"
                 >
-                  <Trash2 className="h-5 w-5" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
 
                 <CardContent className="p-6 pr-16">
