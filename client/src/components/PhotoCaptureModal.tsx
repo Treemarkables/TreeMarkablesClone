@@ -14,53 +14,60 @@ interface PhotoCaptureModalProps {
 }
 
 export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalProps) {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const uploadPhotoMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('photo', file);
-      formData.append('authorName', 'User');
-      formData.append('description', 'Photo added');
-
-      // CRITICAL: Add timestamp to bypass ALL caching layers (service worker, browser, iOS)
-      const timestamp = Date.now();
-      const url = `/api/jobs/${jobId}/photos?_bypass=${timestamp}`;
+    mutationFn: async (files: File[]) => {
+      const results = [];
       
-      console.log('📸 Uploading photo with cache bypass:', url);
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('photo', file);
+        formData.append('authorName', 'User');
+        formData.append('description', 'Photo added');
 
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        // Force no caching at any level
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        },
-      });
+        // CRITICAL: Add timestamp to bypass ALL caching layers (service worker, browser, iOS)
+        const timestamp = Date.now();
+        const url = `/api/jobs/${jobId}/photos?_bypass=${timestamp}`;
+        
+        console.log('📸 Uploading photo with cache bypass:', url);
 
-      console.log('📸 Upload response status:', response.status);
+        const response = await fetch(url, {
+          method: 'POST',
+          body: formData,
+          // Force no caching at any level
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('📸 Upload failed:', error);
-        throw new Error(error.message || 'Failed to upload photo');
+        console.log('📸 Upload response status:', response.status);
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.error('📸 Upload failed:', error);
+          throw new Error(error.message || 'Failed to upload photo');
+        }
+
+        const result = await response.json();
+        console.log('📸 Upload success:', result);
+        results.push(result);
       }
-
-      const result = await response.json();
-      console.log('📸 Upload success:', result);
-      return result;
+      
+      return results;
     },
     onSuccess: (data) => {
+      const count = data.length;
       toast({
         title: "Success",
-        description: "Photo uploaded successfully",
+        description: `${count} photo${count > 1 ? 's' : ''} uploaded successfully`,
       });
       
       // Invalidate ALL diary queries for this job (including all filter types)
@@ -80,52 +87,69 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
   });
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
 
-    // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-    if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: "Invalid file type",
-        description: "Please select a JPEG or PNG image",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate file size (10MB)
     const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      toast({
-        title: "File too large",
-        description: "Please select an image smaller than 10MB",
-        variant: "destructive",
-      });
-      return;
+    const validFiles: File[] = [];
+    const newPreviewUrls: string[] = [];
+
+    // Validate each file
+    for (const file of files) {
+      // Validate file type
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "Invalid file type",
+          description: `${file.name} is not a JPEG or PNG image`,
+          variant: "destructive",
+        });
+        continue;
+      }
+
+      // Validate file size
+      if (file.size > maxSize) {
+        toast({
+          title: "File too large",
+          description: `${file.name} is larger than 10MB`,
+          variant: "destructive",
+        });
+        continue;
+      }
+
+      validFiles.push(file);
     }
 
-    setSelectedFile(file);
+    if (validFiles.length === 0) return;
 
-    // Create preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreviewUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setSelectedFiles(validFiles);
+
+    // Create previews for all valid files
+    validFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewUrls(prev => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleUpload = () => {
-    if (!selectedFile) return;
-    uploadPhotoMutation.mutate(selectedFile);
+    if (selectedFiles.length === 0) return;
+    uploadPhotoMutation.mutate(selectedFiles);
   };
 
   const handleClose = () => {
-    setSelectedFile(null);
-    setPreviewUrl(null);
+    setSelectedFiles([]);
+    setPreviewUrls([]);
     if (cameraInputRef.current) cameraInputRef.current.value = '';
     if (libraryInputRef.current) libraryInputRef.current.value = '';
     onClose();
+  };
+
+  const removePhoto = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
   };
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -164,34 +188,39 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
             ref={libraryInputRef}
             type="file"
             accept="image/*"
+            multiple
             onChange={handleFileSelect}
             className="hidden"
             data-testid="input-library"
           />
 
           {/* Preview or upload options */}
-          {previewUrl ? (
-            <div className="relative">
-              <img
-                src={previewUrl}
-                alt="Photo preview"
-                className="w-full h-auto max-h-96 object-contain rounded-lg"
-                data-testid="img-photo-preview"
-              />
-              <Button
-                variant="destructive"
-                size="icon"
-                className="absolute top-2 right-2"
-                onClick={() => {
-                  setSelectedFile(null);
-                  setPreviewUrl(null);
-                  if (cameraInputRef.current) cameraInputRef.current.value = '';
-                  if (libraryInputRef.current) libraryInputRef.current.value = '';
-                }}
-                data-testid="button-clear-photo"
-              >
-                <X className="w-4 h-4" />
-              </Button>
+          {previewUrls.length > 0 ? (
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-gray-700">
+                {previewUrls.length} photo{previewUrls.length > 1 ? 's' : ''} selected
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto">
+                {previewUrls.map((url, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={url}
+                      alt={`Photo preview ${index + 1}`}
+                      className="w-full h-32 object-cover rounded-lg"
+                      data-testid={`img-photo-preview-${index}`}
+                    />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-1 right-1 h-6 w-6 opacity-90 hover:opacity-100"
+                      onClick={() => removePhoto(index)}
+                      data-testid={`button-remove-photo-${index}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
