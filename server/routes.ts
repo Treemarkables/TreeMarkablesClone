@@ -2918,57 +2918,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      let fileBuffer = req.file.buffer;
-      let fileName = req.file.originalname;
-      let mimeType = req.file.mimetype;
-
-      console.log('📸 Photo upload - Original:', { fileName, mimeType, size: fileBuffer.length });
-
-      // Convert HEIC to JPEG if necessary
-      const isHeic = fileName.toLowerCase().endsWith('.heic') || 
-                     fileName.toLowerCase().endsWith('.heif') ||
-                     mimeType === 'image/heic' || 
-                     mimeType === 'image/heif';
-      
-      console.log('📸 HEIC detection:', { isHeic, fileName, mimeType });
-
-      if (isHeic) {
-        try {
-          console.log('🔄 Converting HEIC to JPEG:', fileName);
-          
-          // Convert HEIC to JPEG using heic-convert
-          const jpegBuffer = await heicConvert({
-            buffer: fileBuffer,
-            format: 'JPEG',
-            quality: 0.9 // High quality
-          });
-
-          // Use sharp to ensure proper JPEG format and optimize
-          fileBuffer = await sharp(Buffer.from(jpegBuffer))
-            .jpeg({ quality: 90, progressive: true })
-            .toBuffer();
-
-          // Update filename and mime type
-          fileName = fileName.replace(/\.(heic|heif)$/i, '.jpg');
-          mimeType = 'image/jpeg';
-          
-          console.log('✅ HEIC converted to JPEG:', fileName);
-        } catch (conversionError) {
-          console.error('❌ HEIC conversion failed:', conversionError);
-          // If conversion fails, return an error
-          return res.status(400).json({
-            success: false,
-            message: 'Failed to convert HEIC image. Please try a different format.'
-          });
-        }
-      }
-
-      // Upload to object storage for persistence (file is in memory)
+      // Upload directly without conversion - on-the-fly conversion will handle display
+      // This makes uploads instant instead of 20-40 seconds per HEIC photo
       const photoStorage = new PhotoStorageService();
       const photoUrl = await photoStorage.uploadPhoto(
-        fileBuffer,
-        fileName,
-        mimeType
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype
       );
 
       // Create diary entry with photo
