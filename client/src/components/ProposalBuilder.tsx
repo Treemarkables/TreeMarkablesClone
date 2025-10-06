@@ -1614,6 +1614,19 @@ export function ProposalBuilder({
                     type="button"
                     variant="outline"
                     onClick={() => {
+                      initializeEmailForm();
+                      setShowEmailDialog(true);
+                    }}
+                    data-testid="button-email-proposal"
+                    className="flex items-center gap-2"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Email
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
                       initializeSmsForm();
                       setShowSmsDialog(true);
                     }}
