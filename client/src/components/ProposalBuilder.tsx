@@ -800,21 +800,21 @@ export function ProposalBuilder({
       return;
     }
 
-    // Get current proposal data to send email for
-    const previewData = getPreviewData();
+    // Use the actual saved draft proposal ID
+    const actualProposalId = draftProposalId || editingProposalId;
     
-    // Check if this is a preview proposal (not saved yet)
-    if (!previewData.proposal.id || previewData.proposal.id.startsWith('preview-')) {
+    // Check if proposal is saved
+    if (!actualProposalId) {
       toast({
         title: "Save Proposal First",
-        description: "Please save the proposal first before sending email. Click 'Create Proposal' at the bottom of the form.",
+        description: "Please wait for the proposal to finish auto-saving, then try again.",
         variant: "destructive"
       });
       return;
     }
 
     await sendEmailMutation.mutateAsync({
-      proposalId: previewData.proposal.id,
+      proposalId: actualProposalId,
       to: emailForm.to,
       subject: emailForm.subject,
       message: emailForm.message,
@@ -865,11 +865,11 @@ export function ProposalBuilder({
   // Accept proposal mutation - converts to work order
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
-      const previewData = getPreviewData();
-      const proposalId = previewData.proposal.id;
+      // Use the actual saved draft proposal ID
+      const proposalId = draftProposalId || editingProposalId;
       
-      if (!proposalId || proposalId.startsWith('preview-')) {
-        throw new Error('Please save the proposal first before accepting');
+      if (!proposalId) {
+        throw new Error('Please wait for the proposal to finish auto-saving, then try again');
       }
 
       console.log('Accepting proposal:', proposalId);
