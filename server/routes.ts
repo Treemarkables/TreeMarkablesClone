@@ -3533,6 +3533,22 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const customerName = customer?.name || 'Valued Customer';
       const proposalNumber = proposal.proposalNumber || 'N/A';
 
+      // Create a map of photo URLs to Content IDs for inline embedding
+      const photoToCidMap = new Map<string, string>();
+      let cidCounter = 1;
+      
+      // Collect all unique photos first and assign CIDs
+      for (const section of sections) {
+        if (section.images && Array.isArray(section.images)) {
+          for (const photoUrl of section.images) {
+            if (!photoToCidMap.has(photoUrl)) {
+              photoToCidMap.set(photoUrl, `photo${cidCounter}@treemarkables`);
+              cidCounter++;
+            }
+          }
+        }
+      }
+      
       // Build sections HTML with descriptions and line items
       let sectionsHtml = '';
       if (sections.length > 0) {
@@ -3550,7 +3566,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             sectionsHtml += `<p style="color: #6b7280; line-height: 1.6; margin: 0 0 15px 0; white-space: pre-wrap;">${section.content}</p>`;
           }
           
-          // Show photos if they exist - using TABLE layout for email compatibility
+          // Show photos if they exist - using TABLE layout for email compatibility with CID references
           if (section.images && Array.isArray(section.images) && section.images.length > 0) {
             sectionsHtml += '<div style="margin: 15px 0;">';
             sectionsHtml += '<h5 style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">Documentation</h5>';
@@ -3559,12 +3575,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             
             for (let i = 0; i < section.images.length; i++) {
               const imageUrl = section.images[i];
-              // Build absolute URL for the image (required for email clients)
-              const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${baseUrl}${imageUrl}`;
+              // Use CID reference for inline image embedding
+              const cid = photoToCidMap.get(imageUrl);
               
               sectionsHtml += `
                 <td style="padding: 5px; width: ${Math.floor(100 / Math.min(section.images.length, 3))}%;">
-                  <img src="${fullImageUrl}" alt="Documentation photo ${i + 1}" style="display: block; width: 100%; max-width: 200px; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" />
+                  <img src="cid:${cid}" alt="Documentation photo ${i + 1}" style="display: block; width: 100%; max-width: 200px; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" />
                 </td>
               `;
               
@@ -3791,36 +3807,27 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       };
 
-      // Collect all photos from all sections and convert to email attachments
+      // Collect all photos from all sections and convert to inline email attachments with CIDs
       const emailAttachments = [];
-      const uniquePhotos = new Set<string>();
       
-      for (const section of sections) {
-        if (section.images && Array.isArray(section.images)) {
-          for (const photoUrl of section.images) {
-            // Avoid duplicate photos
-            if (!uniquePhotos.has(photoUrl)) {
-              uniquePhotos.add(photoUrl);
-              
-              console.log(`📎 Processing photo: ${path.basename(photoUrl)}`);
-              
-              const attachment = await preparePhotoAttachment(photoUrl);
-              if (attachment) {
-                emailAttachments.push({
-                  content: attachment.data.toString('base64'),
-                  filename: attachment.filename,
-                  type: attachment.mimeType,
-                  disposition: 'attachment'
-                });
-                
-                console.log(`✅ Added photo attachment: ${attachment.filename} (${attachment.mimeType})`);
-              }
-            }
-          }
+      for (const [photoUrl, cid] of photoToCidMap.entries()) {
+        console.log(`📎 Processing photo: ${path.basename(photoUrl)}`);
+        
+        const attachment = await preparePhotoAttachment(photoUrl);
+        if (attachment) {
+          emailAttachments.push({
+            content: attachment.data.toString('base64'),
+            filename: attachment.filename,
+            type: attachment.mimeType,
+            disposition: 'inline', // Use inline for embedding in email body
+            content_id: cid // Content ID for referencing in HTML
+          });
+          
+          console.log(`✅ Added inline photo: ${attachment.filename} (${attachment.mimeType}) with CID: ${cid}`);
         }
       }
       
-      console.log(`📎 Total attachments prepared: ${emailAttachments.length} photos`);
+      console.log(`📎 Total inline attachments prepared: ${emailAttachments.length} photos`);
 
       // Send email using EmailService with attachments
       const emailSuccess = await emailService.sendEmail({
