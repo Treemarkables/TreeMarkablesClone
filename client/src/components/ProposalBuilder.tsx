@@ -846,7 +846,7 @@ export function ProposalBuilder({
       to: customerEmail,
       cc: '',
       subject: `Tree Service Proposal ${proposalNumber}`,
-      message: `Dear ${previewData.customer?.name || 'Valued Customer'},\n\nThank you for your interest in our tree services. Please find your personalized proposal attached.\n\nWe look forward to working with you!\n\nBest regards,\nProfessional Tree Care Services`
+      message: `Dear ${previewData.customer?.name || 'Valued Customer'},\n\nThank you for your interest in our tree services. Please find your personalized proposal below with full details, photos, and pricing.\n\nWe look forward to working with you!\n\nBest regards,\nProfessional Tree Care Services`
     });
   };
 
