@@ -76,7 +76,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
   const [showNewEntryDialog, setShowNewEntryDialog] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
   const [showPrivateEntries, setShowPrivateEntries] = useState(true);
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; entryId: string } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -748,7 +748,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                   className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group"
                                 >
                                   <button
-                                    onClick={() => setSelectedPhoto(photo)}
+                                    onClick={() => setSelectedPhoto({ url: photo, entryId: entry.id })}
                                     className="w-full h-full hover-elevate active-elevate-2 active:opacity-80 transition-opacity"
                                     data-testid={`button-view-photo-${index}`}
                                   >
@@ -864,6 +864,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
           onClick={() => setSelectedPhoto(null)}
           data-testid="fullpage-photo-overlay"
         >
+          {/* Close Button */}
           <button
             onClick={() => setSelectedPhoto(null)}
             className="absolute top-2 right-2 sm:top-4 sm:right-4 z-10 bg-white/10 text-white rounded-full p-3 sm:p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-white/20 active:bg-white/30 transition-colors touch-manipulation"
@@ -874,8 +875,29 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+
+          {/* Delete Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm('Delete this photo from the diary entry?')) {
+                deletePhotoMutation.mutate({
+                  entryId: selectedPhoto.entryId,
+                  photoUrl: selectedPhoto.url
+                });
+                setSelectedPhoto(null);
+              }
+            }}
+            className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 bg-red-600 text-white rounded-full p-3 sm:p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-red-700 active:bg-red-800 transition-colors touch-manipulation"
+            data-testid="button-delete-fullscreen-photo"
+            aria-label="Delete photo"
+            disabled={deletePhotoMutation.isPending}
+          >
+            <Trash2 className="w-5 h-5 sm:w-5 sm:h-5" />
+          </button>
+
           <img
-            src={selectedPhoto}
+            src={selectedPhoto.url}
             alt="Full size diary photo"
             className="max-w-full max-h-full w-auto h-auto object-contain touch-manipulation"
             onClick={(e) => e.stopPropagation()}
