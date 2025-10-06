@@ -762,7 +762,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                       <Eye className="h-8 w-8 text-white drop-shadow-lg opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
                                     </div>
                                   </button>
-                                  {/* Delete Photo Button */}
+                                  {/* Delete Photo Button - Always visible on mobile, hover on desktop */}
                                   <Button
                                     variant="destructive"
                                     size="icon"
@@ -775,7 +775,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                         });
                                       }
                                     }}
-                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                    className="absolute top-1 right-1 h-6 w-6 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
                                     data-testid={`button-delete-photo-${index}`}
                                     title="Delete photo"
                                     disabled={deletePhotoMutation.isPending}
