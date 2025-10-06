@@ -7,7 +7,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
+import { pool } from "./db";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
 if (!process.env.ALLOW_EMPLOYEE_ID_LOGIN) {
@@ -30,16 +31,20 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
-// Configure session middleware with memorystore
-const MemoryStore = createMemoryStore(session);
+// Configure session middleware with PostgreSQL store for persistence across server restarts
+const PgSession = connectPgSimple(session);
 const isDevelopment = process.env.NODE_ENV === 'development';
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
     resave: false,
     saveUninitialized: false,
-    store: new MemoryStore({
-      checkPeriod: 86400000, // Prune expired entries every 24h
+    store: new PgSession({
+      pool: pool as any, // Use PostgreSQL pool for persistent sessions
+      tableName: 'session', // Session table name
+      createTableIfMissing: true, // Auto-create session table
+      pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes
     }),
     cookie: {
       secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
@@ -51,6 +56,8 @@ app.use(
     },
   })
 );
+
+console.log('✅ Session store: PostgreSQL (sessions persist across server restarts)');
 
 // Runtime static file serving with path resolution
 function resolveAndServeStatic(app: express.Express) {
