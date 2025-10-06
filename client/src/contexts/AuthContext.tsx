@@ -23,10 +23,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const { data: meResponse } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
+    queryFn: async () => {
+      // Custom query function that handles 401 gracefully
+      const res = await fetch('/api/auth/me', {
+        credentials: 'include',
+      });
+      
+      // If not authenticated, return null instead of throwing
+      if (res.status === 401) {
+        return { success: false, data: null };
+      }
+      
+      if (!res.ok) {
+        throw new Error(`${res.status}: ${res.statusText}`);
+      }
+      
+      return await res.json();
+    },
     retry: false,
-    // Prevent caching to avoid stale authentication state
+    // CRITICAL: Never cache authentication state
     staleTime: 0,
     gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const loginMutation = useMutation({
@@ -91,13 +110,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    if (meResponse?.success === false && currentUser) {
-      // Server says not authenticated but we have cached user - clear it
-      console.warn('⚠️ Authentication mismatch detected - clearing stale user state');
-      setCurrentUserState(null);
-      queryClient.clear();
-    } else if (meResponse?.data && !currentUser) {
-      setCurrentUserState(meResponse.data);
+    // If server returns not authenticated
+    if (meResponse?.success === false) {
+      if (currentUser) {
+        console.warn('⚠️ Authentication mismatch detected - clearing stale user state');
+        setCurrentUserState(null);
+      }
+    } 
+    // If server returns authenticated user data
+    else if (meResponse?.success === true && meResponse.data) {
+      if (!currentUser || currentUser.id !== meResponse.data.id) {
+        console.log('✅ Setting authenticated user:', meResponse.data.role);
+        setCurrentUserState(meResponse.data);
+      }
     }
   }, [meResponse, currentUser]);
 
