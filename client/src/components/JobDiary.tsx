@@ -796,6 +796,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                             deleteEntryMutation.mutate(entry.id);
                           }
                         }}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
                         data-testid={`button-delete-entry-${entry.id}`}
                       >
                         <Trash2 className="h-4 w-4" />
