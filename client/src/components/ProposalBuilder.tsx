@@ -1229,7 +1229,7 @@ export function ProposalBuilder({
                               value={section.description}
                               onChange={(e) => updateSectionDescription(section.id, e.target.value)}
                               placeholder="Describe this section of work..."
-                              className="min-h-[200px] border-0 p-0 focus-visible:ring-0"
+                              className="min-h-[100px] border-0 p-0 focus-visible:ring-0"
                               data-testid={`textarea-section-description-${section.id}`}
                             />
                           </div>
