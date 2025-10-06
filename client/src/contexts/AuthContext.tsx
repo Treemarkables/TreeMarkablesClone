@@ -56,11 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return res.json();
     },
     onSuccess: () => {
-      const wasCrewUser = currentUser?.role === 'crew';
       setCurrentUserState(null);
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-      // Crew users go to login page, others go to home
-      setLocation(wasCrewUser ? '/login' : '/');
+      // Redirect all users to login page after logout
+      setLocation('/login');
     },
   });
 
