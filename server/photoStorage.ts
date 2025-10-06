@@ -111,6 +111,28 @@ export class PhotoStorageService {
     return { file, exists };
   }
 
+  async downloadPhotoBuffer(photoPath: string): Promise<{ buffer: Buffer; contentType: string; exists: boolean } | null> {
+    const { file, exists } = await this.getPhoto(photoPath);
+    
+    if (!exists || !file) {
+      return null;
+    }
+
+    try {
+      const [metadata] = await file.getMetadata();
+      const [fileBuffer] = await file.download();
+      
+      return {
+        buffer: fileBuffer,
+        contentType: metadata.contentType || 'application/octet-stream',
+        exists: true
+      };
+    } catch (error) {
+      console.error('Error downloading photo buffer:', error);
+      return null;
+    }
+  }
+
   async downloadPhoto(photoPath: string, res: Response): Promise<void> {
     const { file, exists } = await this.getPhoto(photoPath);
     
