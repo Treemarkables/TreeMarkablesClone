@@ -741,11 +741,11 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                 {entry.photos.length} {entry.photos.length === 1 ? 'Photo' : 'Photos'}
                               </span>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1.5">
                               {entry.photos.map((photo, index) => (
                                 <div
                                   key={index}
-                                  className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group"
+                                  className="relative aspect-square rounded-md overflow-hidden bg-gray-100 group"
                                 >
                                   <div
                                     role="button"
@@ -767,7 +767,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                       loading="lazy"
                                     />
                                     <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 active:bg-opacity-20 transition-opacity flex items-center justify-center pointer-events-none">
-                                      <Eye className="h-8 w-8 text-white drop-shadow-lg opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
+                                      <Eye className="h-5 w-5 text-white drop-shadow-lg opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
                                     </div>
                                   </div>
                                   {/* Delete Photo Button - Always visible on mobile, hover on desktop */}
@@ -783,12 +783,12 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                         });
                                       }
                                     }}
-                                    className="absolute top-1 right-1 h-6 w-6 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
+                                    className="absolute top-0.5 right-0.5 h-5 w-5 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
                                     data-testid={`button-delete-photo-${index}`}
                                     title="Delete photo"
                                     disabled={deletePhotoMutation.isPending}
                                   >
-                                    <Trash2 className="h-3 w-3" />
+                                    <Trash2 className="h-2.5 w-2.5" />
                                   </Button>
                                 </div>
                               ))}
