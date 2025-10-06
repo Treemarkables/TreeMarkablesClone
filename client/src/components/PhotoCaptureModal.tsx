@@ -16,7 +16,6 @@ interface PhotoCaptureModalProps {
 export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -130,33 +129,48 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
     onClose();
   };
 
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
+
   const handleCameraClick = () => {
-    fileInputRef.current?.click();
+    cameraInputRef.current?.click();
+  };
+
+  const handleLibraryClick = () => {
+    libraryInputRef.current?.click();
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md" data-testid="dialog-photo-capture">
         <DialogHeader>
-          <DialogTitle>Capture Photo</DialogTitle>
+          <DialogTitle>Add Photo</DialogTitle>
           <DialogDescription>
-            Take a photo or select an image to add to the job diary
+            Take a new photo or choose from your library
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Hidden file input */}
+          {/* Hidden file inputs - separate for camera and library */}
           <input
-            ref={fileInputRef}
+            ref={cameraInputRef}
             type="file"
             accept="image/*"
-            capture={isMobile ? "environment" : undefined}
+            capture="environment"
             onChange={handleFileSelect}
             className="hidden"
-            data-testid="input-photo-file"
+            data-testid="input-camera"
+          />
+          <input
+            ref={libraryInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+            data-testid="input-library"
           />
 
-          {/* Preview or upload button */}
+          {/* Preview or upload options */}
           {previewUrl ? (
             <div className="relative">
               <img
@@ -172,9 +186,8 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
                 onClick={() => {
                   setSelectedFile(null);
                   setPreviewUrl(null);
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = '';
-                  }
+                  if (cameraInputRef.current) cameraInputRef.current.value = '';
+                  if (libraryInputRef.current) libraryInputRef.current.value = '';
                 }}
                 data-testid="button-clear-photo"
               >
@@ -182,18 +195,27 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
               </Button>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg">
-              <Camera className="w-12 h-12 mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-4">
-                {isMobile ? "Take a photo" : "Select an image"}
-              </p>
+            <div className="space-y-3">
+              {/* Take Photo Button */}
               <Button
                 variant="outline"
                 onClick={handleCameraClick}
-                data-testid="button-select-photo"
+                className="w-full h-20 flex flex-col gap-2"
+                data-testid="button-take-photo"
               >
-                <Upload className="w-4 h-4 mr-2" />
-                {isMobile ? "Open Camera" : "Choose File"}
+                <Camera className="w-8 h-8" />
+                <span className="text-base font-medium">Take Photo</span>
+              </Button>
+
+              {/* Choose from Library Button */}
+              <Button
+                variant="outline"
+                onClick={handleLibraryClick}
+                className="w-full h-20 flex flex-col gap-2"
+                data-testid="button-choose-library"
+              >
+                <Upload className="w-8 h-8" />
+                <span className="text-base font-medium">Choose from Library</span>
               </Button>
             </div>
           )}
