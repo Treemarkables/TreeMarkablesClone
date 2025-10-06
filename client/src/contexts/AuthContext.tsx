@@ -24,6 +24,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: meResponse } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
     retry: false,
+    // Prevent caching to avoid stale authentication state
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const loginMutation = useMutation({
@@ -88,7 +91,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    if (meResponse?.data && !currentUser) {
+    if (meResponse?.success === false && currentUser) {
+      // Server says not authenticated but we have cached user - clear it
+      console.warn('⚠️ Authentication mismatch detected - clearing stale user state');
+      setCurrentUserState(null);
+      queryClient.clear();
+    } else if (meResponse?.data && !currentUser) {
       setCurrentUserState(meResponse.data);
     }
   }, [meResponse, currentUser]);
