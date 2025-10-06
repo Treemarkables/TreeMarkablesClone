@@ -2141,7 +2141,7 @@ export function GlobalJobCard({
                                     onTouchStart={() => {
                                       setDescriptionPopupOpen(true);
                                     }}
-                                    onClick={() => {
+                                    onDoubleClick={() => {
                                       setDescriptionPopupOpen(true);
                                     }}
                                   />
