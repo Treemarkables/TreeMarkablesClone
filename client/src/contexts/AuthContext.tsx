@@ -47,8 +47,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return res.json();
     },
     onSuccess: () => {
+      // Clear all user state
       setCurrentUserState(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      
+      // Clear ALL query cache to prevent stale data
+      queryClient.clear();
+      
+      // Clear any localStorage items that might cache user data
+      try {
+        // Keep only essential items like lastViewedJobId, remove any auth-related data
+        const essentialKeys = ['lastViewedJobId'];
+        const itemsToKeep: Record<string, string> = {};
+        
+        essentialKeys.forEach(key => {
+          const value = localStorage.getItem(key);
+          if (value) itemsToKeep[key] = value;
+        });
+        
+        localStorage.clear();
+        
+        // Restore essential items
+        Object.entries(itemsToKeep).forEach(([key, value]) => {
+          localStorage.setItem(key, value);
+        });
+      } catch (e) {
+        console.error('Error clearing localStorage:', e);
+      }
+      
       // Redirect all users to login page after logout
       setLocation('/login');
     },

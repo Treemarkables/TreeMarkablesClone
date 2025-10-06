@@ -557,13 +557,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('[LOGOUT] Session destroyed successfully for employee:', employeeId);
       
-      // Clear the session cookie
+      // Clear the session cookie with all possible options to ensure deletion
       res.clearCookie('connect.sid', {
         path: '/',
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax'
       });
+      
+      // Also try clearing without options (for compatibility)
+      res.clearCookie('connect.sid');
       
       res.json({
         success: true,
