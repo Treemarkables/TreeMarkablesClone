@@ -814,26 +814,56 @@ export function ProposalBuilder({
       return;
     }
 
-    // Use the actual saved draft proposal ID
-    const actualProposalId = draftProposalId || proposalId;
-    
-    // Check if proposal is saved
-    if (!actualProposalId) {
+    // Auto-save the proposal before sending email to ensure latest data is used
+    const formData = form.getValues();
+    const proposalData = {
+      customerId: formData.customerId || customerId,
+      jobId: formData.jobId || jobId,
+      quoteId: formData.quoteId,
+      proposalNumber: draftProposalId ? undefined : `PROP-${Date.now()}`,
+      title: formData.title || 'Untitled Proposal',
+      description: formData.description,
+      totalAmount: grandTotal,
+      taxRate: formData.taxRate || 15,
+      status: 'draft',
+      deliveryMethod: formData.deliveryMethod || 'email',
+      notes: formData.notes,
+      createdBy: 'system',
+      sections: sections, // Include latest sections with photos
+    };
+
+    try {
+      // Save first to ensure database has latest data
+      const saveResult = await saveDraftMutation.mutateAsync(proposalData);
+      
+      // Extract proposal ID from the save result directly
+      const actualProposalId = saveResult?.data?.id || saveResult?.id || draftProposalId || proposalId;
+      
+      if (!actualProposalId) {
+        toast({
+          title: "Save Failed",
+          description: "Could not save proposal. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Now send the email with the saved data
+      await sendEmailMutation.mutateAsync({
+        proposalId: actualProposalId,
+        to: emailForm.to,
+        subject: emailForm.subject,
+        message: emailForm.message,
+        cc: emailForm.cc
+      });
+    } catch (error) {
+      console.error('Error saving before email:', error);
       toast({
-        title: "Save Proposal First",
-        description: "Please wait for the proposal to finish auto-saving, then try again.",
+        title: "Save Failed",
+        description: "Could not save proposal before sending. Please try manual save first.",
         variant: "destructive"
       });
-      return;
     }
-
-    await sendEmailMutation.mutateAsync({
-      proposalId: actualProposalId,
-      to: emailForm.to,
-      subject: emailForm.subject,
-      message: emailForm.message,
-      cc: emailForm.cc
-    });
   };
 
   // Initialize email form with customer data
