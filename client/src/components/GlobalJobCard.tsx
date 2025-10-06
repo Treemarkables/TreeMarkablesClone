@@ -2545,24 +2545,22 @@ export function GlobalJobCard({
                                 <div className="text-xs text-gray-500">⋯</div>
                               </div>
                               
-                              {/* Scrollable Container for Mobile */}
-                              <div className="overflow-x-auto">
-                                {/* Table Header */}
-                                <div className="bg-gray-50 border-b border-gray-200 min-w-[800px]">
-                                  <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-600">
-                                  <div className="col-span-2">Item Code</div>
-                                  <div className="col-span-2">Item Name</div>
+                              {/* Table Header */}
+                              <div className="bg-gray-50 border-b border-gray-200">
+                                <div className="grid grid-cols-12 gap-1 px-2 py-2 text-xs font-medium text-gray-600">
+                                  <div className="col-span-2">Code</div>
+                                  <div className="col-span-2">Name</div>
                                   <div className="col-span-1 text-center">Qty</div>
                                   <div className="col-span-1 text-center">GST</div>
-                                  <div className="col-span-2 text-right">Cost ex GST</div>
-                                  <div className="col-span-1 text-right">Markup</div>
+                                  <div className="col-span-2 text-right">Cost</div>
+                                  <div className="col-span-1 text-center">%</div>
                                   <div className="col-span-2 text-right">Price</div>
                                   <div className="col-span-1 text-right">Total</div>
                                 </div>
-                                </div>
+                              </div>
 
-                                {/* Table Body */}
-                                <div className="bg-white min-w-[800px]">
+                              {/* Table Body */}
+                              <div className="bg-white">
                                   {lineItemFields.map((field, index) => {
                                     const unitCost = field.unitCost || 0;
                                     const quantity = field.quantity || 1;
@@ -2573,13 +2571,10 @@ export function GlobalJobCard({
                                     const markupPercent = unitCost > 0 ? ((markup / unitCost) * 100).toFixed(0) : '0';
                                     
                                     return (
-                                      <div key={field.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm">
-                                      <div className="col-span-2 text-gray-500">{field.itemCode || '—'}</div>
-                                      <div className="col-span-2 font-medium text-gray-900">
-                                        <div className="flex items-center gap-2">
-                                          <div className="w-4 h-4 bg-gray-200 rounded flex-shrink-0"></div>
-                                          {field.description}
-                                        </div>
+                                      <div key={field.id} className="grid grid-cols-12 gap-1 px-2 py-2 border-b border-gray-100 hover:bg-gray-50 text-xs">
+                                      <div className="col-span-2 text-gray-500 truncate">{field.itemCode || '—'}</div>
+                                      <div className="col-span-2 font-medium text-gray-900 truncate">
+                                        {field.description}
                                       </div>
                                       <div className="col-span-1 text-center">
                                         <FormField
@@ -2597,7 +2592,7 @@ export function GlobalJobCard({
                                                     const newQuantity = parseFloat(e.target.value) || 1;
                                                     quantityField.onChange(newQuantity);
                                                   }}
-                                                  className="w-16 h-8 text-center text-sm border-none bg-transparent p-0"
+                                                  className="w-12 h-6 text-center text-xs border-none bg-transparent p-0"
                                                 />
                                               </FormControl>
                                             </FormItem>
@@ -2676,7 +2671,7 @@ export function GlobalJobCard({
                                                   }}
                                                   disabled={!isAdmin}
                                                   readOnly={!isAdmin}
-                                                  className="w-20 h-8 text-right text-sm border-none bg-transparent p-1 font-mono"
+                                                  className="w-16 h-6 text-right text-xs border-none bg-transparent p-0 font-mono"
                                                 />
                                               </FormControl>
                                             </FormItem>
@@ -2701,8 +2696,7 @@ export function GlobalJobCard({
                                     );
                                   })}
                                 </div>
-                              </div>
-
+                              
                               {/* Search Row */}
                               <div className="bg-white border-t border-gray-200">
                                 <div className="p-4">
