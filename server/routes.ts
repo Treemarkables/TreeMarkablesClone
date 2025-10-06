@@ -8616,7 +8616,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         const trimmed = line.trim();
         
         // Check if this is a quote header like "On Thu, Oct 2, 2025 at 4:21 AM <...> wrote:"
-        if (line.match(/^On .+ wrote:$/i) || line.match(/^[-]{3,} Original Message [-]{3,}/i)) {
+        // Matches various formats including Gmail's "On [date] at [time] <email> wrote:"
+        if (line.match(/^On .+wrote:?$/i) || 
+            line.match(/^[-]{3,} Original Message [-]{3,}/i) ||
+            line.match(/^On .+ at .+ <.+> wrote:?$/i)) {
           inQuote = true;
           break;
         }
