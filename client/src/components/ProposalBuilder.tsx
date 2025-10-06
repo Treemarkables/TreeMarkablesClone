@@ -69,14 +69,6 @@ export function ProposalBuilder({
     enabled: !!jobId && isOpen,
   });
 
-  // Fetch customer data
-  const formCustomerId = form.watch('customerId');
-  const activeCustomerId = formCustomerId || customerId;
-  const { data: customerData } = useQuery({
-    queryKey: ['/api/customers', activeCustomerId],
-    enabled: !!activeCustomerId && isOpen,
-  });
-
   // Fetch diary entries to access photos
   const { data: diaryEntriesData } = useQuery({
     queryKey: ['/api/jobs', jobId, 'diary'],
@@ -103,6 +95,14 @@ export function ProposalBuilder({
       notes: "",
       deliveryMethod: "email" as const,
     },
+  });
+
+  // Fetch customer data (after form is initialized)
+  const formCustomerId = form.watch('customerId');
+  const activeCustomerId = formCustomerId || customerId;
+  const { data: customerData } = useQuery({
+    queryKey: ['/api/customers', activeCustomerId],
+    enabled: !!activeCustomerId && isOpen,
   });
 
   // Initialize proposal with job data when available
