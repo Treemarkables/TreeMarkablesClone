@@ -122,8 +122,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                       pathname.startsWith('/quote/') ||
                       pathname.startsWith('/invoice/');
   
-  // Only show dev banner in dev mode AND on internal dashboard pages
-  const showDevBanner = isDev && !isPublicPage;
+  // Only show dev banner in dev mode AND on internal dashboard pages AND not on mobile
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const showDevBanner = isDev && !isPublicPage && !isMobile;
   
   // Debug logging
   if (isDev) {
