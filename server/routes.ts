@@ -3452,6 +3452,22 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       console.log(`📝 Found ${lineItems.length} line items`);
       console.log(`📸 Section images:`, sections.map(s => ({ id: s.id, title: s.title, imageCount: s.images?.length || 0, images: s.images })));
       
+      // Detailed debug for each section
+      for (const section of sections) {
+        console.log(`\n🔍 Section "${section.title}":`);
+        console.log(`   - Images array:`, section.images);
+        console.log(`   - Images is array:`, Array.isArray(section.images));
+        console.log(`   - Images length:`, section.images?.length || 0);
+        if (section.images && Array.isArray(section.images) && section.images.length > 0) {
+          console.log(`   ✅ Section has ${section.images.length} images`);
+          section.images.forEach((img, i) => {
+            console.log(`      Image ${i + 1}: ${img}`);
+          });
+        } else {
+          console.log(`   ❌ NO IMAGES - images value:`, JSON.stringify(section.images));
+        }
+      }
+      
       // Group line items by section
       const sectionLineItems = new Map<string, any[]>();
       for (const item of lineItems) {
