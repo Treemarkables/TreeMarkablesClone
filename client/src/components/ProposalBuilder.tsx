@@ -69,6 +69,14 @@ export function ProposalBuilder({
     enabled: !!jobId && isOpen,
   });
 
+  // Fetch customer data
+  const formCustomerId = form.watch('customerId');
+  const activeCustomerId = formCustomerId || customerId;
+  const { data: customerData } = useQuery({
+    queryKey: ['/api/customers', activeCustomerId],
+    enabled: !!activeCustomerId && isOpen,
+  });
+
   // Fetch diary entries to access photos
   const { data: diaryEntriesData } = useQuery({
     queryKey: ['/api/jobs', jobId, 'diary'],
@@ -1059,8 +1067,9 @@ export function ProposalBuilder({
       updatedAt: new Date()
     };
 
-    // Mock customer data - try to find actual customer or use preview data
-    const previewCustomer = {
+    // Use real customer data from API, fallback to mock data
+    const realCustomer = (customerData as any)?.success ? (customerData as any).data : null;
+    const previewCustomer = realCustomer || {
       id: formData.customerId || 'preview-customer',
       name: 'Preview Customer',
       email: 'customer@example.com',
