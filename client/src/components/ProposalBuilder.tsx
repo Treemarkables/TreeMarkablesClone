@@ -74,6 +74,12 @@ export function ProposalBuilder({
     queryKey: ['/api/jobs', jobId, 'diary'],
     enabled: !!jobId && isOpen,
   });
+
+  // Fetch existing proposal data when in edit mode
+  const { data: existingProposalData } = useQuery({
+    queryKey: ['/api/proposals', proposalId],
+    enabled: !!proposalId && mode === 'edit' && isOpen,
+  });
   
   // Form state
   const form = useForm({
@@ -131,6 +137,39 @@ export function ProposalBuilder({
       console.log('Proposal initialized with job data:', job);
     }
   }, [jobData, isOpen, form, customerId]);
+
+  // Load existing proposal data when in edit mode
+  useEffect(() => {
+    if (existingProposalData && (existingProposalData as any)?.success && mode === 'edit' && isOpen) {
+      const proposal = (existingProposalData as any).data;
+      
+      console.log('Loading existing proposal:', proposal);
+      
+      // Populate form with existing proposal data
+      form.setValue('title', proposal.title || '');
+      form.setValue('description', proposal.description || '');
+      form.setValue('customerId', proposal.customerId || '');
+      form.setValue('jobId', proposal.jobId || '');
+      form.setValue('notes', proposal.notes || '');
+      form.setValue('taxRate', proposal.taxRate || 15);
+      form.setValue('deliveryMethod', proposal.deliveryMethod || 'email');
+      
+      // Load sections with photos properly mapped
+      if (proposal.sections && Array.isArray(proposal.sections)) {
+        const loadedSections = proposal.sections.map((section: any) => ({
+          id: section.id,
+          title: section.title,
+          description: section.content || '',
+          photos: section.photos || [], // Already mapped by backend
+          lineItems: [], // Will be loaded separately
+          sortOrder: section.sortOrder || 0
+        }));
+        
+        setSections(loadedSections);
+        console.log('Loaded sections with photos:', loadedSections);
+      }
+    }
+  }, [existingProposalData, mode, isOpen, form]);
 
   // Component state - sections-based approach
   const [sections, setSections] = useState<ProposalSectionData[]>([
