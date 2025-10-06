@@ -3830,12 +3830,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       console.log(`📎 Total inline attachments prepared: ${emailAttachments.length} photos`);
 
       // Send email using EmailService with attachments
-      const fromEmail = replyToEmail || 'info@treemarkables.co.nz';
       const emailSuccess = await emailService.sendEmail({
         to,
         cc,
-        from: `Treemarkables <${fromEmail}>`, // Display name "Treemarkables" with job-specific email
-        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
+        from: 'Treemarkables <jullianhalley@hotmail.com>', // Display name with verified sender address
+        replyTo: replyToEmail || 'info@treemarkables.co.nz', // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`,
