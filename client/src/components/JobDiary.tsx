@@ -747,9 +747,17 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                   key={index}
                                   className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group"
                                 >
-                                  <button
+                                  <div
+                                    role="button"
+                                    tabIndex={0}
                                     onClick={() => setSelectedPhoto({ url: photo, entryId: entry.id })}
-                                    className="w-full h-full hover-elevate active-elevate-2 active:opacity-80 transition-opacity"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        setSelectedPhoto({ url: photo, entryId: entry.id });
+                                      }
+                                    }}
+                                    className="w-full h-full hover-elevate active-elevate-2 active:opacity-80 transition-opacity cursor-pointer"
                                     data-testid={`button-view-photo-${index}`}
                                   >
                                     <img
@@ -761,7 +769,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                     <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 active:bg-opacity-20 transition-opacity flex items-center justify-center pointer-events-none">
                                       <Eye className="h-8 w-8 text-white drop-shadow-lg opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
                                     </div>
-                                  </button>
+                                  </div>
                                   {/* Delete Photo Button - Always visible on mobile, hover on desktop */}
                                   <Button
                                     variant="destructive"
