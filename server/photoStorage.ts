@@ -54,7 +54,30 @@ export class PhotoStorageService {
   async uploadPhoto(fileBuffer: Buffer, originalFilename: string, mimeType: string): Promise<string> {
     const privateDir = this.getPrivateObjectDir();
     const timestamp = Date.now();
-    const extension = originalFilename.split('.').pop() || 'jpg';
+    let extension = originalFilename.split('.').pop()?.toLowerCase() || 'jpg';
+    let processedBuffer = fileBuffer;
+    let finalMimeType = mimeType;
+    
+    // Convert HEIC/HEIF to JPEG during upload for universal compatibility
+    if (extension === 'heic' || extension === 'heif' || mimeType === 'image/heic' || mimeType === 'image/heif') {
+      console.log(`🔄 Converting HEIC to JPEG during upload: ${originalFilename}`);
+      try {
+        const jpegBuffer = await heicConvert({
+          buffer: fileBuffer,
+          format: 'JPEG',
+          quality: 0.8
+        });
+        
+        processedBuffer = Buffer.from(jpegBuffer);
+        extension = 'jpg';
+        finalMimeType = 'image/jpeg';
+        console.log(`✅ Converted HEIC to JPEG: ${originalFilename} → .jpg`);
+      } catch (conversionError) {
+        console.error(`❌ HEIC conversion failed for ${originalFilename}, using original:`, conversionError);
+        // Keep original if conversion fails
+      }
+    }
+    
     const uniqueFilename = `${timestamp}_${randomUUID()}.${extension}`;
     const fullPath = `${privateDir}/photos/${uniqueFilename}`;
 
@@ -62,9 +85,9 @@ export class PhotoStorageService {
     const bucket = objectStorageClient.bucket(bucketName);
     const file = bucket.file(objectName);
 
-    await file.save(fileBuffer, {
+    await file.save(processedBuffer, {
       metadata: {
-        contentType: mimeType,
+        contentType: finalMimeType,
       },
     });
 
