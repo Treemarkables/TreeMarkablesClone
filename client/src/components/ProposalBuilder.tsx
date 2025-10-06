@@ -67,6 +67,12 @@ export function ProposalBuilder({
     queryKey: ['/api/jobs', jobId],
     enabled: !!jobId && isOpen,
   });
+
+  // Fetch diary entries to access photos
+  const { data: diaryEntriesData } = useQuery({
+    queryKey: ['/api/jobs', jobId, 'diary'],
+    enabled: !!jobId && isOpen,
+  });
   
   // Form state
   const form = useForm({
@@ -141,6 +147,9 @@ export function ProposalBuilder({
   const [activeSectionId, setActiveSectionId] = useState('section-1');
   const [showPreview, setShowPreview] = useState(false);
   const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [showDiaryPhotoDialog, setShowDiaryPhotoDialog] = useState(false);
+  const [currentPhotoSectionId, setCurrentPhotoSectionId] = useState<string>('');
+  const [selectedDiaryPhotos, setSelectedDiaryPhotos] = useState<string[]>([]);
   const [emailForm, setEmailForm] = useState({
     to: '',
     cc: '',
@@ -502,6 +511,69 @@ export function ProposalBuilder({
         ? { ...section, photos: section.photos.filter(p => p.id !== photoId) }
         : section
     ));
+  };
+
+  // Diary photo selection functions
+  const openDiaryPhotoDialog = (sectionId: string) => {
+    setCurrentPhotoSectionId(sectionId);
+    setSelectedDiaryPhotos([]);
+    setShowDiaryPhotoDialog(true);
+  };
+
+  const toggleDiaryPhotoSelection = (photoUrl: string) => {
+    setSelectedDiaryPhotos(prev => 
+      prev.includes(photoUrl) 
+        ? prev.filter(url => url !== photoUrl)
+        : [...prev, photoUrl]
+    );
+  };
+
+  const addDiaryPhotosToSection = () => {
+    if (selectedDiaryPhotos.length === 0) return;
+
+    // Convert diary photo URLs to the photo format used in sections
+    const newPhotos = selectedDiaryPhotos.map((url, index) => ({
+      id: `diary-photo-${Date.now()}-${index}`,
+      url: url,
+      filename: url.split('/').pop() || 'diary-photo',
+      type: 'before' as const,
+      category: 'documentation' as const,
+      capturedAt: new Date().toISOString(),
+    }));
+
+    setSections(prev => prev.map(section => 
+      section.id === currentPhotoSectionId
+        ? { ...section, photos: [...section.photos, ...newPhotos] }
+        : section
+    ));
+
+    toast({
+      title: "Success",
+      description: `Added ${selectedDiaryPhotos.length} photo(s) from diary`,
+    });
+
+    setShowDiaryPhotoDialog(false);
+    setSelectedDiaryPhotos([]);
+  };
+
+  // Get all photos from diary entries
+  const getDiaryPhotos = () => {
+    if (!diaryEntriesData || !(diaryEntriesData as any)?.success) return [];
+    
+    const entries = (diaryEntriesData as any).data || [];
+    const allPhotos: string[] = [];
+
+    entries.forEach((entry: any) => {
+      if (entry.photos && Array.isArray(entry.photos)) {
+        allPhotos.push(...entry.photos);
+      }
+      if (entry.photoUrl) {
+        allPhotos.push(entry.photoUrl);
+      }
+    });
+
+    // Remove duplicates
+    return [...new Set(allPhotos)];
   };
 
   // Mutations
@@ -982,7 +1054,7 @@ export function ProposalBuilder({
                           <div>
                             <div className="flex items-center justify-between mb-4">
                               <label className="text-sm font-medium">Photos</label>
-                              <div>
+                              <div className="flex gap-2">
                                 <input
                                   type="file"
                                   multiple
@@ -1006,6 +1078,17 @@ export function ProposalBuilder({
                                     </span>
                                   </Button>
                                 </label>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openDiaryPhotoDialog(section.id)}
+                                  disabled={getDiaryPhotos().length === 0}
+                                  data-testid={`button-select-diary-photos-${section.id}`}
+                                >
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Select from Diary
+                                </Button>
                               </div>
                             </div>
 
@@ -1562,6 +1645,79 @@ export function ProposalBuilder({
                     )}
                   </Button>
                 </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Diary Photo Selection Dialog */}
+      {showDiaryPhotoDialog && (
+        <Dialog open={showDiaryPhotoDialog} onOpenChange={setShowDiaryPhotoDialog}>
+          <DialogContent className="max-w-full sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                Select Photos from Diary
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-y-auto p-4">
+              {getDiaryPhotos().length === 0 ? (
+                <div className="text-center py-12">
+                  <Camera className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-gray-500">No photos found in job diary</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {getDiaryPhotos().map((photoUrl, index) => (
+                    <div
+                      key={`diary-photo-${index}`}
+                      className={`relative cursor-pointer rounded-lg border-2 transition-all ${
+                        selectedDiaryPhotos.includes(photoUrl)
+                          ? 'border-blue-600 ring-2 ring-blue-600 ring-offset-2'
+                          : 'border-gray-200 hover:border-gray-400'
+                      }`}
+                      onClick={() => toggleDiaryPhotoSelection(photoUrl)}
+                      data-testid={`diary-photo-${index}`}
+                    >
+                      <img
+                        src={photoUrl}
+                        alt={`Diary photo ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg"
+                      />
+                      {selectedDiaryPhotos.includes(photoUrl) && (
+                        <div className="absolute top-2 right-2 bg-blue-600 text-white rounded-full p-1">
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t p-4 flex items-center justify-between bg-gray-50">
+              <div className="text-sm text-gray-600">
+                {selectedDiaryPhotos.length} photo(s) selected
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDiaryPhotoDialog(false)}
+                  data-testid="button-cancel-diary-photos"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={addDiaryPhotosToSection}
+                  disabled={selectedDiaryPhotos.length === 0}
+                  data-testid="button-add-diary-photos"
+                >
+                  Add {selectedDiaryPhotos.length > 0 ? `${selectedDiaryPhotos.length} ` : ''}Photo(s)
+                </Button>
               </div>
             </div>
           </DialogContent>
