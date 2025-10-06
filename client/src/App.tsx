@@ -62,12 +62,17 @@ import { Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { addDays, subDays } from "date-fns";
 
-// Protected Route wrapper - redirects authenticated crew users to allowed pages
+// Protected Route wrapper - redirects unauthenticated users to login and crew users to allowed pages
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isCrew, isAuthenticated } = useAuth();
   
-  // Only redirect if user is authenticated AND is crew
-  if (isAuthenticated && isCrew) {
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+  
+  // Redirect crew users to job dashboard (they don't have access to admin pages)
+  if (isCrew) {
     return <Redirect to="/job-dashboard" />;
   }
   
@@ -512,9 +517,11 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/dispatch">
-        <SidebarLayout>
-          <Dispatch />
-        </SidebarLayout>
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <Dispatch />
+          </SidebarLayout>
+        </AuthenticatedRoute>
       </Route>
       <Route path="/calendar">
         <ProtectedRoute>
