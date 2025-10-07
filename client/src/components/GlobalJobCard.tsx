@@ -3532,7 +3532,11 @@ export function GlobalJobCard({
                 quote={{
                   id: editingJob.id,
                   quoteNumber: `QTE-${editingJob.jobNumber || Date.now()}`,
-                  amount: String(formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0),
+                  amount: String(formData?.lineItems?.reduce((sum, item) => {
+                    const quantity = item.quantity || 1;
+                    const unitPrice = item.unitPrice || 0;
+                    return sum + (quantity * unitPrice);
+                  }, 0) || 0),
                   status: 'draft',
                   customerId: selectedCustomer?.id || '',
                   leadId: editingJob.id,
