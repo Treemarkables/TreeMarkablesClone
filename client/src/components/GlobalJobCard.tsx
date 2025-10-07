@@ -3531,26 +3531,32 @@ export function GlobalJobCard({
                 template={quoteTemplate}
                 quote={{
                   id: editingJob.id,
+                  quoteNumber: `QTE-${editingJob.jobNumber || Date.now()}`,
                   amount: String(formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0),
                   status: 'draft',
                   customerId: selectedCustomer?.id || '',
                   leadId: editingJob.id,
-                  description: editingJob.description || '',
+                  description: formData?.description || editingJob.description || '',
                   validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                   terms: quoteTemplate?.paymentTerms || 'Payment due within 30 days',
                   createdAt: new Date(),
                   updatedAt: new Date()
                 }}
                 customer={selectedCustomer || undefined}
-                lineItems={formData?.lineItems?.map(item => ({
-                  id: item.id,
-                  description: item.description,
-                  quantity: item.quantity,
-                  unitPrice: item.unitPrice,
-                  unit: 'each',
-                  total: item.total,
-                  priceIncludesTax: item.priceIncludesTax || false
-                })) || []}
+                lineItems={formData?.lineItems?.map(item => {
+                  const quantity = item.quantity || 1;
+                  const unitPrice = item.unitPrice || 0;
+                  const total = quantity * unitPrice;
+                  return {
+                    id: item.id,
+                    description: item.description,
+                    quantity: quantity,
+                    unitPrice: unitPrice,
+                    unit: 'each',
+                    total: total,
+                    priceIncludesTax: item.priceIncludesTax || false
+                  };
+                }) || []}
                 showActions={false}
               />
             </div>
