@@ -1147,7 +1147,7 @@ export function GlobalJobCard({
     const timeoutId = setTimeout(checkConflicts, 300); // Debounce
     return () => {
       clearTimeout(timeoutId);
-      abortController.abort('Component cleanup');
+      abortController.abort();
     };
   }, [schedulingData.date, schedulingData.startTime, schedulingData.duration, schedulingData.assignedTo, editingJob?.id]);
 
