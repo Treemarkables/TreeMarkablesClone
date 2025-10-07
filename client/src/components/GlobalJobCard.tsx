@@ -3527,27 +3527,10 @@ export function GlobalJobCard({
               </div>
             </DialogHeader>
             <div className="p-3 sm:p-6">
-              <QuoteTemplate
-                template={quoteTemplate}
-                quote={{
-                  id: editingJob.id,
-                  quoteNumber: `QTE-${editingJob.jobNumber || Date.now()}`,
-                  amount: String(formData?.lineItems?.reduce((sum, item) => {
-                    const quantity = item.quantity || 1;
-                    const unitPrice = item.unitPrice || 0;
-                    return sum + (quantity * unitPrice);
-                  }, 0) || 0),
-                  status: 'draft',
-                  customerId: selectedCustomer?.id || '',
-                  leadId: editingJob.id,
-                  description: formData?.description || editingJob.description || '',
-                  validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                  terms: quoteTemplate?.paymentTerms || 'Payment due within 30 days',
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                }}
-                customer={selectedCustomer || undefined}
-                lineItems={formData?.lineItems?.map(item => {
+              {(() => {
+                // Use editingJob.lineItems first (loaded from database), fallback to formData
+                const lineItemsSource = editingJob.lineItems || formData?.lineItems || [];
+                const mappedLineItems = lineItemsSource.map(item => {
                   const quantity = item.quantity || 1;
                   const unitPrice = item.unitPrice || 0;
                   const total = quantity * unitPrice;
@@ -3560,9 +3543,31 @@ export function GlobalJobCard({
                     total: total,
                     priceIncludesTax: item.priceIncludesTax || false
                   };
-                }) || []}
-                showActions={false}
-              />
+                });
+                const totalAmount = mappedLineItems.reduce((sum, item) => sum + item.total, 0);
+                
+                return (
+                  <QuoteTemplate
+                    template={quoteTemplate}
+                    quote={{
+                      id: editingJob.id,
+                      quoteNumber: `QTE-${editingJob.jobNumber || Date.now()}`,
+                      amount: String(totalAmount),
+                      status: 'draft',
+                      customerId: selectedCustomer?.id || '',
+                      leadId: editingJob.id,
+                      description: formData?.description || editingJob.description || '',
+                      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                      terms: quoteTemplate?.paymentTerms || 'Payment due within 30 days',
+                      createdAt: new Date(),
+                      updatedAt: new Date()
+                    }}
+                    customer={selectedCustomer || undefined}
+                    lineItems={mappedLineItems}
+                    showActions={false}
+                  />
+                );
+              })()}
             </div>
           </DialogContent>
         </Dialog>

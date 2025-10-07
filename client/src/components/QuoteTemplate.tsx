@@ -52,8 +52,6 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
   const lineItemSubtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
   const hasLineItems = lineItems.length > 0 && lineItemSubtotal > 0;
   
-  console.log('QuoteTemplate Debug:', { lineItems, lineItemSubtotal, hasLineItems });
-  
   const gstRate = 0.15; // 15% GST for New Zealand
   
   let subtotal: number;
@@ -67,7 +65,6 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
     
     lineItems.forEach((item) => {
       const isInclusive = item.priceIncludesTax || false;
-      console.log('Processing line item:', { item, isInclusive });
       
       if (isInclusive) {
         // Price includes GST - extract the ex-GST amount
@@ -82,7 +79,6 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
     });
     
     gstAmount = totalAmount - subtotal;
-    console.log('Calculated totals:', { subtotal, gstAmount, totalAmount });
   } else {
     // Fall back to quote amount and calculate GST
     const quoteAmount = typeof quote.amount === 'string' ? parseFloat(quote.amount) : quote.amount;
@@ -90,7 +86,6 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
     // Reverse calculate subtotal from total (total = subtotal + GST = subtotal * 1.15)
     subtotal = totalAmount / (1 + gstRate);
     gstAmount = totalAmount - subtotal;
-    console.log('Using fallback quote amount:', { quoteAmount, subtotal, gstAmount, totalAmount });
   }
 
   // Get status color
