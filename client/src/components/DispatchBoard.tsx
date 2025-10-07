@@ -675,12 +675,26 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
   };
 
-  // Check if job has recent activity (within last hour)
+  // Check if job has recent activity (since last viewed)
   const hasRecentActivity = (job: JobAssignment) => {
     if (!job.lastActivityAt) return false;
     // Safari-safe date parsing
     const lastActivity = new Date(job.lastActivityAt);
     if (isNaN(lastActivity.getTime())) return false;
+    
+    // Get last viewed timestamp from localStorage
+    const lastViewedKey = `job-last-viewed-${job.id}`;
+    const lastViewedStr = localStorage.getItem(lastViewedKey);
+    
+    if (lastViewedStr) {
+      const lastViewed = new Date(lastViewedStr);
+      if (!isNaN(lastViewed.getTime())) {
+        // Show indicator only if there's activity since the job was last viewed
+        return lastActivity > lastViewed;
+      }
+    }
+    
+    // If never viewed, show indicator if activity within last hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     return lastActivity > oneHourAgo;
   };
@@ -1010,6 +1024,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const handleEditJob = (job: JobAssignment) => {
     console.log('🔵 Job card clicked:', job.jobNumber || job.id);
+    
+    // Mark job as viewed - store current timestamp
+    const lastViewedKey = `job-last-viewed-${job.id}`;
+    localStorage.setItem(lastViewedKey, new Date().toISOString());
+    
     setJobToEdit(job);
     setGlobalJobCardMode('edit');
     setShowGlobalJobCard(true);
