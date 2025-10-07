@@ -3546,27 +3546,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const total = subtotal + gst;
 
       // Get base URL for absolute image paths (required for email clients)
-      const baseUrl = process.env.REPLIT_DEV_DOMAIN || `${req.protocol}://${req.get('host')}`;
+      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+        : `${req.protocol}://${req.get('host')}`;
       
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
       const proposalNumber = proposal.proposalNumber || 'N/A';
-
-      // Create a map of photo URLs to Content IDs for inline embedding
-      const photoToCidMap = new Map<string, string>();
-      let cidCounter = 1;
-      
-      // Collect all unique photos and assign CIDs (no limit - user wants all photos)
-      for (const section of sections) {
-        if (section.images && Array.isArray(section.images)) {
-          for (const photoUrl of section.images) {
-            if (!photoToCidMap.has(photoUrl)) {
-              photoToCidMap.set(photoUrl, `photo${cidCounter}@treemarkables`);
-              cidCounter++;
-            }
-          }
-        }
-      }
       
       // Build sections HTML with descriptions and line items
       let sectionsHtml = '';
@@ -3585,7 +3571,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             sectionsHtml += `<p style="color: #6b7280; line-height: 1.6; margin: 0 0 15px 0; white-space: pre-wrap;">${section.content}</p>`;
           }
           
-          // Show photos if they exist - using TABLE layout for email compatibility with CID references
+          // Show photos if they exist - using TABLE layout for email compatibility with hosted URLs
           if (section.images && Array.isArray(section.images) && section.images.length > 0) {
             sectionsHtml += '<div style="margin: 15px 0;">';
             sectionsHtml += `<h5 style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">Documentation</h5>`;
@@ -3594,12 +3580,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             
             for (let i = 0; i < section.images.length; i++) {
               const imageUrl = section.images[i];
-              // Use CID reference for inline image embedding
-              const cid = photoToCidMap.get(imageUrl);
+              // Use absolute URL to hosted image (no attachments - keeps email size small)
+              const absoluteImageUrl = imageUrl.startsWith('http') ? imageUrl : `${baseUrl}${imageUrl}`;
               
               sectionsHtml += `
                 <td style="padding: 5px; width: ${Math.floor(100 / Math.min(section.images.length, 3))}%;">
-                  <img src="cid:${cid}" alt="Documentation photo ${i + 1}" style="display: block; width: 100%; max-width: 200px; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" />
+                  <img src="${absoluteImageUrl}" alt="Documentation photo ${i + 1}" style="display: block; width: 100%; max-width: 200px; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" />
                 </td>
               `;
               
@@ -3731,137 +3717,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         </div>
       `;
 
-      // Helper function to prepare photo attachment with HEIC conversion
-      const preparePhotoAttachment = async (photoPath: string): Promise<{ filename: string; mimeType: string; data: Buffer } | null> => {
-        try {
-          const fileName = path.basename(photoPath);
-          let fileContent: Buffer;
-          let mimeType: string;
-          
-          // Check if photo is in object storage
-          if (photoPath.startsWith('/objects/photos/')) {
-            console.log(`📦 Downloading photo from object storage: ${fileName}`);
-            const photoStorage = new PhotoStorageService();
-            const downloadResult = await photoStorage.downloadPhotoBuffer(photoPath);
-            
-            if (!downloadResult) {
-              console.warn(`⚠️ Photo not found in object storage: ${photoPath}`);
-              return null;
-            }
-            
-            fileContent = downloadResult.buffer;
-            mimeType = downloadResult.contentType;
-            console.log(`✅ Downloaded from object storage: ${fileName} (${mimeType})`);
-          } else {
-            // Fallback to filesystem for legacy photos
-            const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
-            
-            if (!fs.existsSync(filePath)) {
-              console.warn(`⚠️ Photo file not found: ${filePath}`);
-              return null;
-            }
-            
-            fileContent = fs.readFileSync(filePath);
-            
-            // Determine mime type from extension
-            const fileExtension = path.extname(fileName).toLowerCase();
-            const mimeTypes: { [key: string]: string } = {
-              '.jpg': 'image/jpeg',
-              '.jpeg': 'image/jpeg',
-              '.png': 'image/png',
-              '.gif': 'image/gif',
-              '.webp': 'image/webp',
-              '.heic': 'image/heic',
-              '.heif': 'image/heif'
-            };
-            mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
-          }
-          
-          let finalFileName = fileName;
-          const fileExtension = path.extname(fileName).toLowerCase();
-          
-          // Check if HEIC/HEIF - convert to JPEG for email compatibility
-          if (fileExtension === '.heic' || fileExtension === '.heif' || mimeType === 'image/heic' || mimeType === 'image/heif') {
-            console.log(`🔄 Converting HEIC to JPEG for email: ${fileName}`);
-            try {
-              const jpegBuffer = await heicConvert({
-                buffer: fileContent,
-                format: 'JPEG',
-                quality: 0.8
-              });
-              
-              fileContent = Buffer.from(jpegBuffer);
-              finalFileName = fileName.replace(/\.(heic|heif)$/i, '.jpg');
-              mimeType = 'image/jpeg';
-              console.log(`✅ Converted HEIC to JPEG: ${finalFileName}`);
-            } catch (conversionError) {
-              console.error(`❌ HEIC conversion failed for ${fileName}, using original:`, conversionError);
-              // Keep original if conversion fails
-            }
-          }
-          
-          // Compress images for email to reduce size (SendGrid has limits)
-          if (mimeType === 'image/jpeg' || mimeType === 'image/jpg' || mimeType === 'image/png') {
-            console.log(`📉 Compressing image for email: ${finalFileName}`);
-            try {
-              const compressedBuffer = await sharp(fileContent)
-                .resize(500, 500, { 
-                  fit: 'inside', 
-                  withoutEnlargement: true 
-                })
-                .jpeg({ quality: 20 }) // 50% file size reduction for email
-                .toBuffer();
-              
-              const originalSize = (fileContent.length / 1024).toFixed(2);
-              const compressedSize = (compressedBuffer.length / 1024).toFixed(2);
-              console.log(`✅ Compressed ${finalFileName}: ${originalSize}KB → ${compressedSize}KB`);
-              
-              fileContent = compressedBuffer;
-              // Ensure filename ends with .jpg after compression
-              if (!finalFileName.match(/\.jpe?g$/i)) {
-                finalFileName = finalFileName.replace(/\.\w+$/i, '.jpg');
-              }
-              mimeType = 'image/jpeg';
-            } catch (compressionError) {
-              console.warn(`⚠️ Image compression failed for ${finalFileName}, using original:`, compressionError);
-              // Keep original if compression fails
-            }
-          }
-          
-          return {
-            filename: finalFileName,
-            mimeType,
-            data: fileContent
-          };
-        } catch (error) {
-          console.error(`❌ Error processing photo ${photoPath}:`, error);
-          return null;
-        }
-      };
-
-      // Collect all photos from all sections and convert to inline email attachments with CIDs
-      const emailAttachments = [];
-      
-      for (const [photoUrl, cid] of photoToCidMap.entries()) {
-        console.log(`📎 Processing photo: ${path.basename(photoUrl)}`);
-        
-        const attachment = await preparePhotoAttachment(photoUrl);
-        if (attachment) {
-          emailAttachments.push({
-            content: attachment.data.toString('base64'),
-            filename: attachment.filename,
-            type: attachment.mimeType,
-            disposition: 'inline', // Use inline for embedding in email body
-            content_id: cid // Content ID for referencing in HTML
-          });
-          
-          console.log(`✅ Added inline photo: ${attachment.filename} (${attachment.mimeType}) with CID: ${cid}`);
-        }
-      }
-      
-      console.log(`📎 Total inline attachments prepared: ${emailAttachments.length} photos`);
-
-      // Send email using EmailService with attachments
+      // Send email using EmailService (photos are hosted URLs, no attachments needed)
       const emailSuccess = await emailService.sendEmail({
         to,
         cc,
@@ -3869,8 +3725,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         replyTo: replyToEmail || 'info@treemarkables.co.nz', // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
-        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`,
-        ...(emailAttachments.length > 0 && { attachments: emailAttachments })
+        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
       });
 
       if (!emailSuccess) {
@@ -3880,7 +3735,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      console.log(`📧 Proposal ${proposalNumber} email sent to ${to}${emailAttachments.length > 0 ? ` with ${emailAttachments.length} photo attachment(s)` : ''}`);
+      console.log(`📧 Proposal ${proposalNumber} email sent to ${to} (photos loaded from hosted URLs)`);
 
       // Create diary entry for sent proposal email
       if (proposal.jobId) {
@@ -3889,17 +3744,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             jobId: proposal.jobId,
             entryType: 'email',
             title: `Proposal Sent: ${proposalNumber}`,
-            description: `Proposal "${proposal.title || 'Tree Service Proposal'}" sent to ${to}${cc ? ` (CC: ${cc})` : ''}${
-              emailAttachments.length > 0 ? `\n\nAttachments: ${emailAttachments.length} photo(s)` : ''
-            }\n\nTotal: $${total.toFixed(2)} NZD`,
+            description: `Proposal "${proposal.title || 'Tree Service Proposal'}" sent to ${to}${cc ? ` (CC: ${cc})` : ''}\n\nTotal: $${total.toFixed(2)} NZD`,
             authorName: 'System',
             metadata: {
               proposalId,
               proposalNumber,
               recipient: to,
               cc: cc || null,
-              total: total.toFixed(2),
-              photoAttachments: emailAttachments.length
+              total: total.toFixed(2)
             }
           });
 
