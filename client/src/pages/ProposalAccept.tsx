@@ -142,7 +142,7 @@ export default function ProposalAccept() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
         {/* Sticky Header with Accept Button */}
-        <div className="sticky top-0 z-[100] bg-white/98 border-b border-gray-200 shadow-lg backdrop-blur-md">
+        <div className="sticky top-0 z-[100] bg-white border-b border-gray-200 shadow-lg">
           <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-3 sm:gap-4">
               <div className="flex-1 min-w-0">
@@ -183,7 +183,7 @@ export default function ProposalAccept() {
         </div>
 
         {/* Proposal Details */}
-        <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto px-4 py-8 pb-24">
           <Card>
             <CardContent className="p-0">
               <ProposalTemplate
