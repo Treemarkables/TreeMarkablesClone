@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'crypto';
 import { z } from "zod";
 
 // Extend Express Session to include employeeId
@@ -2998,7 +2999,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Upload photo and create diary entry (using Object Storage for persistence)
+  // Upload photo and create diary entry (FAST: responds immediately, uploads in background)
   app.post('/api/jobs/:jobId/photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
@@ -3010,31 +3011,49 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      // Upload directly without conversion - on-the-fly conversion will handle display
-      // This makes uploads instant instead of 20-40 seconds per HEIC photo
-      const photoStorage = new PhotoStorageService();
-      const photoUrl = await photoStorage.uploadPhoto(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype
-      );
-
-      // Create diary entry with photo
-      const diaryEntry = await storage.createJobDiaryEntry({
+      // Create a temporary diary entry ID immediately
+      const tempDiaryEntry = {
+        id: randomUUID(),
         jobId,
-        entryType: 'photo',
+        entryType: 'photo' as const,
         title: 'Photo Added',
         description: req.body.description || 'Photo added',
         authorName: req.body.authorName || 'User',
-        photoUrl,
-        photos: [photoUrl], // Add photo to array for gallery display
-        isPrivate: false
-      });
+        photoUrl: '/temp/uploading',
+        photos: ['/temp/uploading'],
+        isPrivate: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
+      // Respond immediately for fast UI
       res.json({ 
         success: true, 
-        data: diaryEntry,
+        data: tempDiaryEntry,
         message: 'Photo uploaded successfully' 
+      });
+
+      // Upload to object storage in background (don't await)
+      const photoStorage = new PhotoStorageService();
+      photoStorage.uploadPhoto(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype
+      ).then(async (photoUrl) => {
+        // Update diary entry with real photo URL
+        await storage.createJobDiaryEntry({
+          jobId,
+          entryType: 'photo',
+          title: 'Photo Added',
+          description: req.body.description || 'Photo added',
+          authorName: req.body.authorName || 'User',
+          photoUrl,
+          photos: [photoUrl],
+          isPrivate: false
+        });
+        console.log(`✅ Background photo upload complete: ${photoUrl}`);
+      }).catch(error => {
+        console.error('❌ Background photo upload failed:', error);
       });
     } catch (error) {
       console.error('Error uploading photo:', error);
