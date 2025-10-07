@@ -3555,7 +3555,7 @@ export function GlobalJobCard({
                       amount: String(totalAmount),
                       status: 'draft',
                       customerId: selectedCustomer?.id || '',
-                      leadId: editingJob.id,
+                      jobId: editingJob.id,
                       description: formData?.description || editingJob.description || '',
                       validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                       terms: quoteTemplate?.paymentTerms || 'Payment due within 30 days',

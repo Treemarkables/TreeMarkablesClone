@@ -53,18 +53,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
     enabled: !!actualQuoteResponse?.data?.customerId,
   });
 
-  // Fetch job data if quote has leadId (which is the job ID)
+  // Fetch job data if quote has jobId
   const { data: jobResponse } = useQuery({
-    queryKey: ["/api/jobs", actualQuoteResponse?.data?.leadId],
-    enabled: !!actualQuoteResponse?.data?.leadId,
-  });
-  
-  // Debug logging
-  console.log('QuoteViewer Debug:', {
-    quote: actualQuoteResponse?.data,
-    leadId: actualQuoteResponse?.data?.leadId,
-    jobResponse,
-    job: jobResponse?.data
+    queryKey: ["/api/jobs", actualQuoteResponse?.data?.jobId],
+    enabled: !!actualQuoteResponse?.data?.jobId,
   });
 
   // Accept quote mutation
@@ -332,7 +324,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
             {/* Debug Info */}
             <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
               <strong>Debug:</strong> Job loaded: {job ? 'Yes' : 'No'} | 
-              Lead ID: {quote.leadId || 'None'} | 
+              Job ID: {quote.jobId || 'None'} | 
               Job line items: {job?.lineItems?.length || 0} | 
               Quote line items: {quote.lineItems?.length || 0}
             </div>

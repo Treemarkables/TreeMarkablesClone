@@ -293,6 +293,7 @@ export const apiKeys = pgTable("api_keys", {
 export const quotes = pgTable("quotes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   leadId: varchar("lead_id").references(() => leads.id),
+  jobId: varchar("job_id").references(() => jobs.id),
   customerId: varchar("customer_id").references(() => customers.id),
   quoteNumber: text("quote_number").notNull().unique(),
   description: text("description").notNull(),
