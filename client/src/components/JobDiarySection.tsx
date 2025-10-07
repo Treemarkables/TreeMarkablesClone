@@ -545,6 +545,14 @@ export function JobDiarySection({
     // Remove "Message:" prefix
     cleaned = cleaned.replace(/^Message:\s*/i, '');
     
+    // Remove email reply headers like "On Tue, Oct 7, 2025 at 5:49 PM Treemarkables <jullianhalley@hotmail.com> wrote:"
+    if (type === 'email') {
+      // Pattern: "On [day], [month] [day], [year] at [time] [name] <[email]> wrote:"
+      cleaned = cleaned.replace(/^On .+? at .+? .+? <.+?> wrote:\s*/i, '');
+      // Also remove alternative pattern: "On [date] [name] wrote:"
+      cleaned = cleaned.replace(/^On .+? wrote:\s*/i, '');
+    }
+    
     return cleaned.trim();
   };
 
@@ -830,7 +838,7 @@ export function JobDiarySection({
                               </Button>
                             </div>
                           ) : (
-                            <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-line break-words overflow-hidden">
+                            <div className={`${entry.type === 'email' ? 'text-sm font-bold' : 'text-xs'} text-gray-700 dark:text-gray-300 whitespace-pre-line break-words overflow-hidden`}>
                               {cleanDiaryContent(entry.content, entry.type)}
                             </div>
                           )}
