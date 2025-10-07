@@ -1828,7 +1828,6 @@ export function GlobalJobCard({
                 data-form="job-form"
               >
                 <div className="flex flex-col md:flex-row h-full w-full min-w-0">
-                  {/* Left Panel - Job Details (full width when diary tab is active) */}
                   <div className={`flex-1 ${sidebarTab === 'diary' ? 'md:flex-1' : 'md:flex-[3]'} bg-white ${sidebarTab !== 'diary' ? 'md:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'md:rounded-lg' : 'md:rounded-l-lg'} min-w-0`}>
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
@@ -3150,7 +3149,7 @@ export function GlobalJobCard({
                       )}
                     </div>
                   )}
-                  </div>
+                </div>
 
                   {sidebarTab !== 'diary' && editingJob && (
                     <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
