@@ -1269,17 +1269,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   return (
     <>
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Desktop Layout: Calendar on left, Job cards on right */}
+      {/* Desktop Layout: Full width calendar */}
       <div className="hidden lg:flex gap-4 flex-1 min-h-0 p-4 overflow-hidden" data-testid="dispatch-desktop-layout">
-        {/* Calendar Grid - Left Side (70%) */}
-        <div className="w-[70%] h-full" data-testid="calendar-grid-container">
+        {/* Calendar Grid - Full Width */}
+        <div className="w-full h-full" data-testid="calendar-grid-container">
           <Card className="h-full overflow-hidden">
             <CalendarGrid />
           </Card>
         </div>
 
-        {/* Job Cards - Right Side (30%) */}
-        <div className="w-[30%] h-full flex flex-col" data-testid="job-cards-container">
+        {/* Job Cards - Hidden on desktop, only shown on mobile */}
+        <div className="hidden w-[30%] h-full flex-col" data-testid="job-cards-container">
           <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0" style={{pointerEvents: 'auto'}}>
             <CardHeader className="flex-shrink-0 border-b pb-3">
               <div className="flex items-center justify-between">
