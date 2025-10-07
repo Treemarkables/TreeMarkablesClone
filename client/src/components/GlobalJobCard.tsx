@@ -3153,7 +3153,6 @@ export function GlobalJobCard({
                   )}
                 </div>
 
-              <>
                 {sidebarTab !== 'diary' && editingJob && (
                   <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
                     <JobDiarySection 
@@ -3174,7 +3173,6 @@ export function GlobalJobCard({
                     />
                   </div>
                 )}
-              </>
               </div>
             </form>
           </Form>
