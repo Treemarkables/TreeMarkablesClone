@@ -3177,6 +3177,7 @@ export function GlobalJobCard({
 
 
       </DialogContent>
+      </Dialog>
 
       {/* Email Composer Modal */}
       {isEmailComposerOpen && (
