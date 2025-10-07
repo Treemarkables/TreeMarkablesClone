@@ -1186,6 +1186,21 @@ export function GlobalJobCard({
         notes: schedulingData.notes
       }));
 
+      // First, update the job with scheduledDate and scheduledStartTime for calendar display
+      const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scheduledDate: dateStr,
+          scheduledStartTime: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+        })
+      });
+
+      if (!jobUpdateResponse.ok) {
+        throw new Error('Failed to update job schedule');
+      }
+
+      // Then create staff assignments
       const response = await fetch(`/api/jobs/${editingJob.id}/staff-assignments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
