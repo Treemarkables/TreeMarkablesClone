@@ -1580,7 +1580,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             {job.address || 'No address specified'}
                           </div>
                           {job.description && (
-                            <div className="text-xs text-gray-500 mb-3 line-clamp-2 break-words">
+                            <div 
+                              className="text-xs text-gray-500 mb-3 line-clamp-2 break-words cursor-pointer"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                handleEditJob(job);
+                              }}
+                              data-testid={`job-description-${job.id}`}
+                            >
                               {job.description}
                             </div>
                           )}
