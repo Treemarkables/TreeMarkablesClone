@@ -234,6 +234,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/staff-schedule"}>
+                    <Link href="/staff-schedule" onClick={() => isMobile && setOpen(false)} data-testid="link-staff-schedule">
+                      <Users className="h-4 w-4" />
+                      <span>Staff Schedule</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/workflows"}>
                     <Link href="/workflows" onClick={() => isMobile && setOpen(false)} data-testid="link-workflows">
                       <Workflow className="h-4 w-4" />
