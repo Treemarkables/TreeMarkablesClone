@@ -1132,8 +1132,12 @@ export function GlobalJobCard({
           setStaffConflicts(data.data || []);
         }
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (error instanceof Error && (error.name === 'AbortError' || error.message === 'Component cleanup')) {
           // Request was cancelled, ignore
+          return;
+        }
+        if (abortController.signal.aborted) {
+          // Component is unmounting, ignore
           return;
         }
         console.error('Error checking conflicts:', error);
