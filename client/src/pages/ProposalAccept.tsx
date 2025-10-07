@@ -142,19 +142,19 @@ export default function ProposalAccept() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white pb-20">
         {/* Sticky Header with Accept Button */}
-        <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-          <div className="max-w-4xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between gap-4">
+        <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-md backdrop-blur-sm bg-white/95">
+          <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+            <div className="flex items-center justify-between gap-3 sm:gap-4">
               <div className="flex-1 min-w-0">
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Review Your Proposal</h1>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  <span className="text-sm text-gray-600">
+                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Review Your Proposal</h1>
+                <div className="flex flex-wrap gap-2 mt-0.5 sm:mt-1">
+                  <span className="text-xs sm:text-sm text-gray-600">
                     {proposal.proposalNumber}
                   </span>
                   {customer && (
                     <>
-                      <span className="text-sm text-gray-400">•</span>
-                      <span className="text-sm text-gray-600">{customer.name}</span>
+                      <span className="text-xs sm:text-sm text-gray-400">•</span>
+                      <span className="text-xs sm:text-sm text-gray-600 truncate">{customer.name}</span>
                     </>
                   )}
                 </div>
@@ -162,19 +162,19 @@ export default function ProposalAccept() {
               <Button 
                 onClick={() => acceptProposalMutation.mutate()}
                 disabled={acceptProposalMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap shrink-0"
+                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap shrink-0 shadow-lg"
                 size="default"
                 data-testid="button-accept-proposal-sticky"
               >
                 {acceptProposalMutation.isPending ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    <span className="hidden sm:inline">Accepting...</span>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="ml-2 hidden sm:inline">Accepting...</span>
                   </>
                 ) : (
                   <>
-                    <Check className="w-4 h-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Accept Proposal</span>
+                    <Check className="w-5 h-5" />
+                    <span className="ml-2 hidden sm:inline">Accept Proposal</span>
                   </>
                 )}
               </Button>
