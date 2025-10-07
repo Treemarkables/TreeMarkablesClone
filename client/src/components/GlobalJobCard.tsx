@@ -151,7 +151,8 @@ export function GlobalJobCard({
     startTime: '',
     duration: '', // in minutes
     assignedTo: [] as string[],
-    notes: ''
+    notes: '',
+    sendClientNotification: false
   });
   const [staffConflicts, setStaffConflicts] = useState<{employeeId: string; conflicts: any[]}[]>([]);
 
@@ -1178,7 +1179,8 @@ export function GlobalJobCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           staffAssignments,
-          sendNotifications: true
+          sendNotifications: true,
+          sendClientNotification: schedulingData.sendClientNotification
         })
       });
 
@@ -1202,7 +1204,8 @@ export function GlobalJobCard({
           startTime: '',
           duration: '',
           assignedTo: [],
-          notes: ''
+          notes: '',
+          sendClientNotification: false
         });
         setStaffConflicts([]);
       } else {
@@ -3572,6 +3575,25 @@ export function GlobalJobCard({
                 </div>
               )}
             </div>
+            
+            {/* Client Notification Option */}
+            <div className="flex items-center space-x-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
+              <Checkbox
+                id="client-notification"
+                checked={schedulingData.sendClientNotification}
+                onCheckedChange={(checked) => 
+                  setSchedulingData(prev => ({ ...prev, sendClientNotification: checked === true }))
+                }
+                data-testid="checkbox-send-client-notification"
+              />
+              <label
+                htmlFor="client-notification"
+                className="text-sm font-medium leading-none cursor-pointer select-none"
+              >
+                Send booking confirmation email to client with date and time
+              </label>
+            </div>
+
             <div>
               <label className="text-sm font-medium">Notes</label>
               <Textarea
@@ -3592,7 +3614,8 @@ export function GlobalJobCard({
                   startTime: '',
                   duration: '',
                   assignedTo: [],
-                  notes: ''
+                  notes: '',
+                  sendClientNotification: false
                 });
                 setStaffConflicts([]);
               }}
