@@ -1827,7 +1827,6 @@ export function GlobalJobCard({
                 className="flex flex-col h-full w-full min-w-0" 
                 data-form="job-form"
               >
-                {/* ServiceM8-style Two Panel Layout */}
                 <div className="flex flex-col md:flex-row h-full w-full min-w-0">
                   {/* Left Panel - Job Details (full width when diary tab is active) */}
                   <div className={`flex-1 ${sidebarTab === 'diary' ? 'md:flex-1' : 'md:flex-[3]'} bg-white ${sidebarTab !== 'diary' ? 'md:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'md:rounded-lg' : 'md:rounded-l-lg'} min-w-0`}>
