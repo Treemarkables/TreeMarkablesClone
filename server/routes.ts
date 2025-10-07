@@ -3125,6 +3125,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Regenerate all thumbnails with new quality settings (admin utility)
+  app.post('/api/admin/regenerate-thumbnails', async (req: Request, res: Response) => {
+    try {
+      const photoStorage = new PhotoStorageService();
+      const result = await photoStorage.regenerateAllThumbnails();
+      res.json({ 
+        success: true, 
+        message: `Regenerated ${result.regenerated} of ${result.total} thumbnails`,
+        data: result
+      });
+    } catch (error) {
+      console.error('Error regenerating thumbnails:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Error regenerating thumbnails' 
+      });
+    }
+  });
+
   // Get all diary entries (for admin view)
   app.get('/api/diary', async (req: Request, res: Response) => {
     try {
