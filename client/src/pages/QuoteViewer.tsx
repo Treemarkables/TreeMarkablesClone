@@ -329,12 +329,20 @@ export default function QuoteViewer({}: QuoteViewerProps) {
               </div>
             </div>
 
+            {/* Debug Info */}
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+              <strong>Debug:</strong> Job loaded: {job ? 'Yes' : 'No'} | 
+              Lead ID: {quote.leadId || 'None'} | 
+              Job line items: {job?.lineItems?.length || 0} | 
+              Quote line items: {quote.lineItems?.length || 0}
+            </div>
+
             {/* Job Description */}
             {job?.description && (
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Work Description</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Description</h3>
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-gray-700">{job.description}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{job.description}</p>
                 </div>
               </div>
             )}
