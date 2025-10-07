@@ -951,11 +951,14 @@ export function GlobalJobCard({
         const endDate = new Date(firstAssignment.endTime);
         const durationMinutes = (endDate.getTime() - startDate.getTime()) / 60000;
         
+        // Remove duplicate employee IDs when loading existing assignments
+        const uniqueEmployeeIds = [...new Set(data.data.map((a: any) => a.employeeId))];
+        
         setSchedulingData({
           date: startDate.toISOString().split('T')[0],
           startTime: startDate.toTimeString().slice(0, 5),
           duration: durationMinutes.toString(),
-          assignedTo: data.data.map((a: any) => a.employeeId),
+          assignedTo: uniqueEmployeeIds,
           notes: firstAssignment.notes || ''
         });
       }
@@ -1170,8 +1173,9 @@ export function GlobalJobCard({
       const endDate = new Date(new Date(startTimeISO).getTime() + durationMs);
       const endTimeISO = endDate.toISOString();
 
-      // Create staff assignments
-      const staffAssignments = schedulingData.assignedTo.map(employeeId => ({
+      // Create staff assignments - remove duplicates first
+      const uniqueEmployeeIds = [...new Set(schedulingData.assignedTo)];
+      const staffAssignments = uniqueEmployeeIds.map(employeeId => ({
         employeeId,
         startTime: startTimeISO,
         endTime: endTimeISO,
@@ -1194,7 +1198,7 @@ export function GlobalJobCard({
         const scheduledDate = new Date(startTimeISO);
         toast({
           title: "Job Scheduled",
-          description: `${schedulingData.assignedTo.length} staff member(s) scheduled for ${format(scheduledDate, 'PPP')} at ${format(scheduledDate, 'p')}`,
+          description: `${uniqueEmployeeIds.length} staff member(s) scheduled for ${format(scheduledDate, 'PPP')} at ${format(scheduledDate, 'p')}`,
         });
 
         // Refresh job data and staff assignments for dispatch board
