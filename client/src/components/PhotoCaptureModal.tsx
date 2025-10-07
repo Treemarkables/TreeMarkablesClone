@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Camera, Upload, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { compressImage } from "@/lib/imageCompression";
 
 interface PhotoCaptureModalProps {
   isOpen: boolean;
@@ -26,8 +27,19 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
       const results = [];
       
       for (const file of files) {
+        // Compress image before upload for 5-10x faster uploads
+        let fileToUpload = file;
+        if (file.type.startsWith('image/')) {
+          try {
+            fileToUpload = await compressImage(file);
+            console.log('📸 Compressed:', file.name, 'from', (file.size / 1024).toFixed(0), 'KB to', (fileToUpload.size / 1024).toFixed(0), 'KB');
+          } catch (error) {
+            console.warn('📸 Compression failed, using original:', error);
+          }
+        }
+
         const formData = new FormData();
-        formData.append('photo', file);
+        formData.append('photo', fileToUpload);
         formData.append('authorName', 'User');
         formData.append('description', 'Photo added');
 
