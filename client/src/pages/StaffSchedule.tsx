@@ -157,14 +157,14 @@ export default function StaffSchedule() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1">
                             <div className="font-semibold text-sm mb-1">
-                              {job.customerName}
+                              {job.title || 'Untitled Job'}
                             </div>
                             <div className="text-xs opacity-90">
                               Job #{job.jobNumber}
                             </div>
-                            {job.location && (
+                            {job.address && (
                               <div className="text-xs opacity-75 mt-1">
-                                {job.location}
+                                {job.address}
                               </div>
                             )}
                           </div>
