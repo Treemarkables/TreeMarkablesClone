@@ -2832,6 +2832,7 @@ export function GlobalJobCard({
                               })()}
                             </div>
                           </div>
+                    </div>
                   )}
 
                   {sidebarTab === 'diary' && (
