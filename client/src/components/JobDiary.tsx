@@ -741,12 +741,12 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                 {entry.photos.length} {entry.photos.length === 1 ? 'Photo' : 'Photos'}
                               </span>
                             </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '2px', border: '2px solid red' }}>
                               {entry.photos.map((photo, index) => (
                                 <div
                                   key={index}
-                                  className="relative aspect-square rounded-sm overflow-hidden bg-gray-100 group cursor-pointer"
-                                  style={{ width: 'calc(16.666% - 2px)', flexShrink: 0 }}
+                                  className="relative rounded-sm overflow-hidden group cursor-pointer"
+                                  style={{ aspectRatio: '1', width: '100%', border: '1px solid blue' }}
                                 >
                                   <div
                                     role="button"
