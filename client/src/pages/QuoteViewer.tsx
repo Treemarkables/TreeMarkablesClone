@@ -58,6 +58,14 @@ export default function QuoteViewer({}: QuoteViewerProps) {
     queryKey: ["/api/jobs", actualQuoteResponse?.data?.leadId],
     enabled: !!actualQuoteResponse?.data?.leadId,
   });
+  
+  // Debug logging
+  console.log('QuoteViewer Debug:', {
+    quote: actualQuoteResponse?.data,
+    leadId: actualQuoteResponse?.data?.leadId,
+    jobResponse,
+    job: jobResponse?.data
+  });
 
   // Accept quote mutation
   const acceptQuoteMutation = useMutation({
