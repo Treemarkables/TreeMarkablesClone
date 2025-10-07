@@ -218,8 +218,9 @@ function startNotificationQueueWorker() {
   // Check queue every minute
   setInterval(async () => {
     try {
-      const { storage } = await import("./routes.js");
-      const { emailService, smsService } = await import("./emailService.js");
+      const { storage } = await import("./storage");
+      const { emailService } = await import("./services/emailService");
+      const { smsService } = await import("./services/smsService");
       
       // Get pending notifications that are due
       const pendingNotifications = await storage.getPendingNotifications(new Date());
