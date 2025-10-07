@@ -328,22 +328,22 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
             </div>
           ))}
 
-          <Separator className="my-4 sm:my-8" />
+          <Separator className="my-3 sm:my-4" />
 
           {/* Totals */}
-          <div className="p-4 sm:p-8">
+          <div className="p-3 sm:p-4">
             <div className="flex justify-end">
-              <div className="w-full max-w-sm space-y-2 sm:space-y-3">
-                <div className="flex justify-between text-sm sm:text-base text-gray-700">
+              <div className="w-full max-w-xs space-y-1 sm:space-y-1.5">
+                <div className="flex justify-between text-xs sm:text-sm text-gray-700">
                   <span>Subtotal (excl GST):</span>
                   <span data-testid="text-subtotal" className="font-medium">{formatCurrency(totals.subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-sm sm:text-base text-gray-700">
+                <div className="flex justify-between text-xs sm:text-sm text-gray-700">
                   <span>GST (15%):</span>
                   <span data-testid="text-gst-amount" className="font-medium">{formatCurrency(totals.gst)}</span>
                 </div>
-                <Separator />
-                <div className="flex justify-between text-lg sm:text-xl font-bold text-gray-900">
+                <Separator className="my-1" />
+                <div className="flex justify-between text-base sm:text-lg font-bold text-gray-900">
                   <span>Total (inc GST):</span>
                   <span data-testid="text-total-amount">{formatCurrency(totals.total)}</span>
                 </div>
@@ -352,8 +352,8 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
           </div>
 
           {/* Footer */}
-          <div className="p-3 sm:p-8 pt-6">
-            <div className="text-center text-sm text-gray-600">
+          <div className="p-3 sm:p-4 pt-2">
+            <div className="text-center text-xs sm:text-sm text-gray-600">
               <p>Thank you for choosing {template.companyName || 'Treemarkables LTD'}!</p>
               <p className="mt-1">Professional tree services you can trust.</p>
             </div>
