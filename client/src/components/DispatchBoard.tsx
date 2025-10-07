@@ -1616,7 +1616,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             return null;
                           })()}
                         </div>
-                        <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{job.priority}</span>
                       </div>
                     </div>
                   </div>
