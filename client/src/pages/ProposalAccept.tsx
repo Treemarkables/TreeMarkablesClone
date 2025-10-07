@@ -168,13 +168,13 @@ export default function ProposalAccept() {
               >
                 {acceptProposalMutation.isPending ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="ml-2 hidden sm:inline">Accepting...</span>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Accept Proposal
                   </>
                 ) : (
                   <>
-                    <Check className="w-5 h-5" />
-                    <span className="ml-2 hidden sm:inline">Accept Proposal</span>
+                    <Check className="w-4 h-4 mr-2" />
+                    Accept Proposal
                   </>
                 )}
               </Button>
