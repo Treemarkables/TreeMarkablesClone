@@ -13,13 +13,16 @@ export default function StaffSchedule() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
 
-  const { data: jobs = [] } = useQuery<Job[]>({
+  const { data: jobsData } = useQuery<{ success: boolean; data: Job[] }>({
     queryKey: ['/api/jobs'],
   });
 
-  const { data: employees = [] } = useQuery<Employee[]>({
+  const { data: employeesData } = useQuery<{ success: boolean; data: Employee[] }>({
     queryKey: ['/api/employees'],
   });
+
+  const jobs = jobsData?.data || [];
+  const employees = employeesData?.data || [];
 
   // Filter jobs for selected date
   const dateJobs = jobs.filter(job => {
@@ -29,7 +32,7 @@ export default function StaffSchedule() {
   });
 
   // Get jobs for each employee
-  const getEmployeeJobs = (employeeId: number) => {
+  const getEmployeeJobs = (employeeId: string) => {
     return dateJobs
       .filter(job => job.assignedTo?.includes(employeeId))
       .sort((a, b) => {

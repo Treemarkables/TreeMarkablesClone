@@ -183,6 +183,16 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              
+              {/* Staff Schedule - Available to both crew and admin */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/staff-schedule"}>
+                  <Link href="/staff-schedule" onClick={() => isMobile && setOpen(false)} data-testid="link-staff-schedule">
+                    <Users className="h-4 w-4" />
+                    <span>Staff Schedule</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -230,14 +240,6 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     <Link href="/calendar" onClick={() => isMobile && setOpen(false)} data-testid="link-calendar">
                       <CalendarDays className="h-4 w-4" />
                       <span>Calendar</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/staff-schedule"}>
-                    <Link href="/staff-schedule" onClick={() => isMobile && setOpen(false)} data-testid="link-staff-schedule">
-                      <Users className="h-4 w-4" />
-                      <span>Staff Schedule</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
