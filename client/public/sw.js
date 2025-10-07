@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v9-safari-fix';
-const STATIC_CACHE = 'treemarkables-static-v9-safari-fix';
-const API_CACHE = 'treemarkables-api-v9-safari-fix';
+const CACHE_NAME = 'treemarkables-v10-thumbnail-fix';
+const STATIC_CACHE = 'treemarkables-static-v10-thumbnail-fix';
+const API_CACHE = 'treemarkables-api-v10-thumbnail-fix';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -31,9 +31,9 @@ self.addEventListener('activate', function(event) {
       console.log('[SW v9] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          // Delete ANY cache that's not v9
-          if (!cacheName.includes('v9-safari-fix')) {
-            console.log('[SW v9] DELETING old cache:', cacheName);
+          // Delete ANY cache that's not v10
+          if (!cacheName.includes('v10-thumbnail-fix')) {
+            console.log('[SW v10] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
