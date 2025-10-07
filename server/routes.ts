@@ -10283,6 +10283,85 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Get proposal with customer and template (optimized for public viewing)
+  app.get('/api/proposals/:id/public', async (req: Request, res: Response) => {
+    try {
+      const proposal = await storage.getProposal(req.params.id);
+      if (!proposal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal not found'
+        });
+      }
+      
+      // Get proposal sections
+      const sections = await storage.getProposalSectionsByProposal(proposal.id);
+      
+      // Get all line items for this proposal
+      const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
+      
+      // Fetch choices for each line item
+      const lineItemsWithChoices = await Promise.all(
+        allLineItems.map(async (item) => {
+          const choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
+          return {
+            ...item,
+            choices: choices || []
+          };
+        })
+      );
+      
+      // Map images → photos and attach line items with choices to each section
+      const sectionsWithPhotosAndLineItems = sections.map(section => ({
+        ...section,
+        photos: (section.images || []).map((url: string) => ({
+          id: `photo-${Date.now()}-${Math.random()}`,
+          url,
+          filename: url.split('/').pop() || 'photo',
+          type: 'before' as const,
+          category: 'documentation' as const,
+          capturedAt: new Date().toISOString(),
+        })),
+        lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id)
+      }));
+
+      // Fetch customer data if available
+      let customer = null;
+      if (proposal.customerId) {
+        customer = await storage.getCustomer(proposal.customerId);
+      }
+
+      // Fetch default template
+      const template = await storage.getDefaultTemplate('proposal') || {
+        id: 'default',
+        name: 'Default Template',
+        type: 'proposal',
+        companyName: 'Treemarkables',
+        companyPhone: '+64 6 867 1234',
+        companyEmail: 'info@treemarkables.co.nz',
+        companyAddress: 'Gisborne, New Zealand',
+        paymentTerms: 'This proposal is valid for 30 days from the date above. Payment due within 7 days of acceptance.',
+        gstNumber: '123-456-789'
+      };
+      
+      // Return combined data in one response
+      res.json({
+        success: true,
+        data: {
+          proposal: { ...proposal, sections: sectionsWithPhotosAndLineItems },
+          customer,
+          template
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching proposal public data:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching proposal'
+      });
+    }
+  });
+
   // Create new proposal
   app.post('/api/proposals', async (req: Request, res: Response) => {
     try {
