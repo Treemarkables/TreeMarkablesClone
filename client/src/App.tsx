@@ -39,6 +39,7 @@ import StaffManagement from "@/pages/StaffManagement";
 import TemplateManagement from "@/pages/TemplateManagement";
 import Developer from "@/pages/Developer";
 import Calendar from "@/pages/Calendar";
+import StaffSchedule from "@/pages/StaffSchedule";
 import SettingsPreferences from "@/pages/SettingsPreferences";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
@@ -555,6 +556,13 @@ function Router() {
             <Calendar />
           </SidebarLayout>
         </ProtectedRoute>
+      </Route>
+      <Route path="/staff-schedule">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <StaffSchedule />
+          </SidebarLayout>
+        </AuthenticatedRoute>
       </Route>
       <Route path="/workflows">
         <ProtectedRoute>
