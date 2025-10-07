@@ -2706,14 +2706,14 @@ export function GlobalJobCard({
                                                       form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
                                                     }}
                                                   />
-                                                  <div className={`relative w-8 h-4 bg-gray-200 rounded-full transition-colors ${
-                                                    gstField.value ? 'bg-blue-600' : 'bg-gray-200'
+                                                  <div className={`relative w-9 h-5 rounded-full transition-all ${
+                                                    gstField.value ? 'bg-blue-600' : 'bg-gray-300'
                                                   }`}>
-                                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
-                                                      gstField.value ? 'transform translate-x-4' : ''
+                                                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${
+                                                      gstField.value ? 'translate-x-4' : 'translate-x-0'
                                                     }`}></div>
                                                   </div>
-                                                  <span className="ml-1 text-xs text-gray-600">
+                                                  <span className="ml-1.5 text-xs text-gray-700 font-medium min-w-[20px]">
                                                     {gstField.value ? 'Inc' : 'Ex'}
                                                   </span>
                                                 </label>
@@ -2862,14 +2862,14 @@ export function GlobalJobCard({
                                                           form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
                                                         }}
                                                       />
-                                                      <div className={`relative w-10 h-5 bg-gray-200 rounded-full transition-colors ${
-                                                        gstField.value ? 'bg-blue-600' : 'bg-gray-200'
+                                                      <div className={`relative w-10 h-5 rounded-full transition-all ${
+                                                        gstField.value ? 'bg-blue-600' : 'bg-gray-300'
                                                       }`}>
-                                                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-                                                          gstField.value ? 'transform translate-x-5' : ''
+                                                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${
+                                                          gstField.value ? 'translate-x-5' : 'translate-x-0'
                                                         }`}></div>
                                                       </div>
-                                                      <span className="ml-2 text-sm text-gray-700 font-medium">
+                                                      <span className="ml-2 text-sm text-gray-700 font-medium min-w-[24px]">
                                                         {gstField.value ? 'Inc' : 'Ex'}
                                                       </span>
                                                     </label>
