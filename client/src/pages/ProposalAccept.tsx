@@ -186,7 +186,7 @@ export default function ProposalAccept() {
         <div className="h-[72px]"></div>
 
         {/* Proposal Details */}
-        <div className="max-w-4xl mx-auto px-4 py-8 pb-24">
+        <div className="max-w-4xl mx-auto px-4 py-8">
           <Card>
             <CardContent className="p-0">
               <ProposalTemplate
@@ -197,39 +197,6 @@ export default function ProposalAccept() {
                 showActions={false}
                 className="border-0"
               />
-            </CardContent>
-          </Card>
-
-          {/* Accept Button */}
-          <Card className="mt-6">
-            <CardContent className="p-6">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-1">Ready to Accept?</h2>
-                  <p className="text-sm text-gray-600">
-                    By accepting this proposal, you agree to proceed with the work as outlined above.
-                  </p>
-                </div>
-                <Button 
-                  onClick={() => acceptProposalMutation.mutate()}
-                  disabled={acceptProposalMutation.isPending}
-                  className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
-                  size="lg"
-                  data-testid="button-accept-proposal"
-                >
-                  {acceptProposalMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Accepting...
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-5 h-5 mr-2" />
-                      Accept Proposal
-                    </>
-                  )}
-                </Button>
-              </div>
             </CardContent>
           </Card>
         </div>
