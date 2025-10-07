@@ -91,7 +91,7 @@ export class PhotoStorageService {
       },
     });
 
-    // Generate and upload thumbnail (600px wide WebP, ~60KB for mobile performance)
+    // Generate and upload thumbnail (600px wide WebP, quality 35 for maximum mobile performance)
     const thumbnailFilename = `thumb_${uniqueFilename.replace(/\.(jpg|jpeg|png)$/i, '.webp')}`;
     const thumbnailPath = `${privateDir}/photos/${thumbnailFilename}`;
     const thumbnailFile = bucket.file(this.parseObjectPath(thumbnailPath).objectName);
@@ -102,7 +102,7 @@ export class PhotoStorageService {
           fit: 'inside',
           withoutEnlargement: true 
         })
-        .webp({ quality: 60 })
+        .webp({ quality: 35 })
         .toBuffer();
       
       await thumbnailFile.save(thumbnailBuffer, {
@@ -201,13 +201,13 @@ export class PhotoStorageService {
           try {
             const [originalBuffer] = await originalFile.download();
             
-            // Generate thumbnail (600px, quality 60 for mobile performance)
+            // Generate thumbnail (600px, quality 35 for maximum mobile performance)
             const thumbnailBuffer = await sharp(originalBuffer)
               .resize(600, 600, { 
                 fit: 'inside',
                 withoutEnlargement: true 
               })
-              .webp({ quality: 60 })
+              .webp({ quality: 35 })
               .toBuffer();
             
             // Save thumbnail for future requests
