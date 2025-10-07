@@ -3722,7 +3722,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
     try {
-      const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId } = req.body;
+      const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId, quoteId } = req.body;
       
       console.log(`📧 Processing email to ${to} with ${selectedPhotos.length} selected photos`);
       console.log('Selected photos:', selectedPhotos);
@@ -3736,7 +3736,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
 
       // Get related data for email context
-      let job, customer, invoice;
+      let job, customer, invoice, quote;
       if (jobId) {
         job = await storage.getJob(jobId);
       }
@@ -3745,6 +3745,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
       if (invoiceId) {
         invoice = await storage.getInvoice(invoiceId);
+      }
+      if (quoteId) {
+        quote = await storage.getQuote(quoteId);
       }
 
       // Create replyTo email address using job number
@@ -3819,19 +3822,33 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Create job diary entry for the email
         if (jobId) {
           try {
+            // For quote emails, create a much shorter diary entry
+            const isQuoteEmail = quoteId || subject.toLowerCase().includes('quote');
+            let diaryDescription;
+            
+            if (isQuoteEmail) {
+              // Short description for quote emails
+              const quoteNumber = quote?.quoteNumber || subject.match(/QTE-\d+/)?.[0] || 'Quote';
+              diaryDescription = `${quoteNumber} sent to ${to}`;
+            } else {
+              // Full description for other emails
+              diaryDescription = `Email sent to ${to}${cc ? ` (CC: ${cc})` : ''}${
+                emailAttachments.length > 0 ? `\n\nAttachments: ${emailAttachments.length} photo(s)` : ''
+              }\n\nMessage:\n${body}`;
+            }
+            
             await storage.createJobDiaryEntry({
               jobId: jobId,
               entryType: 'email',
-              title: `Email sent: ${subject}`,
-              description: `Email sent to ${to}${cc ? ` (CC: ${cc})` : ''}${
-                emailAttachments.length > 0 ? `\n\nAttachments: ${emailAttachments.length} photo(s)` : ''
-              }\n\nMessage:\n${body}`,
+              title: isQuoteEmail ? `Quote Sent` : `Email sent: ${subject}`,
+              description: diaryDescription,
               authorName: 'System',
               authorRole: 'system',
-              tags: ['communication', 'email', invoiceId ? 'invoice' : ''].filter(Boolean),
+              tags: ['communication', 'email', invoiceId ? 'invoice' : '', quoteId ? 'quote' : ''].filter(Boolean),
               isPrivate: false,
               metadata: {
-                emailAddress: to
+                emailAddress: to,
+                quoteId: quoteId || undefined
               }
             });
             
