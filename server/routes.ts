@@ -3564,40 +3564,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const proposalAcceptUrl = `https://${baseUrl.replace(/^https?:\/\//, '')}/proposal/${proposalId}/accept`;
       
       const htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">
-            Dear ${customerName},
-          </p>
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <p>Dear ${customerName},</p>
           
-          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">
-            ${message || `Thank you for your inquiry, we are pleased to provide you with the following estimate.`}
-          </p>
+          <p>${message || `Thank you for your inquiry, we are pleased to provide you with the following estimate.`}</p>
           
-          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 0 0 30px 0;">
-            <strong>Total cost: $${total.toFixed(2)}</strong>
-          </p>
+          <p><strong>Total cost: $${total.toFixed(2)}</strong></p>
           
-          <div style="margin: 30px 0;">
-            <a href="${proposalAcceptUrl}" 
-               style="display: inline-block; background: #22c55e; color: white; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-weight: 600; font-size: 16px;">
-              View
-            </a>
-            <p style="color: #666; font-size: 14px; margin: 10px 0 0 0;">
-              <strong>Proposal Title</strong><br>
-              Review & Accept Online
-            </p>
-          </div>
+          <p>View and accept your estimate online here: <a href="${proposalAcceptUrl}">${proposalAcceptUrl}</a></p>
           
-          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 30px 0 5px 0;">
-            View and accept your estimate online here: <a href="${proposalAcceptUrl}" style="color: #3b82f6;">${proposalAcceptUrl}</a>
-          </p>
-          
-          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 30px 0 0 0;">
-            Regards,
-          </p>
-          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 5px 0 0 0;">
-            Treemarkables
-          </p>
+          <p>Regards,<br>
+          Treemarkables</p>
         </div>
       `;
 
