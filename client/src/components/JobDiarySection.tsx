@@ -545,12 +545,15 @@ export function JobDiarySection({
     // Remove "Message:" prefix
     cleaned = cleaned.replace(/^Message:\s*/i, '');
     
-    // Remove email reply headers like "On Tue, Oct 7, 2025 at 5:49 PM Treemarkables <jullianhalley@hotmail.com> wrote:"
+    // Remove email reply headers and quoted text for email type
     if (type === 'email') {
-      // Pattern: "On [day], [month] [day], [year] at [time] [name] <[email]> wrote:"
-      cleaned = cleaned.replace(/^On .+? at .+? .+? <.+?> wrote:\s*/i, '');
-      // Also remove alternative pattern: "On [date] [name] wrote:"
-      cleaned = cleaned.replace(/^On .+? wrote:\s*/i, '');
+      // Remove the "On [date] at [time] [name] <[email]> wrote:" pattern that appears AFTER the message
+      // This pattern matches the quoted reply footer
+      cleaned = cleaned.replace(/\n*On .+? at .+? .+? <.+?> wrote:\s*$/is, '');
+      // Also handle pattern without email: "On [date] [name] wrote:"
+      cleaned = cleaned.replace(/\n*On .+? wrote:\s*$/is, '');
+      // Remove any trailing quoted content that starts with "On" at the end
+      cleaned = cleaned.replace(/\n+On\s+.+$/is, '');
     }
     
     return cleaned.trim();
