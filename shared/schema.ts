@@ -324,10 +324,13 @@ export const jobs = pgTable("jobs", {
   leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),
+  scheduledStartTime: text("scheduled_start_time"), // e.g., "08:00"
+  scheduledEndTime: text("scheduled_end_time"), // e.g., "10:00"
   completedDate: timestamp("completed_date"),
   status: text("status").notNull().default('quote'), // lead, quote, scheduled, work_order, completed, unsuccessful
   priority: text("priority"), // low, medium, high, urgent
   assignedTeam: text("assigned_team").array(),
+  assignedTo: text("assigned_to").array(), // Employee IDs for calendar display
   estimatedDuration: integer("estimated_duration"), // hours
   actualDuration: integer("actual_duration"), // hours
   equipment: text("equipment").array(),
