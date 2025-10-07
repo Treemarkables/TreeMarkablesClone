@@ -265,7 +265,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   const transformJobsForDisplay = (apiJobs: Job[]): DisplayJob[] => {
     return apiJobs.map(job => ({
       id: job.id,
-      title: job.title || 'Untitled Job',
+      title: job.title || getCustomerName(job.customerId || ''),
       customerId: job.customerId || '',
       status: job.status || 'unknown',
       priority: job.priority || 'medium',

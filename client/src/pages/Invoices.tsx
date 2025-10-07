@@ -208,7 +208,7 @@ export default function Invoices() {
                     <div className="space-y-2 min-w-0">
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate" data-testid={`text-job-title-${job.id}`}>
-                          {job.title || 'Untitled Job'}
+                          {job.title || job.customer?.name || 'Untitled Job'}
                         </p>
                         <p className="text-sm text-muted-foreground truncate" data-testid={`text-address-${job.id}`}>
                           {job.address || 'No address'}
