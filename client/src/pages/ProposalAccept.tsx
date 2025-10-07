@@ -11,21 +11,10 @@ export default function ProposalAccept() {
   const { proposalId } = useParams();
   const [acceptanceStatus, setAcceptanceStatus] = useState<'viewing' | 'success' | 'error' | 'already_accepted'>('viewing');
   
-  // Fetch proposal data
-  const { data: proposalResponse, isLoading: proposalLoading } = useQuery({
-    queryKey: ["/api/proposals", proposalId],
+  // Fetch proposal, customer, and template in one optimized request
+  const { data: proposalDataResponse, isLoading: proposalLoading } = useQuery({
+    queryKey: ["/api/proposals", proposalId, "public"],
     enabled: !!proposalId,
-  });
-
-  // Fetch customer data if proposal has customerId
-  const { data: customerResponse } = useQuery({
-    queryKey: ["/api/customers", proposalResponse?.data?.customerId],
-    enabled: !!proposalResponse?.data?.customerId,
-  });
-
-  // Fetch default proposal template
-  const { data: templateResponse } = useQuery({
-    queryKey: ["/api/templates/default/proposal"],
   });
 
   // Accept proposal mutation
@@ -48,18 +37,10 @@ export default function ProposalAccept() {
     }
   });
 
-  // Check if proposal is already accepted when page loads
-  useEffect(() => {
-    if (proposalResponse?.data && acceptanceStatus === 'viewing') {
-      if (proposalResponse.data.status === 'accepted') {
-        setAcceptanceStatus('already_accepted');
-      }
-    }
-  }, [proposalResponse?.data, acceptanceStatus]);
-
-  const proposal = proposalResponse?.data;
-  const customer = customerResponse?.data;
-  const template = templateResponse?.data || {
+  // Extract data from combined response
+  const proposal = proposalDataResponse?.data?.proposal;
+  const customer = proposalDataResponse?.data?.customer;
+  const template = proposalDataResponse?.data?.template || {
     id: 'default',
     name: 'Default Template',
     type: 'proposal',
@@ -70,6 +51,15 @@ export default function ProposalAccept() {
     paymentTerms: 'This proposal is valid for 30 days from the date above. Payment due within 7 days of acceptance.',
     gstNumber: '123-456-789'
   };
+
+  // Check if proposal is already accepted when page loads
+  useEffect(() => {
+    if (proposal && acceptanceStatus === 'viewing') {
+      if (proposal.status === 'accepted') {
+        setAcceptanceStatus('already_accepted');
+      }
+    }
+  }, [proposal, acceptanceStatus]);
 
   // Loading state - show while fetching proposal
   if (proposalLoading) {
