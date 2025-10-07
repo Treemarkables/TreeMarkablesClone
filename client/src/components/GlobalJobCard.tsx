@@ -3174,8 +3174,8 @@ export function GlobalJobCard({
                   </div>
                 )}
               </div>
-
-
+            </form>
+          </Form>
       </DialogContent>
       </Dialog>
 
