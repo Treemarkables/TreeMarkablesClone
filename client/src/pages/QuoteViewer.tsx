@@ -134,6 +134,52 @@ export default function QuoteViewer({}: QuoteViewerProps) {
     }).format(amount);
   };
 
+  // Calculate totals from line items if available
+  const gstRate = 0.15; // 15% GST for New Zealand
+  let subtotal = 0;
+  let totalAmount = 0;
+  
+  if (job?.lineItems && Array.isArray(job.lineItems) && job.lineItems.length > 0) {
+    // Calculate from job line items
+    job.lineItems.forEach((item: any) => {
+      const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
+      const isInclusive = item.priceIncludesTax || false;
+      
+      if (isInclusive) {
+        // Price includes GST - extract the ex-GST amount
+        const exGst = itemTotal / (1 + gstRate);
+        subtotal += exGst;
+        totalAmount += itemTotal;
+      } else {
+        // Price excludes GST - add it
+        subtotal += itemTotal;
+        totalAmount += itemTotal * (1 + gstRate);
+      }
+    });
+  } else if (quote.lineItems && Array.isArray(quote.lineItems) && quote.lineItems.length > 0) {
+    // Fallback to quote line items
+    quote.lineItems.forEach((item: any) => {
+      const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
+      const isInclusive = item.priceIncludesTax || false;
+      
+      if (isInclusive) {
+        const exGst = itemTotal / (1 + gstRate);
+        subtotal += exGst;
+        totalAmount += itemTotal;
+      } else {
+        subtotal += itemTotal;
+        totalAmount += itemTotal * (1 + gstRate);
+      }
+    });
+  } else {
+    // Fallback to quote amount field
+    const quoteAmount = typeof quote.amount === 'string' ? parseFloat(quote.amount) : (quote.amount || 0);
+    totalAmount = quoteAmount;
+    subtotal = totalAmount / (1 + gstRate);
+  }
+  
+  const gstAmount = totalAmount - subtotal;
+
   const isExpired = quote.validUntil && new Date(quote.validUntil) < new Date();
   const isAccepted = quote.status === 'accepted';
 
@@ -286,7 +332,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
             )}
 
             {/* Line Items */}
-            {quote.lineItems && quote.lineItems.length > 0 && (
+            {((job?.lineItems && job.lineItems.length > 0) || (quote.lineItems && quote.lineItems.length > 0)) && (
               <div className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Services</h3>
                 <div className="overflow-x-auto max-w-full">
@@ -300,14 +346,17 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {quote.lineItems.map((item: any, index: number) => (
-                        <tr key={index}>
-                          <td className="border border-gray-300 px-4 py-2">{item.description}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-center">{item.quantity}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.total)}</td>
-                        </tr>
-                      ))}
+                      {(job?.lineItems || quote.lineItems || []).map((item: any, index: number) => {
+                        const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
+                        return (
+                          <tr key={index}>
+                            <td className="border border-gray-300 px-4 py-2">{item.description}</td>
+                            <td className="border border-gray-300 px-4 py-2 text-center">{item.quantity}</td>
+                            <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
+                            <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(itemTotal)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -319,16 +368,16 @@ export default function QuoteViewer({}: QuoteViewerProps) {
               <div className="w-full max-w-sm space-y-3">
                 <div className="flex justify-between text-gray-700">
                   <span>Subtotal (excl GST):</span>
-                  <span>{formatCurrency(quote.subtotal || 0)}</span>
+                  <span>{formatCurrency(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-gray-700">
                   <span>GST (15%):</span>
-                  <span>{formatCurrency((quote.totalAmount || 0) - (quote.subtotal || 0))}</span>
+                  <span>{formatCurrency(gstAmount)}</span>
                 </div>
                 <div className="border-t pt-2">
                   <div className="flex justify-between text-xl font-bold text-gray-900">
                     <span>Total (inc GST):</span>
-                    <span>{formatCurrency(quote.totalAmount || 0)}</span>
+                    <span>{formatCurrency(totalAmount)}</span>
                   </div>
                 </div>
               </div>
