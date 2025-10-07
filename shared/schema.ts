@@ -2342,6 +2342,7 @@ export const templatePhotos = pgTable("template_photos", {
   templateId: varchar("template_id").references(() => documentTemplates.id),
   sectionId: varchar("section_id").references(() => templateSections.id), // Which proposal section
   photoUrl: text("photo_url").notNull(),
+  thumbnailUrl: text("thumbnail_url"), // WebP thumbnail for fast mobile loading (~120KB vs 2MB+)
   caption: text("caption"),
   altText: text("alt_text"),
   sortOrder: integer("sort_order").default(0),
