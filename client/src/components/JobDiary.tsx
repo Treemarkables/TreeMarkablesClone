@@ -741,11 +741,11 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                 {entry.photos.length} {entry.photos.length === 1 ? 'Photo' : 'Photos'}
                               </span>
                             </div>
-                            <div className="grid grid-cols-6 gap-0.5">
+                            <div className="flex flex-wrap gap-0.5">
                               {entry.photos.map((photo, index) => (
                                 <div
                                   key={index}
-                                  className="relative aspect-square rounded-sm overflow-hidden bg-gray-100 group cursor-pointer"
+                                  className="relative aspect-square rounded-sm overflow-hidden bg-gray-100 group cursor-pointer w-[calc(16.666%-0.125rem)]"
                                 >
                                   <div
                                     role="button"
