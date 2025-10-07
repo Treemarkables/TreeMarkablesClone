@@ -1116,6 +1116,34 @@ export const notificationSummarySchema = z.object({
 
 export type NotificationSummary = z.infer<typeof notificationSummarySchema>;
 
+// Notification Queue Table (for scheduled email/SMS notifications)
+export const notificationQueue = pgTable("notification_queue", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recipientId: varchar("recipient_id").notNull(), // Employee ID
+  recipientEmail: text("recipient_email"),
+  recipientPhone: text("recipient_phone"),
+  notificationType: text("notification_type").notNull(), // 'email', 'sms', 'both'
+  subject: text("subject"),
+  message: text("message").notNull(),
+  metadata: jsonb("metadata"), // Additional data (job details, assignment info, etc.)
+  sendAt: timestamp("send_at").notNull(), // When to send the notification
+  status: text("status").notNull().default('pending'), // 'pending', 'sent', 'failed'
+  sentAt: timestamp("sent_at"),
+  error: text("error"), // Error message if failed
+  jobId: varchar("job_id"), // Reference to job if job-related
+  assignmentId: varchar("assignment_id"), // Reference to staff assignment
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertNotificationQueueSchema = createInsertSchema(notificationQueue).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+});
+
+export type NotificationQueueItem = typeof notificationQueue.$inferSelect;
+export type InsertNotificationQueueItem = z.infer<typeof insertNotificationQueueSchema>;
+
 // ========================================
 // SCHEDULING & TEAM MANAGEMENT SCHEMAS
 // ========================================
