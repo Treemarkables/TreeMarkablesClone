@@ -2500,7 +2500,7 @@ export function GlobalJobCard({
                               </div>
                             </div>
                             
-                            <div className="grid grid-cols-4 gap-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                               <div>
                                 <label className="text-sm font-medium text-gray-700 mb-1 block">Quantity</label>
                                 <Input
@@ -2833,8 +2833,6 @@ export function GlobalJobCard({
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
                   )}
 
                   {sidebarTab === 'diary' && (
