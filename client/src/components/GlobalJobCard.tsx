@@ -2773,6 +2773,8 @@ export function GlobalJobCard({
                             </div>
                           )}
 
+                          </div>
+
                           {/* ServiceM8-Style Financial Summary */}
                           <div className="grid grid-cols-2 gap-6">
                             <div></div> {/* Left side spacer */}
@@ -2832,7 +2834,6 @@ export function GlobalJobCard({
                               })()}
                             </div>
                           </div>
-                    </div>
                   )}
 
                   {sidebarTab === 'diary' && (
@@ -3152,7 +3153,7 @@ export function GlobalJobCard({
                   )}
                 </div>
 
-                {/* Right Panel - Activity Diary - Only show when NOT in diary tab */}
+              <>
                 {sidebarTab !== 'diary' && editingJob && (
                   <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
                     <JobDiarySection 
@@ -3173,6 +3174,7 @@ export function GlobalJobCard({
                     />
                   </div>
                 )}
+              </>
               </div>
             </form>
           </Form>
