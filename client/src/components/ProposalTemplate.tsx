@@ -224,8 +224,8 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
 
               {/* Section Description */}
               {section.description && (
-                <div className="mb-4 sm:mb-6">
-                  <p className="text-gray-700 text-sm sm:text-base whitespace-pre-wrap break-words">{section.description}</p>
+                <div className="mb-2 sm:mb-6">
+                  <p className="text-gray-700 text-xs sm:text-base whitespace-pre-wrap break-words">{section.description}</p>
                 </div>
               )}
 
