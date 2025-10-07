@@ -3021,30 +3021,32 @@ export function GlobalJobCard({
                           <div className="space-y-2 text-sm">
                               {(() => {
                                 const lineItems = form.watch('lineItems') || [];
-                                const taxMode = form.watch('taxMode') || 'tax_exclusive';
                                 const gstRate = 0.15; // 15% GST for New Zealand
                                 const paidAmount = parseFloat(form.watch('paidAmount') || '0');
                                 
-                                const lineItemTotal = lineItems.reduce((sum: number, item: any) => {
+                                // Calculate totals by checking each line item's priceIncludesTax flag
+                                let subtotal = 0;
+                                let totalIncGst = 0;
+                                
+                                lineItems.forEach((item: any) => {
                                   const quantity = item.quantity || 1;
                                   const unitPrice = item.unitPrice || 0;
-                                  return sum + (quantity * unitPrice);
-                                }, 0);
+                                  const lineTotal = quantity * unitPrice;
+                                  const isInclusive = item.priceIncludesTax || false;
+                                  
+                                  if (isInclusive) {
+                                    // Price includes GST - extract the ex-GST amount
+                                    const exGst = lineTotal / (1 + gstRate);
+                                    subtotal += exGst;
+                                    totalIncGst += lineTotal;
+                                  } else {
+                                    // Price excludes GST - add it
+                                    subtotal += lineTotal;
+                                    totalIncGst += lineTotal * (1 + gstRate);
+                                  }
+                                });
                                 
-                                let subtotal: number;
-                                let gstAmount: number;
-                                let totalIncGst: number;
-                                
-                                if (taxMode === 'tax_inclusive') {
-                                  totalIncGst = lineItemTotal;
-                                  subtotal = totalIncGst / (1 + gstRate);
-                                  gstAmount = totalIncGst - subtotal;
-                                } else {
-                                  subtotal = lineItemTotal;
-                                  gstAmount = subtotal * gstRate;
-                                  totalIncGst = subtotal + gstAmount;
-                                }
-                                
+                                const gstAmount = totalIncGst - subtotal;
                                 const balanceDue = totalIncGst - paidAmount;
                                 
                                 return (
