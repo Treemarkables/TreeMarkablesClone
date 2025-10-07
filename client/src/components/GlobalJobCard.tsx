@@ -129,6 +129,9 @@ export function GlobalJobCard({
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
   
+  // Double-tap detection for mobile description
+  const [lastDescriptionTap, setLastDescriptionTap] = useState(0);
+  
   // Profit tracking state
   const [isProfitTrackerOpen, setIsProfitTrackerOpen] = useState(false);
   
@@ -2147,7 +2150,16 @@ export function GlobalJobCard({
                                     className="min-h-[90px] text-base font-medium cursor-pointer" 
                                     placeholder="Describe the work that needs to be done"
                                     onTouchStart={() => {
-                                      setDescriptionPopupOpen(true);
+                                      const now = Date.now();
+                                      const timeSinceLastTap = now - lastDescriptionTap;
+                                      
+                                      // Double-tap detection: if tapped within 300ms, it's a double-tap
+                                      if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+                                        setDescriptionPopupOpen(true);
+                                        setLastDescriptionTap(0); // Reset to prevent triple-tap
+                                      } else {
+                                        setLastDescriptionTap(now);
+                                      }
                                     }}
                                     onDoubleClick={() => {
                                       setDescriptionPopupOpen(true);
