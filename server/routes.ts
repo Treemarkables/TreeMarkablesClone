@@ -10262,6 +10262,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Map images → photos and attach line items with choices to each section
       const sectionsWithPhotosAndLineItems = sections.map(section => ({
         ...section,
+        description: section.content, // Map content to description for frontend
         photos: (section.images || []).map((url: string) => {
           // Generate thumbnail URL: /objects/photos/filename.jpg → /objects/photos/thumb_filename.webp
           const filename = url.split('/').pop() || 'photo';
