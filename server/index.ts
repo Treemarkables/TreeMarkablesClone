@@ -211,6 +211,66 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
+// Notification queue worker - processes pending notifications
+function startNotificationQueueWorker() {
+  log("🔔 Starting notification queue worker...", "startup");
+  
+  // Check queue every minute
+  setInterval(async () => {
+    try {
+      const { storage } = await import("./routes.js");
+      const { emailService, smsService } = await import("./emailService.js");
+      
+      // Get pending notifications that are due
+      const pendingNotifications = await storage.getPendingNotifications(new Date());
+      
+      if (pendingNotifications.length > 0) {
+        log(`[Notification Queue] Processing ${pendingNotifications.length} pending notification(s)`, "startup");
+      }
+      
+      for (const notification of pendingNotifications) {
+        try {
+          // Send email notification
+          if (notification.recipientEmail && (notification.notificationType === 'email' || notification.notificationType === 'both')) {
+            await emailService.sendEmail({
+              to: notification.recipientEmail,
+              from: 'jullianhalley@hotmail.com',
+              subject: notification.subject || 'Job Notification',
+              html: notification.message,
+              text: notification.message.replace(/<[^>]*>/g, '') // Strip HTML for text version
+            });
+            log(`[Notification Queue] Email sent to ${notification.recipientEmail}`, "startup");
+          }
+          
+          // Send SMS notification
+          if (notification.recipientPhone && (notification.notificationType === 'sms' || notification.notificationType === 'both')) {
+            const smsMessage = (notification.metadata as any)?.smsMessage || notification.message.replace(/<[^>]*>/g, '').substring(0, 160);
+            await smsService.sendSMS({ 
+              to: notification.recipientPhone, 
+              message: smsMessage 
+            });
+            log(`[Notification Queue] SMS sent to ${notification.recipientPhone}`, "startup");
+          }
+          
+          // Mark as sent
+          await storage.markNotificationSent(notification.id);
+          log(`[Notification Queue] Notification ${notification.id} marked as sent`, "startup");
+          
+        } catch (error) {
+          const err = error as Error;
+          log(`[Notification Queue] Failed to send notification ${notification.id}: ${err.message}`, "error");
+          await storage.markNotificationFailed(notification.id, err.message);
+        }
+      }
+    } catch (error) {
+      const err = error as Error;
+      log(`[Notification Queue] Worker error: ${err.message}`, "error");
+    }
+  }, 60000); // Run every minute
+  
+  log("🔔 Notification queue worker started (checking every 60 seconds)", "startup");
+}
+
 (async () => {
   try {
     log("Starting server initialization...", "startup");
@@ -312,6 +372,9 @@ process.on('unhandledRejection', (reason, promise) => {
       console.error('Server error details:', error);
       process.exit(1);
     });
+
+    // Start notification queue worker
+    startNotificationQueueWorker();
 
   } catch (error) {
     const err = error as Error;
