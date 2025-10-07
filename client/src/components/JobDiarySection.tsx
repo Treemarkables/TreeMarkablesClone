@@ -40,7 +40,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  Receipt
+  Receipt,
+  Trash2
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -481,6 +482,24 @@ export function JobDiarySection({
     }
   });
 
+  const deleteEntryMutation = useMutation({
+    mutationFn: async (entryId: string) => {
+      return apiRequest('DELETE', `/api/diary/${entryId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Entry deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to delete entry",
+        variant: "destructive"
+      });
+    }
+  });
+
   // Helper functions
   const getEntryIcon = (type: DiaryEntry['type'], docInfo?: { type: string; number: string } | null) => {
     // Special case: invoice emails get invoice icon
@@ -681,21 +700,39 @@ export function JobDiarySection({
                       onClick={isClickable ? handleEntryClick : undefined}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        {entry.type === 'note' && editingEntryId !== entry.id && (
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            className="h-5 w-5 ml-auto"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingEntryId(entry.id);
-                              setEditingContent(entry.content);
-                            }}
-                            data-testid={`button-edit-entry-${entry.id}`}
-                          >
-                            <Edit className="w-2.5 h-2.5" />
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1 ml-auto">
+                          {entry.type === 'note' && editingEntryId !== entry.id && (
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-5 w-5"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingEntryId(entry.id);
+                                setEditingContent(entry.content);
+                              }}
+                              data-testid={`button-edit-entry-${entry.id}`}
+                            >
+                              <Edit className="w-2.5 h-2.5" />
+                            </Button>
+                          )}
+                          {editingEntryId !== entry.id && (
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-5 w-5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('Are you sure you want to delete this entry?')) {
+                                  deleteEntryMutation.mutate(entry.id);
+                                }
+                              }}
+                              data-testid={`button-delete-entry-${entry.id}`}
+                            >
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       
                       <div className="text-[10px] text-muted-foreground mb-1 flex items-center justify-between gap-2 flex-wrap">
