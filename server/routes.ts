@@ -10262,14 +10262,23 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Map images → photos and attach line items with choices to each section
       const sectionsWithPhotosAndLineItems = sections.map(section => ({
         ...section,
-        photos: (section.images || []).map((url: string) => ({
-          id: `photo-${Date.now()}-${Math.random()}`,
-          url,
-          filename: url.split('/').pop() || 'photo',
-          type: 'before' as const,
-          category: 'documentation' as const,
-          capturedAt: new Date().toISOString(),
-        })),
+        photos: (section.images || []).map((url: string) => {
+          // Generate thumbnail URL: /objects/photos/filename.jpg → /objects/photos/thumb_filename.webp
+          const filename = url.split('/').pop() || 'photo';
+          const thumbnailUrl = url.includes('/objects/photos/') 
+            ? url.replace(/\/([^/]+)\.(jpg|jpeg|png|webp)$/i, '/thumb_$1.webp')
+            : url;
+          
+          return {
+            id: `photo-${Date.now()}-${Math.random()}`,
+            url,
+            thumbnailUrl,
+            filename,
+            type: 'before' as const,
+            category: 'documentation' as const,
+            capturedAt: new Date().toISOString(),
+          };
+        }),
         lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id)
       }));
 

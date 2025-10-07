@@ -167,6 +167,64 @@ export class PhotoStorageService {
   }
 
   async downloadPhoto(photoPath: string, res: Response): Promise<void> {
+    const filename = photoPath.replace("/objects/photos/", "");
+    const isThumbnailRequest = filename.startsWith('thumb_');
+    
+    // If thumbnail requested but doesn't exist, generate it from original
+    if (isThumbnailRequest) {
+      const { file: thumbFile, exists: thumbExists } = await this.getPhoto(photoPath);
+      
+      if (!thumbExists) {
+        // Generate thumbnail from original
+        const originalFilename = filename.replace(/^thumb_/, '').replace(/\.webp$/i, function(match) {
+          // Try to guess original extension
+          return '.jpg'; // Most likely original format
+        });
+        const originalPath = `/objects/photos/${originalFilename}`;
+        const { file: originalFile, exists: originalExists } = await this.getPhoto(originalPath);
+        
+        if (originalExists && originalFile) {
+          try {
+            const [originalBuffer] = await originalFile.download();
+            
+            // Generate thumbnail
+            const thumbnailBuffer = await sharp(originalBuffer)
+              .resize(800, 800, { 
+                fit: 'inside',
+                withoutEnlargement: true 
+              })
+              .webp({ quality: 80 })
+              .toBuffer();
+            
+            // Save thumbnail for future requests
+            const privateDir = this.getPrivateObjectDir();
+            const { bucketName } = this.parseObjectPath(privateDir);
+            const bucket = objectStorageClient.bucket(bucketName);
+            const thumbObjectName = this.parseObjectPath(`${privateDir}/photos/${filename}`).objectName;
+            const thumbFileRef = bucket.file(thumbObjectName);
+            
+            await thumbFileRef.save(thumbnailBuffer, {
+              metadata: { contentType: 'image/webp' }
+            });
+            
+            console.log(`✅ Generated on-the-fly thumbnail: ${filename} (${(thumbnailBuffer.length / 1024).toFixed(0)}KB)`);
+            
+            // Serve the generated thumbnail
+            res.set({
+              "Content-Type": "image/webp",
+              "Content-Length": thumbnailBuffer.length.toString(),
+              "Cache-Control": "public, max-age=31536000",
+            });
+            res.send(thumbnailBuffer);
+            return;
+          } catch (thumbError) {
+            console.error(`❌ Thumbnail generation failed for ${filename}:`, thumbError);
+            // Fall through to try serving whatever exists
+          }
+        }
+      }
+    }
+    
     const { file, exists } = await this.getPhoto(photoPath);
     
     if (!exists || !file) {
