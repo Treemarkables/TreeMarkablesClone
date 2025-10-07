@@ -137,6 +137,28 @@ This meant that when sessions expired or were cleared in the PWA, users would te
 
 **Result**: The billing tables now have proper breathing room on both sides, improving readability and visual consistency with the rest of the application.
 
+### Mobile Proposal Page Performance Optimization (Oct 7, 2025)
+**Issue**: The public proposal acceptance page (`/proposals/:id/accept`) was taking 13+ seconds to load on mobile Chrome, causing poor user experience for customers trying to review and accept proposals.
+
+**Root Causes**:
+1. **Sequential API queries**: The `/api/proposals/:id/public` endpoint was fetching proposal data, sections, line items, customer, and template sequentially, causing ~500ms API latency
+2. **Image blocking**: Full-resolution multi-megabyte HEIC/JPEG proposal photos were loading without lazy loading or size constraints, blocking page render for 12+ seconds on mobile networks
+
+**Solutions Implemented**:
+1. **API Parallelization**: Refactored `/api/proposals/:id/public` to fetch sections, line items, customer, and template in parallel using `Promise.all()`, reducing sequential database calls
+2. **Image Lazy Loading**: Added `loading="lazy"` and `decoding="async"` attributes to all proposal images (company logo and section photos) to defer off-screen image loading and prevent render blocking
+3. **Route Ordering Fix**: Ensured specific route `/api/proposals/:id/public` is registered BEFORE generic `/:id` route to prevent routing conflicts
+
+**Performance Impact**: 
+- Lazy loading prevents 12+ second image blocking delays on mobile
+- Images load progressively as user scrolls, significantly improving perceived performance
+- Initial page content renders faster without waiting for all images to download
+
+**Remaining Optimizations** (future work):
+- Generate responsive image variants (WebP, multiple sizes) for faster mobile downloads
+- Implement CDN or object storage thumbnails to reduce image payload sizes
+- Consider batch-fetching line item choices to further reduce API latency below 150ms
+
 ## External Dependencies
 
 ### Core Framework
