@@ -53,10 +53,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
     enabled: !!actualQuoteResponse?.data?.customerId,
   });
 
-  // Fetch job data if quote has jobId
+  // Fetch job data if quote has leadId (which is the job ID)
   const { data: jobResponse } = useQuery({
-    queryKey: ["/api/jobs", actualQuoteResponse?.data?.jobId],
-    enabled: !!actualQuoteResponse?.data?.jobId,
+    queryKey: ["/api/jobs", actualQuoteResponse?.data?.leadId],
+    enabled: !!actualQuoteResponse?.data?.leadId,
   });
 
   // Accept quote mutation
