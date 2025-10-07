@@ -1,4 +1,4 @@
-import { useState, forwardRef } from 'react';
+import { useState, useEffect, useRef, forwardRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -59,6 +59,48 @@ interface ProposalTemplateProps {
   onEmail?: () => void;
   onDownload?: () => void;
   onCopy?: () => void;
+}
+
+// Lazy loading image component using Intersection Observer
+function LazyImage({ src, alt, className }: { src: string; alt: string; className: string }) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !isLoaded) {
+            setIsLoaded(true);
+            observer.disconnect();
+          }
+        });
+      },
+      {
+        rootMargin: '100px', // Start loading 100px before image enters viewport
+        threshold: 0.01
+      }
+    );
+
+    if (imgRef.current) {
+      observer.observe(imgRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isLoaded]);
+
+  return (
+    <img
+      ref={imgRef}
+      src={isLoaded ? src : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"%3E%3C/svg%3E'}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      decoding="async"
+    />
+  );
 }
 
 export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps>(({
@@ -352,12 +394,10 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                           document.body.appendChild(modal);
                         }}
                       >
-                        <img
+                        <LazyImage
                           src={photo.thumbnailUrl || photo.url}
                           alt={photo.filename}
                           className="w-full aspect-square object-cover"
-                          loading="lazy"
-                          decoding="async"
                         />
                       </div>
                     ))}
