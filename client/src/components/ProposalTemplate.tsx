@@ -285,7 +285,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                         <img
                           src={photo.url}
                           alt={photo.filename}
-                          className="w-full h-17 sm:h-22 object-cover"
+                          className="w-full h-16 sm:h-20 object-cover"
                           loading="lazy"
                           decoding="async"
                         />
