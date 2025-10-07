@@ -237,7 +237,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                     {section.photos.map((photo) => (
                       <div key={photo.id} className="bg-gray-50 rounded-lg overflow-hidden" data-testid={`img-photo-${photo.id}`}>
                         <img
-                          src={photo.url}
+                          src={photo.thumbnailUrl || photo.url}
                           alt={photo.filename}
                           className="w-full aspect-square object-cover"
                           loading="lazy"
