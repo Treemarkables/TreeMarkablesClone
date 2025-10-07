@@ -141,8 +141,8 @@ export default function ProposalAccept() {
   if (acceptanceStatus === 'viewing') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
-        {/* Sticky Header with Accept Button */}
-        <div className="sticky top-0 z-[100] bg-white border-b border-gray-200 shadow-lg">
+        {/* Fixed Header with Accept Button - Safari compatible */}
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-white border-b border-gray-200 shadow-lg">
           <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-3 sm:gap-4">
               <div className="flex-1 min-w-0">
@@ -181,6 +181,9 @@ export default function ProposalAccept() {
             </div>
           </div>
         </div>
+
+        {/* Spacer for fixed header */}
+        <div className="h-[72px]"></div>
 
         {/* Proposal Details */}
         <div className="max-w-4xl mx-auto px-4 py-8 pb-24">
