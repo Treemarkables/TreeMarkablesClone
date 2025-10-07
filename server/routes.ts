@@ -10228,62 +10228,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Get single proposal
-  app.get('/api/proposals/:id', async (req: Request, res: Response) => {
-    try {
-      const proposal = await storage.getProposal(req.params.id);
-      if (!proposal) {
-        return res.status(404).json({
-          success: false,
-          message: 'Proposal not found'
-        });
-      }
-      
-      // Get proposal sections
-      const sections = await storage.getProposalSectionsByProposal(proposal.id);
-      
-      // Get all line items for this proposal
-      const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
-      
-      // Fetch choices for each line item
-      const lineItemsWithChoices = await Promise.all(
-        allLineItems.map(async (item) => {
-          const choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
-          return {
-            ...item,
-            choices: choices || []
-          };
-        })
-      );
-      
-      // Map images → photos and attach line items with choices to each section
-      const sectionsWithPhotosAndLineItems = sections.map(section => ({
-        ...section,
-        photos: (section.images || []).map((url: string) => ({
-          id: `photo-${Date.now()}-${Math.random()}`,
-          url,
-          filename: url.split('/').pop() || 'photo',
-          type: 'before' as const,
-          category: 'documentation' as const,
-          capturedAt: new Date().toISOString(),
-        })),
-        lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id)
-      }));
-      
-      res.json({
-        success: true,
-        data: { ...proposal, sections: sectionsWithPhotosAndLineItems }
-      });
-    } catch (error) {
-      console.error('Error fetching proposal:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error fetching proposal'
-      });
-    }
-  });
-
   // Get proposal with customer and template (optimized for public viewing)
+  // IMPORTANT: This must come BEFORE the generic /:id route
   app.get('/api/proposals/:id/public', async (req: Request, res: Response) => {
     try {
       const proposal = await storage.getProposal(req.params.id);
@@ -10355,6 +10301,61 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       });
     } catch (error) {
       console.error('Error fetching proposal public data:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching proposal'
+      });
+    }
+  });
+
+  // Get single proposal
+  app.get('/api/proposals/:id', async (req: Request, res: Response) => {
+    try {
+      const proposal = await storage.getProposal(req.params.id);
+      if (!proposal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal not found'
+        });
+      }
+      
+      // Get proposal sections
+      const sections = await storage.getProposalSectionsByProposal(proposal.id);
+      
+      // Get all line items for this proposal
+      const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
+      
+      // Fetch choices for each line item
+      const lineItemsWithChoices = await Promise.all(
+        allLineItems.map(async (item) => {
+          const choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
+          return {
+            ...item,
+            choices: choices || []
+          };
+        })
+      );
+      
+      // Map images → photos and attach line items with choices to each section
+      const sectionsWithPhotosAndLineItems = sections.map(section => ({
+        ...section,
+        photos: (section.images || []).map((url: string) => ({
+          id: `photo-${Date.now()}-${Math.random()}`,
+          url,
+          filename: url.split('/').pop() || 'photo',
+          type: 'before' as const,
+          category: 'documentation' as const,
+          capturedAt: new Date().toISOString(),
+        })),
+        lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id)
+      }));
+      
+      res.json({
+        success: true,
+        data: { ...proposal, sections: sectionsWithPhotosAndLineItems }
+      });
+    } catch (error) {
+      console.error('Error fetching proposal:', error);
       res.status(500).json({
         success: false,
         message: 'Error fetching proposal'
