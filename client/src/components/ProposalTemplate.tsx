@@ -279,17 +279,17 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               {section.photos.length > 0 && (
                 <div className="mb-4 sm:mb-6">
                   <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Documentation</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
                     {section.photos.map((photo) => (
                       <div key={photo.id} className="bg-gray-50 rounded-lg overflow-hidden" data-testid={`img-photo-${photo.id}`}>
                         <img
                           src={photo.url}
                           alt={photo.filename}
-                          className="w-full h-16 sm:h-20 object-cover"
+                          className="w-full aspect-square object-cover"
                           loading="lazy"
                           decoding="async"
                         />
-                        <div className="p-2">
+                        <div className="p-1.5">
                           <p className="text-xs text-gray-600 truncate">{photo.filename}</p>
                           {photo.notes && (
                             <p className="text-xs text-gray-500 truncate">{photo.notes}</p>
