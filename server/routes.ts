@@ -3555,13 +3555,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Create a map of photo URLs to Content IDs for inline embedding
       const photoToCidMap = new Map<string, string>();
       let cidCounter = 1;
-      const maxPhotosPerSection = 6; // Limit photos to avoid Gmail clipping
       
-      // Collect limited unique photos first and assign CIDs (max 6 per section)
+      // Collect all unique photos and assign CIDs (no limit - user wants all photos)
       for (const section of sections) {
         if (section.images && Array.isArray(section.images)) {
-          const limitedPhotos = section.images.slice(0, maxPhotosPerSection);
-          for (const photoUrl of limitedPhotos) {
+          for (const photoUrl of section.images) {
             if (!photoToCidMap.has(photoUrl)) {
               photoToCidMap.set(photoUrl, `photo${cidCounter}@treemarkables`);
               cidCounter++;
@@ -3588,29 +3586,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           }
           
           // Show photos if they exist - using TABLE layout for email compatibility with CID references
-          // Limit photos per section to avoid Gmail clipping
           if (section.images && Array.isArray(section.images) && section.images.length > 0) {
-            const displayImages = section.images.slice(0, maxPhotosPerSection);
-            const hasMorePhotos = section.images.length > maxPhotosPerSection;
-            
             sectionsHtml += '<div style="margin: 15px 0;">';
-            sectionsHtml += `<h5 style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">Documentation${hasMorePhotos ? ` (${displayImages.length} of ${section.images.length} photos)` : ''}</h5>`;
+            sectionsHtml += `<h5 style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">Documentation</h5>`;
             sectionsHtml += '<table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%;">';
             sectionsHtml += '<tr>';
             
-            for (let i = 0; i < displayImages.length; i++) {
-              const imageUrl = displayImages[i];
+            for (let i = 0; i < section.images.length; i++) {
+              const imageUrl = section.images[i];
               // Use CID reference for inline image embedding
               const cid = photoToCidMap.get(imageUrl);
               
               sectionsHtml += `
-                <td style="padding: 5px; width: ${Math.floor(100 / Math.min(displayImages.length, 3))}%;">
+                <td style="padding: 5px; width: ${Math.floor(100 / Math.min(section.images.length, 3))}%;">
                   <img src="cid:${cid}" alt="Documentation photo ${i + 1}" style="display: block; width: 100%; max-width: 200px; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" />
                 </td>
               `;
               
               // Start new row after every 3 images
-              if ((i + 1) % 3 === 0 && i < displayImages.length - 1) {
+              if ((i + 1) % 3 === 0 && i < section.images.length - 1) {
                 sectionsHtml += '</tr><tr>';
               }
             }
@@ -3811,11 +3805,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             console.log(`📉 Compressing image for email: ${finalFileName}`);
             try {
               const compressedBuffer = await sharp(fileContent)
-                .resize(600, 600, { 
+                .resize(500, 500, { 
                   fit: 'inside', 
                   withoutEnlargement: true 
                 })
-                .jpeg({ quality: 30 }) // Very low quality for email to avoid Gmail clipping
+                .jpeg({ quality: 20 }) // 50% file size reduction for email
                 .toBuffer();
               
               const originalSize = (fileContent.length / 1024).toFixed(2);
