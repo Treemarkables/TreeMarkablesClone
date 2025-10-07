@@ -323,4 +323,58 @@ export class PhotoStorageService {
       }
     }
   }
+
+  async regenerateAllThumbnails(): Promise<{ total: number; regenerated: number; errors: string[] }> {
+    const privateDir = this.getPrivateObjectDir();
+    const { bucketName } = this.parseObjectPath(privateDir);
+    const bucket = objectStorageClient.bucket(bucketName);
+    
+    const [files] = await bucket.getFiles({ prefix: this.parseObjectPath(`${privateDir}/photos/`).objectName });
+    
+    const originalFiles = files.filter(file => 
+      !file.name.includes('thumb_') && 
+      (file.name.endsWith('.jpg') || file.name.endsWith('.jpeg') || file.name.endsWith('.png') || file.name.endsWith('.webp'))
+    );
+    
+    let regenerated = 0;
+    const errors: string[] = [];
+    
+    console.log(`🔄 Starting thumbnail regeneration for ${originalFiles.length} photos...`);
+    
+    for (const file of originalFiles) {
+      try {
+        const [fileBuffer] = await file.download();
+        const filename = file.name.split('/').pop() || '';
+        const thumbnailFilename = `thumb_${filename.replace(/\.(jpg|jpeg|png)$/i, '.webp')}`;
+        
+        const thumbnailBuffer = await sharp(fileBuffer)
+          .resize(600, 600, { 
+            fit: 'inside',
+            withoutEnlargement: true 
+          })
+          .webp({ quality: 35 })
+          .toBuffer();
+        
+        const thumbnailFile = bucket.file(this.parseObjectPath(`${privateDir}/photos/${thumbnailFilename}`).objectName);
+        await thumbnailFile.save(thumbnailBuffer, {
+          metadata: { contentType: 'image/webp' }
+        });
+        
+        regenerated++;
+        console.log(`✅ Regenerated: ${thumbnailFilename} (${(thumbnailBuffer.length / 1024).toFixed(0)}KB)`);
+      } catch (error) {
+        const errorMsg = `Failed to regenerate thumbnail for ${file.name}: ${error}`;
+        errors.push(errorMsg);
+        console.error(`❌ ${errorMsg}`);
+      }
+    }
+    
+    console.log(`🎉 Thumbnail regeneration complete: ${regenerated}/${originalFiles.length} successful`);
+    
+    return {
+      total: originalFiles.length,
+      regenerated,
+      errors
+    };
+  }
 }
