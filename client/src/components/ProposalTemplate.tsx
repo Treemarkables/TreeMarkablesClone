@@ -170,52 +170,6 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
 
       <Card className="shadow-lg">
         <CardContent className="p-0">
-          {/* Header with Treemarkables Branding - Compact */}
-          <div className="bg-gradient-to-r from-orange-500 to-blue-600 p-0.5 sm:p-1 text-white">
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-0.5 sm:gap-0">
-              <div className="flex-1 min-w-0 flex items-start gap-1">
-                <img 
-                  src={new URL('@assets/treelogo_1758218149788.webp', import.meta.url).href}
-                  alt="Treemarkables Logo" 
-                  className="w-8 h-8 sm:w-16 sm:h-16 object-contain bg-white rounded p-0.5 flex-shrink-0"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-[8px] sm:text-xs font-bold mb-0 truncate">{template.companyName || 'Treemarkables LTD'}</h1>
-                  <p className="text-orange-100 text-[6px] sm:text-[8px]">Professional Tree Services</p>
-                  <div className="mt-0.5 space-y-0 text-[6px] sm:text-[8px] text-orange-100">
-                    <div className="flex items-center gap-0.5">
-                      <Phone className="w-1.5 h-1.5 sm:w-2 sm:h-2" />
-                      <span className="break-all">{template.companyPhone || '027 216 6882'}</span>
-                    </div>
-                    <div className="flex items-center gap-0.5">
-                      <MapPin className="w-1.5 h-1.5 sm:w-2 sm:h-2" />
-                      <span className="break-all">{template.companyAddress || '213 Stanley road, Gisborne'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="text-left sm:text-right flex-shrink-0">
-                <div className="bg-white/20 rounded p-0.5 backdrop-blur-sm">
-                  <h2 className="text-[8px] sm:text-xs font-bold mb-0">PROPOSAL</h2>
-                  <div className="mt-0.5 space-y-0 text-[6px] sm:text-[8px]">
-                    <p><strong>Number:</strong> {proposal.proposalNumber || 'PROP-' + proposal.id}</p>
-                    <p><strong>Date:</strong> {format(new Date(proposal.createdAt || Date.now()), 'dd MMM yyyy')}</p>
-                    {expiryDate && (
-                      <p><strong>Valid Until:</strong> {format(expiryDate, 'dd MMM yyyy')}</p>
-                    )}
-                    <div className="mt-0.5">
-                      <Badge className={`${getStatusColor(proposal.status || 'draft')} text-[5px] sm:text-[6px] px-0.5 py-0`}>
-                        {(proposal.status || 'draft').toUpperCase()}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Customer Information */}
           {customer && (
             <div className="p-4 sm:p-8 border-b border-gray-200">
@@ -400,29 +354,6 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                   <span data-testid="text-total-amount">{formatCurrency(totals.total)}</span>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Payment Instructions */}
-          <div className="p-3 sm:p-8 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Instructions</h3>
-            <div className="bg-blue-50 rounded-lg p-4 space-y-3">
-              <div>
-                <p className="text-gray-900 font-semibold text-sm mb-2">Bank Transfer Details:</p>
-                <div className="bg-white rounded p-3 space-y-1">
-                  <p className="text-gray-700 text-sm"><strong>Bank:</strong> ANZ</p>
-                  <p className="text-gray-700 text-sm"><strong>Account:</strong> 06 0637 0768850 00</p>
-                </div>
-              </div>
-              <p className="text-gray-700 text-sm">
-                Please pay this invoice within {template.paymentTerms || 'Payment due within 7 days'} of the issue date.
-                For questions about this invoice, please contact us at {template.companyPhone || '027 216 6882'}.
-              </p>
-              {template.gstNumber && (
-                <p className="text-gray-600 text-sm">
-                  <strong>GST Number:</strong> {template.gstNumber}
-                </p>
-              )}
             </div>
           </div>
 
