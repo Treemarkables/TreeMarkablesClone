@@ -272,7 +272,7 @@ export function CalendarGrid() {
               timeSlots.map(slot => (
                 <div
                   key={slot.hour}
-                  className="flex-1 min-w-[40px] border-r p-1 text-[10px] text-center font-medium text-gray-600 whitespace-nowrap overflow-hidden"
+                  className="flex-1 min-w-[80px] border-r p-1 text-xs text-center font-medium text-gray-600 whitespace-nowrap overflow-hidden"
                   data-testid={`time-slot-${slot.hour}`}
                 >
                   {slot.label}
@@ -282,7 +282,7 @@ export function CalendarGrid() {
               dateRange.map(date => (
                 <div
                   key={date.toISOString()}
-                  className="w-32 flex-shrink-0 border-r p-2 text-xs text-center font-medium"
+                  className="w-40 flex-shrink-0 border-r p-2 text-xs text-center font-medium"
                   data-testid={`date-header-${format(date, 'yyyy-MM-dd')}`}
                 >
                   <div>{format(date, 'EEE')}</div>
@@ -297,7 +297,7 @@ export function CalendarGrid() {
           {employees.map(employee => (
             <div
               key={employee.id}
-              className="flex flex-1 border-b hover:bg-gray-50"
+              className="flex flex-1 min-h-[100px] border-b hover:bg-gray-50"
               data-testid={`staff-row-${employee.id}`}
             >
               {/* Staff Name Column */}
@@ -319,20 +319,20 @@ export function CalendarGrid() {
                   return (
                     <div
                       key={slot.hour}
-                      className="flex-1 min-w-[40px] border-r p-0.5 min-h-[60px] relative overflow-hidden"
+                      className="flex-1 min-w-[80px] border-r p-1 min-h-[100px] relative overflow-hidden"
                       data-testid={`slot-${employee.id}-${slot.hour}`}
                     >
                       {jobs.map(job => (
                         <div
                           key={job.id}
-                          className={`text-xs p-1.5 rounded border cursor-pointer mb-0.5 h-full ${getStatusColor(job.status)}`}
+                          className={`text-sm p-2 rounded border cursor-pointer mb-1 h-full flex flex-col ${getStatusColor(job.status)}`}
                           onClick={() => handleJobClick(job)}
                           data-testid={`job-block-${job.id}`}
                         >
-                          <div className="font-bold truncate text-sm">
+                          <div className="font-bold text-sm whitespace-normal">
                             {job.title || job.customerName}
                           </div>
-                          <div className="truncate text-[10px] opacity-90">#{job.jobNumber}</div>
+                          <div className="text-xs opacity-90">#{job.jobNumber}</div>
                         </div>
                       ))}
                     </div>
@@ -350,20 +350,20 @@ export function CalendarGrid() {
                   return (
                     <div
                       key={date.toISOString()}
-                      className="w-32 flex-shrink-0 border-r p-0.5 min-h-[60px]"
+                      className="w-40 flex-shrink-0 border-r p-1 min-h-[100px]"
                       data-testid={`slot-${employee.id}-${format(date, 'yyyy-MM-dd')}`}
                     >
                       {dayJobs.map(job => (
                         <div
                           key={job.id}
-                          className={`text-xs p-1.5 rounded border cursor-pointer mb-0.5 ${getStatusColor(job.status)}`}
+                          className={`text-sm p-2 rounded border cursor-pointer mb-1 ${getStatusColor(job.status)}`}
                           onClick={() => handleJobClick(job)}
                           data-testid={`job-block-${job.id}`}
                         >
-                          <div className="font-bold truncate text-sm">
+                          <div className="font-bold text-sm whitespace-normal">
                             {job.title || job.customerName}
                           </div>
-                          <div className="truncate text-[10px] opacity-90">
+                          <div className="text-xs opacity-90">
                             #{job.jobNumber} • {job.scheduledStartTime || 'All day'}
                           </div>
                         </div>
