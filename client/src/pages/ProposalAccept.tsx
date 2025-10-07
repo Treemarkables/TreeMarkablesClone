@@ -140,9 +140,9 @@ export default function ProposalAccept() {
   // Viewing state - show proposal with Accept button
   if (acceptanceStatus === 'viewing') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white pb-20">
+      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
         {/* Sticky Header with Accept Button */}
-        <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-md backdrop-blur-sm bg-white/95">
+        <div className="sticky top-0 z-[100] bg-white/98 border-b border-gray-200 shadow-lg backdrop-blur-md">
           <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-3 sm:gap-4">
               <div className="flex-1 min-w-0">
