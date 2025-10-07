@@ -20,6 +20,7 @@ interface Employee {
 interface Job {
   id: string;
   jobNumber: string;
+  title?: string;
   customerName: string;
   address: string;
   scheduledDate: string;
@@ -318,20 +319,20 @@ export function CalendarGrid() {
                   return (
                     <div
                       key={slot.hour}
-                      className="flex-1 min-w-[40px] border-r p-1 min-h-[60px] relative overflow-hidden"
+                      className="flex-1 min-w-[40px] border-r p-0.5 min-h-[60px] relative overflow-hidden"
                       data-testid={`slot-${employee.id}-${slot.hour}`}
                     >
                       {jobs.map(job => (
                         <div
                           key={job.id}
-                          className={`text-xs p-1 rounded border cursor-pointer mb-1 ${getStatusColor(job.status)}`}
+                          className={`text-xs p-1.5 rounded border cursor-pointer mb-0.5 h-full ${getStatusColor(job.status)}`}
                           onClick={() => handleJobClick(job)}
                           data-testid={`job-block-${job.id}`}
                         >
-                          <div className="font-semibold truncate">
-                            {job.jobNumber}
+                          <div className="font-bold truncate text-sm">
+                            {job.title || job.customerName}
                           </div>
-                          <div className="truncate">{job.customerName}</div>
+                          <div className="truncate text-[10px] opacity-90">#{job.jobNumber}</div>
                         </div>
                       ))}
                     </div>
@@ -349,21 +350,21 @@ export function CalendarGrid() {
                   return (
                     <div
                       key={date.toISOString()}
-                      className="w-32 flex-shrink-0 border-r p-1 min-h-[60px]"
+                      className="w-32 flex-shrink-0 border-r p-0.5 min-h-[60px]"
                       data-testid={`slot-${employee.id}-${format(date, 'yyyy-MM-dd')}`}
                     >
                       {dayJobs.map(job => (
                         <div
                           key={job.id}
-                          className={`text-xs p-1 rounded border cursor-pointer mb-1 ${getStatusColor(job.status)}`}
+                          className={`text-xs p-1.5 rounded border cursor-pointer mb-0.5 ${getStatusColor(job.status)}`}
                           onClick={() => handleJobClick(job)}
                           data-testid={`job-block-${job.id}`}
                         >
-                          <div className="font-semibold truncate">
-                            {job.jobNumber}
+                          <div className="font-bold truncate text-sm">
+                            {job.title || job.customerName}
                           </div>
-                          <div className="truncate text-[10px]">
-                            {job.scheduledStartTime || 'All day'}
+                          <div className="truncate text-[10px] opacity-90">
+                            #{job.jobNumber} • {job.scheduledStartTime || 'All day'}
                           </div>
                         </div>
                       ))}
