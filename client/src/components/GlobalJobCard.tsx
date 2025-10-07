@@ -1150,11 +1150,8 @@ export function GlobalJobCard({
     const timeoutId = setTimeout(checkConflicts, 300); // Debounce
     return () => {
       clearTimeout(timeoutId);
-      try {
-        abortController.abort();
-      } catch (error) {
-        // Ignore abort errors during cleanup
-      }
+      // Note: We don't call abort() here because it causes unhandled promise rejections
+      // The signal checks in checkConflicts will handle cleanup properly
     };
   }, [schedulingData.date, schedulingData.startTime, schedulingData.duration, schedulingData.assignedTo, editingJob?.id]);
 
