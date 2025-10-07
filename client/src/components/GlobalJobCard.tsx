@@ -1324,7 +1324,8 @@ export function GlobalJobCard({
   const currentStatus = editingJob?.status || form.watch('status');
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
+    <>
+      <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogContent className="w-full h-full max-w-full flex flex-col p-4 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
         <DialogTitle className="sr-only">
           {mode === "create" ? "Create New Job" : `Job ${editingJob?.jobNumber || ""}`}
@@ -2770,13 +2771,12 @@ export function GlobalJobCard({
                               </div>
                             </div>
                           )}
+                        </div>
 
-                          </div>
-
-                          {/* ServiceM8-Style Financial Summary */}
-                          <div className="grid grid-cols-2 gap-6">
-                            <div></div> {/* Left side spacer */}
-                            <div className="space-y-2 text-sm">
+                        {/* ServiceM8-Style Financial Summary */}
+                        <div className="grid grid-cols-2 gap-6">
+                          <div></div> {/* Left side spacer */}
+                          <div className="space-y-2 text-sm">
                               {(() => {
                                 const lineItems = form.watch('lineItems') || [];
                                 const taxMode = form.watch('taxMode') || 'tax_exclusive';
@@ -2832,6 +2832,8 @@ export function GlobalJobCard({
                               })()}
                             </div>
                           </div>
+                        </div>
+                    </div>
                   )}
 
                   {sidebarTab === 'diary' && (
@@ -3149,7 +3151,7 @@ export function GlobalJobCard({
                       )}
                     </div>
                   )}
-                </div>
+                  </div>
 
                   {sidebarTab !== 'diary' && editingJob && (
                     <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
@@ -3175,6 +3177,7 @@ export function GlobalJobCard({
               </form>
             </Form>
           </div>
+        </div>
       </DialogContent>
       </Dialog>
 
@@ -3742,6 +3745,6 @@ export function GlobalJobCard({
           </div>
         </DialogContent>
       </Dialog>
-    </Dialog>
+    </>
   );
 }
