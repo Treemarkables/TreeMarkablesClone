@@ -385,7 +385,7 @@ export default function Calendar() {
                               )} text-white`}
                               data-testid={`appointment-indicator-${appointment.id}`}
                             >
-                              {appointment.title || 'Untitled'}
+                              {appointment.title || appointment.customer?.name || 'Untitled'}
                             </div>
                           ))}
                           {dayAppointments.length > 3 && (
@@ -440,7 +440,7 @@ export default function Calendar() {
                           <CardHeader className="pb-3">
                             <div className="flex items-start justify-between gap-2">
                               <CardTitle className="text-base">
-                                {appointment.title || 'Untitled Appointment'}
+                                {appointment.title || appointment.customer?.name || 'Untitled Appointment'}
                               </CardTitle>
                               {appointment.priority && (
                                 <Badge
@@ -537,7 +537,7 @@ export default function Calendar() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">
-                          {appointment.title || 'Untitled'}
+                          {appointment.title || appointment.customer?.name || 'Untitled'}
                         </p>
                         {appointment.scheduledDate && (
                           <p className="text-xs text-muted-foreground mt-1">
