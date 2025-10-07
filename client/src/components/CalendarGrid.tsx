@@ -261,18 +261,18 @@ export function CalendarGrid() {
       </div>
 
       {/* Calendar Grid */}
-      <div className="flex-1 overflow-hidden">
-        <div className="w-full h-full flex flex-col">
+      <div className="flex-1 overflow-auto">
+        <div className="h-full flex flex-col min-w-max">
           {/* Time Header Row */}
           <div className="sticky top-0 z-10 flex bg-white border-b">
-            <div className="w-32 flex-shrink-0 border-r bg-gray-50 font-semibold p-2">
+            <div className="w-32 flex-shrink-0 border-r bg-gray-50 font-semibold p-2 sticky left-0 z-20">
               Staff
             </div>
             {viewMode === 'day' ? (
               timeSlots.map(slot => (
                 <div
                   key={slot.hour}
-                  className="flex-1 min-w-[80px] border-r p-1 text-xs text-center font-medium text-gray-600 whitespace-nowrap overflow-hidden"
+                  className="w-[120px] flex-shrink-0 border-r p-1 text-xs text-center font-medium text-gray-600 whitespace-nowrap"
                   data-testid={`time-slot-${slot.hour}`}
                 >
                   {slot.label}
@@ -293,15 +293,15 @@ export function CalendarGrid() {
           </div>
 
           {/* Staff Rows */}
-          <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 flex flex-col">
           {employees.map(employee => (
             <div
               key={employee.id}
-              className="flex flex-1 min-h-[100px] border-b hover:bg-gray-50"
+              className="flex min-h-[100px] border-b hover:bg-gray-50"
               data-testid={`staff-row-${employee.id}`}
             >
               {/* Staff Name Column */}
-              <div className="w-32 flex-shrink-0 border-r p-2 flex items-center gap-2">
+              <div className="w-32 flex-shrink-0 border-r p-2 flex items-center gap-2 sticky left-0 bg-white z-10">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback className="text-xs">
                     {employee.firstName[0]}{employee.lastName[0]}
@@ -319,7 +319,7 @@ export function CalendarGrid() {
                   return (
                     <div
                       key={slot.hour}
-                      className="flex-1 min-w-[80px] border-r p-1 min-h-[100px] relative overflow-hidden"
+                      className="w-[120px] flex-shrink-0 border-r p-1 min-h-[100px] relative"
                       data-testid={`slot-${employee.id}-${slot.hour}`}
                     >
                       {jobs.map(job => (
@@ -329,8 +329,8 @@ export function CalendarGrid() {
                           onClick={() => handleJobClick(job)}
                           data-testid={`job-block-${job.id}`}
                         >
-                          <div className="font-bold text-sm whitespace-normal">
-                            {job.title || job.customerName}
+                          <div className="font-bold text-sm whitespace-normal break-words">
+                            {job.customerName}
                           </div>
                           <div className="text-xs opacity-90">#{job.jobNumber}</div>
                         </div>
@@ -360,8 +360,8 @@ export function CalendarGrid() {
                           onClick={() => handleJobClick(job)}
                           data-testid={`job-block-${job.id}`}
                         >
-                          <div className="font-bold text-sm whitespace-normal">
-                            {job.title || job.customerName}
+                          <div className="font-bold text-sm whitespace-normal break-words">
+                            {job.customerName}
                           </div>
                           <div className="text-xs opacity-90">
                             #{job.jobNumber} • {job.scheduledStartTime || 'All day'}
