@@ -2594,21 +2594,22 @@ export function GlobalJobCard({
                               {/* Table - Horizontally scrollable on mobile */}
                               <div className="overflow-x-auto">
                                 {/* Table Header */}
-                                <div className="bg-gray-50 border-b border-gray-200 min-w-[800px]">
-                                  <div className="grid grid-cols-12 gap-1 px-2 py-2 text-xs font-medium text-gray-600">
-                                    <div className="col-span-2">Code</div>
-                                    <div className="col-span-2">Name</div>
-                                    <div className="col-span-1 text-center">Qty</div>
-                                    <div className="col-span-1 text-center">GST</div>
-                                    <div className="col-span-2 text-right">Cost</div>
-                                    <div className="col-span-1 text-center">%</div>
-                                    <div className="col-span-2 text-right">Price</div>
-                                    <div className="col-span-1 text-right">Total</div>
+                                <div className="bg-gray-50 border-b border-gray-200 min-w-[850px]">
+                                  <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto] gap-1 px-2 py-2 text-xs font-medium text-gray-600">
+                                    <div className="w-8"></div>
+                                    <div className="min-w-[100px]">Code</div>
+                                    <div className="min-w-[150px]">Name</div>
+                                    <div className="w-16 text-center">Qty</div>
+                                    <div className="w-20 text-center">GST</div>
+                                    <div className="w-20 text-right">Cost</div>
+                                    <div className="w-12 text-center">%</div>
+                                    <div className="w-20 text-right">Price</div>
+                                    <div className="w-20 text-right">Total</div>
                                   </div>
                                 </div>
 
                                 {/* Table Body */}
-                                <div className="bg-white min-w-[800px]">
+                                <div className="bg-white min-w-[850px]">
                                   {lineItemFields.map((field, index) => {
                                     const unitCost = field.unitCost || 0;
                                     const quantity = field.quantity || 1;
@@ -2619,12 +2620,24 @@ export function GlobalJobCard({
                                     const markupPercent = unitCost > 0 ? ((markup / unitCost) * 100).toFixed(0) : '0';
                                     
                                     return (
-                                      <div key={field.id} className="grid grid-cols-12 gap-1 px-2 py-2 border-b border-gray-100 hover:bg-gray-50 text-xs">
-                                      <div className="col-span-2 text-gray-500 truncate">{field.itemCode || '—'}</div>
-                                      <div className="col-span-2 font-medium text-gray-900 truncate">
+                                      <div key={field.id} className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto] gap-1 px-2 py-2 border-b border-gray-100 hover:bg-gray-50 text-xs items-center">
+                                      <div className="w-8">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => removeLineItemField(index)}
+                                          className="h-6 w-6 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          data-testid={`button-delete-item-${index}`}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                      <div className="min-w-[100px] text-gray-500 truncate">{field.itemCode || '—'}</div>
+                                      <div className="min-w-[150px] font-medium text-gray-900 truncate">
                                         {field.description}
                                       </div>
-                                      <div className="col-span-1 text-center">
+                                      <div className="w-16 text-center">
                                         <FormField
                                           control={form.control}
                                           name={`lineItems.${index}.quantity`}
@@ -2647,7 +2660,7 @@ export function GlobalJobCard({
                                           )}
                                         />
                                       </div>
-                                      <div className="col-span-1 text-center">
+                                      <div className="w-20 text-center">
                                         <FormField
                                           control={form.control}
                                           name={`lineItems.${index}.priceIncludesTax`}
@@ -2699,9 +2712,9 @@ export function GlobalJobCard({
                                           )}
                                         />
                                       </div>
-                                      <div className="col-span-2 text-right font-mono">${costExGst.toFixed(2)}</div>
-                                      <div className="col-span-1 text-right text-gray-600">{markupPercent}%</div>
-                                      <div className="col-span-2 text-right">
+                                      <div className="w-20 text-right font-mono">${costExGst.toFixed(2)}</div>
+                                      <div className="w-12 text-right text-gray-600">{markupPercent}%</div>
+                                      <div className="w-20 text-right">
                                         <FormField
                                           control={form.control}
                                           name={`lineItems.${index}.unitPrice`}
@@ -2726,7 +2739,7 @@ export function GlobalJobCard({
                                           )}
                                         />
                                       </div>
-                                      <div className="col-span-1 text-right font-mono font-semibold">
+                                      <div className="w-20 text-right font-mono font-semibold">
                                         {(() => {
                                           const isGstInclusive = field.priceIncludesTax || false;
                                           if (isGstInclusive) {
