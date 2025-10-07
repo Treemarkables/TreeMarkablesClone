@@ -175,13 +175,27 @@ export class PhotoStorageService {
       const { file: thumbFile, exists: thumbExists } = await this.getPhoto(photoPath);
       
       if (!thumbExists) {
-        // Generate thumbnail from original
-        const originalFilename = filename.replace(/^thumb_/, '').replace(/\.webp$/i, function(match) {
-          // Try to guess original extension
-          return '.jpg'; // Most likely original format
-        });
-        const originalPath = `/objects/photos/${originalFilename}`;
-        const { file: originalFile, exists: originalExists } = await this.getPhoto(originalPath);
+        // Generate thumbnail from original - try all common extensions
+        // API generates thumbnails as: /objects/photos/name.ext → /objects/photos/thumb_name.webp
+        // Reverse: thumb_name.webp → name → try name.jpg, name.jpeg, etc.
+        // Preserves multi-dot filenames: thumb_tree.photo.final.webp → tree.photo.final → tree.photo.final.jpg
+        const baseFilename = filename.replace(/^thumb_/, '').replace(/\.[^.]+$/i, '');
+        const possibleExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.JPG', '.JPEG', '.PNG', '.WEBP', '.HEIC', '.HEIF'];
+        
+        let originalFile = null;
+        let originalExists = false;
+        let foundOriginalPath = '';
+        
+        for (const ext of possibleExtensions) {
+          const originalPath = `/objects/photos/${baseFilename}${ext}`;
+          const result = await this.getPhoto(originalPath);
+          if (result.exists) {
+            originalFile = result.file;
+            originalExists = true;
+            foundOriginalPath = originalPath;
+            break;
+          }
+        }
         
         if (originalExists && originalFile) {
           try {
@@ -207,7 +221,7 @@ export class PhotoStorageService {
               metadata: { contentType: 'image/webp' }
             });
             
-            console.log(`✅ Generated on-the-fly thumbnail: ${filename} (${(thumbnailBuffer.length / 1024).toFixed(0)}KB)`);
+            console.log(`✅ Generated on-the-fly thumbnail: ${filename} from ${foundOriginalPath} (${(thumbnailBuffer.length / 1024).toFixed(0)}KB)`);
             
             // Serve the generated thumbnail
             res.set({
@@ -219,8 +233,14 @@ export class PhotoStorageService {
             return;
           } catch (thumbError) {
             console.error(`❌ Thumbnail generation failed for ${filename}:`, thumbError);
-            // Fall through to try serving whatever exists
+            // Fall back to serving original if thumbnail generation fails
+            console.log(`📸 Falling back to original: ${foundOriginalPath}`);
+            return this.downloadPhoto(foundOriginalPath, res);
           }
+        } else {
+          // No original found with any extension - fall back to trying without thumbnail prefix
+          console.log(`⚠️ No original found for thumbnail ${filename}, attempting to serve as-is`);
+          // This will likely 404, but preserves existing behavior
         }
       }
     }
