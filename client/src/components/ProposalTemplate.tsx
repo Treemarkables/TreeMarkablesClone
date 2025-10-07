@@ -233,9 +233,27 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               {section.photos.length > 0 && (
                 <div className="mb-4 sm:mb-6">
                   <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Documentation</h4>
-                  <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-12 gap-1 sm:gap-1.5">
+                  <div className="grid grid-cols-4 md:grid-cols-2 gap-1 sm:gap-1.5">
                     {section.photos.map((photo) => (
-                      <div key={photo.id} className="bg-gray-50 rounded-lg overflow-hidden" data-testid={`img-photo-${photo.id}`}>
+                      <div 
+                        key={photo.id} 
+                        className="bg-gray-50 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity" 
+                        data-testid={`img-photo-${photo.id}`}
+                        onClick={() => {
+                          // Create modal with full-size image
+                          const modal = document.createElement('div');
+                          modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4';
+                          modal.onclick = () => modal.remove();
+                          
+                          const img = document.createElement('img');
+                          img.src = photo.url;
+                          img.className = 'max-w-full max-h-full object-contain';
+                          img.onclick = (e) => e.stopPropagation();
+                          
+                          modal.appendChild(img);
+                          document.body.appendChild(modal);
+                        }}
+                      >
                         <img
                           src={photo.thumbnailUrl || photo.url}
                           alt={photo.filename}
