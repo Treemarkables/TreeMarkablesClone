@@ -2588,7 +2588,17 @@ export function GlobalJobCard({
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
                               <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                                 <h4 className="font-medium text-gray-800">Items & Services</h4>
-                                <div className="text-xs text-gray-500">⋯</div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setIsAddingLineItem(true)}
+                                  className="flex items-center gap-1"
+                                  data-testid="button-add-line-item"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  Add Item
+                                </Button>
                               </div>
                               
                               {/* Desktop Table View - Hidden on mobile */}
@@ -2980,6 +2990,27 @@ export function GlobalJobCard({
                                   </div>
                                 </div>
                               </div>
+                            </div>
+                          )}
+                          
+                          {/* Empty State - Show when no line items */}
+                          {lineItemFields.length === 0 && !isAddingLineItem && (
+                            <div className="border border-gray-200 border-dashed rounded-lg p-8 text-center">
+                              <div className="text-gray-400 mb-3">
+                                <DollarSign className="w-12 h-12 mx-auto" />
+                              </div>
+                              <h4 className="font-medium text-gray-700 mb-2">No line items yet</h4>
+                              <p className="text-sm text-gray-500 mb-4">Add services or materials to start building your quote</p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsAddingLineItem(true)}
+                                className="flex items-center gap-2 mx-auto"
+                                data-testid="button-add-first-item"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Add First Item
+                              </Button>
                             </div>
                           )}
                         </div>
