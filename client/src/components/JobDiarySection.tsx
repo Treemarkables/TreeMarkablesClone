@@ -272,7 +272,8 @@ export function JobDiarySection({
             timestamp: proposal.createdAt,
             metadata: {
               proposalNumber: proposal.proposalNumber,
-              status: proposal.status
+              status: proposal.status,
+              isDeletable: false // Proposals from proposals table cannot be deleted via diary endpoint
             }
           });
         });
@@ -727,7 +728,7 @@ export function JobDiarySection({
                               <Edit className="w-2.5 h-2.5" />
                             </Button>
                           )}
-                          {editingEntryId !== entry.id && (
+                          {editingEntryId !== entry.id && entry.metadata?.isDeletable !== false && (
                             <Button 
                               size="icon" 
                               variant="ghost" 
