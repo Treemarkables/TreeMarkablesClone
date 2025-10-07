@@ -2583,33 +2583,33 @@ export function GlobalJobCard({
                         )}
 
                         {/* ServiceM8-Style Line Items Table */}
-                        <div className="space-y-4 px-3 sm:px-4">
+                        <div className="space-y-4 px-3 sm:px-4 py-4">
                           {lineItemFields.length > 0 && (
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
-                              <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+                              <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                                 <h4 className="font-medium text-gray-800">Items & Services</h4>
                                 <div className="text-xs text-gray-500">⋯</div>
                               </div>
                               
-                              {/* Table - Horizontally scrollable on mobile */}
-                              <div className="overflow-x-auto">
+                              {/* Desktop Table View - Hidden on mobile */}
+                              <div className="hidden lg:block">
                                 {/* Table Header */}
-                                <div className="bg-gray-50 border-b border-gray-200 min-w-[850px]">
-                                  <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto] gap-1 px-2 py-2 text-xs font-medium text-gray-600">
-                                    <div className="w-8"></div>
-                                    <div className="min-w-[100px]">Code</div>
-                                    <div className="min-w-[150px]">Name</div>
-                                    <div className="w-16 text-center">Qty</div>
-                                    <div className="w-20 text-center">GST</div>
-                                    <div className="w-20 text-right">Cost</div>
-                                    <div className="w-12 text-center">%</div>
-                                    <div className="w-20 text-right">Price</div>
-                                    <div className="w-20 text-right">Total</div>
+                                <div className="bg-gray-50 border-b border-gray-200">
+                                  <div className="grid grid-cols-[40px_80px_1fr_60px_80px_70px_50px_80px_90px] gap-2 px-4 py-2 text-xs font-medium text-gray-600">
+                                    <div></div>
+                                    <div>Code</div>
+                                    <div>Name</div>
+                                    <div className="text-center">Qty</div>
+                                    <div className="text-center">GST</div>
+                                    <div className="text-right">Cost</div>
+                                    <div className="text-center">%</div>
+                                    <div className="text-right">Price</div>
+                                    <div className="text-right">Total</div>
                                   </div>
                                 </div>
 
                                 {/* Table Body */}
-                                <div className="bg-white min-w-[850px]">
+                                <div className="bg-white">
                                   {lineItemFields.map((field, index) => {
                                     const unitCost = field.unitCost || 0;
                                     const quantity = field.quantity || 1;
@@ -2620,24 +2620,24 @@ export function GlobalJobCard({
                                     const markupPercent = unitCost > 0 ? ((markup / unitCost) * 100).toFixed(0) : '0';
                                     
                                     return (
-                                      <div key={field.id} className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto] gap-1 px-2 py-2 border-b border-gray-100 hover:bg-gray-50 text-xs items-center">
-                                      <div className="w-8">
+                                      <div key={field.id} className="grid grid-cols-[40px_80px_1fr_60px_80px_70px_50px_80px_90px] gap-2 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-xs items-center">
+                                      <div>
                                         <Button
                                           type="button"
                                           variant="ghost"
                                           size="icon"
                                           onClick={() => removeLineItemField(index)}
-                                          className="h-6 w-6 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
                                           data-testid={`button-delete-item-${index}`}
                                         >
-                                          <Trash2 className="w-3 h-3" />
+                                          <Trash2 className="w-3.5 h-3.5" />
                                         </Button>
                                       </div>
-                                      <div className="min-w-[100px] text-gray-500 truncate">{field.itemCode || '—'}</div>
-                                      <div className="min-w-[150px] font-medium text-gray-900 truncate">
+                                      <div className="text-gray-500 truncate">{field.itemCode || '—'}</div>
+                                      <div className="font-medium text-gray-900 truncate">
                                         {field.description}
                                       </div>
-                                      <div className="w-16 text-center">
+                                      <div className="text-center">
                                         <FormField
                                           control={form.control}
                                           name={`lineItems.${index}.quantity`}
@@ -2660,7 +2660,7 @@ export function GlobalJobCard({
                                           )}
                                         />
                                       </div>
-                                      <div className="w-20 text-center">
+                                      <div className="text-center">
                                         <FormField
                                           control={form.control}
                                           name={`lineItems.${index}.priceIncludesTax`}
@@ -2712,9 +2712,9 @@ export function GlobalJobCard({
                                           )}
                                         />
                                       </div>
-                                      <div className="w-20 text-right font-mono">${costExGst.toFixed(2)}</div>
-                                      <div className="w-12 text-right text-gray-600">{markupPercent}%</div>
-                                      <div className="w-20 text-right">
+                                      <div className="text-right font-mono">${costExGst.toFixed(2)}</div>
+                                      <div className="text-right text-gray-600">{markupPercent}%</div>
+                                      <div className="text-right">
                                         <FormField
                                           control={form.control}
                                           name={`lineItems.${index}.unitPrice`}
@@ -2739,7 +2739,7 @@ export function GlobalJobCard({
                                           )}
                                         />
                                       </div>
-                                      <div className="w-20 text-right font-mono font-semibold">
+                                      <div className="text-right font-mono font-semibold">
                                         {(() => {
                                           const isGstInclusive = field.priceIncludesTax || false;
                                           if (isGstInclusive) {
@@ -2759,9 +2759,173 @@ export function GlobalJobCard({
                                 </div>
                               </div>
                               
+                              {/* Mobile Card View - Hidden on desktop */}
+                              <div className="lg:hidden">
+                                {lineItemFields.map((field, index) => {
+                                  const unitCost = field.unitCost || 0;
+                                  const quantity = field.quantity || 1;
+                                  const costExGst = quantity * unitCost;
+                                  const priceExGst = field.unitPrice || 0;
+                                  const totalExGst = quantity * priceExGst;
+                                  const markup = priceExGst - unitCost;
+                                  const markupPercent = unitCost > 0 ? ((markup / unitCost) * 100).toFixed(0) : '0';
+                                  
+                                  return (
+                                    <div key={field.id} className="p-4 border-b border-gray-100 bg-white">
+                                      {/* Item Header */}
+                                      <div className="flex items-start justify-between mb-3">
+                                        <div className="flex-1 pr-3">
+                                          <div className="font-medium text-sm text-gray-900 mb-1">
+                                            {field.description}
+                                          </div>
+                                          {field.itemCode && (
+                                            <div className="text-xs text-gray-500">
+                                              Code: {field.itemCode}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => removeLineItemField(index)}
+                                          className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          data-testid={`button-delete-item-${index}`}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                      
+                                      {/* Item Details Grid */}
+                                      <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div>
+                                          <label className="text-xs text-gray-500 block mb-1">Quantity</label>
+                                          <FormField
+                                            control={form.control}
+                                            name={`lineItems.${index}.quantity`}
+                                            render={({ field: quantityField }) => (
+                                              <FormItem>
+                                                <FormControl>
+                                                  <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    {...quantityField}
+                                                    onChange={(e) => {
+                                                      const newQuantity = parseFloat(e.target.value) || 1;
+                                                      quantityField.onChange(newQuantity);
+                                                    }}
+                                                    className="h-8 text-sm"
+                                                  />
+                                                </FormControl>
+                                              </FormItem>
+                                            )}
+                                          />
+                                        </div>
+                                        
+                                        <div>
+                                          <label className="text-xs text-gray-500 block mb-1">GST</label>
+                                          <FormField
+                                            control={form.control}
+                                            name={`lineItems.${index}.priceIncludesTax`}
+                                            render={({ field: gstField }) => (
+                                              <FormItem>
+                                                <FormControl>
+                                                  <div className="flex items-center h-8">
+                                                    <label className="inline-flex items-center cursor-pointer">
+                                                      <input
+                                                        type="checkbox"
+                                                        className="sr-only"
+                                                        checked={gstField.value || false}
+                                                        onChange={(e) => {
+                                                          const isIncluding = e.target.checked;
+                                                          const gstRate = 0.15;
+                                                          const currentPrice = form.getValues(`lineItems.${index}.unitPrice`) || 0;
+                                                          const wasIncluding = gstField.value || false;
+                                                          let newPrice = currentPrice;
+                                                          if (isIncluding && !wasIncluding) {
+                                                            newPrice = currentPrice * (1 + gstRate);
+                                                          } else if (!isIncluding && wasIncluding) {
+                                                            newPrice = currentPrice / (1 + gstRate);
+                                                          }
+                                                          gstField.onChange(isIncluding);
+                                                          form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+                                                        }}
+                                                      />
+                                                      <div className={`relative w-10 h-5 bg-gray-200 rounded-full transition-colors ${
+                                                        gstField.value ? 'bg-blue-600' : 'bg-gray-200'
+                                                      }`}>
+                                                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                          gstField.value ? 'transform translate-x-5' : ''
+                                                        }`}></div>
+                                                      </div>
+                                                      <span className="ml-2 text-sm text-gray-700 font-medium">
+                                                        {gstField.value ? 'Inc' : 'Ex'}
+                                                      </span>
+                                                    </label>
+                                                  </div>
+                                                </FormControl>
+                                              </FormItem>
+                                            )}
+                                          />
+                                        </div>
+                                        
+                                        <div>
+                                          <label className="text-xs text-gray-500 block mb-1">Price</label>
+                                          <FormField
+                                            control={form.control}
+                                            name={`lineItems.${index}.unitPrice`}
+                                            render={({ field: priceField }) => (
+                                              <FormItem>
+                                                <FormControl>
+                                                  <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    {...priceField}
+                                                    onChange={(e) => {
+                                                      const newPrice = parseFloat(e.target.value) || 0;
+                                                      priceField.onChange(newPrice);
+                                                    }}
+                                                    disabled={!isAdmin}
+                                                    readOnly={!isAdmin}
+                                                    className="h-8 text-sm"
+                                                  />
+                                                </FormControl>
+                                              </FormItem>
+                                            )}
+                                          />
+                                        </div>
+                                        
+                                        <div>
+                                          <label className="text-xs text-gray-500 block mb-1">Total</label>
+                                          <div className="h-8 flex items-center font-mono font-semibold text-sm">
+                                            {(() => {
+                                              const isGstInclusive = field.priceIncludesTax || false;
+                                              if (isGstInclusive) {
+                                                const totalIncGst = quantity * priceExGst;
+                                                return `$${totalIncGst.toFixed(2)}`;
+                                              } else {
+                                                return `$${totalExGst.toFixed(2)}`;
+                                              }
+                                            })()}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Cost & Margin Info */}
+                                      <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between text-xs text-gray-500">
+                                        <div>Cost: <span className="font-mono">${costExGst.toFixed(2)}</span></div>
+                                        <div>Margin: <span className="font-semibold">{markupPercent}%</span></div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              
                               {/* Search Row */}
                               <div className="bg-white border-t border-gray-200">
-                                <div className="p-4">
+                                <div className="p-4 sm:p-6">
                                   <div className="relative">
                                     <Input
                                       placeholder="Search or Add New..."
