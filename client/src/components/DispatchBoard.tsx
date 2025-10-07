@@ -1392,7 +1392,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       {/* Status Avatar Circle with Activity Indicator */}
                       <div className="relative flex-shrink-0">
                         <div 
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[12px]"
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-[10px]"
                           style={{ backgroundColor: getJobStatusColorValue(job) }}
                         >
                           {getStatusInitials(job)}
@@ -1557,7 +1557,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     {/* Status Avatar with Activity Indicator */}
                     <div className="relative flex-shrink-0">
                       <div 
-                        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-[19px] relative z-10"
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-[15px] relative z-10"
                         style={{ backgroundColor: getJobStatusColorValue(job) }}
                       >
                         {getStatusInitials(job)}
