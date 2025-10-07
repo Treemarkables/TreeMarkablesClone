@@ -2327,6 +2327,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Fresh Start Metrics: Mark all new jobs as metrics-eligible for clean business tracking
       processedBody.metricsEligible = true;
       processedBody.metricsStartDate = new Date();
+      
+      // Set lastActivityAt for proper dispatch board sorting (new jobs appear at top)
+      processedBody.lastActivityAt = new Date();
 
       const validation = insertJobSchema.safeParse(processedBody);
       if (!validation.success) {
