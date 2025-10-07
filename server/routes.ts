@@ -3086,7 +3086,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         req.file.buffer,
         req.file.originalname,
         req.file.mimetype
-      ).then(async (photoUrl) => {
+      ).then(async ({ url: photoUrl, thumbnailUrl }) => {
         // Update diary entry with real photo URL
         await storage.createJobDiaryEntry({
           jobId,
@@ -3098,7 +3098,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           photos: [photoUrl],
           isPrivate: false
         });
-        console.log(`✅ Background photo upload complete: ${photoUrl}`);
+        console.log(`✅ Background photo upload complete: ${photoUrl} (thumbnail: ${thumbnailUrl})`);
       }).catch(error => {
         console.error('❌ Background photo upload failed:', error);
       });
