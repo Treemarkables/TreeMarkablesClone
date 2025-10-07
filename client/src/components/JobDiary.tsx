@@ -741,7 +741,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                 {entry.photos.length} {entry.photos.length === 1 ? 'Photo' : 'Photos'}
                               </span>
                             </div>
-                            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1.5">
+                            <div className="grid grid-cols-6 sm:grid-cols-6 md:grid-cols-8 gap-1">
                               {entry.photos.map((photo, index) => (
                                 <div
                                   key={index}
