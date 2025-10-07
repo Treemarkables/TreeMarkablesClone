@@ -234,23 +234,121 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                 <div className="mb-4 sm:mb-6">
                   <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Documentation</h4>
                   <div className="grid grid-cols-4 md:grid-cols-4 gap-1 sm:gap-1.5">
-                    {section.photos.map((photo) => (
+                    {section.photos.map((photo, photoIndex) => (
                       <div 
                         key={photo.id} 
                         className="bg-gray-50 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity" 
                         data-testid={`img-photo-${photo.id}`}
                         onClick={() => {
-                          // Create modal with full-size image
-                          const modal = document.createElement('div');
-                          modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4';
-                          modal.onclick = () => modal.remove();
+                          const photos = section.photos;
+                          let currentIndex = photoIndex;
                           
+                          // Create modal container
+                          const modal = document.createElement('div');
+                          modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/95';
+                          
+                          // Create close button
+                          const closeBtn = document.createElement('button');
+                          closeBtn.innerHTML = '×';
+                          closeBtn.className = 'absolute top-4 right-4 text-white text-4xl w-12 h-12 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors z-10';
+                          closeBtn.onclick = () => modal.remove();
+                          
+                          // Create image container
+                          const imgContainer = document.createElement('div');
+                          imgContainer.className = 'relative w-full h-full flex items-center justify-center p-4 sm:p-16';
+                          
+                          // Create image element
                           const img = document.createElement('img');
-                          img.src = photo.url;
                           img.className = 'max-w-full max-h-full object-contain';
                           img.onclick = (e) => e.stopPropagation();
                           
-                          modal.appendChild(img);
+                          // Create counter
+                          const counter = document.createElement('div');
+                          counter.className = 'absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full';
+                          
+                          // Create prev button
+                          const prevBtn = document.createElement('button');
+                          prevBtn.innerHTML = '‹';
+                          prevBtn.className = 'absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 text-white text-5xl w-12 h-12 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors';
+                          
+                          // Create next button
+                          const nextBtn = document.createElement('button');
+                          nextBtn.innerHTML = '›';
+                          nextBtn.className = 'absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 text-white text-5xl w-12 h-12 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors';
+                          
+                          const updateImage = () => {
+                            img.src = photos[currentIndex].url;
+                            counter.textContent = `${currentIndex + 1} / ${photos.length}`;
+                            prevBtn.style.display = currentIndex === 0 ? 'none' : 'flex';
+                            nextBtn.style.display = currentIndex === photos.length - 1 ? 'none' : 'flex';
+                          };
+                          
+                          prevBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            if (currentIndex > 0) {
+                              currentIndex--;
+                              updateImage();
+                            }
+                          };
+                          
+                          nextBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            if (currentIndex < photos.length - 1) {
+                              currentIndex++;
+                              updateImage();
+                            }
+                          };
+                          
+                          // Add keyboard navigation
+                          const handleKeyDown = (e: KeyboardEvent) => {
+                            if (e.key === 'ArrowLeft' && currentIndex > 0) {
+                              currentIndex--;
+                              updateImage();
+                            } else if (e.key === 'ArrowRight' && currentIndex < photos.length - 1) {
+                              currentIndex++;
+                              updateImage();
+                            } else if (e.key === 'Escape') {
+                              modal.remove();
+                            }
+                          };
+                          document.addEventListener('keydown', handleKeyDown);
+                          
+                          // Add touch swipe support for mobile
+                          let touchStartX = 0;
+                          let touchEndX = 0;
+                          
+                          imgContainer.addEventListener('touchstart', (e) => {
+                            touchStartX = e.changedTouches[0].screenX;
+                          });
+                          
+                          imgContainer.addEventListener('touchend', (e) => {
+                            touchEndX = e.changedTouches[0].screenX;
+                            if (touchStartX - touchEndX > 50 && currentIndex < photos.length - 1) {
+                              currentIndex++;
+                              updateImage();
+                            } else if (touchEndX - touchStartX > 50 && currentIndex > 0) {
+                              currentIndex--;
+                              updateImage();
+                            }
+                          });
+                          
+                          // Clean up on close
+                          modal.onclick = () => {
+                            document.removeEventListener('keydown', handleKeyDown);
+                            modal.remove();
+                          };
+                          
+                          // Assemble modal
+                          imgContainer.appendChild(img);
+                          modal.appendChild(closeBtn);
+                          modal.appendChild(imgContainer);
+                          modal.appendChild(counter);
+                          if (photos.length > 1) {
+                            modal.appendChild(prevBtn);
+                            modal.appendChild(nextBtn);
+                          }
+                          
+                          updateImage();
                           document.body.appendChild(modal);
                         }}
                       >
