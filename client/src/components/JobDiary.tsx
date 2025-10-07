@@ -732,16 +732,16 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                         </div>
                         <p className="text-gray-700 mb-4">{entry.description}</p>
                         
-                        {/* Photo Gallery - Compact View */}
+                        {/* Photo Thumbnails */}
                         {entry.photos && entry.photos.length > 0 && (
                           <div className="mb-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Camera className="h-4 w-4 text-gray-500" />
-                              <span className="text-sm font-medium text-gray-700">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <Camera className="h-3.5 w-3.5 text-gray-500" />
+                              <span className="text-xs font-medium text-gray-700">
                                 {entry.photos.length} {entry.photos.length === 1 ? 'Photo' : 'Photos'}
                               </span>
                             </div>
-                            <div className="grid grid-cols-6 sm:grid-cols-6 md:grid-cols-8 gap-1">
+                            <div className="grid grid-cols-6 gap-1">
                               {entry.photos.map((photo, index) => (
                                 <div
                                   key={index}
