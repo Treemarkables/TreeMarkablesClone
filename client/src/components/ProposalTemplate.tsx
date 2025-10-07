@@ -61,17 +61,18 @@ interface ProposalTemplateProps {
   onCopy?: () => void;
 }
 
-// Lazy loading image component using Intersection Observer
+// Lazy loading image component using Intersection Observer with zero layout shift
 function LazyImage({ src, alt, className }: { src: string; alt: string; className: string }) {
+  const [shouldLoad, setShouldLoad] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  const imgRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting && !isLoaded) {
-            setIsLoaded(true);
+          if (entry.isIntersecting && !shouldLoad) {
+            setShouldLoad(true);
             observer.disconnect();
           }
         });
@@ -82,24 +83,41 @@ function LazyImage({ src, alt, className }: { src: string; alt: string; classNam
       }
     );
 
-    if (imgRef.current) {
-      observer.observe(imgRef.current);
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
     }
 
     return () => {
       observer.disconnect();
     };
-  }, [isLoaded]);
+  }, [shouldLoad]);
+
+  // Preload image and fade in when ready
+  useEffect(() => {
+    if (shouldLoad && !isLoaded) {
+      const img = new Image();
+      img.onload = () => {
+        setIsLoaded(true);
+      };
+      img.src = src;
+    }
+  }, [shouldLoad, src, isLoaded]);
 
   return (
-    <img
-      ref={imgRef}
-      src={isLoaded ? src : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="600" height="600"%3E%3Crect width="600" height="600" fill="%23f3f4f6"/%3E%3C/svg%3E'}
-      alt={alt}
-      className={className}
-      loading="lazy"
-      decoding="async"
-    />
+    <div ref={containerRef} className="relative w-full bg-gray-100" style={{ paddingBottom: '100%' }}>
+      {/* Placeholder - always rendered to maintain aspect ratio */}
+      <div className={`absolute inset-0 bg-gray-100 transition-opacity duration-300 ${isLoaded ? 'opacity-0' : 'opacity-100'}`} />
+      {/* Real image - fades in when loaded */}
+      {shouldLoad && (
+        <img
+          src={src}
+          alt={alt}
+          className={`${className} absolute inset-0 transition-opacity duration-300 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+          loading="lazy"
+          decoding="async"
+        />
+      )}
+    </div>
   );
 }
 
