@@ -175,7 +175,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
             <div className="flex flex-col sm:flex-row justify-between items-start gap-1 sm:gap-0">
               <div className="flex-1 min-w-0 flex items-start gap-2 sm:gap-3">
                 <img 
-                  src={new URL('@assets/new logo png_1757829817784.png', import.meta.url).href}
+                  src={new URL('@assets/treelogo_1758218149788.webp', import.meta.url).href}
                   alt="Treemarkables Logo" 
                   className="w-40 h-40 sm:w-80 sm:h-80 object-contain bg-white rounded p-1 sm:p-2 flex-shrink-0"
                   loading="lazy"
