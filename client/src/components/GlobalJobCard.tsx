@@ -1174,6 +1174,11 @@ export function GlobalJobCard({
       const endDate = new Date(new Date(startTimeISO).getTime() + durationMs);
       const endTimeISO = endDate.toISOString();
 
+      // Calculate end time for calendar display
+      const endDateTime = new Date(new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`).getTime() + durationMs);
+      const endHours = endDateTime.getHours();
+      const endMinutes = endDateTime.getMinutes();
+      
       // Create staff assignments - remove duplicates first
       const uniqueEmployeeIds = [...new Set(schedulingData.assignedTo)];
       const staffAssignments = uniqueEmployeeIds.map(employeeId => ({
@@ -1183,13 +1188,15 @@ export function GlobalJobCard({
         notes: schedulingData.notes
       }));
 
-      // First, update the job with scheduledDate and scheduledStartTime for calendar display
+      // First, update the job with scheduledDate, scheduledStartTime, scheduledEndTime, and assignedTo for calendar display
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scheduledDate: dateStr,
-          scheduledStartTime: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+          scheduledStartTime: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
+          scheduledEndTime: `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`,
+          assignedTo: uniqueEmployeeIds
         })
       });
 
