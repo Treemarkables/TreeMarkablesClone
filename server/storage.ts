@@ -1785,9 +1785,26 @@ class DatabaseStorage implements IStorage {
     const [diaryEntry] = await db.insert(schema.jobDiaryEntries).values(entry).returning();
     return diaryEntry;
   }
-  async getJobDiaryEntry(id: string): Promise<JobDiaryEntry | undefined> { return undefined; }
-  async updateJobDiaryEntry(id: string, updates: Partial<InsertJobDiaryEntry>): Promise<JobDiaryEntry> { throw new Error("Not implemented"); }
-  async deleteJobDiaryEntry(id: string): Promise<boolean> { return false; }
+  async getJobDiaryEntry(id: string): Promise<JobDiaryEntry | undefined> { 
+    const [entry] = await db.select().from(schema.jobDiaryEntries).where(eq(schema.jobDiaryEntries.id, id));
+    return entry;
+  }
+  async updateJobDiaryEntry(id: string, updates: Partial<InsertJobDiaryEntry>): Promise<JobDiaryEntry> { 
+    const [updated] = await db.update(schema.jobDiaryEntries)
+      .set(updates)
+      .where(eq(schema.jobDiaryEntries.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error('Diary entry not found');
+    }
+    return updated;
+  }
+  async deleteJobDiaryEntry(id: string): Promise<boolean> { 
+    const result = await db.delete(schema.jobDiaryEntries)
+      .where(eq(schema.jobDiaryEntries.id, id))
+      .returning();
+    return result.length > 0;
+  }
   async getJobDiaryEntriesByJob(jobId: string): Promise<JobDiaryEntry[]> {
     return await db.select().from(schema.jobDiaryEntries)
       .where(eq(schema.jobDiaryEntries.jobId, jobId))
