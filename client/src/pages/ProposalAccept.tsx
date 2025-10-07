@@ -9,7 +9,7 @@ import { ProposalTemplate } from "@/components/ProposalTemplate";
 
 export default function ProposalAccept() {
   const { proposalId } = useParams();
-  const [acceptanceStatus, setAcceptanceStatus] = useState<'pending' | 'success' | 'error' | 'already_accepted'>('pending');
+  const [acceptanceStatus, setAcceptanceStatus] = useState<'viewing' | 'success' | 'error' | 'already_accepted'>('viewing');
   
   // Fetch proposal data
   const { data: proposalResponse, isLoading: proposalLoading } = useQuery({
@@ -48,15 +48,11 @@ export default function ProposalAccept() {
     }
   });
 
-  // Automatically accept proposal when page loads
+  // Check if proposal is already accepted when page loads
   useEffect(() => {
-    if (proposalResponse?.data && acceptanceStatus === 'pending') {
-      // Check if already accepted
+    if (proposalResponse?.data && acceptanceStatus === 'viewing') {
       if (proposalResponse.data.status === 'accepted') {
         setAcceptanceStatus('already_accepted');
-      } else {
-        // Auto-accept the proposal
-        acceptProposalMutation.mutate();
       }
     }
   }, [proposalResponse?.data, acceptanceStatus]);
@@ -76,7 +72,7 @@ export default function ProposalAccept() {
   };
 
   // Loading state - show while fetching proposal
-  if (proposalLoading || acceptanceStatus === 'pending') {
+  if (proposalLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -84,9 +80,9 @@ export default function ProposalAccept() {
             <div className="mb-6">
               <Loader2 className="w-16 h-16 text-orange-600 animate-spin mx-auto" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Accepting Your Proposal</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Loading Proposal</h1>
             <p className="text-gray-600">
-              Please wait while we process your acceptance...
+              Please wait...
             </p>
           </CardContent>
         </Card>
@@ -131,7 +127,6 @@ export default function ProposalAccept() {
             <div className="flex flex-col gap-2">
               <Button 
                 onClick={() => {
-                  setAcceptanceStatus('pending');
                   acceptProposalMutation.mutate();
                 }}
                 disabled={acceptProposalMutation.isPending}
@@ -148,6 +143,88 @@ export default function ProposalAccept() {
             </div>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  // Viewing state - show proposal with Accept button
+  if (acceptanceStatus === 'viewing') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200">
+          <div className="max-w-4xl mx-auto px-4 py-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Review Your Proposal</h1>
+                <p className="text-gray-600">
+                  Please review the details below and click Accept to proceed.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-semibold text-gray-700">Proposal #:</span>
+                <span className="text-gray-900">{proposal.proposalNumber}</span>
+              </div>
+              {customer && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-semibold text-gray-700">Customer:</span>
+                  <span className="text-gray-900">{customer.name}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Proposal Details */}
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <Card>
+            <CardContent className="p-0">
+              <ProposalTemplate
+                proposal={proposal}
+                customer={customer}
+                template={template}
+                sections={proposal.sections || []}
+                showActions={false}
+                className="border-0"
+              />
+            </CardContent>
+          </Card>
+
+          {/* Accept Button */}
+          <Card className="mt-6">
+            <CardContent className="p-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-1">Ready to Accept?</h2>
+                  <p className="text-sm text-gray-600">
+                    By accepting this proposal, you agree to proceed with the work as outlined above.
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => acceptProposalMutation.mutate()}
+                  disabled={acceptProposalMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
+                  size="lg"
+                  data-testid="button-accept-proposal"
+                >
+                  {acceptProposalMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Accepting...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5 mr-2" />
+                      Accept Proposal
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
