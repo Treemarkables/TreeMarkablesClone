@@ -2683,27 +2683,8 @@ export function GlobalJobCard({
                                                     className="sr-only"
                                                     checked={gstField.value || false}
                                                     onChange={(e) => {
-                                                      const isIncluding = e.target.checked;
-                                                      const gstRate = 0.15; // 15% GST for NZ
-                                                      
-                                                      // Get current price
-                                                      const currentPrice = form.getValues(`lineItems.${index}.unitPrice`) || 0;
-                                                      const wasIncluding = gstField.value || false;
-                                                      
-                                                      let newPrice = currentPrice;
-                                                      
-                                                      // Convert price based on toggle direction
-                                                      if (isIncluding && !wasIncluding) {
-                                                        // Converting from Ex to Inc: add GST
-                                                        newPrice = currentPrice * (1 + gstRate);
-                                                      } else if (!isIncluding && wasIncluding) {
-                                                        // Converting from Inc to Ex: remove GST  
-                                                        newPrice = currentPrice / (1 + gstRate);
-                                                      }
-                                                      
-                                                      // Update the GST mode and the converted price
-                                                      gstField.onChange(isIncluding);
-                                                      form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+                                                      // Simply toggle the GST mode without changing the price
+                                                      gstField.onChange(e.target.checked);
                                                     }}
                                                   />
                                                   <div className={`relative w-9 h-5 rounded-full transition-all ${
@@ -2848,18 +2829,8 @@ export function GlobalJobCard({
                                                         className="sr-only"
                                                         checked={gstField.value || false}
                                                         onChange={(e) => {
-                                                          const isIncluding = e.target.checked;
-                                                          const gstRate = 0.15;
-                                                          const currentPrice = form.getValues(`lineItems.${index}.unitPrice`) || 0;
-                                                          const wasIncluding = gstField.value || false;
-                                                          let newPrice = currentPrice;
-                                                          if (isIncluding && !wasIncluding) {
-                                                            newPrice = currentPrice * (1 + gstRate);
-                                                          } else if (!isIncluding && wasIncluding) {
-                                                            newPrice = currentPrice / (1 + gstRate);
-                                                          }
-                                                          gstField.onChange(isIncluding);
-                                                          form.setValue(`lineItems.${index}.unitPrice`, parseFloat(newPrice.toFixed(2)));
+                                                          // Simply toggle the GST mode without changing the price
+                                                          gstField.onChange(e.target.checked);
                                                         }}
                                                       />
                                                       <div className={`relative w-10 h-5 rounded-full transition-all ${
