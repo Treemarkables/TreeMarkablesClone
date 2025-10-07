@@ -732,9 +732,9 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                         </div>
                         <p className="text-gray-700 mb-4">{entry.description}</p>
                         
-                        {/* Photo Gallery */}
+                        {/* Photo Gallery - Compact View */}
                         {entry.photos && entry.photos.length > 0 && (
-                          <div className="mb-4">
+                          <div className="mb-3">
                             <div className="flex items-center gap-2 mb-2">
                               <Camera className="h-4 w-4 text-gray-500" />
                               <span className="text-sm font-medium text-gray-700">
@@ -745,7 +745,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                               {entry.photos.map((photo, index) => (
                                 <div
                                   key={index}
-                                  className="relative aspect-square rounded-md overflow-hidden bg-gray-100 group"
+                                  className="relative aspect-square rounded overflow-hidden bg-gray-100 group cursor-pointer"
                                 >
                                   <div
                                     role="button"
