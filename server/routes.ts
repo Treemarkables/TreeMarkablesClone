@@ -3578,6 +3578,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         </div>
       `;
 
+      console.log('📧 EMAIL HTML CONTENT:', htmlContent);
+      console.log('📧 EMAIL TEXT CONTENT:', `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`);
+
       // Send email using EmailService (photos are hosted URLs, no attachments needed)
       const emailSuccess = await emailService.sendEmail({
         to,
