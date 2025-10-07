@@ -3555,11 +3555,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Create a map of photo URLs to Content IDs for inline embedding
       const photoToCidMap = new Map<string, string>();
       let cidCounter = 1;
+      const maxPhotosPerSection = 6; // Limit photos to avoid Gmail clipping
       
-      // Collect all unique photos first and assign CIDs
+      // Collect limited unique photos first and assign CIDs (max 6 per section)
       for (const section of sections) {
         if (section.images && Array.isArray(section.images)) {
-          for (const photoUrl of section.images) {
+          const limitedPhotos = section.images.slice(0, maxPhotosPerSection);
+          for (const photoUrl of limitedPhotos) {
             if (!photoToCidMap.has(photoUrl)) {
               photoToCidMap.set(photoUrl, `photo${cidCounter}@treemarkables`);
               cidCounter++;
@@ -3586,11 +3588,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           }
           
           // Show photos if they exist - using TABLE layout for email compatibility with CID references
-          // Limit to 6 photos max per section to avoid Gmail clipping
+          // Limit photos per section to avoid Gmail clipping
           if (section.images && Array.isArray(section.images) && section.images.length > 0) {
-            const maxPhotos = 6;
-            const displayImages = section.images.slice(0, maxPhotos);
-            const hasMorePhotos = section.images.length > maxPhotos;
+            const displayImages = section.images.slice(0, maxPhotosPerSection);
+            const hasMorePhotos = section.images.length > maxPhotosPerSection;
             
             sectionsHtml += '<div style="margin: 15px 0;">';
             sectionsHtml += `<h5 style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">Documentation${hasMorePhotos ? ` (${displayImages.length} of ${section.images.length} photos)` : ''}</h5>`;
@@ -3810,11 +3811,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             console.log(`📉 Compressing image for email: ${finalFileName}`);
             try {
               const compressedBuffer = await sharp(fileContent)
-                .resize(800, 800, { 
+                .resize(600, 600, { 
                   fit: 'inside', 
                   withoutEnlargement: true 
                 })
-                .jpeg({ quality: 40 }) // Much lower quality for email to avoid Gmail clipping
+                .jpeg({ quality: 30 }) // Very low quality for email to avoid Gmail clipping
                 .toBuffer();
               
               const originalSize = (fileContent.length / 1024).toFixed(2);
