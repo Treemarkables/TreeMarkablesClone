@@ -10240,13 +10240,15 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
       
-      // Get proposal sections
-      const sections = await storage.getProposalSectionsByProposal(proposal.id);
+      // Fetch all data in parallel for speed
+      const [sections, allLineItems, customer, template] = await Promise.all([
+        storage.getProposalSectionsByProposal(proposal.id),
+        storage.getProposalLineItemsByProposal(proposal.id),
+        proposal.customerId ? storage.getCustomer(proposal.customerId) : Promise.resolve(null),
+        storage.getDefaultTemplate('proposal')
+      ]);
       
-      // Get all line items for this proposal
-      const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
-      
-      // Fetch choices for each line item
+      // Fetch choices for all line items in parallel
       const lineItemsWithChoices = await Promise.all(
         allLineItems.map(async (item) => {
           const choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
@@ -10271,14 +10273,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id)
       }));
 
-      // Fetch customer data if available
-      let customer = null;
-      if (proposal.customerId) {
-        customer = await storage.getCustomer(proposal.customerId);
-      }
-
-      // Fetch default template
-      const template = await storage.getDefaultTemplate('proposal') || {
+      // Use template or fallback
+      const finalTemplate = template || {
         id: 'default',
         name: 'Default Template',
         type: 'proposal',
@@ -10296,7 +10292,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         data: {
           proposal: { ...proposal, sections: sectionsWithPhotosAndLineItems },
           customer,
-          template
+          template: finalTemplate
         }
       });
     } catch (error) {
