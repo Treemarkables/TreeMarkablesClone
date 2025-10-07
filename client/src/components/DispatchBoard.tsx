@@ -1412,7 +1412,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               {customerName}
                             </h3>
                           </div>
-                          <div className="text-[18px] font-bold text-black leading-none flex-shrink-0">
+                          <div className="text-[9px] font-bold text-black leading-none flex-shrink-0">
                             {job.jobId || '0000'}
                           </div>
                         </div>
@@ -1592,7 +1592,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </div>
                           )}
                         </div>
-                        <div className="text-[26px] font-bold text-black leading-none flex-shrink-0">
+                        <div className="text-[13px] font-bold text-black leading-none flex-shrink-0">
                           {job.jobId || job.jobNumber || '0000'}
                         </div>
                       </div>
