@@ -3554,98 +3554,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const customerName = customer?.name || 'Valued Customer';
       const proposalNumber = proposal.proposalNumber || 'N/A';
       
-      // Build sections HTML with descriptions and line items
-      let sectionsHtml = '';
-      if (sections.length > 0) {
-        sectionsHtml = '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px;">';
-        sectionsHtml += '<h3 style="color: #374151; margin: 0 0 15px 0;">Proposal Details</h3>';
-        
-        for (const section of sections) {
-          const items = sectionLineItems.get(section.id) || [];
-          
-          // Always show section title
-          sectionsHtml += `<h4 style="color: #4b5563; margin: 15px 0 10px 0;">${section.title}</h4>`;
-          
-          // Show section description if it exists
-          if (section.content) {
-            sectionsHtml += `<p style="color: #6b7280; line-height: 1.6; margin: 0 0 15px 0; white-space: pre-wrap;">${section.content}</p>`;
-          }
-          
-          // Show photos if they exist - using TABLE layout for email compatibility with hosted URLs
-          if (section.images && Array.isArray(section.images) && section.images.length > 0) {
-            sectionsHtml += '<div style="margin: 15px 0;">';
-            sectionsHtml += `<h5 style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">Documentation</h5>`;
-            sectionsHtml += '<table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%;">';
-            sectionsHtml += '<tr>';
-            
-            for (let i = 0; i < section.images.length; i++) {
-              const imageUrl = section.images[i];
-              // Use absolute URL to hosted image (no attachments - keeps email size small)
-              const absoluteImageUrl = imageUrl.startsWith('http') ? imageUrl : `${baseUrl}${imageUrl}`;
-              
-              sectionsHtml += `
-                <td style="padding: 5px; width: ${Math.floor(100 / Math.min(section.images.length, 3))}%;">
-                  <img src="${absoluteImageUrl}" alt="Documentation photo ${i + 1}" style="display: block; width: 100%; max-width: 200px; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" />
-                </td>
-              `;
-              
-              // Start new row after every 3 images
-              if ((i + 1) % 3 === 0 && i < section.images.length - 1) {
-                sectionsHtml += '</tr><tr>';
-              }
-            }
-            
-            sectionsHtml += '</tr></table></div>';
-          }
-          
-          // Show line items if they exist
-          if (items.length > 0) {
-            sectionsHtml += '<table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">';
-            sectionsHtml += `
-              <tr style="background: #f9fafb;">
-                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 600;">Service</th>
-                <th style="padding: 8px; text-align: center; border-bottom: 2px solid #e5e7eb; font-weight: 600;">Qty</th>
-                <th style="padding: 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600;">Price</th>
-              </tr>
-            `;
-            
-            for (const item of items) {
-              if (item.selected) {
-                const itemPrice = parseFloat(item.totalPrice || '0');
-                sectionsHtml += `
-                  <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${item.description}</td>
-                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #f3f4f6;">${item.quantity} ${item.unit}</td>
-                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f3f4f6;">$${itemPrice.toFixed(2)}</td>
-                  </tr>
-                `;
-              }
-            }
-            sectionsHtml += '</table>';
-          }
-        }
-        
-        // Add totals if there are any line items
-        if (lineItems.length > 0) {
-          sectionsHtml += '<table style="width: 100%; margin-top: 20px; border-top: 2px solid #e5e7eb; padding-top: 10px;">';
-          sectionsHtml += `
-            <tr>
-              <td style="padding: 8px; text-align: right; color: #6b7280;">Subtotal (excl GST):</td>
-              <td style="padding: 8px; text-align: right; font-weight: bold; width: 120px;">$${subtotal.toFixed(2)}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px; text-align: right; color: #6b7280;">GST (15%):</td>
-              <td style="padding: 8px; text-align: right; font-weight: bold;">$${gst.toFixed(2)}</td>
-            </tr>
-            <tr style="border-top: 2px solid #374151;">
-              <td style="padding: 8px; text-align: right; color: #374151; font-weight: bold; font-size: 16px;">Total (inc GST):</td>
-              <td style="padding: 8px; text-align: right; font-weight: bold; font-size: 16px; color: #f59e0b;">$${total.toFixed(2)}</td>
-            </tr>
-          `;
-          sectionsHtml += '</table>';
-        }
-        sectionsHtml += '</div>';
-      }
+      // Simple email - just a notification with link to view proposal online
 
       // Get customer contact details for header
       const customerEmail = customer?.email || job?.jobContactEmail || '';
@@ -3654,57 +3563,41 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Generate proposal acceptance URL - goes directly to acceptance page
       const proposalAcceptUrl = `https://${baseUrl.replace(/^https?:\/\//, '')}/proposal/${proposalId}/accept`;
       
-      // Use hosted logo URL instead of base64 (keeps email size small)
-      const logoUrl = `${baseUrl}/attached_assets/new%20logo%20png_1757829817784.png`;
-
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img src="${logoUrl}" alt="Treemarkables Logo" style="width: 200px; height: 200px; object-fit: contain; margin-bottom: 20px; background: white; border-radius: 8px; padding: 10px;" />
-            <h1 style="color: #f59e0b; margin: 0;">Tree Service Proposal</h1>
-            <p style="color: #6b7280; margin: 5px 0 0 0;">Professional Tree Care Services</p>
-          </div>
-
-          <!-- ACCEPT BUTTON - Prominent Call-to-Action -->
-          <div style="text-align: center; margin-bottom: 30px;">
+          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">
+            Dear ${customerName},
+          </p>
+          
+          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">
+            ${message || `Thank you for your inquiry, we are pleased to provide you with the following estimate.`}
+          </p>
+          
+          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 0 0 30px 0;">
+            <strong>Total cost: $${total.toFixed(2)}</strong>
+          </p>
+          
+          <div style="margin: 30px 0;">
             <a href="${proposalAcceptUrl}" 
-               style="display: inline-block; background: #f59e0b; color: white; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: bold; font-size: 18px; box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
-              ✓ Accept This Proposal
+               style="display: inline-block; background: #22c55e; color: white; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-weight: 600; font-size: 16px;">
+              View
             </a>
-            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
-              Click to accept this proposal and create your work order
+            <p style="color: #666; font-size: 14px; margin: 10px 0 0 0;">
+              <strong>Proposal Title</strong><br>
+              Review & Accept Online
             </p>
           </div>
-
-          <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h2 style="color: #374151; margin: 0 0 15px 0;">Dear ${customerName},</h2>
-            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 15px 0;">
-              ${message || `Thank you for your interest in our tree services. Please find your personalized proposal ${proposalNumber} below.`}
-            </p>
-            <p style="color: #4b5563; line-height: 1.6; margin: 0;">
-              We look forward to working with you!
-            </p>
-          </div>
-
-          ${sectionsHtml}
-
-          <!-- ACCEPT BUTTON - Bottom of email for convenience -->
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${proposalAcceptUrl}" 
-               style="display: inline-block; background: #f59e0b; color: white; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: bold; font-size: 18px; box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
-              ✓ Accept This Proposal
-            </a>
-            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
-              Ready to get started? Accept now and we'll schedule your service
-            </p>
-          </div>
-
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-            <p style="color: #6b7280; font-size: 14px; margin: 0;">
-              Professional Tree Care Services<br>
-              Phone: Contact us for immediate assistance
-            </p>
-          </div>
+          
+          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 30px 0 5px 0;">
+            View and accept your estimate online here: <a href="${proposalAcceptUrl}" style="color: #3b82f6;">${proposalAcceptUrl}</a>
+          </p>
+          
+          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 30px 0 0 0;">
+            Regards,
+          </p>
+          <p style="color: #333; font-size: 16px; line-height: 1.5; margin: 5px 0 0 0;">
+            Treemarkables
+          </p>
         </div>
       `;
 
