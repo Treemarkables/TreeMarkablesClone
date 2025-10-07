@@ -1150,7 +1150,11 @@ export function GlobalJobCard({
     const timeoutId = setTimeout(checkConflicts, 300); // Debounce
     return () => {
       clearTimeout(timeoutId);
-      abortController.abort();
+      try {
+        abortController.abort();
+      } catch (error) {
+        // Ignore abort errors during cleanup
+      }
     };
   }, [schedulingData.date, schedulingData.startTime, schedulingData.duration, schedulingData.assignedTo, editingJob?.id]);
 
