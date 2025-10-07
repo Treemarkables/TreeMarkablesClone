@@ -51,7 +51,7 @@ export class PhotoStorageService {
     return { bucketName, objectName };
   }
 
-  async uploadPhoto(fileBuffer: Buffer, originalFilename: string, mimeType: string): Promise<string> {
+  async uploadPhoto(fileBuffer: Buffer, originalFilename: string, mimeType: string): Promise<{ url: string; thumbnailUrl: string }> {
     const privateDir = this.getPrivateObjectDir();
     const timestamp = Date.now();
     let extension = originalFilename.split('.').pop()?.toLowerCase() || 'jpg';
@@ -79,19 +79,52 @@ export class PhotoStorageService {
     }
     
     const uniqueFilename = `${timestamp}_${randomUUID()}.${extension}`;
+    const bucket = objectStorageClient.bucket(this.parseObjectPath(privateDir).bucketName);
+
+    // Upload original/full-size image
     const fullPath = `${privateDir}/photos/${uniqueFilename}`;
-
-    const { bucketName, objectName } = this.parseObjectPath(fullPath);
-    const bucket = objectStorageClient.bucket(bucketName);
-    const file = bucket.file(objectName);
-
-    await file.save(processedBuffer, {
+    const fullFile = bucket.file(this.parseObjectPath(fullPath).objectName);
+    
+    await fullFile.save(processedBuffer, {
       metadata: {
         contentType: finalMimeType,
       },
     });
 
-    return `/objects/photos/${uniqueFilename}`;
+    // Generate and upload thumbnail (800px wide WebP, ~120KB)
+    const thumbnailFilename = `thumb_${uniqueFilename.replace(/\.(jpg|jpeg|png)$/i, '.webp')}`;
+    const thumbnailPath = `${privateDir}/photos/${thumbnailFilename}`;
+    const thumbnailFile = bucket.file(this.parseObjectPath(thumbnailPath).objectName);
+    
+    try {
+      const thumbnailBuffer = await sharp(processedBuffer)
+        .resize(800, 800, { 
+          fit: 'inside',
+          withoutEnlargement: true 
+        })
+        .webp({ quality: 80 })
+        .toBuffer();
+      
+      await thumbnailFile.save(thumbnailBuffer, {
+        metadata: {
+          contentType: 'image/webp',
+        },
+      });
+      
+      console.log(`✅ Generated thumbnail: ${thumbnailFilename} (${(thumbnailBuffer.length / 1024).toFixed(0)}KB)`);
+      
+      return {
+        url: `/objects/photos/${uniqueFilename}`,
+        thumbnailUrl: `/objects/photos/${thumbnailFilename}`
+      };
+    } catch (thumbnailError) {
+      console.error(`❌ Thumbnail generation failed for ${originalFilename}, using original:`, thumbnailError);
+      // Fallback to original if thumbnail fails
+      return {
+        url: `/objects/photos/${uniqueFilename}`,
+        thumbnailUrl: `/objects/photos/${uniqueFilename}`
+      };
+    }
   }
 
   async getPhoto(photoPath: string): Promise<{ file: any; exists: boolean }> {
