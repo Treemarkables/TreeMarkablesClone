@@ -1819,18 +1819,18 @@ export function GlobalJobCard({
           {/* Main Content Area */}
           <div className="flex-1 flex min-h-0 min-w-0">
             <Form {...form}>
-            <form 
-              onSubmit={form.handleSubmit((data) => {
-                console.log('Form submitted:', data);
-                // Save functionality will be handled by the save buttons
-              })}
-              className="flex flex-col h-full w-full min-w-0" 
-              data-form="job-form"
-            >
-              {/* ServiceM8-style Two Panel Layout */}
-              <div className="flex flex-col md:flex-row h-full w-full min-w-0">
-                {/* Left Panel - Job Details (full width when diary tab is active) */}
-                <div className={`flex-1 ${sidebarTab === 'diary' ? 'md:flex-1' : 'md:flex-[3]'} bg-white ${sidebarTab !== 'diary' ? 'md:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'md:rounded-lg' : 'md:rounded-l-lg'} min-w-0`}>
+              <form 
+                onSubmit={form.handleSubmit((data) => {
+                  console.log('Form submitted:', data);
+                  // Save functionality will be handled by the save buttons
+                })}
+                className="flex flex-col h-full w-full min-w-0" 
+                data-form="job-form"
+              >
+                {/* ServiceM8-style Two Panel Layout */}
+                <div className="flex flex-col md:flex-row h-full w-full min-w-0">
+                  {/* Left Panel - Job Details (full width when diary tab is active) */}
+                  <div className={`flex-1 ${sidebarTab === 'diary' ? 'md:flex-1' : 'md:flex-[3]'} bg-white ${sidebarTab !== 'diary' ? 'md:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'md:rounded-lg' : 'md:rounded-l-lg'} min-w-0`}>
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
                       {/* ServiceM8-Style Customer Search or Create */}
@@ -3151,31 +3151,31 @@ export function GlobalJobCard({
                       )}
                     </div>
                   )}
-                </div>
-
-                {sidebarTab !== 'diary' && editingJob && (
-                  <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
-                    <JobDiarySection 
-                      jobId={editingJob.id}
-                      onQuoteClick={(quoteNumber) => {
-                        setIsQuoteModalOpen(true);
-                      }}
-                      onInvoiceClick={(invoiceNumber) => {
-                        setIsInvoiceModalOpen(true);
-                      }}
-                      onProposalClick={(proposalNumber) => {
-                        // Find the proposal by number
-                        const proposals = jobProposalResponse?.data || [];
-                        const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
-                        setEditingProposalId(proposal?.id);
-                        setIsProposalBuilderOpen(true);
-                      }}
-                    />
                   </div>
-                )}
-              </div>
-            </form>
-          </Form>
+
+                  {sidebarTab !== 'diary' && editingJob && (
+                    <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
+                      <JobDiarySection 
+                        jobId={editingJob.id}
+                        onQuoteClick={(quoteNumber) => {
+                          setIsQuoteModalOpen(true);
+                        }}
+                        onInvoiceClick={(invoiceNumber) => {
+                          setIsInvoiceModalOpen(true);
+                        }}
+                        onProposalClick={(proposalNumber) => {
+                          // Find the proposal by number
+                          const proposals = jobProposalResponse?.data || [];
+                          const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
+                          setEditingProposalId(proposal?.id);
+                          setIsProposalBuilderOpen(true);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </form>
+            </Form>
           </div>
       </DialogContent>
       </Dialog>
