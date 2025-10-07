@@ -381,6 +381,12 @@ export interface IStorage {
   getNotificationSummary(userId?: string): Promise<NotificationSummary>;
   deleteExpiredNotifications(): Promise<void>;
 
+  // Notification Queue Management
+  createNotificationQueueItem(item: schema.InsertNotificationQueueItem): Promise<schema.NotificationQueueItem>;
+  getPendingNotifications(beforeTime?: Date): Promise<schema.NotificationQueueItem[]>;
+  markNotificationSent(id: string): Promise<void>;
+  markNotificationFailed(id: string, error: string): Promise<void>;
+
   // Employee Management
   createEmployee(employee: InsertEmployee): Promise<Employee>;
   getEmployee(id: string): Promise<Employee | undefined>;
@@ -2324,6 +2330,46 @@ class DatabaseStorage implements IStorage {
     }; 
   }
   async deleteExpiredNotifications(): Promise<void> { }
+
+  // Notification Queue Management
+  async createNotificationQueueItem(item: schema.InsertNotificationQueueItem): Promise<schema.NotificationQueueItem> {
+    const [created] = await db.insert(schema.notificationQueue).values(item).returning();
+    return created;
+  }
+
+  async getPendingNotifications(beforeTime?: Date): Promise<schema.NotificationQueueItem[]> {
+    const queryTime = beforeTime || new Date();
+    return await db
+      .select()
+      .from(schema.notificationQueue)
+      .where(
+        and(
+          eq(schema.notificationQueue.status, 'pending'),
+          lte(schema.notificationQueue.sendAt, queryTime)
+        )
+      )
+      .orderBy(schema.notificationQueue.sendAt);
+  }
+
+  async markNotificationSent(id: string): Promise<void> {
+    await db
+      .update(schema.notificationQueue)
+      .set({
+        status: 'sent',
+        sentAt: new Date()
+      })
+      .where(eq(schema.notificationQueue.id, id));
+  }
+
+  async markNotificationFailed(id: string, error: string): Promise<void> {
+    await db
+      .update(schema.notificationQueue)
+      .set({
+        status: 'failed',
+        error
+      })
+      .where(eq(schema.notificationQueue.id, id));
+  }
 
   async createEmployee(employee: InsertEmployee): Promise<Employee> {
     const [newEmployee] = await db.insert(schema.employees).values(employee).returning();

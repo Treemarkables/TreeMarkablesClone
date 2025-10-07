@@ -196,10 +196,57 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
     // Log that notification is queued
     console.log(`[Notification Queue] Schedule notification for ${employee.firstName} ${employee.lastName} queued until ${nextSendTime.toISOString()}`);
     
-    // In a production system, you would store this in a queue or database
-    // For now, we'll just log it and send immediately in development
-    // In production, you'd use a job queue like Bull or Redis
-    await sendScheduleNotification(employee, job, assignment);
+    // Format notification message
+    const startTime = new Date(assignment.startTime).toLocaleString('en-NZ', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'Pacific/Auckland'
+    });
+    
+    const endTime = new Date(assignment.endTime).toLocaleTimeString('en-NZ', {
+      timeStyle: 'short',
+      timeZone: 'Pacific/Auckland'
+    });
+
+    const emailHtml = `
+      <h2>You've been scheduled for a job</h2>
+      <p>Hi ${employee.firstName},</p>
+      <p>You've been assigned to the following job:</p>
+      <ul>
+        <li><strong>Job:</strong> ${job?.title || 'Tree Service'}</li>
+        <li><strong>Location:</strong> ${job?.address || 'Address TBD'}</li>
+        <li><strong>Date & Time:</strong> ${startTime} - ${endTime}</li>
+        ${assignment.role ? `<li><strong>Role:</strong> ${assignment.role}</li>` : ''}
+        ${assignment.notes ? `<li><strong>Notes:</strong> ${assignment.notes}</li>` : ''}
+      </ul>
+      <p>Please confirm your availability as soon as possible.</p>
+      <p>Thanks,<br>Treemarkables Team</p>
+    `;
+
+    const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
+    
+    // Store in notification queue
+    await storage.createNotificationQueueItem({
+      recipientId: employee.id,
+      recipientEmail: employee.email,
+      recipientPhone: employee.phone,
+      notificationType: employee.email && employee.phone ? 'both' : employee.email ? 'email' : 'sms',
+      subject: `Job Scheduled: ${job?.title || 'Tree Service'}`,
+      message: employee.email ? emailHtml : smsMessage,
+      metadata: {
+        jobId: job?.id,
+        assignmentId: assignment.id,
+        startTime: assignment.startTime,
+        endTime: assignment.endTime,
+        smsMessage: employee.phone ? smsMessage : undefined
+      },
+      sendAt: nextSendTime,
+      status: 'pending',
+      jobId: job?.id,
+      assignmentId: assignment.id
+    });
+
+    console.log(`[Notification Queue] Notification stored in queue for ${employee.firstName} ${employee.lastName}`);
   }
 }
 
