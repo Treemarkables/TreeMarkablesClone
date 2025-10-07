@@ -14,6 +14,7 @@ interface LineItem {
   unitPrice: number;
   unit?: string;
   total: number;
+  priceIncludesTax?: boolean;
 }
 
 interface QuoteTemplateProps {
@@ -58,10 +59,25 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
   let totalAmount: number;
   
   if (hasLineItems) {
-    // Line items already contain GST-inclusive amounts, so treat them like lump-sum
-    totalAmount = lineItemSubtotal;
-    // Reverse calculate subtotal from total (total = subtotal + GST = subtotal * 1.15)
-    subtotal = totalAmount / (1 + gstRate);
+    // Calculate totals by checking each line item's priceIncludesTax flag
+    subtotal = 0;
+    totalAmount = 0;
+    
+    lineItems.forEach((item) => {
+      const isInclusive = item.priceIncludesTax || false;
+      
+      if (isInclusive) {
+        // Price includes GST - extract the ex-GST amount
+        const exGst = item.total / (1 + gstRate);
+        subtotal += exGst;
+        totalAmount += item.total;
+      } else {
+        // Price excludes GST - add it
+        subtotal += item.total;
+        totalAmount += item.total * (1 + gstRate);
+      }
+    });
+    
     gstAmount = totalAmount - subtotal;
   } else {
     // Fall back to quote amount and calculate GST

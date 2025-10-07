@@ -3548,7 +3548,8 @@ export function GlobalJobCard({
                   quantity: item.quantity,
                   unitPrice: item.unitPrice,
                   unit: 'each',
-                  total: item.total
+                  total: item.total,
+                  priceIncludesTax: item.priceIncludesTax || false
                 })) || []}
                 showActions={false}
               />
