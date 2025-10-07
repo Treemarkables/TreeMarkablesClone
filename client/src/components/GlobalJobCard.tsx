@@ -2558,22 +2558,24 @@ export function GlobalJobCard({
                                 <div className="text-xs text-gray-500">⋯</div>
                               </div>
                               
-                              {/* Table Header */}
-                              <div className="bg-gray-50 border-b border-gray-200">
-                                <div className="grid grid-cols-12 gap-1 px-2 py-2 text-xs font-medium text-gray-600">
-                                  <div className="col-span-2">Code</div>
-                                  <div className="col-span-2">Name</div>
-                                  <div className="col-span-1 text-center">Qty</div>
-                                  <div className="col-span-1 text-center">GST</div>
-                                  <div className="col-span-2 text-right">Cost</div>
-                                  <div className="col-span-1 text-center">%</div>
-                                  <div className="col-span-2 text-right">Price</div>
-                                  <div className="col-span-1 text-right">Total</div>
+                              {/* Table - Horizontally scrollable on mobile */}
+                              <div className="overflow-x-auto">
+                                {/* Table Header */}
+                                <div className="bg-gray-50 border-b border-gray-200 min-w-[800px]">
+                                  <div className="grid grid-cols-12 gap-1 px-2 py-2 text-xs font-medium text-gray-600">
+                                    <div className="col-span-2">Code</div>
+                                    <div className="col-span-2">Name</div>
+                                    <div className="col-span-1 text-center">Qty</div>
+                                    <div className="col-span-1 text-center">GST</div>
+                                    <div className="col-span-2 text-right">Cost</div>
+                                    <div className="col-span-1 text-center">%</div>
+                                    <div className="col-span-2 text-right">Price</div>
+                                    <div className="col-span-1 text-right">Total</div>
+                                  </div>
                                 </div>
-                              </div>
 
-                              {/* Table Body */}
-                              <div className="bg-white">
+                                {/* Table Body */}
+                                <div className="bg-white min-w-[800px]">
                                   {lineItemFields.map((field, index) => {
                                     const unitCost = field.unitCost || 0;
                                     const quantity = field.quantity || 1;
@@ -2709,6 +2711,7 @@ export function GlobalJobCard({
                                     );
                                   })}
                                 </div>
+                              </div>
                               
                               {/* Search Row */}
                               <div className="bg-white border-t border-gray-200">
