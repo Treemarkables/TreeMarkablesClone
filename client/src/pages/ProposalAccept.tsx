@@ -150,29 +150,44 @@ export default function ProposalAccept() {
   // Viewing state - show proposal with Accept button
   if (acceptanceStatus === 'viewing') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200">
-          <div className="max-w-4xl mx-auto px-4 py-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">Review Your Proposal</h1>
-                <p className="text-gray-600">
-                  Please review the details below and click Accept to proceed.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-semibold text-gray-700">Proposal #:</span>
-                <span className="text-gray-900">{proposal.proposalNumber}</span>
-              </div>
-              {customer && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-semibold text-gray-700">Customer:</span>
-                  <span className="text-gray-900">{customer.name}</span>
+      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white pb-20">
+        {/* Sticky Header with Accept Button */}
+        <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+          <div className="max-w-4xl mx-auto px-4 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Review Your Proposal</h1>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  <span className="text-sm text-gray-600">
+                    {proposal.proposalNumber}
+                  </span>
+                  {customer && (
+                    <>
+                      <span className="text-sm text-gray-400">•</span>
+                      <span className="text-sm text-gray-600">{customer.name}</span>
+                    </>
+                  )}
                 </div>
-              )}
+              </div>
+              <Button 
+                onClick={() => acceptProposalMutation.mutate()}
+                disabled={acceptProposalMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap shrink-0"
+                size="default"
+                data-testid="button-accept-proposal-sticky"
+              >
+                {acceptProposalMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <span className="hidden sm:inline">Accepting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Accept Proposal</span>
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
