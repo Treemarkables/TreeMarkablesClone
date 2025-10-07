@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
-import { useState } from 'react';
-import type { Job, Employee } from '@shared/schema';
+import { useState, useMemo } from 'react';
+import type { Job, Employee, Customer } from '@shared/schema';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 
 export default function StaffSchedule() {
@@ -21,8 +21,30 @@ export default function StaffSchedule() {
     queryKey: ['/api/employees'],
   });
 
+  const { data: customersData } = useQuery<{ success: boolean; data: Customer[] }>({
+    queryKey: ['/api/customers'],
+  });
+
   const jobs = jobsData?.data || [];
   const employees = employeesData?.data || [];
+  const customers = customersData?.data || [];
+
+  // Create a map of customer IDs to customer names for quick lookup
+  const customerMap = useMemo(() => {
+    const map = new Map<string, string>();
+    customers.forEach(customer => {
+      map.set(customer.id, customer.name);
+    });
+    return map;
+  }, [customers]);
+
+  // Helper function to get customer name for a job
+  const getCustomerName = (job: Job) => {
+    if (job.customerId) {
+      return customerMap.get(job.customerId) || 'Unknown Customer';
+    }
+    return 'No Customer';
+  };
 
   // Filter jobs for selected date
   const dateJobs = jobs.filter(job => {
@@ -157,7 +179,7 @@ export default function StaffSchedule() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1">
                             <div className="font-semibold text-sm mb-1">
-                              {job.title || 'Untitled Job'}
+                              {getCustomerName(job)}
                             </div>
                             <div className="text-xs opacity-90">
                               Job #{job.jobNumber}
