@@ -465,3 +465,9 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Sticky header support for all browsers */
+.header-sticky {
+  position: -webkit-sticky; /* Safari */
+  position: sticky;
+}
