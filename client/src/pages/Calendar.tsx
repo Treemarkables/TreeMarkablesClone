@@ -334,7 +334,7 @@ export default function Calendar() {
               </div>
 
               {/* Calendar days grid */}
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-1 pb-8">
                 {calendarDays.map((day, index) => {
                   const dayAppointments = getAppointmentsForDate(day);
                   const isCurrentMonth = isSameMonth(day, currentDate);
