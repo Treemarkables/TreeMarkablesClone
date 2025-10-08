@@ -380,12 +380,19 @@ export default function Calendar() {
                           {dayAppointments.slice(0, 3).map(appointment => (
                             <div
                               key={appointment.id}
-                              className={`text-[10px] sm:text-xs p-1 rounded truncate ${getStatusColor(
+                              className={`text-[10px] sm:text-xs p-1 rounded ${getStatusColor(
                                 appointment.status
                               )} text-white`}
                               data-testid={`appointment-indicator-${appointment.id}`}
                             >
-                              {appointment.customer?.name || appointment.title || 'Untitled'}
+                              <div className="font-semibold truncate">
+                                {appointment.customer?.name || appointment.title || 'Untitled'}
+                              </div>
+                              {appointment.address && (
+                                <div className="text-[9px] sm:text-[10px] truncate opacity-90">
+                                  {appointment.address}
+                                </div>
+                              )}
                             </div>
                           ))}
                           {dayAppointments.length > 3 && (
