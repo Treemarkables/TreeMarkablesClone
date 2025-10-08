@@ -844,24 +844,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                jobId.includes(query);
       })
       .sort((a, b) => {
-        // First, prioritize jobs with recent activity (lastActivityAt)
-        const hasActivityA = !!a.lastActivityAt;
-        const hasActivityB = !!b.lastActivityAt;
-        
-        // Jobs with activity come before jobs without activity
-        if (hasActivityA && !hasActivityB) return -1;
-        if (!hasActivityA && hasActivityB) return 1;
-        
-        // If both have activity, sort by most recent first
-        if (hasActivityA && hasActivityB) {
-          const activityA = new Date(a.lastActivityAt!).getTime();
-          const activityB = new Date(b.lastActivityAt!).getTime();
-          if (activityA !== activityB) {
-            return activityB - activityA; // Most recent first
-          }
-        }
-        
-        // Then sort by highest job number (descending)
+        // Sort by highest job number first (descending) - newest jobs at top
         const jobNumberA = parseInt(a.jobNumber || '0', 10);
         const jobNumberB = parseInt(b.jobNumber || '0', 10);
         return jobNumberB - jobNumberA;
