@@ -43,7 +43,7 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-black border-t border-gray-800 py-12">
+    <footer className="bg-black border-t border-gray-800 py-6">
       <div className="max-w-6xl mx-auto px-6">
         <div className="grid lg:grid-cols-4 gap-8">
           {/* Company Info */}
