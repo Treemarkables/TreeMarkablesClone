@@ -9331,32 +9331,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const messagePlatform = platform || lastInboundMessage.platform;
       
       if (messagePlatform === 'email') {
-        // Send email using SendGrid
+        // Send email using EmailService
         try {
-          const sgMail = require('@sendgrid/mail');
-          const apiKey = process.env.SENDGRID_API_KEY;
+          const emailResult = await emailService.sendEmail({
+            to: recipientContact,
+            from: process.env.SENDGRID_FROM_EMAIL || 'info@treemarkables.co.nz',
+            subject: lastInboundMessage.subject ? `Re: ${lastInboundMessage.subject}` : 'Response to your enquiry',
+            text: content,
+            html: content.replace(/\n/g, '<br>')
+          });
           
-          if (apiKey) {
-            sgMail.setApiKey(apiKey);
-            
-            await sgMail.send({
-              to: recipientContact,
-              from: process.env.SENDGRID_FROM_EMAIL || 'info@treemarkables.co.nz',
-              subject: lastInboundMessage.subject ? `Re: ${lastInboundMessage.subject}` : 'Response to your enquiry',
-              text: content,
-              html: content.replace(/\n/g, '<br>')
-            });
-            
+          if (emailResult.success) {
             await storage.updateConversationMessage(message.id, {
               deliveryStatus: 'delivered'
             });
-            
-            console.log(`📧 Email sent to ${recipientContact}`);
+            console.log(`📧 Email sent to ${recipientContact}${emailResult.messageId ? ` (ID: ${emailResult.messageId})` : ''}`);
           } else {
-            console.warn('⚠️ SendGrid API key not configured');
             await storage.updateConversationMessage(message.id, {
               deliveryStatus: 'failed'
             });
+            console.warn(`⚠️ Failed to send email to ${recipientContact}`);
           }
         } catch (emailError) {
           console.error('Error sending email:', emailError);
