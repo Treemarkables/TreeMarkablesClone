@@ -3615,8 +3615,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const total = subtotal + gst;
 
       // Get base URL for absolute image paths (required for email clients)
-      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-        ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+      // Use REPLIT_DOMAINS for production, fall back to request host
+      const replitDomains = process.env.REPLIT_DOMAINS;
+      const baseUrl = replitDomains 
+        ? `https://${replitDomains.split(',')[0]}` 
         : `${req.protocol}://${req.get('host')}`;
       
       // Prepare email content
