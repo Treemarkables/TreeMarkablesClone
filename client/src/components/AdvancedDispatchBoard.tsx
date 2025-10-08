@@ -40,6 +40,9 @@ import {
 } from '@/components/ui/select';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, startOfMonth, endOfMonth, getDaysInMonth } from 'date-fns';
 
+// CACHE BUSTER - Force reload verification
+console.log('🚨🚨🚨 AdvancedDispatchBoard.tsx FILE LOADED - Timestamp:', new Date().toISOString());
+
 type AdvancedDispatchBoardProps = {
   compact?: boolean;
 };
