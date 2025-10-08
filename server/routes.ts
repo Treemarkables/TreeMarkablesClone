@@ -9330,11 +9330,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Send based on platform
       // Convert web_form to email for outbound messages if recipient has email
       let messagePlatform = platform || lastInboundMessage.platform;
-      console.log(`📨 Reply platform check: original=${messagePlatform}, recipient=${recipientContact}`);
-      
       if (messagePlatform === 'web_form' && recipientContact && recipientContact.includes('@')) {
         messagePlatform = 'email';
-        console.log(`📨 Converted web_form to email for ${recipientContact}`);
       }
       
       if (messagePlatform === 'email') {
