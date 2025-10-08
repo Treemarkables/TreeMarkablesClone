@@ -209,9 +209,9 @@ export default function Opportunities() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-white w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b">
+      <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b w-full">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Button variant="ghost" size="icon" className="flex-shrink-0" data-testid="button-menu">
             <Menu className="h-5 w-5" />
