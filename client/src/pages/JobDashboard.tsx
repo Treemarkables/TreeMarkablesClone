@@ -219,6 +219,11 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     queryKey: ['/api/quotes'],
   });
 
+  // Fetch proposals data with sections to enable pricing calculation
+  const { data: proposalsResponse } = useQuery<ApiResponse<any>>({
+    queryKey: ['/api/proposals?includeSections=true'],
+  });
+
   // Redirect crew users if they try to access restricted tabs
   useEffect(() => {
     const allowedCrewTabs = ['jobs', 'safety'];
@@ -232,6 +237,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   const leads = leadsResponse?.data || [];
   const customers = customersResponse?.data || [];
   const quotes = quotesResponse?.data || [];
+  const proposals = proposalsResponse?.data || [];
 
   // No mock data - use real data only
 
@@ -267,6 +273,26 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     return customer?.name || 'Unknown Customer';
   };
 
+  // Helper function to calculate proposal total from line items
+  const calculateProposalTotal = (proposal: any): number => {
+    if (!proposal?.sections || !Array.isArray(proposal.sections)) {
+      return 0;
+    }
+    
+    let total = 0;
+    proposal.sections.forEach((section: any) => {
+      if (section.lineItems && Array.isArray(section.lineItems)) {
+        section.lineItems.forEach((item: any) => {
+          if (item.selected !== false) { // Include item if not explicitly unselected
+            total += Number(item.totalPrice || 0);
+          }
+        });
+      }
+    });
+    
+    return total;
+  };
+
   // Helper function to get job price from linked quote or proposal
   const getJobPrice = (job: Job): number => {
     // First try to get price from linked quote
@@ -277,8 +303,21 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
       }
     }
     
-    // TODO: Add proposal price lookup when proposals have pricing
-    // For now, fall back to job.totalAmount if no quote is linked
+    // Then try to get price from the most recent proposal for this job
+    const jobProposals = proposals.filter((p: any) => p.jobId === job.id);
+    if (jobProposals.length > 0) {
+      // Sort by creation date and get the most recent
+      const sortedProposals = jobProposals.sort((a: any, b: any) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const latestProposal = sortedProposals[0];
+      const proposalTotal = calculateProposalTotal(latestProposal);
+      if (proposalTotal > 0) {
+        return proposalTotal;
+      }
+    }
+    
+    // Fall back to job.totalAmount if no quote or proposal is linked
     return job.totalAmount ? Number(job.totalAmount) : 0;
   };
 
