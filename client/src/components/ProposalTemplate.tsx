@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar } from 'lucide-react';
 import type { DocumentTemplate, Proposal, Customer } from '@shared/schema';
+import { LinkifiedText } from '@/utils/linkify';
 
 interface ProposalLineItem {
   id: string;
@@ -269,7 +270,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Proposal Overview</h3>
               <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
                 <p className="text-gray-700 text-sm sm:text-base whitespace-pre-wrap break-words" data-testid="text-proposal-description">
-                  {proposal.introduction}
+                  <LinkifiedText text={proposal.introduction} />
                 </p>
               </div>
             </div>
@@ -285,7 +286,9 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               {/* Section Description */}
               {section.description && (
                 <div className="mb-2 sm:mb-6">
-                  <p className="text-gray-700 text-xs sm:text-base whitespace-pre-wrap break-words">{section.description}</p>
+                  <p className="text-gray-700 text-xs sm:text-base whitespace-pre-wrap break-words">
+                    <LinkifiedText text={section.description} />
+                  </p>
                 </div>
               )}
 
@@ -455,9 +458,13 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                               <tr key={item.id} className={`${item.selected ? 'bg-green-50' : 'even:bg-gray-50'} ${!item.selected && item.isOptional ? 'opacity-60' : ''}`} data-testid={`row-line-item-${sectionIndex}-${index}`}>
                                 <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-gray-900">
                                   <div>
-                                    <span className="font-medium text-xs sm:text-sm break-words">{item.description}</span>
+                                    <span className="font-medium text-xs sm:text-sm break-words">
+                                      <LinkifiedText text={item.description} />
+                                    </span>
                                     {item.notes && (
-                                      <p className="text-xs text-gray-600 mt-1 break-words">{item.notes}</p>
+                                      <p className="text-xs text-gray-600 mt-1 break-words">
+                                        <LinkifiedText text={item.notes} />
+                                      </p>
                                     )}
                                     {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
                                       <div className="mt-2 text-xs">
