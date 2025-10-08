@@ -263,6 +263,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   };
   
   const jobLineItemsCosts = calculateJobLineItemsCosts(job?.lineItems || []);
+  const jobLineItemsTotal = calculateJobLineItemsTotal(job?.lineItems || []);
   const totalAmount = getJobPrice();
   
   // Materials costs come from the actual cost fields in line items
