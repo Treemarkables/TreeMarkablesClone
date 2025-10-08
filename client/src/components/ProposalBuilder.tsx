@@ -1123,7 +1123,9 @@ export function ProposalBuilder({
     };
 
     // Use real customer data from API, fallback to mock data
+    console.log('Customer data for preview:', customerData);
     const realCustomer = (customerData as any)?.success ? (customerData as any).data : null;
+    console.log('Real customer extracted:', realCustomer);
     const previewCustomer = realCustomer || {
       id: formData.customerId || 'preview-customer',
       name: 'Preview Customer',
@@ -1147,6 +1149,7 @@ export function ProposalBuilder({
       createdAt: new Date(),
       updatedAt: new Date()
     };
+    console.log('Preview customer being used:', previewCustomer);
 
     // Convert sections to preview format
     const previewSections = sections.map(section => ({
