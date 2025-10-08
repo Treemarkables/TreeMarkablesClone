@@ -385,7 +385,7 @@ export default function Calendar() {
                               )} text-white`}
                               data-testid={`appointment-indicator-${appointment.id}`}
                             >
-                              {appointment.title || appointment.customer?.name || 'Untitled'}
+                              {appointment.customer?.name || appointment.title || 'Untitled'}
                             </div>
                           ))}
                           {dayAppointments.length > 3 && (
