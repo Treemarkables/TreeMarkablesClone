@@ -511,31 +511,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
             {/* Jobs List */}
             <div className="p-3 pb-8 space-y-3">
-              {(() => {
-                const sorted = [...allJobs].sort((a: any, b: any) => {
-                  // Sort by job number (descending) for newest first
-                  const aNum = parseInt(a.jobNumber) || 0;
-                  const bNum = parseInt(b.jobNumber) || 0;
-                  if (aNum !== bNum) {
-                    return bNum - aNum;
-                  }
-                  // Fallback to creation date
-                  const aDate = new Date(a.createdAt || a.id);
-                  const bDate = new Date(b.createdAt || b.id);
-                  return bDate.getTime() - aDate.getTime();
-                });
-                console.log('🔍 Dispatch Board Debug:', {
-                  totalJobs: allJobs.length,
-                  statusFilter,
-                  searchQuery,
-                  top10Jobs: sorted.slice(0, 10).map((j: any) => ({
-                    jobNumber: j.jobNumber,
-                    title: j.title || '(no title)',
-                    status: j.status
-                  }))
-                });
-                return sorted.map((job: any, index: number) => renderJobSidebarCard(job, index));
-              })()}
+              {allJobs.map((job: any, index: number) => renderJobSidebarCard(job, index))}
             </div>
           </div>
         </div>
