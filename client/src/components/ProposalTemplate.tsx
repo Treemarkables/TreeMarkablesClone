@@ -264,18 +264,6 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
             </div>
           )}
 
-          {/* Proposal Introduction */}
-          {proposal.introduction && (
-            <div className="p-4 sm:p-8 border-b border-gray-200">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Proposal Overview</h3>
-              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                <p className="text-gray-700 text-sm sm:text-base whitespace-pre-wrap break-words" data-testid="text-proposal-description">
-                  <LinkifiedText text={proposal.introduction} />
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Proposal Sections */}
           {sections.map((section, sectionIndex) => (
             <div key={section.id} className="p-4 sm:p-8 border-b border-gray-200">
