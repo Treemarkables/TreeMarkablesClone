@@ -123,7 +123,7 @@ export default function TreeRemoval() {
       </div>
 
       {/* Tree Care Philosophy */}
-      <section className="py-16 bg-background">
+      <section className="py-8 bg-background">
         <div className="max-w-6xl mx-auto px-6">
           {/* Main Philosophy */}
           <div className="text-center mb-16">
