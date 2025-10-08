@@ -21,7 +21,7 @@ const blogPosts = [
 
 export default function Blog() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-16 md:pt-20 lg:pt-24">
       <SEO 
         title="Tree Care Blog - Expert Tips from Gisborne Arborists | Treemarkables"
         description="Expert tree care advice from Gisborne's professional arborists. Get tips on tree pruning, removal, and maintenance for your property's safety and health."

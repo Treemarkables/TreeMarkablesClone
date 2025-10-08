@@ -74,7 +74,7 @@ export default function Header() {
   ];
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-[100] shadow-sm header-sticky">
+    <header className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-[100] shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-[auto_1fr_auto] items-center min-h-16 md:min-h-20 lg:min-h-24 py-2">
           
