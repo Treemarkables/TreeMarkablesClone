@@ -150,6 +150,9 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     return sorted;
   }, [allJobsRaw, statusFilter, searchQuery, customersData]);
   
+  // Component render debug
+  console.log('⚡ AdvancedDispatchBoard RENDER - Raw Jobs:', allJobsRaw?.length, 'Sorted Jobs:', allJobs?.length);
+  
   // Status options for dropdown
   const statusOptions = [
     { value: 'all', label: 'All Categories' },
