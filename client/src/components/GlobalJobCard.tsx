@@ -1377,7 +1377,7 @@ export function GlobalJobCard({
           currentStatus === 'scheduled' ? 'bg-orange-600 border-orange-700' :
           currentStatus === 'unsuccessful' ? 'bg-red-600 border-red-700' :
           'bg-gray-600 border-gray-700'
-        }`}>
+        }`} style={{ paddingTop: 'max(0.25rem, env(safe-area-inset-top))' }}>
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Left: Job Title & Status */}
             <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
