@@ -41,7 +41,7 @@ export function LeadFormDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 py-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 py-4 pb-8">
             <FormField
               control={form.control}
               name="name"
