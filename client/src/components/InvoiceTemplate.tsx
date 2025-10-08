@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { format, addDays } from 'date-fns';
 import { FileText, Download, Mail, Copy, Calendar, CreditCard, MapPin, Phone, Mail as MailIcon } from 'lucide-react';
 import type { DocumentTemplate, Customer } from '@shared/schema';
+import { LinkifiedText } from '@/utils/linkify';
 
 interface InvoiceLineItem {
   id: string;
@@ -241,7 +242,9 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
               {description && (
                 <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                  <p className="text-gray-700 whitespace-pre-wrap">{description}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    <LinkifiedText text={description} />
+                  </p>
                 </div>
               )}
               <div className="overflow-x-auto">
@@ -259,9 +262,13 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                     {lineItems.map((item, index) => (
                       <tr key={item.id} className="even:bg-gray-50" data-testid={`row-line-item-${index}`}>
                         <td className="border border-gray-200 px-4 py-3 text-gray-900">
-                          <span className="font-medium">{item.description}</span>
+                          <span className="font-medium">
+                            <LinkifiedText text={item.description} />
+                          </span>
                           {item.category && (
-                            <p className="text-sm text-gray-600">{item.category}</p>
+                            <p className="text-sm text-gray-600">
+                              <LinkifiedText text={item.category} />
+                            </p>
                           )}
                         </td>
                         <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.quantity}</td>
@@ -279,7 +286,9 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             <div className="p-3 sm:p-8 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
               <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 whitespace-pre-wrap">{description || 'Professional Tree Services'}</p>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  <LinkifiedText text={description || 'Professional Tree Services'} />
+                </p>
                 {!description && (
                   <p className="text-sm text-gray-600 mt-2">Total amount includes all services as agreed</p>
                 )}

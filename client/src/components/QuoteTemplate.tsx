@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { FileText, Download, Mail, Copy, CheckCircle } from 'lucide-react';
 import type { DocumentTemplate, Quote, Customer } from '@shared/schema';
+import { LinkifiedText } from '@/utils/linkify';
 
 interface LineItem {
   id: string;
@@ -278,7 +279,7 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Service Description</h3>
               <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
                 <p className="text-xs sm:text-sm text-gray-700 whitespace-pre-wrap" data-testid="text-quote-description">
-                  {quote.description}
+                  <LinkifiedText text={quote.description} />
                 </p>
               </div>
             </div>
@@ -302,7 +303,9 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
                   <tbody>
                     {lineItems.map((item, index) => (
                       <tr key={item.id} className="even:bg-gray-50" data-testid={`row-line-item-${index}`}>
-                        <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900">{item.description}</td>
+                        <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900">
+                          <LinkifiedText text={item.description} />
+                        </td>
                         <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700">{item.quantity}</td>
                         <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700">{item.unit || 'each'}</td>
                         <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm text-gray-700">{formatCurrency(item.unitPrice)}</td>
