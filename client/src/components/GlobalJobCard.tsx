@@ -3710,12 +3710,23 @@ export function GlobalJobCard({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">Start Time</label>
-                <Input
-                  type="time"
+                <Select
                   value={schedulingData.startTime}
-                  onChange={(e) => setSchedulingData(prev => ({ ...prev, startTime: e.target.value }))}
-                  data-testid="input-schedule-start-time"
-                />
+                  onValueChange={(value) => setSchedulingData(prev => ({ ...prev, startTime: value }))}
+                >
+                  <SelectTrigger data-testid="select-schedule-start-time">
+                    <SelectValue placeholder="Select time" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {Array.from({ length: 48 }, (_, i) => {
+                      const hours = Math.floor(i / 2);
+                      const minutes = (i % 2) * 30;
+                      const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                      const display = `${hours === 0 ? 12 : hours > 12 ? hours - 12 : hours}:${String(minutes).padStart(2, '0')} ${hours < 12 ? 'AM' : 'PM'}`;
+                      return <SelectItem key={time} value={time}>{display}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium">Duration</label>
