@@ -142,10 +142,10 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const isAccepted = proposal.status === 'accepted';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4">
-        <div className="max-w-4xl mx-auto">
+      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full">
+        <div className="max-w-4xl mx-auto w-full">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <Link href="/">
@@ -201,7 +201,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       </div>
 
       {/* Proposal Content */}
-      <div className="max-w-4xl mx-auto py-4 sm:py-6 px-2 sm:px-4">
+      <div className="max-w-4xl mx-auto py-4 sm:py-6 px-2 sm:px-4 w-full">
         {/* Status Banner */}
         {isAccepted && (
           <div className="bg-green-100 border border-green-300 rounded-lg p-4 mb-6">

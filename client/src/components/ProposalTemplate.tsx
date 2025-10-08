@@ -195,7 +195,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
   const isExpired = expiryDate && expiryDate < new Date();
 
   return (
-    <div ref={ref} className={`max-w-4xl mx-auto bg-white ${className}`}>
+    <div ref={ref} className={`max-w-4xl mx-auto bg-white w-full ${className}`}>
       {/* Action Bar */}
       {showActions && (
         <div className="flex justify-between items-center mb-6 p-4 bg-gray-50 rounded-lg">
@@ -418,9 +418,9 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               {section.lineItems.length > 0 && (
                 <div className="mb-4 sm:mb-6">
                   <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Services & Pricing</h4>
-                  <div className="overflow-x-auto -mx-4 sm:mx-0">
-                    <div className="inline-block min-w-full align-middle px-4 sm:px-0">
-                      <table className="min-w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="w-full overflow-x-auto">
+                    <div className="inline-block min-w-full align-middle">
+                      <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
                         <thead className="bg-gray-50">
                           <tr>
                             <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">Service</th>
