@@ -62,12 +62,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   // Accept quote mutation
   const acceptQuoteMutation = useMutation({
     mutationFn: async () => {
-      console.log('Accepting quote:', quoteId);
       const response = await apiRequest('POST', `/api/quotes/${quoteId}/accept`);
       return response;
     },
     onSuccess: (response: any) => {
-      console.log('Quote accepted successfully:', response);
       toast({
         title: "Quote Accepted!",
         description: "Your quote has been accepted and converted to a work order. We'll be in touch to schedule the work.",
@@ -78,7 +76,6 @@ export default function QuoteViewer({}: QuoteViewerProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     },
     onError: (error: any) => {
-      console.error('Quote acceptance error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to accept quote. Please try again.",
@@ -196,10 +193,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">
+              <h1 className="text-lg font-semibold text-gray-900">
                 Quote #{quote.quoteNumber || quote.id}
               </h1>
-              <p className="text-sm text-gray-600">
+              <p className="text-xs text-gray-600">
                 {customer?.name || 'Customer'} - {new Date(quote.createdAt).toLocaleDateString()}
               </p>
             </div>
@@ -241,19 +238,19 @@ export default function QuoteViewer({}: QuoteViewerProps) {
       {/* Quote Content */}
       <div className="max-w-4xl mx-auto py-6 px-4">
         <Card className="bg-white shadow-sm">
-          <CardContent className="p-8">
+          <CardContent className="p-6">
             {/* Company Header */}
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-orange-600 mb-2">Treemarkables</h1>
-              <p className="text-gray-600">Professional Tree Care Services</p>
-              <p className="text-sm text-gray-500">Gisborne, New Zealand | Phone: +64 6 867 1234 | Email: info@treemarkables.co.nz</p>
+            <div className="text-center mb-6">
+              <h1 className="text-2xl font-bold text-orange-600 mb-1">Treemarkables</h1>
+              <p className="text-sm text-gray-600">Professional Tree Care Services</p>
+              <p className="text-xs text-gray-500">Gisborne, New Zealand | Phone: +64 6 867 1234 | Email: info@treemarkables.co.nz</p>
             </div>
 
             {/* Status Banner */}
             {isAccepted && (
-              <div className="bg-green-100 border border-green-300 rounded-lg p-4 mb-6">
-                <div className="flex items-center">
-                  <Check className="w-5 h-5 text-green-600 mr-2" />
+              <div className="bg-green-100 border border-green-300 rounded-lg p-3 mb-4">
+                <div className="flex items-center text-sm">
+                  <Check className="w-4 h-4 text-green-600 mr-2" />
                   <span className="text-green-800 font-medium">Quote Accepted</span>
                   <span className="text-green-600 ml-2">- We'll be in touch to schedule the work!</span>
                 </div>
@@ -261,9 +258,9 @@ export default function QuoteViewer({}: QuoteViewerProps) {
             )}
 
             {isExpired && !isAccepted && (
-              <div className="bg-red-100 border border-red-300 rounded-lg p-4 mb-6">
-                <div className="flex items-center">
-                  <Clock className="w-5 h-5 text-red-600 mr-2" />
+              <div className="bg-red-100 border border-red-300 rounded-lg p-3 mb-4">
+                <div className="flex items-center text-sm">
+                  <Clock className="w-4 h-4 text-red-600 mr-2" />
                   <span className="text-red-800 font-medium">Quote Expired</span>
                   <span className="text-red-600 ml-2">- Please contact us for an updated quote</span>
                 </div>
@@ -271,10 +268,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
             )}
 
             {/* Quote Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quote Details</h3>
-                <div className="space-y-2">
+                <h3 className="text-base font-semibold text-gray-900 mb-3">Quote Details</h3>
+                <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Quote Number:</span>
                     <span className="font-medium">{quote.quoteNumber}</span>
@@ -299,8 +296,8 @@ export default function QuoteViewer({}: QuoteViewerProps) {
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Details</h3>
-                <div className="space-y-2">
+                <h3 className="text-base font-semibold text-gray-900 mb-3">Customer Details</h3>
+                <div className="space-y-1.5 text-sm">
                   <div>
                     <span className="text-gray-600">Name:</span>
                     <span className="font-medium ml-2">{customer?.name || 'N/A'}</span>
@@ -321,36 +318,28 @@ export default function QuoteViewer({}: QuoteViewerProps) {
               </div>
             </div>
 
-            {/* Debug Info */}
-            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
-              <strong>Debug:</strong> Job loaded: {job ? 'Yes' : 'No'} | 
-              Job ID: {quote.jobId || 'None'} | 
-              Job line items: {job?.lineItems?.length || 0} | 
-              Quote line items: {quote.lineItems?.length || 0}
-            </div>
-
             {/* Job Description */}
             {job?.description && (
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Description</h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-gray-700 whitespace-pre-wrap">{job.description}</p>
+              <div className="mb-6">
+                <h3 className="text-base font-semibold text-gray-900 mb-3">Service Description</h3>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{job.description}</p>
                 </div>
               </div>
             )}
 
             {/* Line Items */}
             {((job?.lineItems && job.lineItems.length > 0) || (quote.lineItems && quote.lineItems.length > 0)) && (
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Services</h3>
+              <div className="mb-6">
+                <h3 className="text-base font-semibold text-gray-900 mb-3">Services</h3>
                 <div className="overflow-x-auto max-w-full">
-                  <table className="w-full border-collapse border border-gray-300">
+                  <table className="w-full border-collapse border border-gray-300 text-sm">
                     <thead>
                       <tr className="bg-gray-50">
-                        <th className="border border-gray-300 px-4 py-2 text-left">Description</th>
-                        <th className="border border-gray-300 px-4 py-2 text-center">Quantity</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right">Unit Price</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right">Total</th>
+                        <th className="border border-gray-300 px-3 py-1.5 text-left">Description</th>
+                        <th className="border border-gray-300 px-3 py-1.5 text-center">Quantity</th>
+                        <th className="border border-gray-300 px-3 py-1.5 text-right">Unit Price</th>
+                        <th className="border border-gray-300 px-3 py-1.5 text-right">Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -358,10 +347,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                         const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
                         return (
                           <tr key={index}>
-                            <td className="border border-gray-300 px-4 py-2">{item.description}</td>
-                            <td className="border border-gray-300 px-4 py-2 text-center">{item.quantity}</td>
-                            <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                            <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(itemTotal)}</td>
+                            <td className="border border-gray-300 px-3 py-1.5">{item.description}</td>
+                            <td className="border border-gray-300 px-3 py-1.5 text-center">{item.quantity}</td>
+                            <td className="border border-gray-300 px-3 py-1.5 text-right">{formatCurrency(item.unitPrice)}</td>
+                            <td className="border border-gray-300 px-3 py-1.5 text-right">{formatCurrency(itemTotal)}</td>
                           </tr>
                         );
                       })}
@@ -372,8 +361,8 @@ export default function QuoteViewer({}: QuoteViewerProps) {
             )}
 
             {/* Totals */}
-            <div className="flex justify-end mb-8">
-              <div className="w-full max-w-sm space-y-3">
+            <div className="flex justify-end mb-6">
+              <div className="w-full max-w-sm space-y-2 text-sm">
                 <div className="flex justify-between text-gray-700">
                   <span>Subtotal (excl GST):</span>
                   <span>{formatCurrency(subtotal)}</span>
@@ -383,7 +372,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                   <span>{formatCurrency(gstAmount)}</span>
                 </div>
                 <div className="border-t pt-2">
-                  <div className="flex justify-between text-xl font-bold text-gray-900">
+                  <div className="flex justify-between text-lg font-bold text-gray-900">
                     <span>Total (inc GST):</span>
                     <span>{formatCurrency(totalAmount)}</span>
                   </div>
@@ -392,17 +381,17 @@ export default function QuoteViewer({}: QuoteViewerProps) {
             </div>
 
             {/* Terms */}
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Terms & Conditions</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 text-sm">
+            <div className="border-t pt-4">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">Terms & Conditions</h3>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-gray-700 text-xs">
                   {quote.terms || 'Quote valid for 30 days from the date above. GST included. Payment due within 7 days of work completion.'}
                 </p>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="text-center text-sm text-gray-600 mt-8 pt-6 border-t">
+            <div className="text-center text-xs text-gray-600 mt-6 pt-4 border-t">
               <p>Thank you for considering Treemarkables!</p>
               <p className="mt-1">
                 Valid until {quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : '30 days from quote date'}.
