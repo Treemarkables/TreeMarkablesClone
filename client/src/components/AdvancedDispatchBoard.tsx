@@ -498,12 +498,17 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             <div className="p-3 pb-8 space-y-3">
               {allJobs
                 .sort((a: any, b: any) => {
-                  // Sort by creation date (newest first) - use jobNumber as fallback for newer jobs
+                  // Sort by job number (descending) for newest first
+                  const aNum = parseInt(a.jobNumber) || 0;
+                  const bNum = parseInt(b.jobNumber) || 0;
+                  if (aNum !== bNum) {
+                    return bNum - aNum;
+                  }
+                  // Fallback to creation date
                   const aDate = new Date(a.createdAt || a.id);
                   const bDate = new Date(b.createdAt || b.id);
                   return bDate.getTime() - aDate.getTime();
                 })
-                .slice(0, 6)
                 .map((job: any, index: number) => renderJobSidebarCard(job, index))
               }
             </div>
