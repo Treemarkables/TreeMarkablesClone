@@ -345,10 +345,24 @@ export default function Opportunities() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedConversation(conversation);
+                        
+                        // Extract contact details from conversation
+                        const name = (conversation as any).customerName || '';
+                        const email = (conversation as any).customerEmail || '';
+                        // Use customerPhone if available, otherwise check if senderContact looks like a phone
+                        let phone = (conversation as any).customerPhone || '';
+                        if (!phone && (conversation as any).senderContact) {
+                          const contact = (conversation as any).senderContact;
+                          // Check if senderContact is a phone number (contains only digits, spaces, +, -, or parentheses)
+                          if (/^[\d\s+\-()]+$/.test(contact)) {
+                            phone = contact;
+                          }
+                        }
+                        
                         jobForm.reset({
-                          name: conversation.title || '',
-                          email: '',
-                          phone: '',
+                          name: name,
+                          email: email,
+                          phone: phone,
                           address: '',
                           serviceRequested: '',
                           urgency: 'medium',
@@ -366,10 +380,24 @@ export default function Opportunities() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedConversation(conversation);
+                        
+                        // Extract contact details from conversation
+                        const name = (conversation as any).customerName || '';
+                        const email = (conversation as any).customerEmail || '';
+                        // Use customerPhone if available, otherwise check if senderContact looks like a phone
+                        let phone = (conversation as any).customerPhone || '';
+                        if (!phone && (conversation as any).senderContact) {
+                          const contact = (conversation as any).senderContact;
+                          // Check if senderContact is a phone number (contains only digits, spaces, +, -, or parentheses)
+                          if (/^[\d\s+\-()]+$/.test(contact)) {
+                            phone = contact;
+                          }
+                        }
+                        
                         opportunityForm.reset({
-                          name: conversation.title || '',
-                          email: '',
-                          phone: '',
+                          name: name,
+                          email: email,
+                          phone: phone,
                           address: '',
                           serviceRequested: '',
                           urgency: 'medium',
