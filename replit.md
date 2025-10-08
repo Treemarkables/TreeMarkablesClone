@@ -3,6 +3,10 @@
 ## Overview
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
+## Recent Changes (October 2025)
+- **Email Activity Tracking**: Integrated SendGrid email tracking to monitor opens and clicks on proposals, quotes, and invoices sent to customers. Activity data is displayed inline with job diary entries.
+- **Diary Entry Optimization**: Modified proposal/quote/invoice workflow to prevent duplicate diary entries. Now only creates diary entries when documents are SENT (via email/SMS), not when saved as drafts.
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
