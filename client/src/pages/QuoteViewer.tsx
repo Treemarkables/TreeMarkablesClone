@@ -181,10 +181,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   const isAccepted = quote.status === 'accepted';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full">
+        <div className="max-w-4xl mx-auto w-full flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/">
               <Button variant="outline" size="sm">
@@ -236,9 +236,9 @@ export default function QuoteViewer({}: QuoteViewerProps) {
       </div>
 
       {/* Quote Content */}
-      <div className="max-w-4xl mx-auto py-6 px-4">
-        <Card className="bg-white shadow-sm">
-          <CardContent className="p-6">
+      <div className="max-w-4xl mx-auto py-4 sm:py-6 px-2 sm:px-4 w-full">
+        <Card className="bg-white shadow-sm w-full">
+          <CardContent className="p-4 sm:p-6">
             {/* Company Header */}
             <div className="text-center mb-3">
               <h1 className="text-base font-bold text-orange-600 mb-0.5">Treemarkables</h1>
@@ -332,7 +332,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
             {((job?.lineItems && job.lineItems.length > 0) || (quote.lineItems && quote.lineItems.length > 0)) && (
               <div className="mb-6">
                 <h3 className="text-base font-semibold text-gray-900 mb-3">Services</h3>
-                <div className="overflow-x-auto max-w-full">
+                <div className="w-full overflow-x-auto">
                   <table className="w-full border-collapse border border-gray-300 text-sm">
                     <thead>
                       <tr className="bg-gray-50">

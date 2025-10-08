@@ -93,10 +93,10 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   const isOverdue = invoice.dueDate && new Date(invoice.dueDate) < new Date() && invoice.status !== 'paid';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full">
+        <div className="max-w-4xl mx-auto w-full flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/">
               <Button variant="outline" size="sm">
@@ -128,9 +128,9 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
       </div>
 
       {/* Invoice Content */}
-      <div className="max-w-4xl mx-auto py-6 px-4">
-        <Card className="bg-white shadow-sm">
-          <CardContent className="p-8">
+      <div className="max-w-4xl mx-auto py-4 sm:py-6 px-2 sm:px-4 w-full">
+        <Card className="bg-white shadow-sm w-full">
+          <CardContent className="p-4 sm:p-8">
             {/* Company Header */}
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-orange-600 mb-2">Treemarkables</h1>
