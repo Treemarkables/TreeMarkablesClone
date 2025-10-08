@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +28,8 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  Mail
+  Mail,
+  MousePointerClick
 } from "lucide-react";
 
 interface JobDiaryEntry {
@@ -49,6 +50,58 @@ interface JobDiaryEntry {
   isPrivate: boolean;
   createdAt: string;
   updatedAt: string;
+  metadata?: {
+    sendgridMessageId?: string;
+    [key: string]: any;
+  };
+}
+
+// Component to display email activity
+function EmailActivity({ messageId }: { messageId: string }) {
+  const [activity, setActivity] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchActivity = async () => {
+      try {
+        const response = await fetch(`/api/email-activity/${messageId}`);
+        const data = await response.json();
+        if (data.success) {
+          setActivity(data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching email activity:', error);
+      }
+    };
+
+    if (messageId) {
+      fetchActivity();
+    }
+  }, [messageId]);
+
+  if (!activity) return null;
+
+  return (
+    <div className="flex items-center gap-3 mt-2 text-xs">
+      {activity.opens > 0 && (
+        <div className="flex items-center gap-1 text-green-600">
+          <Eye className="h-3 w-3" />
+          <span>{activity.opens} {activity.opens === 1 ? 'open' : 'opens'}</span>
+        </div>
+      )}
+      {activity.clicks > 0 && (
+        <div className="flex items-center gap-1 text-blue-600">
+          <MousePointerClick className="h-3 w-3" />
+          <span>{activity.clicks} {activity.clicks === 1 ? 'click' : 'clicks'}</span>
+        </div>
+      )}
+      {activity.lastEventAt && (
+        <div className="flex items-center gap-1 text-gray-500">
+          <Clock className="h-3 w-3" />
+          <span>Last activity: {format(new Date(activity.lastEventAt), 'MMM dd, HH:mm')}</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface JobDiaryProps {
@@ -827,6 +880,13 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                             </div>
                           )}
                         </div>
+
+                        {/* Email Activity Tracking */}
+                        {entry.entryType === 'email' && entry.metadata?.sendgridMessageId && (
+                          <div className="mt-3">
+                            <EmailActivity messageId={entry.metadata.sendgridMessageId} />
+                          </div>
+                        )}
 
                         {(entry.progress !== undefined || entry.weatherConditions || entry.equipmentUsed?.length || entry.tags?.length) && (
                           <div className="mt-4 pt-4 border-t border-gray-200">
