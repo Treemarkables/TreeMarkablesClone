@@ -1236,9 +1236,9 @@ export function ProposalBuilder({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-full sm:max-w-5xl h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
-          <DialogHeader className="flex-shrink-0 pb-2 sm:pb-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
+        <DialogContent className="max-w-full sm:max-w-5xl h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-4 sm:p-6 w-full min-w-0">
+          <DialogHeader className="flex-shrink-0 pb-2 sm:pb-4 w-full min-w-0">
+            <div className="flex items-center justify-between flex-wrap gap-2 w-full min-w-0">
               <div>
                 <DialogTitle className="text-lg sm:text-2xl font-bold text-primary">
                   {mode === "edit" ? "Edit Proposal" : "Create Proposal"}
@@ -1271,13 +1271,13 @@ export function ProposalBuilder({
             </div>
           </DialogHeader>
 
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-x-hidden overflow-y-auto w-full max-w-full min-w-0">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-8">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-8 w-full max-w-full min-w-0">
               {/* Sections Management */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
+              <Card className="w-full max-w-full min-w-0">
+                <CardHeader className="w-full max-w-full min-w-0">
+                  <div className="flex items-center justify-between w-full max-w-full min-w-0">
                     <CardTitle>Proposal Sections</CardTitle>
                     <Button
                       type="button"
@@ -1291,12 +1291,12 @@ export function ProposalBuilder({
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
+                <CardContent className="w-full max-w-full min-w-0">
+                  <div className="space-y-6 w-full max-w-full min-w-0">
                     {sections.map((section) => (
-                      <Card key={section.id} className="border-l-4 border-l-primary">
-                        <CardHeader>
-                          <div className="flex items-center justify-between">
+                      <Card key={section.id} className="border-l-4 border-l-primary w-full max-w-full min-w-0">
+                        <CardHeader className="w-full max-w-full min-w-0">
+                          <div className="flex items-center justify-between w-full max-w-full min-w-0">
                             <Input
                               value={section.title}
                               onChange={(e) => updateSectionTitle(section.id, e.target.value)}
@@ -1410,11 +1410,11 @@ export function ProposalBuilder({
                             </div>
 
                             {/* Add Line Item Form */}
-                            <Card className="mb-3">
-                              <CardHeader className="p-3">
+                            <Card className="mb-3 w-full max-w-full min-w-0">
+                              <CardHeader className="p-3 w-full max-w-full min-w-0">
                                 <CardTitle className="text-sm">Add Line Item</CardTitle>
                               </CardHeader>
-                              <CardContent className="space-y-2 p-3 pt-0">
+                              <CardContent className="space-y-2 p-3 pt-0 w-full max-w-full min-w-0">
                                 {/* Basic Details */}
                                 <div>
                                   <Input
