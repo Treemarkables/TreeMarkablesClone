@@ -74,9 +74,21 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     enabled: !compact // Only load when showing full calculator
   });
 
+  // Fetch quotes data to get pricing information
+  const { data: quotesResponse } = useQuery({
+    queryKey: ['/api/quotes'],
+  });
+
+  // Fetch proposals data with sections to enable pricing calculation
+  const { data: proposalsResponse } = useQuery({
+    queryKey: ['/api/proposals?includeSections=true'],
+  });
+
   
   const job = (jobResponse as any)?.data;
   const employees = (employeesData as any)?.data || [];
+  const quotes = (quotesResponse as any)?.data || [];
+  const proposals = (proposalsResponse as any)?.data || [];
 
   // Fetch staff time entries from the new time tracking system
   const today = new Date().toISOString().split('T')[0];
@@ -193,10 +205,60 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       return sum + itemCost;
     }, 0);
   };
+
+  // Helper function to calculate proposal total from line items
+  const calculateProposalTotal = (proposal: any): number => {
+    if (!proposal?.sections || !Array.isArray(proposal.sections)) {
+      return 0;
+    }
+    
+    let total = 0;
+    proposal.sections.forEach((section: any) => {
+      if (section.lineItems && Array.isArray(section.lineItems)) {
+        section.lineItems.forEach((item: any) => {
+          if (item.selected !== false) { // Include item if not explicitly unselected
+            total += Number(item.totalPrice || 0);
+          }
+        });
+      }
+    });
+    
+    return total;
+  };
+
+  // Helper function to get job price from linked quote or proposal
+  const getJobPrice = (): number => {
+    if (!job) return 0;
+
+    // First try to get price from linked quote
+    if (job.quoteId) {
+      const linkedQuote = quotes.find((q: any) => q.id === job.quoteId);
+      if (linkedQuote?.amount) {
+        return Number(linkedQuote.amount);
+      }
+    }
+    
+    // Then try to get price from the most recent proposal for this job
+    const jobProposals = proposals.filter((p: any) => p.jobId === job.id);
+    if (jobProposals.length > 0) {
+      // Sort by creation date and get the most recent
+      const sortedProposals = jobProposals.sort((a: any, b: any) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const latestProposal = sortedProposals[0];
+      const proposalTotal = calculateProposalTotal(latestProposal);
+      if (proposalTotal > 0) {
+        return proposalTotal;
+      }
+    }
+    
+    // Fall back to job line items or job.totalAmount
+    const jobLineItemsTotal = calculateJobLineItemsTotal(job?.lineItems || []);
+    return jobLineItemsTotal > 0 ? jobLineItemsTotal : (job?.totalAmount ? parseFloat(job.totalAmount) : 0);
+  };
   
-  const jobLineItemsTotal = calculateJobLineItemsTotal(job?.lineItems || []);
   const jobLineItemsCosts = calculateJobLineItemsCosts(job?.lineItems || []);
-  const totalAmount = jobLineItemsTotal > 0 ? jobLineItemsTotal : (job?.totalAmount ? parseFloat(job.totalAmount) : 0);
+  const totalAmount = getJobPrice();
   
   // Materials costs come from the actual cost fields in line items
   const materialsCosts = jobLineItemsCosts;
