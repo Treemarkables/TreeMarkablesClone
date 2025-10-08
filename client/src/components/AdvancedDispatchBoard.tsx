@@ -74,7 +74,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   });
   const jobsData = jobsQuery.data;
 
-  const { data: customersData } = useQuery({
+  const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ['/api/customers'],
   });
 
@@ -164,15 +164,13 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
   // Get customer name with enhanced display logic
   const getCustomerName = (customerId: string, jobData?: any) => {
+    // Return placeholder if customers data hasn't loaded yet
+    if (!customersData || customersLoading) {
+      return 'Loading...';
+    }
+    
     const customer = (customersData as any)?.data?.find((c: any) => c.id === customerId);
     const job = jobData || (jobsData as any)?.data?.find((j: any) => j.customerId === customerId);
-    
-    console.log('🔍 getCustomerName:', { 
-      customerId, 
-      foundCustomer: !!customer, 
-      customerName: customer?.name,
-      totalCustomers: (customersData as any)?.data?.length 
-    });
     
     // Priority 1: Use customer name if available (even if generic)
     if (customer?.name) {
@@ -290,7 +288,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const renderJobSidebarCard = (job: any, index: number) => {
     const customer = getCustomerName(job.customerId, job);
     const styling = getStatusStyling(job.status);
-    console.log('📋 Job Card:', { jobNumber: job.jobNumber, customerId: job.customerId, customerName: customer, customersDataLength: (customersData as any)?.data?.length });
     
     // ServiceM8-style letter mapping based on status
     const getStatusLetter = (status: string) => {
