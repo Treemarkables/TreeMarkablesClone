@@ -231,9 +231,9 @@ export default function Calendar() {
   const selectedDateAppointments = selectedDate ? getAppointmentsForDate(selectedDate) : [];
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 border-b">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 border-b w-full">
         <div className="flex items-center gap-2">
           <CalendarIcon className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-calendar-title">

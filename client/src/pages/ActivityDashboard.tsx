@@ -115,7 +115,7 @@ export default function ActivityDashboard() {
   };
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto w-full overflow-x-hidden">
       {/* Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold">Today's Activity</h1>
