@@ -214,6 +214,11 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     queryKey: ['/api/customers'],
   });
 
+  // Fetch quotes data to get pricing information
+  const { data: quotesResponse } = useQuery<ApiResponse<any>>({
+    queryKey: ['/api/quotes'],
+  });
+
   // Redirect crew users if they try to access restricted tabs
   useEffect(() => {
     const allowedCrewTabs = ['jobs', 'safety'];
@@ -226,6 +231,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   const jobs = jobsResponse?.data || [];
   const leads = leadsResponse?.data || [];
   const customers = customersResponse?.data || [];
+  const quotes = quotesResponse?.data || [];
 
   // No mock data - use real data only
 
@@ -261,6 +267,21 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     return customer?.name || 'Unknown Customer';
   };
 
+  // Helper function to get job price from linked quote or proposal
+  const getJobPrice = (job: Job): number => {
+    // First try to get price from linked quote
+    if (job.quoteId) {
+      const linkedQuote = quotes.find((q: any) => q.id === job.quoteId);
+      if (linkedQuote?.amount) {
+        return Number(linkedQuote.amount);
+      }
+    }
+    
+    // TODO: Add proposal price lookup when proposals have pricing
+    // For now, fall back to job.totalAmount if no quote is linked
+    return job.totalAmount ? Number(job.totalAmount) : 0;
+  };
+
   // Transform API data to display format - now safe to use getCustomerName
   const transformJobsForDisplay = (apiJobs: Job[]): DisplayJob[] => {
     return apiJobs.map(job => ({
@@ -270,7 +291,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
       status: job.status || 'unknown',
       priority: job.priority || 'medium',
       scheduledDate: job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : '',
-      estimatedValue: job.totalAmount ? Number(job.totalAmount) : 0,
+      estimatedValue: getJobPrice(job),
       location: job.address || 'Location TBD',
       customer: getCustomerName(job.customerId || '')
     }));
