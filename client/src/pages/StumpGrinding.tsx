@@ -146,7 +146,7 @@ export default function StumpGrinding() {
         style={{ backgroundImage: `url(${heroBackground})` }}
       >
         <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative max-w-6xl mx-auto px-6 pt-32">
+        <div className="relative max-w-6xl mx-auto px-6 pt-20">
           <div className="text-center">
             <h1 className="text-5xl md:text-6xl font-bold text-white mb-6" data-testid="text-hero-title">
               Stump Grinding Gisborne
