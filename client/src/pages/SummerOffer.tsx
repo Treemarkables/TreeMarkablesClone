@@ -141,7 +141,7 @@ export default function SummerOffer() {
             Our way of saying thanks to our amazing Gisborne community!
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
             <Button size="lg" className="text-lg px-8 py-6" asChild data-testid="button-primary-cta">
               <a href="#contact-form">
                 Book Now & Enter to Win
