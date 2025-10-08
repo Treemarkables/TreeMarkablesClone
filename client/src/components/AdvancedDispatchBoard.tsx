@@ -445,9 +445,30 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                           ? job.assignedTo.includes(member.id)
                           : job.assignedTo === member.id;
                         
-                        return isSameDay(jobDate, currentDate) && 
+                        const shouldShow = isSameDay(jobDate, currentDate) && 
                                jobTime.getHours() === slotHour && 
                                isAssigned;
+                        
+                        // Debug logging for job 3321
+                        if (job.jobNumber === '3321') {
+                          console.log('🔍 Job 3321 Debug:', {
+                            jobNumber: job.jobNumber,
+                            scheduledDate: job.scheduledDate,
+                            scheduledStartTime: job.scheduledStartTime,
+                            jobDate: jobDate.toISOString(),
+                            currentDate: currentDate.toISOString(),
+                            jobTime: jobTime.toISOString(),
+                            jobTimeHours: jobTime.getHours(),
+                            slotHour,
+                            isSameDay: isSameDay(jobDate, currentDate),
+                            isAssigned,
+                            assignedTo: job.assignedTo,
+                            memberId: member.id,
+                            shouldShow
+                          });
+                        }
+                        
+                        return shouldShow;
                       })
                       .map((job: any) => renderJobBlock(job, timeSlot, member))
                     }
