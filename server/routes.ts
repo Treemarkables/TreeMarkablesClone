@@ -9328,7 +9328,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       });
       
       // Send based on platform
-      const messagePlatform = platform || lastInboundMessage.platform;
+      // Convert web_form to email for outbound messages if recipient has email
+      let messagePlatform = platform || lastInboundMessage.platform;
+      if (messagePlatform === 'web_form' && recipientContact && recipientContact.includes('@')) {
+        messagePlatform = 'email';
+      }
       
       if (messagePlatform === 'email') {
         // Send email using EmailService
