@@ -495,7 +495,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             </div>
 
             {/* Jobs List */}
-            <div className="p-3 space-y-3">
+            <div className="p-3 pb-8 space-y-3">
               {allJobs
                 .sort((a: any, b: any) => {
                   // Sort by creation date (newest first) - use jobNumber as fallback for newer jobs
