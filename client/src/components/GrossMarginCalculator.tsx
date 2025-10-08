@@ -81,7 +81,12 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
 
   // Fetch proposals data with sections to enable pricing calculation
   const { data: proposalsResponse } = useQuery({
-    queryKey: ['/api/proposals?includeSections=true'],
+    queryKey: ['/api/proposals', 'with-sections'],
+    queryFn: async () => {
+      const response = await fetch('/api/proposals?includeSections=true');
+      if (!response.ok) throw new Error('Failed to fetch proposals');
+      return response.json();
+    }
   });
 
   
@@ -234,6 +239,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     if (job.quoteId) {
       const linkedQuote = quotes.find((q: any) => q.id === job.quoteId);
       if (linkedQuote?.amount) {
+        console.log('💰 Revenue from Quote:', linkedQuote.amount);
         return Number(linkedQuote.amount);
       }
     }
@@ -246,7 +252,13 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       const latestProposal = sortedProposals[0];
+      console.log('📋 Latest Proposal:', {
+        id: latestProposal.id,
+        hasSections: !!latestProposal.sections,
+        sectionsCount: latestProposal.sections?.length || 0
+      });
       const proposalTotal = calculateProposalTotal(latestProposal);
+      console.log('💰 Revenue from Proposal:', proposalTotal);
       if (proposalTotal > 0) {
         return proposalTotal;
       }
@@ -254,6 +266,7 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     
     // Fall back to job line items or job.totalAmount
     const jobLineItemsTotal = calculateJobLineItemsTotal(job?.lineItems || []);
+    console.log('💰 Revenue fallback:', { jobLineItemsTotal, totalAmount: job?.totalAmount });
     return jobLineItemsTotal > 0 ? jobLineItemsTotal : (job?.totalAmount ? parseFloat(job.totalAmount) : 0);
   };
   
