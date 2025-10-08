@@ -78,11 +78,11 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     queryKey: ['/api/customers'],
   });
 
-  // Time slots from 7 AM to 4 PM (10 hours) to match ServiceM8
+  // Time slots for full 24-hour day
   const timeSlots = useMemo(() => {
     const slots = [];
-    for (let i = 0; i < 10; i++) {
-      const time = addHours(startOfDay(currentDate).setHours(7), i);
+    for (let i = 0; i < 24; i++) {
+      const time = addHours(startOfDay(currentDate), i);
       slots.push(time);
     }
     return slots;
@@ -445,30 +445,9 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                           ? job.assignedTo.includes(member.id)
                           : job.assignedTo === member.id;
                         
-                        const shouldShow = isSameDay(jobDate, currentDate) && 
+                        return isSameDay(jobDate, currentDate) && 
                                jobTime.getHours() === slotHour && 
                                isAssigned;
-                        
-                        // Debug logging for job 3321
-                        if (job.jobNumber === '3321') {
-                          console.log('🔍 Job 3321 Debug:', {
-                            jobNumber: job.jobNumber,
-                            scheduledDate: job.scheduledDate,
-                            scheduledStartTime: job.scheduledStartTime,
-                            jobDate: jobDate.toISOString(),
-                            currentDate: currentDate.toISOString(),
-                            jobTime: jobTime.toISOString(),
-                            jobTimeHours: jobTime.getHours(),
-                            slotHour,
-                            isSameDay: isSameDay(jobDate, currentDate),
-                            isAssigned,
-                            assignedTo: job.assignedTo,
-                            memberId: member.id,
-                            shouldShow
-                          });
-                        }
-                        
-                        return shouldShow;
                       })
                       .map((job: any) => renderJobBlock(job, timeSlot, member))
                     }
