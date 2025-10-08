@@ -6483,6 +6483,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             });
 
             console.log(`✅ Client notification email sent to ${clientEmail}`);
+
+            // Create diary entry for email notification
+            try {
+              await storage.createJobDiaryEntry({
+                jobId,
+                entryType: 'communication',
+                title: 'Booking Confirmation Email Sent',
+                description: `Email sent to ${clientEmail}\nSubject: ${emailSubject}`,
+                authorName: 'System',
+                metadata: JSON.stringify({
+                  recipient: clientEmail,
+                  subject: emailSubject,
+                  notificationType: 'booking_confirmation'
+                }),
+                isPrivate: false
+              });
+            } catch (diaryError) {
+              console.error('❌ Error creating diary entry for email notification:', diaryError);
+            }
           }
         } catch (emailError) {
           console.error('❌ Error sending client notification email:', emailError);
