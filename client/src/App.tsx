@@ -180,7 +180,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Mobile header - sidebar toggle, refresh, and actions */}
-          <header className="md:hidden flex items-center justify-between px-2 pb-2 border-b bg-white" style={{ paddingTop: 'max(1rem, calc(env(safe-area-inset-top) + 0.5rem))' }}>
+          <header className="md:hidden flex items-center justify-between px-2 pb-2 border-b bg-white" style={{ paddingTop: 'max(2rem, calc(env(safe-area-inset-top) + 1rem))' }}>
             <div className="flex items-center gap-2">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               
