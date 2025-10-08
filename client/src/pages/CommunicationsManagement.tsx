@@ -56,8 +56,8 @@ export default function CommunicationsManagement() {
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-3 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6 w-full overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Communications Management</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">

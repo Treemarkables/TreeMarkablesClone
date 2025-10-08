@@ -89,9 +89,9 @@ export default function Developer() {
   };
 
   return (
-    <div className="flex flex-col h-full p-6 space-y-6">
+    <div className="flex flex-col h-full p-3 sm:p-6 space-y-4 sm:space-y-6 w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Developer</h1>
           <p className="text-gray-600">API access, webhooks, and integrations</p>
