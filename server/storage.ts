@@ -62,7 +62,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, ilike, and, gte, lte, lt, gt, ne, desc, sql } from "drizzle-orm";
+import { eq, ilike, and, gte, lte, lt, gt, ne, desc, sql, inArray } from "drizzle-orm";
 import * as schema from "@shared/schema";
 
 // modify the interface with any CRUD methods
