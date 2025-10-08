@@ -118,9 +118,10 @@ export default function Opportunities() {
     const name = conversation.customerName || '';
     let email = conversation.customerEmail || '';
     let phone = conversation.customerPhone || '';
+    let address = '';
 
     // If we don't have email/phone from customer record, try to extract from first message
-    if ((!email || !phone) && messages.length > 0) {
+    if ((!email || !phone || !address) && messages.length > 0) {
       const firstMessage = messages.find(m => m.direction === 'inbound');
       
       if (firstMessage) {
@@ -150,6 +151,17 @@ export default function Opportunities() {
             email = emailMatch[1].trim();
           }
         }
+
+        // Extract address from message content
+        if (!address && firstMessage.content) {
+          // Look for common NZ address patterns:
+          // - Number followed by street name (e.g., "28 De lautour Road")
+          // - Can include unit/flat numbers
+          const addressMatch = firstMessage.content.match(/(?:^|\n)(\d+[a-zA-Z]?\s+[A-Z][a-zA-Z\s]+(?:Road|Street|Avenue|Lane|Drive|Place|Terrace|Way|Court|Crescent|Close|Grove|Heights)(?:\s*,?\s*[A-Z][a-zA-Z\s]+)?)/im);
+          if (addressMatch) {
+            address = addressMatch[1].trim();
+          }
+        }
       }
     }
 
@@ -158,7 +170,7 @@ export default function Opportunities() {
       phone = conversation.senderContact;
     }
 
-    return { name, email, phone };
+    return { name, email, phone, address };
   };
 
   // Reply mutation
@@ -439,13 +451,13 @@ export default function Opportunities() {
                         }
                         
                         // Extract contact details from conversation and messages
-                        const { name, email, phone } = extractContactDetails(conversation, fetchedMessages);
+                        const { name, email, phone, address } = extractContactDetails(conversation, fetchedMessages);
                         
                         jobForm.reset({
                           name: name,
                           email: email,
                           phone: phone,
-                          address: '',
+                          address: address,
                           serviceRequested: '',
                           urgency: 'medium',
                           status: 'new',
@@ -476,13 +488,13 @@ export default function Opportunities() {
                         }
                         
                         // Extract contact details from conversation and messages
-                        const { name, email, phone } = extractContactDetails(conversation, fetchedMessages);
+                        const { name, email, phone, address } = extractContactDetails(conversation, fetchedMessages);
                         
                         opportunityForm.reset({
                           name: name,
                           email: email,
                           phone: phone,
-                          address: '',
+                          address: address,
                           serviceRequested: '',
                           urgency: 'medium',
                           status: 'new',
