@@ -2839,11 +2839,12 @@ class DatabaseStorage implements IStorage {
       }
     }
     
-    // Subquery to get the first message's fromName for each conversation
+    // Subquery to get the first message's contact info for each conversation
     const firstMessageSubquery = db
       .select({
         conversationId: schema.conversationMessages.conversationId,
         fromName: schema.conversationMessages.fromName,
+        fromContact: schema.conversationMessages.fromContact,
         rowNum: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${schema.conversationMessages.conversationId} ORDER BY ${schema.conversationMessages.createdAt} ASC)`.as('row_num')
       })
       .from(schema.conversationMessages)
@@ -2854,7 +2855,10 @@ class DatabaseStorage implements IStorage {
       .select({
         conversations: schema.conversations,
         customerName: schema.customers.name,
-        senderName: firstMessageSubquery.fromName
+        customerEmail: schema.customers.email,
+        customerPhone: schema.customers.phone,
+        senderName: firstMessageSubquery.fromName,
+        senderContact: firstMessageSubquery.fromContact
       })
       .from(schema.conversations)
       .leftJoin(schema.customers, eq(schema.conversations.customerId, schema.customers.id))
@@ -2882,10 +2886,13 @@ class DatabaseStorage implements IStorage {
     
     const results = await baseQuery;
     
-    // Map results to include customerName or senderName in the conversation object
+    // Map results to include customer/sender contact info in the conversation object
     return results.map((row: any) => ({
       ...row.conversations,
-      customerName: row.customerName || row.senderName
+      customerName: row.customerName || row.senderName,
+      customerEmail: row.customerEmail,
+      customerPhone: row.customerPhone,
+      senderContact: row.senderContact
     })) as Conversation[];
   }
 
