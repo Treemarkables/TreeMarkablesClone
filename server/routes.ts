@@ -2618,6 +2618,15 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         jobs = await storage.getAllJobs();
       }
       
+      // Debug: Check if job 3325 is in the results
+      const job3325 = jobs.find((j: any) => j.jobNumber === '3325');
+      console.log('🔍 API JOBS DEBUG:', {
+        totalJobs: jobs.length,
+        hasJob3325: !!job3325,
+        job3325Details: job3325 ? { id: job3325.id, jobNumber: job3325.jobNumber, title: job3325.title, status: job3325.status } : null,
+        first5Jobs: jobs.slice(0, 5).map((j: any) => ({ jobNumber: j.jobNumber, title: j.title }))
+      });
+      
       res.json({ success: true, data: jobs });
     } catch (error) {
       console.error('Error fetching jobs:', error);
