@@ -190,9 +190,9 @@ export default function Inbox() {
   }
 
   return (
-    <div className="h-full bg-background flex flex-col">
+    <div className="h-full bg-background flex flex-col w-full overflow-x-hidden">
       {/* Header */}
-      <div className="border-b p-6">
+      <div className="border-b p-3 sm:p-6 w-full">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
