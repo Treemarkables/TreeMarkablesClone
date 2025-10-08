@@ -3653,7 +3653,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       console.log('📧 EMAIL TEXT CONTENT:', `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`);
 
       // Send email using EmailService (photos are hosted URLs, no attachments needed)
-      const emailSuccess = await emailService.sendEmail({
+      const emailResult = await emailService.sendEmail({
         to,
         cc,
         from: 'Treemarkables <jullianhalley@hotmail.com>', // Display name with verified sender address
@@ -3663,14 +3663,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
       });
 
-      if (!emailSuccess) {
+      if (!emailResult.success) {
         return res.status(500).json({
           success: false,
           message: 'Failed to send proposal email'
         });
       }
 
-      console.log(`📧 Proposal ${proposalNumber} email sent to ${to} (photos loaded from hosted URLs)`);
+      console.log(`📧 Proposal ${proposalNumber} email sent to ${to}${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
 
       // Create diary entry for sent proposal email
       if (proposal.jobId) {
@@ -3686,7 +3686,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               proposalNumber,
               recipient: to,
               cc: cc || null,
-              total: total.toFixed(2)
+              total: total.toFixed(2),
+              sendgridMessageId: emailResult.messageId
             }
           });
 
@@ -3805,7 +3806,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
       
       // Send email using the emailService
-      const emailSent = await emailService.sendEmail({
+      const emailResult = await emailService.sendEmail({
         to: to,
         from: 'jullianhalley@hotmail.com',
         subject: subject,
@@ -3815,11 +3816,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
-      if (emailSent) {
+      if (emailResult.success) {
         // Log email activity (you could store this in database for audit trail)
         console.log(`📧 Invoice email sent to ${to} for job ${job?.jobNumber || jobId}${
           emailAttachments.length > 0 ? ` with ${emailAttachments.length} photo attachment(s)` : ''
-        }`);
+        }${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
 
         // Create job diary entry for the email
         if (jobId) {
@@ -3850,7 +3851,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               isPrivate: false,
               metadata: {
                 emailAddress: to,
-                quoteId: quoteId || undefined
+                quoteId: quoteId || undefined,
+                sendgridMessageId: emailResult.messageId
               }
             });
             
@@ -7655,7 +7657,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       console.log('📧 Sending email via diary:', { to, subject, replyTo: replyToEmail });
       
       // Send email using the service
-      const success = await emailService.sendEmail({
+      const emailResult = await emailService.sendEmail({
         to,
         from: 'noreply@treemarkables.co.nz',
         replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
@@ -7664,14 +7666,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         html: `<p>${message.replace(/\n/g, '<br>')}</p>`
       });
       
-      if (success) {
+      if (emailResult.success) {
         // Create diary entry for sent email
         const diaryEntry = await storage.createJobDiaryEntry({
           jobId,
           entryType: 'email',
           title: `Email: ${subject}`,
           description: `Email sent to ${to}: ${message}`,
-          authorName: 'System'
+          authorName: 'System',
+          metadata: {
+            sendgridMessageId: emailResult.messageId
+          }
         });
         
         res.json({ 
@@ -7731,6 +7736,100 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error starring communication:', error);
       res.status(500).json({ success: false, message: 'Error updating communication' });
+    }
+  });
+
+  // Get email activity from SendGrid
+  app.get('/api/email-activity/:messageId', async (req: Request, res: Response) => {
+    try {
+      const { messageId } = req.params;
+      
+      if (!messageId || messageId.startsWith('mock-')) {
+        // Return mock data for development
+        return res.json({
+          success: true,
+          data: {
+            opens: 0,
+            clicks: 0,
+            events: []
+          }
+        });
+      }
+
+      const apiKey = process.env.SENDGRID_API_KEY;
+      if (!apiKey) {
+        console.log('SendGrid API key not configured');
+        return res.json({
+          success: true,
+          data: { opens: 0, clicks: 0, events: [] }
+        });
+      }
+
+      // Query SendGrid Activity API
+      const response = await fetch(
+        `https://api.sendgrid.com/v3/messages?limit=10&query=msg_id%3D%22${messageId}%22`,
+        {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        console.error('SendGrid Activity API error:', response.statusText);
+        return res.json({
+          success: true,
+          data: { opens: 0, clicks: 0, events: [] }
+        });
+      }
+
+      const data = await response.json();
+      const messages = data.messages || [];
+      
+      // Extract activity data
+      let opens = 0;
+      let clicks = 0;
+      const events: any[] = [];
+
+      messages.forEach((msg: any) => {
+        if (msg.events) {
+          msg.events.forEach((event: any) => {
+            if (event.event_name === 'open') {
+              opens++;
+              events.push({
+                type: 'open',
+                timestamp: event.processed,
+                ip: event.ip_address
+              });
+            } else if (event.event_name === 'click') {
+              clicks++;
+              events.push({
+                type: 'click',
+                timestamp: event.processed,
+                url: event.url,
+                ip: event.ip_address
+              });
+            }
+          });
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          opens,
+          clicks,
+          events,
+          lastEventAt: events.length > 0 ? events[events.length - 1].timestamp : null
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching email activity:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error fetching email activity' 
+      });
     }
   });
 

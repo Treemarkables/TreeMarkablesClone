@@ -18,6 +18,11 @@ interface EmailParams {
   }>;
 }
 
+interface EmailResult {
+  success: boolean;
+  messageId?: string;
+}
+
 class EmailService {
   private mailService: MailService;
   private isConfigured: boolean = false;
@@ -39,7 +44,7 @@ class EmailService {
     }
   }
 
-  async sendEmail(params: EmailParams): Promise<boolean> {
+  async sendEmail(params: EmailParams): Promise<EmailResult> {
     try {
       if (!this.isConfigured) {
         // Mock mode - log the email instead of sending
@@ -56,12 +61,12 @@ class EmailService {
         }
         console.log('Time:', new Date().toLocaleString());
         console.log('================================\n');
-        return true;
+        return { success: true, messageId: `mock-${Date.now()}` };
       }
 
       const fromEmail = params.from || this.fromEmail;
       
-      await this.mailService.send({
+      const response = await this.mailService.send({
         to: params.to,
         from: fromEmail,
         subject: params.subject,
@@ -74,15 +79,18 @@ class EmailService {
         ...(params.attachments && { attachments: params.attachments }),
       });
 
-      console.log(`📧 Email sent successfully to ${params.to}`);
-      return true;
+      // Extract message ID from SendGrid response headers
+      const messageId = response[0]?.headers?.['x-message-id'] || undefined;
+      
+      console.log(`📧 Email sent successfully to ${params.to}${messageId ? ` (Message ID: ${messageId})` : ''}`);
+      return { success: true, messageId };
     } catch (error: any) {
       console.error('📧 SendGrid email error:', error);
       // Log detailed error information
       if (error.response && error.response.body && error.response.body.errors) {
         console.error('📧 SendGrid error details:', JSON.stringify(error.response.body.errors, null, 2));
       }
-      return false;
+      return { success: false };
     }
   }
 
@@ -92,7 +100,7 @@ class EmailService {
     jobTitle: string,
     status: string,
     additionalData?: Record<string, any>
-  ): Promise<boolean> {
+  ): Promise<EmailResult> {
     const statusTemplates = {
       scheduled: {
         subject: `Job Scheduled: ${jobTitle}`,
@@ -119,7 +127,7 @@ class EmailService {
     const template = statusTemplates[status as keyof typeof statusTemplates];
     if (!template) {
       console.error(`No email template found for status: ${status}`);
-      return false;
+      return { success: false };
     }
 
     return this.sendEmail({
@@ -207,7 +215,7 @@ class EmailService {
     quoteNumber: string,
     amount: number,
     quoteData: any
-  ): Promise<boolean> {
+  ): Promise<EmailResult> {
     const subject = `Your Quote #${quoteNumber} - Treemarkables`;
     const text = `Hi ${customerName},\n\nThank you for your interest in our tree services. Please find your quote #${quoteNumber} attached.\n\nQuote Amount: $${amount.toFixed(2)} NZD\n\nThis quote is valid for 30 days. Please contact us if you have any questions.\n\nBest regards,\nTreemarkables Team`;
     
