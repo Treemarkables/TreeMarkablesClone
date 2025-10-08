@@ -59,26 +59,49 @@ interface JobDiaryEntry {
 // Component to display email activity
 function EmailActivity({ messageId }: { messageId: string }) {
   const [activity, setActivity] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchActivity = async () => {
       try {
+        console.log('📧 Fetching email activity for message ID:', messageId);
         const response = await fetch(`/api/email-activity/${messageId}`);
         const data = await response.json();
+        console.log('📧 Email activity response:', data);
         if (data.success) {
           setActivity(data.data);
         }
       } catch (error) {
         console.error('Error fetching email activity:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
     if (messageId) {
       fetchActivity();
+    } else {
+      setLoading(false);
     }
   }, [messageId]);
 
-  if (!activity) return null;
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+        <Clock className="h-3 w-3 animate-spin" />
+        <span>Loading email activity...</span>
+      </div>
+    );
+  }
+
+  if (!activity || (activity.opens === 0 && activity.clicks === 0)) {
+    return (
+      <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
+        <Mail className="h-3 w-3" />
+        <span>No opens or clicks yet</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-3 mt-2 text-xs">
