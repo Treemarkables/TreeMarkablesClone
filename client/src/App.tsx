@@ -180,7 +180,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Mobile header - sidebar toggle, refresh, and actions */}
-          <header className="md:hidden flex items-center justify-between p-2 border-b bg-white">
+          <header className="md:hidden flex items-center justify-between px-2 pb-2 border-b bg-white" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
             <div className="flex items-center gap-2">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               
@@ -391,8 +391,10 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               </Button>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col">
-            {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
+          <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col pb-20 md:pb-0" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(5rem, env(safe-area-inset-bottom))' }}>
+            <div className="md:pb-0">
+              {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
+            </div>
           </main>
         </div>
         
