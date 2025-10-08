@@ -339,12 +339,17 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
   // Render job block in time grid
   const renderJobBlock = (job: any, timeSlot: Date, staffMember: any) => {
-    if (!job.scheduledTime) return null;
+    if (!job.scheduledStartTime) return null;
     
-    const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledTime}`);
+    const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledStartTime}`);
     const slotHour = timeSlot.getHours();
     
-    if (jobTime.getHours() === slotHour && job.assignedTo === staffMember.id) {
+    // Check if staffMember is assigned to this job (handle both single ID and array)
+    const isAssigned = Array.isArray(job.assignedTo) 
+      ? job.assignedTo.includes(staffMember.id)
+      : job.assignedTo === staffMember.id;
+    
+    if (jobTime.getHours() === slotHour && isAssigned) {
       return (
         <div 
           key={job.id}
@@ -430,13 +435,19 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                     {/* Render job blocks for this time slot and staff member */}
                     {allJobs
                       .filter((job: any) => {
-                        if (!job.scheduledDate || !job.scheduledTime) return false;
+                        if (!job.scheduledDate || !job.scheduledStartTime) return false;
                         const jobDate = new Date(job.scheduledDate);
-                        const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledTime}`);
+                        const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledStartTime}`);
                         const slotHour = timeSlot.getHours();
+                        
+                        // Check if member is assigned to this job (handle both single ID and array)
+                        const isAssigned = Array.isArray(job.assignedTo) 
+                          ? job.assignedTo.includes(member.id)
+                          : job.assignedTo === member.id;
+                        
                         return isSameDay(jobDate, currentDate) && 
                                jobTime.getHours() === slotHour && 
-                               job.assignedTo === member.id;
+                               isAssigned;
                       })
                       .map((job: any) => renderJobBlock(job, timeSlot, member))
                     }
