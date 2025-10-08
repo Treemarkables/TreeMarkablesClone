@@ -240,10 +240,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
         <Card className="bg-white shadow-sm">
           <CardContent className="p-6">
             {/* Company Header */}
-            <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-orange-600 mb-1">Treemarkables</h1>
-              <p className="text-sm text-gray-600">Professional Tree Care Services</p>
-              <p className="text-xs text-gray-500">Gisborne, New Zealand | Phone: +64 6 867 1234 | Email: info@treemarkables.co.nz</p>
+            <div className="text-center mb-3">
+              <h1 className="text-base font-bold text-orange-600 mb-0.5">Treemarkables</h1>
+              <p className="text-xs text-gray-600">Professional Tree Care Services</p>
+              <p className="text-[10px] text-gray-500">Gisborne, New Zealand | Phone: +64 6 867 1234 | Email: info@treemarkables.co.nz</p>
             </div>
 
             {/* Status Banner */}
