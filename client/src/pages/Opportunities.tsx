@@ -251,7 +251,20 @@ export default function Opportunities() {
     return message.substring(0, maxLength) + '...';
   };
 
-  const handleConversationClick = (conversation: Conversation) => {
+  const handleConversationClick = async (conversation: Conversation) => {
+    // Mark messages as read before navigating
+    if (conversation.unreadCount && conversation.unreadCount > 0) {
+      try {
+        await fetch(`/api/conversations/${conversation.id}/messages/read`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        // Refresh conversations to update unread count
+        queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      } catch (error) {
+        console.error('Error marking messages as read:', error);
+      }
+    }
     // Navigate to conversation detail page
     setLocation(`/conversation/${conversation.id}`);
   };
