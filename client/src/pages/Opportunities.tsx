@@ -205,24 +205,43 @@ export default function Opportunities() {
     }
   });
 
-  // Create Job as Lead mutation
+  // Create Quote mutation
   const createJobMutation = useMutation({
     mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
-      return apiRequest('POST', '/api/leads', { ...leadData, status: 'new' });
+      // First, create or find customer
+      const customerResponse = await apiRequest('POST', '/api/customers', {
+        name: leadData.name,
+        email: leadData.email,
+        phone: leadData.phone,
+        address: leadData.address
+      });
+      const customerId = customerResponse.data.id;
+
+      // Create the quote
+      const quoteData = {
+        customerId: customerId,
+        description: leadData.serviceRequested || leadData.notes || 'Quote from conversation',
+        amount: '0',
+        status: 'draft',
+        createdBy: 'admin'
+      };
+      
+      return apiRequest('POST', '/api/quotes', quoteData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       setShowCreateJobDialog(false);
       jobForm.reset();
       toast({ 
-        title: 'Job lead created successfully',
-        description: 'The job lead has been sent to dispatch'
+        title: 'Quote created successfully',
+        description: 'The quote has been created and will appear in dispatch board'
       });
       setLocation('/dispatch');
     },
     onError: () => {
       toast({ 
-        title: 'Failed to create job lead', 
+        title: 'Failed to create quote', 
         description: 'Please try again.',
         variant: 'destructive'
       });
@@ -434,10 +453,10 @@ export default function Opportunities() {
                         });
                         setShowCreateJobDialog(true);
                       }}
-                      data-testid={`menuitem-create-job-${conversation.id}`}
+                      data-testid={`menuitem-create-quote-${conversation.id}`}
                     >
                       <Briefcase className="h-4 w-4 mr-2" />
-                      Create Job as Lead
+                      Create New Quote
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={async (e) => {
@@ -553,18 +572,18 @@ export default function Opportunities() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Job as Lead Dialog */}
+      {/* Create Quote Dialog */}
       <LeadFormDialog
         open={showCreateJobDialog}
         onOpenChange={setShowCreateJobDialog}
-        title="Create Job as Lead"
-        description="Create a new job lead that will be sent to dispatch"
-        submitLabel="Create Job Lead"
+        title="Create New Quote"
+        description="Create a quote from this conversation"
+        submitLabel="Create Quote"
         isSubmitting={createJobMutation.isPending}
         form={jobForm}
         onSubmit={(values) => createJobMutation.mutate({ ...values, status: 'new' })}
         includeStatus={false}
-        testIdPrefix="job"
+        testIdPrefix="quote"
       />
 
       {/* Create Opportunity Dialog */}
