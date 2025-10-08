@@ -113,6 +113,54 @@ export default function Opportunities() {
 
   const messages = messagesResponse?.data || [];
 
+  // Helper function to extract contact details from conversation and messages
+  const extractContactDetails = (conversation: any, messages: any[]) => {
+    const name = conversation.customerName || '';
+    let email = conversation.customerEmail || '';
+    let phone = conversation.customerPhone || '';
+
+    // If we don't have email/phone from customer record, try to extract from first message
+    if ((!email || !phone) && messages.length > 0) {
+      const firstMessage = messages.find(m => m.direction === 'inbound');
+      
+      if (firstMessage) {
+        // Get email from fromContact if it looks like an email
+        if (!email && firstMessage.fromContact && firstMessage.fromContact.includes('@')) {
+          email = firstMessage.fromContact;
+        }
+        
+        // Try to extract phone from message content
+        if (!phone && firstMessage.content) {
+          // Look for "Phone: " pattern in the message
+          const phoneMatch = firstMessage.content.match(/Phone:\s*([0-9+\s\-()]+)/i);
+          if (phoneMatch) {
+            phone = phoneMatch[1].trim();
+          }
+        }
+
+        // Also check if fromContact is a phone number
+        if (!phone && firstMessage.fromContact && /^[\d\s+\-()]+$/.test(firstMessage.fromContact)) {
+          phone = firstMessage.fromContact;
+        }
+
+        // Extract email from message content if not found yet
+        if (!email && firstMessage.content) {
+          const emailMatch = firstMessage.content.match(/Email:\s*([^\s\n]+@[^\s\n]+)/i);
+          if (emailMatch) {
+            email = emailMatch[1].trim();
+          }
+        }
+      }
+    }
+
+    // Use senderContact as fallback for phone if it looks like a phone number
+    if (!phone && conversation.senderContact && /^[\d\s+\-()]+$/.test(conversation.senderContact)) {
+      phone = conversation.senderContact;
+    }
+
+    return { name, email, phone };
+  };
+
   // Reply mutation
   const replyMutation = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: string; content: string }) => {
@@ -342,22 +390,24 @@ export default function Opportunities() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem 
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
                         setSelectedConversation(conversation);
                         
-                        // Extract contact details from conversation
-                        const name = (conversation as any).customerName || '';
-                        const email = (conversation as any).customerEmail || '';
-                        // Use customerPhone if available, otherwise check if senderContact looks like a phone
-                        let phone = (conversation as any).customerPhone || '';
-                        if (!phone && (conversation as any).senderContact) {
-                          const contact = (conversation as any).senderContact;
-                          // Check if senderContact is a phone number (contains only digits, spaces, +, -, or parentheses)
-                          if (/^[\d\s+\-()]+$/.test(contact)) {
-                            phone = contact;
+                        // Fetch messages for this conversation to extract contact details
+                        let fetchedMessages: any[] = [];
+                        try {
+                          const response = await fetch(`/api/conversations/${conversation.id}/messages`);
+                          if (response.ok) {
+                            const data = await response.json();
+                            fetchedMessages = data.data || [];
                           }
+                        } catch (error) {
+                          console.error('Error fetching messages:', error);
                         }
+                        
+                        // Extract contact details from conversation and messages
+                        const { name, email, phone } = extractContactDetails(conversation, fetchedMessages);
                         
                         jobForm.reset({
                           name: name,
@@ -377,22 +427,24 @@ export default function Opportunities() {
                       Create Job as Lead
                     </DropdownMenuItem>
                     <DropdownMenuItem 
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
                         setSelectedConversation(conversation);
                         
-                        // Extract contact details from conversation
-                        const name = (conversation as any).customerName || '';
-                        const email = (conversation as any).customerEmail || '';
-                        // Use customerPhone if available, otherwise check if senderContact looks like a phone
-                        let phone = (conversation as any).customerPhone || '';
-                        if (!phone && (conversation as any).senderContact) {
-                          const contact = (conversation as any).senderContact;
-                          // Check if senderContact is a phone number (contains only digits, spaces, +, -, or parentheses)
-                          if (/^[\d\s+\-()]+$/.test(contact)) {
-                            phone = contact;
+                        // Fetch messages for this conversation to extract contact details
+                        let fetchedMessages: any[] = [];
+                        try {
+                          const response = await fetch(`/api/conversations/${conversation.id}/messages`);
+                          if (response.ok) {
+                            const data = await response.json();
+                            fetchedMessages = data.data || [];
                           }
+                        } catch (error) {
+                          console.error('Error fetching messages:', error);
                         }
+                        
+                        // Extract contact details from conversation and messages
+                        const { name, email, phone } = extractContactDetails(conversation, fetchedMessages);
                         
                         opportunityForm.reset({
                           name: name,
