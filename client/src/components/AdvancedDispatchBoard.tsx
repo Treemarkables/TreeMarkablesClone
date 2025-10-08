@@ -167,8 +167,6 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     const customer = (customersData as any)?.data?.find((c: any) => c.id === customerId);
     const job = jobData || (jobsData as any)?.data?.find((j: any) => j.customerId === customerId);
     
-    console.log('🔍 getCustomerName DEBUG:', { customerId, customer: customer?.name, hasCustomersData: !!(customersData as any)?.data });
-    
     // Priority 1: Use customer name if available (even if generic)
     if (customer?.name) {
       // Remove generic "Customer-" prefix if present, otherwise use full name
