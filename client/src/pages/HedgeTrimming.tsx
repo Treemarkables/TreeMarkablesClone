@@ -169,7 +169,7 @@ export default function HedgeTrimming() {
       </section>
 
       {/* Hedge Care Philosophy */}
-      <section className="py-20 bg-background">
+      <section className="py-12 bg-background">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <div className="flex justify-center mb-6">
@@ -194,7 +194,7 @@ export default function HedgeTrimming() {
       </section>
 
       {/* When to Trim Hedges */}
-      <section className="py-20 bg-muted/30">
+      <section className="py-12 bg-muted/30">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-foreground mb-6">
@@ -313,7 +313,7 @@ export default function HedgeTrimming() {
       </section>
 
       {/* Our Approach to Hedge Trimming */}
-      <section className="py-20 bg-background">
+      <section className="py-12 bg-background">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-foreground mb-6">
@@ -381,7 +381,7 @@ export default function HedgeTrimming() {
       </section>
 
       {/* When to Trim */}
-      <section className="py-20 bg-muted/30">
+      <section className="py-12 bg-muted/30">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-foreground mb-6">
@@ -456,7 +456,7 @@ export default function HedgeTrimming() {
       </section>
 
       {/* Hedge Trimming Types */}
-      <section className="py-20 bg-background">
+      <section className="py-12 bg-background">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-foreground mb-6">
@@ -573,7 +573,7 @@ export default function HedgeTrimming() {
       </section>
 
       {/* Welcome Section */}
-      <section className="py-20 bg-muted/30">
+      <section className="py-12 bg-muted/30">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-4xl font-bold text-foreground mb-8">
             A warm welcome from the team
@@ -591,7 +591,7 @@ export default function HedgeTrimming() {
       </section>
 
       {/* Simple Credentials */}
-      <section className="py-20 bg-background">
+      <section className="py-12 bg-background">
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid md:grid-cols-3 gap-8 text-center">
             <div>
@@ -614,7 +614,7 @@ export default function HedgeTrimming() {
       </section>
 
       {/* Testimonials */}
-      <section className="py-20 bg-muted/30">
+      <section className="py-12 bg-muted/30">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-foreground mb-6">
