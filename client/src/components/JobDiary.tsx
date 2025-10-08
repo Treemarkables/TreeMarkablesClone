@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { LinkifiedText } from "@/utils/linkify";
 import { 
   Plus, 
   Clock, 
@@ -233,7 +234,9 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                           </Badge>
                           {entry.isPrivate && <EyeOff className="h-3 w-3 text-gray-400" />}
                         </div>
-                        <div className="text-gray-600 text-xs truncate">{entry.description}</div>
+                        <div className="text-gray-600 text-xs truncate">
+                          <LinkifiedText text={entry.description} />
+                        </div>
                         <div className="text-gray-400 text-xs">
                           {entry.authorName} • {format(new Date(entry.createdAt), 'MMM dd, HH:mm')}
                         </div>
@@ -730,7 +733,9 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                           </Badge>
                         )}
                         </div>
-                        <p className="text-gray-700 mb-4">{entry.description}</p>
+                        <p className="text-gray-700 mb-4">
+                          <LinkifiedText text={entry.description} />
+                        </p>
                         
                         {/* Photo Thumbnails */}
                         {entry.photos && entry.photos.length > 0 && (
