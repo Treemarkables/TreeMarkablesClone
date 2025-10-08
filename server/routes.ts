@@ -6520,8 +6520,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         const diaryEntry = await storage.createJobDiaryEntry({
           jobId,
           entryType: 'milestone',
-          title: 'Staff Scheduled',
-          description: `${employeeNames.length} staff member(s) scheduled: ${staffList}`,
+          title: `Staff Scheduled - ${scheduleDate} at ${startTimeStr}`,
+          description: `${employeeNames.length} staff member(s) scheduled: ${staffList}\nScheduled from ${startTimeStr} to ${endTimeStr}`,
           authorName: 'System',
           content: `Scheduled on ${scheduleDate} from ${startTimeStr} to ${endTimeStr}`,
           metadata: JSON.stringify({
