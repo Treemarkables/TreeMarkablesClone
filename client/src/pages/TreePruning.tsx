@@ -463,7 +463,7 @@ export default function TreePruning() {
       </section>
 
       {/* Service Areas Section */}
-      <section className="py-16 bg-muted/30">
+      <section className="py-8 md:py-16 bg-muted/30">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <h3 className="text-2xl font-bold text-foreground mb-6">
@@ -512,7 +512,7 @@ export default function TreePruning() {
       </section>
 
       {/* Related Services Section */}
-      <section className="py-16 bg-background">
+      <section className="py-8 md:py-16 bg-background">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <h3 className="text-2xl font-bold text-foreground mb-6">
