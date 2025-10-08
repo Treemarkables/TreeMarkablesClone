@@ -167,6 +167,13 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     const customer = (customersData as any)?.data?.find((c: any) => c.id === customerId);
     const job = jobData || (jobsData as any)?.data?.find((j: any) => j.customerId === customerId);
     
+    console.log('🔍 getCustomerName:', { 
+      customerId, 
+      foundCustomer: !!customer, 
+      customerName: customer?.name,
+      totalCustomers: (customersData as any)?.data?.length 
+    });
+    
     // Priority 1: Use customer name if available (even if generic)
     if (customer?.name) {
       // Remove generic "Customer-" prefix if present, otherwise use full name
@@ -283,6 +290,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const renderJobSidebarCard = (job: any, index: number) => {
     const customer = getCustomerName(job.customerId, job);
     const styling = getStatusStyling(job.status);
+    console.log('📋 Job Card:', { jobNumber: job.jobNumber, customerId: job.customerId, customerName: customer, customersDataLength: (customersData as any)?.data?.length });
     
     // ServiceM8-style letter mapping based on status
     const getStatusLetter = (status: string) => {
