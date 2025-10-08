@@ -307,7 +307,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     return (
       <div
         key={job.id}
-        className="flex items-start gap-3 py-3 px-2 hover:bg-gray-50 cursor-pointer transition-colors border-l-4"
+        className="flex items-start gap-3 py-3 px-2 hover:bg-gray-50 cursor-pointer transition-colors border-l-4 min-h-[120px]"
         style={{ borderLeftColor: styling.hexColor }}
         onClick={() => handleJobCardClick(job)}
         data-testid={`job-sidebar-card-${job.id}`}
@@ -326,10 +326,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           <h4 className="font-semibold text-base text-gray-900 mb-1">{customer}</h4>
           
           {/* Address */}
-          <p className="text-sm text-gray-600 mb-2 break-words">{job.address}</p>
+          <p className="text-sm text-gray-600 mb-2 break-words line-clamp-2">{job.address}</p>
           
           {/* Job description */}
-          <p className="text-sm text-gray-800 break-words">{job.title}</p>
+          <p className="text-sm text-gray-800 break-words line-clamp-2">{job.title || '\u00A0'}</p>
         </div>
         
         {/* Job number */}
