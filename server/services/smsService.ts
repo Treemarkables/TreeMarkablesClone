@@ -1,5 +1,4 @@
-import { getTwilioClient, getTwilioFromPhoneNumber } from './twilioClient';
-import type { Twilio } from 'twilio';
+import { sendSMSEveryoneMessage, getSMSEveryoneSenderId } from './smsEveryoneClient';
 
 interface SMSParams {
   to: string;
@@ -9,25 +8,26 @@ interface SMSParams {
 function normalizePhoneNumber(phone: string): string {
   const cleaned = phone.replace(/\D/g, '');
   
+  // SMS Everyone requires international format without the + sign
+  // For NZ numbers: 6421123456 (not +6421123456)
   if (cleaned.startsWith('64')) {
-    return `+${cleaned}`;
+    return cleaned;
   }
   
   if (cleaned.startsWith('0')) {
-    return `+64${cleaned.substring(1)}`;
+    return `64${cleaned.substring(1)}`;
   }
   
   if (cleaned.length === 9 || cleaned.length === 10) {
-    return `+64${cleaned}`;
+    return `64${cleaned}`;
   }
   
-  return phone;
+  return cleaned;
 }
 
 class SMSService {
-  private client: Twilio | null = null;
   private isConfigured: boolean = false;
-  private fromPhone: string = '';
+  private senderId: string = '';
   private isInitializing: boolean = false;
 
   constructor() {
@@ -39,12 +39,11 @@ class SMSService {
     this.isInitializing = true;
 
     try {
-      this.client = await getTwilioClient();
-      this.fromPhone = await getTwilioFromPhoneNumber();
+      this.senderId = await getSMSEveryoneSenderId();
       this.isConfigured = true;
-      console.log('📱 Twilio SMS service configured successfully via Replit connector');
+      console.log('📱 SMS Everyone NZ service configured successfully');
     } catch (error) {
-      console.log('📱 Twilio connector not configured - SMS service in mock mode');
+      console.log('📱 SMS Everyone not configured - SMS service in mock mode');
       console.log('📱 Error:', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       this.isInitializing = false;
@@ -64,26 +63,23 @@ class SMSService {
       const normalizedPhone = normalizePhoneNumber(params.to);
       console.log(`📱 Normalizing phone: ${params.to} -> ${normalizedPhone}`);
 
-      if (!this.isConfigured || !this.client) {
+      if (!this.isConfigured) {
         console.log('\n=== SMS NOTIFICATION (Mock Mode) ===');
         console.log(`To: ${normalizedPhone}`);
-        console.log(`From: ${this.fromPhone || 'Treemarkables'}`);
+        console.log(`From: ${this.senderId || 'Treemarkables'}`);
         console.log(`Message: ${params.message}`);
         console.log('Time:', new Date().toLocaleString());
         console.log('==============================\n');
         return true;
       }
 
-      const message = await this.client.messages.create({
-        body: params.message,
-        from: this.fromPhone,
-        to: normalizedPhone,
-      });
+      const result = await sendSMSEveryoneMessage(normalizedPhone, params.message);
 
-      console.log(`📱 SMS sent successfully to ${normalizedPhone}, SID: ${message.sid}`);
+      console.log(`📱 SMS sent successfully to ${normalizedPhone} via SMS Everyone (Campaign ID: ${result.CampaignId})`);
+      console.log(`📱 Credits used: ${result.Credits}, Messages: ${result.Messages}`);
       return true;
     } catch (error) {
-      console.error('📱 Twilio SMS error:', error);
+      console.error('📱 SMS Everyone error:', error);
       return false;
     }
   }
