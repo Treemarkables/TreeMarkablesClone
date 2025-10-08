@@ -132,7 +132,22 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       });
     }
     
-    return filtered;
+    // Sort by job number (descending - highest job number first)
+    const sorted = [...filtered].sort((a: any, b: any) => {
+      const numA = parseInt(a.jobNumber || '0', 10);
+      const numB = parseInt(b.jobNumber || '0', 10);
+      return numB - numA; // Descending order
+    });
+    
+    // Debug logging
+    console.log('🔍 Dispatch Board Debug:', {
+      totalJobs: sorted.length,
+      statusFilter,
+      searchQuery,
+      top10Jobs: sorted.slice(0, 10).map((j: any) => ({ jobNumber: j.jobNumber, title: j.title }))
+    });
+    
+    return sorted;
   }, [allJobsRaw, statusFilter, searchQuery, customersData]);
   
   // Status options for dropdown
