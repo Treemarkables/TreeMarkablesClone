@@ -88,9 +88,10 @@ export default function StumpGrinding() {
   const handleCallNow = () => {
     if ((window as any).gtag_report_conversion) {
       (window as any).gtag_report_conversion('tel:0272166882');
-    } else {
-      window.location.href = 'tel:0272166882';
     }
+    setTimeout(() => {
+      window.location.href = 'tel:0272166882';
+    }, 100);
   };
 
   // Local business structured data for Stump Grinding SEO
