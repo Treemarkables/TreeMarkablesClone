@@ -496,8 +496,8 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
             {/* Jobs List */}
             <div className="p-3 pb-8 space-y-3">
-              {allJobs
-                .sort((a: any, b: any) => {
+              {(() => {
+                const sorted = [...allJobs].sort((a: any, b: any) => {
                   // Sort by job number (descending) for newest first
                   const aNum = parseInt(a.jobNumber) || 0;
                   const bNum = parseInt(b.jobNumber) || 0;
@@ -508,9 +508,19 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                   const aDate = new Date(a.createdAt || a.id);
                   const bDate = new Date(b.createdAt || b.id);
                   return bDate.getTime() - aDate.getTime();
-                })
-                .map((job: any, index: number) => renderJobSidebarCard(job, index))
-              }
+                });
+                console.log('🔍 Dispatch Board Debug:', {
+                  totalJobs: allJobs.length,
+                  statusFilter,
+                  searchQuery,
+                  top10Jobs: sorted.slice(0, 10).map((j: any) => ({
+                    jobNumber: j.jobNumber,
+                    title: j.title || '(no title)',
+                    status: j.status
+                  }))
+                });
+                return sorted.map((job: any, index: number) => renderJobSidebarCard(job, index));
+              })()}
             </div>
           </div>
         </div>
