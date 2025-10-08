@@ -104,7 +104,7 @@ export default function TreeRemoval() {
           <source src={heroVideo} type="video/mp4" />
         </video>
         <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative max-w-6xl mx-auto px-6 pt-80">
+        <div className="relative max-w-6xl mx-auto px-6 pt-48">
           <div className="text-center">
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6" data-testid="text-hero-title">
               Gisborne's tree removal experts
