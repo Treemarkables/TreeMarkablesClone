@@ -165,16 +165,19 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   // Get customer name with enhanced display logic
   const getCustomerName = (customerId: string, jobData?: any) => {
     const customer = (customersData as any)?.data?.find((c: any) => c.id === customerId);
+    const job = jobData || (jobsData as any)?.data?.find((j: any) => j.customerId === customerId);
     
-    // If customer has a proper name (not generic ServiceM8 import name), use it
-    if (customer?.name && !customer.name.startsWith('Customer-')) {
+    // Priority 1: Use customer name if available (even if generic)
+    if (customer?.name) {
+      // Remove generic "Customer-" prefix if present, otherwise use full name
+      if (customer.name.startsWith('Customer-')) {
+        const cleanName = customer.name.replace('Customer-', '').trim();
+        return cleanName || customer.name;
+      }
       return customer.name;
     }
     
-    // Try to find the job for this customer to get address info
-    const job = jobData || (jobsData as any)?.data?.find((j: any) => j.customerId === customerId);
-    
-    // If job has proper address, use street address
+    // Priority 2: If job has proper address, use street address
     if (job?.address && job.address !== 'Address not specified' && job.address.trim()) {
       const addressParts = job.address.split(',');
       if (addressParts.length > 0) {
@@ -185,7 +188,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       }
     }
     
-    // For quote/lead jobs, try to use part of description as identifier
+    // Priority 3: For jobs with description, use part of it as identifier
     if (job?.description && job.description.trim() && job.description !== null) {
       const desc = job.description.trim();
       // Extract first meaningful part of description (up to 40 chars)
@@ -195,15 +198,9 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
       }
     }
     
-    // Check for job status to provide context
+    // Priority 4: For quote/lead jobs without other info, show status with job number
     if (job?.status === 'lead' || job?.status === 'quote') {
       return `${job.status.charAt(0).toUpperCase() + job.status.slice(1)} #${job.jobNumber || ''}`;
-    }
-    
-    // Fallback: use customer name without the generic prefix
-    if (customer?.name) {
-      const cleanName = customer.name.replace('Customer-', '');
-      return `Customer ${cleanName.substring(0, 8)}`;
     }
     
     return 'Unknown Customer';
