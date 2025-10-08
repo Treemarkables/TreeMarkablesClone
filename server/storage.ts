@@ -441,6 +441,7 @@ export interface IStorage {
   getProposalSection(id: string): Promise<ProposalSection | undefined>;
   updateProposalSection(id: string, updates: UpdateProposalSection): Promise<ProposalSection>;
   getProposalSectionsByProposal(proposalId: string): Promise<ProposalSection[]>;
+  getProposalSectionsByProposalIds(proposalIds: string[]): Promise<ProposalSection[]>;
   deleteProposalSection(id: string): Promise<void>;
   reorderProposalSections(proposalId: string, sectionIds: string[]): Promise<ProposalSection[]>;
   
@@ -449,6 +450,7 @@ export interface IStorage {
   getProposalLineItem(id: string): Promise<ProposalLineItem | undefined>;
   updateProposalLineItem(id: string, updates: UpdateProposalLineItem): Promise<ProposalLineItem>;
   getProposalLineItemsByProposal(proposalId: string): Promise<ProposalLineItem[]>;
+  getProposalLineItemsByProposalIds(proposalIds: string[]): Promise<ProposalLineItem[]>;
   deleteProposalLineItem(id: string): Promise<void>;
   reorderProposalLineItems(proposalId: string, itemIds: string[]): Promise<ProposalLineItem[]>;
 
@@ -2587,6 +2589,15 @@ class DatabaseStorage implements IStorage {
       .orderBy(schema.proposalSections.sortOrder);
     return sections;
   }
+
+  async getProposalSectionsByProposalIds(proposalIds: string[]): Promise<ProposalSection[]> {
+    if (proposalIds.length === 0) return [];
+    const sections = await db.select()
+      .from(schema.proposalSections)
+      .where(inArray(schema.proposalSections.proposalId, proposalIds))
+      .orderBy(schema.proposalSections.proposalId, schema.proposalSections.sortOrder);
+    return sections;
+  }
   
   async deleteProposalSection(id: string): Promise<void> {
     await db.delete(schema.proposalSections).where(eq(schema.proposalSections.id, id));
@@ -2624,6 +2635,15 @@ class DatabaseStorage implements IStorage {
       .from(schema.proposalLineItems)
       .where(eq(schema.proposalLineItems.proposalId, proposalId))
       .orderBy(schema.proposalLineItems.sortOrder);
+    return items;
+  }
+
+  async getProposalLineItemsByProposalIds(proposalIds: string[]): Promise<ProposalLineItem[]> {
+    if (proposalIds.length === 0) return [];
+    const items = await db.select()
+      .from(schema.proposalLineItems)
+      .where(inArray(schema.proposalLineItems.proposalId, proposalIds))
+      .orderBy(schema.proposalLineItems.proposalId, schema.proposalLineItems.sortOrder);
     return items;
   }
   

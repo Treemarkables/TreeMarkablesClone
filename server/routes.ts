@@ -10357,7 +10357,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Get all proposals
   app.get('/api/proposals', async (req: Request, res: Response) => {
     try {
-      const { customerId, quoteId, jobId } = req.query;
+      const { customerId, quoteId, jobId, includeSections } = req.query;
       
       let proposals;
       if (customerId) {
@@ -10370,12 +10370,66 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         proposals = await storage.getAllProposals();
       }
 
-      res.json({
-        success: true,
-        data: proposals,
-        count: proposals.length,
-        message: 'Proposals retrieved successfully'
-      });
+      // Only fetch sections and line items if explicitly requested
+      if (includeSections === 'true') {
+        // Batch fetch all sections and line items for all proposals in just 2 queries
+        const proposalIds = proposals.map(p => p.id);
+        
+        // Fetch all sections and line items in parallel (2 bulk queries total)
+        const [allSections, allLineItems] = await Promise.all([
+          storage.getProposalSectionsByProposalIds(proposalIds),
+          storage.getProposalLineItemsByProposalIds(proposalIds)
+        ]);
+
+        // Group sections and line items by proposal ID
+        const sectionsByProposalId = new Map<string, any[]>();
+        const lineItemsByProposalId = new Map<string, any[]>();
+        
+        allSections.forEach(section => {
+          if (!sectionsByProposalId.has(section.proposalId)) {
+            sectionsByProposalId.set(section.proposalId, []);
+          }
+          sectionsByProposalId.get(section.proposalId)!.push(section);
+        });
+        
+        allLineItems.forEach(item => {
+          if (!lineItemsByProposalId.has(item.proposalId)) {
+            lineItemsByProposalId.set(item.proposalId, []);
+          }
+          lineItemsByProposalId.get(item.proposalId)!.push(item);
+        });
+
+        // Combine the data
+        const proposalsWithData = proposals.map(proposal => {
+          const sections = sectionsByProposalId.get(proposal.id) || [];
+          const lineItems = lineItemsByProposalId.get(proposal.id) || [];
+
+          // Attach line items to their sections
+          const sectionsWithLineItems = sections.map(section => ({
+            ...section,
+            lineItems: lineItems.filter(item => item.sectionId === section.id)
+          }));
+
+          return {
+            ...proposal,
+            sections: sectionsWithLineItems
+          };
+        });
+
+        res.json({
+          success: true,
+          data: proposalsWithData,
+          count: proposalsWithData.length,
+          message: 'Proposals retrieved successfully'
+        });
+      } else {
+        res.json({
+          success: true,
+          data: proposals,
+          count: proposals.length,
+          message: 'Proposals retrieved successfully'
+        });
+      }
     } catch (error) {
       console.error('Error fetching proposals:', error);
       res.status(500).json({
