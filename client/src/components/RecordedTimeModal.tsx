@@ -185,6 +185,28 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     setPendingEntries(prev => prev.filter(entry => entry.id !== id));
   };
 
+  // Delete saved time entry mutation
+  const deleteTimeEntryMutation = useMutation({
+    mutationFn: async (entryId: string) => {
+      await apiRequest('DELETE', `/api/time-entries/job/${entryId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['time-entries', jobId, today] });
+      refetchTimeEntries();
+      toast({
+        title: "Success",
+        description: "Time entry deleted successfully"
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete time entry",
+        variant: "destructive"
+      });
+    }
+  });
+
   const saveAllEntries = async () => {
     try {
       if (pendingEntries.length === 0) {
@@ -432,8 +454,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               
               <div className="divide-y divide-gray-100">
                 {existingEntries.map((entry: any) => (
-                  <div key={entry.id} className="p-1 bg-white">
-                    <div className="grid grid-cols-3 gap-1">
+                  <div key={entry.id} className="p-1 bg-white hover:bg-gray-50 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between" data-testid={`saved-entry-${entry.id}`}>
+                    <div className="flex-1 grid grid-cols-3 gap-1">
                       <div>
                         <div className="text-[8px] text-gray-500">Staff</div>
                         <div className="font-medium text-[10px]">{entry.employeeName}</div>
@@ -447,6 +469,16 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         <div className="text-[10px] font-medium">{formatDuration(entry.hours)}</div>
                       </div>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteTimeEntryMutation.mutate(entry.id)}
+                      disabled={deleteTimeEntryMutation.isPending}
+                      className="text-red-600 hover:text-red-800 hover:bg-red-50 h-6 px-1"
+                      data-testid={`button-delete-${entry.id}`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 ))}
               </div>
