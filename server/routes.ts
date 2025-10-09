@@ -3759,6 +3759,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
       
       // If invoice data is provided but no invoiceId, create the invoice first
+      let emailBody = body; // Create mutable copy of body
       if (invoiceData && !invoiceId) {
         console.log('📋 Creating invoice from invoice data before sending email');
         const newInvoice = await storage.createInvoice({
@@ -3779,8 +3780,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Replace temporary invoice ID in email body with real invoice ID
         // The frontend uses the job ID as a placeholder, so we replace any invoice links
         const tempInvoiceId = invoiceData.jobId || jobId;
-        if (tempInvoiceId && body.includes(`/invoice/${tempInvoiceId}`)) {
-          body = body.replace(new RegExp(`/invoice/${tempInvoiceId}`, 'g'), `/invoice/${invoice.id}`);
+        if (tempInvoiceId && emailBody.includes(`/invoice/${tempInvoiceId}`)) {
+          emailBody = emailBody.replace(new RegExp(`/invoice/${tempInvoiceId}`, 'g'), `/invoice/${invoice.id}`);
           console.log('✅ Updated invoice link in email body from', tempInvoiceId, 'to', invoice.id);
         }
       } else if (invoiceId) {
@@ -3798,7 +3799,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
 
       // Prepare email content with any necessary formatting
-      const emailHtml = body.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
+      const emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
       
       // Process photo attachments
       const emailAttachments = [];
