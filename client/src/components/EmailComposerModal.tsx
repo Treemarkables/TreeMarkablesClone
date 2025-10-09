@@ -873,7 +873,7 @@ export function EmailComposerModal({
                     invoice={showPreview.data}
                     customer={customer}
                     lineItems={showPreview.data.lineItems || []}
-                    description={job?.description || job?.title || ''}
+                    description={showPreview.data.description || job?.description || job?.title || ''}
                     showActions={false}
                   />
                 )}
