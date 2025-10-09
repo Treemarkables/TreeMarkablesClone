@@ -139,42 +139,40 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
       </div>
 
       {/* Invoice Content */}
-      <div className="max-w-4xl mx-auto py-4 sm:py-6 px-2 sm:px-4 w-full">
+      <div className="max-w-4xl mx-auto py-2 sm:py-3 px-2 sm:px-4 w-full">
         <Card className="bg-white shadow-sm w-full">
-          <CardContent className="p-4 sm:p-8">
+          <CardContent className="p-3 sm:p-4">
             {/* Company Header */}
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-orange-600 mb-2">Treemarkables</h1>
-              <p className="text-gray-600">Professional Tree Care Services</p>
-              <p className="text-sm text-gray-500">Gisborne, New Zealand | Phone: 0272166882 | Email: quotes@treemarkables.nz</p>
+            <div className="text-center mb-3">
+              <h1 className="text-xl font-bold text-orange-600 mb-1">Treemarkables</h1>
+              <p className="text-sm text-gray-600">Professional Tree Care Services</p>
+              <p className="text-xs text-gray-500">Gisborne, New Zealand | Phone: 0272166882 | Email: quotes@treemarkables.nz</p>
             </div>
 
             {/* Status Banner */}
             {invoice.status === 'paid' && (
-              <div className="bg-green-100 border border-green-300 rounded-lg p-4 mb-6">
-                <div className="flex items-center">
-                  <Receipt className="w-5 h-5 text-green-600 mr-2" />
-                  <span className="text-green-800 font-medium">Payment Received</span>
-                  <span className="text-green-600 ml-2">- Thank you for your payment!</span>
+              <div className="bg-green-100 border border-green-300 rounded-lg p-2 mb-3">
+                <div className="flex items-center text-sm">
+                  <Receipt className="w-4 h-4 text-green-600 mr-2" />
+                  <span className="text-green-800 font-medium">Payment Received - Thank you!</span>
                 </div>
               </div>
             )}
 
             {isOverdue && (
-              <div className="bg-red-100 border border-red-300 rounded-lg p-4 mb-6">
-                <div className="flex items-center">
-                  <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-                  <span className="text-red-800 font-medium">Payment Overdue</span>
-                  <span className="text-red-600 ml-2">- Please contact us to arrange payment</span>
+              <div className="bg-red-100 border border-red-300 rounded-lg p-2 mb-3">
+                <div className="flex items-center text-sm">
+                  <AlertCircle className="w-4 h-4 text-red-600 mr-2" />
+                  <span className="text-red-800 font-medium">Payment Overdue - Please contact us</span>
                 </div>
               </div>
             )}
 
             {/* Invoice Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Invoice Details</h3>
-                <div className="space-y-2">
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Invoice Details</h3>
+                <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Invoice Number:</span>
                     <span className="font-medium">{invoice.invoiceNumber}</span>
@@ -199,8 +197,8 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Bill To</h3>
-                <div className="space-y-2">
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Bill To</h3>
+                <div className="space-y-1 text-sm">
                   <div>
                     <span className="text-gray-600">Name:</span>
                     <span className="font-medium ml-2">{customer?.name || 'N/A'}</span>
@@ -223,37 +221,37 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
 
             {/* Work Description */}
             {job?.description && (
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Work Performed</h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-gray-700">{job.description}</p>
+              <div className="mb-3">
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Work Performed</h3>
+                <div className="bg-gray-50 rounded-lg p-2">
+                  <p className="text-sm text-gray-700">{job.description}</p>
                 </div>
               </div>
             )}
 
             {/* Line Items */}
             {invoice.items && invoice.items.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Services & Materials</h3>
+              <div className="mb-3">
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Services & Materials</h3>
                 <div className="w-full overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300">
+                  <table className="w-full border-collapse border border-gray-300 text-sm">
                     <thead>
                       <tr className="bg-gray-50">
-                        <th className="border border-gray-300 px-4 py-2 text-left">Description</th>
-                        <th className="border border-gray-300 px-4 py-2 text-center">Qty</th>
-                        <th className="border border-gray-300 px-4 py-2 text-center">Unit</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right">Unit Price</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right">Total (inc GST)</th>
+                        <th className="border border-gray-300 px-2 py-1 text-left">Description</th>
+                        <th className="border border-gray-300 px-2 py-1 text-center">Qty</th>
+                        <th className="border border-gray-300 px-2 py-1 text-center">Unit</th>
+                        <th className="border border-gray-300 px-2 py-1 text-right">Unit Price</th>
+                        <th className="border border-gray-300 px-2 py-1 text-right">Total (inc GST)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {invoice.items.map((item: any, index: number) => (
                         <tr key={index}>
-                          <td className="border border-gray-300 px-4 py-2">{item.description}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-center">{item.quantity}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-center">{item.unit || 'each'}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.total)}</td>
+                          <td className="border border-gray-300 px-2 py-1">{item.description}</td>
+                          <td className="border border-gray-300 px-2 py-1 text-center">{item.quantity}</td>
+                          <td className="border border-gray-300 px-2 py-1 text-center">{item.unit || 'each'}</td>
+                          <td className="border border-gray-300 px-2 py-1 text-right">{formatCurrency(item.unitPrice)}</td>
+                          <td className="border border-gray-300 px-2 py-1 text-right">{formatCurrency(item.total)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -263,8 +261,8 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             )}
 
             {/* Totals */}
-            <div className="flex justify-end mb-8">
-              <div className="w-full max-w-sm space-y-3">
+            <div className="flex justify-end mb-3">
+              <div className="w-full max-w-sm space-y-1 text-sm">
                 <div className="flex justify-between text-gray-700">
                   <span>Subtotal (excl GST):</span>
                   <span>{formatCurrency(subtotal)}</span>
@@ -273,8 +271,8 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                   <span>GST (15%):</span>
                   <span>{formatCurrency(gstAmount)}</span>
                 </div>
-                <div className="border-t pt-2">
-                  <div className="flex justify-between text-xl font-bold text-gray-900">
+                <div className="border-t pt-1">
+                  <div className="flex justify-between text-lg font-bold text-gray-900">
                     <span>Total Due:</span>
                     <span>{formatCurrency(totalAmount)}</span>
                   </div>
@@ -283,11 +281,11 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             </div>
 
             {/* Payment Information */}
-            <div className="border-t pt-6 mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
+            <div className="border-t pt-3 mb-3">
+              <h3 className="text-base font-semibold text-gray-900 mb-2">Payment Information</h3>
+              <div className="bg-gray-50 rounded-lg p-2">
                 <div className="text-sm">
-                  <p className="font-medium text-gray-900 mb-2">Bank Transfer Details:</p>
+                  <p className="font-medium text-gray-900 mb-1">Bank Transfer Details:</p>
                   <p className="text-gray-700">Account Name: Treemarkables Ltd</p>
                   <p className="text-gray-700">Account: 06-0637-0768850-00</p>
                 </div>
@@ -295,17 +293,17 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             </div>
 
             {/* Terms */}
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Terms & Conditions</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 text-sm">
+            <div className="border-t pt-3">
+              <h3 className="text-base font-semibold text-gray-900 mb-2">Terms & Conditions</h3>
+              <div className="bg-gray-50 rounded-lg p-2">
+                <p className="text-gray-700 text-xs">
                   {invoice.terms || 'Payment due within 7 days of invoice date. Late payments may incur additional charges. GST included where applicable.'}
                 </p>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="text-center text-sm text-gray-600 mt-8 pt-6 border-t">
+            <div className="text-center text-xs text-gray-600 mt-3 pt-3 border-t">
               <p>Thank you for choosing Treemarkables!</p>
               <p className="mt-1">
                 For any questions about this invoice, please contact us at quotes@treemarkables.nz or 0272166882.
