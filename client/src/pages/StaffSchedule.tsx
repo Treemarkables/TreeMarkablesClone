@@ -88,6 +88,23 @@ export default function StaffSchedule() {
     return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
+  // Assign a consistent color to each staff member
+  const staffColors = [
+    { bg: 'bg-blue-50', border: 'border-blue-300', avatar: 'bg-blue-500' },
+    { bg: 'bg-green-50', border: 'border-green-300', avatar: 'bg-green-500' },
+    { bg: 'bg-purple-50', border: 'border-purple-300', avatar: 'bg-purple-500' },
+    { bg: 'bg-orange-50', border: 'border-orange-300', avatar: 'bg-orange-500' },
+    { bg: 'bg-pink-50', border: 'border-pink-300', avatar: 'bg-pink-500' },
+    { bg: 'bg-indigo-50', border: 'border-indigo-300', avatar: 'bg-indigo-500' },
+    { bg: 'bg-teal-50', border: 'border-teal-300', avatar: 'bg-teal-500' },
+    { bg: 'bg-cyan-50', border: 'border-cyan-300', avatar: 'bg-cyan-500' },
+  ];
+
+  const getStaffColor = (employeeId: string) => {
+    const hash = employeeId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return staffColors[hash % staffColors.length];
+  };
+
   const handleJobClick = (job: Job) => {
     setSelectedJob(job);
     setShowJobCard(true);
@@ -159,13 +176,14 @@ export default function StaffSchedule() {
           })
           .map(employee => {
           const employeeJobs = getEmployeeJobs(employee.id);
+          const color = getStaffColor(employee.id);
           
           return (
-            <Card key={employee.id} data-testid={`staff-card-${employee.id}`}>
+            <Card key={employee.id} data-testid={`staff-card-${employee.id}`} className={`border-l-4 ${color.border} ${color.bg}`}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback className="text-sm">
+                  <Avatar className={`h-10 w-10 ${color.avatar}`}>
+                    <AvatarFallback className="text-sm text-white">
                       {employee.firstName[0]}{employee.lastName[0]}
                     </AvatarFallback>
                   </Avatar>
