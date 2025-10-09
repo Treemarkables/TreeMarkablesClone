@@ -64,6 +64,17 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   const customer = customerResponse?.data;
   const job = jobResponse?.data;
 
+  // Calculate totals from line items
+  const lineItemTotal = invoice.items?.reduce((sum: number, item: any) => {
+    const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
+    return sum + (itemTotal || 0);
+  }, 0) || 0;
+
+  const gstRate = 0.15;
+  const totalAmount = lineItemTotal || invoice.totalAmount || 0;
+  const subtotal = totalAmount / (1 + gstRate);
+  const gstAmount = totalAmount - subtotal;
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NZ', {
       style: 'currency',
@@ -135,7 +146,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-orange-600 mb-2">Treemarkables</h1>
               <p className="text-gray-600">Professional Tree Care Services</p>
-              <p className="text-sm text-gray-500">Gisborne, New Zealand | Phone: +64 6 867 1234 | Email: info@treemarkables.co.nz</p>
+              <p className="text-sm text-gray-500">Gisborne, New Zealand | Phone: 0272166882 | Email: info@treemarkables.co.nz</p>
             </div>
 
             {/* Status Banner */}
@@ -256,16 +267,16 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               <div className="w-full max-w-sm space-y-3">
                 <div className="flex justify-between text-gray-700">
                   <span>Subtotal (excl GST):</span>
-                  <span>{formatCurrency(invoice.subtotal || 0)}</span>
+                  <span>{formatCurrency(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-gray-700">
                   <span>GST (15%):</span>
-                  <span>{formatCurrency((invoice.totalAmount || 0) - (invoice.subtotal || 0))}</span>
+                  <span>{formatCurrency(gstAmount)}</span>
                 </div>
                 <div className="border-t pt-2">
                   <div className="flex justify-between text-xl font-bold text-gray-900">
                     <span>Total Due:</span>
-                    <span>{formatCurrency(invoice.totalAmount || 0)}</span>
+                    <span>{formatCurrency(totalAmount)}</span>
                   </div>
                 </div>
               </div>
@@ -303,7 +314,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             <div className="text-center text-sm text-gray-600 mt-8 pt-6 border-t">
               <p>Thank you for choosing Treemarkables!</p>
               <p className="mt-1">
-                For any questions about this invoice, please contact us at info@treemarkables.co.nz or +64 6 867 1234.
+                For any questions about this invoice, please contact us at info@treemarkables.co.nz or 0272166882.
               </p>
             </div>
           </CardContent>
