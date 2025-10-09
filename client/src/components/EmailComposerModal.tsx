@@ -448,7 +448,8 @@ export function EmailComposerModal({
       customerId: customer?.id,
       invoiceId: invoiceData?.id,
       quoteId: quoteData?.id,
-      proposalId: proposalData?.id
+      proposalId: proposalData?.id,
+      invoiceData: invoiceData // Pass full invoice data so backend can create invoice if needed
     };
 
     sendEmailMutation.mutate(emailPayload);
