@@ -4132,11 +4132,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Get invoice by ID
   app.get('/api/invoices/:id', async (req: Request, res: Response) => {
     try {
-      const invoice = await storage.getInvoice(req.params.id);
-      if (!invoice) {
+      // Query invoice directly from database
+      const result = await db.select()
+        .from(invoices)
+        .where(eq(invoices.id, req.params.id))
+        .limit(1);
+      
+      if (result.length === 0) {
         return res.status(404).json({ success: false, message: 'Invoice not found' });
       }
-      res.json({ success: true, data: invoice });
+      
+      res.json({ success: true, data: result[0] });
     } catch (error) {
       console.error('Error fetching invoice:', error);
       res.status(500).json({ success: false, message: 'Error fetching invoice' });
