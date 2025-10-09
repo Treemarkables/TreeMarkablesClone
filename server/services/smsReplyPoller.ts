@@ -1,7 +1,7 @@
 import { retrieveSMSReplies } from './smsEveryoneClient';
 import { db } from '../db';
-import { conversations, conversationMessages } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { jobs, jobDiaryEntries, customers } from '@shared/schema';
+import { eq, or, sql } from 'drizzle-orm';
 
 const POLLING_INTERVAL_MS = 60 * 1000; // 1 minute (60 seconds)
 let pollingIntervalId: NodeJS.Timeout | null = null;
@@ -51,80 +51,71 @@ async function processSMSReplies() {
     for (const reply of replies) {
       try {
         const senderPhone = normalizePhoneForMatching(reply.Originator);
-        console.log(`📱 Processing SMS from ${reply.Originator} (normalized: ${senderPhone})`);
+        console.log(`📱 Processing SMS reply from ${reply.Originator} (normalized: ${senderPhone})`);
 
-        // Try to find existing conversation by matching phone number
-        // Look in both lead and customer conversations
-        let existingConversation = await db
+        // Find jobs where this phone number matches
+        // Check jobContactPhone, billingContactPhone, or billingContactMobile
+        const matchedJobs = await db
           .select()
-          .from(conversations)
+          .from(jobs)
           .where(
-            and(
-              eq(conversations.source, 'sms'),
-              eq(conversations.isActive, true)
+            or(
+              sql`REGEXP_REPLACE(${jobs.jobContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${senderPhone.slice(-9)} || '%'`,
+              sql`REGEXP_REPLACE(${jobs.billingContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${senderPhone.slice(-9)} || '%'`,
+              sql`REGEXP_REPLACE(${jobs.billingContactMobile}, '[^0-9]', '', 'g') LIKE '%' || ${senderPhone.slice(-9)} || '%'`
             )
           )
-          .limit(100); // Get recent SMS conversations
+          .limit(10);
 
-        // Find conversation where the phone matches
-        const matchedConversation = existingConversation.find(conv => {
-          // Check if title contains the phone number
-          const titlePhone = normalizePhoneForMatching(conv.title);
-          return titlePhone.includes(senderPhone) || senderPhone.includes(titlePhone);
-        });
-
-        let conversationId: string;
-
-        if (matchedConversation) {
-          conversationId = matchedConversation.id;
-          console.log(`📱 Found existing conversation: ${conversationId}`);
-          
-          // Update conversation with latest message info
-          await db
-            .update(conversations)
-            .set({
-              lastMessageAt: new Date(reply.Received),
-              lastMessageBy: 'customer',
-              unreadCount: matchedConversation.unreadCount + 1,
-              updatedAt: new Date()
-            })
-            .where(eq(conversations.id, conversationId));
-        } else {
-          // Create new conversation for this SMS reply
-          const newConversation = await db
-            .insert(conversations)
-            .values({
-              title: `SMS from ${reply.Originator}`,
-              source: 'sms',
-              status: 'open',
-              lastMessageAt: new Date(reply.Received),
-              lastMessageBy: 'customer',
-              unreadCount: 1,
-            })
-            .returning();
-          
-          conversationId = newConversation[0].id;
-          console.log(`📱 Created new conversation: ${conversationId}`);
+        if (matchedJobs.length === 0) {
+          console.log(`📱 No matching job found for phone ${reply.Originator} - skipping reply`);
+          continue;
         }
 
-        // Add the reply message to the conversation
-        await db
-          .insert(conversationMessages)
-          .values({
-            conversationId,
-            type: 'sms',
-            content: reply.MessageText,
-            direction: 'inbound',
-            fromContact: reply.Originator,
-            fromName: reply.Originator,
-            toContact: reply.Recipient,
-            platform: 'sms',
-            externalId: reply.ReferenceId,
-            deliveryStatus: 'delivered',
-            isRead: false,
-          });
+        // If multiple jobs match, use the most recent one (by lastActivityAt or createdAt)
+        const matchedJob = matchedJobs.reduce((latest, current) => {
+          const latestTime = latest.lastActivityAt || latest.createdAt || new Date(0);
+          const currentTime = current.lastActivityAt || current.createdAt || new Date(0);
+          return currentTime > latestTime ? current : latest;
+        });
 
-        console.log(`📱 ✅ Stored SMS reply in conversation ${conversationId}`);
+        console.log(`📱 Matched reply to job #${matchedJob.jobNumber} (${matchedJob.id})`);
+
+        // Get customer name for diary entry
+        let customerName = 'Customer';
+        if (matchedJob.customerId) {
+          const customer = await db
+            .select()
+            .from(customers)
+            .where(eq(customers.id, matchedJob.customerId))
+            .limit(1);
+          
+          if (customer.length > 0) {
+            customerName = customer[0].name;
+          }
+        }
+
+        // Create diary entry for the SMS reply
+        await db.insert(jobDiaryEntries).values({
+          jobId: matchedJob.id,
+          entryType: 'sms',
+          title: '📱 SMS Reply Received',
+          description: `SMS reply from ${customerName} (${reply.Originator}):\n\n${reply.MessageText}`,
+          authorName: customerName,
+          authorRole: 'customer',
+          tags: ['sms', 'reply', 'communication'],
+          createdAt: new Date(reply.Received)
+        });
+
+        // Update job's lastActivityAt to bring it to top of dispatch board
+        await db
+          .update(jobs)
+          .set({ 
+            lastActivityAt: new Date(reply.Received)
+          })
+          .where(eq(jobs.id, matchedJob.id));
+
+        console.log(`📱 ✅ Stored SMS reply as diary entry in job #${matchedJob.jobNumber}`);
       } catch (error) {
         console.error(`📱 Error processing SMS reply from ${reply.Originator}:`, error);
       }
