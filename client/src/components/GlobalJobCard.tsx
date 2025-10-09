@@ -3485,6 +3485,7 @@ export function GlobalJobCard({
               jobId: editingJob?.id,
               invoiceNumber: `INV-${editingJob?.jobNumber || '0000'}`,
               customerId: editingJob?.customerId || '',
+              amount: totalAmount,
               totalAmount,
               status: 'draft',
               issueDate: new Date().toISOString(),
@@ -3492,7 +3493,8 @@ export function GlobalJobCard({
               paymentTerms: invoiceTemplate?.paymentTerms || 'Payment due within 30 days',
               lineItems,
               description,
-              photos
+              photos,
+              createdAt: new Date().toISOString()
             };
           })() : undefined}
           proposalData={emailContext === 'proposal' && jobProposalResponse?.success && jobProposalResponse.data.length > 0 ? {
