@@ -751,7 +751,7 @@ export function GlobalJobCard({
   const { data: jobProposalResponse, isLoading: isProposalLoading, isFetching: isProposalFetching, refetch: refetchProposals } = useQuery({
     queryKey: ["/api/proposals", editingJob?.id],
     queryFn: async () => {
-      const response = await fetch(`/api/proposals?jobId=${editingJob?.id}`);
+      const response = await fetch(`/api/proposals?jobId=${editingJob?.id}&includeSections=true`);
       if (!response.ok) throw new Error('Failed to fetch proposals');
       return response.json();
     },
@@ -3418,17 +3418,57 @@ export function GlobalJobCard({
             status: jobQuoteResponse.data[0].status,
             lineItems: formData?.lineItems || []
           } : undefined}
-          invoiceData={emailContext === 'invoice' ? {
-            id: editingJob?.id,
-            invoiceNumber: `INV-${editingJob?.jobNumber || '0000'}`,
-            customerId: editingJob?.customerId || '',
-            totalAmount: (editingJob?.lineItems || []).reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0,
-            status: 'draft',
-            issueDate: new Date().toISOString(),
-            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            paymentTerms: invoiceTemplate?.paymentTerms || 'Payment due within 30 days',
-            lineItems: editingJob?.lineItems || []
-          } : undefined}
+          invoiceData={emailContext === 'invoice' ? (() => {
+            // Get line items and description from proposal if available, otherwise from job
+            const proposal = jobProposalResponse?.data?.[0];
+            let lineItems: any[] = [];
+            let description = '';
+            
+            if (proposal?.sections) {
+              // Extract line items from all proposal sections
+              lineItems = proposal.sections.flatMap((section: any) => 
+                (section.lineItems || []).map((item: any) => ({
+                  id: item.id,
+                  description: item.description,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  total: item.totalPrice || item.total,
+                  unit: item.unit || 'ea',
+                  category: item.category
+                }))
+              );
+              // Use proposal title and sections as description
+              description = proposal.title || '';
+              if (proposal.sections && proposal.sections.length > 0) {
+                const sectionDescriptions = proposal.sections
+                  .map((s: any) => s.description)
+                  .filter((d: any) => d)
+                  .join('\n\n');
+                if (sectionDescriptions) {
+                  description = description ? `${description}\n\n${sectionDescriptions}` : sectionDescriptions;
+                }
+              }
+            } else {
+              // Fallback to job line items and description
+              lineItems = editingJob?.lineItems || [];
+              description = editingJob?.description || editingJob?.title || '';
+            }
+            
+            const totalAmount = lineItems.reduce((sum: number, item: any) => sum + (item.total || item.totalPrice || 0), 0) || 0;
+            
+            return {
+              id: editingJob?.id,
+              invoiceNumber: `INV-${editingJob?.jobNumber || '0000'}`,
+              customerId: editingJob?.customerId || '',
+              totalAmount,
+              status: 'draft',
+              issueDate: new Date().toISOString(),
+              dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              paymentTerms: invoiceTemplate?.paymentTerms || 'Payment due within 30 days',
+              lineItems,
+              description
+            };
+          })() : undefined}
           proposalData={emailContext === 'proposal' && jobProposalResponse?.success && jobProposalResponse.data.length > 0 ? {
             id: jobProposalResponse.data[0].id,
             proposalNumber: jobProposalResponse.data[0].proposalNumber,
