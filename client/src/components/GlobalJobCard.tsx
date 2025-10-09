@@ -3445,6 +3445,8 @@ export function GlobalJobCard({
             // Get line items and photos from proposal if available, otherwise from job
             // Always use job description (not proposal description)
             const proposal = jobProposalResponse?.data?.[0];
+            console.log('📋 Creating invoice data from proposal:', proposal?.id);
+            console.log('📋 Proposal has sections:', !!proposal?.sections, 'sections count:', proposal?.sections?.length || 0);
             let lineItems: any[] = [];
             let photos: any[] = [];
             
@@ -3470,13 +3472,17 @@ export function GlobalJobCard({
               photos = [];
             }
             
+            console.log('📋 Invoice will have', lineItems.length, 'line items');
+            
             // Always use job description (from job details)
             const description = editingJob?.description || editingJob?.title || '';
             
             const totalAmount = lineItems.reduce((sum: number, item: any) => sum + (item.total || item.totalPrice || 0), 0) || 0;
+            console.log('📋 Invoice total amount:', totalAmount);
             
             return {
               id: editingJob?.id,
+              jobId: editingJob?.id,
               invoiceNumber: `INV-${editingJob?.jobNumber || '0000'}`,
               customerId: editingJob?.customerId || '',
               totalAmount,
