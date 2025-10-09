@@ -3402,7 +3402,14 @@ export function GlobalJobCard({
           isOpen={isEmailComposerOpen}
           onClose={() => setIsEmailComposerOpen(false)}
           job={editingJob}
-          customer={selectedCustomer}
+          customer={emailContext === 'invoice' && editingJob ? {
+            ...selectedCustomer,
+            billingContactEmail: editingJob.billingContactEmail,
+            email: editingJob.billingContactEmail || editingJob.jobContactEmail || selectedCustomer?.email,
+            phone: editingJob.billingContactPhone || editingJob.billingContactMobile || editingJob.jobContactPhone || selectedCustomer?.phone,
+            address: editingJob.billingAddress || editingJob.address || selectedCustomer?.address,
+            name: selectedCustomer?.name || `${editingJob.jobContactFirstName || ''} ${editingJob.jobContactLastName || ''}`.trim()
+          } : selectedCustomer}
           quoteData={emailContext === 'quote' && jobQuoteResponse?.success && jobQuoteResponse.data.length > 0 ? {
             id: jobQuoteResponse.data[0].id,
             quoteNumber: jobQuoteResponse.data[0].quoteNumber,
