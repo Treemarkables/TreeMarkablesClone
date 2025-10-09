@@ -446,7 +446,9 @@ export function EmailComposerModal({
       selectedPhotos: selectedPhotos,
       jobId: job?.id,
       customerId: customer?.id,
-      invoiceId: invoiceData?.id,
+      // Only pass invoiceId if it exists in database (not temporary job ID)
+      // If invoiceData exists but no real invoiceId, backend will create it
+      invoiceId: undefined, // Let backend create invoice from invoiceData
       quoteId: quoteData?.id,
       proposalId: proposalData?.id,
       invoiceData: invoiceData // Pass full invoice data so backend can create invoice if needed
