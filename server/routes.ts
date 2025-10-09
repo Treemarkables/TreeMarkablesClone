@@ -14,6 +14,9 @@ declare module 'express-session' {
 import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { invoices } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertLeadSchema, insertCallSchema, insertQuoteSchema,
@@ -3779,16 +3782,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           invoice = newInvoice;
           console.log('✅ Invoice created with ID:', invoice.id);
         } catch (error: any) {
-          // If duplicate invoice number, this invoice was already created - fetch the existing one
+          // If duplicate invoice number, this invoice was already created - fetch it by number
           if (error.code === '23505' && error.constraint === 'invoices_invoice_number_unique') {
             console.log('📋 Invoice already exists with number:', invoiceData.invoiceNumber, '- fetching existing invoice');
-            // Fetch all invoices for this job and find the one with matching invoice number
-            const jobInvoices = await storage.getInvoicesByJobId(jobId);
-            invoice = jobInvoices.find((inv: any) => inv.invoiceNumber === invoiceData.invoiceNumber) || null;
-            if (invoice) {
+            // Query the database directly to find the invoice by invoice number
+            const result = await db.select()
+              .from(invoices)
+              .where(eq(invoices.invoiceNumber, invoiceData.invoiceNumber))
+              .limit(1);
+            
+            if (result.length > 0) {
+              invoice = result[0];
               console.log('✅ Found existing invoice with ID:', invoice.id);
             } else {
               console.warn('⚠️ Could not find existing invoice with number:', invoiceData.invoiceNumber);
+              invoice = null;
             }
           } else {
             throw error; // Re-throw other errors
