@@ -3738,6 +3738,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       console.log(`📧 Processing email to ${to} with ${selectedPhotos.length} selected photos`);
       console.log('Selected photos:', selectedPhotos);
+      console.log('📋 Invoice data received:', invoiceData ? 'YES' : 'NO', invoiceData ? `(ID: ${invoiceData.id})` : '');
+      console.log('📋 Invoice ID received:', invoiceId || 'NONE');
       
       // Validate required fields
       if (!to || !subject || !body) {
