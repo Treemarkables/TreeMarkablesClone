@@ -88,7 +88,7 @@ export default function StaffSchedule() {
     return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
-  // Assign a consistent color to each staff member
+  // Assign a consistent color to each staff member - expanded palette
   const staffColors = [
     { bg: 'bg-blue-50', border: 'border-blue-300', avatar: 'bg-blue-500' },
     { bg: 'bg-green-50', border: 'border-green-300', avatar: 'bg-green-500' },
@@ -98,11 +98,27 @@ export default function StaffSchedule() {
     { bg: 'bg-indigo-50', border: 'border-indigo-300', avatar: 'bg-indigo-500' },
     { bg: 'bg-teal-50', border: 'border-teal-300', avatar: 'bg-teal-500' },
     { bg: 'bg-cyan-50', border: 'border-cyan-300', avatar: 'bg-cyan-500' },
+    { bg: 'bg-red-50', border: 'border-red-300', avatar: 'bg-red-500' },
+    { bg: 'bg-amber-50', border: 'border-amber-300', avatar: 'bg-amber-500' },
+    { bg: 'bg-lime-50', border: 'border-lime-300', avatar: 'bg-lime-500' },
+    { bg: 'bg-emerald-50', border: 'border-emerald-300', avatar: 'bg-emerald-500' },
+    { bg: 'bg-sky-50', border: 'border-sky-300', avatar: 'bg-sky-500' },
+    { bg: 'bg-violet-50', border: 'border-violet-300', avatar: 'bg-violet-500' },
+    { bg: 'bg-fuchsia-50', border: 'border-fuchsia-300', avatar: 'bg-fuchsia-500' },
+    { bg: 'bg-rose-50', border: 'border-rose-300', avatar: 'bg-rose-500' },
   ];
 
+  // Filter employees and create a stable mapping
+  const filteredEmployees = useMemo(() => {
+    return employees.filter(employee => {
+      const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
+      return !fullName.includes('admin') && fullName !== 'julian halley';
+    });
+  }, [employees]);
+
   const getStaffColor = (employeeId: string) => {
-    const hash = employeeId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return staffColors[hash % staffColors.length];
+    const index = filteredEmployees.findIndex(emp => emp.id === employeeId);
+    return staffColors[index % staffColors.length];
   };
 
   const handleJobClick = (job: Job) => {
@@ -168,13 +184,7 @@ export default function StaffSchedule() {
 
       {/* Staff Schedule List */}
       <div className="space-y-4">
-        {employees
-          .filter(employee => {
-            // Filter out admin user and Julian Halley
-            const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
-            return !fullName.includes('admin') && fullName !== 'julian halley';
-          })
-          .map(employee => {
+        {filteredEmployees.map(employee => {
           const employeeJobs = getEmployeeJobs(employee.id);
           const color = getStaffColor(employee.id);
           
