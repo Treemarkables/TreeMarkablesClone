@@ -7,7 +7,7 @@ import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
-import heroVideo from "@assets/copy_77E88CDC-C666-4B3C-B02C-5CE23818F128_1757799940776.mp4";
+import heroImage from "@assets/tree_pruning_hero.jpg";
 
 export default function TreeRemoval() {
   // Add Google tag event script for form submission tracking
@@ -94,17 +94,12 @@ export default function TreeRemoval() {
       <Header />
       {/* Hero Section */}
       <section className="relative min-h-screen">
-        {/* Video Background */}
-        <video 
-          autoPlay 
-          muted 
-          loop 
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover"
-        >
-          <source src={heroVideo} type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 bg-black/20"></div>
+        {/* Image Background */}
+        <div 
+          className="absolute inset-0 w-full h-full bg-cover bg-center"
+          style={{ backgroundImage: `url(${heroImage})` }}
+        />
+        <div className="absolute inset-0 bg-black/30"></div>
         <div className="relative max-w-6xl mx-auto px-6 pt-48">
           <div className="text-center">
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6" data-testid="text-hero-title">
