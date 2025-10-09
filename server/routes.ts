@@ -3773,6 +3773,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
         invoice = newInvoice;
         console.log('✅ Invoice created with ID:', invoice.id);
+        
+        // Replace temporary invoice ID in email body with real invoice ID
+        // The frontend uses the job ID as a placeholder, so we replace any invoice links
+        const tempInvoiceId = invoiceData.jobId || jobId;
+        if (tempInvoiceId && body.includes(`/invoice/${tempInvoiceId}`)) {
+          body = body.replace(new RegExp(`/invoice/${tempInvoiceId}`, 'g'), `/invoice/${invoice.id}`);
+          console.log('✅ Updated invoice link in email body from', tempInvoiceId, 'to', invoice.id);
+        }
       } else if (invoiceId) {
         invoice = await storage.getInvoice(invoiceId);
       }
