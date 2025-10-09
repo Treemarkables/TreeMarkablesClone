@@ -432,6 +432,29 @@ export function GlobalJobCard({
     }
   }, [editingJob?.id]);
 
+  // Listen for reply email events from diary
+  useEffect(() => {
+    const handleOpenEmailComposer = (event: CustomEvent) => {
+      const { to, subject, context } = event.detail;
+      setEmailContext('general');
+      setIsEmailComposerOpen(true);
+      
+      // Pre-fill email fields after modal opens
+      setTimeout(() => {
+        const toInput = document.querySelector('input[name="email-to"]') as HTMLInputElement;
+        const subjectInput = document.querySelector('input[name="email-subject"]') as HTMLInputElement;
+        if (toInput) toInput.value = to;
+        if (subjectInput) subjectInput.value = subject;
+      }, 100);
+    };
+
+    window.addEventListener('openEmailComposer', handleOpenEmailComposer as EventListener);
+    
+    return () => {
+      window.removeEventListener('openEmailComposer', handleOpenEmailComposer as EventListener);
+    };
+  }, []);
+
   // Form setup
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
