@@ -3758,24 +3758,33 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         customer = await storage.getCustomer(customerId);
       }
       
-      // If invoice data is provided but no invoiceId, create the invoice first
+      // If invoice data is provided but no invoiceId, create or find the invoice
       let emailBody = body; // Create mutable copy of body
       if (invoiceData && !invoiceId) {
-        console.log('📋 Creating invoice from invoice data before sending email');
-        const newInvoice = await storage.createInvoice({
-          jobId: invoiceData.jobId || jobId,
-          customerId: invoiceData.customerId || customerId,
-          invoiceNumber: invoiceData.invoiceNumber,
-          amount: invoiceData.totalAmount,
-          dueDate: invoiceData.dueDate ? new Date(invoiceData.dueDate) : undefined,
-          issueDate: invoiceData.issueDate ? new Date(invoiceData.issueDate) : undefined,
-          status: 'sent', // Mark as sent since we're sending it now
-          items: invoiceData.lineItems || [],
-          notes: invoiceData.description,
-          jobTitle: job?.title || job?.description || 'Service'
-        });
-        invoice = newInvoice;
-        console.log('✅ Invoice created with ID:', invoice.id);
+        // First check if an invoice already exists for this job with this invoice number
+        const existingInvoices = await storage.getInvoicesByJob(invoiceData.jobId || jobId);
+        const existingInvoice = existingInvoices.find(inv => inv.invoiceNumber === invoiceData.invoiceNumber);
+        
+        if (existingInvoice) {
+          console.log('📋 Invoice already exists with number:', invoiceData.invoiceNumber, '- using existing invoice');
+          invoice = existingInvoice;
+        } else {
+          console.log('📋 Creating invoice from invoice data before sending email');
+          const newInvoice = await storage.createInvoice({
+            jobId: invoiceData.jobId || jobId,
+            customerId: invoiceData.customerId || customerId,
+            invoiceNumber: invoiceData.invoiceNumber,
+            amount: invoiceData.totalAmount,
+            dueDate: invoiceData.dueDate ? new Date(invoiceData.dueDate) : undefined,
+            issueDate: invoiceData.issueDate ? new Date(invoiceData.issueDate) : undefined,
+            status: 'sent', // Mark as sent since we're sending it now
+            items: invoiceData.lineItems || [],
+            notes: invoiceData.description,
+            jobTitle: job?.title || job?.description || 'Service'
+          });
+          invoice = newInvoice;
+          console.log('✅ Invoice created with ID:', invoice.id);
+        }
         
         // Replace temporary invoice ID in email body with real invoice ID
         // The frontend uses the job ID as a placeholder, so we replace any invoice links
