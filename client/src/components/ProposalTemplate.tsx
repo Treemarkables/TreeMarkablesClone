@@ -54,6 +54,7 @@ interface ProposalTemplateProps {
   template: DocumentTemplate;
   proposal: Proposal;
   customer?: Customer;
+  job?: any;
   sections?: ProposalSection[];
   className?: string;
   showActions?: boolean;
@@ -126,6 +127,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
   template,
   proposal,
   customer,
+  job,
   sections = [],
   className = '',
   showActions = false,
@@ -241,8 +243,11 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                     <h4 className="font-semibold text-gray-900 text-sm sm:text-base break-words" data-testid="text-customer-name">
                       {customer.name}
                     </h4>
-                    {customer.address && (
-                      <p className="text-gray-700 mt-2 text-sm sm:text-base break-words">{customer.address}</p>
+                    {(job?.address || customer.address) && (
+                      <div className="flex items-start gap-2 text-gray-700 mt-2 text-sm sm:text-base">
+                        <MapPin className="w-3 h-3 sm:w-4 sm:h-4 shrink-0 mt-1" />
+                        <p className="break-words">{job?.address || customer.address}</p>
+                      </div>
                     )}
                   </div>
                   <div className="space-y-1">
