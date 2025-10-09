@@ -283,12 +283,6 @@ export default function ConversationDetail() {
             placeholder="Type a message..."
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendReply();
-              }
-            }}
             className="min-h-[40px] sm:min-h-[44px] max-h-[100px] sm:max-h-[120px] resize-none text-sm sm:text-base"
             data-testid="textarea-message-input"
           />
