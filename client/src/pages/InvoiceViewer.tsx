@@ -221,7 +221,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             )}
 
             {/* Line Items */}
-            {invoice.lineItems && invoice.lineItems.length > 0 && (
+            {invoice.items && invoice.items.length > 0 && (
               <div className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Services & Materials</h3>
                 <div className="w-full overflow-x-auto">
@@ -229,16 +229,18 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                     <thead>
                       <tr className="bg-gray-50">
                         <th className="border border-gray-300 px-4 py-2 text-left">Description</th>
-                        <th className="border border-gray-300 px-4 py-2 text-center">Quantity</th>
+                        <th className="border border-gray-300 px-4 py-2 text-center">Qty</th>
+                        <th className="border border-gray-300 px-4 py-2 text-center">Unit</th>
                         <th className="border border-gray-300 px-4 py-2 text-right">Unit Price</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right">Total</th>
+                        <th className="border border-gray-300 px-4 py-2 text-right">Total (inc GST)</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {invoice.lineItems.map((item: any, index: number) => (
+                      {invoice.items.map((item: any, index: number) => (
                         <tr key={index}>
                           <td className="border border-gray-300 px-4 py-2">{item.description}</td>
                           <td className="border border-gray-300 px-4 py-2 text-center">{item.quantity}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-center">{item.unit || 'each'}</td>
                           <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
                           <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.total)}</td>
                         </tr>
@@ -277,15 +279,11 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                   <div>
                     <p className="font-medium text-gray-900 mb-2">Bank Transfer Details:</p>
                     <p className="text-gray-700">Account Name: Treemarkables Ltd</p>
-                    <p className="text-gray-700">Bank: ANZ</p>
-                    <p className="text-gray-700">Account: 01-0123-0123456-00</p>
-                    <p className="text-gray-700">Reference: {invoice.invoiceNumber}</p>
+                    <p className="text-gray-700">Account: 06-0637-0768850-00</p>
                   </div>
                   <div>
                     <p className="font-medium text-gray-900 mb-2">Other Payment Methods:</p>
                     <p className="text-gray-700">Cash on completion</p>
-                    <p className="text-gray-700">EFTPOS available</p>
-                    <p className="text-gray-700">Credit Card (Visa/Mastercard)</p>
                   </div>
                 </div>
               </div>
