@@ -286,16 +286,10 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             <div className="border-t pt-6 mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
               <div className="bg-gray-50 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="font-medium text-gray-900 mb-2">Bank Transfer Details:</p>
-                    <p className="text-gray-700">Account Name: Treemarkables Ltd</p>
-                    <p className="text-gray-700">Account: 06-0637-0768850-00</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900 mb-2">Other Payment Methods:</p>
-                    <p className="text-gray-700">Cash on completion</p>
-                  </div>
+                <div className="text-sm">
+                  <p className="font-medium text-gray-900 mb-2">Bank Transfer Details:</p>
+                  <p className="text-gray-700">Account Name: Treemarkables Ltd</p>
+                  <p className="text-gray-700">Account: 06-0637-0768850-00</p>
                 </div>
               </div>
             </div>
