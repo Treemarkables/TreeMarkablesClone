@@ -331,7 +331,7 @@ const timeSlots = [
 
 // Job filter options similar to ServiceM8
 const jobFilterOptions = [
-  { value: 'all', label: 'All Jobs', icon: List, description: 'Jobs with a Quote or Work Order status, or recently Completed/Unsuccessful.' },
+  { value: 'all', label: 'All Jobs', icon: List, description: 'Active jobs with Quote or Work Order status (excludes completed).' },
   { value: 'action_required', label: 'Action Required', icon: AlertTriangle, description: 'Jobs that need to be scheduled, sent to a Queue, or actioned in some way.' },
   { value: 'for_review', label: 'For My Review', icon: Target, description: 'Jobs that specifically need your attention.' },
   { value: 'leads', label: 'Leads', icon: User, description: 'Potential customers and job inquiries.' },
@@ -823,8 +823,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     const sorted = jobs
       .filter(job => {
-        // Show all jobs including completed (only exclude unsuccessful)
-        return job.status !== 'unsuccessful';
+        // Exclude completed and unsuccessful jobs from dispatch board
+        return job.status !== 'unsuccessful' && job.status !== 'completed';
       })
       .filter(job => {
         // Apply search filter
