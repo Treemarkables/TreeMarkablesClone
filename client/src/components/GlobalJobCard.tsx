@@ -3414,9 +3414,12 @@ export function GlobalJobCard({
           invoiceData={emailContext === 'invoice' ? {
             id: editingJob?.id,
             invoiceNumber: `INV-${editingJob?.jobNumber || '0000'}`,
+            customerId: editingJob?.customerId || '',
             totalAmount: formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0,
+            status: 'draft',
             issueDate: new Date().toISOString(),
             dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            paymentTerms: invoiceTemplate?.paymentTerms || 'Payment due within 30 days',
             lineItems: formData?.lineItems || []
           } : undefined}
           proposalData={emailContext === 'proposal' && jobProposalResponse?.success && jobProposalResponse.data.length > 0 ? {
