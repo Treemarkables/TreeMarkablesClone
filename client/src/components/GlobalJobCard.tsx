@@ -3419,13 +3419,11 @@ export function GlobalJobCard({
             lineItems: formData?.lineItems || []
           } : undefined}
           invoiceData={emailContext === 'invoice' ? (() => {
-            // Get line items, description, and photos from proposal if available, otherwise from job
+            // Get line items and photos from proposal if available, otherwise from job
+            // Always use job description (not proposal description)
             const proposal = jobProposalResponse?.data?.[0];
             let lineItems: any[] = [];
-            let description = '';
             let photos: any[] = [];
-            
-            console.log('📋 Invoice Data Builder - Proposal:', proposal);
             
             if (proposal?.sections) {
               // Extract line items from all proposal sections
@@ -3443,26 +3441,14 @@ export function GlobalJobCard({
               
               // Extract photos from all proposal sections
               photos = proposal.sections.flatMap((section: any) => section.photos || []);
-              
-              // Use proposal title and sections as description
-              description = proposal.title || '';
-              if (proposal.sections && proposal.sections.length > 0) {
-                const sectionDescriptions = proposal.sections
-                  .map((s: any) => s.description)
-                  .filter((d: any) => d)
-                  .join('\n\n');
-                if (sectionDescriptions) {
-                  description = description ? `${description}\n\n${sectionDescriptions}` : sectionDescriptions;
-                }
-              }
             } else {
-              // Fallback to job line items and description
+              // Fallback to job line items
               lineItems = editingJob?.lineItems || [];
-              description = editingJob?.description || editingJob?.title || '';
               photos = [];
             }
             
-            console.log('📋 Invoice Data:', { lineItems, description, photos: photos.length });
+            // Always use job description (from job details)
+            const description = editingJob?.description || editingJob?.title || '';
             
             const totalAmount = lineItems.reduce((sum: number, item: any) => sum + (item.total || item.totalPrice || 0), 0) || 0;
             
