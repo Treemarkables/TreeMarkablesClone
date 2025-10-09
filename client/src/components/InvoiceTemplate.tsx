@@ -67,7 +67,10 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   const [isLoading, setIsLoading] = useState(false);
 
   // Calculate totals - use line items if available, otherwise fall back to invoice amount
-  const lineItemSubtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+  const lineItemSubtotal = lineItems.reduce((sum, item) => {
+    const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
+    return sum + (itemTotal || 0);
+  }, 0);
   const hasLineItems = lineItems.length > 0 && lineItemSubtotal > 0;
   
   const gstRate = 0.15; // 15% GST for New Zealand
