@@ -112,7 +112,7 @@ export default function StaffSchedule() {
   const filteredEmployees = useMemo(() => {
     return employees.filter(employee => {
       const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
-      return !fullName.includes('admin') && fullName !== 'julian halley';
+      return !fullName.includes('admin') && fullName !== 'julian halley' && fullName !== 'jullian halley';
     });
   }, [employees]);
 
