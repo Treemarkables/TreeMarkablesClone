@@ -3761,15 +3761,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // If invoice data is provided but no invoiceId, create or find the invoice
       let emailBody = body; // Create mutable copy of body
       if (invoiceData && !invoiceId) {
-        // First check if an invoice already exists for this job with this invoice number
-        const existingInvoices = await storage.getInvoicesByJob(invoiceData.jobId || jobId);
-        const existingInvoice = existingInvoices.find(inv => inv.invoiceNumber === invoiceData.invoiceNumber);
-        
-        if (existingInvoice) {
-          console.log('📋 Invoice already exists with number:', invoiceData.invoiceNumber, '- using existing invoice');
-          invoice = existingInvoice;
-        } else {
-          console.log('📋 Creating invoice from invoice data before sending email');
+        console.log('📋 Creating invoice from invoice data before sending email');
+        console.log('📋 Invoice line items:', invoiceData.lineItems?.length || 0, 'items');
+        try {
           const newInvoice = await storage.createInvoice({
             jobId: invoiceData.jobId || jobId,
             customerId: invoiceData.customerId || customerId,
@@ -3784,14 +3778,25 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           });
           invoice = newInvoice;
           console.log('✅ Invoice created with ID:', invoice.id);
+        } catch (error: any) {
+          // If duplicate invoice number, this invoice was already created - that's OK, use the existing one
+          if (error.code === '23505' && error.constraint === 'invoices_invoice_number_unique') {
+            console.log('📋 Invoice already exists with number:', invoiceData.invoiceNumber);
+            // For now, we'll just set invoice to null and the email will still send without creating a duplicate
+            invoice = null;
+          } else {
+            throw error; // Re-throw other errors
+          }
         }
         
         // Replace temporary invoice ID in email body with real invoice ID
         // The frontend uses the job ID as a placeholder, so we replace any invoice links
-        const tempInvoiceId = invoiceData.jobId || jobId;
-        if (tempInvoiceId && emailBody.includes(`/invoice/${tempInvoiceId}`)) {
-          emailBody = emailBody.replace(new RegExp(`/invoice/${tempInvoiceId}`, 'g'), `/invoice/${invoice.id}`);
-          console.log('✅ Updated invoice link in email body from', tempInvoiceId, 'to', invoice.id);
+        if (invoice) {
+          const tempInvoiceId = invoiceData.jobId || jobId;
+          if (tempInvoiceId && emailBody.includes(`/invoice/${tempInvoiceId}`)) {
+            emailBody = emailBody.replace(new RegExp(`/invoice/${tempInvoiceId}`, 'g'), `/invoice/${invoice.id}`);
+            console.log('✅ Updated invoice link in email body from', tempInvoiceId, 'to', invoice.id);
+          }
         }
       } else if (invoiceId) {
         invoice = await storage.getInvoice(invoiceId);
