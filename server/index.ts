@@ -376,6 +376,10 @@ function startNotificationQueueWorker() {
 
     // Start notification queue worker
     startNotificationQueueWorker();
+    
+    // Start SMS reply polling (polls every 60 seconds)
+    const { startSMSReplyPolling } = await import('./services/smsReplyPoller');
+    startSMSReplyPolling();
 
   } catch (error) {
     const err = error as Error;
