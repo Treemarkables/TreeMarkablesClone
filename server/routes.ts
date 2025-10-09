@@ -3771,7 +3771,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           status: 'sent', // Mark as sent since we're sending it now
           paymentTerms: invoiceData.paymentTerms,
           lineItems: invoiceData.lineItems || [],
-          description: invoiceData.description
+          description: invoiceData.description,
+          jobTitle: job?.title || job?.description || 'Service'
         });
         invoice = newInvoice;
         console.log('✅ Invoice created with ID:', invoice.id);
