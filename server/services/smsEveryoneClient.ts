@@ -188,12 +188,16 @@ export async function retrieveSMSReplies(): Promise<SMSReply[]> {
     });
 
     if (!response.ok) {
+      console.error(`📱 SMS Replies API error: ${response.status} ${response.statusText}`);
       throw new Error(`SMS Everyone Replies API error: ${response.status}`);
     }
 
     const result: SMSRepliesResponse = await response.json();
+    console.log('📱 SMS Replies API response:', JSON.stringify(result, null, 2));
+    
     return result.Messages || [];
   } catch (error) {
+    console.error('📱 SMS Replies API error:', error);
     throw error;
   }
 }
