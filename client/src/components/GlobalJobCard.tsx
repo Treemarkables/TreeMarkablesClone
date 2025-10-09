@@ -3614,7 +3614,7 @@ export function GlobalJobCard({
                     size="sm" 
                     onClick={() => {
                       setIsInvoiceModalOpen(false);
-                      handleEmailClick();
+                      handleEmailClick('invoice');
                     }} 
                     data-testid="button-email-invoice"
                     className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
