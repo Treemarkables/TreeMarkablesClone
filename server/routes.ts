@@ -3779,11 +3779,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           invoice = newInvoice;
           console.log('✅ Invoice created with ID:', invoice.id);
         } catch (error: any) {
-          // If duplicate invoice number, this invoice was already created - that's OK, use the existing one
+          // If duplicate invoice number, this invoice was already created - fetch the existing one
           if (error.code === '23505' && error.constraint === 'invoices_invoice_number_unique') {
-            console.log('📋 Invoice already exists with number:', invoiceData.invoiceNumber);
-            // For now, we'll just set invoice to null and the email will still send without creating a duplicate
-            invoice = null;
+            console.log('📋 Invoice already exists with number:', invoiceData.invoiceNumber, '- fetching existing invoice');
+            // Fetch all invoices for this job and find the one with matching invoice number
+            const jobInvoices = await storage.getInvoicesByJobId(jobId);
+            invoice = jobInvoices.find((inv: any) => inv.invoiceNumber === invoiceData.invoiceNumber) || null;
+            if (invoice) {
+              console.log('✅ Found existing invoice with ID:', invoice.id);
+            } else {
+              console.warn('⚠️ Could not find existing invoice with number:', invoiceData.invoiceNumber);
+            }
           } else {
             throw error; // Re-throw other errors
           }
