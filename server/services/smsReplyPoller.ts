@@ -130,7 +130,19 @@ async function processSMSReplies() {
       }
     }
   } catch (error) {
-    console.error('📱 Error polling SMS replies:', error instanceof Error ? error.message : error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Only log 403 errors once to avoid spam
+    if (errorMessage.includes('403')) {
+      if (!(processSMSReplies as any).logged403) {
+        console.warn('⚠️  SMS Replies API returned 403 - This feature may not be enabled on your SMS Everyone account');
+        console.warn('⚠️  Contact SMS Everyone support to enable 2-way SMS / Replies API feature');
+        console.warn('⚠️  Outbound SMS sending will continue to work normally');
+        (processSMSReplies as any).logged403 = true;
+      }
+    } else {
+      console.error('📱 Error polling SMS replies:', errorMessage);
+    }
   } finally {
     isPolling = false;
   }
