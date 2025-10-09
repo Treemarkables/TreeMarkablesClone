@@ -563,6 +563,9 @@ function Router() {
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
+      <Route path="/dispatch-board">
+        {() => <Redirect to="/dispatch" />}
+      </Route>
       <Route path="/calendar">
         <ProtectedRoute>
           <SidebarLayout>
