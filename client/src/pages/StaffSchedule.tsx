@@ -151,7 +151,13 @@ export default function StaffSchedule() {
 
       {/* Staff Schedule List */}
       <div className="space-y-4">
-        {employees.map(employee => {
+        {employees
+          .filter(employee => {
+            // Filter out admin user and Julian Halley
+            const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
+            return !fullName.includes('admin') && fullName !== 'julian halley';
+          })
+          .map(employee => {
           const employeeJobs = getEmployeeJobs(employee.id);
           
           return (
