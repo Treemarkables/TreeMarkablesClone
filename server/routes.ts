@@ -3734,7 +3734,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
     try {
-      const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId, quoteId } = req.body;
+      const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId, quoteId, invoiceData } = req.body;
       
       console.log(`📧 Processing email to ${to} with ${selectedPhotos.length} selected photos`);
       console.log('Selected photos:', selectedPhotos);
@@ -3755,9 +3755,28 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       if (customerId) {
         customer = await storage.getCustomer(customerId);
       }
-      if (invoiceId) {
+      
+      // If invoice data is provided but no invoiceId, create the invoice first
+      if (invoiceData && !invoiceId) {
+        console.log('📋 Creating invoice from invoice data before sending email');
+        const newInvoice = await storage.createInvoice({
+          jobId: invoiceData.jobId || jobId,
+          customerId: invoiceData.customerId || customerId,
+          invoiceNumber: invoiceData.invoiceNumber,
+          amount: invoiceData.totalAmount,
+          dueDate: invoiceData.dueDate,
+          issueDate: invoiceData.issueDate,
+          status: 'sent', // Mark as sent since we're sending it now
+          paymentTerms: invoiceData.paymentTerms,
+          lineItems: invoiceData.lineItems || [],
+          description: invoiceData.description
+        });
+        invoice = newInvoice;
+        console.log('✅ Invoice created with ID:', invoice.id);
+      } else if (invoiceId) {
         invoice = await storage.getInvoice(invoiceId);
       }
+      
       if (quoteId) {
         quote = await storage.getQuote(quoteId);
       }
