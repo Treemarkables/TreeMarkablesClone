@@ -1162,11 +1162,15 @@ export function ProposalBuilder({
       }))
     }));
 
+    // Get job data if available
+    const job = jobData && (jobData as any)?.success ? (jobData as any).data : null;
+
     return {
       proposal: previewProposal,
       template: previewTemplate,
       customer: previewCustomer,
-      sections: previewSections
+      sections: previewSections,
+      job: job
     };
   };
 
@@ -1892,6 +1896,7 @@ export function ProposalBuilder({
                     template={previewData.template}
                     proposal={previewData.proposal}
                     customer={previewData.customer}
+                    job={previewData.job}
                     sections={previewData.sections}
                     showActions={true}
                     onEmail={() => {
