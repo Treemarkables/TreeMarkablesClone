@@ -159,56 +159,41 @@ export async function getSMSEveryoneSenderId(): Promise<string> {
 }
 
 interface SMSReply {
-  originator: string;
-  recipient: string;
-  message_text: string;
-  received: string;
-  reference?: string;
+  Originator: string;
+  Recipient: string;
+  MessageText: string;
+  Received: string;
+  ReferenceId?: string;
 }
 
 interface SMSRepliesResponse {
-  replies: SMSReply[];
+  Count: number;
+  Messages: SMSReply[];
 }
 
 export async function retrieveSMSReplies(): Promise<SMSReply[]> {
   const credentials = await getCredentials();
   
-  // Try NZ endpoint first, then fallback to AU endpoint
-  const endpoints = [
-    'https://smseveryone.co.nz/api/v1/replies',
-    'https://www.smseveryone.com.au/api/v1/replies'
-  ];
+  // Use the correct endpoint from documentation
+  const endpoint = 'https://smseveryone.com/api/replies';
   
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          username: credentials.username,
-          password: credentials.password
-        })
-      });
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': createAuthHeader(credentials.username, credentials.password),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({}) // Empty body to get all new replies
+    });
 
-      if (response.ok) {
-        const result: SMSRepliesResponse = await response.json();
-        return result.replies || [];
-      }
-      
-      // If not OK, try next endpoint
-      if (endpoint === endpoints[endpoints.length - 1]) {
-        throw new Error(`SMS Everyone Replies API error: ${response.status}`);
-      }
-    } catch (error) {
-      // If it's the last endpoint, throw the error
-      if (endpoint === endpoints[endpoints.length - 1]) {
-        throw error;
-      }
-      // Otherwise, continue to next endpoint
+    if (!response.ok) {
+      throw new Error(`SMS Everyone Replies API error: ${response.status}`);
     }
+
+    const result: SMSRepliesResponse = await response.json();
+    return result.Messages || [];
+  } catch (error) {
+    throw error;
   }
-  
-  return [];
 }
