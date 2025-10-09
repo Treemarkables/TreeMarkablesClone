@@ -3766,8 +3766,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           customerId: invoiceData.customerId || customerId,
           invoiceNumber: invoiceData.invoiceNumber,
           amount: invoiceData.totalAmount,
-          dueDate: invoiceData.dueDate,
-          issueDate: invoiceData.issueDate,
+          dueDate: invoiceData.dueDate ? new Date(invoiceData.dueDate) : undefined,
+          issueDate: invoiceData.issueDate ? new Date(invoiceData.issueDate) : undefined,
           status: 'sent', // Mark as sent since we're sending it now
           paymentTerms: invoiceData.paymentTerms,
           lineItems: invoiceData.lineItems || [],
