@@ -77,6 +77,17 @@ export default function StaffSchedule() {
     }
   };
 
+  // Convert 24-hour time to 12-hour format
+  const formatTime12Hour = (time24?: string) => {
+    if (!time24) return 'All day';
+    
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
   const handleJobClick = (job: Job) => {
     setSelectedJob(job);
     setShowJobCard(true);
@@ -192,7 +203,7 @@ export default function StaffSchedule() {
                           </div>
                           <div className="text-right">
                             <div className="text-sm font-medium">
-                              {job.scheduledStartTime || 'All day'}
+                              {formatTime12Hour(job.scheduledStartTime)}
                             </div>
                             {job.status && (
                               <div className="text-xs mt-1">
