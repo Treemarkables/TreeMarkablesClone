@@ -910,6 +910,33 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                             <EmailActivity messageId={entry.metadata.sendgridMessageId} />
                           </div>
                         )}
+                        
+                        {/* Reply to Email Button */}
+                        {entry.entryType === 'email' && entry.metadata?.emailAddress && (
+                          <div className="mt-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Trigger email composer with reply context
+                                const event = new CustomEvent('openEmailComposer', {
+                                  detail: {
+                                    to: entry.metadata.emailAddress,
+                                    subject: `Re: ${entry.title}`,
+                                    context: 'reply'
+                                  }
+                                });
+                                window.dispatchEvent(event);
+                              }}
+                              className="gap-2"
+                              data-testid="button-reply-email"
+                            >
+                              <Mail className="h-4 w-4" />
+                              Reply
+                            </Button>
+                          </div>
+                        )}
 
                         {(entry.progress !== undefined || entry.weatherConditions || entry.equipmentUsed?.length || entry.tags?.length) && (
                           <div className="mt-4 pt-4 border-t border-gray-200">
