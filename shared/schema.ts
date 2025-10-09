@@ -536,6 +536,10 @@ export const proposals = pgTable("proposals", {
   signedDate: timestamp("signed_date"),
   templateUsed: text("template_used"),
   branding: jsonb("branding"), // logo, colors, fonts
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).default("0.00"),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).default("0.00"),
+  gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).default("0.00"),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("15.00"),
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
