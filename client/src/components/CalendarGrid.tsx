@@ -357,10 +357,13 @@ export function CalendarGrid() {
                           onClick={() => handleJobClick(job)}
                           data-testid={`job-block-${job.id}`}
                         >
-                          <div className="font-bold text-sm whitespace-normal break-words">
+                          <div className="font-semibold text-xs whitespace-normal break-words">
                             {getCustomerName(job)}
                           </div>
-                          <div className="text-xs opacity-90">#{job.jobNumber}</div>
+                          <div className="text-[10px] opacity-70 truncate">
+                            {job.address}
+                          </div>
+                          <div className="text-xs opacity-90 mt-auto">#{job.jobNumber}</div>
                         </div>
                       ))}
                     </div>
@@ -388,10 +391,13 @@ export function CalendarGrid() {
                           onClick={() => handleJobClick(job)}
                           data-testid={`job-block-${job.id}`}
                         >
-                          <div className="font-bold text-sm whitespace-normal break-words">
+                          <div className="font-semibold text-xs whitespace-normal break-words">
                             {getCustomerName(job)}
                           </div>
-                          <div className="text-xs opacity-90">
+                          <div className="text-[10px] opacity-70 truncate">
+                            {job.address}
+                          </div>
+                          <div className="text-xs opacity-90 mt-1">
                             #{job.jobNumber} • {job.scheduledStartTime || 'All day'}
                           </div>
                         </div>
