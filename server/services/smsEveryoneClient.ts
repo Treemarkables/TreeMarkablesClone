@@ -97,3 +97,37 @@ export async function getSMSEveryoneSenderId(): Promise<string> {
   const credentials = await getCredentials();
   return credentials.senderId;
 }
+
+interface SMSReply {
+  originator: string;
+  recipient: string;
+  message_text: string;
+  received: string;
+  reference?: string;
+}
+
+interface SMSRepliesResponse {
+  replies: SMSReply[];
+}
+
+export async function retrieveSMSReplies(): Promise<SMSReply[]> {
+  const credentials = await getCredentials();
+  
+  const response = await fetch('https://www.smseveryone.com.au/api/v1/replies', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      username: credentials.username,
+      password: credentials.password
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`SMS Everyone Replies API error: ${response.status}`);
+  }
+
+  const result: SMSRepliesResponse = await response.json();
+  return result.replies || [];
+}
