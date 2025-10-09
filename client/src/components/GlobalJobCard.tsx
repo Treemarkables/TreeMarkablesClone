@@ -3419,10 +3419,13 @@ export function GlobalJobCard({
             lineItems: formData?.lineItems || []
           } : undefined}
           invoiceData={emailContext === 'invoice' ? (() => {
-            // Get line items and description from proposal if available, otherwise from job
+            // Get line items, description, and photos from proposal if available, otherwise from job
             const proposal = jobProposalResponse?.data?.[0];
             let lineItems: any[] = [];
             let description = '';
+            let photos: any[] = [];
+            
+            console.log('📋 Invoice Data Builder - Proposal:', proposal);
             
             if (proposal?.sections) {
               // Extract line items from all proposal sections
@@ -3437,6 +3440,10 @@ export function GlobalJobCard({
                   category: item.category
                 }))
               );
+              
+              // Extract photos from all proposal sections
+              photos = proposal.sections.flatMap((section: any) => section.photos || []);
+              
               // Use proposal title and sections as description
               description = proposal.title || '';
               if (proposal.sections && proposal.sections.length > 0) {
@@ -3452,7 +3459,10 @@ export function GlobalJobCard({
               // Fallback to job line items and description
               lineItems = editingJob?.lineItems || [];
               description = editingJob?.description || editingJob?.title || '';
+              photos = [];
             }
+            
+            console.log('📋 Invoice Data:', { lineItems, description, photos: photos.length });
             
             const totalAmount = lineItems.reduce((sum: number, item: any) => sum + (item.total || item.totalPrice || 0), 0) || 0;
             
@@ -3466,7 +3476,8 @@ export function GlobalJobCard({
               dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
               paymentTerms: invoiceTemplate?.paymentTerms || 'Payment due within 30 days',
               lineItems,
-              description
+              description,
+              photos
             };
           })() : undefined}
           proposalData={emailContext === 'proposal' && jobProposalResponse?.success && jobProposalResponse.data.length > 0 ? {

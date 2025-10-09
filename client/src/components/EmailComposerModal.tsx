@@ -874,6 +874,7 @@ export function EmailComposerModal({
                     customer={customer}
                     lineItems={showPreview.data.lineItems || []}
                     description={showPreview.data.description || job?.description || job?.title || ''}
+                    photos={showPreview.data.photos || []}
                     showActions={false}
                   />
                 )}

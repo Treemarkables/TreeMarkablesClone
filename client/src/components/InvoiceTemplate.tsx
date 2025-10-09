@@ -41,6 +41,7 @@ interface InvoiceTemplateProps {
   customer?: Customer;
   lineItems?: InvoiceLineItem[];
   description?: string;
+  photos?: any[];
   className?: string;
   showActions?: boolean;
   onEmail?: () => void;
@@ -55,6 +56,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   customer,
   lineItems = [],
   description,
+  photos = [],
   className = '',
   showActions = false,
   onEmail,
@@ -292,6 +294,27 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                 {!description && (
                   <p className="text-sm text-gray-600 mt-2">Total amount includes all services as agreed</p>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Photos */}
+          {photos && photos.length > 0 && (
+            <div className="p-3 sm:p-8 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Documentation</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {photos.map((photo: any, index: number) => (
+                  <div key={photo.id || index} className="relative aspect-square">
+                    <img
+                      src={photo.url}
+                      alt={photo.caption || `Photo ${index + 1}`}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                    {photo.caption && (
+                      <p className="text-xs text-gray-600 mt-1 truncate">{photo.caption}</p>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
