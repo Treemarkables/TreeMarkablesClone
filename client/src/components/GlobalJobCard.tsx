@@ -3415,7 +3415,8 @@ export function GlobalJobCard({
             id: editingJob?.id,
             invoiceNumber: `INV-${editingJob?.jobNumber || '0000'}`,
             totalAmount: formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0,
-            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            issueDate: new Date().toISOString(),
+            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             lineItems: formData?.lineItems || []
           } : undefined}
           proposalData={emailContext === 'proposal' && jobProposalResponse?.success && jobProposalResponse.data.length > 0 ? {
