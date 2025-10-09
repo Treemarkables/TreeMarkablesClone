@@ -1877,21 +1877,6 @@ class DatabaseStorage implements IStorage {
   async getAllPriceRules(): Promise<PriceRule[]> { return []; }
   async getPriceRulesByService(serviceName: string): Promise<PriceRule[]> { return []; }
 
-  // Dashboard stats - return empty/default values
-  async getDashboardStats(): Promise<any> {
-    return {
-      totalLeads: 0,
-      totalCustomers: 0,
-      totalJobs: 0,
-      totalRevenue: 0,
-      conversionRate: 0,
-      averageQuoteValue: 0,
-      missedCalls: 0,
-      recentCalls: [],
-      recentLeads: []
-    };
-  }
-
   async getRevenueStats(fromDate?: Date, toDate?: Date): Promise<any> {
     // Get all completed jobs
     const allJobs = await this.getAllJobs();
