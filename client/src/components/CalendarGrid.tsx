@@ -21,7 +21,7 @@ interface Job {
   id: string;
   jobNumber: string;
   title?: string;
-  customerName: string;
+  customerId?: string;
   address: string;
   scheduledDate: string;
   scheduledStartTime?: string;
@@ -29,6 +29,11 @@ interface Job {
   status: string;
   assignedTo: string[];
   serviceType?: string;
+}
+
+interface Customer {
+  id: string;
+  name: string;
 }
 
 type ViewMode = 'day' | 'week' | '2weeks' | 'month';
@@ -49,8 +54,31 @@ export function CalendarGrid() {
     queryKey: ['/api/jobs'],
   });
 
+  // Fetch customers
+  const { data: customersData } = useQuery<{ success: boolean; data: Customer[] }>({
+    queryKey: ['/api/customers'],
+  });
+
   const employees = employeesData?.data || [];
   const allJobs = jobsData?.data || [];
+  const customers = customersData?.data || [];
+
+  // Create customer map for efficient lookup
+  const customerMap = useMemo(() => {
+    const map = new Map<string, string>();
+    customers.forEach(customer => {
+      map.set(customer.id, customer.name);
+    });
+    return map;
+  }, [customers]);
+
+  // Helper function to get customer name for a job
+  const getCustomerName = (job: Job) => {
+    if (job.customerId) {
+      return customerMap.get(job.customerId) || 'Unknown Customer';
+    }
+    return 'No Customer';
+  };
 
   // Navigation handlers
   const goToPrevious = () => {
@@ -330,7 +358,7 @@ export function CalendarGrid() {
                           data-testid={`job-block-${job.id}`}
                         >
                           <div className="font-bold text-sm whitespace-normal break-words">
-                            {job.customerName}
+                            {getCustomerName(job)}
                           </div>
                           <div className="text-xs opacity-90">#{job.jobNumber}</div>
                         </div>
@@ -361,7 +389,7 @@ export function CalendarGrid() {
                           data-testid={`job-block-${job.id}`}
                         >
                           <div className="font-bold text-sm whitespace-normal break-words">
-                            {job.customerName}
+                            {getCustomerName(job)}
                           </div>
                           <div className="text-xs opacity-90">
                             #{job.jobNumber} • {job.scheduledStartTime || 'All day'}
