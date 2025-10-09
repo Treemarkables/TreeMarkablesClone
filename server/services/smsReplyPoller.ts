@@ -1,5 +1,5 @@
 import { retrieveSMSReplies } from './smsEveryoneClient';
-import { db } from '@db';
+import { db } from '../db';
 import { conversations, conversationMessages } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 
