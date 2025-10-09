@@ -50,8 +50,8 @@ async function processSMSReplies() {
     
     for (const reply of replies) {
       try {
-        const senderPhone = normalizePhoneForMatching(reply.originator);
-        console.log(`📱 Processing SMS from ${reply.originator} (normalized: ${senderPhone})`);
+        const senderPhone = normalizePhoneForMatching(reply.Originator);
+        console.log(`📱 Processing SMS from ${reply.Originator} (normalized: ${senderPhone})`);
 
         // Try to find existing conversation by matching phone number
         // Look in both lead and customer conversations
@@ -83,7 +83,7 @@ async function processSMSReplies() {
           await db
             .update(conversations)
             .set({
-              lastMessageAt: new Date(reply.received),
+              lastMessageAt: new Date(reply.Received),
               lastMessageBy: 'customer',
               unreadCount: matchedConversation.unreadCount + 1,
               updatedAt: new Date()
@@ -94,10 +94,10 @@ async function processSMSReplies() {
           const newConversation = await db
             .insert(conversations)
             .values({
-              title: `SMS from ${reply.originator}`,
+              title: `SMS from ${reply.Originator}`,
               source: 'sms',
               status: 'open',
-              lastMessageAt: new Date(reply.received),
+              lastMessageAt: new Date(reply.Received),
               lastMessageBy: 'customer',
               unreadCount: 1,
             })
@@ -113,20 +113,20 @@ async function processSMSReplies() {
           .values({
             conversationId,
             type: 'sms',
-            content: reply.message_text,
+            content: reply.MessageText,
             direction: 'inbound',
-            fromContact: reply.originator,
-            fromName: reply.originator,
-            toContact: reply.recipient,
+            fromContact: reply.Originator,
+            fromName: reply.Originator,
+            toContact: reply.Recipient,
             platform: 'sms',
-            externalId: reply.reference,
+            externalId: reply.ReferenceId,
             deliveryStatus: 'delivered',
             isRead: false,
           });
 
         console.log(`📱 ✅ Stored SMS reply in conversation ${conversationId}`);
       } catch (error) {
-        console.error(`📱 Error processing SMS reply from ${reply.originator}:`, error);
+        console.error(`📱 Error processing SMS reply from ${reply.Originator}:`, error);
       }
     }
   } catch (error) {
