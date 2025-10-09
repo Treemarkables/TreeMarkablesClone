@@ -113,21 +113,42 @@ interface SMSRepliesResponse {
 export async function retrieveSMSReplies(): Promise<SMSReply[]> {
   const credentials = await getCredentials();
   
-  const response = await fetch('https://www.smseveryone.com.au/api/v1/replies', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      username: credentials.username,
-      password: credentials.password
-    })
-  });
+  // Try NZ endpoint first, then fallback to AU endpoint
+  const endpoints = [
+    'https://smseveryone.co.nz/api/v1/replies',
+    'https://www.smseveryone.com.au/api/v1/replies'
+  ];
+  
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username: credentials.username,
+          password: credentials.password
+        })
+      });
 
-  if (!response.ok) {
-    throw new Error(`SMS Everyone Replies API error: ${response.status}`);
+      if (response.ok) {
+        const result: SMSRepliesResponse = await response.json();
+        return result.replies || [];
+      }
+      
+      // If not OK, try next endpoint
+      if (endpoint === endpoints[endpoints.length - 1]) {
+        throw new Error(`SMS Everyone Replies API error: ${response.status}`);
+      }
+    } catch (error) {
+      // If it's the last endpoint, throw the error
+      if (endpoint === endpoints[endpoints.length - 1]) {
+        throw error;
+      }
+      // Otherwise, continue to next endpoint
+    }
   }
-
-  const result: SMSRepliesResponse = await response.json();
-  return result.replies || [];
+  
+  return [];
 }
