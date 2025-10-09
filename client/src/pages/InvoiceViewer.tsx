@@ -146,7 +146,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-orange-600 mb-2">Treemarkables</h1>
               <p className="text-gray-600">Professional Tree Care Services</p>
-              <p className="text-sm text-gray-500">Gisborne, New Zealand | Phone: 0272166882 | Email: info@treemarkables.co.nz</p>
+              <p className="text-sm text-gray-500">Gisborne, New Zealand | Phone: 0272166882 | Email: quotes@treemarkables.nz</p>
             </div>
 
             {/* Status Banner */}
@@ -308,7 +308,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             <div className="text-center text-sm text-gray-600 mt-8 pt-6 border-t">
               <p>Thank you for choosing Treemarkables!</p>
               <p className="mt-1">
-                For any questions about this invoice, please contact us at info@treemarkables.co.nz or 0272166882.
+                For any questions about this invoice, please contact us at quotes@treemarkables.nz or 0272166882.
               </p>
             </div>
           </CardContent>
