@@ -3456,9 +3456,9 @@ export function GlobalJobCard({
                 (section.lineItems || []).map((item: any) => ({
                   id: item.id,
                   description: item.description,
-                  quantity: item.quantity,
-                  unitPrice: item.unitPrice,
-                  total: item.totalPrice || item.total,
+                  quantity: parseFloat(item.quantity) || 1,
+                  unitPrice: parseFloat(item.unitPrice) || 0,
+                  total: parseFloat(item.totalPrice || item.total || '0'),
                   unit: item.unit || 'ea',
                   category: item.category
                 }))
@@ -3472,12 +3472,12 @@ export function GlobalJobCard({
               photos = [];
             }
             
-            console.log('📋 Invoice will have', lineItems.length, 'line items');
+            console.log('📋 Invoice will have', lineItems.length, 'line items, data:', lineItems);
             
             // Always use job description (from job details)
             const description = editingJob?.description || editingJob?.title || '';
             
-            const totalAmount = lineItems.reduce((sum: number, item: any) => sum + (item.total || item.totalPrice || 0), 0) || 0;
+            const totalAmount = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0) || 0;
             console.log('📋 Invoice total amount:', totalAmount);
             
             return {
