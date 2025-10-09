@@ -55,20 +55,56 @@ export async function sendSMSEveryoneMessage(
     body.TimeScheduled = `${year}${month}${day}${hour}${minute}`;
   }
 
-  const response = await fetch('https://smseveryone.com/api/campaign', {
-    method: 'POST',
-    headers: {
-      'Authorization': createAuthHeader(credentials.username, credentials.password),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
+  // Try NZ endpoint first, then fallback to .com endpoint
+  const endpoints = [
+    'https://smseveryone.co.nz/api/campaign',
+    'https://smseveryone.com/api/campaign'
+  ];
+  
+  let response;
+  let lastError;
+  
+  for (const endpoint of endpoints) {
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': createAuthHeader(credentials.username, credentials.password),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      
+      if (response.ok) {
+        break; // Success, exit loop
+      }
+    } catch (error) {
+      lastError = error;
+      // Try next endpoint
+    }
+  }
+  
+  if (!response) {
+    throw lastError || new Error('Failed to connect to SMS Everyone API');
+  }
 
   const result = await response.json();
   
   if (!response.ok || result.Code !== 0) {
-    throw new Error(result.Message || `SMS Everyone API error: ${response.status}`);
+    console.error('📱 SMS Everyone API Error:', {
+      status: response.status,
+      code: result.Code,
+      message: result.Message,
+      response: result
+    });
+    throw new Error(result.Message || `SMS Everyone API error: ${response.status} (Code: ${result.Code})`);
   }
+
+  console.log('✅ SMS Everyone API Response:', {
+    campaignId: result.CampaignId,
+    messages: result.Messages,
+    credits: result.Credits
+  });
 
   return result;
 }
@@ -76,13 +112,37 @@ export async function sendSMSEveryoneMessage(
 export async function getSMSEveryoneCredits(): Promise<number> {
   const credentials = await getCredentials();
   
-  const response = await fetch('https://smseveryone.com/api/credits', {
-    method: 'GET',
-    headers: {
-      'Authorization': createAuthHeader(credentials.username, credentials.password),
-      'Content-Type': 'application/json'
+  // Try NZ endpoint first, then fallback to .com endpoint
+  const endpoints = [
+    'https://smseveryone.co.nz/api/credits',
+    'https://smseveryone.com/api/credits'
+  ];
+  
+  let response;
+  let lastError;
+  
+  for (const endpoint of endpoints) {
+    try {
+      response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': createAuthHeader(credentials.username, credentials.password),
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        break; // Success, exit loop
+      }
+    } catch (error) {
+      lastError = error;
+      // Try next endpoint
     }
-  });
+  }
+  
+  if (!response) {
+    throw lastError || new Error('Failed to connect to SMS Everyone API');
+  }
 
   const result = await response.json();
   
