@@ -216,20 +216,36 @@ export function setupTimeTrackingRoutes(app: any) {
       
       console.log('Successfully created', createdEntries.length, 'time entries');
       
-      // Update job with additional costs if provided
-      if (additionalCosts !== undefined && additionalCosts !== null) {
-        try {
-          const job = await storage.getJob(jobId);
-          if (job) {
-            await storage.updateJob(jobId, {
-              laborCosts: additionalCosts.toString()
-            });
-            console.log('Updated job laborCosts to:', additionalCosts);
+      // Calculate total labor cost from time entries
+      const totalLaborCost = createdEntries.reduce((sum, entry) => {
+        const hours = parseFloat(entry.hours?.toString() || '0');
+        const rate = parseFloat(entry.rate?.toString() || '0');
+        return sum + (hours * rate);
+      }, 0);
+      
+      // Update job with calculated labor cost and additional costs
+      try {
+        const job = await storage.getJob(jobId);
+        if (job) {
+          const updates: any = {
+            calculatedLaborCost: totalLaborCost.toString(),
+            totalStaffHours: createdEntries.reduce((sum, e) => sum + parseFloat(e.hours?.toString() || '0'), 0).toString()
+          };
+          
+          // Also update additional costs if provided
+          if (additionalCosts !== undefined && additionalCosts !== null) {
+            updates.laborCosts = additionalCosts.toString();
           }
-        } catch (error) {
-          console.error('Error updating job labor costs:', error);
-          // Don't fail the whole request if this fails
+          
+          await storage.updateJob(jobId, updates);
+          console.log('Updated job labor costs:', { 
+            calculatedLaborCost: totalLaborCost, 
+            additionalCosts: additionalCosts || 0 
+          });
         }
+      } catch (error) {
+        console.error('Error updating job labor costs:', error);
+        // Don't fail the whole request if this fails
       }
       
       res.json({ 
