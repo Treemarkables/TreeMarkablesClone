@@ -1896,6 +1896,19 @@ class DatabaseStorage implements IStorage {
       ? totalRevenue / jobsWithRevenue.length 
       : 0;
     
+    // Calculate customer retention (repeat customers)
+    const customerJobCounts = new Map<string, number>();
+    allJobs.forEach(job => {
+      if (job.customerId) {
+        customerJobCounts.set(job.customerId, (customerJobCounts.get(job.customerId) || 0) + 1);
+      }
+    });
+    
+    const repeatCustomers = Array.from(customerJobCounts.values()).filter(count => count > 1).length;
+    const customerRetention = customersCount > 0 
+      ? Math.round((repeatCustomers / customersCount) * 100) 
+      : 0;
+    
     return {
       totalLeads: leadsCount,
       totalCustomers: customersCount,
@@ -1903,6 +1916,7 @@ class DatabaseStorage implements IStorage {
       totalRevenue,
       conversionRate: Math.round(conversionRate * 100) / 100,
       averageQuoteValue: Math.round(averageQuoteValue * 100) / 100,
+      customerRetention,
       missedCalls: 0,
       recentCalls: [],
       recentLeads: allLeads.slice(0, 5)
