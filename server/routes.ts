@@ -4838,7 +4838,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   app.get('/api/quote-analytics', async (req: Request, res: Response) => {
     try {
-      const analytics = await storage.getQuoteAnalytics();
+      const { fromDate, toDate } = req.query;
+      
+      let fromDateObj: Date | undefined;
+      let toDateObj: Date | undefined;
+      
+      if (fromDate && typeof fromDate === 'string') {
+        fromDateObj = new Date(fromDate);
+        if (isNaN(fromDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
+        }
+      }
+      
+      if (toDate && typeof toDate === 'string') {
+        toDateObj = new Date(toDate);
+        if (isNaN(toDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid toDate format' });
+        }
+      }
+      
+      const analytics = await storage.getQuoteAnalytics(fromDateObj, toDateObj);
       res.json({ success: true, data: analytics });
     } catch (error) {
       console.error('Error fetching quote analytics:', error);
