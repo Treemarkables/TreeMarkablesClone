@@ -1929,6 +1929,7 @@ class DatabaseStorage implements IStorage {
     // Calculate totals
     let totalRevenue = 0;
     let totalCosts = 0;
+    let jobsWithRevenue = 0;
     
     for (const job of filteredJobs) {
       // Calculate revenue from line items
@@ -1936,6 +1937,11 @@ class DatabaseStorage implements IStorage {
         return sum + (item.total || 0);
       }, 0);
       totalRevenue += jobRevenue;
+      
+      // Count jobs that have revenue
+      if (jobRevenue > 0) {
+        jobsWithRevenue++;
+      }
       
       // Calculate costs: line item costs + calculated labor cost + additional costs
       const itemCosts = (job.lineItems || []).reduce((sum: number, item: any) => {
@@ -1957,7 +1963,7 @@ class DatabaseStorage implements IStorage {
     return {
       totalRevenue,
       jobsCompleted: filteredJobs.length,
-      averageJobValue: filteredJobs.length > 0 ? totalRevenue / filteredJobs.length : 0,
+      averageJobValue: jobsWithRevenue > 0 ? totalRevenue / jobsWithRevenue : 0,
       totalCosts,
       grossMargin,
       monthlyTrend: []
