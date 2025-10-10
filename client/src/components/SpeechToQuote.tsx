@@ -163,8 +163,11 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
     setIsProcessing(true);
     
     try {
+      // Determine filename based on input type
+      const filename = audioBlob instanceof File ? audioBlob.name : 'recording.webm';
+      
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('audio', audioBlob, filename);
 
       const response = await fetch('/api/speech-to-quote', {
         method: 'POST',
@@ -201,6 +204,17 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Validate file size (max 25MB)
+    const maxSize = 25 * 1024 * 1024; // 25MB in bytes
+    if (file.size > maxSize) {
+      toast({
+        variant: 'destructive',
+        title: 'File Too Large',
+        description: 'Audio file must be less than 25MB. Try a shorter recording.',
+      });
+      return;
+    }
+
     // Validate file type
     const validTypes = ['audio/mp4', 'audio/m4a', 'audio/mpeg', 'audio/wav', 'audio/webm', 'audio/x-m4a'];
     if (!validTypes.includes(file.type) && !file.name.match(/\.(m4a|mp3|wav|webm)$/i)) {
@@ -233,7 +247,7 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
           <DialogTitle>Speech to Quote</DialogTitle>
           <DialogDescription>
             {isIOS 
-              ? 'Upload a voice memo or record using your device'
+              ? 'Upload a voice recording to generate a quote'
               : 'Record your voice or upload an audio file to generate a quote'
             }
           </DialogDescription>
@@ -266,10 +280,13 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
                     className="w-full"
                     data-testid="button-upload-audio"
                   >
-                    Upload Voice Memo
+                    Upload Audio File
                   </Button>
                   <p className="text-xs text-muted-foreground text-center">
-                    Record using your device's Voice Memos app, then upload it here
+                    {isIOS 
+                      ? 'Record using Voice Memos app first, then upload your recording here'
+                      : 'Upload a pre-recorded audio file (m4a, mp3, wav, or webm)'
+                    }
                   </p>
                 </div>
               ) : (
