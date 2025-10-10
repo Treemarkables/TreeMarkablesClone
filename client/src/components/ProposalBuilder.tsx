@@ -824,8 +824,20 @@ export function ProposalBuilder({
 
     // Auto-save the proposal before sending email to ensure latest data is used
     const formData = form.getValues();
+    
+    // Validate required fields
+    const actualCustomerId = formData.customerId || customerId;
+    if (!actualCustomerId) {
+      toast({
+        title: "Missing Customer",
+        description: "A customer must be assigned to the proposal before sending",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     const proposalData = {
-      customerId: formData.customerId || customerId,
+      customerId: actualCustomerId,
       jobId: formData.jobId || jobId,
       quoteId: formData.quoteId,
       proposalNumber: draftProposalId ? undefined : `PROP-${Date.now()}`,
@@ -866,9 +878,18 @@ export function ProposalBuilder({
       });
     } catch (error) {
       console.error('Error saving before email:', error);
+      
+      // Extract more detailed error message
+      let errorMessage = "Could not save proposal before sending. Please try manual save first.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMessage = (error as any).message;
+      }
+      
       toast({
         title: "Save Failed",
-        description: "Could not save proposal before sending. Please try manual save first.",
+        description: errorMessage,
         variant: "destructive"
       });
     }
