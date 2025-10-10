@@ -174,30 +174,46 @@ interface SMSRepliesResponse {
 export async function retrieveSMSReplies(): Promise<SMSReply[]> {
   const credentials = await getCredentials();
   
-  // Use the correct endpoint from documentation
-  const endpoint = 'https://smseveryone.com/api/replies';
+  // Try NZ endpoint first, then fallback to .com endpoint (same as send SMS)
+  const endpoints = [
+    'https://smseveryone.co.nz/api/replies',
+    'https://smseveryone.com/api/replies'
+  ];
   
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': createAuthHeader(credentials.username, credentials.password),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({}) // Empty body to get all new replies
-    });
-
-    if (!response.ok) {
-      console.error(`📱 SMS Replies API error: ${response.status} ${response.statusText}`);
-      throw new Error(`SMS Everyone Replies API error: ${response.status}`);
+  let response;
+  let lastError;
+  let usedEndpoint = '';
+  
+  for (const endpoint of endpoints) {
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': createAuthHeader(credentials.username, credentials.password),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({}) // Empty body to get all new replies
+      });
+      
+      if (response.ok) {
+        usedEndpoint = endpoint;
+        break; // Success, exit loop
+      } else {
+        console.error(`📱 SMS Replies API error at ${endpoint}: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error(`📱 SMS Replies connection error at ${endpoint}:`, error);
+      lastError = error;
+      // Try next endpoint
     }
-
-    const result: SMSRepliesResponse = await response.json();
-    console.log('📱 SMS Replies API response:', JSON.stringify(result, null, 2));
-    
-    return result.Messages || [];
-  } catch (error) {
-    console.error('📱 SMS Replies API error:', error);
-    throw error;
   }
+  
+  if (!response || !response.ok) {
+    throw lastError || new Error('Failed to connect to SMS Everyone Replies API');
+  }
+
+  const result: SMSRepliesResponse = await response.json();
+  console.log(`📱 SMS Replies API response from ${usedEndpoint}:`, JSON.stringify(result, null, 2));
+  
+  return result.Messages || [];
 }

@@ -4121,6 +4121,28 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Manual test endpoint to check SMS replies (for debugging)
+  app.get('/api/sms/test-replies', async (req: Request, res: Response) => {
+    try {
+      const { retrieveSMSReplies } = await import('./services/smsEveryoneClient');
+      const replies = await retrieveSMSReplies();
+      
+      res.json({
+        success: true,
+        count: replies.length,
+        replies: replies,
+        message: replies.length > 0 ? `Found ${replies.length} replies` : 'No SMS replies found'
+      });
+    } catch (error: any) {
+      console.error('Error testing SMS replies:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to fetch SMS replies',
+        error: error.toString()
+      });
+    }
+  });
+
   // Twilio webhook for incoming SMS replies
   app.post('/api/webhooks/sms', async (req: Request, res: Response) => {
     try {
