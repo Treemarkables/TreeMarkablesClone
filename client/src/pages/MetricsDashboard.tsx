@@ -95,7 +95,8 @@ export default function MetricsDashboard() {
   });
 
   const { data: quoteAnalytics, isLoading: quotesLoading } = useQuery<QuoteAnalytics>({
-    queryKey: ['/api/quote-analytics']
+    queryKey: ['/api/quote-analytics'],
+    queryFn: () => fetch('/api/quote-analytics').then(res => res.json()).then(res => res.data)
   });
 
   // Export handler
