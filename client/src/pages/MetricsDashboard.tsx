@@ -16,8 +16,10 @@ import {
   ChevronDown,
   ChevronUp,
   BarChart3,
-  Send
+  Send,
+  Calendar
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -74,6 +76,12 @@ export default function MetricsDashboard() {
   const [selectedMetric, setSelectedMetric] = useState<string>("");
   const [reportDateRange, setReportDateRange] = useState<string>("30");
   const [reportFormat, setReportFormat] = useState<string>("pdf");
+  
+  // Date range state
+  const [dateRangePreset, setDateRangePreset] = useState<string>("all");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  
   const { toast } = useToast();
 
   // Format currency helper
@@ -84,19 +92,62 @@ export default function MetricsDashboard() {
     }).format(amount);
   };
 
-  // Data queries
+  // Helper to get date range based on preset
+  const getDateRange = () => {
+    if (dateRangePreset === "custom" && startDate && endDate) {
+      return { from: startDate, to: endDate };
+    }
+    
+    const today = new Date();
+    const fromDate = new Date();
+    
+    switch (dateRangePreset) {
+      case "7":
+        fromDate.setDate(today.getDate() - 7);
+        return { from: fromDate.toISOString().split('T')[0], to: today.toISOString().split('T')[0] };
+      case "30":
+        fromDate.setDate(today.getDate() - 30);
+        return { from: fromDate.toISOString().split('T')[0], to: today.toISOString().split('T')[0] };
+      case "90":
+        fromDate.setDate(today.getDate() - 90);
+        return { from: fromDate.toISOString().split('T')[0], to: today.toISOString().split('T')[0] };
+      case "all":
+      default:
+        return null;
+    }
+  };
+
+  const dateRange = getDateRange();
+
+  // Data queries with date filtering
   const { data: dashboardStats, isLoading: statsLoading } = useQuery<DashboardStats>({
-    queryKey: ['/api/dashboard-stats']
+    queryKey: ['/api/dashboard-stats', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('fromDate', dateRange.from);
+      if (dateRange?.to) params.append('toDate', dateRange.to);
+      return fetch(`/api/dashboard-stats?${params}`).then(res => res.json()).then(res => res.data);
+    }
   });
 
   const { data: revenueStats, isLoading: revenueLoading } = useQuery<RevenueStats>({
-    queryKey: ['/api/revenue-stats'],
-    queryFn: () => fetch('/api/revenue-stats').then(res => res.json()).then(res => res.data)
+    queryKey: ['/api/revenue-stats', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('fromDate', dateRange.from);
+      if (dateRange?.to) params.append('toDate', dateRange.to);
+      return fetch(`/api/revenue-stats?${params}`).then(res => res.json()).then(res => res.data);
+    }
   });
 
   const { data: quoteAnalytics, isLoading: quotesLoading } = useQuery<QuoteAnalytics>({
-    queryKey: ['/api/quote-analytics'],
-    queryFn: () => fetch('/api/quote-analytics').then(res => res.json()).then(res => res.data)
+    queryKey: ['/api/quote-analytics', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('fromDate', dateRange.from);
+      if (dateRange?.to) params.append('toDate', dateRange.to);
+      return fetch(`/api/quote-analytics?${params}`).then(res => res.json()).then(res => res.data);
+    }
   });
 
   // Export handler
@@ -259,6 +310,89 @@ export default function MetricsDashboard() {
               </Button>
             </div>
           </div>
+
+          {/* Date Range Filter */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Date Range Filter
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Button
+                  variant={dateRangePreset === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateRangePreset("all")}
+                  data-testid="button-date-all"
+                >
+                  All Time
+                </Button>
+                <Button
+                  variant={dateRangePreset === "7" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateRangePreset("7")}
+                  data-testid="button-date-7"
+                >
+                  Last 7 Days
+                </Button>
+                <Button
+                  variant={dateRangePreset === "30" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateRangePreset("30")}
+                  data-testid="button-date-30"
+                >
+                  Last 30 Days
+                </Button>
+                <Button
+                  variant={dateRangePreset === "90" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateRangePreset("90")}
+                  data-testid="button-date-90"
+                >
+                  Last 90 Days
+                </Button>
+                <Button
+                  variant={dateRangePreset === "custom" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateRangePreset("custom")}
+                  data-testid="button-date-custom"
+                >
+                  Custom Range
+                </Button>
+              </div>
+
+              {dateRangePreset === "custom" && (
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex-1 min-w-[150px]">
+                    <label className="text-sm font-medium mb-1 block">Start Date</label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      data-testid="input-start-date"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[150px]">
+                    <label className="text-sm font-medium mb-1 block">End Date</label>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      data-testid="input-end-date"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {dateRange && (
+                <p className="text-sm text-muted-foreground mt-3">
+                  Showing data from {new Date(dateRange.from).toLocaleDateString()} to {new Date(dateRange.to).toLocaleDateString()}
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
         {/* Key Metrics Section */}
         <div className="mb-6">
