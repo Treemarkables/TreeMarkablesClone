@@ -334,39 +334,30 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
 
 
   const handleSave = () => {
-    const dataToSave = { 
-      ...formData, 
+    // ONLY save cost-related fields, don't touch revenue/line items
+    const dataToSave: any = {
+      materialsCosts: materialsCosts.toString(),
+      grossMargin: null,
+      grossMarginCalculated: false,
       assignedStaffIds: selectedStaffIds,
       staffAssignments: staffAssignments.filter(assignment => selectedStaffIds.includes(assignment.staffId))
     };
   
-    // Convert numeric values to strings for backend schema compatibility
-    if (dataToSave.laborCosts !== undefined) {
-      (dataToSave as any).laborCosts = dataToSave.laborCosts.toString();
+    // Add cost fields if they exist
+    if (formData.otherCosts !== undefined) {
+      dataToSave.otherCosts = formData.otherCosts.toString();
     }
-    // Use computed materials costs from job line items, not stale formData
-    (dataToSave as any).materialsCosts = materialsCosts.toString();
     
-    if (dataToSave.otherCosts !== undefined) {
-      (dataToSave as any).otherCosts = dataToSave.otherCosts.toString();
-    }
-    if (dataToSave.laborHours !== undefined) {
-      (dataToSave as any).laborHours = dataToSave.laborHours.toString();
-    }
-    if (dataToSave.hourlyRate !== undefined) {
-      (dataToSave as any).hourlyRate = dataToSave.hourlyRate.toString();
-    }
-    // Use computed total amount from line items
-    (dataToSave as any).totalAmount = totalAmount.toString();
-    
-    // If staff time entries exist, don't include laborCosts (server-calculated)
+    // If staff time entries exist, don't include laborCosts (server will calculate from entries)
     if (hasStaffTimeEntries) {
-      delete dataToSave.laborCosts;
-      delete dataToSave.laborHours;
-      delete dataToSave.hourlyRate;
+      // Server will calculate labor costs from time entries
     } else if (calculationMode === 'hourly' && formData.laborHours && formData.hourlyRate) {
       // If using hourly calculation mode, use calculated labor costs
-      (dataToSave as any).laborCosts = calculatedLaborCosts.toString();
+      dataToSave.laborCosts = calculatedLaborCosts.toString();
+      dataToSave.laborHours = formData.laborHours.toString();
+      dataToSave.hourlyRate = formData.hourlyRate.toString();
+    } else if (formData.laborCosts !== undefined) {
+      dataToSave.laborCosts = formData.laborCosts.toString();
     }
 
     updateGrossMarginMutation.mutate(dataToSave);
