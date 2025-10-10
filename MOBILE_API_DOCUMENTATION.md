@@ -433,6 +433,87 @@ fetch('https://your-domain.replit.app/api/mobile/jobs/job-uuid/calls', {
 
 ---
 
+### 7. Speech to Quote (Voice-Powered Quote Generation)
+
+Convert recorded speech to structured quote data using AI transcription and extraction.
+
+**Endpoint:** `POST /api/mobile/speech-to-quote`
+
+**Headers:**
+- `Authorization`: Bearer token with your API key
+- `Content-Type`: `multipart/form-data`
+
+**Request Body:**
+- `audio` (file, required): Audio file (supports .mp3, .wav, .m4a, .ogg, .webm, up to 50MB)
+
+**Example Request:**
+```javascript
+const formData = new FormData();
+formData.append('audio', audioFile);
+
+fetch('https://your-domain.replit.app/api/mobile/speech-to-quote', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer your-api-key-here'
+  },
+  body: formData
+});
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "transcription": "I need two large oak trees removed from my backyard at 123 Main Street. The customer mentioned it would cost around $2500 and they need it done urgently.",
+    "customerName": "John Smith",
+    "customerPhone": "+1-555-0123",
+    "customerEmail": "john@example.com",
+    "address": "123 Main Street",
+    "jobDescription": "Remove two large oak trees from backyard",
+    "treeTypes": "Oak trees",
+    "estimatedPrice": 2500,
+    "urgency": "urgent",
+    "notes": "Customer mentioned trees are close to power lines"
+  }
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "success": false,
+  "message": "No audio file uploaded"
+}
+```
+
+**Error Response (500):**
+```json
+{
+  "success": false,
+  "message": "Failed to process audio"
+}
+```
+
+**Processing Steps:**
+1. Audio is transcribed using OpenAI Whisper
+2. Transcript is analyzed by GPT-5 to extract structured quote data
+3. Audio file is automatically cleaned up after processing
+
+**Notes:**
+- Supports all common audio formats used by mobile devices
+- Works with both native app recordings and uploaded Voice Memos (iOS)
+- Automatic cleanup of uploaded audio files prevents storage bloat
+- Returns null for fields not mentioned in the recording
+- Best results with clear audio and minimal background noise
+
+**Use Cases:**
+- Quick quote creation while on-site with customers
+- Converting voice memos to structured data
+- Hands-free quote entry while driving
+
+---
+
 ## Common Response Codes
 
 | Code | Meaning |

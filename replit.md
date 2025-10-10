@@ -4,7 +4,7 @@
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
 ## Recent Changes (October 2025)
-- **Speech-to-Quote Feature**: Implemented voice-powered quote creation with browser MediaRecorder API and iOS file upload workaround. Users can record job details verbally, which are transcribed with OpenAI Whisper and auto-extracted into structured quote data using GPT-4. Features include:
+- **Speech-to-Quote Feature**: Implemented voice-powered quote creation with browser MediaRecorder API and iOS file upload workaround. Users can record job details verbally, which are transcribed with OpenAI Whisper and auto-extracted into structured quote data using GPT-5. Features include:
   - Direct browser recording on Android/desktop devices using MediaRecorder API
   - iOS workaround: Upload Voice Memo recordings (m4a, mp3, wav, webm files up to 25MB)
   - Automatic device detection and UI adaptation for optimal user experience
@@ -12,7 +12,9 @@ This application is a comprehensive business management platform for Treemarkabl
   - Secure server-side audio file handling with automatic cleanup
   - Filename preservation for uploaded files to ensure correct transcription processing
   - Integrated into GlobalJobCard for easy access from any job
-- **Twilio Voice Call Recording & Auto Job Creation**: Implemented automatic call recording system that transcribes calls with OpenAI Whisper, extracts job details with GPT-4, and auto-creates customers and jobs. Includes Twilio signature validation for webhook security. See TWILIO_VOICE_SETUP.md for configuration.
+- **Mobile App Speech-to-Quote API**: Added native endpoint `/api/mobile/speech-to-quote` for mobile app integration with API key authentication. Enables on-site quote creation through native device recording with full audio format support.
+- **Twilio Voice Auto-Quote Generation**: Extended Twilio voice webhook to automatically generate quote drafts when pricing is discussed in customer calls. System detects pricing keywords ("price", "cost", "quote") or actual dollar amounts, uses GPT-5 to extract line items, and creates draft proposals linked to auto-created jobs. See TWILIO_VOICE_SETUP.md for details.
+- **Twilio Voice Call Recording & Auto Job Creation**: Implemented automatic call recording system that transcribes calls with OpenAI Whisper, extracts job details with GPT-5, and auto-creates customers and jobs. Includes Twilio signature validation for webhook security. See TWILIO_VOICE_SETUP.md for configuration.
 - **Email Diary Display Fixes**: Fixed two critical email diary issues:
   1. Added cache invalidation to EmailComposerModal so sent emails appear immediately in job diary
   2. Fixed extractDocumentInfo() to only detect invoice emails when explicitly "Invoice sent" (not just mentioning "invoice" in subject)
@@ -62,7 +64,7 @@ Preferred communication style: Simple, everyday language.
 - **Customer & Sales**: Lead Management, Customer Management, Quote Management.
 - **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation.
 - **Reporting & Analytics**: Business Analytics, Invoice Management, Safety Reporting.
-- **Integrations**: Twilio Voice (auto call recording & job creation), OpenAI (Whisper transcription & GPT-4 extraction for speech-to-quote), Email-to-Job-Diary, Mobile App Integration (call recording uploads, transcription), Xero Accounting Integration, Addy.co.nz Address Autocomplete.
+- **Integrations**: Twilio Voice (auto call recording, job creation & quote generation), OpenAI (Whisper transcription & GPT-5 extraction for speech-to-quote and call analysis), Email-to-Job-Diary, Mobile App Integration (call recording uploads, transcription, native speech-to-quote), Xero Accounting Integration, Addy.co.nz Address Autocomplete.
 - **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories, etc.
 
 ## External Dependencies

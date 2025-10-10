@@ -4,8 +4,9 @@
 This system automatically:
 1. Records all incoming phone calls to your Twilio number
 2. Transcribes calls using OpenAI Whisper
-3. Extracts job details using GPT-4
+3. Extracts job details using GPT-5
 4. Creates customers and jobs automatically
+5. **NEW**: Auto-generates quote drafts when pricing is discussed
 
 ## Prerequisites
 - Active Twilio account with phone number
@@ -73,9 +74,10 @@ Click **Save** at the bottom.
 5. **System processes**:
    - Downloads MP3 recording
    - Transcribes with Whisper
-   - Extracts job data with GPT-4
+   - Extracts job data with GPT-5
    - Creates/finds customer by phone
    - Creates job automatically
+   - **Auto-generates quote if pricing discussed**
    - Logs everything to job diary
 
 ### Data Extraction
@@ -95,9 +97,37 @@ A job is auto-created if:
 
 Otherwise, the call is recorded and transcribed but no job is created.
 
+### Auto Quote Generation (NEW)
+When a job is auto-created from a call, the system analyzes the transcript for pricing discussions:
+
+**Quote is auto-generated if ANY of these are detected:**
+- Estimated price mentioned in call (e.g., "$2000", "two thousand dollars")
+- Keywords: "price", "cost", "quote" in transcript
+
+**Quote Extraction Process:**
+1. GPT-5 analyzes transcript for pricing components
+2. Extracts detailed quote information:
+   - Job description
+   - Tree types mentioned
+   - Estimated price (in NZD)
+   - Line items (if multiple services discussed)
+   - Additional notes
+3. Creates proposal/quote with status "draft"
+4. Logs quote creation to job diary with extracted details
+
+**Example:**
+Call transcript: *"I need two oak trees removed and stumps ground. Tree removal is $1500, stump grinding $500."*
+
+Generated quote:
+- Section 1: "Tree removal" - 2 × $750 = $1,500
+- Section 2: "Stump grinding" - 1 × $500 = $500
+- Total: $2,000
+
+The quote is saved as a draft and appears in the job's proposals list, ready for review and sending to the customer.
+
 ## Testing
 
-### 1. Test Call
+### 1. Test Call (with Quote Generation)
 Call your Twilio number and say:
 > "Hi, my name is John Smith. I need a large oak tree removed from 123 Main Street in Auckland. It's urgent, probably about $2000."
 
@@ -112,12 +142,16 @@ Watch server logs for:
 🤖 Extracted job data: { customerName: 'John Smith', ... }
 ✅ New customer created: John Smith
 ✅ Job #1234 auto-created from call
+💰 Pricing discussion detected - generating quote draft...
+📋 Quote data extracted: { estimatedPrice: 2000, ... }
+✅ Quote auto-generated for job #1234
 ```
 
 ### 3. Verify in App
 1. Check **Dispatch Board** for new job
-2. View **Job Diary** for call transcript
-3. Check **Customer** was created with phone number
+2. View **Job Diary** for call transcript and quote creation log
+3. Check **Proposals** tab on job for auto-generated quote draft
+4. Check **Customer** was created with phone number
 
 ## Webhook URL
 Your webhook endpoint is:
@@ -135,9 +169,11 @@ This endpoint:
 - **Incoming Calls**: $0.0085/minute
 - **Recording**: $0.0025/minute
 - **Whisper Transcription**: $0.006/minute
-- **GPT-4 Extraction**: ~$0.01/call
+- **GPT-5 Job Extraction**: ~$0.015/call
+- **GPT-5 Quote Extraction**: ~$0.015/call (when pricing discussed)
 
 **Example**: 100 calls × 3 min avg = ~$3.30 + Whisper/GPT costs
+**With Quote Generation**: Add ~$0.015 per call with pricing discussion
 
 ## Troubleshooting
 
