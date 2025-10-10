@@ -19,7 +19,8 @@ import {
   AlertCircle,
   Save,
   TrendingUp,
-  Users
+  Users,
+  Trash2
 } from "lucide-react";
 
 interface GrossMarginData {
@@ -183,6 +184,29 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
       toast({
         title: "Error",
         description: error.message || "Failed to update gross margin",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Delete line item mutation
+  const deleteLineItemMutation = useMutation({
+    mutationFn: async (lineItemId: string) => {
+      const updatedLineItems = (job?.lineItems || []).filter((item: any) => item.id !== lineItemId);
+      return await apiRequest('PUT', `/api/jobs/${jobId}`, { lineItems: updatedLineItems });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      toast({
+        title: "Success",
+        description: "Line item deleted successfully"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete line item",
         variant: "destructive"
       });
     }
@@ -426,12 +450,12 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   return (
     <Card>
       <CardContent className="space-y-6 pt-6">
-        {/* Job Revenue from Line Items - Read Only */}
+        {/* Job Revenue from Line Items */}
         {job?.lineItems && job.lineItems.length > 0 && (
           <div className="space-y-2">
             {job.lineItems.map((item: any, index: number) => (
               <Card key={index} className="p-3 bg-gray-50">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex-1">
                     <div className="font-medium">{item.description}</div>
                     <div className="text-sm text-gray-600">
@@ -441,6 +465,16 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
                   <div className="text-sm font-semibold">
                     ${(item.quantity * parseFloat(item.unitPrice || 0)).toFixed(2)}
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deleteLineItemMutation.mutate(item.id)}
+                    disabled={deleteLineItemMutation.isPending}
+                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    data-testid={`button-delete-line-item-${index}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </Card>
             ))}
@@ -453,6 +487,20 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
           </div>
         )}
 
+
+        {/* Staff Time Entries Indicator */}
+        {hasStaffTimeEntries && (
+          <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+            <div className="flex items-center gap-2 text-blue-700">
+              <Clock className="h-4 w-4" />
+              <span className="font-medium">Staff Time Entries Logged</span>
+            </div>
+            <div className="text-sm text-blue-600 mt-1">
+              {staffTimeEntries.length} time {staffTimeEntries.length === 1 ? 'entry' : 'entries'} detected • 
+              Labor costs automatically calculated: ${staffTimeLaborCost.toFixed(2)}
+            </div>
+          </div>
+        )}
 
         {/* Cost Summary */}
         <div className="bg-gray-50 p-4 rounded-lg">
