@@ -227,6 +227,7 @@ export function JobDiarySection({
                   entry.entryType === 'proposal' ? 'proposal' : 
                   entry.entryType === 'photo' ? 'photo' :
                   entry.entryType === 'email' ? 'email' :
+                  entry.entryType === 'sms' ? 'sms' :
                   'job_event',
             title: entry.title,
             content: entry.description,
