@@ -4343,6 +4343,87 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                   });
                   
                   console.log(`✅ Job #${job.jobNumber} auto-created from call`);
+                  
+                  // Auto-generate quote if pricing was discussed
+                  if (jobData.estimatedPrice || transcript.toLowerCase().includes('price') || transcript.toLowerCase().includes('cost') || transcript.toLowerCase().includes('quote')) {
+                    console.log('💰 Pricing discussion detected - generating quote draft...');
+                    
+                    // Extract detailed quote information with GPT-5
+                    const quoteExtraction = await openai.chat.completions.create({
+                      model: 'gpt-5',
+                      messages: [
+                        {
+                          role: 'system',
+                          content: `You are a quote generation assistant for a tree removal service company in New Zealand.
+Extract detailed quote information from this call transcript and return it as JSON:
+
+{
+  "jobDescription": "detailed description of work",
+  "treeTypes": "types of trees mentioned or null",
+  "estimatedPrice": "price in NZD (number only, no $ sign) or null",
+  "notes": "any additional details for the quote",
+  "items": [
+    {"description": "service item", "quantity": 1, "unitPrice": price}
+  ]
+}
+
+If price components are mentioned (e.g., tree removal $1000, stump grinding $500), break them into items. Otherwise create a single item.`
+                        },
+                        {
+                          role: 'user',
+                          content: transcript
+                        }
+                      ],
+                      response_format: { type: 'json_object' }
+                    });
+                    
+                    const quoteInfo = JSON.parse(quoteExtraction.choices[0].message.content || '{}');
+                    console.log('📋 Quote data extracted:', quoteInfo);
+                    
+                    // Create proposal/quote for the job
+                    try {
+                      const proposalSections = quoteInfo.items && quoteInfo.items.length > 0
+                        ? quoteInfo.items.map((item: any) => ({
+                            name: item.description || 'Service',
+                            items: [{
+                              description: item.description || 'Service',
+                              quantity: item.quantity || 1,
+                              rate: String(item.unitPrice || quoteInfo.estimatedPrice || 0)
+                            }]
+                          }))
+                        : [{
+                            name: 'Tree Services',
+                            items: [{
+                              description: quoteInfo.jobDescription || jobData.notes || 'Tree removal service',
+                              quantity: 1,
+                              rate: String(quoteInfo.estimatedPrice || jobData.estimatedPrice || 0)
+                            }]
+                          }];
+                      
+                      const proposal = await storage.createProposal({
+                        jobId: job.id,
+                        title: `Quote from Call - ${new Date().toLocaleDateString()}`,
+                        sections: proposalSections,
+                        status: 'draft',
+                        notes: quoteInfo.notes || `Auto-generated from phone call.\n\nCall transcript:\n${transcript.substring(0, 500)}...`
+                      });
+                      
+                      // Log quote creation to job diary
+                      await storage.createJobDiaryEntry({
+                        jobId: job.id,
+                        entryType: 'quote',
+                        title: '📋 Quote Auto-Generated from Call',
+                        description: `A quote draft was automatically created based on the pricing discussion in the phone call.\n\nExtracted details:\n${JSON.stringify(quoteInfo, null, 2)}`,
+                        authorName: 'System',
+                        authorRole: 'system',
+                        tags: ['quote', 'auto-generated', 'call-pricing']
+                      });
+                      
+                      console.log(`✅ Quote auto-generated for job #${job.jobNumber}`);
+                    } catch (quoteError) {
+                      console.error('❌ Error creating auto-quote:', quoteError);
+                    }
+                  }
                 } else {
                   console.log(`⚠️ Insufficient data to create job. Customer: ${!!customer}, ServiceType: ${jobData.serviceType}, Address: ${jobData.address}`);
                 }
@@ -8838,6 +8919,92 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         success: false, 
         message: 'Error searching for customer' 
       });
+    }
+  });
+
+  // POST /api/mobile/speech-to-quote - Convert speech to quote (mobile native recording)
+  app.post('/api/mobile/speech-to-quote', requireApiKey, audioUpload.single('audio'), async (req, res) => {
+    let audioFilePath: string | null = null;
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No audio file uploaded' });
+      }
+
+      audioFilePath = req.file.path;
+      console.log('📱 Mobile Speech to Quote - Processing audio file:', req.file.filename);
+
+      // Step 1: Transcribe audio using Whisper
+      const audioReadStream = fs.createReadStream(audioFilePath);
+
+      const transcription = await openai.audio.transcriptions.create({
+        file: audioReadStream,
+        model: "whisper-1",
+      });
+
+      const transcriptText = transcription.text;
+      console.log('📝 Mobile Transcription:', transcriptText);
+
+      // Step 2: Extract quote details using GPT-5
+      const extractionPrompt = `You are a quote assistant for a tree removal service company in New Zealand. 
+Extract the following information from this conversation transcription and return it as JSON:
+
+{
+  "customerName": "customer's full name or null if not mentioned",
+  "customerPhone": "phone number or null if not mentioned", 
+  "customerEmail": "email or null if not mentioned",
+  "address": "property address or null if not mentioned",
+  "jobDescription": "detailed description of the work needed",
+  "treeTypes": "types of trees mentioned or null if not specified",
+  "estimatedPrice": "price mentioned in NZD or null if not mentioned (number only, no $ sign)",
+  "urgency": "urgent/normal/low based on conversation tone",
+  "notes": "any additional important details"
+}
+
+Transcription: ${transcriptText}`;
+
+      const extractionResponse = await openai.chat.completions.create({
+        model: "gpt-5",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant that extracts structured quote information from conversations. Always respond with valid JSON."
+          },
+          {
+            role: "user",
+            content: extractionPrompt
+          }
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const quoteData = JSON.parse(extractionResponse.choices[0].message.content || '{}');
+      console.log('💼 Mobile Extracted quote data:', quoteData);
+
+      res.json({
+        success: true,
+        data: {
+          transcription: transcriptText,
+          ...quoteData
+        }
+      });
+
+    } catch (error) {
+      console.error('Error processing mobile speech to quote:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Failed to process audio' 
+      });
+    } finally {
+      // Always clean up audio file
+      if (audioFilePath && fs.existsSync(audioFilePath)) {
+        try {
+          fs.unlinkSync(audioFilePath);
+          console.log('🗑️ Cleaned up mobile audio file:', audioFilePath);
+        } catch (cleanupError) {
+          console.error('Error cleaning up audio file:', cleanupError);
+        }
+      }
     }
   });
 
