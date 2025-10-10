@@ -784,7 +784,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return team.members.map(memberId => ({ id: memberId, name: `Staff ${memberId}`, role: 'Unknown', skills: [], status: 'available', color: 'bg-gray-500' } as StaffMember)).filter(Boolean) as StaffMember[];
   };
 
-  // Deep search function that searches ALL jobs without date/status filtering
+  // Deep search function that searches ALL jobs including completed and unsuccessful
   const performDeepSearch = (query: string) => {
     if (!query.trim()) {
       setIsDeepSearchActive(false);
@@ -793,12 +793,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
 
     const searchQuery = query.toLowerCase().trim();
+    // Deep search includes ALL jobs (completed, unsuccessful, etc.)
     const allMatchingJobs = jobs.filter(job => {
       const customerName = job.customerName?.toLowerCase() || '';
       const address = job.address?.toLowerCase() || '';
       const serviceType = job.serviceType?.toLowerCase() || '';
       const description = job.description?.toLowerCase() || '';
       const jobId = job.id?.toLowerCase() || '';
+      const jobNumber = job.jobNumber?.toLowerCase() || '';
       const notes = job.notes?.toLowerCase() || '';
       const specialInstructions = job.specialInstructions?.toLowerCase() || '';
 
@@ -807,6 +809,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
              serviceType.includes(searchQuery) ||
              description.includes(searchQuery) ||
              jobId.includes(searchQuery) ||
+             jobNumber.includes(searchQuery) ||
              notes.includes(searchQuery) ||
              specialInstructions.includes(searchQuery);
     });
