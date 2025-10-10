@@ -4,6 +4,11 @@
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
 ## Recent Changes (October 2025)
+- **Speech-to-Quote Feature**: Implemented voice-powered quote creation with browser MediaRecorder API. Users can record job details verbally, which are transcribed with OpenAI Whisper and auto-extracted into structured quote data using GPT-4. Features include:
+  - Browser compatibility detection with fallback messaging for unsupported browsers
+  - Proper resource cleanup (MediaRecorder, streams, timers) on modal close
+  - Secure server-side audio file handling with automatic cleanup
+  - Integrated into GlobalJobCard for easy access from any job
 - **Twilio Voice Call Recording & Auto Job Creation**: Implemented automatic call recording system that transcribes calls with OpenAI Whisper, extracts job details with GPT-4, and auto-creates customers and jobs. Includes Twilio signature validation for webhook security. See TWILIO_VOICE_SETUP.md for configuration.
 - **Email Diary Display Fixes**: Fixed two critical email diary issues:
   1. Added cache invalidation to EmailComposerModal so sent emails appear immediately in job diary
@@ -54,7 +59,7 @@ Preferred communication style: Simple, everyday language.
 - **Customer & Sales**: Lead Management, Customer Management, Quote Management.
 - **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation.
 - **Reporting & Analytics**: Business Analytics, Invoice Management, Safety Reporting.
-- **Integrations**: Twilio Voice (auto call recording & job creation), Email-to-Job-Diary, Mobile App Integration (call recording uploads, transcription), Xero Accounting Integration, Addy.co.nz Address Autocomplete.
+- **Integrations**: Twilio Voice (auto call recording & job creation), OpenAI (Whisper transcription & GPT-4 extraction for speech-to-quote), Email-to-Job-Diary, Mobile App Integration (call recording uploads, transcription), Xero Accounting Integration, Addy.co.nz Address Autocomplete.
 - **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories, etc.
 
 ## External Dependencies
