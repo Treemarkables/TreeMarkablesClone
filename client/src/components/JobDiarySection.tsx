@@ -731,11 +731,11 @@ export function JobDiarySection({
                     )}
                     
                     <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} mb-1 group`}>
-                      <div className="relative max-w-[60%]">
+                      <div className="relative max-w-[85%] sm:max-w-[70%] md:max-w-[60%]">
                         <Button
                           size="icon"
                           variant="ghost"
-                          className={`absolute top-0 ${isSent ? '-left-5' : '-right-5'} h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity`}
+                          className={`absolute top-0 ${isSent ? '-left-5' : '-right-5'} h-4 w-4 opacity-0 md:group-hover:opacity-100 md:opacity-0 opacity-100 transition-opacity`}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (confirm('Delete this message?')) {
@@ -754,7 +754,7 @@ export function JobDiarySection({
                               : 'bg-green-500 text-white rounded-br-sm'
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm'
                         }`}>
-                          <p className="text-[11px] leading-tight whitespace-pre-wrap break-words">{messageText}</p>
+                          <p className="text-[11px] sm:text-[11px] leading-tight whitespace-pre-wrap break-words">{messageText}</p>
                         </div>
                       </div>
                     </div>
