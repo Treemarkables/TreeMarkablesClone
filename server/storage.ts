@@ -2009,14 +2009,36 @@ class DatabaseStorage implements IStorage {
     };
   }
 
-  async getQuoteAnalytics(): Promise<any> {
+  async getQuoteAnalytics(fromDate?: Date, toDate?: Date): Promise<any> {
     // Get all quotes and proposals (excluding drafts)
     const allQuotes = await this.getAllQuotes();
     const allProposals = await this.getAllProposals();
     
+    // Filter by date if provided
+    let filteredQuotes = allQuotes;
+    let filteredProposals = allProposals;
+    
+    if (fromDate || toDate) {
+      filteredQuotes = allQuotes.filter(q => {
+        if (!q.createdAt) return false;
+        const quoteDate = new Date(q.createdAt);
+        if (fromDate && quoteDate < fromDate) return false;
+        if (toDate && quoteDate > toDate) return false;
+        return true;
+      });
+      
+      filteredProposals = allProposals.filter(p => {
+        if (!p.createdAt) return false;
+        const proposalDate = new Date(p.createdAt);
+        if (fromDate && proposalDate < fromDate) return false;
+        if (toDate && proposalDate > toDate) return false;
+        return true;
+      });
+    }
+    
     // Filter out drafts - only count sent quotes/proposals
-    const sentQuotes = allQuotes.filter(q => q.status !== 'draft');
-    const sentProposals = allProposals.filter(p => p.status !== 'draft');
+    const sentQuotes = filteredQuotes.filter(q => q.status !== 'draft');
+    const sentProposals = filteredProposals.filter(p => p.status !== 'draft');
     
     // Count total sent (quotes + proposals)
     const totalQuotes = sentQuotes.length + sentProposals.length;
