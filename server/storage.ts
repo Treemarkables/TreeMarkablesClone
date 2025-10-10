@@ -1965,11 +1965,41 @@ class DatabaseStorage implements IStorage {
   }
 
   async getQuoteAnalytics(): Promise<any> {
+    // Get all quotes and proposals (excluding drafts)
+    const allQuotes = await this.getAllQuotes();
+    const allProposals = await this.getAllProposals();
+    
+    // Filter out drafts - only count sent quotes/proposals
+    const sentQuotes = allQuotes.filter(q => q.status !== 'draft');
+    const sentProposals = allProposals.filter(p => p.status !== 'draft');
+    
+    // Count total sent (quotes + proposals)
+    const totalQuotes = sentQuotes.length + sentProposals.length;
+    
+    // Count accepted
+    const acceptedQuotes = sentQuotes.filter(q => q.status === 'accepted').length;
+    const acceptedProposals = sentProposals.filter(p => p.status === 'accepted').length;
+    const totalAccepted = acceptedQuotes + acceptedProposals;
+    
+    // Count rejected
+    const rejectedQuotes = sentQuotes.filter(q => q.status === 'rejected').length;
+    const rejectedProposals = sentProposals.filter(p => p.status === 'rejected').length;
+    const totalRejected = rejectedQuotes + rejectedProposals;
+    
+    // Count pending (sent but not accepted/rejected)
+    const pendingQuotes = sentQuotes.filter(q => 
+      q.status !== 'accepted' && q.status !== 'rejected'
+    ).length;
+    const pendingProposals = sentProposals.filter(p => 
+      p.status !== 'accepted' && p.status !== 'rejected'
+    ).length;
+    const totalPending = pendingQuotes + pendingProposals;
+    
     return {
-      totalQuotes: 0,
-      acceptedQuotes: 0,
-      rejectedQuotes: 0,
-      pendingQuotes: 0,
+      totalQuotes,
+      acceptedQuotes: totalAccepted,
+      rejectedQuotes: totalRejected,
+      pendingQuotes: totalPending,
       averageResponseTime: 0,
       rejectionReasons: [],
       competitorAnalysis: []
