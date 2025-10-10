@@ -1205,6 +1205,8 @@ export function ProposalBuilder({
       proposalNumber: draftProposalId ? undefined : `PROP-${Date.now()}`,
       title: formData.title || 'Untitled Proposal',
       description: formData.description,
+      subtotal: subtotal.toString(),
+      gstAmount: taxAmount.toString(),
       totalAmount: grandTotal.toString(),
       taxRate: (formData.taxRate || 15).toString(),
       status: 'draft',
@@ -1240,6 +1242,8 @@ export function ProposalBuilder({
         proposalNumber: data.proposalNumber || `PROP-${Date.now()}`, // Auto-generate if not provided
         title: data.title,
         description: data.description,
+        subtotal: subtotal.toString(),
+        gstAmount: taxAmount.toString(),
         totalAmount: grandTotal.toString(),
         taxRate: (data.taxRate || 15).toString(),
         status: 'draft',
