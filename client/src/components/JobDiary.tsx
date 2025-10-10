@@ -29,7 +29,8 @@ import {
   Eye,
   EyeOff,
   Mail,
-  MousePointerClick
+  MousePointerClick,
+  MessageSquare
 } from "lucide-react";
 
 interface JobDiaryEntry {
@@ -146,7 +147,8 @@ const entryTypeConfig = {
   safety: { icon: Shield, color: "bg-yellow-100 text-yellow-800", label: "Safety" },
   completion: { icon: CheckCircle, color: "bg-emerald-100 text-emerald-800", label: "Completion" },
   photo: { icon: Camera, color: "bg-indigo-100 text-indigo-800", label: "Photo" },
-  email: { icon: Mail, color: "bg-cyan-100 text-cyan-800", label: "Email" }
+  email: { icon: Mail, color: "bg-cyan-100 text-cyan-800", label: "Email" },
+  sms: { icon: MessageSquare, color: "bg-green-100 text-green-800", label: "SMS" }
 };
 
 export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInvoiceClick, onProposalClick }: JobDiaryProps) {
@@ -765,6 +767,69 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
             
             const docInfo = detectDocument();
             const isClickable = !!docInfo;
+            
+            // Special rendering for SMS entries (chat-style bubbles)
+            if (entry.entryType === 'sms') {
+              const isSent = entry.title.includes('SMS Sent');
+              const isReceived = entry.title.includes('Reply Received');
+              
+              // Extract the message text from description
+              // Description format: "SMS sent to NAME\n\nMessage: TEXT" or "SMS reply from NAME:\n\nTEXT"
+              let messageText = entry.description;
+              if (isSent && messageText.includes('Message:')) {
+                messageText = messageText.split('Message:')[1].trim();
+              } else if (isReceived && messageText.includes(':\n\n')) {
+                messageText = messageText.split(':\n\n')[1].trim();
+              }
+              
+              // Check if we need to show a date separator
+              const currentIndex = filteredEntries.findIndex((e: JobDiaryEntry) => e.id === entry.id);
+              const previousEntry = currentIndex > 0 ? filteredEntries[currentIndex - 1] : null;
+              const showDateSeparator = !previousEntry || 
+                format(new Date(entry.createdAt), 'yyyy-MM-dd') !== format(new Date(previousEntry.createdAt), 'yyyy-MM-dd') ||
+                previousEntry.entryType !== 'sms';
+              
+              return (
+                <div key={entry.id}>
+                  {/* Date separator for new day or first SMS */}
+                  {showDateSeparator && (
+                    <div className="flex justify-center my-4">
+                      <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                        {format(new Date(entry.createdAt), 'EEEE h:mma').toLowerCase()}
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} mb-2 group`}>
+                    <div className={`relative max-w-[75%]`}>
+                      {/* Delete Button - shown on hover */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Delete this message?')) {
+                            deleteEntryMutation.mutate(entry.id);
+                          }
+                        }}
+                        className={`absolute top-1 ${isSent ? '-left-9' : '-right-9'} h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity`}
+                        data-testid={`button-delete-sms-${entry.id}`}
+                      >
+                        <Trash2 className="h-3 w-3 text-gray-400 hover:text-red-600" />
+                      </Button>
+                      
+                      <div className={`rounded-2xl px-4 py-2 ${
+                        isSent 
+                          ? 'bg-green-500 text-white rounded-br-sm' 
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm'
+                      }`}>
+                        <p className="text-[15px] leading-5 whitespace-pre-wrap break-words">{messageText}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             
             return (
               <Card 
