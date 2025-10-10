@@ -4,6 +4,10 @@
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
 ## Recent Changes (October 2025)
+- **Email Diary Display Fixes**: Fixed two critical email diary issues:
+  1. Added cache invalidation to EmailComposerModal so sent emails appear immediately in job diary
+  2. Fixed extractDocumentInfo() to only detect invoice emails when explicitly "Invoice sent" (not just mentioning "invoice" in subject)
+- **Invoices Page Clean Slate**: Archived 1,901 old completed jobs by changing status to 'archived' to provide clean invoices page. Only newly completed jobs will appear going forward.
 - **Dispatch Board Job Sorting Fix**: Fixed job display order to show newest jobs first (descending by job number). Previously, jobs with recent activity were prioritized over newest jobs, causing new jobs to be hidden outside the 30-job display limit.
 - **Profit Tracker Revenue Fix**: Fixed Profit Tracker to correctly pull revenue from proposal billing. Added missing `inArray` import in storage.ts and fixed proposals query to properly fetch sections with `includeSections=true` parameter.
 - **SMS Everyone NZ Integration**: Replaced Twilio SMS with SMS Everyone NZ for local New Zealand SMS delivery. Offers 10c per SMS, no contracts, NZ-based support, and 2-way messaging.
