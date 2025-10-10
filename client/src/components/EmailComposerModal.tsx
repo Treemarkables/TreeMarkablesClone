@@ -365,6 +365,12 @@ export function EmailComposerModal({
         title: "Email Sent",
         description: "Invoice email has been sent successfully",
       });
+      
+      // Invalidate job diary cache to show the new email entry
+      if (job?.id) {
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'diary'] });
+      }
+      
       onClose();
     },
     onError: (error: any) => {
