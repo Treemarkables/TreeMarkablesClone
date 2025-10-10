@@ -53,6 +53,7 @@ import {
 } from "@shared/schema";
 import multer from "multer";
 import Papa from "papaparse";
+import twilio from "twilio";
 import path from "path";
 import bcrypt from "bcrypt";
 import OpenAI from "openai";
@@ -167,6 +168,44 @@ if (!fs.existsSync(recordingsDir)) {
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+// ========================================
+// TWILIO WEBHOOK VALIDATION
+// ========================================
+
+// Validate Twilio webhook request signature
+function validateTwilioSignature(req: Request): boolean {
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!authToken) {
+    console.warn('⚠️ TWILIO_AUTH_TOKEN not set - skipping signature validation');
+    return true; // Allow in development if not configured
+  }
+
+  const signature = req.headers['x-twilio-signature'] as string;
+  if (!signature) {
+    console.error('❌ Missing X-Twilio-Signature header');
+    return false;
+  }
+
+  // Construct the full URL (Twilio uses full URL for validation)
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const url = `${protocol}://${host}${req.originalUrl}`;
+
+  // Validate signature
+  const validator = twilio.validateRequest(
+    authToken,
+    signature,
+    url,
+    req.body
+  );
+
+  if (!validator) {
+    console.error('❌ Invalid Twilio signature');
+  }
+
+  return validator;
+}
 
 // ========================================
 // BUSINESS HOURS NOTIFICATION HELPERS
@@ -4085,6 +4124,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Twilio webhook for incoming SMS replies
   app.post('/api/webhooks/sms', async (req: Request, res: Response) => {
     try {
+      // Validate Twilio signature
+      if (!validateTwilioSignature(req)) {
+        console.error('❌ Invalid Twilio signature for SMS webhook');
+        return res.status(403).send('Forbidden');
+      }
+
       const { From, To, Body, MessageSid } = req.body;
       
       console.log(`📱 Incoming SMS from ${From}: ${Body}`);
@@ -4154,6 +4199,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Twilio webhook for voice call status updates
   app.post('/api/webhooks/twilio-voice', async (req: Request, res: Response) => {
     try {
+      // Validate Twilio signature
+      if (!validateTwilioSignature(req)) {
+        console.error('❌ Invalid Twilio signature for voice webhook');
+        return res.status(403).send('Forbidden');
+      }
+
       const { CallSid, CallStatus, From, To, RecordingUrl, RecordingSid, RecordingDuration } = req.body;
       
       console.log(`📞 Twilio voice webhook - CallSid: ${CallSid}, Status: ${CallStatus}`);
