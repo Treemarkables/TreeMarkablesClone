@@ -698,6 +698,66 @@ export function JobDiarySection({
                 }
               };
               
+              // Special rendering for SMS entries (chat-style bubbles)
+              if (entry.type === 'sms') {
+                const isSent = entry.title.includes('SMS Sent') || entry.title.includes('SMS sent');
+                const isReceived = entry.title.includes('Reply') || entry.title.includes('reply');
+                
+                // Extract message text
+                let messageText = entry.content;
+                if (isSent && messageText.includes('Message:')) {
+                  messageText = messageText.split('Message:')[1].trim();
+                } else if (isReceived && messageText.includes(':\n\n')) {
+                  messageText = messageText.split(':\n\n')[1].trim();
+                }
+                
+                // Check if we need date separator
+                const currentIndex = diaryEntries.findIndex((e) => e.id === entry.id);
+                const previousEntry = currentIndex > 0 ? diaryEntries[currentIndex - 1] : null;
+                const showDateSeparator = !previousEntry || 
+                  format(new Date(entry.timestamp), 'yyyy-MM-dd') !== format(new Date(previousEntry.timestamp), 'yyyy-MM-dd') ||
+                  previousEntry.type !== 'sms';
+                
+                return (
+                  <div key={entry.id}>
+                    {showDateSeparator && (
+                      <div className="flex justify-center my-3">
+                        <span className="text-[10px] text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                          {format(new Date(entry.timestamp), 'EEEE h:mma').toLowerCase()}
+                        </span>
+                      </div>
+                    )}
+                    
+                    <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} mb-1.5 group`}>
+                      <div className="relative max-w-[75%]">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={`absolute top-0.5 ${isSent ? '-left-7' : '-right-7'} h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Delete this message?')) {
+                              deleteEntryMutation.mutate(entry.id);
+                            }
+                          }}
+                          data-testid={`button-delete-sms-${entry.id}`}
+                        >
+                          <Trash2 className="w-2.5 h-2.5 text-gray-400 hover:text-red-600" />
+                        </Button>
+                        
+                        <div className={`rounded-2xl px-3 py-1.5 ${
+                          isSent 
+                            ? 'bg-green-500 text-white rounded-br-sm' 
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm'
+                        }`}>
+                          <p className="text-[13px] leading-snug whitespace-pre-wrap break-words">{messageText}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              
               return (
                 <div key={entry.id} className="flex gap-3" data-testid={`diary-entry-${entry.type}`}>
                   {/* Icon */}
