@@ -13873,7 +13873,8 @@ Transcription: ${transcriptText}`;
       }
 
       audioFilePath = req.file.path;
-      console.log('📢 Speech to Quote - Processing audio file:', req.file.filename);
+      const context = req.body.context || 'full';
+      console.log('📢 Speech to Quote - Processing audio file:', req.file.filename, '| Context:', context);
 
       // Step 1: Transcribe audio using Whisper
       const audioReadStream = fs.createReadStream(audioFilePath);
@@ -13886,7 +13887,18 @@ Transcription: ${transcriptText}`;
       const transcriptText = transcription.text;
       console.log('📝 Transcription:', transcriptText);
 
-      // Step 2: Extract quote details using GPT-5
+      // If context is description-only, return transcription without extraction
+      if (context === 'job-description' || context === 'invoice-description') {
+        console.log('📝 Returning transcription only (context: ' + context + ')');
+        return res.json({
+          success: true,
+          data: {
+            transcription: transcriptText
+          }
+        });
+      }
+
+      // Step 2: Extract quote details using GPT-5 (full quote mode only)
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       const extractionPrompt = `You are a quote assistant for a tree removal service company in New Zealand. 
 Extract the following information from this conversation transcription and return it as JSON:
