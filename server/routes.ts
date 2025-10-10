@@ -2737,6 +2737,28 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         updateData.equipmentChecklist = oldJob.equipmentChecklist;
       }
 
+      // If line items are provided, recalculate totalAmount, subtotal, and gstAmount
+      if (updateData.lineItems && Array.isArray(updateData.lineItems)) {
+        const subtotal = updateData.lineItems.reduce((sum: number, item: any) => {
+          return sum + (parseFloat(item.total) || 0);
+        }, 0);
+        
+        const taxRate = parseFloat(updateData.taxRate || oldJob?.taxRate || '15');
+        const gstAmount = subtotal * (taxRate / 100);
+        const totalAmount = subtotal + gstAmount;
+        
+        updateData.subtotal = subtotal.toFixed(2);
+        updateData.gstAmount = gstAmount.toFixed(2);
+        updateData.totalAmount = totalAmount.toFixed(2);
+        
+        console.log('💰 Recalculated job totals:', {
+          subtotal: updateData.subtotal,
+          taxRate,
+          gstAmount: updateData.gstAmount,
+          totalAmount: updateData.totalAmount
+        });
+      }
+
       const job = await storage.updateJob(req.params.id, updateData);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
