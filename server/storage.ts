@@ -1877,6 +1877,38 @@ class DatabaseStorage implements IStorage {
   async getAllPriceRules(): Promise<PriceRule[]> { return []; }
   async getPriceRulesByService(serviceName: string): Promise<PriceRule[]> { return []; }
 
+  async getDashboardStats(): Promise<any> {
+    const allJobs = await this.getAllJobs();
+    const allCustomers = await this.getAllCustomers();
+    const allLeads = await this.getAllLeads();
+    
+    const completedJobs = allJobs.filter(job => job.status === 'completed');
+    const totalRevenue = completedJobs.reduce((sum, job) => sum + (parseFloat(job.totalAmount?.toString() || '0')), 0);
+    const leadsCount = allLeads.length;
+    const customersCount = allCustomers.length;
+    
+    // Conversion rate: (completed jobs / total leads) * 100
+    const conversionRate = leadsCount > 0 ? (completedJobs.length / leadsCount) * 100 : 0;
+    
+    // Average quote value (from proposals or line items)
+    const jobsWithRevenue = completedJobs.filter(job => parseFloat(job.totalAmount?.toString() || '0') > 0);
+    const averageQuoteValue = jobsWithRevenue.length > 0 
+      ? totalRevenue / jobsWithRevenue.length 
+      : 0;
+    
+    return {
+      totalLeads: leadsCount,
+      totalCustomers: customersCount,
+      totalJobs: allJobs.length,
+      totalRevenue,
+      conversionRate: Math.round(conversionRate * 100) / 100,
+      averageQuoteValue: Math.round(averageQuoteValue * 100) / 100,
+      missedCalls: 0,
+      recentCalls: [],
+      recentLeads: allLeads.slice(0, 5)
+    };
+  }
+
   async getRevenueStats(fromDate?: Date, toDate?: Date): Promise<any> {
     // Get all completed jobs
     const allJobs = await this.getAllJobs();
@@ -1905,15 +1937,17 @@ class DatabaseStorage implements IStorage {
       }, 0);
       totalRevenue += jobRevenue;
       
-      // Calculate costs: line item costs + staff time labor cost + additional costs
+      // Calculate costs: line item costs + calculated labor cost + additional costs
       const itemCosts = (job.lineItems || []).reduce((sum: number, item: any) => {
         return sum + (item.totalCost || 0);
       }, 0);
       
-      const laborCost = job.staffTimeLaborCost || 0;
-      const additionalCosts = job.laborCosts || 0;
+      const calculatedLabor = parseFloat(job.calculatedLaborCost?.toString() || '0');
+      const additionalLabor = parseFloat(job.laborCosts?.toString() || '0');
+      const materialsCost = parseFloat(job.materialsCosts?.toString() || '0');
+      const otherCost = parseFloat(job.otherCosts?.toString() || '0');
       
-      totalCosts += itemCosts + laborCost + additionalCosts;
+      totalCosts += itemCosts + calculatedLabor + additionalLabor + materialsCost + otherCost;
     }
     
     const grossMargin = totalRevenue > 0 
