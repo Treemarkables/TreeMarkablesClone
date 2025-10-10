@@ -4151,6 +4151,172 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Twilio webhook for voice call status updates
+  app.post('/api/webhooks/twilio-voice', async (req: Request, res: Response) => {
+    try {
+      const { CallSid, CallStatus, From, To, RecordingUrl, RecordingSid, RecordingDuration } = req.body;
+      
+      console.log(`📞 Twilio voice webhook - CallSid: ${CallSid}, Status: ${CallStatus}`);
+      
+      // Handle call completed with recording
+      if (CallStatus === 'completed' && RecordingUrl) {
+        console.log(`🎙️ Call ${CallSid} completed with recording: ${RecordingUrl}`);
+        
+        // Normalize phone number
+        const normalizePhone = (phone: string): string => {
+          const cleaned = phone.replace(/\D/g, '');
+          if (cleaned.startsWith('64')) return `+${cleaned}`;
+          if (cleaned.startsWith('0')) return `+64${cleaned.substring(1)}`;
+          if (cleaned.length === 9 || cleaned.length === 10) return `+64${cleaned}`;
+          return phone;
+        };
+        
+        const callerPhone = normalizePhone(From);
+        
+        // Download recording from Twilio
+        const recordingFilename = `twilio-${CallSid}-${Date.now()}.mp3`;
+        const recordingPath = path.join(recordingsDir, recordingFilename);
+        const recordingUrlWithAuth = `${RecordingUrl}.mp3?Download=true`;
+        
+        // Download with Twilio auth
+        const authHeader = 'Basic ' + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+        
+        const https = await import('https');
+        const file = fs.createWriteStream(recordingPath);
+        
+        https.get(recordingUrlWithAuth, {
+          headers: { 'Authorization': authHeader }
+        }, (response) => {
+          response.pipe(file);
+          file.on('finish', async () => {
+            file.close();
+            console.log(`✅ Recording downloaded: ${recordingPath}`);
+            
+            // Create call record
+            const call = await storage.createCall({
+              phoneNumber: callerPhone,
+              direction: 'inbound',
+              status: 'answered',
+              duration: parseInt(RecordingDuration || '0'),
+              recordingUrl: `/uploads/recordings/${recordingFilename}`,
+              twilioCallSid: CallSid
+            });
+            
+            console.log(`📝 Call record created: ${call.id}`);
+            
+            // Transcribe and extract job data (async)
+            setTimeout(async () => {
+              try {
+                // Transcribe with Whisper
+                const transcription = await openai.audio.transcriptions.create({
+                  file: fs.createReadStream(recordingPath),
+                  model: 'whisper-1',
+                  language: 'en',
+                  response_format: 'text'
+                });
+                
+                const transcript = typeof transcription === 'string' ? transcription : (transcription as any).text || String(transcription);
+                
+                // Update call with transcript
+                await storage.updateCall(call.id, { transcriptText: transcript });
+                
+                console.log(`✅ Call transcribed: ${transcript.substring(0, 100)}...`);
+                
+                // Extract job data with GPT-4
+                const extraction = await openai.chat.completions.create({
+                  model: 'gpt-4',
+                  messages: [
+                    {
+                      role: 'system',
+                      content: `You are a data extraction assistant for a tree removal service company in New Zealand. 
+Extract structured job information from customer call transcripts.
+
+Extract:
+- customerName: Full name if mentioned
+- customerPhone: Use "${callerPhone}" 
+- serviceType: One of [tree-removal, tree-pruning, stump-grinding, hedge-trimming, emergency, other]
+- address: Full address if mentioned
+- urgency: One of [emergency, urgent, normal, low]
+- estimatedPrice: Number only if quoted (no $ sign)
+- notes: Key details about the job
+
+Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
+                    },
+                    {
+                      role: 'user',
+                      content: transcript
+                    }
+                  ],
+                  response_format: { type: 'json_object' }
+                });
+                
+                const jobData = JSON.parse(extraction.choices[0].message.content || '{}');
+                console.log(`🤖 Extracted job data:`, jobData);
+                
+                // Create or find customer
+                let customer;
+                const customers = await storage.getAllCustomers();
+                customer = customers.find(c => c.phone && normalizePhone(c.phone) === callerPhone);
+                
+                if (!customer && jobData.customerName) {
+                  customer = await storage.createCustomer({
+                    name: jobData.customerName,
+                    phone: callerPhone,
+                    address: jobData.address || undefined,
+                    source: 'phone_call'
+                  });
+                  console.log(`✅ New customer created: ${customer.name}`);
+                }
+                
+                // Create job if we have enough data
+                if (customer && (jobData.serviceType || jobData.address)) {
+                  const job = await storage.createJob({
+                    customerId: customer.id,
+                    status: jobData.urgency === 'emergency' ? 'in-progress' : 'scheduled',
+                    address: jobData.address || customer.address || 'TBD',
+                    serviceType: jobData.serviceType || 'other',
+                    priority: jobData.urgency === 'emergency' ? 'urgent' : 'normal',
+                    estimatedAmount: jobData.estimatedPrice ? String(jobData.estimatedPrice) : undefined,
+                    notes: jobData.notes || ''
+                  });
+                  
+                  // Log to job diary
+                  await storage.createJobDiaryEntry({
+                    jobId: job.id,
+                    entryType: 'call',
+                    title: '📞 Job Created from Phone Call',
+                    description: `Call received from ${customer.name} (${callerPhone})\n\nTranscript:\n${transcript}\n\nAuto-extracted:\n${JSON.stringify(jobData, null, 2)}`,
+                    authorName: 'System',
+                    authorRole: 'system',
+                    tags: ['call', 'auto-created', 'ai-extracted']
+                  });
+                  
+                  console.log(`✅ Job #${job.jobNumber} auto-created from call`);
+                } else {
+                  console.log(`⚠️ Insufficient data to create job. Customer: ${!!customer}, ServiceType: ${jobData.serviceType}, Address: ${jobData.address}`);
+                }
+                
+              } catch (error) {
+                console.error('❌ Error processing call recording:', error);
+              }
+            }, 1000); // Small delay to ensure file is fully written
+          });
+        }).on('error', (err) => {
+          console.error('❌ Error downloading recording:', err);
+        });
+      }
+      
+      // Respond to Twilio
+      res.type('text/xml');
+      res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+      
+    } catch (error: any) {
+      console.error('❌ Twilio voice webhook error:', error);
+      res.type('text/xml');
+      res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+    }
+  });
+
   // Get invoice by ID
   app.get('/api/invoices/:id', async (req: Request, res: Response) => {
     try {
