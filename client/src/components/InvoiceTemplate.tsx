@@ -80,16 +80,15 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   let totalAmount: number;
   
   if (hasLineItems) {
-    // Line items already contain GST-inclusive amounts
-    totalAmount = lineItemSubtotal;
-    // Reverse calculate subtotal from total (total = subtotal + GST = subtotal * 1.15)
-    subtotal = totalAmount / (1 + gstRate);
-    gstAmount = totalAmount - subtotal;
+    // Line items contain GST-exclusive amounts (ex-GST)
+    subtotal = lineItemSubtotal;
+    gstAmount = subtotal * gstRate;
+    totalAmount = subtotal + gstAmount;
   } else {
-    // Fall back to invoice amount and calculate GST
+    // Fall back to invoice amount - check if it includes GST or not
     const invoiceAmount = typeof invoice.amount === 'string' ? parseFloat(invoice.amount) : invoice.amount;
     totalAmount = invoiceAmount || 0;
-    // Reverse calculate subtotal from total
+    // Reverse calculate subtotal from total (total = subtotal + GST = subtotal * 1.15)
     subtotal = totalAmount / (1 + gstRate);
     gstAmount = totalAmount - subtotal;
   }
