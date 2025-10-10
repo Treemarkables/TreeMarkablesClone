@@ -4,10 +4,13 @@
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
 ## Recent Changes (October 2025)
-- **Speech-to-Quote Feature**: Implemented voice-powered quote creation with browser MediaRecorder API. Users can record job details verbally, which are transcribed with OpenAI Whisper and auto-extracted into structured quote data using GPT-4. Features include:
-  - Browser compatibility detection with fallback messaging for unsupported browsers
+- **Speech-to-Quote Feature**: Implemented voice-powered quote creation with browser MediaRecorder API and iOS file upload workaround. Users can record job details verbally, which are transcribed with OpenAI Whisper and auto-extracted into structured quote data using GPT-4. Features include:
+  - Direct browser recording on Android/desktop devices using MediaRecorder API
+  - iOS workaround: Upload Voice Memo recordings (m4a, mp3, wav, webm files up to 25MB)
+  - Automatic device detection and UI adaptation for optimal user experience
   - Proper resource cleanup (MediaRecorder, streams, timers) on modal close
   - Secure server-side audio file handling with automatic cleanup
+  - Filename preservation for uploaded files to ensure correct transcription processing
   - Integrated into GlobalJobCard for easy access from any job
 - **Twilio Voice Call Recording & Auto Job Creation**: Implemented automatic call recording system that transcribes calls with OpenAI Whisper, extracts job details with GPT-4, and auto-creates customers and jobs. Includes Twilio signature validation for webhook security. See TWILIO_VOICE_SETUP.md for configuration.
 - **Email Diary Display Fixes**: Fixed two critical email diary issues:
