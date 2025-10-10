@@ -165,6 +165,7 @@ export function GlobalJobCard({
 
   // Speech to quote modal state
   const [isSpeechToQuoteOpen, setIsSpeechToQuoteOpen] = useState(false);
+  const [speechToQuoteContext, setSpeechToQuoteContext] = useState<'full' | 'job-description' | 'invoice-description'>('full');
 
   // Auto-save state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -1133,7 +1134,30 @@ export function GlobalJobCard({
   const handleSpeechToQuoteGenerated = (quoteData: any) => {
     console.log('📢 Speech to Quote data received:', quoteData);
     
-    // Populate form fields with extracted data
+    // If context is description-only, just populate the transcription
+    if (speechToQuoteContext === 'job-description') {
+      if (quoteData.transcription) {
+        form.setValue('description', quoteData.transcription);
+        toast({
+          title: "Job Description Added!",
+          description: "Your voice note has been transcribed into the job description.",
+        });
+      }
+      return;
+    }
+    
+    if (speechToQuoteContext === 'invoice-description') {
+      if (quoteData.transcription) {
+        form.setValue('invoiceDescription', quoteData.transcription);
+        toast({
+          title: "Invoice Description Added!",
+          description: "Your voice note has been transcribed into the invoice description.",
+        });
+      }
+      return;
+    }
+    
+    // Full quote mode - populate form fields with extracted data
     if (quoteData.customerName) {
       form.setValue('newCustomerName', quoteData.customerName);
       form.setValue('isNewCustomer', true);
@@ -1501,7 +1525,10 @@ export function GlobalJobCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onClick={() => setIsSpeechToQuoteOpen(true)} data-testid="menu-item-speech-to-quote-mobile">
+                  <DropdownMenuItem onClick={() => {
+                    setSpeechToQuoteContext('full');
+                    setIsSpeechToQuoteOpen(true);
+                  }} data-testid="menu-item-speech-to-quote-mobile">
                     <Mic className="w-4 h-4 mr-2" />
                     Speech to Quote
                   </DropdownMenuItem>
@@ -1617,7 +1644,10 @@ export function GlobalJobCard({
                 variant="ghost" 
                 size="sm" 
                 className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col [&_svg]:!w-full [&_svg]:!h-auto" 
-                onClick={() => setIsSpeechToQuoteOpen(true)} 
+                onClick={() => {
+                  setSpeechToQuoteContext('full');
+                  setIsSpeechToQuoteOpen(true);
+                }} 
                 data-testid="button-speech-to-quote"
               >
                 <Mic className="w-full h-auto max-w-[40px] max-h-[40px] text-purple-500" />
@@ -2252,7 +2282,23 @@ export function GlobalJobCard({
 
                         {/* Job Description */}
                         <div>
-                          <label className="text-sm font-semibold text-gray-700 mb-1 block">Job Description</label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-sm font-semibold text-gray-700">Job Description</label>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                              onClick={() => {
+                                setSpeechToQuoteContext('job-description');
+                                setIsSpeechToQuoteOpen(true);
+                              }}
+                              data-testid="button-speech-job-description"
+                            >
+                              <Mic className="h-4 w-4 mr-1" />
+                              <span className="text-xs">Voice</span>
+                            </Button>
+                          </div>
                           <FormField
                             control={form.control}
                             name="description"
@@ -2447,9 +2493,25 @@ export function GlobalJobCard({
 
                       {/* Invoice Description */}
                       <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-blue-600" />
-                          <h4 className="font-medium text-gray-800">Invoice Description</h4>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-blue-600" />
+                            <h4 className="font-medium text-gray-800">Invoice Description</h4>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            onClick={() => {
+                              setSpeechToQuoteContext('invoice-description');
+                              setIsSpeechToQuoteOpen(true);
+                            }}
+                            data-testid="button-speech-invoice-description"
+                          >
+                            <Mic className="h-4 w-4 mr-1" />
+                            <span className="text-xs">Voice</span>
+                          </Button>
                         </div>
                         <FormField
                           control={form.control}
