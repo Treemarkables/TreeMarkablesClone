@@ -723,19 +723,19 @@ export function JobDiarySection({
                 return (
                   <div key={entry.id}>
                     {showDateSeparator && (
-                      <div className="flex justify-center my-2">
-                        <span className="text-[9px] text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full">
+                      <div className="flex justify-center my-1">
+                        <span className="text-[7px] text-gray-500 bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded-full">
                           {format(new Date(entry.timestamp), 'EEEE h:mma').toLowerCase()}
                         </span>
                       </div>
                     )}
                     
-                    <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} mb-1 group`}>
-                      <div className="relative max-w-[85%] sm:max-w-[70%] md:max-w-[60%]">
+                    <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} mb-0.5 group`}>
+                      <div className="relative max-w-[42%] sm:max-w-[35%] md:max-w-[30%]">
                         <Button
                           size="icon"
                           variant="ghost"
-                          className={`absolute top-0 ${isSent ? '-left-5' : '-right-5'} h-4 w-4 opacity-0 md:group-hover:opacity-100 md:opacity-0 opacity-100 transition-opacity`}
+                          className={`absolute top-0 ${isSent ? '-left-4' : '-right-4'} h-3 w-3 opacity-0 md:group-hover:opacity-100 md:opacity-0 opacity-100 transition-opacity`}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (confirm('Delete this message?')) {
@@ -744,17 +744,17 @@ export function JobDiarySection({
                           }}
                           data-testid={`button-delete-${entry.type}-${entry.id}`}
                         >
-                          <Trash2 className="w-2 h-2 text-gray-400 hover:text-red-600" />
+                          <Trash2 className="w-1.5 h-1.5 text-gray-400 hover:text-red-600" />
                         </Button>
                         
-                        <div className={`rounded-xl px-2 py-1 ${
+                        <div className={`rounded-lg px-1.5 py-0.5 ${
                           isSent 
                             ? entry.type === 'email' 
                               ? 'bg-blue-500 text-white rounded-br-sm'
                               : 'bg-green-500 text-white rounded-br-sm'
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm'
                         }`}>
-                          <p className="text-[11px] sm:text-[11px] leading-tight whitespace-pre-wrap break-words">{messageText}</p>
+                          <p className="text-[8px] leading-tight whitespace-pre-wrap break-words">{messageText}</p>
                         </div>
                       </div>
                     </div>
