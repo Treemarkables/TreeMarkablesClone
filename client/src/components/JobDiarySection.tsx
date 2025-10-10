@@ -364,9 +364,9 @@ export function JobDiarySection({
       return { type: 'quote', number: quoteMatch[0] };
     }
     
-    // Check for invoice (with or without invoice number)
+    // Check for invoice - only if it explicitly says "Invoice sent" or has INV- number
     const invoiceMatch = (entry.title + ' ' + entry.content).match(/INV-\d+/i);
-    if (content.includes('invoice') || content.includes('inv-')) {
+    if (invoiceMatch || content.includes('invoice sent')) {
       // If we found an invoice number, use it; otherwise use a placeholder
       const invoiceNumber = invoiceMatch ? invoiceMatch[0] : 'latest';
       return { type: 'invoice', number: invoiceNumber };
