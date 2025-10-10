@@ -15,16 +15,23 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isMediaRecorderSupported, setIsMediaRecorderSupported] = useState(true);
+  const [isIOS, setIsIOS] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
 
-  // Check MediaRecorder support on mount
+  // Check device capabilities on mount
   useEffect(() => {
     // Guard against SSR/pre-render
     if (typeof window === 'undefined') return;
+    
+    // Detect iOS devices
+    const iosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    setIsIOS(iosDevice);
     
     const hasBasicSupport = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
     
@@ -36,7 +43,7 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
     
     setIsMediaRecorderSupported(mimeSupported);
     
-    if (!mimeSupported) {
+    if (!mimeSupported && !iosDevice) {
       console.warn('MediaRecorder or required audio format not supported on this browser');
     }
   }, []);
@@ -190,6 +197,29 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['audio/mp4', 'audio/m4a', 'audio/mpeg', 'audio/wav', 'audio/webm', 'audio/x-m4a'];
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(m4a|mp3|wav|webm)$/i)) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid File',
+        description: 'Please upload an audio file (m4a, mp3, wav, or webm)',
+      });
+      return;
+    }
+
+    await processAudio(file);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -202,7 +232,10 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
         <DialogHeader>
           <DialogTitle>Speech to Quote</DialogTitle>
           <DialogDescription>
-            Describe the job details and we'll generate a quote for you.
+            {isIOS 
+              ? 'Upload a voice memo or record using your device'
+              : 'Record your voice or upload an audio file to generate a quote'
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -214,42 +247,85 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
             </div>
           ) : (
             <>
-              <div className="relative">
-                <Button
-                  size="icon"
-                  variant={isRecording ? 'destructive' : 'default'}
-                  className={`h-24 w-24 rounded-full ${isRecording ? 'animate-pulse' : ''}`}
-                  onClick={isRecording ? stopRecording : startRecording}
-                  data-testid={isRecording ? 'button-stop-recording' : 'button-start-recording'}
-                >
-                  {isRecording ? (
-                    <Square className="h-12 w-12" />
-                  ) : (
-                    <Mic className="h-12 w-12" />
-                  )}
-                </Button>
-                {isRecording && (
-                  <div className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive animate-pulse" />
-                )}
-              </div>
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/mp4,audio/m4a,audio/mpeg,audio/wav,audio/webm,.m4a,.mp3,.wav,.webm"
+                onChange={handleFileUpload}
+                className="hidden"
+                data-testid="input-audio-file"
+              />
 
-              {isRecording && (
-                <div className="text-2xl font-mono font-bold" data-testid="text-recording-time">
-                  {formatTime(recordingTime)}
+              {isIOS || !isMediaRecorderSupported ? (
+                /* iOS or unsupported browser - show upload only */
+                <div className="flex flex-col items-center gap-4 w-full">
+                  <Button
+                    size="lg"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full"
+                    data-testid="button-upload-audio"
+                  >
+                    Upload Voice Memo
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Record using your device's Voice Memos app, then upload it here
+                  </p>
                 </div>
-              )}
+              ) : (
+                /* Android/Desktop - show recording with upload option */
+                <>
+                  <div className="relative">
+                    <Button
+                      size="icon"
+                      variant={isRecording ? 'destructive' : 'default'}
+                      className={`h-24 w-24 rounded-full ${isRecording ? 'animate-pulse' : ''}`}
+                      onClick={isRecording ? stopRecording : startRecording}
+                      data-testid={isRecording ? 'button-stop-recording' : 'button-start-recording'}
+                    >
+                      {isRecording ? (
+                        <Square className="h-12 w-12" />
+                      ) : (
+                        <Mic className="h-12 w-12" />
+                      )}
+                    </Button>
+                    {isRecording && (
+                      <div className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive animate-pulse" />
+                    )}
+                  </div>
 
-              <div className="text-center space-y-2">
-                <p className="text-sm font-medium">
-                  {isRecording ? 'Recording...' : 'Tap to start recording'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {isRecording 
-                    ? 'Tap the square to stop and process' 
-                    : 'Speak clearly about customer name, location, job type, and pricing'
-                  }
-                </p>
-              </div>
+                  {isRecording && (
+                    <div className="text-2xl font-mono font-bold" data-testid="text-recording-time">
+                      {formatTime(recordingTime)}
+                    </div>
+                  )}
+
+                  <div className="text-center space-y-2">
+                    <p className="text-sm font-medium">
+                      {isRecording ? 'Recording...' : 'Tap to start recording'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {isRecording 
+                        ? 'Tap the square to stop and process' 
+                        : 'Speak clearly about customer name, location, job type, and pricing'
+                      }
+                    </p>
+                  </div>
+
+                  {!isRecording && (
+                    <div className="w-full border-t pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full"
+                        data-testid="button-upload-audio-alternative"
+                      >
+                        Or Upload Audio File
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>
