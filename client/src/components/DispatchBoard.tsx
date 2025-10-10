@@ -811,8 +811,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
              specialInstructions.includes(searchQuery);
     });
 
+    // Deduplicate jobs by ID (keep the most recent assignment for each unique job)
+    const uniqueJobs = Array.from(
+      allMatchingJobs.reduce((map, job) => {
+        const existing = map.get(job.id);
+        if (!existing || new Date(job.startTime) > new Date(existing.startTime)) {
+          map.set(job.id, job);
+        }
+        return map;
+      }, new Map<string, JobAssignment>()).values()
+    );
+
     setIsDeepSearchActive(true);
-    setDeepSearchResults(allMatchingJobs.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())); // Sort by newest first
+    setDeepSearchResults(uniqueJobs.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())); // Sort by newest first
   };
 
   const getTodaysJobs = () => {
@@ -821,7 +832,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return deepSearchResults;
     }
 
-    const sorted = jobs
+    const filtered = jobs
       .filter(job => {
         // Exclude completed and unsuccessful jobs from dispatch board
         return job.status !== 'unsuccessful' && job.status !== 'completed';
@@ -842,7 +853,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                serviceType.includes(query) ||
                description.includes(query) ||
                jobId.includes(query);
-      })
+      });
+    
+    // Deduplicate jobs by ID (keep the most recent assignment for each unique job)
+    const uniqueJobs = Array.from(
+      filtered.reduce((map, job) => {
+        const existing = map.get(job.id);
+        if (!existing || new Date(job.startTime) > new Date(existing.startTime)) {
+          map.set(job.id, job);
+        }
+        return map;
+      }, new Map<string, JobAssignment>()).values()
+    );
+    
+    const sorted = uniqueJobs
       .sort((a, b) => {
         // Sort by highest job number first (descending) - newest jobs at top
         const jobNumberA = parseInt(a.jobNumber || '0', 10);
