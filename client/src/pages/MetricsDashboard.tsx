@@ -91,7 +91,7 @@ export default function MetricsDashboard() {
 
   const { data: revenueStats, isLoading: revenueLoading } = useQuery<RevenueStats>({
     queryKey: ['/api/revenue-stats'],
-    queryFn: () => fetch('/api/revenue-stats').then(res => res.json())
+    queryFn: () => fetch('/api/revenue-stats').then(res => res.json()).then(res => res.data)
   });
 
   const { data: quoteAnalytics, isLoading: quotesLoading } = useQuery<QuoteAnalytics>({
