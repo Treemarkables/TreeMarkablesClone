@@ -13696,6 +13696,93 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Speech to Quote - Convert recorded speech to quote data
+  app.post('/api/speech-to-quote', audioUpload.single('audio'), async (req, res) => {
+    let audioFilePath: string | null = null;
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No audio file uploaded' });
+      }
+
+      audioFilePath = req.file.path;
+      console.log('📢 Speech to Quote - Processing audio file:', req.file.filename);
+
+      // Step 1: Transcribe audio using Whisper
+      const audioReadStream = fs.createReadStream(audioFilePath);
+
+      const transcription = await openai.audio.transcriptions.create({
+        file: audioReadStream,
+        model: "whisper-1",
+      });
+
+      const transcriptText = transcription.text;
+      console.log('📝 Transcription:', transcriptText);
+
+      // Step 2: Extract quote details using GPT-5
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const extractionPrompt = `You are a quote assistant for a tree removal service company in New Zealand. 
+Extract the following information from this conversation transcription and return it as JSON:
+
+{
+  "customerName": "customer's full name or null if not mentioned",
+  "customerPhone": "phone number or null if not mentioned", 
+  "customerEmail": "email or null if not mentioned",
+  "address": "property address or null if not mentioned",
+  "jobDescription": "detailed description of the work needed",
+  "treeTypes": "types of trees mentioned or null if not specified",
+  "estimatedPrice": "price mentioned in NZD or null if not mentioned (number only, no $ sign)",
+  "urgency": "urgent/normal/low based on conversation tone",
+  "notes": "any additional important details"
+}
+
+Transcription: ${transcriptText}`;
+
+      const extractionResponse = await openai.chat.completions.create({
+        model: "gpt-5",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant that extracts structured quote information from conversations. Always respond with valid JSON."
+          },
+          {
+            role: "user",
+            content: extractionPrompt
+          }
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const quoteData = JSON.parse(extractionResponse.choices[0].message.content || '{}');
+      console.log('💼 Extracted quote data:', quoteData);
+
+      res.json({
+        success: true,
+        data: {
+          transcription: transcriptText,
+          ...quoteData
+        }
+      });
+
+    } catch (error) {
+      console.error('Error processing speech to quote:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Failed to process audio' 
+      });
+    } finally {
+      // Always clean up audio file (security: prevent sensitive recordings from accumulating)
+      if (audioFilePath && fs.existsSync(audioFilePath)) {
+        try {
+          fs.unlinkSync(audioFilePath);
+          console.log('🗑️ Cleaned up audio file:', audioFilePath);
+        } catch (cleanupError) {
+          console.error('Error cleaning up audio file:', cleanupError);
+        }
+      }
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
