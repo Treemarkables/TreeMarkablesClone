@@ -1398,6 +1398,7 @@ export function GlobalJobCard({
           currentStatus === 'quote' ? 'bg-orange-600 border-orange-700' :
           currentStatus === 'lead' ? 'bg-cyan-600 border-cyan-700' :
           currentStatus === 'scheduled' ? 'bg-orange-600 border-orange-700' :
+          currentStatus === 'archived' ? 'bg-gray-600 border-gray-700' :
           currentStatus === 'unsuccessful' ? 'bg-red-600 border-red-700' :
           'bg-gray-600 border-gray-700'
         }`} style={{ paddingTop: 'max(0.25rem, env(safe-area-inset-top))' }}>
@@ -1415,6 +1416,7 @@ export function GlobalJobCard({
                     currentStatus === 'quote' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
                     currentStatus === 'lead' ? 'bg-cyan-700 hover:bg-cyan-800 text-white' :
                     currentStatus === 'scheduled' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
+                    currentStatus === 'archived' ? 'bg-gray-700 hover:bg-gray-800 text-white' :
                     currentStatus === 'unsuccessful' ? 'bg-red-700 hover:bg-red-800 text-white' :
                     'bg-gray-700 hover:bg-gray-800 text-white'
                   }`}
@@ -2124,6 +2126,7 @@ export function GlobalJobCard({
                                         <SelectItem value="scheduled">Scheduled</SelectItem>
                                         <SelectItem value="work_order">Work Order</SelectItem>
                                         <SelectItem value="completed">Completed</SelectItem>
+                                        <SelectItem value="archived">Archived</SelectItem>
                                         <SelectItem value="unsuccessful">Unsuccessful</SelectItem>
                                       </SelectContent>
                                     </Select>
