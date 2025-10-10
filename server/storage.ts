@@ -1877,14 +1877,39 @@ class DatabaseStorage implements IStorage {
   async getAllPriceRules(): Promise<PriceRule[]> { return []; }
   async getPriceRulesByService(serviceName: string): Promise<PriceRule[]> { return []; }
 
-  async getDashboardStats(): Promise<any> {
+  async getDashboardStats(fromDate?: Date, toDate?: Date): Promise<any> {
     const allJobs = await this.getAllJobs();
     const allCustomers = await this.getAllCustomers();
     const allLeads = await this.getLeads();
     
-    const completedJobs = allJobs.filter(job => job.status === 'completed');
+    // Filter by date if provided
+    let filteredJobs = allJobs;
+    let filteredLeads = allLeads;
+    
+    if (fromDate || toDate) {
+      filteredJobs = allJobs.filter(job => {
+        if (!job.createdAt) return false;
+        const jobDate = new Date(job.createdAt);
+        if (fromDate && jobDate < fromDate) return false;
+        if (toDate && jobDate > toDate) return false;
+        return true;
+      });
+      
+      filteredLeads = allLeads.filter(lead => {
+        if (!lead.createdAt) return false;
+        const leadDate = new Date(lead.createdAt);
+        if (fromDate && leadDate < fromDate) return false;
+        if (toDate && leadDate > toDate) return false;
+        return true;
+      });
+    }
+    
+    const completedJobs = filteredJobs.filter(job => job.status === 'completed');
     const totalRevenue = completedJobs.reduce((sum, job) => sum + (parseFloat(job.totalAmount?.toString() || '0')), 0);
-    const leadsCount = allLeads.length;
+    const leadsCount = filteredLeads.length;
+    
+    // For customer count and retention, we use all customers (not filtered by date)
+    // because retention is calculated based on total customer base
     const customersCount = allCustomers.length;
     
     // Conversion rate: (completed jobs / total leads) * 100
@@ -1896,7 +1921,7 @@ class DatabaseStorage implements IStorage {
       ? totalRevenue / jobsWithRevenue.length 
       : 0;
     
-    // Calculate customer retention (repeat customers)
+    // Calculate customer retention (repeat customers) - uses all jobs for accurate retention
     const customerJobCounts = new Map<string, number>();
     allJobs.forEach(job => {
       if (job.customerId) {
@@ -1912,14 +1937,14 @@ class DatabaseStorage implements IStorage {
     return {
       totalLeads: leadsCount,
       totalCustomers: customersCount,
-      totalJobs: allJobs.length,
+      totalJobs: filteredJobs.length,
       totalRevenue,
       conversionRate: Math.round(conversionRate * 100) / 100,
       averageQuoteValue: Math.round(averageQuoteValue * 100) / 100,
       customerRetention,
       missedCalls: 0,
       recentCalls: [],
-      recentLeads: allLeads.slice(0, 5)
+      recentLeads: filteredLeads.slice(0, 5)
     };
   }
 
