@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Receipt, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
+import logoUrl from "@assets/treemarkables_logo_transparent_smooth_1760076555496.png";
 
 interface InvoiceViewerProps {}
 
@@ -107,23 +108,29 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
     <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full">
-        <div className="max-w-4xl mx-auto w-full flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">
-                Invoice #{invoice.invoiceNumber || invoice.id}
-              </h1>
-              <p className="text-sm text-gray-600">
-                {customer?.name || 'Customer'} - {new Date(invoice.createdAt).toLocaleDateString()}
-              </p>
-            </div>
+        <div className="max-w-4xl mx-auto w-full">
+          {/* Logo */}
+          <div className="flex justify-center mb-4">
+            <img src={logoUrl} alt="Treemarkables" className="h-16 sm:h-20 object-contain" />
           </div>
+          
+          <div className="flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link href="/">
+                <Button variant="outline" size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">
+                  Invoice #{invoice.invoiceNumber || invoice.id}
+                </h1>
+                <p className="text-sm text-gray-600">
+                  {customer?.name || 'Customer'} - {new Date(invoice.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
           
           <div className="flex gap-2">
             <Button variant="outline" size="sm" data-testid="button-email-invoice">
@@ -135,6 +142,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               Download PDF
             </Button>
           </div>
+          </div>
         </div>
       </div>
 
@@ -144,7 +152,9 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
           <CardContent className="p-3 sm:p-4">
             {/* Company Header */}
             <div className="text-center mb-3">
-              <h1 className="text-xl font-bold text-orange-600 mb-1">Treemarkables</h1>
+              <div className="flex justify-center mb-2">
+                <img src={logoUrl} alt="Treemarkables" className="h-20 object-contain" />
+              </div>
               <p className="text-sm text-gray-600">Professional Tree Care Services</p>
               <p className="text-xs text-gray-500">Gisborne, New Zealand | Phone: 0272166882 | Email: quotes@treemarkables.nz</p>
             </div>
