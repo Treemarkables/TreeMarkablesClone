@@ -8,6 +8,7 @@ import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import logoUrl from "@assets/treemarkables_logo_transparent_smooth_1760076555496.png";
 
 interface ProposalViewerProps {}
 
@@ -146,6 +147,11 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full">
         <div className="max-w-4xl mx-auto w-full">
+          {/* Logo */}
+          <div className="flex justify-center mb-4">
+            <img src={logoUrl} alt="Treemarkables" className="h-16 sm:h-20 object-contain" />
+          </div>
+          
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <Link href="/">
