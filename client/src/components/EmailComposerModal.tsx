@@ -63,8 +63,7 @@ Please find a copy of your Treemarkables LTD Invoice in regards to {jobDescripti
 If you have any queries or are unable to open the invoice, please contact {contactName} on {contactPhone}.
 
 Regards,
-{contactName}
-{companySignature}`
+{contactName}`
   },
   {
     id: "payment_reminder",
@@ -101,8 +100,7 @@ You can view your quote online here: {quoteLink}
 We look forward to hearing from you. If you have any questions about this quote, please contact {contactName} on {contactPhone}.
 
 Best regards,
-{contactName}
-{companySignature}`
+{contactName}`
   },
   {
     id: "proposal_delivery", 
@@ -123,8 +121,7 @@ You can view your proposal online here: {proposalLink}
 We would be delighted to discuss this proposal further. Please contact {contactName} on {contactPhone} with any questions.
 
 Kind regards,
-{contactName}
-{companySignature}`
+{contactName}`
   }
 ];
 
@@ -251,8 +248,7 @@ export function EmailComposerModal({
         .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
         .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "")
         .replace("{contactName}", "Treemarkables Team")
-        .replace("{contactPhone}", "0272166882")
-        .replace("{companySignature}", "\n\nTreemarkables LTD\nQualified Arborists\nGisborne, New Zealand\nPhone: 0272166882\nEmail: quotes@treemarkables.nz");
+        .replace("{contactPhone}", "0272166882");
 
       setEmailData({
         to: billingEmail || "",
@@ -407,7 +403,6 @@ export function EmailComposerModal({
       .replace("{proposalNumber}", proposalData?.proposalNumber || (job?.jobNumber ? `PROP-${job.jobNumber}` : ""))
       .replace("{contactName}", "Treemarkables Team")
       .replace("{contactPhone}", customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
-      .replace("{companySignature}", "\n\nTreemarkables LTD\nCertified Arborists\nGisborne, New Zealand\nPhone: 027-XXX-XXXX\nEmail: info@treemarkables.co.nz")
       .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
       .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "");
 
