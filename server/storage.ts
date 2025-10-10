@@ -1880,7 +1880,7 @@ class DatabaseStorage implements IStorage {
   async getDashboardStats(): Promise<any> {
     const allJobs = await this.getAllJobs();
     const allCustomers = await this.getAllCustomers();
-    const allLeads = await this.getAllLeads();
+    const allLeads = await this.getLeads();
     
     const completedJobs = allJobs.filter(job => job.status === 'completed');
     const totalRevenue = completedJobs.reduce((sum, job) => sum + (parseFloat(job.totalAmount?.toString() || '0')), 0);
