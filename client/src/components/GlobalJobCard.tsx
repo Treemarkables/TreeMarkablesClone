@@ -4106,6 +4106,7 @@ export function GlobalJobCard({
         open={isSpeechToQuoteOpen}
         onOpenChange={setIsSpeechToQuoteOpen}
         onQuoteGenerated={handleSpeechToQuoteGenerated}
+        context={speechToQuoteContext}
       />
 
       {/* Catalog Selection Modal */}

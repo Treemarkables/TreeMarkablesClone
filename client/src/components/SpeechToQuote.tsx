@@ -8,9 +8,10 @@ interface SpeechToQuoteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onQuoteGenerated: (quoteData: any) => void;
+  context?: 'full' | 'job-description' | 'invoice-description';
 }
 
-export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechToQuoteProps) {
+export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 'full' }: SpeechToQuoteProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -168,6 +169,7 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
       
       const formData = new FormData();
       formData.append('audio', audioBlob, filename);
+      formData.append('context', context);
 
       const response = await fetch('/api/speech-to-quote', {
         method: 'POST',
@@ -180,9 +182,13 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
 
       const result = await response.json();
       
+      const successMessage = context === 'full' 
+        ? 'Quote generated from your speech!'
+        : 'Description transcribed from your speech!';
+      
       toast({
         title: 'Success',
-        description: 'Quote generated from your speech!',
+        description: successMessage,
       });
 
       onQuoteGenerated(result.data);
@@ -244,11 +250,17 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated }: SpeechTo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md" data-testid="dialog-speech-to-quote">
         <DialogHeader>
-          <DialogTitle>Speech to Quote</DialogTitle>
+          <DialogTitle>
+            {context === 'full' ? 'Speech to Quote' : 'Voice to Text'}
+          </DialogTitle>
           <DialogDescription>
-            {isIOS 
-              ? 'Upload a voice recording to generate a quote'
-              : 'Record your voice or upload an audio file to generate a quote'
+            {context === 'full' 
+              ? (isIOS 
+                  ? 'Upload a voice recording to generate a quote'
+                  : 'Record your voice or upload an audio file to generate a quote')
+              : (isIOS
+                  ? 'Upload a voice recording to transcribe into text'
+                  : 'Record your voice or upload an audio file to transcribe into text')
             }
           </DialogDescription>
         </DialogHeader>
