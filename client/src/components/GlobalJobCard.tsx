@@ -3477,8 +3477,15 @@ export function GlobalJobCard({
             // Always use job description (from job details)
             const description = editingJob?.description || editingJob?.title || '';
             
-            const totalAmount = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0) || 0;
-            console.log('📋 Invoice total amount:', totalAmount);
+            // Calculate subtotal (ex-GST) from line items
+            const subtotal = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0) || 0;
+            
+            // Calculate GST (15%) and total amount (inc-GST)
+            const taxRate = parseFloat(editingJob?.taxRate || '15');
+            const gstAmount = subtotal * (taxRate / 100);
+            const totalAmount = subtotal + gstAmount;
+            
+            console.log('📋 Invoice amounts:', { subtotal, taxRate, gstAmount, totalAmount });
             
             return {
               id: editingJob?.id,
