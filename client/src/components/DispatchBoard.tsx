@@ -580,7 +580,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           address: apiJob.address,
           serviceType: apiJob.serviceType || '',
           description: apiJob.description || '',
-          status: 'scheduled', // Jobs with staff assignments are scheduled
+          status: apiJob.status || 'scheduled', // Use actual job status from API
           priority: apiJob.priority,
           startTime: firstAssignment.startTime,
           endTime: firstAssignment.endTime,
