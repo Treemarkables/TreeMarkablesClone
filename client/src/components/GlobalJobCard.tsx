@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +22,7 @@ import { QuoteTemplate } from "./QuoteTemplate";
 import QuoteManagement from "./QuoteManagement";
 import { RecordedTimeModal } from "./RecordedTimeModal";
 import { PhotoCaptureModal } from "./PhotoCaptureModal";
+import { SpeechToQuote } from "./SpeechToQuote";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -161,6 +162,9 @@ export function GlobalJobCard({
 
   // Photo capture modal state
   const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false);
+
+  // Speech to quote modal state
+  const [isSpeechToQuoteOpen, setIsSpeechToQuoteOpen] = useState(false);
 
   // Auto-save state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -1125,6 +1129,46 @@ export function GlobalJobCard({
     });
   };
 
+  // Handle speech-to-quote data
+  const handleSpeechToQuoteGenerated = (quoteData: any) => {
+    console.log('📢 Speech to Quote data received:', quoteData);
+    
+    // Populate form fields with extracted data
+    if (quoteData.customerName) {
+      form.setValue('newCustomerName', quoteData.customerName);
+      form.setValue('isNewCustomer', true);
+    }
+    if (quoteData.customerPhone) {
+      form.setValue('newCustomerPhone', quoteData.customerPhone);
+    }
+    if (quoteData.customerEmail) {
+      form.setValue('newCustomerEmail', quoteData.customerEmail);
+    }
+    if (quoteData.address) {
+      form.setValue('address', quoteData.address);
+    }
+    if (quoteData.jobDescription) {
+      form.setValue('description', quoteData.jobDescription);
+    }
+    if (quoteData.estimatedPrice) {
+      // Add as a line item
+      const lineItems = form.getValues('lineItems') || [];
+      lineItems.push({
+        description: quoteData.jobDescription || 'Tree removal service',
+        quantity: 1,
+        unitPrice: parseFloat(quoteData.estimatedPrice),
+        total: parseFloat(quoteData.estimatedPrice),
+        priceIncludesTax: false
+      });
+      form.setValue('lineItems', lineItems);
+    }
+
+    toast({
+      title: "Quote Generated from Speech!",
+      description: "Job details have been populated. Review and save.",
+    });
+  };
+
   // Check for staff conflicts when scheduling data changes
   useEffect(() => {
     const abortController = new AbortController();
@@ -1457,6 +1501,11 @@ export function GlobalJobCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={() => setIsSpeechToQuoteOpen(true)} data-testid="menu-item-speech-to-quote-mobile">
+                    <Mic className="w-4 h-4 mr-2" />
+                    Speech to Quote
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleEmailClick} data-testid="menu-item-email-mobile">
                     <Mail className="w-4 h-4 mr-2" />
                     Email
@@ -1564,6 +1613,16 @@ export function GlobalJobCard({
           <div className="flex items-center justify-between gap-2">
             {/* Action Buttons */}
             <div className="flex items-center justify-between w-full">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col [&_svg]:!w-full [&_svg]:!h-auto" 
+                onClick={() => setIsSpeechToQuoteOpen(true)} 
+                data-testid="button-speech-to-quote"
+              >
+                <Mic className="w-full h-auto max-w-[40px] max-h-[40px] text-purple-500" />
+                <span className="text-[10px] mt-1 whitespace-nowrap">Speech</span>
+              </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -3979,6 +4038,13 @@ export function GlobalJobCard({
           jobId={editingJob.id}
         />
       )}
+
+      {/* Speech to Quote Modal */}
+      <SpeechToQuote
+        open={isSpeechToQuoteOpen}
+        onOpenChange={setIsSpeechToQuoteOpen}
+        onQuoteGenerated={handleSpeechToQuoteGenerated}
+      />
 
       {/* Catalog Selection Modal */}
       <Dialog open={isCatalogModalOpen} onOpenChange={setIsCatalogModalOpen}>
