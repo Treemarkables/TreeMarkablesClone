@@ -1531,6 +1531,9 @@ export const equipment = pgTable("equipment", {
   registrationExpiryDate: timestamp("registration_expiry_date"),
   cofExpiryDate: timestamp("cof_expiry_date"), // Certificate of Fitness
   
+  // Inspection template assignment
+  defaultInspectionTemplateId: varchar("default_inspection_template_id"),
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
