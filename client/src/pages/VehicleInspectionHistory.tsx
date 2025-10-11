@@ -15,15 +15,6 @@ export default function VehicleInspectionHistory() {
     ? (inspectionsData as any).data as VehicleInspection[] 
     : [];
 
-  const { data: equipmentData } = useQuery({
-    queryKey: ['/api/equipment'],
-  });
-  const vehicles = Array.isArray((equipmentData as any)?.data) ? (equipmentData as any).data : [];
-
-  const getVehicleName = (vehicleId: string) => {
-    const vehicle = vehicles.find((v: any) => v.id === vehicleId);
-    return vehicle?.name || 'Unknown Vehicle';
-  };
 
   if (isLoading) {
     return (
@@ -58,8 +49,8 @@ export default function VehicleInspectionHistory() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
-                      {getVehicleName(inspection.equipmentId)}
-                      {inspection.passedInspection ? (
+                      {inspection.vehicleName || 'Unknown Vehicle'}
+                      {inspection.status === 'pass' ? (
                         <Badge variant="default" className="bg-green-600" data-testid={`badge-status-${inspection.id}`}>
                           <CheckCircle2 className="h-3 w-3 mr-1" />
                           Passed
