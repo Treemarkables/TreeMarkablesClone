@@ -14673,10 +14673,107 @@ Transcription: ${transcriptText}`;
 
   app.post("/api/jha/assessments", async (req, res) => {
     try {
-      const validatedData = schema.insertJhaAssessmentSchema.parse(req.body);
-      const assessment = await storage.createJhaAssessment(validatedData);
+      // Validate the incoming payload
+      const jhaPayloadSchema = z.object({
+        activityDescription: z.string().min(1),
+        ppeRequired: z.string().optional(),
+        teamLeader: z.string().optional(),
+        location: z.string().optional(),
+        comments: z.string().optional(),
+        jobId: z.number().nullable().optional(),
+        selectedHazards: z.array(z.object({
+          hazardTemplateId: z.number(),
+          hazardName: z.string(),
+          initialRisk: z.number().min(1).max(4),
+          selectedControls: z.array(z.number()),
+          residualRisk: z.number().min(1).max(4).optional(),
+          responsiblePerson: z.string().optional()
+        })),
+        signatures: z.array(z.object({
+          name: z.string(),
+          signature: z.string()
+        })),
+        photos: z.array(z.string()).optional()
+      });
+
+      const validated = jhaPayloadSchema.parse(req.body);
+      const { selectedHazards, signatures, photos, ...assessmentData } = validated;
+      
+      // Calculate overall risk rating safely
+      const overallRiskRating = selectedHazards.length > 0 
+        ? Math.max(...selectedHazards.map(h => h.residualRisk || h.initialRisk))
+        : null;
+      
+      // Create the assessment
+      const assessment = await storage.createJhaAssessment({
+        activityDescription: assessmentData.activityDescription,
+        ppeRequired: assessmentData.ppeRequired || null,
+        teamLeader: assessmentData.teamLeader || null,
+        location: assessmentData.location || null,
+        comments: assessmentData.comments || null,
+        photos: photos || [],
+        status: 'completed',
+        overallRiskRating,
+        jobId: assessmentData.jobId || null,
+        date: new Date(),
+        gpsCoordinates: null,
+        teamLeaderId: null,
+        summary: null,
+        completedAt: new Date(),
+        createdBy: null
+      });
+
+      // Create steps for each selected hazard
+      if (selectedHazards && selectedHazards.length > 0) {
+        for (let i = 0; i < selectedHazards.length; i++) {
+          const hazard = selectedHazards[i];
+          
+          // Create the step
+          const step = await storage.createJhaStep({
+            assessmentId: assessment.id,
+            stepNumber: i + 1,
+            stepName: null,
+            hazardName: hazard.hazardName,
+            hazardDescription: null,
+            hazardTemplateId: hazard.hazardTemplateId?.toString() || null,
+            initialRiskRating: hazard.initialRisk,
+            residualRiskRating: hazard.residualRisk || hazard.initialRisk,
+            responsiblePerson: hazard.responsiblePerson || null,
+            responsiblePersonId: null
+          });
+
+          // Create control measures for this step
+          if (hazard.selectedControls && hazard.selectedControls.length > 0) {
+            for (const controlId of hazard.selectedControls) {
+              await storage.createJhaStepControl({
+                stepId: step.id,
+                controlMeasureTemplateId: controlId.toString(),
+                description: '', // Will be populated from template
+                hierarchyLevel: 3,
+                isImplemented: true,
+                sortOrder: 0
+              });
+            }
+          }
+        }
+      }
+
+      // Create signatures
+      if (signatures && signatures.length > 0) {
+        for (const sig of signatures) {
+          await storage.createJhaSignature({
+            assessmentId: assessment.id,
+            workerName: sig.name,
+            workerId: null,
+            signatureDataUrl: sig.signature,
+            signedAt: new Date()
+          });
+        }
+      }
+
       res.json({ success: true, data: assessment });
     } catch (error) {
+      console.error('JHA Assessment creation error:', error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
       }
