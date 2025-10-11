@@ -250,23 +250,26 @@ export function JobDiarySection({
           // The database column is photo_url, which comes through as photoUrl in the API response
           const photoUrl = entry.photoUrl || undefined;
           
+          // Support both snake_case (entry_type) and camelCase (entryType)
+          const entryType = entry.entryType || entry.entry_type;
+          
           entries.push({
             id: entry.id,
-            type: entry.entryType === 'note' ? 'note' : 
-                  entry.entryType === 'proposal' ? 'proposal' : 
-                  entry.entryType === 'photo' ? 'photo' :
-                  entry.entryType === 'email' ? 'email' :
-                  entry.entryType === 'sms' ? 'sms' :
+            type: entryType === 'note' ? 'note' : 
+                  entryType === 'proposal' ? 'proposal' : 
+                  entryType === 'photo' ? 'photo' :
+                  entryType === 'email' ? 'email' :
+                  entryType === 'sms' ? 'sms' :
                   'job_event',
             title: entry.title,
             content: entry.description,
-            author: entry.authorName || 'System',
-            timestamp: entry.createdAt,
+            author: entry.authorName || entry.author_name || 'System',
+            timestamp: entry.createdAt || entry.created_at,
             photoUrl: photoUrl,
             metadata: {
               ...entry.metadata, // Preserve existing metadata (email, phone, etc.)
-              eventType: entry.entryType,
-              proposalNumber: entry.entryType === 'proposal' ? 
+              eventType: entryType,
+              proposalNumber: entryType === 'proposal' ? 
                 entry.title.replace('Proposal Created: ', '') : undefined
             }
           });
