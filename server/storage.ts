@@ -788,6 +788,39 @@ export interface IStorage {
   updateGeneratedDocumentPhoto(id: string, updates: Partial<InsertGeneratedDocumentPhoto>): Promise<GeneratedDocumentPhoto>;
   deleteGeneratedDocumentPhoto(id: string): Promise<void>;
   getGeneratedDocumentPhotosByDocument(documentId: string): Promise<GeneratedDocumentPhoto[]>;
+
+  // Job Hazard Analysis (JHA)
+  getAllJhaHazardTemplates(): Promise<schema.JhaHazardTemplate[]>;
+  getJhaHazardTemplate(id: string): Promise<schema.JhaHazardTemplate | undefined>;
+  createJhaHazardTemplate(template: schema.InsertJhaHazardTemplate): Promise<schema.JhaHazardTemplate>;
+  updateJhaHazardTemplate(id: string, updates: Partial<schema.InsertJhaHazardTemplate>): Promise<schema.JhaHazardTemplate>;
+  deleteJhaHazardTemplate(id: string): Promise<void>;
+
+  getAllJhaControlMeasures(hazardTemplateId?: string): Promise<schema.JhaControlMeasureTemplate[]>;
+  getJhaControlMeasure(id: string): Promise<schema.JhaControlMeasureTemplate | undefined>;
+  createJhaControlMeasure(measure: schema.InsertJhaControlMeasureTemplate): Promise<schema.JhaControlMeasureTemplate>;
+  updateJhaControlMeasure(id: string, updates: Partial<schema.InsertJhaControlMeasureTemplate>): Promise<schema.JhaControlMeasureTemplate>;
+  deleteJhaControlMeasure(id: string): Promise<void>;
+
+  getAllJhaAssessments(jobId?: string, status?: string): Promise<schema.JhaAssessment[]>;
+  getJhaAssessment(id: string, includeSteps?: boolean, includeSignatures?: boolean): Promise<schema.JhaAssessment | undefined>;
+  createJhaAssessment(assessment: schema.InsertJhaAssessment): Promise<schema.JhaAssessment>;
+  updateJhaAssessment(id: string, updates: Partial<schema.InsertJhaAssessment>): Promise<schema.JhaAssessment>;
+  deleteJhaAssessment(id: string): Promise<void>;
+
+  getJhaSteps(assessmentId: string): Promise<schema.JhaStep[]>;
+  createJhaStep(step: schema.InsertJhaStep): Promise<schema.JhaStep>;
+  updateJhaStep(id: string, updates: Partial<schema.InsertJhaStep>): Promise<schema.JhaStep>;
+  deleteJhaStep(id: string): Promise<void>;
+
+  getJhaStepControls(stepId: string): Promise<schema.JhaStepControl[]>;
+  createJhaStepControl(control: schema.InsertJhaStepControl): Promise<schema.JhaStepControl>;
+  updateJhaStepControl(id: string, updates: Partial<schema.InsertJhaStepControl>): Promise<schema.JhaStepControl>;
+  deleteJhaStepControl(id: string): Promise<void>;
+
+  getJhaSignatures(assessmentId: string): Promise<schema.JhaSignature[]>;
+  createJhaSignature(signature: schema.InsertJhaSignature): Promise<schema.JhaSignature>;
+  deleteJhaSignature(id: string): Promise<void>;
 }
 
 // Database Storage Implementation
@@ -4286,6 +4319,221 @@ class DatabaseStorage implements IStorage {
       conversionRate: parseFloat(conversionRate),
       averageRating: avgRating[0]?.avg ? parseFloat(avgRating[0].avg.toFixed(1)) : 0
     };
+  }
+
+  // ==========================================
+  // JOB HAZARD ANALYSIS (JHA) METHODS
+  // ==========================================
+
+  // Hazard Templates
+  async getAllJhaHazardTemplates(): Promise<schema.JhaHazardTemplate[]> {
+    return await db.select()
+      .from(schema.jhaHazardTemplates)
+      .where(eq(schema.jhaHazardTemplates.isActive, true))
+      .orderBy(schema.jhaHazardTemplates.sortOrder, schema.jhaHazardTemplates.name);
+  }
+
+  async getJhaHazardTemplate(id: string): Promise<schema.JhaHazardTemplate | undefined> {
+    const [template] = await db.select()
+      .from(schema.jhaHazardTemplates)
+      .where(eq(schema.jhaHazardTemplates.id, id));
+    return template;
+  }
+
+  async createJhaHazardTemplate(template: schema.InsertJhaHazardTemplate): Promise<schema.JhaHazardTemplate> {
+    const [result] = await db.insert(schema.jhaHazardTemplates)
+      .values(template)
+      .returning();
+    return result;
+  }
+
+  async updateJhaHazardTemplate(id: string, updates: Partial<schema.InsertJhaHazardTemplate>): Promise<schema.JhaHazardTemplate> {
+    const [result] = await db.update(schema.jhaHazardTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.jhaHazardTemplates.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteJhaHazardTemplate(id: string): Promise<void> {
+    await db.update(schema.jhaHazardTemplates)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(schema.jhaHazardTemplates.id, id));
+  }
+
+  // Control Measure Templates
+  async getAllJhaControlMeasures(hazardTemplateId?: string): Promise<schema.JhaControlMeasureTemplate[]> {
+    let query = db.select().from(schema.jhaControlMeasureTemplates);
+    
+    if (hazardTemplateId) {
+      query = query.where(and(
+        eq(schema.jhaControlMeasureTemplates.hazardTemplateId, hazardTemplateId),
+        eq(schema.jhaControlMeasureTemplates.isActive, true)
+      )) as any;
+    } else {
+      query = query.where(eq(schema.jhaControlMeasureTemplates.isActive, true)) as any;
+    }
+    
+    return await query.orderBy(schema.jhaControlMeasureTemplates.sortOrder);
+  }
+
+  async getJhaControlMeasure(id: string): Promise<schema.JhaControlMeasureTemplate | undefined> {
+    const [measure] = await db.select()
+      .from(schema.jhaControlMeasureTemplates)
+      .where(eq(schema.jhaControlMeasureTemplates.id, id));
+    return measure;
+  }
+
+  async createJhaControlMeasure(measure: schema.InsertJhaControlMeasureTemplate): Promise<schema.JhaControlMeasureTemplate> {
+    const [result] = await db.insert(schema.jhaControlMeasureTemplates)
+      .values(measure)
+      .returning();
+    return result;
+  }
+
+  async updateJhaControlMeasure(id: string, updates: Partial<schema.InsertJhaControlMeasureTemplate>): Promise<schema.JhaControlMeasureTemplate> {
+    const [result] = await db.update(schema.jhaControlMeasureTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.jhaControlMeasureTemplates.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteJhaControlMeasure(id: string): Promise<void> {
+    await db.update(schema.jhaControlMeasureTemplates)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(schema.jhaControlMeasureTemplates.id, id));
+  }
+
+  // JHA Assessments
+  async getAllJhaAssessments(jobId?: string, status?: string): Promise<schema.JhaAssessment[]> {
+    let query = db.select().from(schema.jhaAssessments);
+    
+    const conditions = [];
+    if (jobId) {
+      conditions.push(eq(schema.jhaAssessments.jobId, jobId));
+    }
+    if (status) {
+      conditions.push(eq(schema.jhaAssessments.status, status));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(desc(schema.jhaAssessments.date));
+  }
+
+  async getJhaAssessment(id: string, includeSteps?: boolean, includeSignatures?: boolean): Promise<schema.JhaAssessment | undefined> {
+    const [assessment] = await db.select()
+      .from(schema.jhaAssessments)
+      .where(eq(schema.jhaAssessments.id, id));
+    return assessment;
+  }
+
+  async createJhaAssessment(assessment: schema.InsertJhaAssessment): Promise<schema.JhaAssessment> {
+    const assessmentNumber = `JHA-${Date.now()}`;
+    const [result] = await db.insert(schema.jhaAssessments)
+      .values({ ...assessment, assessmentNumber })
+      .returning();
+    return result;
+  }
+
+  async updateJhaAssessment(id: string, updates: Partial<schema.InsertJhaAssessment>): Promise<schema.JhaAssessment> {
+    const [result] = await db.update(schema.jhaAssessments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.jhaAssessments.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteJhaAssessment(id: string): Promise<void> {
+    await db.delete(schema.jhaStepControls)
+      .where(sql`step_id IN (SELECT id FROM jha_steps WHERE assessment_id = ${id})`);
+    await db.delete(schema.jhaSteps)
+      .where(eq(schema.jhaSteps.assessmentId, id));
+    await db.delete(schema.jhaSignatures)
+      .where(eq(schema.jhaSignatures.assessmentId, id));
+    await db.delete(schema.jhaAssessments)
+      .where(eq(schema.jhaAssessments.id, id));
+  }
+
+  // JHA Steps
+  async getJhaSteps(assessmentId: string): Promise<schema.JhaStep[]> {
+    return await db.select()
+      .from(schema.jhaSteps)
+      .where(eq(schema.jhaSteps.assessmentId, assessmentId))
+      .orderBy(schema.jhaSteps.stepNumber);
+  }
+
+  async createJhaStep(step: schema.InsertJhaStep): Promise<schema.JhaStep> {
+    const [result] = await db.insert(schema.jhaSteps)
+      .values(step)
+      .returning();
+    return result;
+  }
+
+  async updateJhaStep(id: string, updates: Partial<schema.InsertJhaStep>): Promise<schema.JhaStep> {
+    const [result] = await db.update(schema.jhaSteps)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.jhaSteps.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteJhaStep(id: string): Promise<void> {
+    await db.delete(schema.jhaStepControls)
+      .where(eq(schema.jhaStepControls.stepId, id));
+    await db.delete(schema.jhaSteps)
+      .where(eq(schema.jhaSteps.id, id));
+  }
+
+  // JHA Step Controls
+  async getJhaStepControls(stepId: string): Promise<schema.JhaStepControl[]> {
+    return await db.select()
+      .from(schema.jhaStepControls)
+      .where(eq(schema.jhaStepControls.stepId, stepId))
+      .orderBy(schema.jhaStepControls.sortOrder);
+  }
+
+  async createJhaStepControl(control: schema.InsertJhaStepControl): Promise<schema.JhaStepControl> {
+    const [result] = await db.insert(schema.jhaStepControls)
+      .values(control)
+      .returning();
+    return result;
+  }
+
+  async updateJhaStepControl(id: string, updates: Partial<schema.InsertJhaStepControl>): Promise<schema.JhaStepControl> {
+    const [result] = await db.update(schema.jhaStepControls)
+      .set(updates)
+      .where(eq(schema.jhaStepControls.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteJhaStepControl(id: string): Promise<void> {
+    await db.delete(schema.jhaStepControls)
+      .where(eq(schema.jhaStepControls.id, id));
+  }
+
+  // JHA Signatures
+  async getJhaSignatures(assessmentId: string): Promise<schema.JhaSignature[]> {
+    return await db.select()
+      .from(schema.jhaSignatures)
+      .where(eq(schema.jhaSignatures.assessmentId, assessmentId))
+      .orderBy(schema.jhaSignatures.signedAt);
+  }
+
+  async createJhaSignature(signature: schema.InsertJhaSignature): Promise<schema.JhaSignature> {
+    const [result] = await db.insert(schema.jhaSignatures)
+      .values(signature)
+      .returning();
+    return result;
+  }
+
+  async deleteJhaSignature(id: string): Promise<void> {
+    await db.delete(schema.jhaSignatures)
+      .where(eq(schema.jhaSignatures.id, id));
   }
 }
 
