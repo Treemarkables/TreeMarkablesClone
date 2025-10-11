@@ -15,6 +15,16 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save, CheckCircle2, Camera, Upload, Loader2, Search, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SignaturePad from "@/components/SignaturePad";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Risk control options based on hierarchy of controls
+const RISK_CONTROL_OPTIONS = [
+  { value: "elimination", label: "Elimination" },
+  { value: "substitution", label: "Substitution" },
+  { value: "engineering", label: "Engineering Controls" },
+  { value: "administrative", label: "Administrative Controls" },
+  { value: "ppe", label: "PPE (Personal Protective Equipment)" }
+];
 
 // ThinkSafe-style JHA form schema
 const jhaFormSchema = z.object({
@@ -29,7 +39,8 @@ const jhaFormSchema = z.object({
     initialRisk: z.number().min(1).max(4),
     selectedControls: z.array(z.number()).min(1, "At least one control measure is required"),
     residualRisk: z.number().min(1).max(4).optional(),
-    responsiblePerson: z.string().optional()
+    responsiblePerson: z.string().optional(),
+    riskControl: z.string().optional()
   }))
 });
 
@@ -420,6 +431,26 @@ export default function JHAAssessment() {
                     />
                   </div>
 
+                  {/* Risk Control */}
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Risk Control</label>
+                    <Select
+                      value={selectedHazard.riskControl || ""}
+                      onValueChange={(value) => updateHazardField(selectedHazard.hazardTemplateId, 'riskControl', value)}
+                    >
+                      <SelectTrigger data-testid={`select-risk-control-${selectedHazard.hazardTemplateId}`}>
+                        <SelectValue placeholder="Select risk control..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RISK_CONTROL_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {/* Residual Risk */}
                   <div>
                     <label className="text-sm font-medium mb-2 block">Residual risk</label>
@@ -458,12 +489,26 @@ export default function JHAAssessment() {
                   {selectedHazards.map((hazard) => {
                     const template = hazardTemplates.find(h => h.id === hazard.hazardTemplateId);
                     const controls = template?.controlMeasures?.filter(c => hazard.selectedControls.includes(c.id)) || [];
+                    const riskControlLabel = RISK_CONTROL_OPTIONS.find(opt => opt.value === hazard.riskControl)?.label || hazard.riskControl;
                     
                     return (
-                      <div key={hazard.hazardTemplateId} className="p-3 border rounded-lg bg-gray-50">
-                        <div className="font-medium text-sm mb-1">
-                          {hazard.hazardName}: {controls.map(c => c.description).join('; ')}
+                      <div key={hazard.hazardTemplateId} className="p-3 border rounded-lg bg-gray-50 space-y-2">
+                        <div className="font-medium text-sm">
+                          {hazard.hazardName}
                         </div>
+                        <div className="text-sm">
+                          <span className="font-medium">Initial Risk:</span> {hazard.initialRisk}
+                        </div>
+                        {hazard.riskControl && (
+                          <div className="text-sm">
+                            <span className="font-medium">Risk Control:</span> {riskControlLabel}
+                          </div>
+                        )}
+                        {controls.length > 0 && (
+                          <div className="text-sm text-muted-foreground">
+                            Control Measures: {controls.map(c => c.description).join('; ')}
+                          </div>
+                        )}
                         {hazard.responsiblePerson && (
                           <div className="text-sm text-muted-foreground">
                             Responsible: {hazard.responsiblePerson}

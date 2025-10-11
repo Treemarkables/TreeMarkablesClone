@@ -2837,6 +2837,9 @@ export const jhaSteps = pgTable("jha_steps", {
   initialRiskRating: integer("initial_risk_rating").notNull(), // Risk with no controls
   residualRiskRating: integer("residual_risk_rating"), // Risk after controls applied
   
+  // Risk Control (hierarchy of controls)
+  riskControl: text("risk_control"), // elimination, substitution, engineering, administrative, ppe
+  
   // Responsibility
   responsiblePerson: text("responsible_person"),
   responsiblePersonId: varchar("responsible_person_id").references(() => employees.id),

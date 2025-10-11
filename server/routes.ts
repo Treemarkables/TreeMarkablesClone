@@ -14687,7 +14687,8 @@ Transcription: ${transcriptText}`;
           initialRisk: z.number().min(1).max(4),
           selectedControls: z.array(z.number()),
           residualRisk: z.number().min(1).max(4).optional(),
-          responsiblePerson: z.string().optional()
+          responsiblePerson: z.string().optional(),
+          riskControl: z.string().optional()
         })),
         signatures: z.array(z.object({
           name: z.string(),
@@ -14738,6 +14739,7 @@ Transcription: ${transcriptText}`;
             hazardTemplateId: hazard.hazardTemplateId?.toString() || null,
             initialRiskRating: hazard.initialRisk,
             residualRiskRating: hazard.residualRisk || hazard.initialRisk,
+            riskControl: hazard.riskControl || null,
             responsiblePerson: hazard.responsiblePerson || null,
             responsiblePersonId: null
           });
