@@ -14038,13 +14038,48 @@ Transcription: ${transcriptText}`;
       const transcriptText = typeof transcription === 'string' ? transcription : transcription.text;
       console.log('📝 Transcription:', transcriptText);
 
-      // If context is description-only, return transcription without extraction
+      // If context is description-only, format transcription as structured list
       if (context === 'job-description' || context === 'invoice-description') {
-        console.log('📝 Returning transcription only (context: ' + context + ')');
+        console.log('📝 Formatting transcription as structured list (context: ' + context + ')');
+        
+        // Use GPT to structure the transcription into a clean bullet-point list
+        const formattingPrompt = `You are a job description formatter for a tree removal service in New Zealand.
+
+Take this voice transcription and format it as a clean, structured list of tasks. Each task should be on its own line.
+
+Rules:
+1. Remove filler words like "okay", "um", "so", etc.
+2. Capitalize the first letter of each task
+3. Keep technical terms like tree species names capitalized (e.g., "Eucalyptus", "Oak", "Pine")
+4. Each task should be a clear, concise action item
+5. Return ONLY the formatted task list, with each task on a new line
+6. Do NOT add bullet points or dashes - just line breaks between tasks
+7. Do NOT number the items
+
+Voice transcription:
+"${transcriptText}"
+
+Formatted task list:`;
+
+        const formattingResponse = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            { 
+              role: "system", 
+              content: "You are a professional job description formatter. Format voice transcriptions into clean, structured task lists."
+            },
+            { role: "user", content: formattingPrompt }
+          ],
+          temperature: 0.3,
+        });
+
+        const formattedText = formattingResponse.choices[0].message.content?.trim() || transcriptText;
+        console.log('📝 Formatted description:', formattedText);
+        
         return res.json({
           success: true,
           data: {
-            transcription: transcriptText
+            transcription: formattedText
           }
         });
       }
