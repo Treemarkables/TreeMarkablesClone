@@ -181,13 +181,17 @@ export function EmailComposerModal({
 
   // Get appropriate template based on context
   const getDefaultTemplate = () => {
-    if (templateType === 'quote' || quoteData) {
-      return EMAIL_TEMPLATES.find(t => t.id === 'quote_delivery') || EMAIL_TEMPLATES[0];
-    } else if (templateType === 'proposal' || proposalData) {
-      return EMAIL_TEMPLATES.find(t => t.id === 'proposal_delivery') || EMAIL_TEMPLATES[0];
-    } else {
+    // Use explicit templateType to determine template (user intent)
+    if (templateType === 'invoice') {
       return EMAIL_TEMPLATES.find(t => t.id === 'invoice_delivery') || EMAIL_TEMPLATES[0];
+    } else if (templateType === 'quote') {
+      return EMAIL_TEMPLATES.find(t => t.id === 'quote_delivery') || EMAIL_TEMPLATES[0];
+    } else if (templateType === 'proposal') {
+      return EMAIL_TEMPLATES.find(t => t.id === 'proposal_delivery') || EMAIL_TEMPLATES[0];
     }
+    
+    // When templateType is not specified, default to custom message for general emails
+    return EMAIL_TEMPLATES.find(t => t.id === 'custom_message') || EMAIL_TEMPLATES[0];
   };
 
   // Pre-populate email data when modal opens
