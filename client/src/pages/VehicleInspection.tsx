@@ -47,26 +47,30 @@ export default function VehicleInspection() {
   const [inspectorNotes, setInspectorNotes] = useState('');
 
   // Fetch equipment (vehicles)
-  const { data: vehicles = [] } = useQuery<SelectEquipment[]>({
+  const { data: vehiclesData } = useQuery({
     queryKey: ['/api/equipment'],
   });
+  const vehicles = Array.isArray((vehiclesData as any)?.data) ? (vehiclesData as any).data : [];
 
   // Fetch templates
-  const { data: templates = [] } = useQuery<SelectInspectionTemplate[]>({
+  const { data: templatesData } = useQuery({
     queryKey: ['/api/inspection-templates'],
   });
+  const templates = Array.isArray((templatesData as any)?.data) ? (templatesData as any).data : [];
 
   // Fetch default template for selected vehicle
-  const { data: defaultTemplate } = useQuery<SelectInspectionTemplate>({
+  const { data: defaultTemplateData } = useQuery({
     queryKey: ['/api/inspection-templates/default', selectedVehicleId],
     enabled: !!selectedVehicleId && !selectedTemplateId,
   });
+  const defaultTemplate = (defaultTemplateData as any)?.data || null;
 
   // Fetch checklist items for selected template
-  const { data: checklistItems = [] } = useQuery<SelectInspectionChecklistItem[]>({
+  const { data: checklistItemsData } = useQuery({
     queryKey: ['/api/inspection-templates', selectedTemplateId || defaultTemplate?.id, 'items'],
     enabled: !!(selectedTemplateId || defaultTemplate?.id),
   });
+  const checklistItems = Array.isArray((checklistItemsData as any)?.data) ? (checklistItemsData as any).data : [];
 
   // Initialize responses when checklist items load (preserve existing answers)
   useEffect(() => {
