@@ -60,6 +60,7 @@ const equipmentFormSchema = z.object({
   dailyRentalCost: z.string().optional(),
   serialNumber: z.string().optional(),
   registrationNumber: z.string().optional(),
+  defaultInspectionTemplateId: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -171,6 +172,11 @@ export default function Equipment() {
   // Fetch equipment data
   const { data: equipmentData, isLoading } = useQuery({
     queryKey: ["/api/equipment"],
+  });
+
+  // Fetch inspection templates for assignment
+  const { data: inspectionTemplatesData } = useQuery({
+    queryKey: ["/api/inspection-templates"],
   });
 
   // Fetch equipment checkouts
@@ -646,6 +652,32 @@ export default function Equipment() {
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="defaultInspectionTemplateId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Default Inspection Template</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-inspection-template">
+                            <SelectValue placeholder="Select inspection template (optional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {((inspectionTemplatesData as any)?.data || []).map((template: any) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}
