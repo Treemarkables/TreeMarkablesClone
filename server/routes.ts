@@ -3042,6 +3042,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       console.log(`📖 Fetching diary entries for job ${jobId}:`, entries.length);
       
+      // DEBUG: Log metadata for each entry
+      entries.forEach((entry: any) => {
+        if (entry.entryType === 'email' || entry.entryType === 'sms') {
+          console.log(`📧 Entry ${entry.id} - Type: ${entry.entryType}, Metadata:`, entry.metadata);
+        }
+      });
+      
       // Transform entries to add photoUrl field for mobile compatibility
       const transformedEntries = entries.map((entry: any) => {
         if (entry.photos && entry.photos.length > 0) {
