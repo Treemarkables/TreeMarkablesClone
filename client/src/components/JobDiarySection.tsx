@@ -942,42 +942,48 @@ export function JobDiarySection({
                       )}
                       
                       {/* Reply buttons for email and SMS */}
-                      {editingEntryId !== entry.id && (entry.type === 'email' || entry.type === 'sms') && (
-                        <div className="mt-2 flex items-center gap-2">
+                      {editingEntryId !== entry.id && (
+                        <>
                           {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
-                                setReplyToEmail(replyEmail);
-                                setActiveComposer('email');
-                              }}
-                              data-testid={`button-reply-email-${entry.id}`}
-                            >
-                              <Mail className="w-3 h-3 mr-1" />
-                              Reply
-                            </Button>
+                            <div className="mt-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  console.log('📧 Email reply metadata:', entry.metadata);
+                                  const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
+                                  setReplyToEmail(replyEmail);
+                                  setActiveComposer('email');
+                                }}
+                                data-testid={`button-reply-email-${entry.id}`}
+                              >
+                                <Mail className="w-3 h-3 mr-1" />
+                                Reply
+                              </Button>
+                            </div>
                           )}
                           {entry.type === 'sms' && entry.metadata?.phoneNumber && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setReplyToPhone(entry.metadata?.phoneNumber || '');
-                                setActiveComposer('sms');
-                              }}
-                              data-testid={`button-reply-sms-${entry.id}`}
-                            >
-                              <MessageSquare className="w-3 h-3 mr-1" />
-                              Reply
-                            </Button>
+                            <div className="mt-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  console.log('📱 SMS reply metadata:', entry.metadata);
+                                  setReplyToPhone(entry.metadata?.phoneNumber || '');
+                                  setActiveComposer('sms');
+                                }}
+                                data-testid={`button-reply-sms-${entry.id}`}
+                              >
+                                <MessageSquare className="w-3 h-3 mr-1" />
+                                Reply
+                              </Button>
+                            </div>
                           )}
-                        </div>
+                        </>
                       )}
                       
                       {(() => {
