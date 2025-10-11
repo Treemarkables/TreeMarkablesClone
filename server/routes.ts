@@ -14031,7 +14031,7 @@ Transcription: ${transcriptText}`;
         file: audioReadStream,
         model: "whisper-1",
         language: "en", // Specify English for better accuracy
-        response_format: "text", // Get plain text response (returns string directly)
+        prompt: "This is a job description for a tree removal service in New Zealand. The speaker is describing tree work, equipment, location, and job details in English.", // Help Whisper with context
       });
 
       // When using response_format: "text", transcription is a string, not an object
