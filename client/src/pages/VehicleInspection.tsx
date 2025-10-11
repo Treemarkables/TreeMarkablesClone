@@ -35,7 +35,7 @@ interface InspectionResponse {
 
 export default function VehicleInspection() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { currentUser: user } = useAuth();
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
