@@ -176,7 +176,16 @@ export default function JHAAssessment() {
   }
 
   const currentTemplate = hazardTemplates[currentStep];
-  const currentStepData = form.watch(`steps.${currentStep}`);
+  const formSteps = form.getValues('steps');
+
+  // Wait for form to be initialized with steps
+  if (formSteps.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (showSignaturePad) {
     return (
@@ -244,6 +253,14 @@ export default function JHAAssessment() {
             </div>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  if (!currentTemplate) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -322,7 +339,7 @@ export default function JHAAssessment() {
               />
 
               {/* Control Measures */}
-              {currentTemplate.controlMeasures.length > 0 && (
+              {currentTemplate && currentTemplate.controlMeasures.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-orange-500" />
