@@ -69,6 +69,20 @@ interface QuoteAnalytics {
   competitorAnalysis: { competitor: string; averagePrice: number; winRate: number }[];
 }
 
+interface LeadSourceData {
+  source: string;
+  count: number;
+  quotedCount: number;
+  wonCount: number;
+  conversionRate: number;
+  quoteConversionRate: number;
+  totalRevenue: number;
+  averageValue: number;
+  averageProfitMargin: number;
+  totalProfit: number;
+  roi: number;
+}
+
 export default function MetricsDashboard() {
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -147,6 +161,16 @@ export default function MetricsDashboard() {
       if (dateRange?.from) params.append('fromDate', dateRange.from);
       if (dateRange?.to) params.append('toDate', dateRange.to);
       return fetch(`/api/quote-analytics?${params}`).then(res => res.json()).then(res => res.data);
+    }
+  });
+
+  const { data: leadSourceData, isLoading: leadSourceLoading } = useQuery<LeadSourceData[]>({
+    queryKey: ['/api/lead-source-analysis', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('fromDate', dateRange.from);
+      if (dateRange?.to) params.append('toDate', dateRange.to);
+      return fetch(`/api/lead-source-analysis?${params}`).then(res => res.json()).then(res => res.data);
     }
   });
 
@@ -580,6 +604,120 @@ export default function MetricsDashboard() {
                 <span className="text-sm font-medium">Pending Quotes</span>
                 <span className="font-bold text-lg text-yellow-600">{quoteAnalytics?.pendingQuotes || 0}</span>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Lead Source Analytics Section */}
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-orange-500" />
+                  Lead Source Performance
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCustomReport('Lead Source Analysis')}
+                  data-testid="button-export-lead-sources"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Report
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {leadSourceLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">Loading lead source data...</p>
+                </div>
+              ) : leadSourceData && leadSourceData.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4 font-medium">Lead Source</th>
+                        <th className="text-right py-3 px-4 font-medium">Total Leads</th>
+                        <th className="text-right py-3 px-4 font-medium">Quoted</th>
+                        <th className="text-right py-3 px-4 font-medium">Won</th>
+                        <th className="text-right py-3 px-4 font-medium">Conversion Rate</th>
+                        <th className="text-right py-3 px-4 font-medium">Quote Conv.</th>
+                        <th className="text-right py-3 px-4 font-medium">Total Revenue</th>
+                        <th className="text-right py-3 px-4 font-medium">Avg Job Value</th>
+                        <th className="text-right py-3 px-4 font-medium">Profit Margin</th>
+                        <th className="text-right py-3 px-4 font-medium">Total Profit</th>
+                        <th className="text-right py-3 px-4 font-medium">ROI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leadSourceData.map((source) => (
+                        <tr 
+                          key={source.source} 
+                          className="border-b hover-elevate"
+                          data-testid={`row-lead-source-${source.source}`}
+                        >
+                          <td className="py-3 px-4 font-medium capitalize">{source.source}</td>
+                          <td className="text-right py-3 px-4">{source.count}</td>
+                          <td className="text-right py-3 px-4">{source.quotedCount}</td>
+                          <td className="text-right py-3 px-4">{source.wonCount}</td>
+                          <td className="text-right py-3 px-4">
+                            <span className={source.conversionRate > 50 ? 'text-green-600 font-semibold' : source.conversionRate > 25 ? 'text-yellow-600' : 'text-gray-600'}>
+                              {source.conversionRate.toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="text-right py-3 px-4">
+                            <span className={source.quoteConversionRate > 70 ? 'text-green-600 font-semibold' : source.quoteConversionRate > 40 ? 'text-yellow-600' : 'text-gray-600'}>
+                              {source.quoteConversionRate.toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="text-right py-3 px-4 font-semibold">{formatCurrency(source.totalRevenue)}</td>
+                          <td className="text-right py-3 px-4">{formatCurrency(source.averageValue)}</td>
+                          <td className="text-right py-3 px-4">
+                            <span className={source.averageProfitMargin > 30 ? 'text-green-600 font-semibold' : source.averageProfitMargin > 15 ? 'text-yellow-600' : 'text-red-600'}>
+                              {source.averageProfitMargin.toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="text-right py-3 px-4 font-semibold text-green-600">{formatCurrency(source.totalProfit)}</td>
+                          <td className="text-right py-3 px-4">
+                            <span className={source.roi > 100 ? 'text-green-600 font-semibold' : source.roi > 0 ? 'text-yellow-600' : 'text-red-600'}>
+                              {source.roi.toFixed(0)}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 font-bold bg-muted/50">
+                        <td className="py-3 px-4">TOTAL</td>
+                        <td className="text-right py-3 px-4">{leadSourceData.reduce((sum, s) => sum + s.count, 0)}</td>
+                        <td className="text-right py-3 px-4">{leadSourceData.reduce((sum, s) => sum + s.quotedCount, 0)}</td>
+                        <td className="text-right py-3 px-4">{leadSourceData.reduce((sum, s) => sum + s.wonCount, 0)}</td>
+                        <td className="text-right py-3 px-4">
+                          {((leadSourceData.reduce((sum, s) => sum + s.wonCount, 0) / leadSourceData.reduce((sum, s) => sum + s.count, 0)) * 100).toFixed(1)}%
+                        </td>
+                        <td className="text-right py-3 px-4">
+                          {((leadSourceData.reduce((sum, s) => sum + s.wonCount, 0) / leadSourceData.reduce((sum, s) => sum + s.quotedCount, 0)) * 100).toFixed(1)}%
+                        </td>
+                        <td className="text-right py-3 px-4">{formatCurrency(leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0))}</td>
+                        <td className="text-right py-3 px-4">
+                          {formatCurrency(leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0) / leadSourceData.reduce((sum, s) => sum + s.wonCount, 0))}
+                        </td>
+                        <td className="text-right py-3 px-4">
+                          {((leadSourceData.reduce((sum, s) => sum + s.totalProfit, 0) / leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0)) * 100).toFixed(1)}%
+                        </td>
+                        <td className="text-right py-3 px-4">{formatCurrency(leadSourceData.reduce((sum, s) => sum + s.totalProfit, 0))}</td>
+                        <td className="text-right py-3 px-4">-</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No lead source data available for the selected period</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
