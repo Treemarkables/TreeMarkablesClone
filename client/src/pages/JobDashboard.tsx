@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +74,8 @@ interface JobDashboardProps {
 }
 
 export default function JobDashboard({ activeTab = "communications", onTabChange }: JobDashboardProps) {
+  const [, navigate] = useLocation();
+  
   // State for job card modal
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isJobCardOpen, setIsJobCardOpen] = useState(false);
@@ -865,7 +868,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
 
           {/* Safety Tab */}
           <TabsContent value="safety" className="flex-1 overflow-auto">
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="heading-safety-management">
                   Safety Management & Compliance
@@ -874,7 +877,46 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                   Comprehensive safety incident tracking, risk assessments, and compliance monitoring for tree removal operations
                 </p>
               </div>
-              <SafetyReporting />
+
+              {/* Job Hazard Analysis Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Job Hazard Analysis (JHA)
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card className="hover-elevate cursor-pointer" onClick={() => navigate('/jha-assessment')} data-testid="card-jha-assessment">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        New JHA Assessment
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        Conduct a comprehensive hazard analysis before starting work
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="hover-elevate cursor-pointer" onClick={() => navigate('/jha-history')} data-testid="card-jha-history">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        JHA History
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        View all completed hazard assessments and documentation
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              <div className="border-t pt-6">
+                <SafetyReporting />
+              </div>
             </div>
           </TabsContent>
 
