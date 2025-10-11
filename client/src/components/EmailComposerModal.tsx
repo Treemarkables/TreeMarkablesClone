@@ -141,7 +141,7 @@ Jules`
   // Pre-populate email data when modal opens (only on first open, not on data updates)
   useEffect(() => {
     if (isOpen && job && customer && !hasInitialized) {
-      const billingEmail = customer.billingContactEmail || customer.email || customer.jobContactEmail;
+      const billingEmail = job.jobContactEmail || customer.billingContactEmail || customer.email || customer.jobContactEmail;
       
       // Format name as "FirstName LastName" - handle various data formats
       let customerName = "Valued Customer";
