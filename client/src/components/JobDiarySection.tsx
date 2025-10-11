@@ -1415,7 +1415,9 @@ export function JobDiarySection({
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Send Email</DialogTitle>
-            <DialogDescription>Send an email to the customer</DialogDescription>
+            <DialogDescription>
+              Send an email to {jobData?.customerName || 'the customer'}
+            </DialogDescription>
           </DialogHeader>
           <Form {...emailForm}>
             <form onSubmit={(e) => {
