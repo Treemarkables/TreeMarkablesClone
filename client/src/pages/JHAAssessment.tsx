@@ -27,7 +27,7 @@ const jhaFormSchema = z.object({
     hazardTemplateId: z.number(),
     hazardName: z.string(),
     initialRisk: z.number().min(1).max(4),
-    selectedControls: z.array(z.number()),
+    selectedControls: z.array(z.number()).min(1, "At least one control measure is required"),
     residualRisk: z.number().min(1).max(4).optional(),
     responsiblePerson: z.string().optional()
   }))
@@ -382,7 +382,12 @@ export default function JHAAssessment() {
                   {/* Control Measures */}
                   {template.controlMeasures && template.controlMeasures.length > 0 && (
                     <div>
-                      <label className="text-sm font-medium mb-2 block">Risk control measures</label>
+                      <label className="text-sm font-medium mb-2 block">
+                        Risk control measures <span className="text-red-500">*</span>
+                      </label>
+                      {selectedHazard.selectedControls.length === 0 && (
+                        <p className="text-sm text-red-500 mb-2">At least one control measure must be selected</p>
+                      )}
                       <div className="space-y-2">
                         {template.controlMeasures.map((control) => (
                           <div
