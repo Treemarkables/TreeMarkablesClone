@@ -14055,6 +14055,7 @@ Rules:
 5. Return ONLY the formatted task list, with each task on a new line
 6. Do NOT add bullet points or dashes - just line breaks between tasks
 7. Do NOT number the items
+8. IMPORTANT: When the speaker says "new line", "next line", "next item", or "line break", treat that as a command to start the next task on a new line. Remove those command words from the output.
 
 Voice transcription:
 "${transcriptText}"
