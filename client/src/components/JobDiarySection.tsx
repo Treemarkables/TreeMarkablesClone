@@ -871,6 +871,13 @@ export function JobDiarySection({
                           <p className="text-[11px] leading-snug whitespace-pre-wrap break-words">{messageText}</p>
                         </div>
                         
+                        {/* Timestamp for all messages */}
+                        <div className={`flex items-center gap-1 mt-0.5 ${isSent ? 'justify-end' : 'justify-start'}`}>
+                          <span className="text-[9px] text-gray-400">
+                            {format(new Date(entry.timestamp), 'EEEE h:mma').toLowerCase()}
+                          </span>
+                        </div>
+                        
                         {/* Email tracking for sent emails */}
                         {isSent && entry.type === 'email' && entry.metadata?.sendgridMessageId && (
                           <EmailActivity messageId={entry.metadata.sendgridMessageId} />
