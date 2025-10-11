@@ -114,10 +114,6 @@ export default function VehicleInspection() {
         ? templates.find(t => t.id === selectedTemplateId)
         : defaultTemplate;
 
-      if (!selectedVehicle || !templateToUse || !user) {
-        throw new Error('Missing required data');
-      }
-
       // Get signature as base64
       const canvas = signatureCanvasRef.current;
       const signatureDataUrl = canvas ? canvas.toDataURL() : null;
@@ -125,11 +121,11 @@ export default function VehicleInspection() {
       // Create inspection record
       const inspectionData: InsertVehicleInspection = {
         vehicleId: selectedVehicleId,
-        vehicleName: selectedVehicle.name,
-        templateId: templateToUse.id,
-        templateName: templateToUse.name,
-        inspectorId: user.id,
-        inspectorName: user.username || user.employeeId || 'Unknown',
+        vehicleName: selectedVehicle?.name || 'Unknown Vehicle',
+        templateId: (selectedTemplateId || defaultTemplate?.id) as string,
+        templateName: templateToUse?.name || 'Standard Inspection',
+        inspectorId: user?.id || 'unknown',
+        inspectorName: user?.username || user?.employeeId || 'Unknown',
         status: 'completed',
         odometerReading: odometerReading ? parseInt(odometerReading) : null,
         notes: inspectorNotes || null,
