@@ -356,11 +356,17 @@ export interface IStorage {
     total: number;
   }>;
 
-  getLeadSourceAnalysis(): Promise<{
+  getLeadSourceAnalysis(fromDate?: Date, toDate?: Date): Promise<{
     source: string;
     count: number;
+    quotedCount: number;
+    wonCount: number;
     conversionRate: number;
+    quoteConversionRate: number;
+    totalRevenue: number;
     averageValue: number;
+    averageProfitMargin: number;
+    totalProfit: number;
     roi: number;
   }[]>;
 
@@ -2101,7 +2107,149 @@ class DatabaseStorage implements IStorage {
     };
   }
 
-  async getLeadSourceAnalysis(): Promise<any[]> { return []; }
+  async getLeadSourceAnalysis(fromDate?: Date, toDate?: Date): Promise<any[]> {
+    try {
+      // Build query conditions
+      const conditions = [];
+      
+      if (fromDate) {
+        conditions.push(sql`${schema.jobs.createdAt} >= ${fromDate}`);
+      }
+      if (toDate) {
+        conditions.push(sql`${schema.jobs.createdAt} <= ${toDate}`);
+      }
+
+      // Get all jobs with lead source data
+      const jobs = await this.db
+        .select()
+        .from(schema.jobs)
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+      // Get all proposals for conversion rate calculation
+      const proposals = await this.db
+        .select()
+        .from(schema.proposals)
+        .where(conditions.length > 0 ? and(
+          fromDate ? sql`${schema.proposals.createdAt} >= ${fromDate}` : undefined,
+          toDate ? sql`${schema.proposals.createdAt} <= ${toDate}` : undefined
+        ).filter(Boolean) : undefined);
+
+      // Group jobs by lead source
+      const sourceMap = new Map<string, {
+        count: number;
+        quotedCount: number;
+        wonCount: number;
+        totalRevenue: number;
+        totalCosts: number;
+        totalProfit: number;
+        jobIds: Set<string>;
+      }>();
+
+      // Initialize all possible lead sources
+      const leadSources = ['website', 'phone', 'referral', 'repeat', 'google', 'facebook', 'direct', 'advertisement', 'other'];
+      leadSources.forEach(source => {
+        sourceMap.set(source, {
+          count: 0,
+          quotedCount: 0,
+          wonCount: 0,
+          totalRevenue: 0,
+          totalCosts: 0,
+          totalProfit: 0,
+          jobIds: new Set()
+        });
+      });
+
+      // Process jobs
+      jobs.forEach(job => {
+        const source = job.leadSource || 'other';
+        const existing = sourceMap.get(source) || {
+          count: 0,
+          quotedCount: 0,
+          wonCount: 0,
+          totalRevenue: 0,
+          totalCosts: 0,
+          totalProfit: 0,
+          jobIds: new Set()
+        };
+
+        existing.count++;
+        existing.jobIds.add(job.id);
+
+        // Count quoted jobs (jobs with quotes/proposals)
+        if (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'completed') {
+          existing.quotedCount++;
+        }
+
+        // Count won jobs (completed with revenue)
+        if (job.status === 'completed' && job.totalAmount) {
+          existing.wonCount++;
+          const revenue = parseFloat(job.totalAmount) || 0;
+          existing.totalRevenue += revenue;
+
+          // Calculate costs and profit
+          const laborCosts = parseFloat(job.laborCosts || '0') || 0;
+          const materialsCosts = parseFloat(job.materialsCosts || '0') || 0;
+          const costOfGoods = parseFloat(job.costOfGoods || '0') || 0;
+          const totalCosts = laborCosts + materialsCosts + costOfGoods;
+          
+          existing.totalCosts += totalCosts;
+          existing.totalProfit += (revenue - totalCosts);
+        }
+
+        sourceMap.set(source, existing);
+      });
+
+      // Count proposals per job for better conversion tracking
+      const proposalsByJob = new Map<string, number>();
+      proposals.forEach(proposal => {
+        if (proposal.jobId) {
+          const count = proposalsByJob.get(proposal.jobId) || 0;
+          proposalsByJob.set(proposal.jobId, count + 1);
+        }
+      });
+
+      // Calculate metrics for each source
+      const result = Array.from(sourceMap.entries()).map(([source, data]) => {
+        const count = data.count;
+        const quotedCount = data.quotedCount;
+        const wonCount = data.wonCount;
+        const totalRevenue = data.totalRevenue;
+        const totalProfit = data.totalProfit;
+
+        // Conversion rates
+        const conversionRate = count > 0 ? (wonCount / count) * 100 : 0;
+        const quoteConversionRate = quotedCount > 0 ? (wonCount / quotedCount) * 100 : 0;
+
+        // Average values
+        const averageValue = wonCount > 0 ? totalRevenue / wonCount : 0;
+        const averageProfitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+
+        // ROI calculation (assuming some marketing cost - this can be made configurable)
+        const estimatedMarketingCost = count * 10; // $10 per lead as placeholder
+        const roi = estimatedMarketingCost > 0 ? ((totalProfit - estimatedMarketingCost) / estimatedMarketingCost) * 100 : 0;
+
+        return {
+          source,
+          count,
+          quotedCount,
+          wonCount,
+          conversionRate: Math.round(conversionRate * 100) / 100,
+          quoteConversionRate: Math.round(quoteConversionRate * 100) / 100,
+          totalRevenue: Math.round(totalRevenue * 100) / 100,
+          averageValue: Math.round(averageValue * 100) / 100,
+          averageProfitMargin: Math.round(averageProfitMargin * 100) / 100,
+          totalProfit: Math.round(totalProfit * 100) / 100,
+          roi: Math.round(roi * 100) / 100
+        };
+      });
+
+      // Sort by total revenue descending
+      return result.sort((a, b) => b.totalRevenue - a.totalRevenue);
+    } catch (error) {
+      console.error('Error in getLeadSourceAnalysis:', error);
+      return [];
+    }
+  }
   async importCustomersFromCsv(csvData: any[]): Promise<CsvImportResult> {
     console.log('🚀 Starting CSV customer import...', { totalRows: csvData.length });
     
