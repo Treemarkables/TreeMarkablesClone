@@ -320,7 +320,7 @@ export function JobDiarySection({
     
     const template = emailTemplates.find((t: any) => t.id === templateId);
     if (template) {
-      const message = replaceTemplateVariables(template.body);
+      const message = replaceTemplateVariables(template.htmlContent || template.textContent || '');
       const subject = replaceTemplateVariables(template.subject);
       emailForm.setValue('message', message);
       emailForm.setValue('subject', subject);
@@ -336,7 +336,7 @@ export function JobDiarySection({
     
     const template = smsTemplates.find((t: any) => t.id === templateId);
     if (template) {
-      const message = replaceTemplateVariables(template.body);
+      const message = replaceTemplateVariables(template.message);
       smsForm.setValue('message', message);
     }
   };
