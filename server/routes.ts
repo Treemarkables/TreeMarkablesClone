@@ -3050,15 +3050,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       });
       
-      // Transform entries to add photoUrl field for mobile compatibility
+      // Transform entries to add photoUrl field and convert snake_case to camelCase
       const transformedEntries = entries.map((entry: any) => {
-        if (entry.photos && entry.photos.length > 0) {
-          return {
-            ...entry,
-            photoUrl: entry.photos[0] // Add direct photoUrl field
-          };
+        const transformed: any = {
+          ...entry,
+          // Convert snake_case to camelCase for frontend compatibility
+          entryType: entry.entry_type || entry.entryType,
+          authorName: entry.author_name || entry.authorName,
+          authorRole: entry.author_role || entry.authorRole,
+          photoUrl: entry.photo_url || entry.photoUrl,
+          isPrivate: entry.is_private !== undefined ? entry.is_private : entry.isPrivate,
+          createdAt: entry.created_at || entry.createdAt,
+          updatedAt: entry.updated_at || entry.updatedAt
+        };
+        
+        // Add photoUrl from photos array for mobile compatibility
+        if (entry.photos && entry.photos.length > 0 && !transformed.photoUrl) {
+          transformed.photoUrl = entry.photos[0];
         }
-        return entry;
+        
+        return transformed;
       });
       
       res.json({ success: true, data: transformedEntries });
