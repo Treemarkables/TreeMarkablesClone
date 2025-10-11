@@ -731,7 +731,7 @@ export function JobDiarySection({
                     )}
                     
                     <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} mb-0.5 group`}>
-                      <div className="relative max-w-[35%] sm:max-w-[28%] md:max-w-[24%]">
+                      <div className="relative max-w-[90%]">
                         <Button
                           size="icon"
                           variant="ghost"
