@@ -34,10 +34,10 @@ const emailTemplateSchema = z.object({
 const smsTemplateSchema = z.object({
   name: z.string().min(1, "Template name is required"),
   category: z.string().default("custom_message"),
-  message: z.string().min(1, "Message is required").max(160, "SMS must be 160 characters or less"),
+  message: z.string().min(1, "Message is required").max(306, "SMS must be 306 characters or less"),
   variables: z.array(z.string()).default([]),
   description: z.string().optional(),
-  maxLength: z.number().default(160),
+  maxLength: z.number().default(306),
   isActive: z.boolean().default(true),
   isDefault: z.boolean().default(false),
   createdBy: z.string().default("admin"),
@@ -89,7 +89,7 @@ export default function CommunicationTemplates() {
       message: "",
       variables: [],
       description: "",
-      maxLength: 160,
+      maxLength: 306,
       isActive: true,
       isDefault: false,
       createdBy: "admin"
@@ -202,7 +202,7 @@ export default function CommunicationTemplates() {
         message: "",
         variables: [],
         description: "",
-        maxLength: 160,
+        maxLength: 306,
         isActive: true,
         isDefault: false,
         createdBy: "admin"
@@ -532,7 +532,7 @@ export default function CommunicationTemplates() {
                           {...field} 
                           placeholder="Hi {customerName}, we're scheduled for {address} tomorrow. See you then!"
                           rows={6}
-                          maxLength={160}
+                          maxLength={306}
                           data-testid="textarea-sms-body"
                         />
                       </FormControl>

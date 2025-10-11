@@ -1406,7 +1406,7 @@ export const smsTemplates = pgTable("sms_templates", {
   message: text("message").notNull(),
   variables: text("variables").array().default([]), // customerName, jobTitle, amount, etc.
   description: text("description"),
-  maxLength: integer("max_length").default(160),
+  maxLength: integer("max_length").default(306),
   isActive: boolean("is_active").notNull().default(true),
   isDefault: boolean("is_default").notNull().default(false),
   createdBy: text("created_by").notNull(),
