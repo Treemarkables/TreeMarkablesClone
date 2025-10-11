@@ -264,6 +264,7 @@ export function JobDiarySection({
             timestamp: entry.createdAt,
             photoUrl: photoUrl,
             metadata: {
+              ...entry.metadata, // Preserve existing metadata (email, phone, etc.)
               eventType: entry.entryType,
               proposalNumber: entry.entryType === 'proposal' ? 
                 entry.title.replace('Proposal Created: ', '') : undefined
@@ -941,7 +942,7 @@ export function JobDiarySection({
                       )}
                       
                       {/* Reply buttons for email and SMS */}
-                      {(entry.type === 'email' || entry.type === 'sms') && (
+                      {editingEntryId !== entry.id && (entry.type === 'email' || entry.type === 'sms') && (
                         <div className="mt-2 flex items-center gap-2">
                           {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
                             <Button
