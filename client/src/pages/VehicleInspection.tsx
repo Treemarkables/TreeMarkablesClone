@@ -23,7 +23,7 @@ type ResponseValue = 'YES' | 'NO' | 'N/A';
 
 interface InspectionResponse {
   checklistItemId: string;
-  questionText: string;
+  question: string;
   category: string | null;
   requiresComment: boolean;
   requiresPhoto: boolean;
@@ -83,7 +83,7 @@ export default function VehicleInspection() {
           if (!newResponses.has(item.id)) {
             newResponses.set(item.id, {
               checklistItemId: item.id,
-              questionText: item.questionText,
+              question: item.question,
               category: item.category,
               requiresComment: item.requiresComment || false,
               requiresPhoto: item.requiresPhoto || false,
@@ -146,7 +146,7 @@ export default function VehicleInspection() {
           const responseData: InsertInspectionResponse = {
             inspectionId,
             checklistItemId: response.checklistItemId,
-            questionText: response.questionText,
+            question: response.question,
             category: response.category,
             requiresComment: response.requiresComment,
             requiresPhoto: response.requiresPhoto,
@@ -404,7 +404,7 @@ export default function VehicleInspection() {
                   return (
                     <div key={item.id} className="space-y-3 pb-4 border-b last:border-0">
                       <div>
-                        <p className="font-medium text-sm md:text-base">{item.questionText}</p>
+                        <p className="font-medium text-sm md:text-base">{item.question}</p>
                       </div>
 
                       <div className="flex gap-2">
