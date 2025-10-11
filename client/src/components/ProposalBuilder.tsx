@@ -145,16 +145,20 @@ export function ProposalBuilder({
     if (jobData && (jobData as any)?.success && (jobData as any)?.data && isOpen) {
       const job = (jobData as any).data;
       
+      // Check if job description should be included (defaults to true if not set)
+      const includeDescription = job.includeDescriptionInQuotesProposals !== false;
+      const descriptionValue = includeDescription ? (job.description || '') : '';
+      
       // Update form with job information
       form.setValue('title', job.title || 'Tree Service Proposal');
-      form.setValue('description', job.description || '');
+      form.setValue('description', descriptionValue);
       form.setValue('customerId', job.customerId || customerId || '');
       
-      // Initialize sections with job description and line items
+      // Initialize sections with job description and line items (only if checkbox is checked)
       const initialSection: ProposalSectionData = {
         id: 'section-1',
         title: job.serviceType || 'Tree Removal Services',
-        description: job.description || '',
+        description: descriptionValue,
         photos: [],
         lineItems: job.lineItems ? job.lineItems.map((item: any, index: number) => ({
           id: item.id || `job-item-${index}`,
@@ -1355,7 +1359,57 @@ export function ProposalBuilder({
                         <CardContent className="space-y-3 p-3 sm:p-4">
                           {/* Section Description */}
                           <div>
-                            <label className="text-sm font-medium mb-1.5 block">Description</label>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-sm font-medium">Description</label>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                onClick={() => {
+                                  // Simple voice-to-text using browser SpeechRecognition
+                                  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                                  if (!SpeechRecognition) {
+                                    toast({
+                                      title: "Not Supported",
+                                      description: "Speech recognition is not supported in this browser.",
+                                      variant: "destructive"
+                                    });
+                                    return;
+                                  }
+                                  
+                                  const recognition = new SpeechRecognition();
+                                  recognition.continuous = false;
+                                  recognition.interimResults = false;
+                                  
+                                  recognition.onresult = (event: any) => {
+                                    const transcript = event.results[0][0].transcript;
+                                    // Append to existing description
+                                    const currentDesc = section.description || '';
+                                    const newDesc = currentDesc ? `${currentDesc}\n${transcript}` : transcript;
+                                    updateSectionDescription(section.id, newDesc);
+                                  };
+                                  
+                                  recognition.onerror = () => {
+                                    toast({
+                                      title: "Error",
+                                      description: "Could not capture voice. Please try again.",
+                                      variant: "destructive"
+                                    });
+                                  };
+                                  
+                                  recognition.start();
+                                  toast({
+                                    title: "Listening...",
+                                    description: "Speak now to add to description",
+                                  });
+                                }}
+                                data-testid={`button-voice-section-description-${section.id}`}
+                              >
+                                <Mic className="h-4 w-4 mr-1" />
+                                <span className="text-xs">Voice</span>
+                              </Button>
+                            </div>
                             <Textarea
                               value={section.description}
                               onChange={(e) => updateSectionDescription(section.id, e.target.value)}
