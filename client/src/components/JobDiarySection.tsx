@@ -746,9 +746,11 @@ export function JobDiarySection({
               
               // Special rendering for SMS and Email entries (chat-style bubbles)
               if (entry.type === 'sms' || entry.type === 'email') {
-                const isSent = entry.title.includes('SMS Sent') || entry.title.includes('SMS sent') || 
-                              entry.title.includes('Email Sent') || entry.title.includes('sent');
-                const isReceived = entry.title.includes('Reply') || entry.title.includes('reply');
+                // Check both title and content for better detection
+                const titleLower = entry.title.toLowerCase();
+                const contentLower = entry.content.toLowerCase();
+                const isSent = titleLower.includes('sent') || contentLower.includes('email sent to') || contentLower.includes('sms sent to');
+                const isReceived = titleLower.includes('reply') || titleLower.includes('from');
                 
                 // Extract message text
                 let messageText = entry.content;
