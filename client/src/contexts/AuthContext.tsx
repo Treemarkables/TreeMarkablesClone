@@ -60,7 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('Login Success - User Data:', data.data);
         console.log('Login Success - Role:', data.data.role, typeof data.data.role);
         setCurrentUserState(data.data);
-        queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+        // Set the query data directly instead of invalidating to prevent race condition
+        queryClient.setQueryData(['/api/auth/me'], { success: true, data: data.data });
       }
     },
   });
