@@ -591,6 +591,13 @@ function Router() {
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
+      <Route path="/safety/jha/new">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <JHAAssessment />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
       <Route path="/jha-history">
         <AuthenticatedRoute>
           <SidebarLayout>
