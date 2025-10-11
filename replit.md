@@ -4,6 +4,8 @@
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
 ## Recent Changes (October 2025)
+- **Lead Source Analytics**: Added comprehensive lead source performance tracking in MetricsDashboard with conversion rates, profit margins, revenue analysis, and CSV export. Tracks performance across all lead sources (website, phone, referral, repeat, google, facebook, etc.) with date range filtering.
+- **Diary Chat Bubble Width Update**: Increased message bubble width from 24-35% to 90% to better utilize the full width of the diary panel for improved readability.
 - **Speech-to-Quote Feature**: Implemented voice-powered quote creation with browser MediaRecorder API and iOS file upload workaround. Users can record job details verbally, which are transcribed with OpenAI Whisper and auto-extracted into structured quote data using GPT-5. Features include:
   - Direct browser recording on Android/desktop devices using MediaRecorder API
   - iOS workaround: Upload Voice Memo recordings (m4a, mp3, wav, webm files up to 25MB)
