@@ -851,14 +851,15 @@ export function JobDiarySection({
                             <span className="truncate">{entry.author}</span>
                           </span>
                         </div>
-                        {entry.type === 'email' && entry.metadata?.emailAddress && (
+                        {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
                           <Button
                             size="sm"
                             variant="ghost"
                             className="h-5 text-[10px]"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setReplyToEmail(entry.metadata?.emailAddress || '');
+                              const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
+                              setReplyToEmail(replyEmail);
                               setActiveComposer('email');
                             }}
                             data-testid={`button-reply-email-${entry.id}`}
