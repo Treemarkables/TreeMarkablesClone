@@ -9085,9 +9085,12 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const transcription = await openai.audio.transcriptions.create({
         file: audioReadStream,
         model: "whisper-1",
+        language: "en", // Specify English for better accuracy
+        response_format: "text", // Get plain text response (returns string directly)
       });
 
-      const transcriptText = transcription.text;
+      // When using response_format: "text", transcription is a string, not an object
+      const transcriptText = typeof transcription === 'string' ? transcription : transcription.text;
       console.log('📝 Mobile Transcription:', transcriptText);
 
       // Step 2: Extract quote details using GPT-5
@@ -14027,9 +14030,12 @@ Transcription: ${transcriptText}`;
       const transcription = await openai.audio.transcriptions.create({
         file: audioReadStream,
         model: "whisper-1",
+        language: "en", // Specify English for better accuracy
+        response_format: "text", // Get plain text response (returns string directly)
       });
 
-      const transcriptText = transcription.text;
+      // When using response_format: "text", transcription is a string, not an object
+      const transcriptText = typeof transcription === 'string' ? transcription : transcription.text;
       console.log('📝 Transcription:', transcriptText);
 
       // If context is description-only, return transcription without extraction
