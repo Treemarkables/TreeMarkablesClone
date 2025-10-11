@@ -125,8 +125,34 @@ const ALLOWED_AUDIO_MIME_TYPES = [
 ];
 
 // Audio upload configuration for call recordings  
+const audioStorage = multer.diskStorage({
+  destination: 'uploads/recordings/',
+  filename: (req, file, cb) => {
+    // Generate unique filename with proper extension
+    const uniqueId = crypto.randomBytes(16).toString('hex');
+    
+    // Map MIME type to file extension
+    const mimeToExt: Record<string, string> = {
+      'audio/mpeg': '.mp3',
+      'audio/mp3': '.mp3',
+      'audio/mp4': '.m4a',
+      'audio/m4a': '.m4a',
+      'audio/wav': '.wav',
+      'audio/wave': '.wav',
+      'audio/x-wav': '.wav',
+      'audio/aac': '.aac',
+      'audio/ogg': '.ogg',
+      'audio/webm': '.webm'
+    };
+    
+    // Get extension from MIME type or use .webm as default for browser recordings
+    const ext = mimeToExt[file.mimetype] || '.webm';
+    cb(null, uniqueId + ext);
+  }
+});
+
 const audioUpload = multer({
-  dest: 'uploads/recordings/',
+  storage: audioStorage,
   limits: {
     fileSize: 50 * 1024 * 1024, // 50MB limit for audio files
   },
