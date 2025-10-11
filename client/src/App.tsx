@@ -41,6 +41,7 @@ import Developer from "@/pages/Developer";
 import Calendar from "@/pages/Calendar";
 import StaffSchedule from "@/pages/StaffSchedule";
 import SettingsPreferences from "@/pages/SettingsPreferences";
+import CommunicationTemplates from "@/pages/CommunicationTemplates";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import JobTemplateManagement from "@/components/JobTemplateManagement";
@@ -662,6 +663,11 @@ function Router() {
       <Route path="/settings/preferences">
         <SidebarLayout>
           <SettingsPreferences />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/templates">
+        <SidebarLayout>
+          <CommunicationTemplates />
         </SidebarLayout>
       </Route>
       

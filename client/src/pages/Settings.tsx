@@ -19,7 +19,8 @@ import {
   ListChecks,
   FileText,
   CheckSquare,
-  Sliders
+  Sliders,
+  Mail
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -81,6 +82,14 @@ const settingsOptions = [
     icon: FileText,
     color: "bg-cyan-100 text-cyan-600",
     path: "/settings/forms"
+  },
+  {
+    id: "templates",
+    title: "Communication Templates",
+    description: "Email and SMS templates for customer messages",
+    icon: Mail,
+    color: "bg-pink-100 text-pink-600",
+    path: "/settings/templates"
   },
   {
     id: "preferences",
