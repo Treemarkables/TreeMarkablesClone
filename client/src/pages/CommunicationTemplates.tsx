@@ -412,7 +412,7 @@ export default function CommunicationTemplates() {
                   <CardContent>
                     <p className="text-sm line-clamp-3">{template.message}</p>
                     <p className="text-xs text-muted-foreground mt-2">
-                      {template.message.length} / 160 characters
+                      {template.message.length} / 306 characters
                     </p>
                   </CardContent>
                 </Card>
@@ -537,7 +537,7 @@ export default function CommunicationTemplates() {
                         />
                       </FormControl>
                       <FormDescription>
-                        {field.value?.length || 0} / 160 characters
+                        {field.value?.length || 0} / 306 characters
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
