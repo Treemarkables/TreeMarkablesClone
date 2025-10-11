@@ -37,15 +37,25 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
     
     const hasBasicSupport = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
     
-    // Check MIME type support - iOS supports mp4, most browsers support webm
-    const mimeSupported = hasBasicSupport && 
-      (MediaRecorder.isTypeSupported('audio/mp4') ||
-       MediaRecorder.isTypeSupported('audio/webm;codecs=opus') || 
-       MediaRecorder.isTypeSupported('audio/webm'));
+    // iOS Safari is picky - if MediaRecorder exists, let's try to use it
+    // We'll determine the best MIME type dynamically when recording starts
+    setIsMediaRecorderSupported(hasBasicSupport);
     
-    setIsMediaRecorderSupported(mimeSupported);
+    // Debug logging with all possible formats
+    const debugFormats = [
+      'audio/mp4',
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/wav',
+      'audio/ogg',
+      'audio/mpeg',
+      ''  // Empty string means default format
+    ];
     
-    // Debug logging
+    const supportedFormats = window.MediaRecorder 
+      ? debugFormats.filter(fmt => fmt === '' || MediaRecorder.isTypeSupported(fmt))
+      : [];
+    
     console.log('🎤 Speech-to-Quote Device Check:', {
       isIOS: iosDevice,
       userAgent: navigator.userAgent,
@@ -53,15 +63,12 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
       hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
       hasMediaRecorder: !!window.MediaRecorder,
       hasBasicSupport,
-      supportsMP4: window.MediaRecorder ? MediaRecorder.isTypeSupported('audio/mp4') : false,
-      supportsWebmOpus: window.MediaRecorder ? MediaRecorder.isTypeSupported('audio/webm;codecs=opus') : false,
-      supportsWebm: window.MediaRecorder ? MediaRecorder.isTypeSupported('audio/webm') : false,
-      mimeSupported,
-      willShowRecordButton: mimeSupported
+      supportedFormats,
+      willShowRecordButton: hasBasicSupport
     });
     
-    if (!mimeSupported) {
-      console.warn('MediaRecorder or required audio format not supported on this browser');
+    if (!hasBasicSupport) {
+      console.warn('MediaRecorder or getUserMedia not supported on this browser');
     }
   }, []);
 
@@ -135,24 +142,43 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
       });
       streamRef.current = stream;
       
-      // Choose MIME type based on device support - iOS prefers mp4, others use webm
-      let mimeType = 'audio/webm;codecs=opus';
+      // Choose MIME type based on device support - try in order of preference
+      let mimeType = '';
+      let recorderOptions: MediaRecorderOptions = {};
+      
       if (MediaRecorder.isTypeSupported('audio/mp4')) {
         mimeType = 'audio/mp4';
+        recorderOptions = { mimeType, audioBitsPerSecond: 128000 };
       } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         mimeType = 'audio/webm;codecs=opus';
+        recorderOptions = { mimeType, audioBitsPerSecond: 128000 };
       } else if (MediaRecorder.isTypeSupported('audio/webm')) {
         mimeType = 'audio/webm';
+        recorderOptions = { mimeType, audioBitsPerSecond: 128000 };
+      } else {
+        // No specific MIME type supported, let browser choose default
+        // This is common on older iOS versions
+        console.warn('No specific MIME type supported, using browser default');
+        recorderOptions = { audioBitsPerSecond: 128000 };
       }
       
       // Store MIME type for later use when creating blob
-      mimeTypeRef.current = mimeType;
+      mimeTypeRef.current = mimeType || 'audio/webm'; // fallback for blob creation
       
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType,
-        audioBitsPerSecond: 128000, // 128 kbps for much better quality
-      });
+      console.log('🎤 Creating MediaRecorder with options:', recorderOptions);
+      
+      let mediaRecorder;
+      try {
+        mediaRecorder = new MediaRecorder(stream, recorderOptions);
+      } catch (error) {
+        console.warn('Failed to create MediaRecorder with options, trying without options:', error);
+        // If options fail (iOS quirk), try without any options
+        mediaRecorder = new MediaRecorder(stream);
+        mimeTypeRef.current = 'audio/webm'; // Use generic fallback
+      }
 
+      console.log('🎤 MediaRecorder created, MIME type will be:', mediaRecorder.mimeType);
+      
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
