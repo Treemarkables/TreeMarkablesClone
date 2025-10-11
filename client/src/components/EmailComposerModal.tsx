@@ -56,14 +56,10 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     id: "invoice_delivery",
     name: "Invoice Delivery",
     subject: "Invoice RE: {jobNumber} {customerAddress}",
-    body: `Hi {customerName},
-
-Please find a copy of your Treemarkables LTD Invoice in regards to {jobDescription} attached. View your invoice online here: {invoiceLink}
-
-If you have any queries or are unable to open the invoice, please contact {contactName} on {contactPhone}.
+    body: `Dear {customerName},
 
 Regards,
-{contactName}`
+Jules`
   },
   {
     id: "payment_reminder",
