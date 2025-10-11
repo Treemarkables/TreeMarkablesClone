@@ -203,8 +203,9 @@ export function JobDiarySection({
   // Fetch diary entries (combining local and ServiceM8 sources)
   const { data: diaryEntries = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/jobs', jobId, 'diary-timeline'],
+    // DISABLED: Bootstrap cache was using old data format
     // Use bootstrap data as initial data if available
-    initialData: hasBootstrap ? (() => {
+    initialData: false ? (() => {
       console.log('🚀 Seeding React Query with bootstrap data');
       // Transform bootstrap data to DiaryEntry format
       return bootstrapData.data.map((entry: any) => ({
