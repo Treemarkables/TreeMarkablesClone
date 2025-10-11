@@ -44,6 +44,7 @@ import SettingsPreferences from "@/pages/SettingsPreferences";
 import CommunicationTemplates from "@/pages/CommunicationTemplates";
 import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
 import VehicleInspection from "@/pages/VehicleInspection";
+import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import JobTemplateManagement from "@/components/JobTemplateManagement";
@@ -570,6 +571,13 @@ function Router() {
         <AuthenticatedRoute>
           <SidebarLayout>
             <VehicleInspection />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/vehicle-inspection-history">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <VehicleInspectionHistory />
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
