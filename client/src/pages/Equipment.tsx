@@ -720,15 +720,14 @@ export default function Equipment() {
                   name="defaultInspectionTemplateId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Default Inspection Template</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <FormLabel>Default Inspection Template (optional)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
                           <SelectTrigger data-testid="select-inspection-template">
-                            <SelectValue placeholder="Select inspection template (optional)" />
+                            <SelectValue placeholder="None - select to assign a template" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
                           {((inspectionTemplatesData as any)?.data || []).map((template: any) => (
                             <SelectItem key={template.id} value={template.id}>
                               {template.name}
@@ -960,15 +959,14 @@ export default function Equipment() {
                   name="defaultInspectionTemplateId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Default Inspection Template</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <FormLabel>Default Inspection Template (optional)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select inspection template (optional)" />
+                            <SelectValue placeholder="None - select to assign a template" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
                           {((inspectionTemplatesData as any)?.data || []).map((template: any) => (
                             <SelectItem key={template.id} value={template.id}>
                               {template.name}
