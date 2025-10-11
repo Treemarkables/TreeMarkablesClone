@@ -3390,17 +3390,57 @@ class DatabaseStorage implements IStorage {
     };
   }
 
-  async createEmailTemplate(templateData: InsertEmailTemplate): Promise<EmailTemplate> { throw new Error("Not implemented"); }
-  async getEmailTemplate(id: string): Promise<EmailTemplate | undefined> { return undefined; }
-  async updateEmailTemplate(id: string, updates: UpdateEmailTemplate): Promise<EmailTemplate> { throw new Error("Not implemented"); }
-  async getAllEmailTemplates(): Promise<EmailTemplate[]> { return []; }
-  async deleteEmailTemplate(id: string): Promise<void> { }
+  async createEmailTemplate(templateData: InsertEmailTemplate): Promise<EmailTemplate> {
+    const [template] = await db.insert(schema.emailTemplates).values(templateData).returning();
+    return template;
+  }
+  
+  async getEmailTemplate(id: string): Promise<EmailTemplate | undefined> {
+    const [template] = await db.select().from(schema.emailTemplates).where(eq(schema.emailTemplates.id, id));
+    return template || undefined;
+  }
+  
+  async updateEmailTemplate(id: string, updates: UpdateEmailTemplate): Promise<EmailTemplate> {
+    const [updated] = await db.update(schema.emailTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.emailTemplates.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getAllEmailTemplates(): Promise<EmailTemplate[]> {
+    return await db.select().from(schema.emailTemplates).orderBy(schema.emailTemplates.createdAt);
+  }
+  
+  async deleteEmailTemplate(id: string): Promise<void> {
+    await db.delete(schema.emailTemplates).where(eq(schema.emailTemplates.id, id));
+  }
 
-  async createSmsTemplate(templateData: InsertSmsTemplate): Promise<SmsTemplate> { throw new Error("Not implemented"); }
-  async getSmsTemplate(id: string): Promise<SmsTemplate | undefined> { return undefined; }
-  async updateSmsTemplate(id: string, updates: UpdateSmsTemplate): Promise<SmsTemplate> { throw new Error("Not implemented"); }
-  async getAllSmsTemplates(): Promise<SmsTemplate[]> { return []; }
-  async deleteSmsTemplate(id: string): Promise<void> { }
+  async createSmsTemplate(templateData: InsertSmsTemplate): Promise<SmsTemplate> {
+    const [template] = await db.insert(schema.smsTemplates).values(templateData).returning();
+    return template;
+  }
+  
+  async getSmsTemplate(id: string): Promise<SmsTemplate | undefined> {
+    const [template] = await db.select().from(schema.smsTemplates).where(eq(schema.smsTemplates.id, id));
+    return template || undefined;
+  }
+  
+  async updateSmsTemplate(id: string, updates: UpdateSmsTemplate): Promise<SmsTemplate> {
+    const [updated] = await db.update(schema.smsTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.smsTemplates.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getAllSmsTemplates(): Promise<SmsTemplate[]> {
+    return await db.select().from(schema.smsTemplates).orderBy(schema.smsTemplates.createdAt);
+  }
+  
+  async deleteSmsTemplate(id: string): Promise<void> {
+    await db.delete(schema.smsTemplates).where(eq(schema.smsTemplates.id, id));
+  }
 
   // ServiceM8 Integration Management
   async createServicem8Config(config: InsertServicem8Config): Promise<Servicem8Config> {
