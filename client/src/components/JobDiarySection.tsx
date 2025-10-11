@@ -129,6 +129,8 @@ export function JobDiarySection({
   const [editingContent, setEditingContent] = useState<string>("");
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null);
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
+  const [replyToEmail, setReplyToEmail] = useState<string>("");
+  const [replyToPhone, setReplyToPhone] = useState<string>("");
   
   // Touch swipe state for photo gallery
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -149,6 +151,33 @@ export function JobDiarySection({
     resolver: zodResolver(emailSchema),
     defaultValues: { to: customerEmail || "", subject: "", message: "" }
   });
+
+  // Pre-fill forms when opening composer via reply
+  useEffect(() => {
+    if (activeComposer === 'email' && replyToEmail) {
+      emailForm.setValue('to', replyToEmail);
+    } else if (activeComposer === 'email' && !replyToEmail) {
+      // Reset to default customer email when not replying
+      emailForm.setValue('to', customerEmail || '');
+    }
+  }, [activeComposer, replyToEmail, emailForm, customerEmail]);
+
+  useEffect(() => {
+    if (activeComposer === 'sms' && replyToPhone) {
+      smsForm.setValue('phoneNumber', replyToPhone);
+    } else if (activeComposer === 'sms' && !replyToPhone) {
+      // Reset to default customer phone when not replying
+      smsForm.setValue('phoneNumber', customerPhone || '');
+    }
+  }, [activeComposer, replyToPhone, smsForm, customerPhone]);
+
+  // Clear reply state when composer closes
+  useEffect(() => {
+    if (activeComposer === null) {
+      setReplyToEmail('');
+      setReplyToPhone('');
+    }
+  }, [activeComposer]);
 
   // Force cache invalidation on mobile devices to prevent stale data
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -829,19 +858,28 @@ export function JobDiarySection({
                             className="h-5 text-[10px]"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setReplyToEmail(entry.metadata?.emailAddress || '');
                               setActiveComposer('email');
-                              // Pre-fill email address for reply
-                              if (entry.metadata?.emailAddress) {
-                                // Store the reply-to email in a ref or state if needed
-                                setTimeout(() => {
-                                  const emailInput = document.querySelector('[data-testid="input-email-to"]') as HTMLInputElement;
-                                  if (emailInput) emailInput.value = entry.metadata?.emailAddress || '';
-                                }, 100);
-                              }
                             }}
                             data-testid={`button-reply-email-${entry.id}`}
                           >
                             <Mail className="w-2.5 h-2.5 mr-0.5" />
+                            Reply
+                          </Button>
+                        )}
+                        {entry.type === 'sms' && entry.metadata?.phoneNumber && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-5 text-[10px]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReplyToPhone(entry.metadata?.phoneNumber || '');
+                              setActiveComposer('sms');
+                            }}
+                            data-testid={`button-reply-sms-${entry.id}`}
+                          >
+                            <MessageSquare className="w-2.5 h-2.5 mr-0.5" />
                             Reply
                           </Button>
                         )}
