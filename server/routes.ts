@@ -3042,10 +3042,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       console.log(`📖 Fetching diary entries for job ${jobId}:`, entries.length);
       
-      // DEBUG: Log metadata for each entry
+      // DEBUG: Log all entries to see what we're getting
       entries.forEach((entry: any) => {
-        if (entry.entryType === 'email' || entry.entryType === 'sms') {
-          console.log(`📧 Entry ${entry.id} - Type: ${entry.entryType}, Metadata:`, entry.metadata);
+        console.log(`📝 Entry ${entry.id} - Type: ${entry.entry_type || entry.entryType}, Title: ${entry.title}`);
+        if (entry.entry_type === 'email' || entry.entry_type === 'sms' || entry.entryType === 'email' || entry.entryType === 'sms') {
+          console.log(`📧 Email/SMS Entry ${entry.id} - Metadata:`, JSON.stringify(entry.metadata));
         }
       });
       
