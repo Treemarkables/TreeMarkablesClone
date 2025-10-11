@@ -82,6 +82,7 @@ export function EmailComposerModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   // Fetch email templates from database
   const { data: dbTemplates = [] } = useQuery({
@@ -137,9 +138,9 @@ Jules`
     return EMAIL_TEMPLATES.find(t => t.id === 'custom_message') || EMAIL_TEMPLATES[0];
   };
 
-  // Pre-populate email data when modal opens
+  // Pre-populate email data when modal opens (only on first open, not on data updates)
   useEffect(() => {
-    if (isOpen && job && customer) {
+    if (isOpen && job && customer && !hasInitialized) {
       const billingEmail = customer.billingContactEmail || customer.email || customer.jobContactEmail;
       
       // Format name as "FirstName LastName" - handle various data formats
@@ -215,8 +216,13 @@ Jules`
         body: populatedBody,
         selectedTemplate: template.id
       });
+      
+      setHasInitialized(true);
+    } else if (!isOpen) {
+      // Reset initialization flag when modal closes
+      setHasInitialized(false);
     }
-  }, [isOpen, job, customer, invoiceData, quoteData, proposalData, templateType]);
+  }, [isOpen, job, customer, invoiceData, quoteData, proposalData, templateType, hasInitialized]);
 
   // Handle photo selection for email attachments
   const togglePhotoSelection = (photoUrl: string) => {
