@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
-  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle
+  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle, Mic
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
