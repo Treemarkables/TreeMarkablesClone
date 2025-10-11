@@ -1527,6 +1527,10 @@ export const equipment = pgTable("equipment", {
   notes: text("notes"),
   photos: text("photos").array().default([]),
   
+  // Vehicle-specific compliance dates
+  registrationExpiryDate: timestamp("registration_expiry_date"),
+  cofExpiryDate: timestamp("cof_expiry_date"), // Certificate of Fitness
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -1662,6 +1666,133 @@ export type InsertEquipmentMaintenance = z.infer<typeof insertEquipmentMaintenan
 export type InsertInventory = z.infer<typeof insertInventorySchema>;
 export type InsertEquipmentCheckout = z.infer<typeof insertEquipmentCheckoutSchema>;
 export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransactionSchema>;
+
+// ========================================
+// VEHICLE PRE-START INSPECTION SYSTEM
+// ========================================
+
+// Inspection Templates - Customizable checklists per vehicle type
+export const inspectionTemplates = pgTable("inspection_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(), // "Standard Vehicle Inspection", "Truck with Trailer", etc.
+  vehicleType: text("vehicle_type"), // vehicle, truck, van, chipper, bucket_truck - maps to equipment.type
+  description: text("description"),
+  isDefault: boolean("is_default").notNull().default(false), // One default template per vehicle type
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Checklist Items - Individual questions in each template
+export const inspectionChecklistItems = pgTable("inspection_checklist_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => inspectionTemplates.id, { onDelete: 'cascade' }).notNull(),
+  question: text("question").notNull(), // "Are the wheel nuts tight?"
+  requiresComment: boolean("requires_comment").notNull().default(false), // Force comment if answered NO
+  requiresPhoto: boolean("requires_photo").notNull().default(false), // Force photo if answered NO
+  sortOrder: integer("sort_order").notNull().default(0), // For ordering items
+  category: text("category"), // "Safety", "Mechanical", "Documentation" for grouping
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Vehicle Inspections - Completed inspection records
+export const vehicleInspections = pgTable("vehicle_inspections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vehicleId: varchar("vehicle_id").references(() => equipment.id).notNull(),
+  vehicleName: text("vehicle_name").notNull(), // Denormalized for reporting
+  vehicleRegistration: text("vehicle_registration"), // Denormalized
+  templateId: varchar("template_id").references(() => inspectionTemplates.id),
+  templateName: text("template_name"), // Denormalized
+  
+  // Inspection details
+  inspectionDate: timestamp("inspection_date").notNull().defaultNow(),
+  inspectedBy: varchar("inspected_by").notNull(), // Employee ID or name
+  inspectorName: text("inspector_name").notNull(),
+  speedometerReading: integer("speedometer_reading"),
+  
+  // Results
+  status: text("status").notNull().default("pass"), // pass, fail, conditional_pass
+  overallNotes: text("overall_notes"),
+  signature: text("signature"), // Base64 signature image
+  
+  // Metadata
+  deviceInfo: text("device_info"), // Device used for inspection
+  location: text("location"), // GPS coordinates if available
+  photos: text("photos").array().default([]), // General inspection photos
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+// Inspection Responses - Individual YES/NO/N/A answers
+export const inspectionResponses = pgTable("inspection_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  inspectionId: varchar("inspection_id").references(() => vehicleInspections.id, { onDelete: 'cascade' }).notNull(),
+  checklistItemId: varchar("checklist_item_id").references(() => inspectionChecklistItems.id, { onDelete: 'set null' }), // SET NULL to preserve historic responses
+  
+  // Denormalized fields for historical record preservation (doesn't change if template is edited)
+  question: text("question").notNull(),
+  category: text("category"), // Snapshot of category at inspection time
+  requiresComment: boolean("requires_comment").notNull().default(false),
+  requiresPhoto: boolean("requires_photo").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0), // Preserves original order
+  
+  // Response
+  response: text("response").notNull(), // YES, NO, N/A
+  comment: text("comment"), // Optional comment, max 200 chars
+  photos: text("photos").array().default([]), // Photos for this specific item
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint: one response per checklist item per inspection
+  uniqueInspectionItem: unique().on(table.inspectionId, table.checklistItemId),
+}));
+
+// Insert schemas
+export const insertInspectionTemplateSchema = createInsertSchema(inspectionTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInspectionChecklistItemSchema = createInsertSchema(inspectionChecklistItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertVehicleInspectionSchema = createInsertSchema(vehicleInspections).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+export const insertInspectionResponseSchema = createInsertSchema(inspectionResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Update schemas
+export const updateInspectionTemplateSchema = insertInspectionTemplateSchema.partial();
+export const updateInspectionChecklistItemSchema = insertInspectionChecklistItemSchema.partial();
+export const updateVehicleInspectionSchema = insertVehicleInspectionSchema.partial();
+
+// Types
+export type InspectionTemplate = typeof inspectionTemplates.$inferSelect;
+export type InsertInspectionTemplate = z.infer<typeof insertInspectionTemplateSchema>;
+export type UpdateInspectionTemplate = z.infer<typeof updateInspectionTemplateSchema>;
+
+export type InspectionChecklistItem = typeof inspectionChecklistItems.$inferSelect;
+export type InsertInspectionChecklistItem = z.infer<typeof insertInspectionChecklistItemSchema>;
+export type UpdateInspectionChecklistItem = z.infer<typeof updateInspectionChecklistItemSchema>;
+
+export type VehicleInspection = typeof vehicleInspections.$inferSelect;
+export type InsertVehicleInspection = z.infer<typeof insertVehicleInspectionSchema>;
+export type UpdateVehicleInspection = z.infer<typeof updateVehicleInspectionSchema>;
+
+export type InspectionResponse = typeof inspectionResponses.$inferSelect;
+export type InsertInspectionResponse = z.infer<typeof insertInspectionResponseSchema>;
 
 // ========================================
 // COMMUNICATIONS SYSTEM SCHEMAS
