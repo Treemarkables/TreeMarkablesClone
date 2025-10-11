@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
@@ -199,6 +200,8 @@ export function JobDiarySection({
   const [replyToEmail, setReplyToEmail] = useState<string>("");
   const [replyToPhone, setReplyToPhone] = useState<string>("");
   const [replySubject, setReplySubject] = useState<string>("");
+  const [selectedEmailTemplate, setSelectedEmailTemplate] = useState<string>("");
+  const [selectedSmsTemplate, setSelectedSmsTemplate] = useState<string>("");
   
   // Touch swipe state for photo gallery
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -245,12 +248,14 @@ export function JobDiarySection({
     }
   }, [activeComposer, replyToPhone, smsForm, customerPhone]);
 
-  // Clear reply state when composer closes
+  // Clear reply state and template selections when composer closes
   useEffect(() => {
     if (activeComposer === null) {
       setReplyToEmail('');
       setReplyToPhone('');
       setReplySubject('');
+      setSelectedEmailTemplate('');
+      setSelectedSmsTemplate('');
     }
   }, [activeComposer]);
 
@@ -275,6 +280,66 @@ export function JobDiarySection({
       console.log('✅ Using bootstrap diary data:', bootstrapData.data.length, 'entries');
     }
   }, [hasBootstrap, bootstrapData]);
+
+  // Fetch job data for variable replacement
+  const { data: jobData } = useQuery({
+    queryKey: ['/api/jobs', jobId],
+  });
+
+  // Fetch email templates
+  const { data: emailTemplates = [] } = useQuery({
+    queryKey: ['/api/email-templates'],
+  });
+
+  // Fetch SMS templates
+  const { data: smsTemplates = [] } = useQuery({
+    queryKey: ['/api/sms-templates'],
+  });
+
+  // Variable replacement function
+  const replaceTemplateVariables = (template: string) => {
+    const customerName = jobData?.customerName || '';
+    const address = jobData?.jobAddress || '';
+    const phone = jobData?.customerPhone || customerPhone || '';
+    const email = jobData?.customerEmail || customerEmail || '';
+    
+    return template
+      .replace(/{customerName}/g, customerName)
+      .replace(/{jobNumber}/g, jobId)
+      .replace(/{address}/g, address)
+      .replace(/{phone}/g, phone)
+      .replace(/{email}/g, email);
+  };
+
+  // Handle template selection for email
+  const handleEmailTemplateSelect = (templateId: string) => {
+    setSelectedEmailTemplate(templateId);
+    if (templateId === 'none') {
+      return;
+    }
+    
+    const template = emailTemplates.find((t: any) => t.id === templateId);
+    if (template) {
+      const message = replaceTemplateVariables(template.body);
+      const subject = replaceTemplateVariables(template.subject);
+      emailForm.setValue('message', message);
+      emailForm.setValue('subject', subject);
+    }
+  };
+
+  // Handle template selection for SMS
+  const handleSmsTemplateSelect = (templateId: string) => {
+    setSelectedSmsTemplate(templateId);
+    if (templateId === 'none') {
+      return;
+    }
+    
+    const template = smsTemplates.find((t: any) => t.id === templateId);
+    if (template) {
+      const message = replaceTemplateVariables(template.body);
+      smsForm.setValue('message', message);
+    }
+  };
 
   // Fetch diary entries (combining local and ServiceM8 sources)
   const { data: diaryEntries = [], isLoading, refetch } = useQuery({
@@ -1271,6 +1336,26 @@ export function JobDiarySection({
               e.stopPropagation();
               smsForm.handleSubmit((data) => sendSMSMutation.mutate(data))(e);
             }} className="space-y-4">
+              <div>
+                <FormLabel>Template</FormLabel>
+                <Select 
+                  value={selectedSmsTemplate} 
+                  onValueChange={handleSmsTemplateSelect}
+                >
+                  <SelectTrigger className="text-base md:text-sm" data-testid="select-sms-template">
+                    <SelectValue placeholder="Choose a template..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No template</SelectItem>
+                    {smsTemplates.map((template: any) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
               <FormField
                 control={smsForm.control}
                 name="phoneNumber"
@@ -1336,6 +1421,26 @@ export function JobDiarySection({
               e.stopPropagation();
               emailForm.handleSubmit((data) => sendEmailMutation.mutate(data))(e);
             }} className="space-y-4">
+              <div>
+                <FormLabel>Template</FormLabel>
+                <Select 
+                  value={selectedEmailTemplate} 
+                  onValueChange={handleEmailTemplateSelect}
+                >
+                  <SelectTrigger className="text-base md:text-sm" data-testid="select-email-template">
+                    <SelectValue placeholder="Choose a template..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No template</SelectItem>
+                    {emailTemplates.map((template: any) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
               <FormField
                 control={emailForm.control}
                 name="to"
