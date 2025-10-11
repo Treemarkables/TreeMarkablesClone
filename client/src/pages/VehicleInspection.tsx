@@ -282,6 +282,11 @@ export default function VehicleInspection() {
   };
 
   const canProceedToInspection = selectedVehicleId && (selectedTemplateId || defaultTemplate);
+  
+  // Count answered questions
+  const answeredCount = Array.from(responses.values()).filter(r => r.responseValue !== null).length;
+  const totalQuestions = checklistItems.length;
+  
   const canProceedToSignature = 
     checklistItems.length > 0 && 
     responses.size === checklistItems.length && 
@@ -506,7 +511,7 @@ export default function VehicleInspection() {
             className="flex-1"
             data-testid="button-next"
           >
-            Next: Signature
+            {canProceedToSignature ? 'Next: Signature' : `Answer All (${answeredCount}/${totalQuestions})`}
           </Button>
         </div>
       </div>
