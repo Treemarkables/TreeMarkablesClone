@@ -124,15 +124,15 @@ export default function VehicleInspection() {
       const inspectionData: InsertVehicleInspection = {
         vehicleId: selectedVehicleId,
         vehicleName: selectedVehicle?.name || 'Unknown Vehicle',
+        vehicleRegistration: selectedVehicle?.registrationNumber || null,
         templateId: (selectedTemplateId || defaultTemplate?.id) as string,
         templateName: templateToUse?.name || 'Standard Inspection',
         inspectedBy: user?.id || 'unknown',
-        inspectorName: user?.username || user?.employeeId || 'Unknown',
-        status: 'pass',
+        inspectorName: user?.username || 'Unknown',
+        status: Array.from(responses.values()).some(r => r.responseValue === 'NO') ? 'fail' : 'pass',
         speedometerReading: odometerReading ? parseInt(odometerReading) : null,
-        notes: inspectorNotes || null,
-        signatureUrl: signatureDataUrl || null,
-        passedInspection: Array.from(responses.values()).every(r => r.responseValue !== 'NO'),
+        overallNotes: inspectorNotes || null,
+        signature: signatureDataUrl || null,
       };
 
       const inspectionResponse = await apiRequest('POST', '/api/vehicle-inspections', inspectionData);
