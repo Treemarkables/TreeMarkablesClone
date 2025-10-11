@@ -289,11 +289,13 @@ export function JobDiarySection({
   // Fetch email templates
   const { data: emailTemplates = [] } = useQuery({
     queryKey: ['/api/email-templates'],
+    select: (response: any) => response.data || [],
   });
 
   // Fetch SMS templates
   const { data: smsTemplates = [] } = useQuery({
     queryKey: ['/api/sms-templates'],
+    select: (response: any) => response.data || [],
   });
 
   // Variable replacement function

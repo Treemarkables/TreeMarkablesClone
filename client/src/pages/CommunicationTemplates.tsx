@@ -55,11 +55,13 @@ export default function CommunicationTemplates() {
   // Fetch email templates
   const { data: emailTemplates = [], isLoading: loadingEmail } = useQuery({
     queryKey: ['/api/email-templates'],
+    select: (response: any) => response.data || [],
   });
 
   // Fetch SMS templates
   const { data: smsTemplates = [], isLoading: loadingSms } = useQuery({
     queryKey: ['/api/sms-templates'],
+    select: (response: any) => response.data || [],
   });
 
   // Forms
