@@ -14518,6 +14518,312 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // ========================================
+  // JOB HAZARD ANALYSIS (JHA) ROUTES
+  // ========================================
+
+  // Hazard Templates
+  app.get("/api/jha/hazard-templates", async (req, res) => {
+    try {
+      const templates = await storage.getAllJhaHazardTemplates();
+      res.json({ success: true, data: templates });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch hazard templates' });
+    }
+  });
+
+  app.get("/api/jha/hazard-templates/:id", async (req, res) => {
+    try {
+      const template = await storage.getJhaHazardTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Hazard template not found' });
+      }
+      res.json({ success: true, data: template });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch hazard template' });
+    }
+  });
+
+  app.post("/api/jha/hazard-templates", async (req, res) => {
+    try {
+      const validatedData = schema.insertJhaHazardTemplateSchema.parse(req.body);
+      const template = await storage.createJhaHazardTemplate(validatedData);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create hazard template' });
+    }
+  });
+
+  app.patch("/api/jha/hazard-templates/:id", async (req, res) => {
+    try {
+      const existing = await storage.getJhaHazardTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Hazard template not found' });
+      }
+      const template = await storage.updateJhaHazardTemplate(req.params.id, req.body);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update hazard template' });
+    }
+  });
+
+  app.delete("/api/jha/hazard-templates/:id", async (req, res) => {
+    try {
+      const existing = await storage.getJhaHazardTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Hazard template not found' });
+      }
+      await storage.deleteJhaHazardTemplate(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete hazard template' });
+    }
+  });
+
+  // Control Measure Templates
+  app.get("/api/jha/control-measures", async (req, res) => {
+    try {
+      const hazardTemplateId = req.query.hazardTemplateId as string | undefined;
+      const measures = await storage.getAllJhaControlMeasures(hazardTemplateId);
+      res.json({ success: true, data: measures });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch control measures' });
+    }
+  });
+
+  app.get("/api/jha/control-measures/:id", async (req, res) => {
+    try {
+      const measure = await storage.getJhaControlMeasure(req.params.id);
+      if (!measure) {
+        return res.status(404).json({ success: false, message: 'Control measure not found' });
+      }
+      res.json({ success: true, data: measure });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch control measure' });
+    }
+  });
+
+  app.post("/api/jha/control-measures", async (req, res) => {
+    try {
+      const validatedData = schema.insertJhaControlMeasureTemplateSchema.parse(req.body);
+      const measure = await storage.createJhaControlMeasure(validatedData);
+      res.json({ success: true, data: measure });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create control measure' });
+    }
+  });
+
+  app.patch("/api/jha/control-measures/:id", async (req, res) => {
+    try {
+      const existing = await storage.getJhaControlMeasure(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Control measure not found' });
+      }
+      const measure = await storage.updateJhaControlMeasure(req.params.id, req.body);
+      res.json({ success: true, data: measure });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update control measure' });
+    }
+  });
+
+  app.delete("/api/jha/control-measures/:id", async (req, res) => {
+    try {
+      const existing = await storage.getJhaControlMeasure(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Control measure not found' });
+      }
+      await storage.deleteJhaControlMeasure(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete control measure' });
+    }
+  });
+
+  // JHA Assessments
+  app.get("/api/jha/assessments", async (req, res) => {
+    try {
+      const jobId = req.query.jobId as string | undefined;
+      const status = req.query.status as string | undefined;
+      const assessments = await storage.getAllJhaAssessments(jobId, status);
+      res.json({ success: true, data: assessments });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch assessments' });
+    }
+  });
+
+  app.get("/api/jha/assessments/:id", async (req, res) => {
+    try {
+      const includeSteps = req.query.includeSteps === 'true';
+      const includeSignatures = req.query.includeSignatures === 'true';
+      const assessment = await storage.getJhaAssessment(req.params.id, includeSteps, includeSignatures);
+      if (!assessment) {
+        return res.status(404).json({ success: false, message: 'Assessment not found' });
+      }
+      res.json({ success: true, data: assessment });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch assessment' });
+    }
+  });
+
+  app.post("/api/jha/assessments", async (req, res) => {
+    try {
+      const validatedData = schema.insertJhaAssessmentSchema.parse(req.body);
+      const assessment = await storage.createJhaAssessment(validatedData);
+      res.json({ success: true, data: assessment });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create assessment' });
+    }
+  });
+
+  app.patch("/api/jha/assessments/:id", async (req, res) => {
+    try {
+      const existing = await storage.getJhaAssessment(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Assessment not found' });
+      }
+      const assessment = await storage.updateJhaAssessment(req.params.id, req.body);
+      res.json({ success: true, data: assessment });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update assessment' });
+    }
+  });
+
+  app.delete("/api/jha/assessments/:id", async (req, res) => {
+    try {
+      const existing = await storage.getJhaAssessment(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Assessment not found' });
+      }
+      await storage.deleteJhaAssessment(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete assessment' });
+    }
+  });
+
+  // JHA Steps
+  app.get("/api/jha/assessments/:assessmentId/steps", async (req, res) => {
+    try {
+      const steps = await storage.getJhaSteps(req.params.assessmentId);
+      res.json({ success: true, data: steps });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch steps' });
+    }
+  });
+
+  app.post("/api/jha/assessments/:assessmentId/steps", async (req, res) => {
+    try {
+      const validatedData = schema.insertJhaStepSchema.parse({ ...req.body, assessmentId: req.params.assessmentId });
+      const step = await storage.createJhaStep(validatedData);
+      res.json({ success: true, data: step });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create step' });
+    }
+  });
+
+  app.patch("/api/jha/steps/:id", async (req, res) => {
+    try {
+      const step = await storage.updateJhaStep(req.params.id, req.body);
+      res.json({ success: true, data: step });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update step' });
+    }
+  });
+
+  app.delete("/api/jha/steps/:id", async (req, res) => {
+    try {
+      await storage.deleteJhaStep(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete step' });
+    }
+  });
+
+  // JHA Step Controls
+  app.get("/api/jha/steps/:stepId/controls", async (req, res) => {
+    try {
+      const controls = await storage.getJhaStepControls(req.params.stepId);
+      res.json({ success: true, data: controls });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch controls' });
+    }
+  });
+
+  app.post("/api/jha/steps/:stepId/controls", async (req, res) => {
+    try {
+      const validatedData = schema.insertJhaStepControlSchema.parse({ ...req.body, stepId: req.params.stepId });
+      const control = await storage.createJhaStepControl(validatedData);
+      res.json({ success: true, data: control });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create control' });
+    }
+  });
+
+  app.patch("/api/jha/step-controls/:id", async (req, res) => {
+    try {
+      const control = await storage.updateJhaStepControl(req.params.id, req.body);
+      res.json({ success: true, data: control });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update control' });
+    }
+  });
+
+  app.delete("/api/jha/step-controls/:id", async (req, res) => {
+    try {
+      await storage.deleteJhaStepControl(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete control' });
+    }
+  });
+
+  // JHA Signatures
+  app.get("/api/jha/assessments/:assessmentId/signatures", async (req, res) => {
+    try {
+      const signatures = await storage.getJhaSignatures(req.params.assessmentId);
+      res.json({ success: true, data: signatures });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch signatures' });
+    }
+  });
+
+  app.post("/api/jha/assessments/:assessmentId/signatures", async (req, res) => {
+    try {
+      const validatedData = schema.insertJhaSignatureSchema.parse({ ...req.body, assessmentId: req.params.assessmentId });
+      const signature = await storage.createJhaSignature(validatedData);
+      res.json({ success: true, data: signature });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create signature' });
+    }
+  });
+
+  app.delete("/api/jha/signatures/:id", async (req, res) => {
+    try {
+      await storage.deleteJhaSignature(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete signature' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

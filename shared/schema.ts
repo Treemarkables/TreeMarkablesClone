@@ -2764,3 +2764,167 @@ export type InsertReviewRequest = z.infer<typeof insertReviewRequestSchema>;
 
 export type ReviewSubmission = typeof reviewSubmissions.$inferSelect;
 export type InsertReviewSubmission = z.infer<typeof insertReviewSubmissionSchema>;
+
+// Job Hazard Analysis (JHA) System
+export const jhaHazardTemplates = pgTable("jha_hazard_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(), // e.g., "Falling Debris", "Tree Felling"
+  description: text("description"),
+  category: text("category"), // e.g., "Tree Work", "Equipment", "Environmental"
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const jhaControlMeasureTemplates = pgTable("jha_control_measure_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  hazardTemplateId: varchar("hazard_template_id").references(() => jhaHazardTemplates.id),
+  description: text("description").notNull(), // e.g., "Wear the correct P.P.E. for the job"
+  hierarchyLevel: integer("hierarchy_level").notNull().default(3), // 1=Elimination, 2=Substitution, 3=Engineering, 4=Administrative, 5=PPE
+  riskReduction: integer("risk_reduction").default(1), // How much this reduces risk (1-5)
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const jhaAssessments = pgTable("jha_assessments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id),
+  assessmentNumber: text("assessment_number").unique(),
+  
+  // Job details
+  date: timestamp("date").notNull().default(sql`CURRENT_TIMESTAMP`),
+  location: text("location"),
+  gpsCoordinates: text("gps_coordinates"),
+  activityDescription: text("activity_description"), // "Activity taking place"
+  ppeRequired: text("ppe_required"),
+  teamLeader: text("team_leader"),
+  teamLeaderId: varchar("team_leader_id").references(() => employees.id),
+  
+  // Summary
+  summary: text("summary"), // Auto-generated formatted summary
+  
+  // Overall assessment
+  overallRiskRating: integer("overall_risk_rating"), // Highest risk from all steps
+  status: text("status").notNull().default("draft"), // draft, completed, archived
+  
+  // Photos
+  photos: text("photos").array().default([]),
+  
+  // Comments
+  comments: text("comments"),
+  
+  createdBy: varchar("created_by").references(() => employees.id),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const jhaSteps = pgTable("jha_steps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assessmentId: varchar("assessment_id").references(() => jhaAssessments.id).notNull(),
+  stepNumber: integer("step_number").notNull(), // Order of steps
+  
+  // Hazard info
+  stepName: text("step_name"), // Optional step/task name
+  hazardName: text("hazard_name").notNull(), // e.g., "Falling Debris"
+  hazardDescription: text("hazard_description"),
+  hazardTemplateId: varchar("hazard_template_id").references(() => jhaHazardTemplates.id),
+  
+  // Risk ratings (1-5 scale based on risk matrix)
+  initialRiskRating: integer("initial_risk_rating").notNull(), // Risk with no controls
+  residualRiskRating: integer("residual_risk_rating"), // Risk after controls applied
+  
+  // Responsibility
+  responsiblePerson: text("responsible_person"),
+  responsiblePersonId: varchar("responsible_person_id").references(() => employees.id),
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const jhaStepControls = pgTable("jha_step_controls", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stepId: varchar("step_id").references(() => jhaSteps.id).notNull(),
+  controlMeasureTemplateId: varchar("control_measure_template_id").references(() => jhaControlMeasureTemplates.id),
+  
+  // Control measure details
+  description: text("description").notNull(), // Control measure text
+  hierarchyLevel: integer("hierarchy_level").default(3), // 1-5 hierarchy of controls
+  isImplemented: boolean("is_implemented").notNull().default(true), // Checkbox state
+  
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const jhaSignatures = pgTable("jha_signatures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assessmentId: varchar("assessment_id").references(() => jhaAssessments.id).notNull(),
+  
+  // Signer info
+  workerName: text("worker_name").notNull(),
+  workerId: varchar("worker_id").references(() => employees.id),
+  
+  // Signature
+  signatureDataUrl: text("signature_data_url").notNull(), // Base64 signature image
+  signedAt: timestamp("signed_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// JHA Schemas
+export const insertJhaHazardTemplateSchema = createInsertSchema(jhaHazardTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJhaControlMeasureTemplateSchema = createInsertSchema(jhaControlMeasureTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJhaAssessmentSchema = createInsertSchema(jhaAssessments).omit({
+  id: true,
+  assessmentNumber: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJhaStepSchema = createInsertSchema(jhaSteps).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJhaStepControlSchema = createInsertSchema(jhaStepControls).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertJhaSignatureSchema = createInsertSchema(jhaSignatures).omit({
+  id: true,
+  createdAt: true,
+});
+
+// JHA Types
+export type JhaHazardTemplate = typeof jhaHazardTemplates.$inferSelect;
+export type InsertJhaHazardTemplate = z.infer<typeof insertJhaHazardTemplateSchema>;
+
+export type JhaControlMeasureTemplate = typeof jhaControlMeasureTemplates.$inferSelect;
+export type InsertJhaControlMeasureTemplate = z.infer<typeof insertJhaControlMeasureTemplateSchema>;
+
+export type JhaAssessment = typeof jhaAssessments.$inferSelect;
+export type InsertJhaAssessment = z.infer<typeof insertJhaAssessmentSchema>;
+
+export type JhaStep = typeof jhaSteps.$inferSelect;
+export type InsertJhaStep = z.infer<typeof insertJhaStepSchema>;
+
+export type JhaStepControl = typeof jhaStepControls.$inferSelect;
+export type InsertJhaStepControl = z.infer<typeof insertJhaStepControlSchema>;
+
+export type JhaSignature = typeof jhaSignatures.$inferSelect;
+export type InsertJhaSignature = z.infer<typeof insertJhaSignatureSchema>;
