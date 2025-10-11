@@ -336,6 +336,12 @@ Jules`
     }
   });
 
+  // Convert URLs to clickable hyperlinks
+  const linkifyUrls = (text: string): string => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, '<a href="$1" style="color: #3b82f6; text-decoration: underline;">$1</a>');
+  };
+
   const handleTemplateSelect = (templateId: string) => {
     const template = EMAIL_TEMPLATES.find(t => t.id === templateId);
     if (!template) return;
@@ -349,7 +355,7 @@ Jules`
       .replace("{quoteNumber}", quoteData?.quoteNumber || "")
       .replace("{proposalNumber}", proposalData?.proposalNumber || "");
     
-    const populatedBody = template.body
+    let populatedBody = template.body
       .replace("{customerName}", customerName || "Valued Customer")
       .replace("{jobDescription}", job?.description || job?.title || "tree service")
       .replace("{invoiceLink}", invoiceData?.id ? `${window.location.origin}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
@@ -363,6 +369,9 @@ Jules`
       .replace("{contactPhone}", customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
       .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
       .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "");
+
+    // Convert URLs to clickable hyperlinks
+    populatedBody = linkifyUrls(populatedBody);
 
     setEmailData(prev => ({
       ...prev,
@@ -772,13 +781,20 @@ Jules`
 
           {/* Email Body */}
           <div className="flex-1 min-h-0">
-            <Textarea
-              name="email-body"
-              value={emailData.body}
-              onChange={(e) => setEmailData(prev => ({ ...prev, body: e.target.value }))}
-              className="w-full h-full resize-none border-0 focus-visible:ring-0 text-sm leading-relaxed pb-48"
-              placeholder="Compose your email..."
-              data-testid="textarea-email-body"
+            <div
+              contentEditable
+              suppressContentEditableWarning
+              onInput={(e) => {
+                const html = e.currentTarget.innerHTML;
+                setEmailData(prev => ({ ...prev, body: html }));
+              }}
+              dangerouslySetInnerHTML={{ __html: emailData.body || '<p style="color: #9ca3af;">Compose your email...</p>' }}
+              className="w-full h-full resize-none border-0 focus-visible:ring-0 text-sm leading-relaxed pb-48 outline-none overflow-y-auto"
+              data-testid="div-email-body"
+              style={{ 
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word' 
+              }}
             />
           </div>
         </div>
