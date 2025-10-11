@@ -95,7 +95,7 @@ export default function VehicleInspectionSettings() {
 
   // Template mutations
   const createTemplateMutation = useMutation({
-    mutationFn: (data: InsertInspectionTemplate) => apiRequest('/api/inspection-templates', 'POST', data),
+    mutationFn: (data: InsertInspectionTemplate) => apiRequest('POST', '/api/inspection-templates', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
       toast({ title: 'Template created successfully' });
@@ -109,7 +109,7 @@ export default function VehicleInspectionSettings() {
 
   const updateTemplateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<InsertInspectionTemplate> }) =>
-      apiRequest(`/api/inspection-templates/${id}`, 'PATCH', data),
+      apiRequest('PATCH', `/api/inspection-templates/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
       toast({ title: 'Template updated successfully' });
@@ -122,7 +122,7 @@ export default function VehicleInspectionSettings() {
   });
 
   const deleteTemplateMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/inspection-templates/${id}`, 'DELETE'),
+    mutationFn: (id: string) => apiRequest('DELETE', `/api/inspection-templates/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
       toast({ title: 'Template deleted successfully' });
@@ -136,7 +136,7 @@ export default function VehicleInspectionSettings() {
   });
 
   const setDefaultTemplateMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/inspection-templates/${id}/set-default`, 'PATCH'),
+    mutationFn: (id: string) => apiRequest('PATCH', `/api/inspection-templates/${id}/set-default`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
       toast({ title: 'Default template updated' });
@@ -149,7 +149,7 @@ export default function VehicleInspectionSettings() {
   // Checklist item mutations
   const createItemMutation = useMutation({
     mutationFn: (data: InsertInspectionChecklistItem) =>
-      apiRequest(`/api/inspection-templates/${selectedTemplate?.id}/items`, 'POST', data),
+      apiRequest('POST', `/api/inspection-templates/${selectedTemplate?.id}/items`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
       toast({ title: 'Checklist item added' });
@@ -163,7 +163,7 @@ export default function VehicleInspectionSettings() {
 
   const updateItemMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<InsertInspectionChecklistItem> }) =>
-      apiRequest(`/api/checklist-items/${id}`, 'PATCH', data),
+      apiRequest('PATCH', `/api/checklist-items/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
       toast({ title: 'Checklist item updated' });
@@ -176,7 +176,7 @@ export default function VehicleInspectionSettings() {
   });
 
   const deleteItemMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/checklist-items/${id}`, 'DELETE'),
+    mutationFn: (id: string) => apiRequest('DELETE', `/api/checklist-items/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
       toast({ title: 'Checklist item deleted' });
@@ -188,7 +188,7 @@ export default function VehicleInspectionSettings() {
 
   const reorderItemsMutation = useMutation({
     mutationFn: ({ templateId, itemIds }: { templateId: string; itemIds: string[] }) =>
-      apiRequest(`/api/inspection-templates/${templateId}/reorder`, 'POST', { itemIds }),
+      apiRequest('POST', `/api/inspection-templates/${templateId}/reorder`, { itemIds }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
     },
