@@ -157,15 +157,16 @@ const audioUpload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB limit for audio files
   },
   fileFilter: (req, file, cb) => {
-    // Check MIME type
+    // Check MIME type (this is sufficient for browser recordings)
     if (!ALLOWED_AUDIO_MIME_TYPES.includes(file.mimetype)) {
       cb(new Error(`Audio file type ${file.mimetype} not allowed. Only MP3, M4A, WAV, AAC, OGG, and WebM audio files are permitted.`));
       return;
     }
     
-    // Check file extension
+    // For uploaded files with extensions, verify them
+    // Browser MediaRecorder blobs may not have extensions, so we skip this check if no extension
     const ext = path.extname(file.originalname).toLowerCase();
-    if (!ALLOWED_AUDIO_EXTENSIONS.includes(ext)) {
+    if (ext && !ALLOWED_AUDIO_EXTENSIONS.includes(ext)) {
       cb(new Error(`File extension ${ext} not allowed. Only ${ALLOWED_AUDIO_EXTENSIONS.join(', ')} files are permitted.`));
       return;
     }
