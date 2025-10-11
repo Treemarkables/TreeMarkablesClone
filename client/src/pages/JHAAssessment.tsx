@@ -16,6 +16,7 @@ import { ArrowLeft, Save, CheckCircle2, Camera, Upload, Loader2, Search, Plus } 
 import { Badge } from "@/components/ui/badge";
 import SignaturePad from "@/components/SignaturePad";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import thinkSafeImage from "@assets/IMG_4069_1760215066704.png";
 
 // Risk control options based on hierarchy of controls
 const RISK_CONTROL_OPTIONS = [
@@ -237,6 +238,15 @@ export default function JHAAssessment() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
+      </div>
+
+      {/* ThinkSafe Logo & Risk Matrix */}
+      <div className="mb-4">
+        <img 
+          src={thinkSafeImage} 
+          alt="ThinkSafe Risk Matrix" 
+          className="w-full rounded-lg shadow-md"
+        />
       </div>
 
       <Form {...form}>
