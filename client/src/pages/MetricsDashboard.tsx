@@ -175,10 +175,14 @@ export default function MetricsDashboard() {
   });
 
   // Export handler
-  const handleExportData = async (type: 'analytics') => {
+  const handleExportData = async (type: 'analytics' | 'lead-sources') => {
     setIsExporting(true);
     try {
-      const response = await fetch(`/api/export/${type}`);
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('fromDate', dateRange.from);
+      if (dateRange?.to) params.append('toDate', dateRange.to);
+      
+      const response = await fetch(`/api/export/${type}?${params}`);
       if (!response.ok) {
         throw new Error('Export failed');
       }
@@ -187,7 +191,7 @@ export default function MetricsDashboard() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `metrics_export_${new Date().toISOString().split('T')[0]}.csv`;
+      link.download = `${type}_export_${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -195,7 +199,7 @@ export default function MetricsDashboard() {
 
       toast({
         title: "Export Successful",
-        description: "Metrics data has been exported successfully."
+        description: `${type === 'lead-sources' ? 'Lead source' : 'Metrics'} data has been exported successfully.`
       });
     } catch (error) {
       toast({
@@ -620,11 +624,12 @@ export default function MetricsDashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleCustomReport('Lead Source Analysis')}
+                  onClick={() => handleExportData('lead-sources')}
+                  disabled={isExporting}
                   data-testid="button-export-lead-sources"
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Export Report
+                  {isExporting ? 'Exporting...' : 'Export CSV'}
                 </Button>
               </div>
             </CardHeader>

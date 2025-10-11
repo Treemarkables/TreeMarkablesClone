@@ -5930,6 +5930,83 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Export lead source analysis to CSV
+  app.get('/api/export/lead-sources', async (req: Request, res: Response) => {
+    try {
+      const { fromDate, toDate } = req.query;
+      
+      let fromDateObj: Date | undefined;
+      let toDateObj: Date | undefined;
+      
+      if (fromDate && typeof fromDate === 'string') {
+        fromDateObj = new Date(fromDate);
+        if (isNaN(fromDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
+        }
+      }
+      
+      if (toDate && typeof toDate === 'string') {
+        toDateObj = new Date(toDate);
+        if (isNaN(toDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid toDate format' });
+        }
+      }
+      
+      const leadSourceData = await storage.getLeadSourceAnalysis(fromDateObj, toDateObj);
+      
+      // Transform data for CSV export
+      const csvData = leadSourceData.map(source => ({
+        'Lead Source': source.source,
+        'Total Leads': source.count,
+        'Quoted Jobs': source.quotedCount,
+        'Won Jobs': source.wonCount,
+        'Conversion Rate (%)': source.conversionRate,
+        'Quote Conversion Rate (%)': source.quoteConversionRate,
+        'Total Revenue (NZD)': source.totalRevenue,
+        'Average Job Value (NZD)': source.averageValue,
+        'Average Profit Margin (%)': source.averageProfitMargin,
+        'Total Profit (NZD)': source.totalProfit,
+        'ROI (%)': source.roi
+      }));
+
+      // Add totals row
+      const totalLeads = leadSourceData.reduce((sum, s) => sum + s.count, 0);
+      const totalQuoted = leadSourceData.reduce((sum, s) => sum + s.quotedCount, 0);
+      const totalWon = leadSourceData.reduce((sum, s) => sum + s.wonCount, 0);
+      const totalRevenue = leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0);
+      const totalProfit = leadSourceData.reduce((sum, s) => sum + s.totalProfit, 0);
+
+      csvData.push({
+        'Lead Source': 'TOTAL',
+        'Total Leads': totalLeads,
+        'Quoted Jobs': totalQuoted,
+        'Won Jobs': totalWon,
+        'Conversion Rate (%)': totalLeads > 0 ? ((totalWon / totalLeads) * 100).toFixed(2) : '0',
+        'Quote Conversion Rate (%)': totalQuoted > 0 ? ((totalWon / totalQuoted) * 100).toFixed(2) : '0',
+        'Total Revenue (NZD)': totalRevenue,
+        'Average Job Value (NZD)': totalWon > 0 ? (totalRevenue / totalWon).toFixed(2) : '0',
+        'Average Profit Margin (%)': totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(2) : '0',
+        'Total Profit (NZD)': totalProfit,
+        'ROI (%)': '-'
+      });
+
+      // Generate CSV
+      const csv = Papa.unparse(csvData);
+      const dateRange = fromDate && toDate ? `${fromDate}_to_${toDate}` : 'all_time';
+      const filename = `lead_source_analysis_${dateRange}_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
+
+      res.set({
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      });
+      
+      res.send(csv);
+    } catch (error) {
+      console.error('Error exporting lead source analysis:', error);
+      res.status(500).json({ success: false, message: 'Error exporting lead source analysis' });
+    }
+  });
+
   // ========================================
   // PHOTO UPLOAD ENDPOINTS FOR JOB DOCUMENTATION
   // ========================================
