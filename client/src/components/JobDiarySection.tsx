@@ -131,6 +131,7 @@ export function JobDiarySection({
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   const [replyToEmail, setReplyToEmail] = useState<string>("");
   const [replyToPhone, setReplyToPhone] = useState<string>("");
+  const [replySubject, setReplySubject] = useState<string>("");
   
   // Touch swipe state for photo gallery
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -156,11 +157,17 @@ export function JobDiarySection({
   useEffect(() => {
     if (activeComposer === 'email' && replyToEmail) {
       emailForm.setValue('to', replyToEmail);
+      // Auto-populate subject with "Re: " prefix
+      if (replySubject) {
+        const subject = replySubject.startsWith('Re: ') ? replySubject : `Re: ${replySubject}`;
+        emailForm.setValue('subject', subject);
+      }
     } else if (activeComposer === 'email' && !replyToEmail) {
       // Reset to default customer email when not replying
       emailForm.setValue('to', customerEmail || '');
+      emailForm.setValue('subject', '');
     }
-  }, [activeComposer, replyToEmail, emailForm, customerEmail]);
+  }, [activeComposer, replyToEmail, replySubject, emailForm, customerEmail]);
 
   useEffect(() => {
     if (activeComposer === 'sms' && replyToPhone) {
@@ -176,6 +183,7 @@ export function JobDiarySection({
     if (activeComposer === null) {
       setReplyToEmail('');
       setReplyToPhone('');
+      setReplySubject('');
     }
   }, [activeComposer]);
 
@@ -805,7 +813,10 @@ export function JobDiarySection({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
+                                  // Extract subject from email title or content field
+                                  const originalSubject = entry.content || entry.title.replace('Email from ', '').replace('Email sent: ', '');
                                   setReplyToEmail(replyEmail);
+                                  setReplySubject(originalSubject);
                                   setActiveComposer('email');
                                 }}
                                 data-testid={`button-reply-email-${entry.id}`}
@@ -1005,7 +1016,10 @@ export function JobDiarySection({
                                   e.stopPropagation();
                                   console.log('📧 Email reply metadata:', entry.metadata);
                                   const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
+                                  // Extract subject from email title or content field
+                                  const originalSubject = entry.content || entry.title.replace('Email from ', '').replace('Email sent: ', '');
                                   setReplyToEmail(replyEmail);
+                                  setReplySubject(originalSubject);
                                   setActiveComposer('email');
                                 }}
                                 data-testid={`button-reply-email-${entry.id}`}
