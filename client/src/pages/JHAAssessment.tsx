@@ -176,10 +176,10 @@ export default function JHAAssessment() {
   }
 
   const currentTemplate = hazardTemplates[currentStep];
-  const formSteps = form.getValues('steps');
+  const formSteps = form.watch('steps');
 
   // Wait for form to be initialized with steps
-  if (formSteps.length === 0) {
+  if (!formSteps || formSteps.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
