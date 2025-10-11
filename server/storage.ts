@@ -58,7 +58,12 @@ import {
   type TemplatePhoto, type InsertTemplatePhoto,
   type GeneratedDocument, type InsertGeneratedDocument,
   type GeneratedDocumentLineItem, type InsertGeneratedDocumentLineItem,
-  type GeneratedDocumentPhoto, type InsertGeneratedDocumentPhoto
+  type GeneratedDocumentPhoto, type InsertGeneratedDocumentPhoto,
+  // Vehicle Inspection types
+  type InspectionTemplate, type InsertInspectionTemplate, type UpdateInspectionTemplate,
+  type InspectionChecklistItem, type InsertInspectionChecklistItem, type UpdateInspectionChecklistItem,
+  type VehicleInspection, type InsertVehicleInspection, type UpdateVehicleInspection,
+  type InspectionResponse, type InsertInspectionResponse
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
@@ -503,6 +508,40 @@ export interface IStorage {
   createInventoryTransaction(transaction: InsertInventoryTransaction): Promise<InventoryTransaction>;
   getInventoryTransactions(inventoryId: string): Promise<InventoryTransaction[]>;
   getTransactionsByType(type: string): Promise<InventoryTransaction[]>;
+
+  // Vehicle Pre-Start Inspection System
+  // Inspection Templates
+  createInspectionTemplate(template: InsertInspectionTemplate): Promise<InspectionTemplate>;
+  getInspectionTemplate(id: string): Promise<InspectionTemplate | undefined>;
+  updateInspectionTemplate(id: string, updates: UpdateInspectionTemplate): Promise<InspectionTemplate>;
+  deleteInspectionTemplate(id: string): Promise<void>;
+  getAllInspectionTemplates(): Promise<InspectionTemplate[]>;
+  getDefaultTemplate(vehicleType?: string): Promise<InspectionTemplate | undefined>;
+  setDefaultTemplate(id: string): Promise<InspectionTemplate>;
+  
+  // Inspection Checklist Items
+  createChecklistItem(item: InsertInspectionChecklistItem): Promise<InspectionChecklistItem>;
+  getChecklistItem(id: string): Promise<InspectionChecklistItem | undefined>;
+  updateChecklistItem(id: string, updates: UpdateInspectionChecklistItem): Promise<InspectionChecklistItem>;
+  deleteChecklistItem(id: string): Promise<void>;
+  getChecklistItemsByTemplate(templateId: string): Promise<InspectionChecklistItem[]>;
+  reorderChecklistItems(templateId: string, itemIds: string[]): Promise<void>;
+  
+  // Vehicle Inspections
+  createVehicleInspection(inspection: InsertVehicleInspection): Promise<VehicleInspection>;
+  getVehicleInspection(id: string): Promise<VehicleInspection | undefined>;
+  updateVehicleInspection(id: string, updates: UpdateVehicleInspection): Promise<VehicleInspection>;
+  getAllVehicleInspections(filters?: { vehicleId?: string; status?: string; dateFrom?: Date; dateTo?: Date }): Promise<VehicleInspection[]>;
+  getVehicleInspectionsByVehicle(vehicleId: string): Promise<VehicleInspection[]>;
+  getLatestInspection(vehicleId: string): Promise<VehicleInspection | undefined>;
+  
+  // Inspection Responses
+  createInspectionResponse(response: InsertInspectionResponse): Promise<InspectionResponse>;
+  getInspectionResponses(inspectionId: string): Promise<InspectionResponse[]>;
+  
+  // Registration & COF Expiry Checks
+  getVehiclesWithExpiringDocs(daysAhead: number): Promise<Equipment[]>;
+  getExpiredVehicles(): Promise<Equipment[]>;
 
   // Materials Catalog Management
   createMaterial(material: InsertMaterial): Promise<Material>;
@@ -3028,6 +3067,207 @@ class DatabaseStorage implements IStorage {
   async createInventoryTransaction(transaction: InsertInventoryTransaction): Promise<InventoryTransaction> { throw new Error("Not implemented"); }
   async getInventoryTransactions(inventoryId: string): Promise<InventoryTransaction[]> { return []; }
   async getTransactionsByType(type: string): Promise<InventoryTransaction[]> { return []; }
+
+  // Vehicle Pre-Start Inspection System Implementation
+  // Inspection Templates
+  async createInspectionTemplate(template: InsertInspectionTemplate): Promise<InspectionTemplate> {
+    const [result] = await db.insert(schema.inspectionTemplates).values(template).returning();
+    return result;
+  }
+
+  async getInspectionTemplate(id: string): Promise<InspectionTemplate | undefined> {
+    const [result] = await db.select().from(schema.inspectionTemplates).where(eq(schema.inspectionTemplates.id, id));
+    return result;
+  }
+
+  async updateInspectionTemplate(id: string, updates: UpdateInspectionTemplate): Promise<InspectionTemplate> {
+    const [result] = await db.update(schema.inspectionTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.inspectionTemplates.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteInspectionTemplate(id: string): Promise<void> {
+    await db.delete(schema.inspectionTemplates).where(eq(schema.inspectionTemplates.id, id));
+  }
+
+  async getAllInspectionTemplates(): Promise<InspectionTemplate[]> {
+    return await db.select().from(schema.inspectionTemplates)
+      .where(eq(schema.inspectionTemplates.isActive, true))
+      .orderBy(desc(schema.inspectionTemplates.createdAt));
+  }
+
+  async getDefaultTemplate(vehicleType?: string): Promise<InspectionTemplate | undefined> {
+    const query = db.select().from(schema.inspectionTemplates)
+      .where(and(
+        eq(schema.inspectionTemplates.isDefault, true),
+        eq(schema.inspectionTemplates.isActive, true),
+        vehicleType ? eq(schema.inspectionTemplates.vehicleType, vehicleType) : sql`true`
+      ));
+    const [result] = await query;
+    return result;
+  }
+
+  async setDefaultTemplate(id: string): Promise<InspectionTemplate> {
+    // Get the template to find its vehicle type
+    const template = await this.getInspectionTemplate(id);
+    if (!template) throw new Error("Template not found");
+    
+    // Unset any existing default for this vehicle type
+    if (template.vehicleType) {
+      await db.update(schema.inspectionTemplates)
+        .set({ isDefault: false })
+        .where(and(
+          eq(schema.inspectionTemplates.vehicleType, template.vehicleType),
+          eq(schema.inspectionTemplates.isDefault, true)
+        ));
+    }
+    
+    // Set this template as default
+    return await this.updateInspectionTemplate(id, { isDefault: true });
+  }
+
+  // Inspection Checklist Items
+  async createChecklistItem(item: InsertInspectionChecklistItem): Promise<InspectionChecklistItem> {
+    const [result] = await db.insert(schema.inspectionChecklistItems).values(item).returning();
+    return result;
+  }
+
+  async getChecklistItem(id: string): Promise<InspectionChecklistItem | undefined> {
+    const [result] = await db.select().from(schema.inspectionChecklistItems)
+      .where(eq(schema.inspectionChecklistItems.id, id));
+    return result;
+  }
+
+  async updateChecklistItem(id: string, updates: UpdateInspectionChecklistItem): Promise<InspectionChecklistItem> {
+    const [result] = await db.update(schema.inspectionChecklistItems)
+      .set(updates)
+      .where(eq(schema.inspectionChecklistItems.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteChecklistItem(id: string): Promise<void> {
+    await db.delete(schema.inspectionChecklistItems).where(eq(schema.inspectionChecklistItems.id, id));
+  }
+
+  async getChecklistItemsByTemplate(templateId: string): Promise<InspectionChecklistItem[]> {
+    return await db.select().from(schema.inspectionChecklistItems)
+      .where(and(
+        eq(schema.inspectionChecklistItems.templateId, templateId),
+        eq(schema.inspectionChecklistItems.isActive, true)
+      ))
+      .orderBy(schema.inspectionChecklistItems.sortOrder);
+  }
+
+  async reorderChecklistItems(templateId: string, itemIds: string[]): Promise<void> {
+    // Update sort order for each item
+    for (let i = 0; i < itemIds.length; i++) {
+      await db.update(schema.inspectionChecklistItems)
+        .set({ sortOrder: i })
+        .where(eq(schema.inspectionChecklistItems.id, itemIds[i]));
+    }
+  }
+
+  // Vehicle Inspections
+  async createVehicleInspection(inspection: InsertVehicleInspection): Promise<VehicleInspection> {
+    const [result] = await db.insert(schema.vehicleInspections).values(inspection).returning();
+    return result;
+  }
+
+  async getVehicleInspection(id: string): Promise<VehicleInspection | undefined> {
+    const [result] = await db.select().from(schema.vehicleInspections)
+      .where(eq(schema.vehicleInspections.id, id));
+    return result;
+  }
+
+  async updateVehicleInspection(id: string, updates: UpdateVehicleInspection): Promise<VehicleInspection> {
+    const [result] = await db.update(schema.vehicleInspections)
+      .set(updates)
+      .where(eq(schema.vehicleInspections.id, id))
+      .returning();
+    return result;
+  }
+
+  async getAllVehicleInspections(filters?: { vehicleId?: string; status?: string; dateFrom?: Date; dateTo?: Date }): Promise<VehicleInspection[]> {
+    let query = db.select().from(schema.vehicleInspections);
+    
+    const conditions = [];
+    if (filters?.vehicleId) {
+      conditions.push(eq(schema.vehicleInspections.vehicleId, filters.vehicleId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(schema.vehicleInspections.status, filters.status));
+    }
+    if (filters?.dateFrom) {
+      conditions.push(gte(schema.vehicleInspections.inspectionDate, filters.dateFrom));
+    }
+    if (filters?.dateTo) {
+      conditions.push(lte(schema.vehicleInspections.inspectionDate, filters.dateTo));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(desc(schema.vehicleInspections.inspectionDate));
+  }
+
+  async getVehicleInspectionsByVehicle(vehicleId: string): Promise<VehicleInspection[]> {
+    return await db.select().from(schema.vehicleInspections)
+      .where(eq(schema.vehicleInspections.vehicleId, vehicleId))
+      .orderBy(desc(schema.vehicleInspections.inspectionDate));
+  }
+
+  async getLatestInspection(vehicleId: string): Promise<VehicleInspection | undefined> {
+    const [result] = await db.select().from(schema.vehicleInspections)
+      .where(eq(schema.vehicleInspections.vehicleId, vehicleId))
+      .orderBy(desc(schema.vehicleInspections.inspectionDate))
+      .limit(1);
+    return result;
+  }
+
+  // Inspection Responses
+  async createInspectionResponse(response: InsertInspectionResponse): Promise<InspectionResponse> {
+    const [result] = await db.insert(schema.inspectionResponses).values(response).returning();
+    return result;
+  }
+
+  async getInspectionResponses(inspectionId: string): Promise<InspectionResponse[]> {
+    return await db.select().from(schema.inspectionResponses)
+      .where(eq(schema.inspectionResponses.inspectionId, inspectionId))
+      .orderBy(schema.inspectionResponses.sortOrder);
+  }
+
+  // Registration & COF Expiry Checks
+  async getVehiclesWithExpiringDocs(daysAhead: number): Promise<Equipment[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + daysAhead);
+    const today = new Date();
+    
+    return await db.select().from(schema.equipment)
+      .where(and(
+        eq(schema.equipment.type, 'vehicle'),
+        eq(schema.equipment.isActive, true),
+        sql`(${schema.equipment.registrationExpiryDate} BETWEEN ${today} AND ${futureDate} 
+             OR ${schema.equipment.cofExpiryDate} BETWEEN ${today} AND ${futureDate})`
+      ))
+      .orderBy(schema.equipment.registrationExpiryDate);
+  }
+
+  async getExpiredVehicles(): Promise<Equipment[]> {
+    const today = new Date();
+    
+    return await db.select().from(schema.equipment)
+      .where(and(
+        eq(schema.equipment.type, 'vehicle'),
+        eq(schema.equipment.isActive, true),
+        sql`(${schema.equipment.registrationExpiryDate} < ${today} 
+             OR ${schema.equipment.cofExpiryDate} < ${today})`
+      ))
+      .orderBy(schema.equipment.registrationExpiryDate);
+  }
 
   async getBusinessSettings(): Promise<BusinessSettings> {
     // Return default business settings for now
