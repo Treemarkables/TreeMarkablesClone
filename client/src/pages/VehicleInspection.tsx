@@ -133,7 +133,8 @@ export default function VehicleInspection() {
         passedInspection: Array.from(responses.values()).every(r => r.responseValue !== 'NO'),
       };
 
-      const inspectionResult = await apiRequest('POST', '/api/vehicle-inspections', inspectionData);
+      const inspectionResponse = await apiRequest('POST', '/api/vehicle-inspections', inspectionData);
+      const inspectionResult = await inspectionResponse.json();
       const inspectionId = inspectionResult.data.id;
 
       // Create all responses
