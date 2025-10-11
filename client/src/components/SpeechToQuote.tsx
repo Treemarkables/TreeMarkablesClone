@@ -109,11 +109,19 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000, // High quality sample rate
+        }
+      });
       streamRef.current = stream;
       
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 128000, // 128 kbps for much better quality
       });
 
       mediaRecorderRef.current = mediaRecorder;
