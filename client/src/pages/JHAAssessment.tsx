@@ -8,19 +8,28 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, CheckCircle2, Camera, Upload, Loader2, Search, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SignaturePad from "@/components/SignaturePad";
 
+// ThinkSafe-style JHA form schema
 const jhaFormSchema = z.object({
-  jobId: z.number().nullable(),
-  steps: z.array(z.object({
+  activityDescription: z.string().min(1, "Activity is required"),
+  ppeRequired: z.string().optional(),
+  teamLeader: z.string().optional(),
+  location: z.string().optional(),
+  comments: z.string().optional(),
+  selectedHazards: z.array(z.object({
     hazardTemplateId: z.number(),
-    riskRating: z.number().min(1).max(5),
-    controlMeasureIds: z.array(z.number())
+    hazardName: z.string(),
+    initialRisk: z.number().min(1).max(4),
+    selectedControls: z.array(z.number()),
+    residualRisk: z.number().min(1).max(4).optional(),
+    responsiblePerson: z.string().optional()
   }))
 });
 
@@ -29,10 +38,11 @@ type JHAFormValues = z.infer<typeof jhaFormSchema>;
 export default function JHAAssessment() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [currentStep, setCurrentStep] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
   const [signatures, setSignatures] = useState<{ name: string; signature: string }[]>([]);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [signerName, setSignerName] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
 
   // Fetch hazard templates
   const { data: templatesData, isLoading: templatesLoading } = useQuery<{ 
@@ -54,28 +64,26 @@ export default function JHAAssessment() {
   });
 
   const hazardTemplates = templatesData?.data || [];
+  const filteredHazards = hazardTemplates.filter(h => 
+    h.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const form = useForm<JHAFormValues>({
     resolver: zodResolver(jhaFormSchema),
     defaultValues: {
-      jobId: null,
-      steps: []
+      activityDescription: "",
+      ppeRequired: "",
+      teamLeader: "",
+      location: "",
+      comments: "",
+      selectedHazards: []
     }
   });
 
-  // Update form when templates load
-  useEffect(() => {
-    if (hazardTemplates.length > 0 && form.getValues('steps').length === 0) {
-      form.setValue('steps', hazardTemplates.map(template => ({
-        hazardTemplateId: template.id,
-        riskRating: template.defaultRiskRating,
-        controlMeasureIds: []
-      })));
-    }
-  }, [hazardTemplates, form]);
+  const selectedHazards = form.watch("selectedHazards");
 
   const createAssessmentMutation = useMutation({
-    mutationFn: async (data: JHAFormValues & { signatures: { name: string; signature: string }[] }) => {
+    mutationFn: async (data: JHAFormValues & { signatures: { name: string; signature: string }[], photos: string[] }) => {
       return apiRequest('/api/jha/assessments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,32 +106,95 @@ export default function JHAAssessment() {
     }
   });
 
-  const handleNext = () => {
-    if (currentStep < hazardTemplates.length - 1) {
-      setCurrentStep(currentStep + 1);
+  const toggleHazard = (hazard: typeof hazardTemplates[0]) => {
+    const current = selectedHazards;
+    const exists = current.find(h => h.hazardTemplateId === hazard.id);
+    
+    if (exists) {
+      form.setValue("selectedHazards", current.filter(h => h.hazardTemplateId !== hazard.id));
     } else {
-      // Show signature pad
-      setShowSignaturePad(true);
+      form.setValue("selectedHazards", [...current, {
+        hazardTemplateId: hazard.id,
+        hazardName: hazard.name,
+        initialRisk: hazard.defaultRiskRating,
+        selectedControls: [],
+        residualRisk: hazard.defaultRiskRating,
+        responsiblePerson: ""
+      }]);
     }
   };
 
-  const handlePrevious = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
+  const updateHazardField = (hazardId: number, field: string, value: any) => {
+    const current = selectedHazards;
+    const updated = current.map(h => 
+      h.hazardTemplateId === hazardId ? { ...h, [field]: value } : h
+    );
+    form.setValue("selectedHazards", updated);
+  };
+
+  const toggleControl = (hazardId: number, controlId: number) => {
+    const current = selectedHazards;
+    const hazard = current.find(h => h.hazardTemplateId === hazardId);
+    if (!hazard) return;
+    
+    const hasControl = hazard.selectedControls.includes(controlId);
+    const updated = current.map(h => {
+      if (h.hazardTemplateId === hazardId) {
+        return {
+          ...h,
+          selectedControls: hasControl 
+            ? h.selectedControls.filter(id => id !== controlId)
+            : [...h.selectedControls, controlId]
+        };
+      }
+      return h;
+    });
+    form.setValue("selectedHazards", updated);
+  };
+
+  const getRiskColor = (rating: number) => {
+    if (rating >= 4) return "bg-red-500";
+    if (rating >= 3) return "bg-orange-500";
+    if (rating >= 2) return "bg-yellow-500";
+    return "bg-green-500";
+  };
+
+  const getRiskLabel = (rating: number) => {
+    if (rating >= 4) return "Extreme Risk";
+    if (rating >= 3) return "High Risk";
+    if (rating >= 2) return "Medium Risk";
+    return "Insignificant Risk";
   };
 
   const handleSignature = (name: string, signatureData: string) => {
-    setSignatures([...signatures, { name, signature: signatureData }]);
-    setSignerName("");
-    setShowSignaturePad(false);
+    if (signatures.length < 5) {
+      setSignatures([...signatures, { name, signature: signatureData }]);
+      setSignerName("");
+    }
+  };
+
+  const handlePhotoCapture = () => {
+    // In a real app, this would open camera
+    toast({
+      title: "Photo Capture",
+      description: "Camera functionality would open here",
+    });
   };
 
   const handleSubmit = (data: JHAFormValues) => {
+    if (data.selectedHazards.length === 0) {
+      toast({
+        title: "No Hazards Selected",
+        description: "Please select at least one hazard to assess",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (signatures.length === 0) {
       toast({
         title: "Signature Required",
-        description: "At least one worker signature is required to complete the JHA",
+        description: "At least one worker signature is required",
         variant: "destructive"
       });
       return;
@@ -131,20 +202,9 @@ export default function JHAAssessment() {
 
     createAssessmentMutation.mutate({
       ...data,
-      signatures
+      signatures,
+      photos
     });
-  };
-
-  const getRiskColor = (rating: number) => {
-    if (rating >= 4) return "bg-red-500";
-    if (rating >= 3) return "bg-orange-500";
-    return "bg-green-500";
-  };
-
-  const getRiskLabel = (rating: number) => {
-    if (rating >= 4) return "High Risk";
-    if (rating >= 3) return "Medium Risk";
-    return "Low Risk";
   };
 
   if (templatesLoading) {
@@ -155,118 +215,8 @@ export default function JHAAssessment() {
     );
   }
 
-  if (hazardTemplates.length === 0) {
-    return (
-      <div className="container mx-auto p-4 max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>No Hazard Templates Available</CardTitle>
-            <CardDescription>
-              Please configure hazard templates in Settings before conducting a JHA
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => navigate("/settings/jha-templates")} data-testid="button-configure-templates">
-              Configure Templates
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const currentTemplate = hazardTemplates[currentStep];
-  const formSteps = form.watch('steps');
-
-  // Wait for form to be initialized with steps
-  if (!formSteps || formSteps.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (showSignaturePad) {
-    return (
-      <div className="container mx-auto p-4 max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Worker Signatures</CardTitle>
-            <CardDescription>
-              All workers involved in this job must sign the JHA
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {signatures.map((sig, index) => (
-              <div key={index} className="flex items-center gap-2 p-2 border rounded">
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                <span className="font-medium">{sig.name}</span>
-              </div>
-            ))}
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Worker Name</label>
-              <input
-                type="text"
-                value={signerName}
-                onChange={(e) => setSignerName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
-                placeholder="Enter your full name"
-                data-testid="input-signer-name"
-              />
-            </div>
-
-            <SignaturePad
-              onSave={(signatureData) => handleSignature(signerName, signatureData)}
-              disabled={!signerName.trim()}
-            />
-
-            <div className="flex gap-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setShowSignaturePad(false)}
-                data-testid="button-back-to-review"
-              >
-                Back to Review
-              </Button>
-              {signatures.length > 0 && (
-                <Button
-                  onClick={() => handleSubmit(form.getValues())}
-                  disabled={createAssessmentMutation.isPending}
-                  className="flex-1"
-                  data-testid="button-submit-jha"
-                >
-                  {createAssessmentMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Complete JHA
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!currentTemplate) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
-    <div className="container mx-auto p-4 max-w-2xl">
+    <div className="container mx-auto p-4 max-w-4xl">
       <div className="mb-4">
         <Button
           variant="ghost"
@@ -280,142 +230,367 @@ export default function JHAAssessment() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          {/* Header */}
+          <Card>
+            <CardHeader className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white">
+              <CardTitle className="text-2xl">Job Hazard Analysis</CardTitle>
+              <CardDescription className="text-white/90">
+                Complete this form before starting work
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          {/* Job Details */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Job Hazard Analysis</CardTitle>
-                  <CardDescription>
-                    Step {currentStep + 1} of {hazardTemplates.length}
-                  </CardDescription>
-                </div>
-                <Badge variant="outline" data-testid={`text-progress-${currentStep + 1}-${hazardTemplates.length}`}>
-                  {currentStep + 1}/{hazardTemplates.length}
-                </Badge>
-              </div>
+              <CardTitle className="text-lg">Job Details</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">{currentTemplate.name}</h3>
-                {currentTemplate.description && (
-                  <p className="text-sm text-muted-foreground mb-4">{currentTemplate.description}</p>
-                )}
-              </div>
-
-              {/* Risk Rating */}
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
-                name={`steps.${currentStep}.riskRating`}
+                name="activityDescription"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base font-semibold">Risk Rating</FormLabel>
+                    <FormLabel>Activity taking place *</FormLabel>
                     <FormControl>
-                      <RadioGroup
-                        value={field.value?.toString() || "3"}
-                        onValueChange={(value) => field.onChange(parseInt(value))}
-                        className="space-y-2"
-                      >
-                        {[1, 2, 3, 4, 5].map((rating) => (
-                          <div
-                            key={rating}
-                            className="flex items-center space-x-3 p-3 border rounded-lg hover-elevate"
-                          >
-                            <RadioGroupItem value={rating.toString()} id={`rating-${rating}`} data-testid={`radio-risk-${rating}`} />
-                            <label
-                              htmlFor={`rating-${rating}`}
-                              className="flex items-center gap-3 flex-1 cursor-pointer"
-                            >
-                              <div className={`w-8 h-8 rounded-full ${getRiskColor(rating)} flex items-center justify-center text-white font-bold`}>
-                                {rating}
-                              </div>
-                              <span className="font-medium">{getRiskLabel(rating)}</span>
-                            </label>
-                          </div>
-                        ))}
-                      </RadioGroup>
+                      <Textarea {...field} placeholder="Enter text..." data-testid="input-activity" />
                     </FormControl>
                   </FormItem>
                 )}
               />
 
-              {/* Control Measures */}
-              {currentTemplate && currentTemplate.controlMeasures && currentTemplate.controlMeasures.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-orange-500" />
-                    <h4 className="font-semibold">Control Measures</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Select all control measures that will be implemented
-                  </p>
-                  
-                  <FormField
-                    control={form.control}
-                    name={`steps.${currentStep}.controlMeasureIds`}
-                    render={() => (
-                      <FormItem>
-                        {currentTemplate.controlMeasures.map((control) => (
-                          <FormField
-                            key={control.id}
-                            control={form.control}
-                            name={`steps.${currentStep}.controlMeasureIds`}
-                            render={({ field }) => {
-                              return (
-                                <FormItem
-                                  key={control.id}
-                                  className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-lg"
-                                >
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value?.includes(control.id)}
-                                      onCheckedChange={(checked) => {
-                                        return checked
-                                          ? field.onChange([...field.value, control.id])
-                                          : field.onChange(
-                                              field.value?.filter(
-                                                (value) => value !== control.id
-                                              )
-                                            )
-                                      }}
-                                      data-testid={`checkbox-control-${control.id}`}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="font-normal cursor-pointer flex-1">
-                                    {control.description}
-                                  </FormLabel>
-                                </FormItem>
-                              )
-                            }}
-                          />
-                        ))}
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
+              <FormField
+                control={form.control}
+                name="ppeRequired"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>PPE required</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter text..." data-testid="input-ppe" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
 
-              {/* Navigation Buttons */}
-              <div className="flex gap-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handlePrevious}
-                  disabled={currentStep === 0}
-                  data-testid="button-previous"
-                >
-                  Previous
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleNext}
-                  className="flex-1"
-                  data-testid="button-next"
-                >
-                  {currentStep === hazardTemplates.length - 1 ? "Review & Sign" : "Next"}
-                </Button>
+              <FormField
+                control={form.control}
+                name="teamLeader"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Team leader</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter name..." data-testid="input-team-leader" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter text..." data-testid="input-location" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Hazard Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Select Hazards</CardTitle>
+              <div className="relative mt-2">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search hazards..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                  data-testid="input-search-hazards"
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {filteredHazards.map((hazard) => {
+                  const isSelected = selectedHazards.some(h => h.hazardTemplateId === hazard.id);
+                  return (
+                    <div 
+                      key={hazard.id}
+                      className="flex items-center space-x-3 p-3 border rounded-lg hover-elevate cursor-pointer"
+                      onClick={() => toggleHazard(hazard)}
+                      data-testid={`checkbox-hazard-${hazard.id}`}
+                    >
+                      <Checkbox 
+                        checked={isSelected}
+                        onCheckedChange={() => toggleHazard(hazard)}
+                      />
+                      <label className="flex-1 cursor-pointer font-medium">
+                        {hazard.name}
+                      </label>
+                      {isSelected && (
+                        <Badge variant="secondary">Selected</Badge>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
+
+          {/* Selected Hazards Details */}
+          {selectedHazards.map((selectedHazard) => {
+            const template = hazardTemplates.find(h => h.id === selectedHazard.hazardTemplateId);
+            if (!template) return null;
+
+            return (
+              <Card key={selectedHazard.hazardTemplateId} className="border-cyan-200">
+                <CardHeader className="bg-cyan-50">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">{selectedHazard.hazardName}</CardTitle>
+                    <Badge variant="outline">Initial Risk: {selectedHazard.initialRisk}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                  {/* Initial Risk */}
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Initial risk</label>
+                    <p className="text-sm text-muted-foreground mb-2">Risk level with no controls</p>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4].map((rating) => (
+                        <button
+                          key={rating}
+                          type="button"
+                          onClick={() => updateHazardField(selectedHazard.hazardTemplateId, 'initialRisk', rating)}
+                          className={`flex-1 h-12 rounded-md font-medium transition-colors ${
+                            selectedHazard.initialRisk === rating
+                              ? getRiskColor(rating) + ' text-white'
+                              : 'bg-gray-200 hover:bg-gray-300'
+                          }`}
+                          data-testid={`button-initial-risk-${selectedHazard.hazardTemplateId}-${rating}`}
+                        >
+                          {rating}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Control Measures */}
+                  {template.controlMeasures && template.controlMeasures.length > 0 && (
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Risk control measures</label>
+                      <div className="space-y-2">
+                        {template.controlMeasures.map((control) => (
+                          <div
+                            key={control.id}
+                            className="flex items-start space-x-3 p-3 border rounded-lg hover-elevate cursor-pointer"
+                            onClick={() => toggleControl(selectedHazard.hazardTemplateId, control.id)}
+                          >
+                            <Checkbox
+                              checked={selectedHazard.selectedControls.includes(control.id)}
+                              onCheckedChange={() => toggleControl(selectedHazard.hazardTemplateId, control.id)}
+                              data-testid={`checkbox-control-${selectedHazard.hazardTemplateId}-${control.id}`}
+                            />
+                            <label className="flex-1 cursor-pointer text-sm">
+                              {control.description}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Who is responsible */}
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Who is responsible</label>
+                    <Input
+                      placeholder="Enter text..."
+                      value={selectedHazard.responsiblePerson || ""}
+                      onChange={(e) => updateHazardField(selectedHazard.hazardTemplateId, 'responsiblePerson', e.target.value)}
+                      data-testid={`input-responsible-${selectedHazard.hazardTemplateId}`}
+                    />
+                  </div>
+
+                  {/* Residual Risk */}
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Residual risk</label>
+                    <p className="text-sm text-muted-foreground mb-2">Risk level with controls</p>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4].map((rating) => (
+                        <button
+                          key={rating}
+                          type="button"
+                          onClick={() => updateHazardField(selectedHazard.hazardTemplateId, 'residualRisk', rating)}
+                          className={`flex-1 h-12 rounded-md font-medium transition-colors ${
+                            selectedHazard.residualRisk === rating
+                              ? getRiskColor(rating) + ' text-white'
+                              : 'bg-gray-200 hover:bg-gray-300'
+                          }`}
+                          data-testid={`button-residual-risk-${selectedHazard.hazardTemplateId}-${rating}`}
+                        >
+                          {rating}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {/* Summary */}
+          {selectedHazards.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">SUMMARY - Hazard / Risk & Measure</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {selectedHazards.map((hazard) => {
+                    const template = hazardTemplates.find(h => h.id === hazard.hazardTemplateId);
+                    const controls = template?.controlMeasures.filter(c => hazard.selectedControls.includes(c.id)) || [];
+                    
+                    return (
+                      <div key={hazard.hazardTemplateId} className="p-3 border rounded-lg bg-gray-50">
+                        <div className="font-medium text-sm mb-1">
+                          {hazard.hazardName}: {controls.map(c => c.description).join('; ')}
+                        </div>
+                        {hazard.responsiblePerson && (
+                          <div className="text-sm text-muted-foreground">
+                            Responsible: {hazard.responsiblePerson}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Comments */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Comments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FormField
+                control={form.control}
+                name="comments"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Textarea {...field} placeholder="Enter text..." rows={4} data-testid="input-comments" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Image */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Image</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <Button type="button" variant="destructive" onClick={handlePhotoCapture} data-testid="button-capture">
+                  <Camera className="mr-2 h-4 w-4" />
+                  Capture
+                </Button>
+                <Button type="button" className="bg-cyan-500 hover:bg-cyan-600" data-testid="button-choose">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Choose
+                </Button>
+              </div>
+              {photos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {photos.map((photo, idx) => (
+                    <div key={idx} className="aspect-square bg-gray-200 rounded-lg"></div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Signatures */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Signature of worker (s)</CardTitle>
+              <CardDescription>Up to five people can sign here</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {signatures.map((sig, index) => (
+                <div key={index} className="flex items-center gap-2 p-3 border rounded-lg bg-gray-50">
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  <span className="font-medium">{sig.name}</span>
+                </div>
+              ))}
+
+              {signatures.length < 5 && !showSignaturePad && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setShowSignaturePad(true)}
+                  data-testid="button-new-signature"
+                >
+                  New
+                </Button>
+              )}
+
+              {showSignaturePad && (
+                <div className="space-y-3 p-4 border rounded-lg">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Worker Name</label>
+                    <Input
+                      value={signerName}
+                      onChange={(e) => setSignerName(e.target.value)}
+                      placeholder="Enter your full name"
+                      data-testid="input-signer-name"
+                    />
+                  </div>
+                  <SignaturePad
+                    onSave={(signatureData) => {
+                      handleSignature(signerName, signatureData);
+                      setShowSignaturePad(false);
+                    }}
+                    disabled={!signerName.trim()}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setShowSignaturePad(false)}
+                    data-testid="button-cancel-signature"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Submit */}
+          <Button
+            type="submit"
+            className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+            disabled={createAssessmentMutation.isPending}
+            data-testid="button-submit-form"
+          >
+            {createAssessmentMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Submitting...
+              </>
+            ) : (
+              "Submit Form"
+            )}
+          </Button>
         </form>
       </Form>
     </div>
