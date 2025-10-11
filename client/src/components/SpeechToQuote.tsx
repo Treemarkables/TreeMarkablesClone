@@ -45,6 +45,21 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
     
     setIsMediaRecorderSupported(mimeSupported);
     
+    // Debug logging
+    console.log('🎤 Speech-to-Quote Device Check:', {
+      isIOS: iosDevice,
+      userAgent: navigator.userAgent,
+      hasMediaDevices: !!navigator.mediaDevices,
+      hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
+      hasMediaRecorder: !!window.MediaRecorder,
+      hasBasicSupport,
+      supportsMP4: window.MediaRecorder ? MediaRecorder.isTypeSupported('audio/mp4') : false,
+      supportsWebmOpus: window.MediaRecorder ? MediaRecorder.isTypeSupported('audio/webm;codecs=opus') : false,
+      supportsWebm: window.MediaRecorder ? MediaRecorder.isTypeSupported('audio/webm') : false,
+      mimeSupported,
+      willShowRecordButton: mimeSupported
+    });
+    
     if (!mimeSupported) {
       console.warn('MediaRecorder or required audio format not supported on this browser');
     }
