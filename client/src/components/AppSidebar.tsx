@@ -19,7 +19,8 @@ import {
   BookOpen,
   Shield,
   LogOut,
-  ClipboardCheck
+  ClipboardCheck,
+  History as HistoryIconLucide
 } from "lucide-react";
 import {
   Sidebar,
@@ -201,6 +202,16 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   <Link href="/vehicle-inspection" onClick={() => isMobile && setOpen(false)} data-testid="link-vehicle-inspection">
                     <ClipboardCheck className="h-4 w-4" />
                     <span>Vehicle Inspection</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              
+              {/* Inspection History - Available to both crew and admin */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/vehicle-inspection-history"}>
+                  <Link href="/vehicle-inspection-history" onClick={() => isMobile && setOpen(false)} data-testid="link-inspection-history">
+                    <HistoryIconLucide className="h-4 w-4" />
+                    <span>Inspection History</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
