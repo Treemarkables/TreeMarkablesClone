@@ -22,6 +22,7 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const mimeTypeRef = useRef<string>('audio/webm'); // Store MIME type used for recording
   const { toast } = useToast();
 
   // Check device capabilities on mount
@@ -29,22 +30,22 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
     // Guard against SSR/pre-render
     if (typeof window === 'undefined') return;
     
-    // Detect iOS devices
+    // Detect iOS devices for UI hints
     const iosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     setIsIOS(iosDevice);
     
     const hasBasicSupport = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
     
-    // Check MIME type support
+    // Check MIME type support - iOS supports mp4, most browsers support webm
     const mimeSupported = hasBasicSupport && 
-      (MediaRecorder.isTypeSupported('audio/webm;codecs=opus') || 
-       MediaRecorder.isTypeSupported('audio/webm') ||
-       MediaRecorder.isTypeSupported('audio/mp4'));
+      (MediaRecorder.isTypeSupported('audio/mp4') ||
+       MediaRecorder.isTypeSupported('audio/webm;codecs=opus') || 
+       MediaRecorder.isTypeSupported('audio/webm'));
     
     setIsMediaRecorderSupported(mimeSupported);
     
-    if (!mimeSupported && !iosDevice) {
+    if (!mimeSupported) {
       console.warn('MediaRecorder or required audio format not supported on this browser');
     }
   }, []);
@@ -119,8 +120,21 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
       });
       streamRef.current = stream;
       
+      // Choose MIME type based on device support - iOS prefers mp4, others use webm
+      let mimeType = 'audio/webm;codecs=opus';
+      if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm';
+      }
+      
+      // Store MIME type for later use when creating blob
+      mimeTypeRef.current = mimeType;
+      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus',
+        mimeType,
         audioBitsPerSecond: 128000, // 128 kbps for much better quality
       });
 
@@ -134,7 +148,7 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeTypeRef.current });
         await processAudio(audioBlob);
         cleanup();
       };
@@ -172,8 +186,15 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
     setIsProcessing(true);
     
     try {
-      // Determine filename based on input type
-      const filename = audioBlob instanceof File ? audioBlob.name : 'recording.webm';
+      // Determine filename based on input type and MIME type
+      let filename = 'recording.webm';
+      if (audioBlob instanceof File) {
+        filename = audioBlob.name;
+      } else {
+        // Use appropriate extension based on MIME type
+        const extension = mimeTypeRef.current.includes('mp4') ? 'm4a' : 'webm';
+        filename = `recording.${extension}`;
+      }
       
       const formData = new FormData();
       formData.append('audio', audioBlob, filename);
@@ -291,8 +312,8 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
                 data-testid="input-audio-file"
               />
 
-              {isIOS || !isMediaRecorderSupported ? (
-                /* iOS or unsupported browser - show upload only */
+              {!isMediaRecorderSupported ? (
+                /* Unsupported browser - show upload only */
                 <div className="flex flex-col items-center gap-4 w-full">
                   <Button
                     size="lg"
@@ -303,10 +324,7 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
                     Upload Audio File
                   </Button>
                   <p className="text-xs text-muted-foreground text-center">
-                    {isIOS 
-                      ? 'Record using Voice Memos app first, then upload your recording here'
-                      : 'Upload a pre-recorded audio file (m4a, mp3, wav, or webm)'
-                    }
+                    Upload a pre-recorded audio file (m4a, mp3, wav, or webm)
                   </p>
                 </div>
               ) : (
