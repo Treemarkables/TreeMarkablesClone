@@ -1749,14 +1749,6 @@ export function GlobalJobCard({
                     <Presentation className="w-4 h-4 mr-2" />
                     Proposal
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => handleEmailClick('proposal')}
-                    disabled={!editingJob?.id || mode === 'create'}
-                    data-testid="menu-item-email-proposal"
-                  >
-                    <Mail className="w-4 h-4 mr-2" />
-                    Email Proposal
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button 
@@ -1805,14 +1797,6 @@ export function GlobalJobCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem 
-                    onClick={() => handleEmailClick('invoice')}
-                    disabled={!editingJob?.id || mode === 'create'}
-                    data-testid="menu-item-email-invoice"
-                  >
-                    <Mail className="w-4 h-4 mr-2" />
-                    Email Invoice
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handlePrintClick}>
                     <Printer className="w-4 h-4 mr-2" />
                     Print
