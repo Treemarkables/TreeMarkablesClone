@@ -14168,6 +14168,291 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // ========================================
+  // VEHICLE PRE-START INSPECTION SYSTEM
+  // ========================================
+
+  // Inspection Templates
+  router.get("/inspection-templates", async (req, res) => {
+    try {
+      const templates = await storage.getAllInspectionTemplates();
+      res.json({ success: true, data: templates });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch templates' });
+    }
+  });
+
+  router.get("/inspection-templates/default/:vehicleType?", async (req, res) => {
+    try {
+      const template = await storage.getDefaultTemplate(req.params.vehicleType);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'No default template found' });
+      }
+      res.json({ success: true, data: template });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch default template' });
+    }
+  });
+
+  router.get("/inspection-templates/:id", async (req, res) => {
+    try {
+      const template = await storage.getInspectionTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+      res.json({ success: true, data: template });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch template' });
+    }
+  });
+
+  router.post("/inspection-templates", async (req, res) => {
+    try {
+      const validatedData = schema.insertInspectionTemplateSchema.parse(req.body);
+      const template = await storage.createInspectionTemplate(validatedData);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create template' });
+    }
+  });
+
+  router.patch("/inspection-templates/:id", async (req, res) => {
+    try {
+      // Check if template exists
+      const existing = await storage.getInspectionTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+      
+      const validatedData = schema.updateInspectionTemplateSchema.parse(req.body);
+      const template = await storage.updateInspectionTemplate(req.params.id, validatedData);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update template' });
+    }
+  });
+
+  router.delete("/inspection-templates/:id", async (req, res) => {
+    try {
+      // Check if template exists
+      const existing = await storage.getInspectionTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+      
+      await storage.deleteInspectionTemplate(req.params.id);
+      res.json({ success: true, message: 'Template deleted' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete template' });
+    }
+  });
+
+  router.patch("/inspection-templates/:id/set-default", async (req, res) => {
+    try {
+      const template = await storage.setDefaultTemplate(req.params.id);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to set default template' });
+    }
+  });
+
+  // Inspection Checklist Items
+  router.get("/inspection-templates/:templateId/items", async (req, res) => {
+    try {
+      const items = await storage.getChecklistItemsByTemplate(req.params.templateId);
+      res.json({ success: true, data: items });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch checklist items' });
+    }
+  });
+
+  router.post("/inspection-templates/:templateId/items", async (req, res) => {
+    try {
+      const validatedData = schema.insertInspectionChecklistItemSchema.parse({ ...req.body, templateId: req.params.templateId });
+      const item = await storage.createChecklistItem(validatedData);
+      res.json({ success: true, data: item });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create checklist item' });
+    }
+  });
+
+  router.patch("/checklist-items/:id", async (req, res) => {
+    try {
+      // Check if item exists
+      const existing = await storage.getChecklistItem(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Checklist item not found' });
+      }
+      
+      const validatedData = schema.updateInspectionChecklistItemSchema.parse(req.body);
+      const item = await storage.updateChecklistItem(req.params.id, validatedData);
+      res.json({ success: true, data: item });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update checklist item' });
+    }
+  });
+
+  router.delete("/checklist-items/:id", async (req, res) => {
+    try {
+      // Check if item exists
+      const existing = await storage.getChecklistItem(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Checklist item not found' });
+      }
+      
+      await storage.deleteChecklistItem(req.params.id);
+      res.json({ success: true, message: 'Checklist item deleted' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete checklist item' });
+    }
+  });
+
+  router.post("/inspection-templates/:templateId/reorder", async (req, res) => {
+    try {
+      const { itemIds } = req.body;
+      await storage.reorderChecklistItems(req.params.templateId, itemIds);
+      res.json({ success: true, message: 'Items reordered' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to reorder items' });
+    }
+  });
+
+  // Vehicle Inspections
+  router.get("/vehicle-inspections", async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.vehicleId) filters.vehicleId = req.query.vehicleId as string;
+      if (req.query.status) filters.status = req.query.status as string;
+      if (req.query.dateFrom) filters.dateFrom = new Date(req.query.dateFrom as string);
+      if (req.query.dateTo) filters.dateTo = new Date(req.query.dateTo as string);
+      
+      const inspections = await storage.getAllVehicleInspections(filters);
+      res.json({ success: true, data: inspections });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch inspections' });
+    }
+  });
+
+  router.get("/vehicle-inspections/vehicle/:vehicleId", async (req, res) => {
+    try {
+      const inspections = await storage.getVehicleInspectionsByVehicle(req.params.vehicleId);
+      res.json({ success: true, data: inspections });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch vehicle inspections' });
+    }
+  });
+
+  router.get("/vehicle-inspections/vehicle/:vehicleId/latest", async (req, res) => {
+    try {
+      const inspection = await storage.getLatestInspection(req.params.vehicleId);
+      if (!inspection) {
+        return res.status(404).json({ success: false, message: 'No inspections found for this vehicle' });
+      }
+      res.json({ success: true, data: inspection });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch latest inspection' });
+    }
+  });
+
+  router.get("/vehicle-inspections/:id", async (req, res) => {
+    try {
+      const inspection = await storage.getVehicleInspection(req.params.id);
+      if (!inspection) {
+        return res.status(404).json({ success: false, message: 'Inspection not found' });
+      }
+      res.json({ success: true, data: inspection });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch inspection' });
+    }
+  });
+
+  router.post("/vehicle-inspections", async (req, res) => {
+    try {
+      const validatedData = schema.insertVehicleInspectionSchema.parse(req.body);
+      const inspection = await storage.createVehicleInspection(validatedData);
+      res.json({ success: true, data: inspection });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create inspection' });
+    }
+  });
+
+  router.patch("/vehicle-inspections/:id", async (req, res) => {
+    try {
+      // Check if inspection exists
+      const existing = await storage.getVehicleInspection(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Inspection not found' });
+      }
+      
+      const validatedData = schema.updateVehicleInspectionSchema.parse(req.body);
+      const inspection = await storage.updateVehicleInspection(req.params.id, validatedData);
+      res.json({ success: true, data: inspection });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update inspection' });
+    }
+  });
+
+  // Inspection Responses
+  router.get("/vehicle-inspections/:inspectionId/responses", async (req, res) => {
+    try {
+      const responses = await storage.getInspectionResponses(req.params.inspectionId);
+      res.json({ success: true, data: responses });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch responses' });
+    }
+  });
+
+  router.post("/vehicle-inspections/:inspectionId/responses", async (req, res) => {
+    try {
+      const validatedData = schema.insertInspectionResponseSchema.parse({ ...req.body, inspectionId: req.params.inspectionId });
+      const response = await storage.createInspectionResponse(validatedData);
+      res.json({ success: true, data: response });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create response' });
+    }
+  });
+
+  // Vehicle Expiry Checks (Registration & COF)
+  router.get("/vehicles/expiring", async (req, res) => {
+    try {
+      const daysAhead = parseInt(req.query.days as string) || 30;
+      const vehicles = await storage.getVehiclesWithExpiringDocs(daysAhead);
+      res.json({ success: true, data: vehicles });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch expiring vehicles' });
+    }
+  });
+
+  router.get("/vehicles/expired", async (req, res) => {
+    try {
+      const vehicles = await storage.getExpiredVehicles();
+      res.json({ success: true, data: vehicles });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch expired vehicles' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
