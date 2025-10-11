@@ -7763,6 +7763,71 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Get equipment with expiring registration/COF
+  app.get('/api/equipment/expiring', async (req: Request, res: Response) => {
+    try {
+      const now = new Date();
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+      const allEquipment = await storage.getAllEquipment();
+      
+      const expiringEquipment = allEquipment
+        .filter(e => {
+          const regExpiry = e.registrationExpiryDate ? new Date(e.registrationExpiryDate) : null;
+          const cofExpiry = e.cofExpiryDate ? new Date(e.cofExpiryDate) : null;
+          
+          return (regExpiry && regExpiry >= now && regExpiry <= thirtyDaysFromNow) ||
+                 (cofExpiry && cofExpiry >= now && cofExpiry <= thirtyDaysFromNow);
+        })
+        .map(e => {
+          const regExpiry = e.registrationExpiryDate ? new Date(e.registrationExpiryDate) : null;
+          const cofExpiry = e.cofExpiryDate ? new Date(e.cofExpiryDate) : null;
+          
+          // Calculate days until expiry
+          const regDaysUntil = regExpiry ? Math.ceil((regExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+          const cofDaysUntil = cofExpiry ? Math.ceil((cofExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+          
+          // Determine severity (critical: ≤7 days, warning: ≤14 days, info: ≤30 days)
+          const regSeverity = regDaysUntil !== null ? 
+            (regDaysUntil <= 7 ? 'critical' : regDaysUntil <= 14 ? 'warning' : 'info') : null;
+          const cofSeverity = cofDaysUntil !== null ?
+            (cofDaysUntil <= 7 ? 'critical' : cofDaysUntil <= 14 ? 'warning' : 'info') : null;
+          
+          return {
+            ...e,
+            registrationDaysUntilExpiry: regDaysUntil,
+            registrationSeverity: regSeverity,
+            cofDaysUntilExpiry: cofDaysUntil,
+            cofSeverity: cofSeverity
+          };
+        })
+        .sort((a, b) => {
+          // Sort by most urgent first
+          const aMin = Math.min(
+            a.registrationDaysUntilExpiry ?? 999,
+            a.cofDaysUntilExpiry ?? 999
+          );
+          const bMin = Math.min(
+            b.registrationDaysUntilExpiry ?? 999,
+            b.cofDaysUntilExpiry ?? 999
+          );
+          return aMin - bMin;
+        });
+
+      res.json({
+        success: true,
+        data: expiringEquipment
+      });
+    } catch (error) {
+      console.error('Error fetching expiring equipment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching expiring equipment'
+      });
+    }
+  });
+
   // ========================================
   // EQUIPMENT CHECKOUT ROUTES (Must come before /api/equipment/:id)
   // ========================================
