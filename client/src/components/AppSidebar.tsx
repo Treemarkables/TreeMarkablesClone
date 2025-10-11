@@ -18,7 +18,8 @@ import {
   Upload,
   BookOpen,
   Shield,
-  LogOut
+  LogOut,
+  ClipboardCheck
 } from "lucide-react";
 import {
   Sidebar,
@@ -190,6 +191,16 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   <Link href="/staff-schedule" onClick={() => isMobile && setOpen(false)} data-testid="link-staff-schedule">
                     <Users className="h-4 w-4" />
                     <span>Staff Schedule</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              
+              {/* Vehicle Inspection - Available to both crew and admin */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/vehicle-inspection"}>
+                  <Link href="/vehicle-inspection" onClick={() => isMobile && setOpen(false)} data-testid="link-vehicle-inspection">
+                    <ClipboardCheck className="h-4 w-4" />
+                    <span>Vehicle Inspection</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
