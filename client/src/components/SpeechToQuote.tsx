@@ -41,32 +41,6 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
     // We'll determine the best MIME type dynamically when recording starts
     setIsMediaRecorderSupported(hasBasicSupport);
     
-    // Debug logging with all possible formats
-    const debugFormats = [
-      'audio/mp4',
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/wav',
-      'audio/ogg',
-      'audio/mpeg',
-      ''  // Empty string means default format
-    ];
-    
-    const supportedFormats = window.MediaRecorder 
-      ? debugFormats.filter(fmt => fmt === '' || MediaRecorder.isTypeSupported(fmt))
-      : [];
-    
-    console.log('🎤 Speech-to-Quote Device Check:', {
-      isIOS: iosDevice,
-      userAgent: navigator.userAgent,
-      hasMediaDevices: !!navigator.mediaDevices,
-      hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
-      hasMediaRecorder: !!window.MediaRecorder,
-      hasBasicSupport,
-      supportedFormats,
-      willShowRecordButton: hasBasicSupport
-    });
-    
     if (!hasBasicSupport) {
       console.warn('MediaRecorder or getUserMedia not supported on this browser');
     }
@@ -165,8 +139,6 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
       // Store MIME type for later use when creating blob
       mimeTypeRef.current = mimeType || 'audio/webm'; // fallback for blob creation
       
-      console.log('🎤 Creating MediaRecorder with options:', recorderOptions);
-      
       let mediaRecorder;
       try {
         mediaRecorder = new MediaRecorder(stream, recorderOptions);
@@ -176,8 +148,6 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
         mediaRecorder = new MediaRecorder(stream);
         mimeTypeRef.current = 'audio/webm'; // Use generic fallback
       }
-
-      console.log('🎤 MediaRecorder created, MIME type will be:', mediaRecorder.mimeType);
       
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
