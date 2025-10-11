@@ -41,11 +41,78 @@ import {
   ChevronRight,
   RefreshCw,
   Receipt,
-  Trash2
+  Trash2,
+  Eye,
+  MousePointerClick
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
+
+// Component to display email activity (opens/clicks)
+function EmailActivity({ messageId }: { messageId: string }) {
+  const [activity, setActivity] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchActivity = async () => {
+      try {
+        const response = await fetch(`/api/email-activity/${messageId}`);
+        const data = await response.json();
+        if (data.success) {
+          setActivity(data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching email activity:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (messageId) {
+      fetchActivity();
+    } else {
+      setLoading(false);
+    }
+  }, [messageId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-1 mt-1 text-[10px] text-gray-400">
+        <Clock className="h-2.5 w-2.5 animate-spin" />
+        <span>Checking...</span>
+      </div>
+    );
+  }
+
+  if (!activity || (activity.opens === 0 && activity.clicks === 0)) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-1 text-[10px]">
+      {activity.opens > 0 && (
+        <div className="flex items-center gap-0.5 text-green-600">
+          <Eye className="h-2.5 w-2.5" />
+          <span>Seen {activity.opens}x</span>
+        </div>
+      )}
+      {activity.clicks > 0 && (
+        <div className="flex items-center gap-0.5 text-blue-600">
+          <MousePointerClick className="h-2.5 w-2.5" />
+          <span>{activity.clicks} click{activity.clicks > 1 ? 's' : ''}</span>
+        </div>
+      )}
+      {activity.lastEventAt && (
+        <div className="flex items-center gap-0.5 text-gray-500">
+          <Clock className="h-2.5 w-2.5" />
+          <span>{format(new Date(activity.lastEventAt), 'MMM dd, h:mma')}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ServiceM8 API response types (matches server/services/servicem8-api.ts)
 interface ServiceM8DiaryEntry {
   id: string;
@@ -803,6 +870,11 @@ export function JobDiarySection({
                         }`}>
                           <p className="text-[11px] leading-snug whitespace-pre-wrap break-words">{messageText}</p>
                         </div>
+                        
+                        {/* Email tracking for sent emails */}
+                        {isSent && entry.type === 'email' && entry.metadata?.sendgridMessageId && (
+                          <EmailActivity messageId={entry.metadata.sendgridMessageId} />
+                        )}
                         
                         {/* Reply button for received messages */}
                         {!isSent && (
