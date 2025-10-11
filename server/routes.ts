@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import { z } from "zod";
 
 // Extend Express Session to include employeeId
@@ -129,7 +129,7 @@ const audioStorage = multer.diskStorage({
   destination: 'uploads/recordings/',
   filename: (req, file, cb) => {
     // Generate unique filename with proper extension
-    const uniqueId = crypto.randomBytes(16).toString('hex');
+    const uniqueId = randomBytes(16).toString('hex');
     
     // Map MIME type to file extension
     const mimeToExt: Record<string, string> = {
