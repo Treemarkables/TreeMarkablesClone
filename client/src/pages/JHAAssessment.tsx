@@ -322,15 +322,14 @@ export default function JHAAssessment() {
                   return (
                     <div 
                       key={hazard.id}
-                      className="flex items-center space-x-3 p-3 border rounded-lg hover-elevate cursor-pointer"
-                      onClick={() => toggleHazard(hazard)}
+                      className="flex items-center space-x-3 p-3 border rounded-lg hover-elevate"
                       data-testid={`checkbox-hazard-${hazard.id}`}
                     >
                       <Checkbox 
                         checked={isSelected}
                         onCheckedChange={() => toggleHazard(hazard)}
                       />
-                      <label className="flex-1 cursor-pointer font-medium">
+                      <label className="flex-1 font-medium">
                         {hazard.name}
                       </label>
                       {isSelected && (
@@ -453,7 +452,7 @@ export default function JHAAssessment() {
                 <div className="space-y-3">
                   {selectedHazards.map((hazard) => {
                     const template = hazardTemplates.find(h => h.id === hazard.hazardTemplateId);
-                    const controls = template?.controlMeasures.filter(c => hazard.selectedControls.includes(c.id)) || [];
+                    const controls = template?.controlMeasures?.filter(c => hazard.selectedControls.includes(c.id)) || [];
                     
                     return (
                       <div key={hazard.hazardTemplateId} className="p-3 border rounded-lg bg-gray-50">
