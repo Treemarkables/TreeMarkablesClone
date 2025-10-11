@@ -42,7 +42,7 @@ function SortableChecklistItem({ item, onEdit, onDelete }: {
       
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium">{item.questionText}</span>
+          <span className="font-medium">{item.question}</span>
           {item.category && (
             <Badge variant="outline" className="text-xs">{item.category}</Badge>
           )}
@@ -81,15 +81,17 @@ export default function VehicleInspectionSettings() {
   );
 
   // Fetch templates
-  const { data: templates = [] } = useQuery<SelectInspectionTemplate[]>({
+  const { data: templatesData } = useQuery({
     queryKey: ['/api/inspection-templates'],
   });
+  const templates = Array.isArray((templatesData as any)?.data) ? (templatesData as any).data : [];
 
   // Fetch checklist items for selected template
-  const { data: checklistItems = [] } = useQuery<SelectInspectionChecklistItem[]>({
+  const { data: checklistItemsData } = useQuery({
     queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'],
     enabled: !!selectedTemplate?.id,
   });
+  const checklistItems = Array.isArray((checklistItemsData as any)?.data) ? (checklistItemsData as any).data : [];
 
   // Template mutations
   const createTemplateMutation = useMutation({
@@ -470,11 +472,11 @@ export default function VehicleInspectionSettings() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="questionText">Question</Label>
+              <Label htmlFor="question">Question</Label>
               <Input
-                id="questionText"
-                value={editingItem.questionText || ''}
-                onChange={(e) => setEditingItem({ ...editingItem, questionText: e.target.value })}
+                id="question"
+                value={editingItem.question || ''}
+                onChange={(e) => setEditingItem({ ...editingItem, question: e.target.value })}
                 placeholder="e.g., Are all lights working?"
                 data-testid="input-question-text"
               />
@@ -522,7 +524,7 @@ export default function VehicleInspectionSettings() {
             </Button>
             <Button
               onClick={handleSaveItem}
-              disabled={!editingItem.questionText}
+              disabled={!editingItem.question}
               data-testid="button-save-item"
             >
               {editingItem.id ? 'Update' : 'Add'}
