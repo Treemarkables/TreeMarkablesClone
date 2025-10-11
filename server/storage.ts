@@ -2126,13 +2126,18 @@ class DatabaseStorage implements IStorage {
         .where(conditions.length > 0 ? and(...conditions) : undefined);
 
       // Get all proposals for conversion rate calculation
+      const proposalConditions = [];
+      if (fromDate) {
+        proposalConditions.push(sql`${schema.proposals.createdAt} >= ${fromDate}`);
+      }
+      if (toDate) {
+        proposalConditions.push(sql`${schema.proposals.createdAt} <= ${toDate}`);
+      }
+      
       const proposals = await this.db
         .select()
         .from(schema.proposals)
-        .where(conditions.length > 0 ? and(
-          fromDate ? sql`${schema.proposals.createdAt} >= ${fromDate}` : undefined,
-          toDate ? sql`${schema.proposals.createdAt} <= ${toDate}` : undefined
-        ).filter(Boolean) : undefined);
+        .where(proposalConditions.length > 0 ? and(...proposalConditions) : undefined);
 
       // Group jobs by lead source
       const sourceMap = new Map<string, {
