@@ -241,11 +241,16 @@ export default function JHAAssessment() {
       </div>
 
       {/* ThinkSafe Logo & Risk Matrix */}
-      <div className="mb-4">
+      <div className="mb-4 overflow-hidden rounded-lg shadow-md" style={{ height: '500px' }}>
         <img 
           src={thinkSafeImage} 
           alt="ThinkSafe Risk Matrix" 
-          className="w-full rounded-lg shadow-md"
+          className="w-full"
+          style={{ 
+            objectFit: 'cover',
+            objectPosition: '0 -100px',
+            height: '100%'
+          }}
         />
       </div>
 
