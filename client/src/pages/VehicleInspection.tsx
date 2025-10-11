@@ -133,7 +133,7 @@ export default function VehicleInspection() {
         passedInspection: Array.from(responses.values()).every(r => r.responseValue !== 'NO'),
       };
 
-      const inspectionResult = await apiRequest('/api/vehicle-inspections', 'POST', inspectionData);
+      const inspectionResult = await apiRequest('POST', '/api/vehicle-inspections', inspectionData);
       const inspectionId = inspectionResult.data.id;
 
       // Create all responses
@@ -150,7 +150,7 @@ export default function VehicleInspection() {
             comments: response.comments || null,
             photoUrl: response.photoUrl || null,
           };
-          return apiRequest(`/api/vehicle-inspections/${inspectionId}/responses`, 'POST', responseData);
+          return apiRequest('POST', `/api/vehicle-inspections/${inspectionId}/responses`, responseData);
         }
         return Promise.resolve();
       });
