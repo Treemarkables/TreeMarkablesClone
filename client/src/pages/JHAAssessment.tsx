@@ -311,7 +311,7 @@ export default function JHAAssessment() {
                     <FormLabel className="text-base font-semibold">Risk Rating</FormLabel>
                     <FormControl>
                       <RadioGroup
-                        value={field.value.toString()}
+                        value={field.value?.toString() || "3"}
                         onValueChange={(value) => field.onChange(parseInt(value))}
                         className="space-y-2"
                       >
