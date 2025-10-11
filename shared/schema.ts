@@ -322,6 +322,7 @@ export const jobs = pgTable("jobs", {
   jobNumber: text("job_number").notNull().unique(),
   title: text("title"),
   description: text("description"),
+  includeDescriptionInQuotesProposals: boolean("include_description_in_quotes_proposals").default(true),
   leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),
