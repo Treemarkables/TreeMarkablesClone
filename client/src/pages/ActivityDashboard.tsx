@@ -14,7 +14,8 @@ import {
   FileText,
   AlertTriangle,
   ChevronRight,
-  Briefcase
+  Briefcase,
+  Info
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -57,9 +58,26 @@ interface ActivityDashboardData {
   };
 }
 
+interface ExpiringEquipment {
+  id: string;
+  name: string;
+  type: string;
+  registrationNumber?: string;
+  registrationExpiryDate?: string;
+  cofExpiryDate?: string;
+  registrationDaysUntilExpiry?: number;
+  cofDaysUntilExpiry?: number;
+  registrationSeverity?: 'critical' | 'warning' | 'info';
+  cofSeverity?: 'critical' | 'warning' | 'info';
+}
+
 export default function ActivityDashboard() {
   const { data, isLoading, error } = useQuery<{ success: boolean; data: ActivityDashboardData }>({
     queryKey: ['/api/activity-dashboard'],
+  });
+
+  const { data: expiringData } = useQuery<{ success: boolean; data: ExpiringEquipment[] }>({
+    queryKey: ['/api/equipment/expiring'],
   });
 
   if (isLoading) {
@@ -184,6 +202,100 @@ export default function ActivityDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Vehicle Compliance Alerts */}
+      {expiringData?.data && expiringData.data.length > 0 && (
+        <Card className="border-orange-200 dark:border-orange-900">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+              <AlertTriangle className="h-5 w-5" />
+              Vehicle Compliance Alerts ({expiringData.data.length})
+            </CardTitle>
+            <CardDescription>Registration and COF expiring within 30 days</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {expiringData.data.map((equipment) => (
+                <div 
+                  key={equipment.id} 
+                  className="flex items-start justify-between p-3 rounded-md border hover-elevate"
+                  data-testid={`alert-equipment-${equipment.id}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{equipment.name}</p>
+                      {equipment.registrationNumber && (
+                        <Badge variant="outline" className="shrink-0">
+                          {equipment.registrationNumber}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="mt-1 space-y-1">
+                      {equipment.registrationDaysUntilExpiry !== null && equipment.registrationDaysUntilExpiry !== undefined && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Badge 
+                            variant={
+                              equipment.registrationSeverity === 'critical' ? 'destructive' : 
+                              equipment.registrationSeverity === 'warning' ? 'default' : 
+                              'secondary'
+                            }
+                            className="shrink-0"
+                          >
+                            {equipment.registrationSeverity === 'critical' ? (
+                              <AlertTriangle className="h-3 w-3" />
+                            ) : equipment.registrationSeverity === 'warning' ? (
+                              <Clock className="h-3 w-3" />
+                            ) : (
+                              <Info className="h-3 w-3" />
+                            )}
+                          </Badge>
+                          <span className="text-muted-foreground">
+                            Registration expires in {equipment.registrationDaysUntilExpiry} day{equipment.registrationDaysUntilExpiry !== 1 ? 's' : ''}
+                            {equipment.registrationExpiryDate && 
+                              ` (${format(new Date(equipment.registrationExpiryDate), 'MMM d, yyyy')})`
+                            }
+                          </span>
+                        </div>
+                      )}
+                      {equipment.cofDaysUntilExpiry !== null && equipment.cofDaysUntilExpiry !== undefined && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Badge 
+                            variant={
+                              equipment.cofSeverity === 'critical' ? 'destructive' : 
+                              equipment.cofSeverity === 'warning' ? 'default' : 
+                              'secondary'
+                            }
+                            className="shrink-0"
+                          >
+                            {equipment.cofSeverity === 'critical' ? (
+                              <AlertTriangle className="h-3 w-3" />
+                            ) : equipment.cofSeverity === 'warning' ? (
+                              <Clock className="h-3 w-3" />
+                            ) : (
+                              <Info className="h-3 w-3" />
+                            )}
+                          </Badge>
+                          <span className="text-muted-foreground">
+                            COF expires in {equipment.cofDaysUntilExpiry} day{equipment.cofDaysUntilExpiry !== 1 ? 's' : ''}
+                            {equipment.cofExpiryDate && 
+                              ` (${format(new Date(equipment.cofExpiryDate), 'MMM d, yyyy')})`
+                            }
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Link href="/equipment" asChild>
+                    <Button variant="outline" size="sm" className="shrink-0" data-testid={`button-view-equipment-${equipment.id}`}>
+                      Update
+                    </Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Content Grid */}
       <div className="grid gap-4 lg:grid-cols-2">
