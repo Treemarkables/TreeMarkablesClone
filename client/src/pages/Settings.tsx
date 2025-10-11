@@ -20,7 +20,8 @@ import {
   FileText,
   CheckSquare,
   Sliders,
-  Mail
+  Mail,
+  ClipboardCheck
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -98,6 +99,14 @@ const settingsOptions = [
     icon: Sliders,
     color: "bg-indigo-100 text-indigo-600",
     path: "/settings/preferences"
+  },
+  {
+    id: "vehicle-inspections",
+    title: "Vehicle Inspections",
+    description: "Pre-start inspection templates and checklists",
+    icon: ClipboardCheck,
+    color: "bg-teal-100 text-teal-600",
+    path: "/settings/vehicle-inspections"
   }
 ];
 
