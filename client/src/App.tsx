@@ -46,6 +46,7 @@ import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
 import VehicleInspection from "@/pages/VehicleInspection";
 import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
 import JHATemplates from "@/pages/JHATemplates";
+import JHAAssessment from "@/pages/JHAAssessment";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import JobTemplateManagement from "@/components/JobTemplateManagement";
@@ -579,6 +580,13 @@ function Router() {
         <AuthenticatedRoute>
           <SidebarLayout>
             <VehicleInspectionHistory />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/jha-assessment">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <JHAAssessment />
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
