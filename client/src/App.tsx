@@ -43,6 +43,7 @@ import StaffSchedule from "@/pages/StaffSchedule";
 import SettingsPreferences from "@/pages/SettingsPreferences";
 import CommunicationTemplates from "@/pages/CommunicationTemplates";
 import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
+import VehicleInspection from "@/pages/VehicleInspection";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import JobTemplateManagement from "@/components/JobTemplateManagement";
@@ -562,6 +563,13 @@ function Router() {
         <AuthenticatedRoute>
           <SidebarLayout>
             <Dispatch />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/vehicle-inspection">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <VehicleInspection />
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
