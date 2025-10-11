@@ -874,7 +874,7 @@ export function JobDiarySection({
                         {/* Timestamp for all messages */}
                         <div className={`flex items-center gap-1 mt-0.5 ${isSent ? 'justify-end' : 'justify-start'}`}>
                           <span className="text-[9px] text-gray-400">
-                            {format(new Date(entry.timestamp), 'EEEE h:mma').toLowerCase()}
+                            {format(new Date(entry.timestamp), 'MMM dd, h:mma').toLowerCase()}
                           </span>
                         </div>
                         
