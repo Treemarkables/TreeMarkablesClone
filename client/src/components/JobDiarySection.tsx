@@ -945,6 +945,10 @@ export function JobDiarySection({
                       )}
                       
                       {/* Reply buttons for email and SMS */}
+                      {editingEntryId !== entry.id && (() => {
+                        console.log('🔍 Checking reply button for entry:', entry.id, 'type:', entry.type, 'metadata:', entry.metadata);
+                        return null;
+                      })()}
                       {editingEntryId !== entry.id && (
                         <>
                           {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
