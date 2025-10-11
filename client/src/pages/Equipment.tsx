@@ -161,6 +161,7 @@ export default function Equipment() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [isAddEquipmentOpen, setIsAddEquipmentOpen] = useState(false);
+  const [isEditEquipmentOpen, setIsEditEquipmentOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isCheckinOpen, setIsCheckinOpen] = useState(false);
   const [isMaintenanceOpen, setIsMaintenanceOpen] = useState(false);
@@ -199,6 +200,7 @@ export default function Equipment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
       setIsAddEquipmentOpen(false);
+      form.reset();
       toast({
         title: "Success",
         description: "Equipment added successfully",
@@ -208,6 +210,29 @@ export default function Equipment() {
       toast({
         title: "Error",
         description: "Failed to add equipment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Edit equipment mutation
+  const editEquipmentMutation = useMutation({
+    mutationFn: (data: EquipmentFormData & { id: string }) => 
+      apiRequest("PATCH", `/api/equipment/${data.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
+      setIsEditEquipmentOpen(false);
+      setSelectedEquipment(null);
+      editForm.reset();
+      toast({
+        title: "Success",
+        description: "Equipment updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update equipment",
         variant: "destructive",
       });
     },
@@ -307,8 +332,17 @@ export default function Equipment() {
     },
   });
 
-  // Equipment form
+  // Equipment form (for adding)
   const form = useForm<EquipmentFormData>({
+    resolver: zodResolver(equipmentFormSchema),
+    defaultValues: {
+      status: "available",
+      condition: "good",
+    },
+  });
+
+  // Edit equipment form
+  const editForm = useForm<EquipmentFormData>({
     resolver: zodResolver(equipmentFormSchema),
     defaultValues: {
       status: "available",
@@ -343,6 +377,34 @@ export default function Equipment() {
 
   const onSubmit = (data: EquipmentFormData) => {
     addEquipmentMutation.mutate(data);
+  };
+
+  const onEdit = (data: EquipmentFormData) => {
+    if (selectedEquipment) {
+      editEquipmentMutation.mutate({ ...data, id: selectedEquipment.id });
+    }
+  };
+
+  const handleEdit = (equipment: any) => {
+    setSelectedEquipment(equipment);
+    editForm.reset({
+      name: equipment.name || '',
+      type: equipment.type || '',
+      brand: equipment.brand || '',
+      model: equipment.model || '',
+      year: equipment.year || undefined,
+      status: equipment.status || 'available',
+      condition: equipment.condition || 'good',
+      currentLocation: equipment.currentLocation || '',
+      purchasePrice: equipment.purchasePrice || '',
+      currentValue: equipment.currentValue || '',
+      dailyRentalCost: equipment.dailyRentalCost || '',
+      serialNumber: equipment.serialNumber || '',
+      registrationNumber: equipment.registrationNumber || '',
+      defaultInspectionTemplateId: equipment.defaultInspectionTemplateId || '',
+      notes: equipment.notes || '',
+    });
+    setIsEditEquipmentOpen(true);
   };
 
   const onCheckout = (data: CheckoutFormData) => {
@@ -713,6 +775,244 @@ export default function Equipment() {
             </Form>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Equipment Dialog */}
+        <Dialog open={isEditEquipmentOpen} onOpenChange={setIsEditEquipmentOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Equipment</DialogTitle>
+            </DialogHeader>
+            
+            <Form {...editForm}>
+              <form onSubmit={editForm.handleSubmit(onEdit)} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Equipment Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Bucket Truck #1" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {equipmentTypes.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="brand"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Brand</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Altec" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="model"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Model</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., AT37G" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="year"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Year</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="2020"
+                            {...field}
+                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Status</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="available">Available</SelectItem>
+                            <SelectItem value="in_use">In Use</SelectItem>
+                            <SelectItem value="maintenance">Maintenance</SelectItem>
+                            <SelectItem value="retired">Retired</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="condition"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Condition</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="excellent">Excellent</SelectItem>
+                            <SelectItem value="good">Good</SelectItem>
+                            <SelectItem value="fair">Fair</SelectItem>
+                            <SelectItem value="needs_repair">Needs Repair</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="currentLocation"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Current Location</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Main Depot" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="serialNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Serial Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Equipment serial number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={editForm.control}
+                  name="defaultInspectionTemplateId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Default Inspection Template</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select inspection template (optional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {((inspectionTemplatesData as any)?.data || []).map((template: any) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editForm.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          placeholder="Additional notes about the equipment..."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsEditEquipmentOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={editEquipmentMutation.isPending}
+                  >
+                    {editEquipmentMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Stats Cards */}
@@ -997,6 +1297,7 @@ export default function Equipment() {
                       variant="ghost" 
                       size={isMobile ? "icon" : "sm"}
                       className={isMobile ? "h-11 w-11" : ""}
+                      onClick={() => handleEdit(item)}
                       data-testid={`button-edit-${item.id}`}
                     >
                       <Edit className="h-4 w-4" />
