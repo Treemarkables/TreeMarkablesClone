@@ -731,7 +731,7 @@ export function JobDiarySection({
                     )}
                     
                     <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} mb-0.5 group`}>
-                      <div className="relative max-w-[40%] sm:max-w-[32%] md:max-w-[28%]">
+                      <div className="relative max-w-[35%] sm:max-w-[28%] md:max-w-[24%]">
                         <Button
                           size="icon"
                           variant="ghost"
@@ -754,7 +754,7 @@ export function JobDiarySection({
                               : 'bg-green-500 text-white rounded-br-sm'
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm'
                         }`}>
-                          <p className="text-[10px] leading-snug whitespace-pre-wrap break-words">{messageText}</p>
+                          <p className="text-[11px] leading-snug whitespace-pre-wrap break-words">{messageText}</p>
                         </div>
                       </div>
                     </div>
