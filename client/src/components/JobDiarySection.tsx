@@ -840,50 +840,15 @@ export function JobDiarySection({
                         </div>
                       </div>
                       
-                      <div className="text-[10px] text-muted-foreground mb-1 flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="flex items-center gap-0.5 whitespace-nowrap">
-                            <Clock className="w-2.5 h-2.5 flex-shrink-0" />
-                            {format(new Date(entry.timestamp), 'h:mm a dd/MM/yy')}
-                          </span>
-                          <span className="flex items-center gap-0.5 truncate min-w-0">
-                            <User className="w-2.5 h-2.5 flex-shrink-0" />
-                            <span className="truncate">{entry.author}</span>
-                          </span>
-                        </div>
-                        {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-5 text-[10px]"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
-                              setReplyToEmail(replyEmail);
-                              setActiveComposer('email');
-                            }}
-                            data-testid={`button-reply-email-${entry.id}`}
-                          >
-                            <Mail className="w-2.5 h-2.5 mr-0.5" />
-                            Reply
-                          </Button>
-                        )}
-                        {entry.type === 'sms' && entry.metadata?.phoneNumber && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-5 text-[10px]"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setReplyToPhone(entry.metadata?.phoneNumber || '');
-                              setActiveComposer('sms');
-                            }}
-                            data-testid={`button-reply-sms-${entry.id}`}
-                          >
-                            <MessageSquare className="w-2.5 h-2.5 mr-0.5" />
-                            Reply
-                          </Button>
-                        )}
+                      <div className="text-[10px] text-muted-foreground mb-1 flex items-center gap-2 flex-wrap">
+                        <span className="flex items-center gap-0.5 whitespace-nowrap">
+                          <Clock className="w-2.5 h-2.5 flex-shrink-0" />
+                          {format(new Date(entry.timestamp), 'h:mm a dd/MM/yy')}
+                        </span>
+                        <span className="flex items-center gap-0.5 truncate min-w-0">
+                          <User className="w-2.5 h-2.5 flex-shrink-0" />
+                          <span className="truncate">{entry.author}</span>
+                        </span>
                       </div>
                       
                       {editingEntryId === entry.id ? (
@@ -973,6 +938,45 @@ export function JobDiarySection({
                             </div>
                           )}
                         </>
+                      )}
+                      
+                      {/* Reply buttons for email and SMS */}
+                      {(entry.type === 'email' || entry.type === 'sms') && (
+                        <div className="mt-2 flex items-center gap-2">
+                          {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
+                                setReplyToEmail(replyEmail);
+                                setActiveComposer('email');
+                              }}
+                              data-testid={`button-reply-email-${entry.id}`}
+                            >
+                              <Mail className="w-3 h-3 mr-1" />
+                              Reply
+                            </Button>
+                          )}
+                          {entry.type === 'sms' && entry.metadata?.phoneNumber && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReplyToPhone(entry.metadata?.phoneNumber || '');
+                                setActiveComposer('sms');
+                              }}
+                              data-testid={`button-reply-sms-${entry.id}`}
+                            >
+                              <MessageSquare className="w-3 h-3 mr-1" />
+                              Reply
+                            </Button>
+                          )}
+                        </div>
                       )}
                       
                       {(() => {
