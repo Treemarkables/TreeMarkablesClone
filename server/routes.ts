@@ -14173,7 +14173,7 @@ Transcription: ${transcriptText}`;
   // ========================================
 
   // Inspection Templates
-  router.get("/inspection-templates", async (req, res) => {
+  app.get("/api/inspection-templates", async (req, res) => {
     try {
       const templates = await storage.getAllInspectionTemplates();
       res.json({ success: true, data: templates });
@@ -14182,7 +14182,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.get("/inspection-templates/default/:vehicleType?", async (req, res) => {
+  app.get("/inspection-templates/default/:vehicleType?", async (req, res) => {
     try {
       const template = await storage.getDefaultTemplate(req.params.vehicleType);
       if (!template) {
@@ -14194,7 +14194,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.get("/inspection-templates/:id", async (req, res) => {
+  app.get("/inspection-templates/:id", async (req, res) => {
     try {
       const template = await storage.getInspectionTemplate(req.params.id);
       if (!template) {
@@ -14206,7 +14206,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.post("/inspection-templates", async (req, res) => {
+  app.post("/inspection-templates", async (req, res) => {
     try {
       const validatedData = schema.insertInspectionTemplateSchema.parse(req.body);
       const template = await storage.createInspectionTemplate(validatedData);
@@ -14219,7 +14219,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.patch("/inspection-templates/:id", async (req, res) => {
+  app.patch("/inspection-templates/:id", async (req, res) => {
     try {
       // Check if template exists
       const existing = await storage.getInspectionTemplate(req.params.id);
@@ -14238,7 +14238,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.delete("/inspection-templates/:id", async (req, res) => {
+  app.delete("/inspection-templates/:id", async (req, res) => {
     try {
       // Check if template exists
       const existing = await storage.getInspectionTemplate(req.params.id);
@@ -14253,7 +14253,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.patch("/inspection-templates/:id/set-default", async (req, res) => {
+  app.patch("/inspection-templates/:id/set-default", async (req, res) => {
     try {
       const template = await storage.setDefaultTemplate(req.params.id);
       res.json({ success: true, data: template });
@@ -14263,7 +14263,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Inspection Checklist Items
-  router.get("/inspection-templates/:templateId/items", async (req, res) => {
+  app.get("/inspection-templates/:templateId/items", async (req, res) => {
     try {
       const items = await storage.getChecklistItemsByTemplate(req.params.templateId);
       res.json({ success: true, data: items });
@@ -14272,7 +14272,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.post("/inspection-templates/:templateId/items", async (req, res) => {
+  app.post("/inspection-templates/:templateId/items", async (req, res) => {
     try {
       const validatedData = schema.insertInspectionChecklistItemSchema.parse({ ...req.body, templateId: req.params.templateId });
       const item = await storage.createChecklistItem(validatedData);
@@ -14285,7 +14285,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.patch("/checklist-items/:id", async (req, res) => {
+  app.patch("/checklist-items/:id", async (req, res) => {
     try {
       // Check if item exists
       const existing = await storage.getChecklistItem(req.params.id);
@@ -14304,7 +14304,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.delete("/checklist-items/:id", async (req, res) => {
+  app.delete("/checklist-items/:id", async (req, res) => {
     try {
       // Check if item exists
       const existing = await storage.getChecklistItem(req.params.id);
@@ -14319,7 +14319,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.post("/inspection-templates/:templateId/reorder", async (req, res) => {
+  app.post("/inspection-templates/:templateId/reorder", async (req, res) => {
     try {
       const { itemIds } = req.body;
       await storage.reorderChecklistItems(req.params.templateId, itemIds);
@@ -14330,7 +14330,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Vehicle Inspections
-  router.get("/vehicle-inspections", async (req, res) => {
+  app.get("/vehicle-inspections", async (req, res) => {
     try {
       const filters: any = {};
       if (req.query.vehicleId) filters.vehicleId = req.query.vehicleId as string;
@@ -14345,7 +14345,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.get("/vehicle-inspections/vehicle/:vehicleId", async (req, res) => {
+  app.get("/vehicle-inspections/vehicle/:vehicleId", async (req, res) => {
     try {
       const inspections = await storage.getVehicleInspectionsByVehicle(req.params.vehicleId);
       res.json({ success: true, data: inspections });
@@ -14354,7 +14354,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.get("/vehicle-inspections/vehicle/:vehicleId/latest", async (req, res) => {
+  app.get("/vehicle-inspections/vehicle/:vehicleId/latest", async (req, res) => {
     try {
       const inspection = await storage.getLatestInspection(req.params.vehicleId);
       if (!inspection) {
@@ -14366,7 +14366,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.get("/vehicle-inspections/:id", async (req, res) => {
+  app.get("/vehicle-inspections/:id", async (req, res) => {
     try {
       const inspection = await storage.getVehicleInspection(req.params.id);
       if (!inspection) {
@@ -14378,7 +14378,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.post("/vehicle-inspections", async (req, res) => {
+  app.post("/vehicle-inspections", async (req, res) => {
     try {
       const validatedData = schema.insertVehicleInspectionSchema.parse(req.body);
       const inspection = await storage.createVehicleInspection(validatedData);
@@ -14391,7 +14391,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.patch("/vehicle-inspections/:id", async (req, res) => {
+  app.patch("/vehicle-inspections/:id", async (req, res) => {
     try {
       // Check if inspection exists
       const existing = await storage.getVehicleInspection(req.params.id);
@@ -14411,7 +14411,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Inspection Responses
-  router.get("/vehicle-inspections/:inspectionId/responses", async (req, res) => {
+  app.get("/vehicle-inspections/:inspectionId/responses", async (req, res) => {
     try {
       const responses = await storage.getInspectionResponses(req.params.inspectionId);
       res.json({ success: true, data: responses });
@@ -14420,7 +14420,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.post("/vehicle-inspections/:inspectionId/responses", async (req, res) => {
+  app.post("/vehicle-inspections/:inspectionId/responses", async (req, res) => {
     try {
       const validatedData = schema.insertInspectionResponseSchema.parse({ ...req.body, inspectionId: req.params.inspectionId });
       const response = await storage.createInspectionResponse(validatedData);
@@ -14434,7 +14434,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Vehicle Expiry Checks (Registration & COF)
-  router.get("/vehicles/expiring", async (req, res) => {
+  app.get("/vehicles/expiring", async (req, res) => {
     try {
       const daysAhead = parseInt(req.query.days as string) || 30;
       const vehicles = await storage.getVehiclesWithExpiringDocs(daysAhead);
@@ -14444,7 +14444,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  router.get("/vehicles/expired", async (req, res) => {
+  app.get("/vehicles/expired", async (req, res) => {
     try {
       const vehicles = await storage.getExpiredVehicles();
       res.json({ success: true, data: vehicles });
