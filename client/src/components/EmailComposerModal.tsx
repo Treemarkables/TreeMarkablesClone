@@ -51,91 +51,6 @@ interface EmailTemplate {
   body: string;
 }
 
-const EMAIL_TEMPLATES: EmailTemplate[] = [
-  {
-    id: "custom_message",
-    name: "Custom Message",
-    subject: "",
-    body: `Dear {customerName},
-
-
-
-Regards,
-Jules`
-  },
-  {
-    id: "invoice_delivery",
-    name: "Invoice Delivery",
-    subject: "Invoice RE: {jobNumber} {customerAddress}",
-    body: `Hi {customerName},
-
-Please find a copy of your Treemarkables LTD Invoice in regards to {jobDescription} attached. View your invoice online here: {invoiceLink}
-
-If you have any queries or are unable to open the invoice, please contact {contactName} on {contactPhone}.
-
-Regards,
-{contactName}`
-  },
-  {
-    id: "payment_reminder",
-    name: "Payment Reminder", 
-    subject: "Payment Reminder - Invoice {invoiceNumber}",
-    body: `Hi {customerName},
-
-This is a friendly reminder that your invoice {invoiceNumber} for {jobDescription} is now due.
-
-Amount Due: {invoiceAmount}
-Due Date: {dueDate}
-
-You can view and pay your invoice online here: {invoiceLink}
-
-If you have any questions, please don't hesitate to contact us.
-
-Best regards,
-{contactName}`
-  },
-  {
-    id: "quote_delivery",
-    name: "Quote Delivery",
-    subject: "Your Quote RE: {jobNumber} {customerAddress}",
-    body: `Hi {customerName},
-
-Thank you for your enquiry. Please find your detailed quote for {jobDescription} attached.
-
-Quote Number: {quoteNumber}
-Valid Until: {quoteExpiry}
-Total Amount: {quoteAmount}
-
-You can view your quote online here: {quoteLink}
-
-We look forward to hearing from you. If you have any questions about this quote, please contact {contactName} on {contactPhone}.
-
-Best regards,
-{contactName}`
-  },
-  {
-    id: "proposal_delivery", 
-    name: "Proposal Delivery",
-    subject: "Your Detailed Proposal RE: {jobNumber}",
-    body: `Hi {customerName},
-
-Thank you for considering Treemarkables for your tree service needs. Please find your comprehensive proposal for {jobDescription} attached.
-
-This proposal includes:
-- Detailed scope of work
-- Professional recommendations  
-- Competitive pricing
-- Our certification and insurance details
-
-You can view your proposal online here: {proposalLink}
-
-We would be delighted to discuss this proposal further. Please contact {contactName} on {contactPhone} with any questions.
-
-Kind regards,
-{contactName}`
-  }
-];
-
 export function EmailComposerModal({ 
   isOpen, 
   onClose, 
@@ -168,6 +83,34 @@ export function EmailComposerModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Fetch email templates from database
+  const { data: dbTemplates = [] } = useQuery({
+    queryKey: ['/api/email-templates'],
+    select: (response: any) => response.data || [],
+    enabled: isOpen,
+  });
+
+  // Combine database templates with default Custom Message template
+  const EMAIL_TEMPLATES: EmailTemplate[] = [
+    {
+      id: "custom_message",
+      name: "Custom Message",
+      subject: "",
+      body: `Dear {customerName},
+
+
+
+Regards,
+Jules`
+    },
+    ...dbTemplates.map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      subject: t.subject || "",
+      body: t.textContent || t.htmlContent || ""
+    }))
+  ];
+
   // Fetch job photos for Smart Attachments
   const { data: jobPhotos } = useQuery<{
     success: boolean;
@@ -183,11 +126,11 @@ export function EmailComposerModal({
   const getDefaultTemplate = () => {
     // Use explicit templateType to determine template (user intent)
     if (templateType === 'invoice') {
-      return EMAIL_TEMPLATES.find(t => t.id === 'invoice_delivery') || EMAIL_TEMPLATES[0];
+      return EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('invoice')) || EMAIL_TEMPLATES[0];
     } else if (templateType === 'quote') {
-      return EMAIL_TEMPLATES.find(t => t.id === 'quote_delivery') || EMAIL_TEMPLATES[0];
+      return EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('quote')) || EMAIL_TEMPLATES[0];
     } else if (templateType === 'proposal') {
-      return EMAIL_TEMPLATES.find(t => t.id === 'proposal_delivery') || EMAIL_TEMPLATES[0];
+      return EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('proposal')) || EMAIL_TEMPLATES[0];
     }
     
     // When templateType is not specified, default to custom message for general emails
