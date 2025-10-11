@@ -2343,15 +2343,26 @@ export function GlobalJobCard({
                         </div>
 
                         {/* Upcoming Bookings */}
-                        <div>
-                          <label className="text-xs font-medium text-gray-600 mb-2 block">Upcoming Bookings</label>
-                          <div className="border rounded-lg p-3 bg-blue-50 text-sm">
-                            <div className="flex items-center gap-2">
-                              <Calendar className="w-4 h-4 text-blue-600" />
-                              <span className="font-medium">Kalsey on 29/09/2025 8:00 AM</span>
+                        {editingJob?.scheduledDate && editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
+                          <div>
+                            <label className="text-xs font-medium text-gray-600 mb-2 block">Upcoming Bookings</label>
+                            <div className="border rounded-lg p-3 bg-blue-50 text-sm space-y-2">
+                              {editingJob.assignedTo.map((employeeId: string) => {
+                                const employee = employees.find((e: any) => e.id === employeeId);
+                                const employeeName = employee?.name || 'Unknown Staff';
+                                const scheduledDate = editingJob.scheduledDate ? new Date(editingJob.scheduledDate).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+                                const scheduledTime = editingJob.scheduledStartTime || '';
+                                
+                                return (
+                                  <div key={employeeId} className="flex items-center gap-2">
+                                    <Calendar className="w-4 h-4 text-blue-600" />
+                                    <span className="font-medium">{employeeName} on {scheduledDate} {scheduledTime}</span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
-                        </div>
+                        )}
 
                         {/* Contacts */}
                         <div>
