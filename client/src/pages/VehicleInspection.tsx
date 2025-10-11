@@ -290,12 +290,7 @@ export default function VehicleInspection() {
   const canProceedToSignature = 
     checklistItems.length > 0 && 
     responses.size === checklistItems.length && 
-    Array.from(responses.values()).every(r => {
-      if (!r.responseValue) return false;
-      if (r.responseValue === 'NO' && r.requiresComment && !r.comments) return false;
-      if (r.responseValue === 'NO' && r.requiresPhoto && !r.photoUrl) return false;
-      return true;
-    });
+    Array.from(responses.values()).every(r => r.responseValue !== null);
 
   const groupedItems = checklistItems.reduce((acc, item) => {
     const category = item.category || 'General';
@@ -450,7 +445,7 @@ export default function VehicleInspection() {
                           {response.requiresComment && (
                             <div>
                               <Label htmlFor={`comment-${item.id}`} className="text-xs">
-                                Comment Required *
+                                Comment (optional)
                               </Label>
                               <Textarea
                                 id={`comment-${item.id}`}
@@ -466,7 +461,7 @@ export default function VehicleInspection() {
                           {response.requiresPhoto && (
                             <div>
                               <Label htmlFor={`photo-${item.id}`} className="text-xs">
-                                Photo Required *
+                                Photo (optional)
                               </Label>
                               <div className="flex gap-2">
                                 <Input

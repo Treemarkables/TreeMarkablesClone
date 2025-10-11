@@ -80,6 +80,15 @@ export default function ActivityDashboard() {
     queryKey: ['/api/equipment/expiring'],
   });
 
+  const { data: inspectionsData } = useQuery<{ success: boolean; data: any[] }>({
+    queryKey: ['/api/vehicle-inspections'],
+  });
+
+  // Filter inspections with concerns (failed or have notes)
+  const inspectionsWithConcerns = (Array.isArray(inspectionsData?.data) ? inspectionsData.data : [])
+    .filter(inspection => !inspection.passedInspection || inspection.notes)
+    .slice(0, 5); // Show last 5
+
   if (isLoading) {
     return (
       <div className="p-3 sm:p-6 space-y-4 max-w-7xl mx-auto">
@@ -288,6 +297,54 @@ export default function ActivityDashboard() {
                   <Link href="/equipment" asChild>
                     <Button variant="outline" size="sm" className="shrink-0" data-testid={`button-view-equipment-${equipment.id}`}>
                       Update
+                    </Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Vehicle Inspection Concerns */}
+      {inspectionsWithConcerns.length > 0 && (
+        <Card className="border-red-200 dark:border-red-900">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <AlertCircle className="h-5 w-5" />
+              Vehicle Inspection Concerns ({inspectionsWithConcerns.length})
+            </CardTitle>
+            <CardDescription>Recent inspections with issues or notes</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {inspectionsWithConcerns.map((inspection) => (
+                <div 
+                  key={inspection.id} 
+                  className="flex items-start justify-between p-3 rounded-md border hover-elevate"
+                  data-testid={`alert-inspection-${inspection.id}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{inspection.vehicleName}</p>
+                      <Badge variant={inspection.passedInspection ? 'secondary' : 'destructive'} className="shrink-0">
+                        {inspection.passedInspection ? 'Passed with notes' : 'Failed'}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 space-y-1">
+                      <p className="text-sm text-muted-foreground">
+                        Inspected by {inspection.inspectorName} on {format(new Date(inspection.inspectionDate), 'MMM d, yyyy')}
+                      </p>
+                      {inspection.notes && (
+                        <p className="text-sm text-muted-foreground italic">
+                          "{inspection.notes}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Link href="/vehicle-inspection" asChild>
+                    <Button variant="outline" size="sm" className="shrink-0" data-testid={`button-view-inspection-${inspection.id}`}>
+                      View
                     </Button>
                   </Link>
                 </div>
