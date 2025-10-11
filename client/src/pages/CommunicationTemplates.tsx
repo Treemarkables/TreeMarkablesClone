@@ -20,13 +20,27 @@ import { Link } from "wouter";
 // Form schemas
 const emailTemplateSchema = z.object({
   name: z.string().min(1, "Template name is required"),
+  category: z.string().default("custom_message"),
   subject: z.string().min(1, "Subject is required"),
-  body: z.string().min(1, "Message body is required"),
+  htmlContent: z.string().min(1, "Message body is required"),
+  textContent: z.string().optional(),
+  variables: z.array(z.string()).default([]),
+  description: z.string().optional(),
+  isActive: z.boolean().default(true),
+  isDefault: z.boolean().default(false),
+  createdBy: z.string().default("admin"),
 });
 
 const smsTemplateSchema = z.object({
   name: z.string().min(1, "Template name is required"),
-  body: z.string().min(1, "Message is required").max(160, "SMS must be 160 characters or less"),
+  category: z.string().default("custom_message"),
+  message: z.string().min(1, "Message is required").max(160, "SMS must be 160 characters or less"),
+  variables: z.array(z.string()).default([]),
+  description: z.string().optional(),
+  maxLength: z.number().default(160),
+  isActive: z.boolean().default(true),
+  isDefault: z.boolean().default(false),
+  createdBy: z.string().default("admin"),
 });
 
 type EmailTemplateFormData = z.infer<typeof emailTemplateSchema>;
@@ -51,12 +65,33 @@ export default function CommunicationTemplates() {
   // Forms
   const emailForm = useForm<EmailTemplateFormData>({
     resolver: zodResolver(emailTemplateSchema),
-    defaultValues: { name: "", subject: "", body: "" }
+    defaultValues: { 
+      name: "", 
+      category: "custom_message",
+      subject: "", 
+      htmlContent: "",
+      textContent: "",
+      variables: [],
+      description: "",
+      isActive: true,
+      isDefault: false,
+      createdBy: "admin"
+    }
   });
 
   const smsForm = useForm<SmsTemplateFormData>({
     resolver: zodResolver(smsTemplateSchema),
-    defaultValues: { name: "", body: "" }
+    defaultValues: { 
+      name: "", 
+      category: "custom_message",
+      message: "",
+      variables: [],
+      description: "",
+      maxLength: 160,
+      isActive: true,
+      isDefault: false,
+      createdBy: "admin"
+    }
   });
 
   // Create/Update Email Template
@@ -146,9 +181,30 @@ export default function CommunicationTemplates() {
   const handleNewTemplate = () => {
     setEditingTemplate(null);
     if (activeTab === "email") {
-      emailForm.reset({ name: "", subject: "", body: "" });
+      emailForm.reset({ 
+        name: "", 
+        category: "custom_message",
+        subject: "", 
+        htmlContent: "",
+        textContent: "",
+        variables: [],
+        description: "",
+        isActive: true,
+        isDefault: false,
+        createdBy: "admin"
+      });
     } else {
-      smsForm.reset({ name: "", body: "" });
+      smsForm.reset({ 
+        name: "", 
+        category: "custom_message",
+        message: "",
+        variables: [],
+        description: "",
+        maxLength: 160,
+        isActive: true,
+        isDefault: false,
+        createdBy: "admin"
+      });
     }
     setIsDialogOpen(true);
   };
@@ -158,13 +214,27 @@ export default function CommunicationTemplates() {
     if (activeTab === "email") {
       emailForm.reset({
         name: template.name,
+        category: template.category || "custom_message",
         subject: template.subject,
-        body: template.body,
+        htmlContent: template.htmlContent,
+        textContent: template.textContent || "",
+        variables: template.variables || [],
+        description: template.description || "",
+        isActive: template.isActive ?? true,
+        isDefault: template.isDefault ?? false,
+        createdBy: template.createdBy || "admin",
       });
     } else {
       smsForm.reset({
         name: template.name,
-        body: template.body,
+        category: template.category || "custom_message",
+        message: template.message,
+        variables: template.variables || [],
+        description: template.description || "",
+        maxLength: template.maxLength || 160,
+        isActive: template.isActive ?? true,
+        isDefault: template.isDefault ?? false,
+        createdBy: template.createdBy || "admin",
       });
     }
     setIsDialogOpen(true);
@@ -283,7 +353,7 @@ export default function CommunicationTemplates() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Message:</p>
-                        <p className="text-sm line-clamp-3">{template.body}</p>
+                        <p className="text-sm line-clamp-3">{template.htmlContent}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -338,9 +408,9 @@ export default function CommunicationTemplates() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm line-clamp-3">{template.body}</p>
+                    <p className="text-sm line-clamp-3">{template.message}</p>
                     <p className="text-xs text-muted-foreground mt-2">
-                      {template.body.length} / 160 characters
+                      {template.message.length} / 160 characters
                     </p>
                   </CardContent>
                 </Card>
@@ -400,7 +470,7 @@ export default function CommunicationTemplates() {
                 />
                 <FormField
                   control={emailForm.control}
-                  name="body"
+                  name="htmlContent"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Message</FormLabel>
@@ -451,7 +521,7 @@ export default function CommunicationTemplates() {
                 />
                 <FormField
                   control={smsForm.control}
-                  name="body"
+                  name="message"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Message</FormLabel>
@@ -465,7 +535,7 @@ export default function CommunicationTemplates() {
                         />
                       </FormControl>
                       <FormDescription>
-                        {field.value.length} / 160 characters
+                        {field.value?.length || 0} / 160 characters
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
