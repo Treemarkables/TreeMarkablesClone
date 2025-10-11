@@ -797,7 +797,7 @@ export function JobDiarySection({
                             ? entry.type === 'email' 
                               ? 'bg-blue-500 text-white rounded-br-sm'
                               : 'bg-green-500 text-white rounded-br-sm'
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm'
+                            : 'bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100 rounded-bl-sm'
                         }`}>
                           <p className="text-[11px] leading-snug whitespace-pre-wrap break-words">{messageText}</p>
                         </div>
