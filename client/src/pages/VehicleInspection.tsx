@@ -124,12 +124,12 @@ export default function VehicleInspection() {
         vehicleName: selectedVehicle?.name || 'Unknown Vehicle',
         templateId: (selectedTemplateId || defaultTemplate?.id) as string,
         templateName: templateToUse?.name || 'Standard Inspection',
-        inspectorId: user?.id || 'unknown',
+        inspectedBy: user?.id || 'unknown',
         inspectorName: user?.username || user?.employeeId || 'Unknown',
-        status: 'completed',
-        odometerReading: odometerReading ? parseInt(odometerReading) : null,
+        status: 'pass',
+        speedometerReading: odometerReading ? parseInt(odometerReading) : null,
         notes: inspectorNotes || null,
-        signatureDataUrl: signatureDataUrl || null,
+        signatureUrl: signatureDataUrl || null,
         passedInspection: Array.from(responses.values()).every(r => r.responseValue !== 'NO'),
       };
 
