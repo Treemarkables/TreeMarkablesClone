@@ -67,7 +67,8 @@
     <div id="root"></div>
     
     <!-- PWA Cache Bypass: Pre-fetch diary data BEFORE React loads -->
-    <!-- This runs before the cached bundle, bypassing service worker -->
+    <!-- DISABLED: Bootstrap causing email entry display issues -->
+    <!--
     <script>
       (function() {
         console.log('🚀 PWA Bootstrap: Starting diary pre-fetch');
@@ -118,6 +119,7 @@
         }
       })();
     </script>
+    -->
     
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
