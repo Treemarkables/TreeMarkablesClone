@@ -27,6 +27,7 @@ interface InspectionResponse {
   category: string | null;
   requiresComment: boolean;
   requiresPhoto: boolean;
+  sortOrder: number;
   responseValue: ResponseValue | null;
   comments: string;
   photoUrl: string | null;
@@ -87,6 +88,7 @@ export default function VehicleInspection() {
               category: item.category,
               requiresComment: item.requiresComment || false,
               requiresPhoto: item.requiresPhoto || false,
+              sortOrder: item.sortOrder || 0,
               responseValue: null,
               comments: '',
               photoUrl: null,
@@ -147,9 +149,10 @@ export default function VehicleInspection() {
             category: response.category,
             requiresComment: response.requiresComment,
             requiresPhoto: response.requiresPhoto,
-            responseValue: response.responseValue,
-            comments: response.comments || null,
-            photoUrl: response.photoUrl || null,
+            sortOrder: response.sortOrder || 0,
+            response: response.responseValue,
+            comment: response.comments || null,
+            photos: response.photoUrl ? [response.photoUrl] : [],
           };
           return apiRequest('POST', `/api/vehicle-inspections/${inspectionId}/responses`, responseData);
         }
