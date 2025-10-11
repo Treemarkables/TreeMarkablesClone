@@ -128,7 +128,7 @@ export default function VehicleInspection() {
         templateId: (selectedTemplateId || defaultTemplate?.id) as string,
         templateName: templateToUse?.name || 'Standard Inspection',
         inspectedBy: user?.id || 'unknown',
-        inspectorName: user?.username || 'Unknown',
+        inspectorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'Unknown' : 'Unknown',
         status: Array.from(responses.values()).some(r => r.responseValue === 'NO') ? 'fail' : 'pass',
         speedometerReading: odometerReading ? parseInt(odometerReading) : null,
         overallNotes: inspectorNotes || null,
