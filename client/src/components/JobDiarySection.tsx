@@ -247,6 +247,7 @@ export function JobDiarySection({
       
       // Add local diary entries
       if (diaryResponse.data) {
+        console.log('🔍 RAW API RESPONSE:', JSON.stringify(diaryResponse.data, null, 2));
         diaryResponse.data.forEach((entry: any) => {
           // CRITICAL FIX: Use entry.photoUrl directly (it's a string, not an array)
           // The database column is photo_url, which comes through as photoUrl in the API response
@@ -254,6 +255,7 @@ export function JobDiarySection({
           
           // Support both snake_case (entry_type) and camelCase (entryType)
           const entryType = entry.entryType || entry.entry_type;
+          console.log('🔍 Processing entry:', entry.id, 'entryType:', entryType, 'entry:', entry);
           
           entries.push({
             id: entry.id,
