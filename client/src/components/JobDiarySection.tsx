@@ -191,8 +191,9 @@ export function JobDiarySection({
   }, [isMobile, jobId, queryClient]);
 
   // Check for bootstrap data (from index.html pre-fetch)
-  const bootstrapData = (window as any).__DIARY_BOOTSTRAP__;
-  const hasBootstrap = bootstrapData?.jobId === jobId && bootstrapData?.data;
+  // DISABLED: Bootstrap cache causes issues with email entries
+  const bootstrapData = undefined; //(window as any).__DIARY_BOOTSTRAP__;
+  const hasBootstrap = false; //bootstrapData?.jobId === jobId && bootstrapData?.data;
   
   useEffect(() => {
     if (hasBootstrap) {
