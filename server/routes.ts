@@ -5225,7 +5225,26 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Lead Source Analysis endpoint - provides ROI and performance by source
   app.get('/api/lead-source-analysis', async (req: Request, res: Response) => {
     try {
-      const sourceAnalysis = await storage.getLeadSourceAnalysis();
+      const { fromDate, toDate } = req.query;
+      
+      let fromDateObj: Date | undefined;
+      let toDateObj: Date | undefined;
+      
+      if (fromDate && typeof fromDate === 'string') {
+        fromDateObj = new Date(fromDate);
+        if (isNaN(fromDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
+        }
+      }
+      
+      if (toDate && typeof toDate === 'string') {
+        toDateObj = new Date(toDate);
+        if (isNaN(toDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid toDate format' });
+        }
+      }
+      
+      const sourceAnalysis = await storage.getLeadSourceAnalysis(fromDateObj, toDateObj);
       res.json({ success: true, data: sourceAnalysis });
     } catch (error) {
       console.error('Error fetching lead source analysis:', error);
