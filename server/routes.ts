@@ -14247,7 +14247,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.get("/inspection-templates/default/:vehicleType?", async (req, res) => {
+  app.get("/api/inspection-templates/default/:vehicleType?", async (req, res) => {
     try {
       const template = await storage.getDefaultTemplate(req.params.vehicleType);
       if (!template) {
@@ -14259,7 +14259,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.get("/inspection-templates/:id", async (req, res) => {
+  app.get("/api/inspection-templates/:id", async (req, res) => {
     try {
       const template = await storage.getInspectionTemplate(req.params.id);
       if (!template) {
@@ -14271,7 +14271,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.post("/inspection-templates", async (req, res) => {
+  app.post("/api/inspection-templates", async (req, res) => {
     try {
       const validatedData = schema.insertInspectionTemplateSchema.parse(req.body);
       const template = await storage.createInspectionTemplate(validatedData);
@@ -14284,7 +14284,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.patch("/inspection-templates/:id", async (req, res) => {
+  app.patch("/api/inspection-templates/:id", async (req, res) => {
     try {
       // Check if template exists
       const existing = await storage.getInspectionTemplate(req.params.id);
@@ -14303,7 +14303,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.delete("/inspection-templates/:id", async (req, res) => {
+  app.delete("/api/inspection-templates/:id", async (req, res) => {
     try {
       // Check if template exists
       const existing = await storage.getInspectionTemplate(req.params.id);
@@ -14318,7 +14318,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.patch("/inspection-templates/:id/set-default", async (req, res) => {
+  app.patch("/api/inspection-templates/:id/set-default", async (req, res) => {
     try {
       const template = await storage.setDefaultTemplate(req.params.id);
       res.json({ success: true, data: template });
@@ -14328,7 +14328,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Inspection Checklist Items
-  app.get("/inspection-templates/:templateId/items", async (req, res) => {
+  app.get("/api/inspection-templates/:templateId/items", async (req, res) => {
     try {
       const items = await storage.getChecklistItemsByTemplate(req.params.templateId);
       res.json({ success: true, data: items });
@@ -14337,7 +14337,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.post("/inspection-templates/:templateId/items", async (req, res) => {
+  app.post("/api/inspection-templates/:templateId/items", async (req, res) => {
     try {
       const validatedData = schema.insertInspectionChecklistItemSchema.parse({ ...req.body, templateId: req.params.templateId });
       const item = await storage.createChecklistItem(validatedData);
@@ -14350,7 +14350,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.patch("/checklist-items/:id", async (req, res) => {
+  app.patch("/api/checklist-items/:id", async (req, res) => {
     try {
       // Check if item exists
       const existing = await storage.getChecklistItem(req.params.id);
@@ -14369,7 +14369,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.delete("/checklist-items/:id", async (req, res) => {
+  app.delete("/api/checklist-items/:id", async (req, res) => {
     try {
       // Check if item exists
       const existing = await storage.getChecklistItem(req.params.id);
@@ -14384,7 +14384,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.post("/inspection-templates/:templateId/reorder", async (req, res) => {
+  app.post("/api/inspection-templates/:templateId/reorder", async (req, res) => {
     try {
       const { itemIds } = req.body;
       await storage.reorderChecklistItems(req.params.templateId, itemIds);
@@ -14395,7 +14395,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Vehicle Inspections
-  app.get("/vehicle-inspections", async (req, res) => {
+  app.get("/api/vehicle-inspections", async (req, res) => {
     try {
       const filters: any = {};
       if (req.query.vehicleId) filters.vehicleId = req.query.vehicleId as string;
@@ -14410,7 +14410,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.get("/vehicle-inspections/vehicle/:vehicleId", async (req, res) => {
+  app.get("/api/vehicle-inspections/vehicle/:vehicleId", async (req, res) => {
     try {
       const inspections = await storage.getVehicleInspectionsByVehicle(req.params.vehicleId);
       res.json({ success: true, data: inspections });
@@ -14419,7 +14419,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.get("/vehicle-inspections/vehicle/:vehicleId/latest", async (req, res) => {
+  app.get("/api/vehicle-inspections/vehicle/:vehicleId/latest", async (req, res) => {
     try {
       const inspection = await storage.getLatestInspection(req.params.vehicleId);
       if (!inspection) {
@@ -14431,7 +14431,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.get("/vehicle-inspections/:id", async (req, res) => {
+  app.get("/api/vehicle-inspections/:id", async (req, res) => {
     try {
       const inspection = await storage.getVehicleInspection(req.params.id);
       if (!inspection) {
@@ -14443,7 +14443,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.post("/vehicle-inspections", async (req, res) => {
+  app.post("/api/vehicle-inspections", async (req, res) => {
     try {
       const validatedData = schema.insertVehicleInspectionSchema.parse(req.body);
       const inspection = await storage.createVehicleInspection(validatedData);
@@ -14456,7 +14456,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.patch("/vehicle-inspections/:id", async (req, res) => {
+  app.patch("/api/vehicle-inspections/:id", async (req, res) => {
     try {
       // Check if inspection exists
       const existing = await storage.getVehicleInspection(req.params.id);
@@ -14476,7 +14476,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Inspection Responses
-  app.get("/vehicle-inspections/:inspectionId/responses", async (req, res) => {
+  app.get("/api/vehicle-inspections/:inspectionId/responses", async (req, res) => {
     try {
       const responses = await storage.getInspectionResponses(req.params.inspectionId);
       res.json({ success: true, data: responses });
@@ -14485,7 +14485,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.post("/vehicle-inspections/:inspectionId/responses", async (req, res) => {
+  app.post("/api/vehicle-inspections/:inspectionId/responses", async (req, res) => {
     try {
       const validatedData = schema.insertInspectionResponseSchema.parse({ ...req.body, inspectionId: req.params.inspectionId });
       const response = await storage.createInspectionResponse(validatedData);
