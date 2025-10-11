@@ -793,6 +793,46 @@ export function JobDiarySection({
                         }`}>
                           <p className="text-[11px] leading-snug whitespace-pre-wrap break-words">{messageText}</p>
                         </div>
+                        
+                        {/* Reply button for received messages */}
+                        {!isSent && (
+                          <div className="mt-1 flex items-center gap-1">
+                            {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
+                                  setReplyToEmail(replyEmail);
+                                  setActiveComposer('email');
+                                }}
+                                data-testid={`button-reply-email-${entry.id}`}
+                              >
+                                <Mail className="w-3 h-3 mr-1" />
+                                Reply
+                              </Button>
+                            )}
+                            {entry.type === 'sms' && entry.metadata?.phoneNumber && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const replyPhone = entry.metadata?.phoneNumber || '';
+                                  setReplyToPhone(replyPhone);
+                                  setActiveComposer('sms');
+                                }}
+                                data-testid={`button-reply-sms-${entry.id}`}
+                              >
+                                <MessageSquare className="w-3 h-3 mr-1" />
+                                Reply
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
