@@ -498,6 +498,23 @@ export function EmailComposerModal({
       }
 
       if (finalTranscript && emailBodyRef.current) {
+        // Convert spoken punctuation to symbols
+        let processedText = finalTranscript
+          .replace(/\bquestion mark\b/gi, '?')
+          .replace(/\bexclamation mark\b/gi, '!')
+          .replace(/\bexclamation point\b/gi, '!')
+          .replace(/\bperiod\b/gi, '.')
+          .replace(/\bfull stop\b/gi, '.')
+          .replace(/\bcomma\b/gi, ',')
+          .replace(/\bcolon\b/gi, ':')
+          .replace(/\bsemicolon\b/gi, ';')
+          .replace(/\bdash\b/gi, '-')
+          .replace(/\bhyphen\b/gi, '-')
+          .replace(/\bquote\b/gi, '"')
+          .replace(/\bapostrophe\b/gi, "'")
+          .replace(/\bnew line\b/gi, '\n')
+          .replace(/\bnew paragraph\b/gi, '\n\n');
+        
         // Insert text at cursor position instead of appending to end
         emailBodyRef.current.focus();
         
@@ -506,8 +523,8 @@ export function EmailComposerModal({
           const range = selection.getRangeAt(0);
           range.deleteContents();
           
-          // Create text node with transcribed text
-          const textNode = document.createTextNode(finalTranscript);
+          // Create text node with processed text
+          const textNode = document.createTextNode(processedText);
           range.insertNode(textNode);
           
           // Move cursor to end of inserted text
