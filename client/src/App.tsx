@@ -43,6 +43,7 @@ import StaffSchedule from "@/pages/StaffSchedule";
 import SettingsPreferences from "@/pages/SettingsPreferences";
 import CommunicationTemplates from "@/pages/CommunicationTemplates";
 import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
+import NotificationPreferences from "@/pages/NotificationPreferences";
 import VehicleInspection from "@/pages/VehicleInspection";
 import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
 import JHATemplates from "@/pages/JHATemplates";
@@ -708,6 +709,11 @@ function Router() {
       <Route path="/settings/preferences">
         <SidebarLayout>
           <SettingsPreferences />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/notifications">
+        <SidebarLayout>
+          <NotificationPreferences />
         </SidebarLayout>
       </Route>
       <Route path="/settings/templates">
