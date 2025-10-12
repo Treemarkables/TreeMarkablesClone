@@ -220,6 +220,8 @@ export default function Opportunities() {
   // Create Quote mutation
   const createJobMutation = useMutation({
     mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
+      console.log('🔵 Starting quote creation with data:', leadData);
+      
       // First, create or find customer
       const customerResponse = await apiRequest('POST', '/api/customers', {
         name: leadData.name,
@@ -227,6 +229,7 @@ export default function Opportunities() {
         phone: leadData.phone,
         address: leadData.address
       });
+      console.log('✅ Customer created:', customerResponse.data.id);
       const customerId = customerResponse.data.id;
 
       // Create the quote
@@ -238,7 +241,10 @@ export default function Opportunities() {
         createdBy: 'admin'
       };
       
-      return apiRequest('POST', '/api/quotes', quoteData);
+      console.log('🔵 Creating quote with data:', quoteData);
+      const quoteResponse = await apiRequest('POST', '/api/quotes', quoteData);
+      console.log('✅ Quote created:', quoteResponse);
+      return quoteResponse;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
@@ -251,10 +257,11 @@ export default function Opportunities() {
       });
       setLocation('/dispatch');
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error('❌ Quote creation error:', error);
       toast({ 
         title: 'Failed to create quote', 
-        description: 'Please try again.',
+        description: error.message || 'Please try again.',
         variant: 'destructive'
       });
     }
