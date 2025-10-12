@@ -534,8 +534,9 @@ export function EmailComposerModal({
           .replace(/\bsemicolon\b/gi, ';')
           .replace(/\bdash\b/gi, '-')
           .replace(/\bhyphen\b/gi, '-')
-          .replace(/\bquote\b/gi, '"')
-          .replace(/\bapostrophe\b/gi, "'")
+          .replace(/\bopen quote\b/gi, '"')
+          .replace(/\bclose quote\b/gi, '"')
+          .replace(/\bquotation mark\b/gi, '"')
           .replace(/\bnew line\b/gi, '\n')
           .replace(/\bnew paragraph\b/gi, '\n\n');
         
