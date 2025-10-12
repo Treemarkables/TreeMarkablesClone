@@ -1480,9 +1480,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
       {/* Mobile Layout: Show job cards in traditional list view */}
       <div className="lg:hidden px-1 pb-1 sm:px-2 sm:pb-2 flex flex-col flex-1 min-h-0 overflow-x-hidden overflow-y-auto">
-      <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0 w-full max-w-full">
+      <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0 w-full max-w-full pt-0">
         {/* Mobile Header - Search and Create Job */}
-        <CardHeader className="space-y-0 flex-shrink-0 px-2 pb-1.5 pt-0">
+        <CardHeader className="space-y-0 flex-shrink-0 px-2 pb-1.5 pt-0 mt-0">
           {/* Create Job Button - Mobile */}
           <Button
             variant="default"
