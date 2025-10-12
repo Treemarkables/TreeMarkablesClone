@@ -1051,6 +1051,11 @@ export const notificationTypes = [
   'job_completed',      // Job completed
   'payment_received',   // Payment received
   'system_alert',       // System alert/message
+  'email_reply',        // Email reply received in diary
+  'sms_reply',          // SMS reply received in diary
+  'proposal_sent',      // Proposal sent (diary activity)
+  'photo_added',        // Photo added to job diary
+  'note_added',         // Note added to job diary
 ] as const;
 
 export type NotificationType = typeof notificationTypes[number];
@@ -1079,6 +1084,7 @@ export const notifications = pgTable("notifications", {
   jobId: varchar("job_id"), // Reference to job if notification is job-related
   customerId: varchar("customer_id"), // Reference to customer if notification is customer-related
   quoteId: varchar("quote_id"), // Reference to quote if notification is quote-related
+  diaryEntryId: varchar("diary_entry_id"), // Reference to diary entry for activity notifications
   // Metadata
   metadata: jsonb("metadata"), // Additional data for the notification
   actionUrl: text("action_url"), // URL to navigate when notification is clicked
