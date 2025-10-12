@@ -16,7 +16,7 @@ import { ArrowLeft, Save, CheckCircle2, Camera, Upload, Loader2, Search, Plus } 
 import { Badge } from "@/components/ui/badge";
 import SignaturePad from "@/components/SignaturePad";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import thinkSafeImage from "@assets/IMG_4069_1760215066704.png";
+import jhaHeaderImage from "@assets/generated_images/JHA_Risk_Assessment_Header_017c01a5.png";
 
 // ThinkSafe-style JHA form schema
 const jhaFormSchema = z.object({
@@ -231,15 +231,15 @@ export default function JHAAssessment() {
         </Button>
       </div>
 
-      {/* ThinkSafe Logo & Risk Matrix */}
+      {/* JHA Risk Assessment Header */}
       <div className="mb-4 overflow-hidden rounded-lg shadow-md h-[300px] md:h-[500px]">
         <img 
-          src={thinkSafeImage} 
-          alt="ThinkSafe Risk Matrix" 
+          src={jhaHeaderImage} 
+          alt="Job Hazard Analysis Risk Assessment" 
           className="w-full h-full"
           style={{ 
             objectFit: 'cover',
-            objectPosition: '0 -50px'
+            objectPosition: 'center'
           }}
         />
       </div>
