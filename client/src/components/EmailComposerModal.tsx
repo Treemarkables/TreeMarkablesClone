@@ -497,14 +497,27 @@ export function EmailComposerModal({
         }
       }
 
-      if (finalTranscript) {
-        // Append transcribed text to email body
-        const currentBody = emailBodyRef.current?.innerText || '';
-        const newBody = currentBody + finalTranscript;
-        setEmailData(prev => ({ ...prev, body: newBody }));
+      if (finalTranscript && emailBodyRef.current) {
+        // Insert text at cursor position instead of appending to end
+        emailBodyRef.current.focus();
         
-        if (emailBodyRef.current) {
-          emailBodyRef.current.innerText = newBody;
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          
+          // Create text node with transcribed text
+          const textNode = document.createTextNode(finalTranscript);
+          range.insertNode(textNode);
+          
+          // Move cursor to end of inserted text
+          range.setStartAfter(textNode);
+          range.setEndAfter(textNode);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          
+          // Update state with new HTML content
+          setEmailData(prev => ({ ...prev, body: emailBodyRef.current?.innerHTML || '' }));
         }
       }
     };
