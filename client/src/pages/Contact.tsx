@@ -19,7 +19,7 @@ const contactFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(255, "Name is too long"),
   email: z.string().email("Please enter a valid email address").max(255),
   phone: z.string().min(1, "Phone number is required").max(50),
-  address: z.string().min(1, "Address is required").max(500, "Address is too long"),
+  address: z.string().max(500, "Address is too long").optional(),
   serviceType: z.enum(["tree_removal", "pruning", "hedge_trimming", "stump_grinding", "emergency", "other"], {
     required_error: "Please select a service type",
   }),
@@ -278,7 +278,7 @@ export default function Contact() {
                           name="address"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Service Address *</FormLabel>
+                              <FormLabel>Service Address</FormLabel>
                               <FormControl>
                                 <Input
                                   placeholder="123 Main Street, Gisborne"
