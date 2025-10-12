@@ -27,7 +27,9 @@ import {
   Image,
   Check,
   Mail,
-  Eye
+  Eye,
+  Mic,
+  MicOff
 } from "lucide-react";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
@@ -83,6 +85,9 @@ export function EmailComposerModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const emailBodyRef = useRef<HTMLDivElement>(null);
 
   // Fetch email templates from database
   const { data: dbTemplates = [] } = useQuery({
@@ -457,6 +462,93 @@ Jules`
     setEmailData(prev => ({ ...prev, body: newValue }));
   };
 
+  // Initialize speech recognition
+  useEffect(() => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-NZ';
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        // Append transcribed text to email body
+        const currentBody = emailBodyRef.current?.innerText || '';
+        const newBody = currentBody + finalTranscript;
+        setEmailData(prev => ({ ...prev, body: newBody }));
+        
+        if (emailBodyRef.current) {
+          emailBodyRef.current.innerText = newBody;
+        }
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      
+      if (event.error === 'not-allowed') {
+        toast({
+          title: "Microphone Access Denied",
+          description: "Please allow microphone access to use voice input",
+          variant: "destructive"
+        });
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [toast]);
+
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      toast({
+        title: "Voice Input Not Supported",
+        description: "Your browser doesn't support voice input",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      recognitionRef.current.start();
+      setIsListening(true);
+      toast({
+        title: "Listening...",
+        description: "Speak to compose your email",
+      });
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-full sm:max-w-4xl h-[90vh] flex flex-col p-0">
@@ -783,11 +875,23 @@ Jules`
             >
               <ListOrdered className="w-4 h-4" />
             </Button>
+            <div className="w-px h-6 bg-gray-300 mx-2" />
+            <Button
+              type="button"
+              variant={isListening ? "default" : "ghost"}
+              size="sm"
+              onClick={toggleVoiceInput}
+              className={isListening ? "bg-red-500 hover:bg-red-600 text-white" : ""}
+              data-testid="button-voice-input"
+            >
+              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </Button>
           </div>
 
           {/* Email Body */}
           <div className="flex-1 min-h-0">
             <div
+              ref={emailBodyRef}
               contentEditable
               suppressContentEditableWarning
               dir="ltr"
