@@ -102,7 +102,7 @@ export function EmailComposerModal({
       id: "custom_message",
       name: "Custom Message",
       subject: "",
-      body: `<p>Dear {customerName},</p><p><br></p><p><br></p><p>Regards,<br>Jules</p>`
+      body: `<p>Hey {firstName},</p><p><br></p><p><br></p><p>Regards,<br>Jules</p>`
     },
     ...dbTemplates.map((t: any) => ({
       id: t.id,
@@ -143,18 +143,27 @@ export function EmailComposerModal({
     if (isOpen && job && customer && !hasInitialized) {
       const billingEmail = job.jobContactEmail || customer.billingContactEmail || customer.email || customer.jobContactEmail;
       
-      // Format name as "FirstName LastName" - handle various data formats
+      // Extract first name from customer data
+      let firstName = "there";
+      if (customer.firstName) {
+        firstName = customer.firstName;
+      } else if (customer.name) {
+        // If name is stored as "LastName, FirstName", extract first name
+        if (customer.name.includes(',')) {
+          const parts = customer.name.split(',').map((p: string) => p.trim());
+          firstName = parts.length === 2 ? parts[1] : customer.name.split(' ')[0];
+        } else {
+          // Extract first word as first name
+          firstName = customer.name.split(' ')[0];
+        }
+      }
+      
+      // Also keep full name for other templates that might need it
       let customerName = "Valued Customer";
       if (customer.firstName && customer.lastName) {
         customerName = `${customer.firstName} ${customer.lastName}`.trim();
       } else if (customer.name) {
-        // If name is stored as "LastName, FirstName", swap it to "FirstName LastName"
-        if (customer.name.includes(',')) {
-          const parts = customer.name.split(',').map((p: string) => p.trim());
-          customerName = parts.length === 2 ? `${parts[1]} ${parts[0]}` : customer.name;
-        } else {
-          customerName = customer.name;
-        }
+        customerName = customer.name;
       }
       
       // Auto-attach appropriate document if available
@@ -194,6 +203,7 @@ export function EmailComposerModal({
         .replace("{customerAddress}", job.address || "");
       
       let populatedBody = template.body
+        .replace("{firstName}", firstName || "there")
         .replace("{customerName}", customerName || "Valued Customer")
         .replace("{jobDescription}", job.description || job.title || "tree service")
         .replace("{invoiceLink}", invoiceData?.id ? `${window.location.origin}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
@@ -366,6 +376,19 @@ export function EmailComposerModal({
     const template = EMAIL_TEMPLATES.find(t => t.id === templateId);
     if (!template) return;
 
+    // Extract first name
+    let firstName = "there";
+    if (customer?.firstName) {
+      firstName = customer.firstName;
+    } else if (customer?.name) {
+      if (customer.name.includes(',')) {
+        const parts = customer.name.split(',').map((p: string) => p.trim());
+        firstName = parts.length === 2 ? parts[1] : customer.name.split(' ')[0];
+      } else {
+        firstName = customer.name.split(' ')[0];
+      }
+    }
+
     const customerName = customer?.name || `${customer?.firstName || ''} ${customer?.lastName || ''}`.trim();
     
     const populatedSubject = template.subject
@@ -376,6 +399,7 @@ export function EmailComposerModal({
       .replace("{proposalNumber}", proposalData?.proposalNumber || "");
     
     let populatedBody = template.body
+      .replace("{firstName}", firstName || "there")
       .replace("{customerName}", customerName || "Valued Customer")
       .replace("{jobDescription}", job?.description || job?.title || "tree service")
       .replace("{invoiceLink}", invoiceData?.id ? `${window.location.origin}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
