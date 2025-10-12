@@ -91,6 +91,7 @@ export default function JHAAssessment() {
       return apiRequest('POST', '/api/jha/assessments', data);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jha/assessments'] });
       toast({
         title: "Success",
         description: "Job Hazard Analysis completed successfully",
