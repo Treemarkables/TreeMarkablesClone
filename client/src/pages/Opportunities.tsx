@@ -223,14 +223,15 @@ export default function Opportunities() {
       console.log('🔵 Starting quote creation with data:', leadData);
       
       // First, create or find customer
-      const customerResponse = await apiRequest('POST', '/api/customers', {
+      const customerRes = await apiRequest('POST', '/api/customers', {
         name: leadData.name,
         email: leadData.email,
         phone: leadData.phone,
         address: leadData.address
       });
-      console.log('✅ Customer created:', customerResponse.data.id);
-      const customerId = customerResponse.data.id;
+      const customerData = await customerRes.json();
+      console.log('✅ Customer created:', customerData.data.id);
+      const customerId = customerData.data.id;
 
       // Create the quote
       const quoteData = {
@@ -242,9 +243,10 @@ export default function Opportunities() {
       };
       
       console.log('🔵 Creating quote with data:', quoteData);
-      const quoteResponse = await apiRequest('POST', '/api/quotes', quoteData);
-      console.log('✅ Quote created:', quoteResponse);
-      return quoteResponse;
+      const quoteRes = await apiRequest('POST', '/api/quotes', quoteData);
+      const quoteResponseData = await quoteRes.json();
+      console.log('✅ Quote created:', quoteResponseData);
+      return quoteResponseData;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
