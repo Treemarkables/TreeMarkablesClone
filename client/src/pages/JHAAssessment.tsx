@@ -228,7 +228,7 @@ export default function JHAAssessment() {
   }
 
   return (
-    <div className="w-full px-4 py-4 mx-auto max-w-4xl">
+    <div className="w-full px-4 py-4 mx-auto max-w-4xl pb-32 md:pb-4">
       <div className="mb-4">
         <Button
           variant="ghost"
@@ -647,7 +647,7 @@ export default function JHAAssessment() {
           </Card>
 
           {/* Submit */}
-          <div className="mb-8 md:mb-4">
+          <div className="sticky bottom-0 left-0 right-0 bg-background pt-4 pb-4 -mx-4 px-4 border-t mt-6">
             <Button
               type="submit"
               className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
