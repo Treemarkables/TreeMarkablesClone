@@ -255,7 +255,10 @@ export default function JHAAssessment() {
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <form onSubmit={(e) => {
+          console.log("📝 Form onSubmit event fired", e);
+          form.handleSubmit(handleSubmit)(e);
+        }} className="space-y-4">
           {/* Header */}
           <Card>
             <CardHeader className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white">
@@ -654,6 +657,7 @@ export default function JHAAssessment() {
               className="w-full h-14 text-lg bg-green-600 hover:bg-green-700 shadow-lg"
               disabled={createAssessmentMutation.isPending}
               data-testid="button-submit-form"
+              onClick={(e) => console.log("🖱️ Submit button clicked", e.type)}
             >
               {createAssessmentMutation.isPending ? (
                 <>
