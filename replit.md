@@ -4,6 +4,16 @@
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
 ## Recent Changes (October 2025)
+- **Comprehensive Notification System**: Implemented complete notification system for job diary activity tracking with in-app notifications, browser push notifications, and user preference management. Features include:
+  - Real-time notification bell with unread count badge and activity dropdown
+  - Automatic notification creation for diary events (email sent, SMS sent, proposals, photos, notes)
+  - Browser push notifications with 30-second polling for new activity
+  - Full notification preferences page (/settings/notifications) with granular control over notification types
+  - Bidirectional synchronization across browser tabs and components using custom events and storage events
+  - Permission-aware defaults that align with browser notification permission status
+  - Activity-specific icons (Mail, MessageSquare, FileText, Camera, StickyNote) for quick visual identification
+  - Direct navigation to relevant jobs from notifications
+  - Priority levels (high for proposals, medium for other activities)
 - **JHA Risk Control Dropdown Enhancement**: Updated JHA Assessment to display control measures from hazard templates in the "Risk Control" dropdown instead of generic hierarchy options. Users can now add custom control measures to each hazard template (e.g., "Wear the correct P.P.E. for the job", "Use proper lifting technique") and select them directly in assessments. Fixed two critical bugs: (1) API not fetching control measures due to column name mismatch (displayOrder vs sortOrder), and (2) React infinite loop caused by double-click handlers on control measure checkboxes.
 - **Job Hazard Analysis (JHA) System**: Implemented comprehensive pre-job risk assessment feature with customizable hazard templates, 1-5 risk rating scale, control measure checklists, multiple worker digital signatures, and structured summary generation. Accessible from Safety tab with template management via /settings/jha-templates. Includes hazard assessment workflow, signature capture, and complete assessment history with detailed reports.
 - **Vehicle-Specific Inspection Templates**: Added ability to assign a default inspection template to each vehicle/equipment. When a vehicle has an assigned template, the inspection form automatically loads it without requiring manual template selection. Equipment management page now includes "Default Inspection Template" dropdown for easy assignment.
