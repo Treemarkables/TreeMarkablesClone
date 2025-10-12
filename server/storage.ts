@@ -194,6 +194,9 @@ export interface IStorage {
   // Sequential Job Number Management
   getNextJobNumber(): Promise<string>;
   
+  // Sequential Quote Number Management
+  getNextQuoteNumber(): Promise<string>;
+  
   // Gross Margin Management
   updateJobGrossMargin(jobId: string, grossMarginData: {
     laborCosts?: number;
@@ -1684,6 +1687,36 @@ class DatabaseStorage implements IStorage {
       console.error('Database query failed for job number, using fallback:', error);
       const nextNumber = DatabaseStorage.jobNumberCounter;
       DatabaseStorage.jobNumberCounter++;
+      return nextNumber.toString();
+    }
+  }
+
+  // Sequential Quote Number Generation
+  private static quoteNumberCounter: number = 1000;
+  
+  async getNextQuoteNumber(): Promise<string> {
+    try {
+      // Query to get the maximum quote number using SQL CAST to handle numeric sorting
+      const result = await db.select({ 
+        maxQuoteNumber: sql<number>`CAST(MAX(CAST(${schema.quotes.quoteNumber} AS INTEGER)) AS INTEGER)`
+      })
+      .from(schema.quotes)
+      .where(sql`${schema.quotes.quoteNumber} ~ '^[0-9]+$'`); // Only numeric quote numbers
+      
+      if (result.length > 0 && result[0].maxQuoteNumber !== null) {
+        const maxQuoteNumber = result[0].maxQuoteNumber;
+        // Ensure our counter is at least as high as the maximum in database
+        DatabaseStorage.quoteNumberCounter = Math.max(DatabaseStorage.quoteNumberCounter, maxQuoteNumber + 1);
+      }
+      
+      const nextNumber = DatabaseStorage.quoteNumberCounter;
+      DatabaseStorage.quoteNumberCounter++;
+      return nextNumber.toString();
+    } catch (error) {
+      // Fallback to counter-only approach if database query fails
+      console.error('Database query failed for quote number, using fallback:', error);
+      const nextNumber = DatabaseStorage.quoteNumberCounter;
+      DatabaseStorage.quoteNumberCounter++;
       return nextNumber.toString();
     }
   }
