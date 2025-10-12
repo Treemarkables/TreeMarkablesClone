@@ -2209,6 +2209,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   app.post('/api/quotes', async (req: Request, res: Response) => {
     try {
       console.log('📋 Quote creation request received:', JSON.stringify(req.body, null, 2));
+      
+      // Auto-generate quote number if not provided
+      if (!req.body.quoteNumber) {
+        req.body.quoteNumber = await storage.getNextQuoteNumber();
+        console.log('🔢 Generated quote number:', req.body.quoteNumber);
+      }
+      
       const validation = insertQuoteSchema.safeParse(req.body);
       if (!validation.success) {
         console.error('❌ Quote validation failed:', validation.error.errors);
