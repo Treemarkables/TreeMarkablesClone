@@ -514,13 +514,18 @@ export default function JHAAssessment() {
                           </div>
                         )}
                         {controls.length > 0 && (
-                          <div className="text-sm text-muted-foreground">
-                            Control Measures: {controls.map(c => c.description).join('; ')}
+                          <div className="text-sm">
+                            <div className="font-medium mb-1">Control Measures:</div>
+                            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                              {controls.map((c, idx) => (
+                                <li key={idx}>{c.description}</li>
+                              ))}
+                            </ul>
                           </div>
                         )}
                         {hazard.responsiblePerson && (
                           <div className="text-sm text-muted-foreground">
-                            Responsible: {hazard.responsiblePerson}
+                            <span className="font-medium">Responsible:</span> {hazard.responsiblePerson}
                           </div>
                         )}
                       </div>
