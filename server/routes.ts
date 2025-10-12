@@ -14743,10 +14743,10 @@ Transcription: ${transcriptText}`;
         comments: z.string().optional(),
         jobId: z.number().nullable().optional(),
         selectedHazards: z.array(z.object({
-          hazardTemplateId: z.number(),
+          hazardTemplateId: z.union([z.number(), z.string()]),
           hazardName: z.string(),
           initialRisk: z.number().min(1).max(4),
-          selectedControls: z.array(z.number()),
+          selectedControls: z.array(z.union([z.number(), z.string()])),
           residualRisk: z.number().min(1).max(4).optional(),
           responsiblePerson: z.string().optional(),
           riskControl: z.string().optional()
