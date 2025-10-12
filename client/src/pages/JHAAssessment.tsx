@@ -18,15 +18,6 @@ import SignaturePad from "@/components/SignaturePad";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import thinkSafeImage from "@assets/IMG_4069_1760215066704.png";
 
-// Risk control options based on hierarchy of controls
-const RISK_CONTROL_OPTIONS = [
-  { value: "elimination", label: "Elimination" },
-  { value: "substitution", label: "Substitution" },
-  { value: "engineering", label: "Engineering Controls" },
-  { value: "administrative", label: "Administrative Controls" },
-  { value: "ppe", label: "PPE (Personal Protective Equipment)" }
-];
-
 // ThinkSafe-style JHA form schema
 const jhaFormSchema = z.object({
   activityDescription: z.string().min(1, "Activity is required"),
@@ -75,7 +66,22 @@ export default function JHAAssessment() {
     queryKey: ['/api/jha/hazard-templates'],
   });
 
+  // Fetch risk control templates
+  const { data: riskControlsData, isLoading: riskControlsLoading } = useQuery<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      hierarchyLevel: number;
+      sortOrder: number;
+    }>;
+  }>({
+    queryKey: ['/api/jha/risk-control-templates'],
+  });
+
   const hazardTemplates = templatesData?.data || [];
+  const riskControlOptions = riskControlsData?.data || [];
   const filteredHazards = hazardTemplates.filter(h => 
     h.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -219,7 +225,7 @@ export default function JHAAssessment() {
     });
   };
 
-  if (templatesLoading) {
+  if (templatesLoading || riskControlsLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -457,9 +463,9 @@ export default function JHAAssessment() {
                         <SelectValue placeholder="Select risk control..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {RISK_CONTROL_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
+                        {riskControlOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.name}>
+                            {option.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -504,7 +510,7 @@ export default function JHAAssessment() {
                   {selectedHazards.map((hazard) => {
                     const template = hazardTemplates.find(h => h.id === hazard.hazardTemplateId);
                     const controls = template?.controlMeasures?.filter(c => hazard.selectedControls.includes(c.id)) || [];
-                    const riskControlLabel = RISK_CONTROL_OPTIONS.find(opt => opt.value === hazard.riskControl)?.label || hazard.riskControl;
+                    const riskControlLabel = riskControlOptions.find(opt => opt.name === hazard.riskControl)?.name || hazard.riskControl;
                     
                     return (
                       <div key={hazard.hazardTemplateId} className="p-3 border rounded-lg bg-gray-50 space-y-2">
