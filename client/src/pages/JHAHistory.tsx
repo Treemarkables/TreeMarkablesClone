@@ -150,65 +150,104 @@ export default function JHAHistory() {
             <ScrollArea className="max-h-[70vh]">
               <div className="space-y-6 pr-4">
                 <div>
-                  <h3 className="font-semibold mb-2">Assessment Date</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedAssessment.completedAt 
-                      ? format(new Date(selectedAssessment.completedAt), "PPPp")
-                      : format(new Date(selectedAssessment.createdAt), "PPPp")}
-                  </p>
+                  <h3 className="font-semibold mb-2">Assessment Details</h3>
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      <span className="font-medium">Date:</span>{' '}
+                      {selectedAssessment.completedAt 
+                        ? format(new Date(selectedAssessment.completedAt), "PPPp")
+                        : format(new Date(selectedAssessment.date), "PPPp")}
+                    </p>
+                    {selectedAssessment.activityDescription && (
+                      <p>
+                        <span className="font-medium">Activity:</span>{' '}
+                        {selectedAssessment.activityDescription}
+                      </p>
+                    )}
+                    {selectedAssessment.location && (
+                      <p>
+                        <span className="font-medium">Location:</span>{' '}
+                        {selectedAssessment.location}
+                      </p>
+                    )}
+                    {selectedAssessment.teamLeader && (
+                      <p>
+                        <span className="font-medium">Team Leader:</span>{' '}
+                        {selectedAssessment.teamLeader}
+                      </p>
+                    )}
+                    {selectedAssessment.ppeRequired && (
+                      <p>
+                        <span className="font-medium">PPE Required:</span>{' '}
+                        {selectedAssessment.ppeRequired}
+                      </p>
+                    )}
+                    {selectedAssessment.overallRiskRating && (
+                      <p>
+                        <span className="font-medium">Overall Risk Rating:</span>{' '}
+                        <Badge variant={getRiskColor(selectedAssessment.overallRiskRating)}>
+                          {getRiskLabel(selectedAssessment.overallRiskRating)}
+                        </Badge>
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <h3 className="font-semibold mb-3">Hazards & Controls</h3>
-                  <div className="space-y-4">
-                    {selectedAssessment.steps.map((step) => (
-                      <Card key={step.id}>
-                        <CardHeader>
-                          <div className="flex items-start justify-between gap-4">
-                            <CardTitle className="text-base">{step.hazardName}</CardTitle>
-                            <Badge variant={getRiskColor(step.riskRating)}>
-                              Risk Level {step.riskRating}
-                            </Badge>
-                          </div>
-                        </CardHeader>
-                        {step.controlMeasures.length > 0 && (
-                          <CardContent>
-                            <h4 className="text-sm font-semibold mb-2">Control Measures:</h4>
-                            <ul className="space-y-1">
-                              {step.controlMeasures.map((measure, idx) => (
-                                <li key={idx} className="flex items-start gap-2 text-sm">
-                                  <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                  <span>{measure}</span>
-                                </li>
-                              ))}
-                            </ul>
+                {selectedAssessment.steps && selectedAssessment.steps.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3">Hazards & Controls</h3>
+                    <div className="space-y-4">
+                      {selectedAssessment.steps.map((step) => (
+                        <Card key={step.id}>
+                          <CardHeader>
+                            <div className="flex items-start justify-between gap-4">
+                              <CardTitle className="text-base">{step.hazardName}</CardTitle>
+                              <Badge variant={getRiskColor(step.riskRating)}>
+                                Risk Level {step.riskRating}
+                              </Badge>
+                            </div>
+                          </CardHeader>
+                          {step.controlMeasures && step.controlMeasures.length > 0 && (
+                            <CardContent>
+                              <h4 className="text-sm font-semibold mb-2">Control Measures:</h4>
+                              <ul className="space-y-1">
+                                {step.controlMeasures.map((measure, idx) => (
+                                  <li key={idx} className="flex items-start gap-2 text-sm">
+                                    <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                    <span>{measure}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </CardContent>
+                          )}
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedAssessment.signatures && selectedAssessment.signatures.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3">Worker Signatures</h3>
+                    <div className="space-y-3">
+                      {selectedAssessment.signatures.map((sig) => (
+                        <Card key={sig.id}>
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium">{sig.workerName}</span>
+                              <span className="text-sm text-muted-foreground">
+                                {format(new Date(sig.signedAt), "PPp")}
+                              </span>
+                            </div>
+                            <div className="border rounded bg-white dark:bg-gray-900 p-2">
+                              <img src={sig.signatureDataUrl} alt={`Signature by ${sig.workerName}`} className="max-h-24" />
+                            </div>
                           </CardContent>
-                        )}
-                      </Card>
-                    ))}
+                        </Card>
+                      ))}
+                    </div>
                   </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-3">Worker Signatures</h3>
-                  <div className="space-y-3">
-                    {selectedAssessment.signatures.map((sig) => (
-                      <Card key={sig.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium">{sig.signerName}</span>
-                            <span className="text-sm text-muted-foreground">
-                              {format(new Date(sig.signedAt), "PPp")}
-                            </span>
-                          </div>
-                          <div className="border rounded bg-white dark:bg-gray-900 p-2">
-                            <img src={sig.signatureData} alt={`Signature by ${sig.signerName}`} className="max-h-24" />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
+                )}
               </div>
             </ScrollArea>
           )}
