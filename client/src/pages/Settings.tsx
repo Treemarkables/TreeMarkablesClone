@@ -21,7 +21,9 @@ import {
   CheckSquare,
   Sliders,
   Mail,
-  ClipboardCheck
+  ClipboardCheck,
+  AlertTriangle,
+  ShieldCheck
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -107,6 +109,22 @@ const settingsOptions = [
     icon: ClipboardCheck,
     color: "bg-teal-100 text-teal-600",
     path: "/settings/vehicle-inspections"
+  },
+  {
+    id: "jha-templates",
+    title: "JHA Templates",
+    description: "Create and manage hazard templates and control measures for safety assessments",
+    icon: AlertTriangle,
+    color: "bg-amber-100 text-amber-600",
+    path: "/settings/jha-templates"
+  },
+  {
+    id: "jha-risk-controls",
+    title: "Risk Control Templates",
+    description: "Manage risk control hierarchy options for job hazard analysis",
+    icon: ShieldCheck,
+    color: "bg-emerald-100 text-emerald-600",
+    path: "/settings/jha-risk-controls"
   }
 ];
 
