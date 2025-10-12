@@ -67,7 +67,7 @@ export default function JHATemplates() {
   });
 
   const { data: controls, isLoading: loadingControls } = useQuery({
-    queryKey: ["/api/jha/control-measures", selectedHazard?.id],
+    queryKey: [`/api/jha/control-measures?hazardTemplateId=${selectedHazard?.id}`],
     enabled: !!selectedHazard,
   });
 
