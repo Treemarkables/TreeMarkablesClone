@@ -88,11 +88,7 @@ export default function JHAAssessment() {
 
   const createAssessmentMutation = useMutation({
     mutationFn: async (data: JHAFormValues & { signatures: { name: string; signature: string }[], photos: string[] }) => {
-      return apiRequest('/api/jha/assessments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+      return apiRequest('POST', '/api/jha/assessments', data);
     },
     onSuccess: () => {
       toast({
