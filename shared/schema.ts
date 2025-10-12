@@ -118,6 +118,7 @@ export const contactFormSchema = z.object({
   name: z.string().min(1).max(255),
   email: z.string().email().max(255),
   phone: z.string().max(50).optional(),
+  address: z.string().max(500).optional(),
   hearAbout: z.string().max(255).optional(),
   message: z.string().min(1).max(5000),
 });
@@ -130,6 +131,7 @@ export const leadSubmissionSchema = z.object({
   name: z.string(),
   email: z.string(),
   phone: z.string().optional(),
+  address: z.string().optional(),
   hearAbout: z.string().optional(),
   message: z.string(),
   // Lead source data
