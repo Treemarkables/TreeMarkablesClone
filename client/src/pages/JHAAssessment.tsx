@@ -7,7 +7,7 @@ import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -284,6 +284,7 @@ export default function JHAAssessment() {
                     <FormControl>
                       <Textarea {...field} placeholder="Enter text..." data-testid="input-activity" />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -657,7 +658,15 @@ export default function JHAAssessment() {
               className="w-full h-14 text-lg bg-green-600 hover:bg-green-700 shadow-lg"
               disabled={createAssessmentMutation.isPending}
               data-testid="button-submit-form"
-              onClick={(e) => console.log("🖱️ Submit button clicked", e.type)}
+              onClick={(e) => {
+                console.log("🖱️ Submit button clicked", e.type);
+                console.log("📋 Form validation state:", {
+                  isValid: form.formState.isValid,
+                  errors: form.formState.errors,
+                  isDirty: form.formState.isDirty,
+                  values: form.getValues()
+                });
+              }}
             >
               {createAssessmentMutation.isPending ? (
                 <>
