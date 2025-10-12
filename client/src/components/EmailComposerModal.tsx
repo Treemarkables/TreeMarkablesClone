@@ -790,6 +790,7 @@ Jules`
             <div
               contentEditable
               suppressContentEditableWarning
+              dir="ltr"
               onInput={(e) => {
                 const html = e.currentTarget.innerHTML;
                 setEmailData(prev => ({ ...prev, body: html }));
@@ -799,7 +800,9 @@ Jules`
               data-testid="div-email-body"
               style={{ 
                 whiteSpace: 'pre-wrap',
-                wordWrap: 'break-word' 
+                wordWrap: 'break-word',
+                direction: 'ltr',
+                unicodeBidi: 'embed'
               }}
             />
           </div>
