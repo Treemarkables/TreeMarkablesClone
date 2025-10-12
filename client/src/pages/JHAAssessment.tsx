@@ -185,7 +185,14 @@ export default function JHAAssessment() {
   };
 
   const handleSubmit = (data: JHAFormValues) => {
+    console.log("🔍 Form submit triggered", { 
+      hazardCount: data.selectedHazards.length,
+      signatureCount: signatures.length,
+      formData: data 
+    });
+
     if (data.selectedHazards.length === 0) {
+      console.log("❌ Validation failed: No hazards selected");
       toast({
         title: "No Hazards Selected",
         description: "Please select at least one hazard to assess",
@@ -195,6 +202,7 @@ export default function JHAAssessment() {
     }
 
     if (signatures.length === 0) {
+      console.log("❌ Validation failed: No signatures");
       toast({
         title: "Signature Required",
         description: "At least one worker signature is required",
@@ -203,6 +211,7 @@ export default function JHAAssessment() {
       return;
     }
 
+    console.log("✅ Validation passed, submitting form");
     createAssessmentMutation.mutate({
       ...data,
       signatures,
@@ -638,21 +647,24 @@ export default function JHAAssessment() {
           </Card>
 
           {/* Submit */}
-          <Button
-            type="submit"
-            className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
-            disabled={createAssessmentMutation.isPending}
-            data-testid="button-submit-form"
-          >
-            {createAssessmentMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              "Submit Form"
-            )}
-          </Button>
+          <div className="mb-8 md:mb-4">
+            <Button
+              type="submit"
+              className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+              disabled={createAssessmentMutation.isPending}
+              data-testid="button-submit-form"
+              onClick={() => console.log("🖱️ Submit button clicked")}
+            >
+              {createAssessmentMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit Form"
+              )}
+            </Button>
+          </div>
         </form>
       </Form>
     </div>
