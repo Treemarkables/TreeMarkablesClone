@@ -16,6 +16,7 @@ import { ArrowLeft, Save, CheckCircle2, Camera, Upload, Loader2, Search, Plus } 
 import { Badge } from "@/components/ui/badge";
 import SignaturePad from "@/components/SignaturePad";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import jhaHeaderImage from "@assets/generated_images/JHA_Risk_Assessment_Header_017c01a5.png";
 
 // ThinkSafe-style JHA form schema
@@ -319,7 +320,12 @@ export default function JHAAssessment() {
                   <FormItem>
                     <FormLabel>Location</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Enter text..." data-testid="input-location" />
+                      <AddressAutocomplete 
+                        value={field.value || ''} 
+                        onChange={field.onChange}
+                        placeholder="Search for address..."
+                        data-testid="input-location"
+                      />
                     </FormControl>
                   </FormItem>
                 )}
