@@ -2877,6 +2877,17 @@ export const jhaSignatures = pgTable("jha_signatures", {
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const jhaRiskControlTemplates = pgTable("jha_risk_control_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(), // e.g., "Elimination", "Substitution", "Engineering Controls"
+  description: text("description"), // Optional description of when to use this control type
+  hierarchyLevel: integer("hierarchy_level").notNull(), // 1=Elimination (most effective), 5=PPE (least effective)
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 // JHA Schemas
 export const insertJhaHazardTemplateSchema = createInsertSchema(jhaHazardTemplates).omit({
   id: true,
@@ -2913,6 +2924,12 @@ export const insertJhaSignatureSchema = createInsertSchema(jhaSignatures).omit({
   createdAt: true,
 });
 
+export const insertJhaRiskControlTemplateSchema = createInsertSchema(jhaRiskControlTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // JHA Types
 export type JhaHazardTemplate = typeof jhaHazardTemplates.$inferSelect;
 export type InsertJhaHazardTemplate = z.infer<typeof insertJhaHazardTemplateSchema>;
@@ -2931,3 +2948,6 @@ export type InsertJhaStepControl = z.infer<typeof insertJhaStepControlSchema>;
 
 export type JhaSignature = typeof jhaSignatures.$inferSelect;
 export type InsertJhaSignature = z.infer<typeof insertJhaSignatureSchema>;
+
+export type JhaRiskControlTemplate = typeof jhaRiskControlTemplates.$inferSelect;
+export type InsertJhaRiskControlTemplate = z.infer<typeof insertJhaRiskControlTemplateSchema>;
