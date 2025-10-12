@@ -219,7 +219,7 @@ export default function JHAAssessment() {
   }
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
+    <div className="w-full px-4 py-4 mx-auto max-w-4xl">
       <div className="mb-4">
         <Button
           variant="ghost"
@@ -232,15 +232,14 @@ export default function JHAAssessment() {
       </div>
 
       {/* ThinkSafe Logo & Risk Matrix */}
-      <div className="mb-4 overflow-hidden rounded-lg shadow-md" style={{ height: '500px' }}>
+      <div className="mb-4 overflow-hidden rounded-lg shadow-md h-[300px] md:h-[500px]">
         <img 
           src={thinkSafeImage} 
           alt="ThinkSafe Risk Matrix" 
-          className="w-full"
+          className="w-full h-full"
           style={{ 
             objectFit: 'cover',
-            objectPosition: '0 -100px',
-            height: '100%'
+            objectPosition: '0 -50px'
           }}
         />
       </div>
