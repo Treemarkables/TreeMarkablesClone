@@ -46,6 +46,7 @@ import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
 import VehicleInspection from "@/pages/VehicleInspection";
 import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
 import JHATemplates from "@/pages/JHATemplates";
+import JHARiskControlTemplates from "@/pages/JHARiskControlTemplates";
 import JHAAssessment from "@/pages/JHAAssessment";
 import JHAHistory from "@/pages/JHAHistory";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
@@ -719,6 +720,11 @@ function Router() {
       <Route path="/settings/jha-templates">
         <SidebarLayout>
           <JHATemplates />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/jha-risk-controls">
+        <SidebarLayout>
+          <JHARiskControlTemplates />
         </SidebarLayout>
       </Route>
       
