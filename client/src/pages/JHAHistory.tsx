@@ -37,7 +37,7 @@ export default function JHAHistory() {
 
   // Fetch full assessment details when selected
   const { data: detailData } = useQuery<{ success: boolean; data: JHAAssessment }>({
-    queryKey: ['/api/jha/assessments', selectedAssessmentId, 'includeSteps=true&includeSignatures=true'],
+    queryKey: [`/api/jha/assessments/${selectedAssessmentId}?includeSteps=true&includeSignatures=true`],
     enabled: !!selectedAssessmentId,
   });
 
