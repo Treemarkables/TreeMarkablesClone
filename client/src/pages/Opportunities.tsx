@@ -217,10 +217,10 @@ export default function Opportunities() {
     }
   });
 
-  // Create Quote mutation
+  // Create Quote mutation (creates a job with status "quote")
   const createJobMutation = useMutation({
     mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
-      console.log('🔵 Starting quote creation with data:', leadData);
+      console.log('🔵 Starting job/quote creation with data:', leadData);
       
       // First, create or find customer
       const customerRes = await apiRequest('POST', '/api/customers', {
@@ -233,20 +233,24 @@ export default function Opportunities() {
       console.log('✅ Customer created:', customerData.data.id);
       const customerId = customerData.data.id;
 
-      // Create the quote
-      const quoteData = {
+      // Create a job with status "quote" so it shows up on dispatch board
+      const jobData = {
         customerId: customerId,
+        title: `Quote for ${leadData.name}`,
         description: leadData.serviceRequested || leadData.notes || 'Quote from conversation',
-        amount: '0',
-        status: 'draft',
-        createdBy: 'admin'
+        address: leadData.address || '',
+        status: 'quote',
+        priority: leadData.urgency || 'medium',
+        leadSource: 'quote_request',
+        totalAmount: '0.00',
+        paidAmount: '0.00'
       };
       
-      console.log('🔵 Creating quote with data:', quoteData);
-      const quoteRes = await apiRequest('POST', '/api/quotes', quoteData);
-      const quoteResponseData = await quoteRes.json();
-      console.log('✅ Quote created:', quoteResponseData);
-      return quoteResponseData;
+      console.log('🔵 Creating job with data:', jobData);
+      const jobRes = await apiRequest('POST', '/api/jobs', jobData);
+      const jobResponseData = await jobRes.json();
+      console.log('✅ Job created:', jobResponseData);
+      return jobResponseData;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
@@ -254,8 +258,8 @@ export default function Opportunities() {
       setShowCreateJobDialog(false);
       jobForm.reset();
       toast({ 
-        title: 'Quote created successfully',
-        description: 'The quote has been created and will appear in dispatch board'
+        title: 'Quote job created successfully',
+        description: 'The quote is now on the dispatch board ready to be worked on'
       });
       setLocation('/dispatch');
     },
