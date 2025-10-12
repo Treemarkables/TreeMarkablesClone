@@ -2980,6 +2980,66 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         console.error('Error updating job lastActivityAt:', error);
       }
       
+      // Auto-create notification for diary activity
+      try {
+        // Get job details for notification context
+        const job = await storage.getJob(jobId);
+        const customer = job?.customerId ? await storage.getCustomer(job.customerId) : null;
+        
+        // Define which diary entry types should create notifications
+        const notifiableTypes = ['email', 'sms', 'proposal', 'photo', 'note'];
+        
+        if (notifiableTypes.includes(entry.entryType)) {
+          // Map diary entry types to notification types
+          const typeMap: Record<string, string> = {
+            'email': 'email_reply',
+            'sms': 'sms_reply',
+            'proposal': 'proposal_sent',
+            'photo': 'photo_added',
+            'note': 'note_added'
+          };
+          
+          const notificationType = typeMap[entry.entryType] || 'system_alert';
+          
+          // Create readable messages for each type
+          const messageMap: Record<string, string> = {
+            'email': `Email sent to ${customer?.name || 'customer'}`,
+            'sms': `SMS sent to ${customer?.name || 'customer'}`,
+            'proposal': `Proposal sent to ${customer?.name || 'customer'}`,
+            'photo': `Photo added to job for ${customer?.name || 'customer'}`,
+            'note': `Note added to job for ${customer?.name || 'customer'}`
+          };
+          
+          const titleMap: Record<string, string> = {
+            'email': 'Email Sent',
+            'sms': 'SMS Sent',
+            'proposal': 'Proposal Sent',
+            'photo': 'Photo Added',
+            'note': 'Note Added'
+          };
+          
+          const notificationData = {
+            title: titleMap[entry.entryType] || 'Job Update',
+            message: messageMap[entry.entryType] || entry.content?.substring(0, 100),
+            type: notificationType,
+            priority: entry.entryType === 'proposal' ? 'high' : 'medium',
+            isRead: false,
+            entityType: 'diary_entry',
+            entityId: entry.id,
+            relatedEntityType: 'job',
+            relatedEntityId: jobId,
+            jobId: jobId,
+            diaryEntryId: entry.id
+          };
+          
+          await storage.createNotification(notificationData);
+          console.log(`🔔 Notification created for ${notificationType} on job ${jobId}`);
+        }
+      } catch (error) {
+        // Don't fail the request if notification creation fails
+        console.error('Error creating diary notification:', error);
+      }
+      
       res.json({ success: true, data: entry });
     } catch (error) {
       console.error('Error creating job diary entry:', error);
