@@ -4494,28 +4494,20 @@ class DatabaseStorage implements IStorage {
 
     if (includeSteps) {
       result.steps = await this.getJhaSteps(id);
-      // Get control measures for each step
+      // Get control measures for each step using raw SQL for proper join
       for (const step of result.steps) {
-        const controls = await db.select({
-          id: schema.jhaStepControls.id,
-          stepId: schema.jhaStepControls.stepId,
-          controlMeasureTemplateId: schema.jhaStepControls.controlMeasureTemplateId,
-          description: schema.jhaStepControls.description,
-          hierarchyLevel: schema.jhaStepControls.hierarchyLevel,
-          isImplemented: schema.jhaStepControls.isImplemented,
-          sortOrder: schema.jhaStepControls.sortOrder,
-          createdAt: schema.jhaStepControls.createdAt,
-          controlMeasure: schema.jhaControlMeasureTemplates.description
-        })
-        .from(schema.jhaStepControls)
-        .leftJoin(
-          schema.jhaControlMeasureTemplates,
-          eq(schema.jhaStepControls.controlMeasureTemplateId, schema.jhaControlMeasureTemplates.id)
-        )
-        .where(eq(schema.jhaStepControls.stepId, step.id))
-        .orderBy(schema.jhaStepControls.sortOrder);
+        const controls = await db.execute(
+          sql`SELECT sc.id, sc.step_id, sc.control_measure_template_id, 
+              sc.description, sc.hierarchy_level, sc.is_implemented, 
+              sc.sort_order, sc.created_at, cm.description as control_measure
+          FROM jha_step_controls sc
+          LEFT JOIN jha_control_measure_templates cm 
+            ON sc.control_measure_template_id = cm.id
+          WHERE sc.step_id = ${step.id}
+          ORDER BY sc.sort_order`
+        );
         
-        step.controlMeasures = controls.map(c => c.controlMeasure || '');
+        step.controlMeasures = controls.rows.map((c: any) => c.control_measure || '');
       }
     }
 
