@@ -83,6 +83,15 @@ export default function JHAAssessment() {
     }
   });
 
+  // Debug form state
+  useEffect(() => {
+    const subscription = form.watch(() => {
+      console.log("📋 Form errors:", form.formState.errors);
+      console.log("📋 Form is valid:", form.formState.isValid);
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
   const selectedHazards = form.watch("selectedHazards");
 
   const createAssessmentMutation = useMutation({
@@ -647,16 +656,21 @@ export default function JHAAssessment() {
           </Card>
 
           {/* Submit */}
-          <div className="sticky bottom-0 left-0 right-0 bg-background pt-4 pb-4 -mx-4 px-4 border-t mt-6 z-50">
+          <div className="sticky bottom-0 left-0 right-0 bg-background pt-4 pb-8 -mx-4 px-4 border-t mt-6 z-50">
             <Button
-              type="submit"
+              type="button"
               className="w-full h-14 text-lg bg-green-600 hover:bg-green-700 shadow-lg"
               disabled={createAssessmentMutation.isPending}
               data-testid="button-submit-form"
               onTouchStart={() => console.log("👆 Submit button touched")}
               onClick={(e) => {
                 console.log("🖱️ Submit button clicked", e);
-                e.stopPropagation();
+                console.log("📋 Current form state:", {
+                  errors: form.formState.errors,
+                  isValid: form.formState.isValid,
+                  values: form.getValues()
+                });
+                form.handleSubmit(handleSubmit)();
               }}
             >
               {createAssessmentMutation.isPending ? (
