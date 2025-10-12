@@ -229,6 +229,20 @@ Jules`
     }
   }, [isOpen, job, customer, invoiceData, quoteData, proposalData, templateType, hasInitialized]);
 
+  // Sync emailData.body to contentEditable div (for template updates and initial render)
+  useEffect(() => {
+    if (emailBodyRef.current) {
+      // Set initial content on first render or when template changes
+      const currentContent = emailBodyRef.current.innerHTML;
+      const newContent = emailData.body || '<p style="color: #9ca3af;">Compose your email...</p>';
+      
+      // Only update if content has actually changed AND user is not currently typing
+      if (currentContent !== newContent && document.activeElement !== emailBodyRef.current) {
+        emailBodyRef.current.innerHTML = newContent;
+      }
+    }
+  }, [emailData.body]);
+
   // Handle photo selection for email attachments
   const togglePhotoSelection = (photoUrl: string) => {
     setSelectedPhotos(prev => 
@@ -889,7 +903,7 @@ Jules`
           </div>
 
           {/* Email Body */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 relative">
             <div
               ref={emailBodyRef}
               contentEditable
@@ -899,14 +913,28 @@ Jules`
                 const html = e.currentTarget.innerHTML;
                 setEmailData(prev => ({ ...prev, body: html }));
               }}
-              dangerouslySetInnerHTML={{ __html: emailData.body || '<p style="color: #9ca3af;">Compose your email...</p>' }}
+              onFocus={(e) => {
+                // Clear placeholder on focus
+                if (e.currentTarget.innerHTML.includes('Compose your email...')) {
+                  e.currentTarget.innerHTML = '';
+                }
+              }}
+              onBlur={(e) => {
+                // Restore placeholder if empty
+                if (!e.currentTarget.textContent?.trim()) {
+                  e.currentTarget.innerHTML = '<p style="color: #9ca3af;">Compose your email...</p>';
+                  setEmailData(prev => ({ ...prev, body: '' }));
+                }
+              }}
               className="w-full h-full resize-none border-0 focus-visible:ring-0 text-sm leading-relaxed pb-48 outline-none overflow-y-auto"
               data-testid="div-email-body"
               style={{ 
                 whiteSpace: 'pre-wrap',
                 wordWrap: 'break-word',
                 direction: 'ltr',
-                unicodeBidi: 'embed'
+                unicodeBidi: 'embed',
+                cursor: 'text',
+                caretColor: 'auto'
               }}
             />
           </div>
