@@ -199,8 +199,8 @@ export default function Inbox() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Mail className="h-6 w-6 text-primary" />
-              Quote Requests
+              <MessageSquare className="h-6 w-6 text-primary" />
+              Conversations
               {unreadCount > 0 && (
                 <Badge variant="destructive" className="ml-2">
                   {unreadCount} unread
@@ -208,7 +208,7 @@ export default function Inbox() {
               )}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Quote requests from your website
+              Messages from website, Facebook, email, and phone
             </p>
           </div>
           <Button 
@@ -228,7 +228,7 @@ export default function Inbox() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search quote requests..."
+                placeholder="Search conversations..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -236,6 +236,18 @@ export default function Inbox() {
               />
             </div>
           </div>
+          <Select value={sourceFilter} onValueChange={setSourceFilter}>
+            <SelectTrigger className="w-40" data-testid="select-source-filter">
+              <SelectValue placeholder="Filter by source" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sources</SelectItem>
+              <SelectItem value="quote_request">Website Quotes</SelectItem>
+              <SelectItem value="social">Facebook</SelectItem>
+              <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="phone">Phone</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-40" data-testid="select-status-filter">
               <SelectValue placeholder="Filter by status" />
@@ -255,10 +267,10 @@ export default function Inbox() {
         <div className="divide-y">
           {filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
-              <Mail className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-medium text-muted-foreground">No quote requests found</p>
+              <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-lg font-medium text-muted-foreground">No conversations found</p>
               <p className="text-sm text-muted-foreground mt-1">
-                {searchTerm ? 'Try adjusting your search terms' : 'Quote requests from your website will appear here'}
+                {searchTerm ? 'Try adjusting your search terms' : 'Messages from website, Facebook, and other channels will appear here'}
               </p>
             </div>
           ) : (
