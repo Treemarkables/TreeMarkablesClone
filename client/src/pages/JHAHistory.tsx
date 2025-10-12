@@ -29,13 +29,20 @@ interface JHAAssessment {
 }
 
 export default function JHAHistory() {
-  const [selectedAssessment, setSelectedAssessment] = useState<JHAAssessment | null>(null);
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<{ success: boolean; data: JHAAssessment[] }>({
     queryKey: ['/api/jha/assessments'],
   });
 
+  // Fetch full assessment details when selected
+  const { data: detailData } = useQuery<{ success: boolean; data: JHAAssessment }>({
+    queryKey: ['/api/jha/assessments', selectedAssessmentId, 'includeSteps=true&includeSignatures=true'],
+    enabled: !!selectedAssessmentId,
+  });
+
   const assessments = data?.data || [];
+  const selectedAssessment = detailData?.data || null;
 
   const getRiskColor = (rating: number) => {
     if (rating >= 4) return "destructive";
@@ -89,7 +96,7 @@ export default function JHAHistory() {
             const totalControls = steps.reduce((sum, step) => sum + (step.controlMeasures?.length || 0), 0);
 
             return (
-              <Card key={assessment.id} className="hover-elevate cursor-pointer" onClick={() => setSelectedAssessment(assessment)}>
+              <Card key={assessment.id} className="hover-elevate cursor-pointer" onClick={() => setSelectedAssessmentId(assessment.id)}>
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
@@ -137,7 +144,7 @@ export default function JHAHistory() {
         </div>
       )}
 
-      <Dialog open={!!selectedAssessment} onOpenChange={(open) => !open && setSelectedAssessment(null)}>
+      <Dialog open={!!selectedAssessmentId} onOpenChange={(open) => !open && setSelectedAssessmentId(null)}>
         <DialogContent className="max-w-3xl max-h-screen">
           <DialogHeader>
             <DialogTitle>

@@ -4487,7 +4487,25 @@ class DatabaseStorage implements IStorage {
     const [assessment] = await db.select()
       .from(schema.jhaAssessments)
       .where(eq(schema.jhaAssessments.id, id));
-    return assessment;
+    
+    if (!assessment) return undefined;
+
+    const result: any = { ...assessment };
+
+    if (includeSteps) {
+      result.steps = await this.getJhaSteps(id);
+      // Get control measures for each step
+      for (const step of result.steps) {
+        const controls = await this.getJhaStepControls(step.id);
+        step.controlMeasures = controls.map(c => c.controlMeasure);
+      }
+    }
+
+    if (includeSignatures) {
+      result.signatures = await this.getJhaSignatures(id);
+    }
+
+    return result;
   }
 
   async createJhaAssessment(assessment: schema.InsertJhaAssessment): Promise<schema.JhaAssessment> {
