@@ -102,12 +102,7 @@ export function EmailComposerModal({
       id: "custom_message",
       name: "Custom Message",
       subject: "",
-      body: `Dear {customerName},
-
-
-
-Regards,
-Jules`
+      body: `<p>Dear {customerName},</p><p><br></p><p><br></p><p>Regards,<br>Jules</p>`
     },
     ...dbTemplates.map((t: any) => ({
       id: t.id,
@@ -213,9 +208,6 @@ Jules`
         .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "")
         .replace("{contactName}", "Treemarkables Team")
         .replace("{contactPhone}", "0272166882");
-
-      // Convert newlines to HTML line breaks for contentEditable
-      populatedBody = populatedBody.replace(/\n/g, '<br>');
 
       setEmailData({
         to: billingEmail || "",
@@ -397,9 +389,6 @@ Jules`
       .replace("{contactPhone}", customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
       .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
       .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "");
-
-    // Convert newlines to HTML line breaks for contentEditable
-    populatedBody = populatedBody.replace(/\n/g, '<br>');
 
     // Convert URLs to clickable hyperlinks
     populatedBody = linkifyUrls(populatedBody);
