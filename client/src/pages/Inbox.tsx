@@ -42,6 +42,7 @@ export default function Inbox() {
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all'); // Add source filter
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showCreateJobDialog, setShowCreateJobDialog] = useState(false);
   const [showCreateOpportunityDialog, setShowCreateOpportunityDialog] = useState(false);
@@ -78,14 +79,16 @@ export default function Inbox() {
     }
   });
 
-  // Fetch conversations from backend - ONLY quote requests from website
+  // Fetch conversations from backend - filter by source
   const { data: conversationsResponse, isLoading, refetch } = useQuery({
-    queryKey: ['/api/conversations', { search: searchTerm || undefined, source: 'quote_request' }],
+    queryKey: ['/api/conversations', { search: searchTerm || undefined, source: sourceFilter !== 'all' ? sourceFilter : undefined }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
-      // Only show quote requests from website in inbox
-      params.append('source', 'quote_request');
+      // Filter by source if not 'all'
+      if (sourceFilter !== 'all') {
+        params.append('source', sourceFilter);
+      }
       const response = await fetch(`/api/conversations?${params}`);
       if (!response.ok) throw new Error('Failed to fetch conversations');
       return response.json();
