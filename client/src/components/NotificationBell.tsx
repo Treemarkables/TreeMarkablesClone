@@ -18,7 +18,8 @@ import {
   Mail,
   MessageSquare,
   Camera,
-  StickyNote
+  StickyNote,
+  BellRing
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
+import { notificationService } from '@/lib/notificationService';
+import { useToast } from '@/hooks/use-toast';
 
 interface NotificationWithDetails {
   id: string;
@@ -114,6 +117,9 @@ export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [pushEnabled, setPushEnabled] = useState(notificationService.isEnabled());
+  const [lastNotificationCount, setLastNotificationCount] = useState(0);
 
   // Fetch notification summary for badge count
   const { data: summaryData } = useQuery({
@@ -126,6 +132,64 @@ export function NotificationBell() {
     queryKey: ['/api/notifications'],
     enabled: isOpen,
   });
+
+  // Check for new notifications and show browser notification
+  useEffect(() => {
+    if (!summaryData) return;
+    
+    const summary: NotificationSummary = (summaryData as any)?.data || { 
+      total: 0, 
+      unread: 0, 
+      byType: {}, 
+      byPriority: {}, 
+      recent: [] 
+    };
+
+    // If we have new unread notifications and browser notifications are enabled
+    // Show notification whenever unread count increases (including 0→1)
+    if (pushEnabled && summary.unread > lastNotificationCount) {
+      const newCount = summary.unread - lastNotificationCount;
+      
+      // Show browser notification for new activity
+      if (summary.recent && summary.recent.length > 0) {
+        const latestNotification = summary.recent[0];
+        
+        notificationService.showNotification(
+          latestNotification.title,
+          {
+            body: `${newCount} new notification${newCount > 1 ? 's' : ''}`,
+            tag: 'diary-activity',
+            data: { url: '/dispatch' },
+            requireInteraction: false,
+          }
+        );
+      }
+    }
+
+    // Update last count
+    if (summary.unread !== lastNotificationCount) {
+      setLastNotificationCount(summary.unread);
+    }
+  }, [summaryData, pushEnabled, lastNotificationCount]);
+
+  // Handle browser notification permission request
+  const handleEnablePushNotifications = async () => {
+    const granted = await notificationService.requestPermission();
+    
+    if (granted) {
+      setPushEnabled(true);
+      toast({
+        title: "Browser notifications enabled",
+        description: "You'll receive desktop notifications for new diary activity",
+      });
+    } else {
+      toast({
+        title: "Permission denied",
+        description: "Please enable notifications in your browser settings",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Mark notification as read mutation
   const markAsReadMutation = useMutation({
@@ -269,23 +333,37 @@ export function NotificationBell() {
       <PopoverContent className="w-96 p-0" align="end" data-testid="dropdown-notifications">
         <Card className="border-0 shadow-lg">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-2">
               <CardTitle className="text-lg font-semibold bg-gradient-to-r from-red-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
                 Notifications
               </CardTitle>
-              {summary.unread > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => markAllAsReadMutation.mutate()}
-                  disabled={markAllAsReadMutation.isPending}
-                  className="text-xs"
-                  data-testid="button-mark-all-read"
-                >
-                  <Check className="h-3 w-3 mr-1" />
-                  Mark all read
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {!pushEnabled && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleEnablePushNotifications}
+                    className="text-xs"
+                    data-testid="button-enable-push"
+                  >
+                    <BellRing className="h-3 w-3 mr-1" />
+                    Enable Alerts
+                  </Button>
+                )}
+                {summary.unread > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => markAllAsReadMutation.mutate()}
+                    disabled={markAllAsReadMutation.isPending}
+                    className="text-xs"
+                    data-testid="button-mark-all-read"
+                  >
+                    <Check className="h-3 w-3 mr-1" />
+                    Mark all read
+                  </Button>
+                )}
+              </div>
             </div>
             {summary.total > 0 && (
               <div className="flex gap-2 text-xs text-muted-foreground">
