@@ -14,7 +14,11 @@ import {
   AlertCircle, 
   Calendar, 
   DollarSign, 
-  Settings 
+  Settings,
+  Mail,
+  MessageSquare,
+  Camera,
+  StickyNote
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { Badge } from '@/components/ui/badge';
@@ -96,6 +100,11 @@ const getTypeIcon = (type: string) => {
     job_completed: CheckCircle,
     payment_received: DollarSign,
     system_alert: Settings,
+    email_reply: Mail,
+    sms_reply: MessageSquare,
+    proposal_sent: FileText,
+    photo_added: Camera,
+    note_added: StickyNote,
   };
   const IconComponent = iconMap[type as keyof typeof iconMap] || Bell;
   return <IconComponent className="h-4 w-4" />;
@@ -180,9 +189,17 @@ export function NotificationBell() {
       return;
     }
 
+    // Handle diary-specific notifications - navigate to job and open diary tab
+    const diaryTypes = ['email_reply', 'sms_reply', 'proposal_sent', 'photo_added', 'note_added'];
+    if (diaryTypes.includes(notification.type) && notification.jobId) {
+      setLocation(`/dispatch?job=${notification.jobId}&tab=diary`);
+      setIsOpen(false);
+      return;
+    }
+
     // Fallback navigation based on related entities
     if (notification.jobId) {
-      setLocation(`/job-dashboard?job=${notification.jobId}`);
+      setLocation(`/dispatch?job=${notification.jobId}`);
       setIsOpen(false);
       return;
     }

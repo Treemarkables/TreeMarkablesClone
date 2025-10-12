@@ -230,6 +230,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             </div>
             
             <div className="flex items-center gap-2">
+              {/* Notifications Bell - Mobile */}
+              {isAdmin && <NotificationBell />}
+              
               {/* Refresh Button - Hidden in Safari */}
               {!isSafari && (
                 <Button 
