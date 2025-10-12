@@ -26,10 +26,10 @@ const jhaFormSchema = z.object({
   location: z.string().optional(),
   comments: z.string().optional(),
   selectedHazards: z.array(z.object({
-    hazardTemplateId: z.number(),
+    hazardTemplateId: z.union([z.number(), z.string()]),
     hazardName: z.string(),
     initialRisk: z.number().min(1).max(4),
-    selectedControls: z.array(z.number()).min(1, "At least one control measure is required"),
+    selectedControls: z.array(z.union([z.number(), z.string()])).min(1, "At least one control measure is required"),
     residualRisk: z.number().min(1).max(4).optional(),
     responsiblePerson: z.string().optional(),
     riskControl: z.string().optional()
