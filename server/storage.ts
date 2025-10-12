@@ -4496,8 +4496,26 @@ class DatabaseStorage implements IStorage {
       result.steps = await this.getJhaSteps(id);
       // Get control measures for each step
       for (const step of result.steps) {
-        const controls = await this.getJhaStepControls(step.id);
-        step.controlMeasures = controls.map(c => c.controlMeasure);
+        const controls = await db.select({
+          id: schema.jhaStepControls.id,
+          stepId: schema.jhaStepControls.stepId,
+          controlMeasureTemplateId: schema.jhaStepControls.controlMeasureTemplateId,
+          description: schema.jhaStepControls.description,
+          hierarchyLevel: schema.jhaStepControls.hierarchyLevel,
+          isImplemented: schema.jhaStepControls.isImplemented,
+          sortOrder: schema.jhaStepControls.sortOrder,
+          createdAt: schema.jhaStepControls.createdAt,
+          controlMeasure: schema.jhaControlMeasureTemplates.description
+        })
+        .from(schema.jhaStepControls)
+        .leftJoin(
+          schema.jhaControlMeasureTemplates,
+          eq(schema.jhaStepControls.controlMeasureTemplateId, schema.jhaControlMeasureTemplates.id)
+        )
+        .where(eq(schema.jhaStepControls.stepId, step.id))
+        .orderBy(schema.jhaStepControls.sortOrder);
+        
+        step.controlMeasures = controls.map(c => c.controlMeasure || '');
       }
     }
 
