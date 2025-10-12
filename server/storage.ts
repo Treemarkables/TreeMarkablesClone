@@ -796,6 +796,12 @@ export interface IStorage {
   updateJhaHazardTemplate(id: string, updates: Partial<schema.InsertJhaHazardTemplate>): Promise<schema.JhaHazardTemplate>;
   deleteJhaHazardTemplate(id: string): Promise<void>;
 
+  getAllJhaRiskControlTemplates(): Promise<schema.JhaRiskControlTemplate[]>;
+  getJhaRiskControlTemplate(id: string): Promise<schema.JhaRiskControlTemplate | undefined>;
+  createJhaRiskControlTemplate(template: schema.InsertJhaRiskControlTemplate): Promise<schema.JhaRiskControlTemplate>;
+  updateJhaRiskControlTemplate(id: string, updates: Partial<schema.InsertJhaRiskControlTemplate>): Promise<schema.JhaRiskControlTemplate>;
+  deleteJhaRiskControlTemplate(id: string): Promise<void>;
+
   getAllJhaControlMeasures(hazardTemplateId?: string): Promise<schema.JhaControlMeasureTemplate[]>;
   getJhaControlMeasure(id: string): Promise<schema.JhaControlMeasureTemplate | undefined>;
   createJhaControlMeasure(measure: schema.InsertJhaControlMeasureTemplate): Promise<schema.JhaControlMeasureTemplate>;
@@ -4359,6 +4365,42 @@ class DatabaseStorage implements IStorage {
     await db.update(schema.jhaHazardTemplates)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(schema.jhaHazardTemplates.id, id));
+  }
+
+  // Risk Control Templates
+  async getAllJhaRiskControlTemplates(): Promise<schema.JhaRiskControlTemplate[]> {
+    return await db.select()
+      .from(schema.jhaRiskControlTemplates)
+      .where(eq(schema.jhaRiskControlTemplates.isActive, true))
+      .orderBy(schema.jhaRiskControlTemplates.sortOrder, schema.jhaRiskControlTemplates.hierarchyLevel);
+  }
+
+  async getJhaRiskControlTemplate(id: string): Promise<schema.JhaRiskControlTemplate | undefined> {
+    const [template] = await db.select()
+      .from(schema.jhaRiskControlTemplates)
+      .where(eq(schema.jhaRiskControlTemplates.id, id));
+    return template;
+  }
+
+  async createJhaRiskControlTemplate(template: schema.InsertJhaRiskControlTemplate): Promise<schema.JhaRiskControlTemplate> {
+    const [result] = await db.insert(schema.jhaRiskControlTemplates)
+      .values(template)
+      .returning();
+    return result;
+  }
+
+  async updateJhaRiskControlTemplate(id: string, updates: Partial<schema.InsertJhaRiskControlTemplate>): Promise<schema.JhaRiskControlTemplate> {
+    const [result] = await db.update(schema.jhaRiskControlTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.jhaRiskControlTemplates.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteJhaRiskControlTemplate(id: string): Promise<void> {
+    await db.update(schema.jhaRiskControlTemplates)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(schema.jhaRiskControlTemplates.id, id));
   }
 
   // Control Measure Templates
