@@ -14583,6 +14583,67 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Risk Control Templates
+  app.get("/api/jha/risk-control-templates", async (req, res) => {
+    try {
+      const templates = await storage.getAllJhaRiskControlTemplates();
+      res.json({ success: true, data: templates });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch risk control templates' });
+    }
+  });
+
+  app.get("/api/jha/risk-control-templates/:id", async (req, res) => {
+    try {
+      const template = await storage.getJhaRiskControlTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Risk control template not found' });
+      }
+      res.json({ success: true, data: template });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch risk control template' });
+    }
+  });
+
+  app.post("/api/jha/risk-control-templates", async (req, res) => {
+    try {
+      const validatedData = schema.insertJhaRiskControlTemplateSchema.parse(req.body);
+      const template = await storage.createJhaRiskControlTemplate(validatedData);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create risk control template' });
+    }
+  });
+
+  app.patch("/api/jha/risk-control-templates/:id", async (req, res) => {
+    try {
+      const existing = await storage.getJhaRiskControlTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Risk control template not found' });
+      }
+      const template = await storage.updateJhaRiskControlTemplate(req.params.id, req.body);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update risk control template' });
+    }
+  });
+
+  app.delete("/api/jha/risk-control-templates/:id", async (req, res) => {
+    try {
+      const existing = await storage.getJhaRiskControlTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Risk control template not found' });
+      }
+      await storage.deleteJhaRiskControlTemplate(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete risk control template' });
+    }
+  });
+
   // Control Measure Templates
   app.get("/api/jha/control-measures", async (req, res) => {
     try {
