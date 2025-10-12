@@ -539,6 +539,11 @@ export function EmailComposerModal({
           .replace(/\bnew line\b/gi, '\n')
           .replace(/\bnew paragraph\b/gi, '\n\n');
         
+        // Capitalize first letter and after sentence-ending punctuation
+        processedText = processedText
+          .replace(/^\s*\w/, (match) => match.toUpperCase()) // First letter
+          .replace(/([.!?]\s+)(\w)/g, (match, p1, p2) => p1 + p2.toUpperCase()); // After punctuation
+        
         // Insert text at cursor position instead of appending to end
         emailBodyRef.current.focus();
         
