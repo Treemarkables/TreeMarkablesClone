@@ -66,22 +66,7 @@ export default function JHAAssessment() {
     queryKey: ['/api/jha/hazard-templates'],
   });
 
-  // Fetch risk control templates
-  const { data: riskControlsData, isLoading: riskControlsLoading } = useQuery<{
-    success: boolean;
-    data: Array<{
-      id: string;
-      name: string;
-      description: string | null;
-      hierarchyLevel: number;
-      sortOrder: number;
-    }>;
-  }>({
-    queryKey: ['/api/jha/risk-control-templates'],
-  });
-
   const hazardTemplates = templatesData?.data || [];
-  const riskControlOptions = riskControlsData?.data || [];
   const filteredHazards = hazardTemplates.filter(h => 
     h.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -225,7 +210,7 @@ export default function JHAAssessment() {
     });
   };
 
-  if (templatesLoading || riskControlsLoading) {
+  if (templatesLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -453,24 +438,26 @@ export default function JHAAssessment() {
                   </div>
 
                   {/* Risk Control */}
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Risk Control</label>
-                    <Select
-                      value={selectedHazard.riskControl || ""}
-                      onValueChange={(value) => updateHazardField(selectedHazard.hazardTemplateId, 'riskControl', value)}
-                    >
-                      <SelectTrigger data-testid={`select-risk-control-${selectedHazard.hazardTemplateId}`}>
-                        <SelectValue placeholder="Select risk control..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {riskControlOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.name}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {template.controlMeasures && template.controlMeasures.length > 0 && (
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Risk Control</label>
+                      <Select
+                        value={selectedHazard.riskControl || ""}
+                        onValueChange={(value) => updateHazardField(selectedHazard.hazardTemplateId, 'riskControl', value)}
+                      >
+                        <SelectTrigger data-testid={`select-risk-control-${selectedHazard.hazardTemplateId}`}>
+                          <SelectValue placeholder="Select risk control..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {template.controlMeasures.map((control) => (
+                            <SelectItem key={control.id} value={control.description}>
+                              {control.description}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   {/* Residual Risk */}
                   <div>
@@ -510,7 +497,6 @@ export default function JHAAssessment() {
                   {selectedHazards.map((hazard) => {
                     const template = hazardTemplates.find(h => h.id === hazard.hazardTemplateId);
                     const controls = template?.controlMeasures?.filter(c => hazard.selectedControls.includes(c.id)) || [];
-                    const riskControlLabel = riskControlOptions.find(opt => opt.name === hazard.riskControl)?.name || hazard.riskControl;
                     
                     return (
                       <div key={hazard.hazardTemplateId} className="p-3 border rounded-lg bg-gray-50 space-y-2">
@@ -522,7 +508,7 @@ export default function JHAAssessment() {
                         </div>
                         {hazard.riskControl && (
                           <div className="text-sm">
-                            <span className="font-medium">Risk Control:</span> {riskControlLabel}
+                            <span className="font-medium">Risk Control:</span> {hazard.riskControl}
                           </div>
                         )}
                         {controls.length > 0 && (
