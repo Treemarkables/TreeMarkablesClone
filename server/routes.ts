@@ -4006,25 +4006,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Create job diary entry for the email
         if (jobId) {
           try {
-            // For quote emails, create a much shorter diary entry
-            const isQuoteEmail = quoteId || subject.toLowerCase().includes('quote');
-            let diaryDescription;
-            
-            if (isQuoteEmail) {
-              // Short description for quote emails
-              const quoteNumber = quote?.quoteNumber || subject.match(/QTE-\d+/)?.[0] || 'Quote';
-              diaryDescription = `${quoteNumber} sent to ${to}`;
-            } else {
-              // Full description for other emails
-              diaryDescription = `Email sent to ${to}${cc ? ` (CC: ${cc})` : ''}${
-                emailAttachments.length > 0 ? `\n\nAttachments: ${emailAttachments.length} photo(s)` : ''
-              }\n\nMessage:\n${body}`;
-            }
+            // Custom email endpoint NEVER creates "Quote Sent" or "Proposal Sent" entries
+            // Those are only created by dedicated /api/proposals/:id/send-email endpoint
+            const diaryDescription = `Email sent to ${to}${cc ? ` (CC: ${cc})` : ''}${
+              emailAttachments.length > 0 ? `\n\nAttachments: ${emailAttachments.length} photo(s)` : ''
+            }\n\nMessage:\n${body}`;
             
             await storage.createJobDiaryEntry({
               jobId: jobId,
               entryType: 'email',
-              title: isQuoteEmail ? `Quote Sent` : `Email sent: ${subject}`,
+              title: `Email sent: ${subject}`,
               description: diaryDescription,
               authorName: 'System',
               authorRole: 'system',
