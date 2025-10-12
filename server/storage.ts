@@ -4333,10 +4333,27 @@ class DatabaseStorage implements IStorage {
 
   // Hazard Templates
   async getAllJhaHazardTemplates(): Promise<schema.JhaHazardTemplate[]> {
-    return await db.select()
+    const templates = await db.select()
       .from(schema.jhaHazardTemplates)
       .where(eq(schema.jhaHazardTemplates.isActive, true))
       .orderBy(schema.jhaHazardTemplates.sortOrder, schema.jhaHazardTemplates.name);
+    
+    // Fetch control measures for each template
+    const templatesWithControls = await Promise.all(
+      templates.map(async (template) => {
+        const controlMeasures = await db.select()
+          .from(schema.jhaControlMeasureTemplates)
+          .where(eq(schema.jhaControlMeasureTemplates.hazardTemplateId, template.id))
+          .orderBy(schema.jhaControlMeasureTemplates.sortOrder);
+        
+        return {
+          ...template,
+          controlMeasures
+        };
+      })
+    );
+    
+    return templatesWithControls;
   }
 
   async getJhaHazardTemplate(id: string): Promise<schema.JhaHazardTemplate | undefined> {
