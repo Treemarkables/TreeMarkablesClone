@@ -888,8 +888,27 @@ export function JobDiarySection({
                 
                 // Extract message text
                 let messageText = entry.content;
+                let recipientInfo = '';
+                
                 if (isSent && messageText.includes('Message:')) {
+                  // Extract recipient email/phone before "Message:"
+                  const beforeMessage = messageText.split('Message:')[0];
+                  if (beforeMessage.includes('Email sent to')) {
+                    recipientInfo = beforeMessage.split('Email sent to')[1].trim();
+                  } else if (beforeMessage.includes('SMS sent to')) {
+                    recipientInfo = beforeMessage.split('SMS sent to')[1].trim();
+                  }
+                  
+                  // Extract message and strip HTML tags
                   messageText = messageText.split('Message:')[1].trim();
+                  
+                  // Strip HTML tags and convert to plain text
+                  messageText = messageText
+                    .replace(/<br\s*\/?>/gi, '\n')  // Convert <br> to newlines
+                    .replace(/<\/p>/gi, '\n')        // Convert </p> to newlines
+                    .replace(/<p>/gi, '')            // Remove <p> tags
+                    .replace(/<[^>]+>/g, '')         // Remove any other HTML tags
+                    .trim();
                 } else if (isReceived && messageText.includes(':\n\n')) {
                   messageText = messageText.split(':\n\n')[1].trim();
                 }
@@ -935,6 +954,12 @@ export function JobDiarySection({
                               : 'bg-green-500 text-white rounded-br-sm'
                             : 'bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100 rounded-bl-sm'
                         }`}>
+                          {/* Show recipient for sent messages */}
+                          {isSent && recipientInfo && (
+                            <div className="text-[9px] opacity-80 mb-0.5 border-b border-white/20 pb-0.5">
+                              To: {recipientInfo}
+                            </div>
+                          )}
                           <p className="text-[11px] leading-snug whitespace-pre-wrap break-words">{messageText}</p>
                         </div>
                         
