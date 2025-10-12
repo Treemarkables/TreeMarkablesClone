@@ -647,13 +647,17 @@ export default function JHAAssessment() {
           </Card>
 
           {/* Submit */}
-          <div className="sticky bottom-0 left-0 right-0 bg-background pt-4 pb-4 -mx-4 px-4 border-t mt-6">
+          <div className="sticky bottom-0 left-0 right-0 bg-background pt-4 pb-4 -mx-4 px-4 border-t mt-6 z-50">
             <Button
               type="submit"
-              className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+              className="w-full h-14 text-lg bg-green-600 hover:bg-green-700 shadow-lg"
               disabled={createAssessmentMutation.isPending}
               data-testid="button-submit-form"
-              onClick={() => console.log("🖱️ Submit button clicked")}
+              onTouchStart={() => console.log("👆 Submit button touched")}
+              onClick={(e) => {
+                console.log("🖱️ Submit button clicked", e);
+                e.stopPropagation();
+              }}
             >
               {createAssessmentMutation.isPending ? (
                 <>
