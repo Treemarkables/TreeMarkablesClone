@@ -90,10 +90,9 @@ export default function JHAHistory() {
         <div className="grid gap-4">
           {assessments.map((assessment) => {
             const highestRisk = assessment.overallRiskRating || 0;
-            const steps = assessment.steps || [];
-            const signatures = assessment.signatures || [];
-            const totalHazards = steps.length;
-            const totalControls = steps.reduce((sum, step) => sum + (step.controlMeasures?.length || 0), 0);
+            const totalHazards = assessment.hazardCount || 0;
+            const totalControls = assessment.controlMeasureCount || 0;
+            const totalSignatures = assessment.signatureCount || 0;
 
             return (
               <Card key={assessment.id} className="hover-elevate cursor-pointer" onClick={() => setSelectedAssessmentId(assessment.id)}>
@@ -134,7 +133,7 @@ export default function JHAHistory() {
                     </div>
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span>{signatures.length} signature{signatures.length !== 1 ? 's' : ''}</span>
+                      <span>{totalSignatures} signature{totalSignatures !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
                 </CardContent>

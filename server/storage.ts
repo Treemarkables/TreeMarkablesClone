@@ -808,7 +808,7 @@ export interface IStorage {
   updateJhaControlMeasure(id: string, updates: Partial<schema.InsertJhaControlMeasureTemplate>): Promise<schema.JhaControlMeasureTemplate>;
   deleteJhaControlMeasure(id: string): Promise<void>;
 
-  getAllJhaAssessments(jobId?: string, status?: string): Promise<schema.JhaAssessment[]>;
+  getAllJhaAssessments(jobId?: string, status?: string): Promise<any[]>;
   getJhaAssessment(id: string, includeSteps?: boolean, includeSignatures?: boolean): Promise<schema.JhaAssessment | undefined>;
   createJhaAssessment(assessment: schema.InsertJhaAssessment): Promise<schema.JhaAssessment>;
   updateJhaAssessment(id: string, updates: Partial<schema.InsertJhaAssessment>): Promise<schema.JhaAssessment>;
@@ -4465,7 +4465,7 @@ class DatabaseStorage implements IStorage {
   }
 
   // JHA Assessments
-  async getAllJhaAssessments(jobId?: string, status?: string): Promise<schema.JhaAssessment[]> {
+  async getAllJhaAssessments(jobId?: string, status?: string): Promise<any[]> {
     let query = db.select().from(schema.jhaAssessments);
     
     const conditions = [];
@@ -4480,7 +4480,35 @@ class DatabaseStorage implements IStorage {
       query = query.where(and(...conditions)) as any;
     }
     
-    return await query.orderBy(desc(schema.jhaAssessments.date));
+    const assessments = await query.orderBy(desc(schema.jhaAssessments.date));
+    
+    // Add counts for each assessment
+    const assessmentsWithCounts = await Promise.all(assessments.map(async (assessment) => {
+      // Count steps (hazards)
+      const stepCount = await db.select({ count: sql<number>`count(*)` })
+        .from(schema.jhaSteps)
+        .where(eq(schema.jhaSteps.assessmentId, assessment.id));
+      
+      // Count total control measures
+      const controlCount = await db.execute(
+        sql`SELECT COUNT(*) as count FROM jha_step_controls 
+            WHERE step_id IN (SELECT id FROM jha_steps WHERE assessment_id = ${assessment.id})`
+      );
+      
+      // Count signatures
+      const signatureCount = await db.select({ count: sql<number>`count(*)` })
+        .from(schema.jhaSignatures)
+        .where(eq(schema.jhaSignatures.assessmentId, assessment.id));
+      
+      return {
+        ...assessment,
+        hazardCount: Number(stepCount[0]?.count || 0),
+        controlMeasureCount: Number(controlCount.rows[0]?.count || 0),
+        signatureCount: Number(signatureCount[0]?.count || 0)
+      };
+    }));
+    
+    return assessmentsWithCounts;
   }
 
   async getJhaAssessment(id: string, includeSteps?: boolean, includeSignatures?: boolean): Promise<schema.JhaAssessment | undefined> {
