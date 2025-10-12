@@ -82,9 +82,11 @@ export default function JHAHistory() {
       ) : (
         <div className="grid gap-4">
           {assessments.map((assessment) => {
-            const highestRisk = Math.max(...assessment.steps.map(s => s.riskRating), 0);
-            const totalHazards = assessment.steps.length;
-            const totalControls = assessment.steps.reduce((sum, step) => sum + step.controlMeasures.length, 0);
+            const highestRisk = assessment.overallRiskRating || 0;
+            const steps = assessment.steps || [];
+            const signatures = assessment.signatures || [];
+            const totalHazards = steps.length;
+            const totalControls = steps.reduce((sum, step) => sum + (step.controlMeasures?.length || 0), 0);
 
             return (
               <Card key={assessment.id} className="hover-elevate cursor-pointer" onClick={() => setSelectedAssessment(assessment)}>
@@ -92,16 +94,21 @@ export default function JHAHistory() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <CardTitle className="text-lg">
-                        JHA #{assessment.id}
+                        {assessment.assessmentNumber || `JHA #${assessment.id.substring(0, 8)}`}
                         {assessment.jobId && ` - Job #${assessment.jobId}`}
                       </CardTitle>
                       <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
                         <span>
                           {assessment.completedAt 
                             ? format(new Date(assessment.completedAt), "PPp")
-                            : format(new Date(assessment.createdAt), "PPp")}
+                            : format(new Date(assessment.date), "PPp")}
                         </span>
                       </div>
+                      {assessment.activityDescription && (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          {assessment.activityDescription}
+                        </p>
+                      )}
                     </div>
                     <Badge variant={getRiskColor(highestRisk)} data-testid={`badge-risk-${assessment.id}`}>
                       {getRiskLabel(highestRisk)}
@@ -120,7 +127,7 @@ export default function JHAHistory() {
                     </div>
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span>{assessment.signatures.length} signature{assessment.signatures.length !== 1 ? 's' : ''}</span>
+                      <span>{signatures.length} signature{signatures.length !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
                 </CardContent>
