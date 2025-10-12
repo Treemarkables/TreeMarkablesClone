@@ -409,15 +409,17 @@ export default function JHAAssessment() {
                         {template.controlMeasures.map((control) => (
                           <div
                             key={control.id}
-                            className="flex items-start space-x-3 p-3 border rounded-lg hover-elevate cursor-pointer"
-                            onClick={() => toggleControl(selectedHazard.hazardTemplateId, control.id)}
+                            className="flex items-start space-x-3 p-3 border rounded-lg hover-elevate"
                           >
                             <Checkbox
                               checked={selectedHazard.selectedControls.includes(control.id)}
                               onCheckedChange={() => toggleControl(selectedHazard.hazardTemplateId, control.id)}
                               data-testid={`checkbox-control-${selectedHazard.hazardTemplateId}-${control.id}`}
                             />
-                            <label className="flex-1 cursor-pointer text-sm">
+                            <label 
+                              className="flex-1 cursor-pointer text-sm"
+                              onClick={() => toggleControl(selectedHazard.hazardTemplateId, control.id)}
+                            >
                               {control.description}
                             </label>
                           </div>
