@@ -236,7 +236,7 @@ export default function Opportunities() {
       // Create a job with status "quote" so it shows up on dispatch board
       const jobData = {
         customerId: customerId,
-        title: `Quote for ${leadData.name}`,
+        title: leadData.name,
         description: leadData.serviceRequested || leadData.notes || 'Quote from conversation',
         address: leadData.address || '',
         status: 'quote',
