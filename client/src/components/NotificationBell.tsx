@@ -118,8 +118,57 @@ export function NotificationBell() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [pushEnabled, setPushEnabled] = useState(notificationService.isEnabled());
+  
+  // Check both browser permission AND user preference from localStorage
+  const getUserPreference = () => {
+    const permission = notificationService.getPermissionStatus();
+    
+    // If permission is denied, notifications are disabled regardless of preference
+    if (permission === 'denied') {
+      return false;
+    }
+    
+    // If permission not granted yet, notifications are disabled
+    if (permission !== 'granted') {
+      return false;
+    }
+    
+    // Permission is granted - check user preference
+    const stored = localStorage.getItem('notificationPreferences');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        return parsed.browserNotifications ?? true; // Default to enabled if permission granted
+      } catch {
+        return true; // Default to enabled if permission granted
+      }
+    }
+    return true; // Default to enabled if permission granted
+  };
+  
+  const [pushEnabled, setPushEnabled] = useState(getUserPreference());
   const [lastNotificationCount, setLastNotificationCount] = useState(0);
+  
+  // Listen for preference changes (both same tab and other tabs)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setPushEnabled(getUserPreference());
+    };
+    
+    const handleCustomChange = () => {
+      setPushEnabled(getUserPreference());
+    };
+    
+    // Cross-tab changes
+    window.addEventListener('storage', handleStorageChange);
+    // Same-tab changes via custom event
+    window.addEventListener('notificationPreferencesChanged', handleCustomChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('notificationPreferencesChanged', handleCustomChange);
+    };
+  }, []);
 
   // Fetch notification summary for badge count
   const { data: summaryData } = useQuery({
@@ -177,12 +226,50 @@ export function NotificationBell() {
     const granted = await notificationService.requestPermission();
     
     if (granted) {
+      // Save preference to localStorage - merge with existing preferences
+      const stored = localStorage.getItem('notificationPreferences');
+      const existingPreferences = stored ? JSON.parse(stored) : {
+        emailNotifications: true,
+        smsNotifications: true,
+        emailActivity: true,
+        smsActivity: true,
+        proposalActivity: true,
+        photoActivity: true,
+        noteActivity: true,
+        quoteActivity: true,
+        jobStatusChanges: true,
+      };
+      
+      const updatedPreferences = {
+        ...existingPreferences,
+        browserNotifications: true,
+      };
+      
+      localStorage.setItem('notificationPreferences', JSON.stringify(updatedPreferences));
+      
+      // Update local state
       setPushEnabled(true);
+      
+      // Notify other components in same tab
+      window.dispatchEvent(new Event('notificationPreferencesChanged'));
+      
       toast({
         title: "Browser notifications enabled",
         description: "You'll receive desktop notifications for new diary activity",
       });
     } else {
+      // Save denied state to localStorage
+      const stored = localStorage.getItem('notificationPreferences');
+      const existingPreferences = stored ? JSON.parse(stored) : {};
+      const updatedPreferences = {
+        ...existingPreferences,
+        browserNotifications: false,
+      };
+      localStorage.setItem('notificationPreferences', JSON.stringify(updatedPreferences));
+      
+      // Notify other components
+      window.dispatchEvent(new Event('notificationPreferencesChanged'));
+      
       toast({
         title: "Permission denied",
         description: "Please enable notifications in your browser settings",
