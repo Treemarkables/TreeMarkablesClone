@@ -198,7 +198,7 @@ Jules`
         .replace("{jobNumber}", job.jobNumber || "")
         .replace("{customerAddress}", job.address || "");
       
-      const populatedBody = template.body
+      let populatedBody = template.body
         .replace("{customerName}", customerName || "Valued Customer")
         .replace("{jobDescription}", job.description || job.title || "tree service")
         .replace("{invoiceLink}", invoiceData?.id ? `${window.location.origin}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
@@ -213,6 +213,9 @@ Jules`
         .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "")
         .replace("{contactName}", "Treemarkables Team")
         .replace("{contactPhone}", "0272166882");
+
+      // Convert newlines to HTML line breaks for contentEditable
+      populatedBody = populatedBody.replace(/\n/g, '<br>');
 
       setEmailData({
         to: billingEmail || "",
@@ -394,6 +397,9 @@ Jules`
       .replace("{contactPhone}", customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
       .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
       .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "");
+
+    // Convert newlines to HTML line breaks for contentEditable
+    populatedBody = populatedBody.replace(/\n/g, '<br>');
 
     // Convert URLs to clickable hyperlinks
     populatedBody = linkifyUrls(populatedBody);
