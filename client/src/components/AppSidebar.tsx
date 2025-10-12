@@ -215,6 +215,26 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              
+              {/* JHA Assessment - Available to both crew and admin */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/jha-assessment"}>
+                  <Link href="/jha-assessment" onClick={() => isMobile && setOpen(false)} data-testid="link-jha-assessment">
+                    <Shield className="h-4 w-4" />
+                    <span>JHA Assessment</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              
+              {/* JHA History - Available to both crew and admin */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/jha-history"}>
+                  <Link href="/jha-history" onClick={() => isMobile && setOpen(false)} data-testid="link-jha-history">
+                    <HistoryIconLucide className="h-4 w-4" />
+                    <span>JHA History</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
