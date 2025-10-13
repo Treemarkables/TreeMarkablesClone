@@ -68,17 +68,19 @@ export class MetaMarketingService {
 
     try {
       // Step 1: Create Campaign
+      const campaignData = new URLSearchParams({
+        name: `Campaign ${Date.now()}`,
+        objective: this.mapObjective(objective),
+        status: 'PAUSED', // Start paused for safety
+        access_token: this.pageAccessToken,
+      });
+
       const campaignResponse = await fetch(
         `https://graph.facebook.com/v18.0/act_${this.adAccountId}/campaigns`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: `Campaign ${Date.now()}`,
-            objective: this.mapObjective(objective),
-            status: 'PAUSED', // Start paused for safety
-            access_token: this.pageAccessToken,
-          }),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: campaignData.toString(),
         }
       );
 
@@ -90,21 +92,23 @@ export class MetaMarketingService {
       const { id: campaignId } = await campaignResponse.json();
 
       // Step 2: Create Ad Set
+      const adSetData = new URLSearchParams({
+        name: `AdSet ${Date.now()}`,
+        campaign_id: campaignId,
+        billing_event: 'IMPRESSIONS',
+        optimization_goal: 'REACH',
+        [budgetType === 'daily' ? 'daily_budget' : 'lifetime_budget']: Math.round(budget * 100).toString(), // Convert to cents
+        targeting: JSON.stringify(this.buildTargeting(targeting)),
+        status: 'PAUSED',
+        access_token: this.pageAccessToken,
+      });
+
       const adSetResponse = await fetch(
         `https://graph.facebook.com/v18.0/act_${this.adAccountId}/adsets`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: `AdSet ${Date.now()}`,
-            campaign_id: campaignId,
-            billing_event: 'IMPRESSIONS',
-            optimization_goal: 'REACH',
-            [budgetType === 'daily' ? 'daily_budget' : 'lifetime_budget']: Math.round(budget * 100), // Convert to cents
-            targeting: this.buildTargeting(targeting),
-            status: 'PAUSED',
-            access_token: this.pageAccessToken,
-          }),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: adSetData.toString(),
         }
       );
 
@@ -116,28 +120,30 @@ export class MetaMarketingService {
       const { id: adSetId } = await adSetResponse.json();
 
       // Step 3: Create Ad Creative
+      const creativeData = new URLSearchParams({
+        name: `Creative ${Date.now()}`,
+        object_story_spec: JSON.stringify({
+          page_id: this.pageId,
+          link_data: {
+            link: adCreative.ctaUrl,
+            message: adCreative.text,
+            name: adCreative.headline,
+            call_to_action: {
+              type: this.mapCtaType(adCreative.ctaText),
+              value: { link: adCreative.ctaUrl },
+            },
+            image_url: adCreative.imageUrl,
+          },
+        }),
+        access_token: this.pageAccessToken,
+      });
+
       const creativeResponse = await fetch(
         `https://graph.facebook.com/v18.0/act_${this.adAccountId}/adcreatives`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: `Creative ${Date.now()}`,
-            object_story_spec: {
-              page_id: this.pageId,
-              link_data: {
-                link: adCreative.ctaUrl,
-                message: adCreative.text,
-                name: adCreative.headline,
-                call_to_action: {
-                  type: this.mapCtaType(adCreative.ctaText),
-                  value: { link: adCreative.ctaUrl },
-                },
-                image_url: adCreative.imageUrl,
-              },
-            },
-            access_token: this.pageAccessToken,
-          }),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: creativeData.toString(),
         }
       );
 
@@ -149,18 +155,20 @@ export class MetaMarketingService {
       const { id: creativeId } = await creativeResponse.json();
 
       // Step 4: Create Ad
+      const adData = new URLSearchParams({
+        name: `Ad ${Date.now()}`,
+        adset_id: adSetId,
+        creative: JSON.stringify({ creative_id: creativeId }),
+        status: 'PAUSED',
+        access_token: this.pageAccessToken,
+      });
+
       const adResponse = await fetch(
         `https://graph.facebook.com/v18.0/act_${this.adAccountId}/ads`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: `Ad ${Date.now()}`,
-            adset_id: adSetId,
-            creative: { creative_id: creativeId },
-            status: 'PAUSED',
-            access_token: this.pageAccessToken,
-          }),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: adData.toString(),
         }
       );
 
@@ -200,15 +208,17 @@ export class MetaMarketingService {
       const stars = '⭐'.repeat(reviewRating);
       const message = `${stars}\n\n"${reviewText}"\n\n- ${reviewAuthor}\n\n${reviewSource === 'google' ? '📍 Review from Google' : '💙 Review from Facebook'}`;
 
+      const postData = new URLSearchParams({
+        message,
+        access_token: this.pageAccessToken,
+      });
+
       const response = await fetch(
         `https://graph.facebook.com/v18.0/${this.pageId}/feed`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message,
-            access_token: this.pageAccessToken,
-          }),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: postData.toString(),
         }
       );
 
@@ -300,15 +310,17 @@ export class MetaMarketingService {
 
     const metaStatus = status === 'active' ? 'ACTIVE' : 'PAUSED';
 
+    const updateData = new URLSearchParams({
+      status: metaStatus,
+      access_token: this.pageAccessToken,
+    });
+
     await fetch(
       `https://graph.facebook.com/v18.0/${campaignId}`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: metaStatus,
-          access_token: this.pageAccessToken,
-        }),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: updateData.toString(),
       }
     );
   }
