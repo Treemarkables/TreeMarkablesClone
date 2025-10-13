@@ -402,11 +402,15 @@ export function EmailComposerModal({
     const customerName = customer?.name || `${customer?.firstName || ''} ${customer?.lastName || ''}`.trim();
     
     const populatedSubject = template.subject
-      .replace("{jobNumber}", job?.jobNumber || "")
-      .replace("{customerAddress}", job?.address || "")
-      .replace("{invoiceNumber}", invoiceData?.invoiceNumber || "")
-      .replace("{quoteNumber}", quoteData?.quoteNumber || "")
-      .replace("{proposalNumber}", proposalData?.proposalNumber || "");
+      .replace(/{jobNumber}/g, job?.jobNumber || "")
+      .replace(/{customerAddress}/g, job?.address || "")
+      .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
+      .replace(/{invoiceAmount}/g, invoiceData?.totalAmount || invoiceData?.amount ? `$${(invoiceData.totalAmount || invoiceData.amount).toFixed(2)}` : "$0.00")
+      .replace(/\$\{invoiceAmount\}/g, invoiceData?.totalAmount || invoiceData?.amount ? `$${(invoiceData.totalAmount || invoiceData.amount).toFixed(2)}` : "$0.00")
+      .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
+      .replace(/{quoteAmount}/g, quoteData?.totalAmount ? `$${quoteData.totalAmount.toFixed(2)}` : "$0.00")
+      .replace(/{proposalNumber}/g, proposalData?.proposalNumber || "")
+      .replace(/{proposalAmount}/g, proposalData?.totalAmount ? `$${proposalData.totalAmount.toFixed(2)}` : "$0.00");
     
     let populatedBody = template.body
       .replace("{firstName}", firstName || "there")
