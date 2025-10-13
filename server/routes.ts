@@ -3859,6 +3859,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       console.log(`📧 Proposal ${proposalNumber} email sent to ${to}${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
 
+      // Update proposal status to 'sent' and record sent date
+      await storage.updateProposal(proposalId, {
+        status: 'sent',
+        sentDate: new Date()
+      });
+      console.log(`📋 Updated proposal ${proposalNumber} status to 'sent'`);
+
       // Create diary entry for sent proposal email
       if (proposal.jobId) {
         try {

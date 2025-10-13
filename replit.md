@@ -4,6 +4,7 @@
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
 ## Recent Changes (October 2025)
+- **Proposal Status Fix**: Fixed proposal send endpoint to properly update status to 'sent' when emailed. Previously proposals stayed in 'draft' status after sending, causing inaccurate quote acceptance metrics.
 - **Metrics Dashboard Fix**: Fixed revenue and job count metrics to exclude archived jobs and include invoiced jobs. Now accurately shows active jobs and revenue from both completed and invoiced statuses.
 - **Invoices Page Simplification**: Removed "Sent" tab to free up space - now shows only "All" and "Pending" tabs with 2-column layout.
 - **Send to Xero Button Fix**: Fixed bug where clicking one "Send to Xero" button would visually affect all buttons on the page. Now properly tracks individual job sending state instead of using global mutation pending state.
