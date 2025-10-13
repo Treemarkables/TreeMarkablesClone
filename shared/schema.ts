@@ -584,6 +584,7 @@ export const proposalLineItems: any = pgTable("proposal_line_items", {
   selectedChoiceId: varchar("selected_choice_id").references(() => proposalLineItemChoices.id, { onDelete: 'set null' }), // FK to selected choice
   fixedPrice: decimal("fixed_price", { precision: 10, scale: 2 }), // For fixed pricing mode
   selected: boolean("selected").notNull().default(true), // Whether customer has selected this line item
+  priceIncludesTax: boolean("price_includes_tax").default(false), // Whether unitPrice/totalPrice includes GST
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

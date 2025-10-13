@@ -11394,7 +11394,8 @@ Transcription: ${transcriptText}`;
                 pricingType: item.pricingType || 'normal',
                 selectedChoiceId: item.selectedChoiceId,
                 fixedPrice: item.fixedPrice?.toString(),
-                selected: item.selected !== false
+                selected: item.selected !== false,
+                priceIncludesTax: item.priceIncludesTax || false
               });
               
               // Create choices for this line item if they exist
@@ -11507,7 +11508,8 @@ Transcription: ${transcriptText}`;
                 pricingType: item.pricingType || 'normal',
                 selectedChoiceId: item.selectedChoiceId,
                 fixedPrice: item.fixedPrice?.toString(),
-                selected: item.selected !== false
+                selected: item.selected !== false,
+                priceIncludesTax: item.priceIncludesTax || false
               });
               console.log(`    ✅ Created line item ${createdItem.id}`);
               
