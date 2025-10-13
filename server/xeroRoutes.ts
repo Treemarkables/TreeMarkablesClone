@@ -265,6 +265,8 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       
       // Step 2: Create invoice in Xero
       try {
+        console.log(`🚀 XERO INVOICE: Starting invoice creation for job ${job.id}`);
+        
         // Get proposal for this job to extract line items
         const proposals = await storage.getProposalsByJob(job.id);
         const proposal = proposals?.[0]; // Get the first/latest proposal
