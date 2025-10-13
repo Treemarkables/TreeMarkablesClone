@@ -1570,6 +1570,11 @@ export function GlobalJobCard({
                         });
                         return;
                       }
+                      // Check if there's an existing proposal and load it
+                      const existingProposal = jobProposalResponse?.data?.[0];
+                      if (existingProposal) {
+                        setEditingProposalId(existingProposal.id);
+                      }
                       setIsProposalBuilderOpen(true);
                     }}
                     data-testid="menu-item-proposal-mobile"
@@ -1744,6 +1749,11 @@ export function GlobalJobCard({
                         });
                         return;
                       }
+                      // Check if there's an existing proposal and load it
+                      const existingProposal = jobProposalResponse?.data?.[0];
+                      if (existingProposal) {
+                        setEditingProposalId(existingProposal.id);
+                      }
                       setIsProposalBuilderOpen(true);
                     }}
                     data-testid="menu-item-proposal"
@@ -1866,7 +1876,18 @@ export function GlobalJobCard({
                     <CreditCard className="w-4 h-4 mr-2" />
                     Invoice
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsProposalBuilderOpen(true)} disabled={!selectedCustomer?.id} data-testid="menu-item-proposal-mobile">
+                  <DropdownMenuItem 
+                    onClick={() => {
+                      // Check if there's an existing proposal and load it
+                      const existingProposal = jobProposalResponse?.data?.[0];
+                      if (existingProposal) {
+                        setEditingProposalId(existingProposal.id);
+                      }
+                      setIsProposalBuilderOpen(true);
+                    }} 
+                    disabled={!selectedCustomer?.id} 
+                    data-testid="menu-item-proposal-mobile"
+                  >
                     <Presentation className="w-4 h-4 mr-2" />
                     Proposal
                   </DropdownMenuItem>
