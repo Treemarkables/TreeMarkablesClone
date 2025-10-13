@@ -15025,6 +15025,166 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Marketing Campaigns API
+  const { metaMarketingService } = await import("./services/metaMarketingService");
+
+  // Get all marketing campaigns
+  app.get("/api/marketing/campaigns", async (req, res) => {
+    try {
+      const campaigns = await storage.getAllMarketingCampaigns();
+      res.json({ success: true, data: campaigns });
+    } catch (error) {
+      console.error('Error fetching marketing campaigns:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch campaigns' });
+    }
+  });
+
+  // Get single marketing campaign
+  app.get("/api/marketing/campaigns/:id", async (req, res) => {
+    try {
+      const campaign = await storage.getMarketingCampaign(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ success: false, message: 'Campaign not found' });
+      }
+      res.json({ success: true, data: campaign });
+    } catch (error) {
+      console.error('Error fetching marketing campaign:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch campaign' });
+    }
+  });
+
+  // Create marketing campaign
+  app.post("/api/marketing/campaigns", async (req, res) => {
+    try {
+      const validatedData = schema.insertMarketingCampaignSchema.parse(req.body);
+      const campaign = await storage.createMarketingCampaign(validatedData);
+      res.json({ success: true, data: campaign });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      console.error('Error creating marketing campaign:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create campaign' });
+    }
+  });
+
+  // Update marketing campaign
+  app.patch("/api/marketing/campaigns/:id", async (req, res) => {
+    try {
+      const updates = req.body;
+      const campaign = await storage.updateMarketingCampaign(req.params.id, updates);
+      res.json({ success: true, data: campaign });
+    } catch (error) {
+      console.error('Error updating marketing campaign:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update campaign' });
+    }
+  });
+
+  // Delete marketing campaign
+  app.delete("/api/marketing/campaigns/:id", async (req, res) => {
+    try {
+      await storage.deleteMarketingCampaign(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting marketing campaign:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete campaign' });
+    }
+  });
+
+  // Publish Facebook/Instagram ad campaign
+  app.post("/api/marketing/campaigns/:id/publish-ad", async (req, res) => {
+    try {
+      const campaign = await storage.getMarketingCampaign(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ success: false, message: 'Campaign not found' });
+      }
+
+      if (campaign.type !== 'ad') {
+        return res.status(400).json({ success: false, message: 'This campaign is not an ad campaign' });
+      }
+
+      const { campaignId, adSetId, adId } = await metaMarketingService.createAdCampaign(
+        campaign.objective || 'awareness',
+        parseFloat(campaign.budget?.toString() || '0'),
+        campaign.budgetType as 'daily' | 'lifetime' || 'daily',
+        campaign.adCreative as any,
+        campaign.targeting as any,
+        campaign.platform as any
+      );
+
+      await storage.updateMarketingCampaign(campaign.id, {
+        metaCampaignId: campaignId,
+        metaAdSetId: adSetId,
+        metaAdId: adId,
+        status: 'published',
+        publishedAt: new Date()
+      });
+
+      res.json({ success: true, message: 'Ad campaign published successfully', campaignId, adSetId, adId });
+    } catch (error) {
+      console.error('Error publishing ad campaign:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to publish ad campaign' });
+    }
+  });
+
+  // Publish review post to Facebook
+  app.post("/api/marketing/campaigns/:id/publish-review", async (req, res) => {
+    try {
+      const campaign = await storage.getMarketingCampaign(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ success: false, message: 'Campaign not found' });
+      }
+
+      if (campaign.type !== 'review_post') {
+        return res.status(400).json({ success: false, message: 'This campaign is not a review post' });
+      }
+
+      const { postId, permalink } = await metaMarketingService.postReviewToFacebook(
+        campaign.reviewText || '',
+        campaign.reviewAuthor || '',
+        campaign.reviewRating || 5,
+        campaign.reviewSource || 'google'
+      );
+
+      await storage.updateMarketingCampaign(campaign.id, {
+        metaPostId: postId,
+        status: 'published',
+        publishedAt: new Date()
+      });
+
+      res.json({ success: true, message: 'Review posted successfully', postId, permalink });
+    } catch (error) {
+      console.error('Error publishing review post:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to publish review post' });
+    }
+  });
+
+  // Refresh campaign stats
+  app.post("/api/marketing/campaigns/:id/refresh-stats", async (req, res) => {
+    try {
+      const campaign = await storage.getMarketingCampaign(req.params.id);
+      if (!campaign || !campaign.metaCampaignId) {
+        return res.status(404).json({ success: false, message: 'Campaign not found or not published' });
+      }
+
+      const stats = await metaMarketingService.getCampaignStats(campaign.metaCampaignId);
+      
+      await storage.updateMarketingCampaign(campaign.id, {
+        reach: stats.reach,
+        impressions: stats.impressions,
+        clicks: stats.clicks,
+        engagement: stats.engagement,
+        spent: stats.spent.toString(),
+        conversions: stats.conversions
+      });
+
+      res.json({ success: true, data: stats });
+    } catch (error) {
+      console.error('Error refreshing campaign stats:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to refresh stats' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
