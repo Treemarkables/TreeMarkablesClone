@@ -63,7 +63,9 @@ import {
   type InspectionTemplate, type InsertInspectionTemplate, type UpdateInspectionTemplate,
   type InspectionChecklistItem, type InsertInspectionChecklistItem, type UpdateInspectionChecklistItem,
   type VehicleInspection, type InsertVehicleInspection, type UpdateVehicleInspection,
-  type InspectionResponse, type InsertInspectionResponse
+  type InspectionResponse, type InsertInspectionResponse,
+  // Marketing Campaign types
+  type MarketingCampaign, type InsertMarketingCampaign
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
@@ -830,6 +832,15 @@ export interface IStorage {
   getJhaSignatures(assessmentId: string): Promise<schema.JhaSignature[]>;
   createJhaSignature(signature: schema.InsertJhaSignature): Promise<schema.JhaSignature>;
   deleteJhaSignature(id: string): Promise<void>;
+
+  // Marketing Campaigns
+  createMarketingCampaign(campaign: schema.InsertMarketingCampaign): Promise<schema.MarketingCampaign>;
+  getMarketingCampaign(id: string): Promise<schema.MarketingCampaign | undefined>;
+  getAllMarketingCampaigns(): Promise<schema.MarketingCampaign[]>;
+  getMarketingCampaignsByStatus(status: string): Promise<schema.MarketingCampaign[]>;
+  getScheduledMarketingCampaigns(): Promise<schema.MarketingCampaign[]>;
+  updateMarketingCampaign(id: string, updates: Partial<schema.InsertMarketingCampaign>): Promise<schema.MarketingCampaign>;
+  deleteMarketingCampaign(id: string): Promise<void>;
 }
 
 // Database Storage Implementation
@@ -4689,6 +4700,58 @@ class DatabaseStorage implements IStorage {
   async deleteJhaSignature(id: string): Promise<void> {
     await db.delete(schema.jhaSignatures)
       .where(eq(schema.jhaSignatures.id, id));
+  }
+
+  // Marketing Campaigns
+  async createMarketingCampaign(campaign: schema.InsertMarketingCampaign): Promise<schema.MarketingCampaign> {
+    const [result] = await db.insert(schema.marketingCampaigns)
+      .values(campaign)
+      .returning();
+    return result;
+  }
+
+  async getMarketingCampaign(id: string): Promise<schema.MarketingCampaign | undefined> {
+    const [result] = await db.select()
+      .from(schema.marketingCampaigns)
+      .where(eq(schema.marketingCampaigns.id, id));
+    return result;
+  }
+
+  async getAllMarketingCampaigns(): Promise<schema.MarketingCampaign[]> {
+    return await db.select()
+      .from(schema.marketingCampaigns)
+      .orderBy(desc(schema.marketingCampaigns.createdAt));
+  }
+
+  async getMarketingCampaignsByStatus(status: string): Promise<schema.MarketingCampaign[]> {
+    return await db.select()
+      .from(schema.marketingCampaigns)
+      .where(eq(schema.marketingCampaigns.status, status))
+      .orderBy(desc(schema.marketingCampaigns.createdAt));
+  }
+
+  async getScheduledMarketingCampaigns(): Promise<schema.MarketingCampaign[]> {
+    return await db.select()
+      .from(schema.marketingCampaigns)
+      .where(
+        and(
+          eq(schema.marketingCampaigns.status, 'scheduled'),
+          lte(schema.marketingCampaigns.scheduledFor, new Date())
+        )
+      );
+  }
+
+  async updateMarketingCampaign(id: string, updates: Partial<schema.InsertMarketingCampaign>): Promise<schema.MarketingCampaign> {
+    const [result] = await db.update(schema.marketingCampaigns)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.marketingCampaigns.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteMarketingCampaign(id: string): Promise<void> {
+    await db.delete(schema.marketingCampaigns)
+      .where(eq(schema.marketingCampaigns.id, id));
   }
 }
 
