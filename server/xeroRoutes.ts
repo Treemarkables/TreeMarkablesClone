@@ -265,23 +265,48 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       
       // Step 2: Create invoice in Xero
       try {
-        // Convert job line items to Xero format
-        const jobLineItems = job.lineItems || [];
+        // Get proposal for this job to extract line items
+        const proposals = await storage.getProposalsByJobId(job.id);
+        const proposal = proposals?.[0]; // Get the first/latest proposal
         
-        if (jobLineItems.length === 0) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'Job must have at least one line item to create an invoice' 
-          });
+        let invoiceLineItems: any[] = [];
+        
+        // Extract line items from proposal sections
+        if (proposal?.sections && Array.isArray(proposal.sections)) {
+          for (const section of proposal.sections) {
+            if (section.lineItems && Array.isArray(section.lineItems)) {
+              for (const item of section.lineItems) {
+                invoiceLineItems.push({
+                  description: item.description || 'Tree Service',
+                  quantity: Number(item.quantity) || 1,
+                  unitAmount: Number(item.unitPrice) || 0,
+                  accountCode: '200', // Sales account - adjust as needed
+                  taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
+                });
+              }
+            }
+          }
         }
         
-        const lineItems = jobLineItems.map((item: any) => ({
-          description: item.description || 'Tree Service',
-          quantity: item.quantity || 1,
-          unitAmount: parseFloat(item.unitPrice || item.total || 0),
-          accountCode: '200', // Sales account - adjust as needed
-          taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
-        }));
+        // Fallback to job line items if no proposal line items found
+        if (invoiceLineItems.length === 0) {
+          const jobLineItems = job.lineItems || [];
+          if (jobLineItems.length === 0) {
+            return res.status(400).json({ 
+              success: false, 
+              message: 'Job must have at least one line item to create an invoice' 
+            });
+          }
+          invoiceLineItems = jobLineItems.map((item: any) => ({
+            description: item.description || 'Tree Service',
+            quantity: item.quantity || 1,
+            unitAmount: parseFloat(item.unitPrice || item.total || 0),
+            accountCode: '200', // Sales account - adjust as needed
+            taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
+          }));
+        }
+        
+        const lineItems = invoiceLineItems;
         
         const invoice = {
           type: 'ACCREC' as any, // Accounts Receivable (sales invoice)
