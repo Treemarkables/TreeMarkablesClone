@@ -218,7 +218,7 @@ export default function Invoices() {
                       <div className="flex items-center justify-between pt-2 border-t">
                         <span className="text-sm text-muted-foreground">Total Amount</span>
                         <span className="text-lg font-bold" data-testid={`text-amount-${job.id}`}>
-                          {formatCurrency(job.totalIncludingGst || job.totalAmount)}
+                          {formatCurrency((job.totalIncludingGst && job.totalIncludingGst !== '0.00') ? job.totalIncludingGst : job.totalAmount)}
                         </span>
                       </div>
 
