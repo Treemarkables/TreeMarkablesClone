@@ -452,6 +452,7 @@ export function ProposalBuilder({
       choices: currentLineItem.choices || [],
       selectedChoiceId: defaultChoiceId,
       fixedPrice: currentLineItem.fixedPrice,
+      priceIncludesTax: currentLineItem.priceIncludesTax || false,
     };
 
     setSections(prev => prev.map(section => 
@@ -1559,27 +1560,37 @@ export function ProposalBuilder({
 
                                   {/* Normal Pricing Fields */}
                                   {currentLineItem.pricingType === "normal" && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      <Input
-                                        type="number"
-                                        placeholder="Quantity"
-                                        value={currentLineItem.quantity || ""}
-                                        onChange={(e) => setCurrentLineItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
-                                        data-testid={`input-line-item-quantity-${section.id}`}
-                                      />
-                                      <Input
-                                        type="number"
-                                        placeholder="Unit Price"
-                                        value={currentLineItem.unitPrice || ""}
-                                        onChange={(e) => setCurrentLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
-                                        data-testid={`input-line-item-price-${section.id}`}
-                                      />
+                                    <div className="space-y-2">
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <Input
+                                          type="number"
+                                          placeholder="Quantity"
+                                          value={currentLineItem.quantity || ""}
+                                          onChange={(e) => setCurrentLineItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                                          data-testid={`input-line-item-quantity-${section.id}`}
+                                        />
+                                        <Input
+                                          type="number"
+                                          placeholder="Unit Price"
+                                          value={currentLineItem.unitPrice || ""}
+                                          onChange={(e) => setCurrentLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
+                                          data-testid={`input-line-item-price-${section.id}`}
+                                        />
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          checked={currentLineItem.priceIncludesTax || false}
+                                          onCheckedChange={(checked) => setCurrentLineItem(prev => ({ ...prev, priceIncludesTax: checked as boolean }))}
+                                          data-testid={`checkbox-price-includes-tax-${section.id}`}
+                                        />
+                                        <label className="text-sm">Price includes GST (15%)</label>
+                                      </div>
                                     </div>
                                   )}
 
                                   {/* Fixed Price Field */}
                                   {currentLineItem.pricingType === "fixed" && (
-                                    <div>
+                                    <div className="space-y-2">
                                       <Input
                                         type="number"
                                         placeholder="Fixed Price"
@@ -1587,6 +1598,14 @@ export function ProposalBuilder({
                                         onChange={(e) => setCurrentLineItem(prev => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
                                         data-testid={`input-fixed-price-${section.id}`}
                                       />
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          checked={currentLineItem.priceIncludesTax || false}
+                                          onCheckedChange={(checked) => setCurrentLineItem(prev => ({ ...prev, priceIncludesTax: checked as boolean }))}
+                                          data-testid={`checkbox-price-includes-tax-fixed-${section.id}`}
+                                        />
+                                        <label className="text-sm">Price includes GST (15%)</label>
+                                      </div>
                                     </div>
                                   )}
 
