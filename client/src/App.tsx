@@ -27,6 +27,7 @@ import Inbox from "@/pages/Inbox";
 import Integrations from "@/pages/Integrations";
 import Equipment from "@/pages/Equipment";
 import Invoices from "@/pages/Invoices";
+import MarketingPlanner from "@/pages/MarketingPlanner";
 import NotFound from "@/pages/not-found";
 import { CustomerPortal } from "@/pages/CustomerPortal";
 import CommunicationsManagement from "@/pages/CommunicationsManagement";
@@ -525,6 +526,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Reviews />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/marketing">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <MarketingPlanner />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

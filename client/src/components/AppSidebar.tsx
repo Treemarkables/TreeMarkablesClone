@@ -20,7 +20,8 @@ import {
   Shield,
   LogOut,
   ClipboardCheck,
-  History as HistoryIconLucide
+  History as HistoryIconLucide,
+  Megaphone
 } from "lucide-react";
 import {
   Sidebar,
@@ -314,6 +315,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     <Link href="/reviews" onClick={() => isMobile && setOpen(false)} data-testid="link-reviews">
                       <Star className="h-4 w-4 fill-current" />
                       <span>Reviews</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/marketing"}>
+                    <Link href="/marketing" onClick={() => isMobile && setOpen(false)} data-testid="link-marketing">
+                      <Megaphone className="h-4 w-4" />
+                      <span>Marketing Planner</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
