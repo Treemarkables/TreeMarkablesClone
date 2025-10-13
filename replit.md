@@ -4,6 +4,8 @@
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It has evolved into a full-featured business dashboard providing advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services.
 
 ## Recent Changes (October 2025)
+- **Standard Invoice Email Template**: Added new "Invoice" email template for first-time invoice sending (previously only had "Invoice Reminder"). Template includes invoice number, amount, due date, and payment link with professional formatting.
+- **SMS Timestamp Fix**: Fixed SMS Everyone NZ timestamp parsing by adding explicit NZ timezone (+13:00) to ensure correct chronological sorting in job diary. API returns timestamps without timezone info, causing display/sorting inconsistencies.
 - **Comprehensive Notification System**: Implemented complete notification system for job diary activity tracking with in-app notifications, browser push notifications, and user preference management. Features include:
   - Real-time notification bell with unread count badge and activity dropdown
   - Automatic notification creation for diary events (email sent, SMS sent, proposals, photos, notes)

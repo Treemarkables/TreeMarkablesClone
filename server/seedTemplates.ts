@@ -47,6 +47,32 @@ Treemarkables Team`,
     createdBy: 'system',
   },
   {
+    name: 'Invoice',
+    category: 'invoice',
+    subject: 'Invoice {invoiceNumber} - ${invoiceAmount}',
+    htmlContent: `Hi {customerName},
+
+Please find attached invoice {invoiceNumber} for the tree service work we completed at {address}.
+
+Invoice Amount: {invoiceAmount}
+Due Date: {dueDate}
+
+You can view and pay your invoice here: {invoiceLink}
+
+If you have any questions about this invoice, please don't hesitate to contact us.
+
+Thank you for your business!
+
+Best regards,
+Treemarkables`,
+    textContent: '',
+    variables: ['customerName', 'invoiceNumber', 'invoiceAmount', 'dueDate', 'invoiceLink', 'address', 'jobNumber'],
+    description: 'Send invoice to customer',
+    isActive: true,
+    isDefault: false,
+    createdBy: 'system',
+  },
+  {
     name: 'Invoice Reminder',
     category: 'invoice',
     subject: 'Payment Reminder - Invoice for {address}',
