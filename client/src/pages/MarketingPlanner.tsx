@@ -78,6 +78,7 @@ export default function MarketingPlanner() {
 
   const { data: campaigns = [], isLoading } = useQuery<MarketingCampaign[]>({
     queryKey: ['/api/marketing/campaigns'],
+    select: (data: any) => data.data || [],
   });
 
   const { data: googleReviews = [] } = useQuery<any[]>({
