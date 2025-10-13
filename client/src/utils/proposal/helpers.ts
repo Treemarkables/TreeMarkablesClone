@@ -26,14 +26,32 @@ export const calculateProposalTotals = (sections: ProposalSection[], taxRate: nu
     section.lineItems.filter(item => item.selected)
   );
   
-  const subtotal = selectedLineItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const taxAmount = subtotal * taxRate / 100;
-  const grandTotal = subtotal + taxAmount;
+  let subtotalExGst = 0;
+  let gstAmount = 0;
+  
+  selectedLineItems.forEach(item => {
+    const itemPrice = item.totalPrice;
+    const isInclusive = item.priceIncludesTax || false;
+    const gstRate = taxRate / 100;
+    
+    if (isInclusive) {
+      // Price includes GST - extract the ex-GST amount
+      const exGst = itemPrice / (1 + gstRate);
+      subtotalExGst += exGst;
+      gstAmount += itemPrice - exGst;
+    } else {
+      // Price excludes GST - add it
+      subtotalExGst += itemPrice;
+      gstAmount += itemPrice * gstRate;
+    }
+  });
+  
+  const grandTotal = subtotalExGst + gstAmount;
   
   return {
     selectedLineItems,
-    subtotal,
-    taxAmount,
+    subtotal: subtotalExGst,
+    taxAmount: gstAmount,
     grandTotal
   };
 };
