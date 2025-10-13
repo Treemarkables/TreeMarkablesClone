@@ -569,10 +569,11 @@ export function GlobalJobCard({
         setSelectedCustomerName(editingJobCustomer.name);
       }
       
-      // Reset loading flag after a small delay to ensure all form updates are done
+      // Reset loading flag after a delay to ensure all form updates are done
+      // Longer timeout prevents auto-save trigger when cache refreshes
       setTimeout(() => {
         isLoadingDataRef.current = false;
-      }, 100);
+      }, 500);
     }
   }, [editingJob, editingJobCustomer, form, replaceLineItems]);
 
@@ -634,8 +635,9 @@ export function GlobalJobCard({
           setLastAutoSaveTime(new Date());
           hasUserChangedRef.current = false;
           
-          // Don't invalidate queries on auto-save to prevent refetching
-          // This avoids the infinite loop of save -> refetch -> form reset -> save
+          // Invalidate queries to refresh data across all views (mobile & desktop sync)
+          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
         } catch (error) {
           console.error('Auto-save failed:', error);
           hasUserChangedRef.current = false;
