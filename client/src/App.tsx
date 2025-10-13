@@ -693,14 +693,6 @@ function Router() {
           />
         </SidebarLayout>
       </Route>
-      <Route path="/settings/notifications">
-        <SidebarLayout>
-          <SettingsPlaceholder 
-            title="Notifications"
-            description="Email alerts, SMS settings and reminders"
-          />
-        </SidebarLayout>
-      </Route>
       <Route path="/settings/forms">
         <SidebarLayout>
           <JobTemplateManagement />
