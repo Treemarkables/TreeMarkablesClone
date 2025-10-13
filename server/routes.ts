@@ -3024,6 +3024,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             type: notificationType,
             priority: entry.entryType === 'proposal' ? 'high' : 'medium',
             isRead: false,
+            userId: req.user?.id, // Add current user's ID
             entityType: 'diary_entry',
             entityId: entry.id,
             relatedEntityType: 'job',
@@ -3033,7 +3034,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           };
           
           await storage.createNotification(notificationData);
-          console.log(`🔔 Notification created for ${notificationType} on job ${jobId}`);
+          console.log(`🔔 Notification created for ${notificationType} on job ${jobId} for user ${req.user?.id}`);
         }
       } catch (error) {
         // Don't fail the request if notification creation fails
