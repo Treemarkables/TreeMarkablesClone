@@ -2234,8 +2234,8 @@ class DatabaseStorage implements IStorage {
         conditions.push(sql`${schema.jobs.createdAt} <= ${toDate}`);
       }
 
-      // Get all jobs with lead source data
-      const jobs = await this.db
+      // Get all jobs with lead source data (exclude archived)
+      const jobs = await db
         .select()
         .from(schema.jobs)
         .where(conditions.length > 0 ? and(...conditions) : undefined);
@@ -2249,7 +2249,7 @@ class DatabaseStorage implements IStorage {
         proposalConditions.push(sql`${schema.proposals.createdAt} <= ${toDate}`);
       }
       
-      const proposals = await this.db
+      const proposals = await db
         .select()
         .from(schema.proposals)
         .where(proposalConditions.length > 0 ? and(...proposalConditions) : undefined);
@@ -2279,8 +2279,11 @@ class DatabaseStorage implements IStorage {
         });
       });
 
-      // Process jobs
+      // Process jobs (exclude archived)
       jobs.forEach(job => {
+        // Skip archived jobs
+        if (job.status === 'archived') return;
+        
         const source = job.leadSource || 'other';
         const existing = sourceMap.get(source) || {
           count: 0,
@@ -2296,12 +2299,12 @@ class DatabaseStorage implements IStorage {
         existing.jobIds.add(job.id);
 
         // Count quoted jobs (jobs with quotes/proposals)
-        if (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'completed') {
+        if (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'completed' || job.status === 'invoiced') {
           existing.quotedCount++;
         }
 
-        // Count won jobs (completed with revenue)
-        if (job.status === 'completed' && job.totalAmount) {
+        // Count won jobs (completed or invoiced with revenue)
+        if ((job.status === 'completed' || job.status === 'invoiced') && job.totalAmount && parseFloat(job.totalAmount) > 0) {
           existing.wonCount++;
           const revenue = parseFloat(job.totalAmount) || 0;
           existing.totalRevenue += revenue;
