@@ -175,6 +175,7 @@ export function ProposalBuilder({
           choices: [],
           selectedChoiceId: undefined,
           fixedPrice: undefined,
+          priceIncludesTax: item.priceIncludesTax || false,
         })) : [],
         sortOrder: 1
       };
@@ -234,7 +235,8 @@ export function ProposalBuilder({
             isOptional: item.isOptional || false,
             selected: item.selected !== false,
             pricingType: item.pricingType || 'normal',
-            choices: [] // Choices would be loaded separately if needed
+            choices: [], // Choices would be loaded separately if needed
+            priceIncludesTax: item.priceIncludesTax || false,
           })),
           sortOrder: section.sortOrder || 0
         }));
