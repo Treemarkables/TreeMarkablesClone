@@ -22,6 +22,7 @@ import Pipeline from "@/pages/Pipeline";
 import Opportunities from "@/pages/Opportunities";
 import ConversationDetail from "@/pages/ConversationDetail";
 import Reputation from "@/pages/Reputation";
+import Reviews from "@/pages/Reviews";
 import Inbox from "@/pages/Inbox";
 import Integrations from "@/pages/Integrations";
 import Equipment from "@/pages/Equipment";
@@ -516,6 +517,14 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Reputation />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/reviews">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Reviews />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

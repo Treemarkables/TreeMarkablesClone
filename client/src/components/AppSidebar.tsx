@@ -310,6 +310,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/reviews"}>
+                    <Link href="/reviews" onClick={() => isMobile && setOpen(false)} data-testid="link-reviews">
+                      <Star className="h-4 w-4 fill-current" />
+                      <span>Reviews</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/inbox"}>
                     <Link href="/inbox" onClick={() => isMobile && setOpen(false)} data-testid="link-inbox">
                       <Inbox className="h-4 w-4" />

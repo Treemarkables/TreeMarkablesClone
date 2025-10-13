@@ -3,6 +3,11 @@
 ## Overview
 This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It provides advanced scheduling, job management, customer relationship tools, and operational analytics. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to streamline operations and enhance business efficiency for tree removal services, supporting business growth and improved service delivery.
 
+## Recent Changes (October 2025)
+- **Reviews Page Added**: New dedicated Reviews page (`/reviews`) to showcase Google and Facebook customer reviews. Includes setup instructions for popular widget services (Elfsight, Trustindex, Onstipe) with placeholder areas for easy embed code integration. Accessible from the Operations & Analysis section in the sidebar.
+- **Metrics Dashboard UI Optimization**: Optimized header area - removed verbose title/description card, collapsed date filter into single compact line with inline buttons, significantly reduced vertical space usage for better data visibility.
+- **Lead Source Analytics Fix**: Fixed lead source performance tracking database query error. Now properly displays lead source data with archived jobs excluded and invoiced jobs included in revenue calculations.
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
