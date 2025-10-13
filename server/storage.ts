@@ -2021,13 +2021,17 @@ class DatabaseStorage implements IStorage {
       });
     }
     
-    const completedJobs = filteredJobs.filter(job => job.status === 'completed');
+    // Include both 'completed' and 'invoiced' jobs in revenue calculation
+    const completedJobs = filteredJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     const totalRevenue = completedJobs.reduce((sum, job) => sum + (parseFloat(job.totalAmount?.toString() || '0')), 0);
     const leadsCount = filteredLeads.length;
     
     // For customer count and retention, we use all customers (not filtered by date)
     // because retention is calculated based on total customer base
     const customersCount = allCustomers.length;
+    
+    // Exclude archived jobs from total count
+    const activeJobs = filteredJobs.filter(job => job.status !== 'archived');
     
     // Conversion rate: (completed jobs / total leads) * 100
     const conversionRate = leadsCount > 0 ? (completedJobs.length / leadsCount) * 100 : 0;
@@ -2038,9 +2042,9 @@ class DatabaseStorage implements IStorage {
       ? totalRevenue / jobsWithRevenue.length 
       : 0;
     
-    // Calculate customer retention (repeat customers) - uses all jobs for accurate retention
+    // Calculate customer retention (repeat customers) - exclude archived jobs
     const customerJobCounts = new Map<string, number>();
-    allJobs.forEach(job => {
+    allJobs.filter(job => job.status !== 'archived').forEach(job => {
       if (job.customerId) {
         customerJobCounts.set(job.customerId, (customerJobCounts.get(job.customerId) || 0) + 1);
       }
@@ -2054,7 +2058,7 @@ class DatabaseStorage implements IStorage {
     return {
       totalLeads: leadsCount,
       totalCustomers: customersCount,
-      totalJobs: filteredJobs.length,
+      totalJobs: activeJobs.length,
       totalRevenue,
       conversionRate: Math.round(conversionRate * 100) / 100,
       averageQuoteValue: Math.round(averageQuoteValue * 100) / 100,
@@ -2066,9 +2070,9 @@ class DatabaseStorage implements IStorage {
   }
 
   async getRevenueStats(fromDate?: Date, toDate?: Date): Promise<any> {
-    // Get all completed jobs
+    // Get all completed and invoiced jobs (exclude archived)
     const allJobs = await this.getAllJobs();
-    const completedJobs = allJobs.filter(job => job.status === 'completed');
+    const completedJobs = allJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     
     // Filter by date range if provided
     let filteredJobs = completedJobs;
