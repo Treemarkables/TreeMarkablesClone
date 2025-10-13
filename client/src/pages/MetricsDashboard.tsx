@@ -633,7 +633,7 @@ export default function MetricsDashboard() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="pr-6">
+            <CardContent className="pr-16">
               {leadSourceLoading ? (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground">Loading lead source data...</p>
