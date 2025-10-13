@@ -218,7 +218,14 @@ export default function Invoices() {
                       <div className="flex items-center justify-between pt-2 border-t">
                         <span className="text-sm text-muted-foreground">Total Amount</span>
                         <span className="text-lg font-bold" data-testid={`text-amount-${job.id}`}>
-                          {formatCurrency((job.totalIncludingGst && job.totalIncludingGst !== '0.00') ? job.totalIncludingGst : job.totalAmount)}
+                          {(() => {
+                            const gst = job.totalIncludingGst;
+                            const total = job.totalAmount;
+                            const useGst = gst && gst !== '0.00' && gst !== '0' && parseFloat(gst) > 0;
+                            const displayValue = useGst ? gst : total;
+                            console.log(`💰 Job ${job.jobNumber}: gst=${gst}, total=${total}, useGst=${useGst}, display=${displayValue}`);
+                            return formatCurrency(displayValue);
+                          })()}
                         </span>
                       </div>
 
