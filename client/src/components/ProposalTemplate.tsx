@@ -150,12 +150,12 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
           if (item.pricingType === 'choice' && item.selectedChoiceId) {
             const selectedChoice = item.choices?.find(c => c.id === item.selectedChoiceId);
             if (selectedChoice) {
-              itemPrice = selectedChoice.price * item.quantity;
+              itemPrice = Number(selectedChoice.price) * Number(item.quantity);
             }
           } else if (item.pricingType === 'fixed' && item.fixedPrice) {
-            itemPrice = item.fixedPrice;
+            itemPrice = Number(item.fixedPrice);
           } else {
-            itemPrice = item.totalPrice;
+            itemPrice = Number(item.totalPrice);
           }
 
           const isInclusive = item.priceIncludesTax || false;
