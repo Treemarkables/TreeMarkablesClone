@@ -11491,7 +11491,8 @@ Transcription: ${transcriptText}`;
             for (let i = 0; i < section.lineItems.length; i++) {
               const item = section.lineItems[i];
               console.log(`    Creating line item ${i + 1}:`, item.description);
-              const createdItem = await storage.createProposalLineItem({
+              console.log(`    📊 priceIncludesTax from frontend:`, item.priceIncludesTax, `(type: ${typeof item.priceIncludesTax})`);
+              const lineItemData = {
                 proposalId: proposal.id,
                 sectionId: createdSection.id,
                 sourceType: 'fixed',
@@ -11509,9 +11510,11 @@ Transcription: ${transcriptText}`;
                 selectedChoiceId: item.selectedChoiceId,
                 fixedPrice: item.fixedPrice?.toString(),
                 selected: item.selected !== false,
-                priceIncludesTax: item.priceIncludesTax || false
-              });
-              console.log(`    ✅ Created line item ${createdItem.id}`);
+                priceIncludesTax: item.priceIncludesTax !== undefined ? item.priceIncludesTax : false
+              };
+              console.log(`    📊 Sending priceIncludesTax to DB:`, lineItemData.priceIncludesTax, `(type: ${typeof lineItemData.priceIncludesTax})`);
+              const createdItem = await storage.createProposalLineItem(lineItemData);
+              console.log(`    ✅ Created line item ${createdItem.id} with priceIncludesTax =`, createdItem.priceIncludesTax);
               
               // Create choices for this line item if they exist
               if (item.choices && Array.isArray(item.choices)) {
