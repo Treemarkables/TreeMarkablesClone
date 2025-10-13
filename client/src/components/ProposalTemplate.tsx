@@ -161,21 +161,27 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
           const isInclusive = item.priceIncludesTax || false;
           const gstRate = 0.15; // 15% GST for New Zealand
           
+          console.log(`💰 Item: ${item.description}, Price: ${itemPrice}, priceIncludesTax: ${item.priceIncludesTax}, isInclusive: ${isInclusive}`);
+          
           if (isInclusive) {
             // Price includes GST - extract the ex-GST amount
             const exGst = itemPrice / (1 + gstRate);
             subtotalExGst += exGst;
             gstAmount += itemPrice - exGst;
+            console.log(`  ✅ GST INCLUSIVE: exGst=${exGst}, gstAmount=${itemPrice - exGst}`);
           } else {
             // Price excludes GST - add it
             subtotalExGst += itemPrice;
             gstAmount += itemPrice * gstRate;
+            console.log(`  ✅ GST EXCLUSIVE: subtotal=${itemPrice}, gstAmount=${itemPrice * gstRate}`);
           }
         }
       });
     });
 
     const totalAmount = subtotalExGst + gstAmount;
+    
+    console.log(`📊 FINAL TOTALS: subtotal=${subtotalExGst}, gst=${gstAmount}, total=${totalAmount}`);
 
     return {
       subtotal: subtotalExGst,
