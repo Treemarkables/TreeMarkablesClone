@@ -311,10 +311,13 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         });
         
         // Create diary entry for Xero send
-        await storage.createJobDiary({
+        await storage.createJobDiaryEntry({
           jobId,
-          type: 'note',
-          content: `Invoice #${xeroInvoice.invoiceNumber || xeroInvoice.invoiceID} sent to Xero successfully. Total: $${job.totalAmount || '0.00'}`,
+          entryType: 'note',
+          title: 'Invoice Sent to Xero',
+          description: `Invoice #${xeroInvoice.invoiceNumber || xeroInvoice.invoiceID} sent to Xero successfully. Total: $${job.totalAmount || '0.00'}`,
+          authorName: 'System',
+          authorRole: 'system',
           metadata: {
             xeroInvoiceId: xeroInvoice.invoiceID,
             xeroInvoiceNumber: xeroInvoice.invoiceNumber,
