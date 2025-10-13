@@ -318,19 +318,59 @@ export default function MetricsDashboard() {
       <div className="p-2 sm:p-4 md:p-6">
         <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 w-full min-w-0">
           
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm sm:text-base text-gray-600 mt-1">Comprehensive overview of key performance indicators</p>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Date Range Filter - Compact */}
+          <div className="flex flex-wrap items-center gap-2 pb-2">
+            <span className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="h-4 w-4" />
+              Filter:
+            </span>
+            <Button
+              variant={dateRangePreset === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setDateRangePreset("all")}
+              data-testid="button-date-all"
+            >
+              All Time
+            </Button>
+            <Button
+              variant={dateRangePreset === "7" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setDateRangePreset("7")}
+              data-testid="button-date-7"
+            >
+              Last 7 Days
+            </Button>
+            <Button
+              variant={dateRangePreset === "30" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setDateRangePreset("30")}
+              data-testid="button-date-30"
+            >
+              Last 30 Days
+            </Button>
+            <Button
+              variant={dateRangePreset === "90" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setDateRangePreset("90")}
+              data-testid="button-date-90"
+            >
+              Last 90 Days
+            </Button>
+            <Button
+              variant={dateRangePreset === "custom" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setDateRangePreset("custom")}
+              data-testid="button-date-custom"
+            >
+              Custom Range
+            </Button>
+            <div className="ml-auto">
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => handleExportData('analytics')}
                 disabled={isExporting}
                 data-testid="button-export-metrics"
-                className="w-full sm:w-auto"
               >
                 <Download className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export Metrics'}</span>
@@ -339,59 +379,9 @@ export default function MetricsDashboard() {
             </div>
           </div>
 
-          {/* Date Range Filter */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Date Range Filter
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2 mb-4">
-                <Button
-                  variant={dateRangePreset === "all" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDateRangePreset("all")}
-                  data-testid="button-date-all"
-                >
-                  All Time
-                </Button>
-                <Button
-                  variant={dateRangePreset === "7" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDateRangePreset("7")}
-                  data-testid="button-date-7"
-                >
-                  Last 7 Days
-                </Button>
-                <Button
-                  variant={dateRangePreset === "30" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDateRangePreset("30")}
-                  data-testid="button-date-30"
-                >
-                  Last 30 Days
-                </Button>
-                <Button
-                  variant={dateRangePreset === "90" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDateRangePreset("90")}
-                  data-testid="button-date-90"
-                >
-                  Last 90 Days
-                </Button>
-                <Button
-                  variant={dateRangePreset === "custom" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDateRangePreset("custom")}
-                  data-testid="button-date-custom"
-                >
-                  Custom Range
-                </Button>
-              </div>
-
-              {dateRangePreset === "custom" && (
+          {dateRangePreset === "custom" && (
+            <Card className="mb-4">
+              <CardContent className="pt-6">
                 <div className="flex flex-wrap gap-3">
                   <div className="flex-1 min-w-[150px]">
                     <label className="text-sm font-medium mb-1 block">Start Date</label>
@@ -412,18 +402,17 @@ export default function MetricsDashboard() {
                     />
                   </div>
                 </div>
-              )}
+                {dateRange && (
+                  <p className="text-sm text-muted-foreground mt-3">
+                    Showing data from {new Date(dateRange.from).toLocaleDateString()} to {new Date(dateRange.to).toLocaleDateString()}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-              {dateRange && (
-                <p className="text-sm text-muted-foreground mt-3">
-                  Showing data from {new Date(dateRange.from).toLocaleDateString()} to {new Date(dateRange.to).toLocaleDateString()}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-        {/* Key Metrics Section */}
-        <div className="mb-6">
+          {/* Key Metrics Section */}
+          <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
