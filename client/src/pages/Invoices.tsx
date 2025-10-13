@@ -24,7 +24,7 @@ type JobWithCustomer = Job & {
 
 export default function Invoices() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "pending" | "sent">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
   const [sendingJobId, setSendingJobId] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -80,8 +80,7 @@ export default function Invoices() {
 
     const matchesTab = 
       activeTab === "all" ||
-      (activeTab === "pending" && (!job.xeroStatus || job.xeroStatus === 'pending')) ||
-      (activeTab === "sent" && job.xeroStatus === 'sent');
+      (activeTab === "pending" && (!job.xeroStatus || job.xeroStatus === 'pending'));
 
     return matchesSearch && matchesTab;
   });
@@ -167,15 +166,12 @@ export default function Invoices() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
-        <TabsList className="grid w-full grid-cols-3 max-w-full" data-testid="tabs-invoice-filter">
+        <TabsList className="grid w-full grid-cols-2 max-w-full" data-testid="tabs-invoice-filter">
           <TabsTrigger value="all" data-testid="tab-all-invoices">
             All ({completedJobs.length})
           </TabsTrigger>
           <TabsTrigger value="pending" data-testid="tab-pending-invoices">
             Pending ({completedJobs.filter(j => !j.xeroStatus || j.xeroStatus === 'pending').length})
-          </TabsTrigger>
-          <TabsTrigger value="sent" data-testid="tab-sent-invoices">
-            Sent ({completedJobs.filter(j => j.xeroStatus === 'sent').length})
           </TabsTrigger>
         </TabsList>
 
@@ -188,7 +184,6 @@ export default function Invoices() {
                 <p className="text-sm text-muted-foreground" data-testid="text-no-invoices-description">
                   {activeTab === "all" && "Complete jobs to create invoices"}
                   {activeTab === "pending" && "No pending invoices"}
-                  {activeTab === "sent" && "No invoices sent to Xero yet"}
                 </p>
               </CardContent>
             </Card>
