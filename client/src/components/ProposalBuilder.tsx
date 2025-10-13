@@ -260,6 +260,7 @@ export function ProposalBuilder({
     choices: [],
     selectedChoiceId: undefined,
     fixedPrice: undefined,
+    priceIncludesTax: false,
   });
 
   // Choice management for current line item
@@ -473,6 +474,7 @@ export function ProposalBuilder({
       choices: [],
       selectedChoiceId: undefined,
       fixedPrice: undefined,
+      priceIncludesTax: false,
     });
 
     toast({
