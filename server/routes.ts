@@ -11664,6 +11664,22 @@ Transcription: ${transcriptText}`;
 
       await storage.createNotification(notificationData);
 
+      // Create diary entry for the job to record the acceptance
+      if (job?.id) {
+        await storage.createJobDiaryEntry({
+          jobId: job.id,
+          entryType: 'system',
+          title: `Proposal Accepted: ${proposal.proposalNumber}`,
+          content: `${customer?.name || 'Customer'} accepted proposal ${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(proposal.totalAmount || 0)}. Job converted to work order.`,
+          metadata: {
+            proposalId: proposal.id,
+            proposalNumber: proposal.proposalNumber,
+            totalAmount: proposal.totalAmount,
+            eventType: 'proposal_accepted'
+          }
+        });
+      }
+
       console.log(`✅ Proposal ${proposal.proposalNumber} accepted and converted to work order ${jobNumber}`);
 
       res.json({ 
