@@ -266,25 +266,29 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       // Step 2: Create invoice in Xero
       try {
         // Get proposal for this job to extract line items
-        const proposals = await storage.getProposalsByJobId(job.id);
+        const proposals = await storage.getProposalsByJob(job.id);
         const proposal = proposals?.[0]; // Get the first/latest proposal
+        
+        console.log(`📋 Found ${proposals.length} proposal(s) for job ${job.id}`);
         
         let invoiceLineItems: any[] = [];
         
-        // Extract line items from proposal sections
-        if (proposal?.sections && Array.isArray(proposal.sections)) {
-          for (const section of proposal.sections) {
-            if (section.lineItems && Array.isArray(section.lineItems)) {
-              for (const item of section.lineItems) {
-                invoiceLineItems.push({
-                  description: item.description || 'Tree Service',
-                  quantity: Number(item.quantity) || 1,
-                  unitAmount: Number(item.unitPrice) || 0,
-                  accountCode: '200', // Sales account - adjust as needed
-                  taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
-                });
-              }
-            }
+        // Fetch sections and line items for the proposal
+        if (proposal) {
+          const sections = await storage.getProposalSectionsByProposal(proposal.id);
+          console.log(`📋 Found ${sections.length} section(s) for proposal ${proposal.id}`);
+          
+          const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
+          console.log(`📋 Found ${allLineItems.length} total line item(s) for proposal ${proposal.id}`);
+          
+          for (const item of allLineItems) {
+            invoiceLineItems.push({
+              description: item.description || 'Tree Service',
+              quantity: Number(item.quantity) || 1,
+              unitAmount: Number(item.unitPrice) || 0,
+              accountCode: '200', // Sales account - adjust as needed
+              taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
+            });
           }
         }
         
