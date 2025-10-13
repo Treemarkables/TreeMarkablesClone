@@ -114,9 +114,15 @@ export default function Invoices() {
   };
 
   const formatCurrency = (amount?: string | null) => {
-    if (!amount) return '$0.00';
+    console.log(`💵 formatCurrency input: "${amount}" (type: ${typeof amount})`);
+    if (!amount) {
+      console.log(`  → Returning $0.00 (falsy value)`);
+      return '$0.00';
+    }
     const num = parseFloat(amount);
-    return `$${num.toFixed(2)}`;
+    const result = `$${num.toFixed(2)}`;
+    console.log(`  → Returning ${result}`);
+    return result;
   };
 
   const handleSendToXero = (jobId: string) => {
