@@ -138,6 +138,40 @@ export function EmailComposerModal({
     return EMAIL_TEMPLATES.find(t => t.id === 'custom_message') || EMAIL_TEMPLATES[0];
   };
 
+  // Auto-attach documents whenever they become available (separate from initialization)
+  useEffect(() => {
+    if (isOpen && (invoiceData || quoteData || proposalData)) {
+      const attachmentsList: TypedAttachment[] = [];
+      
+      if (invoiceData) {
+        attachmentsList.push({
+          name: `Treemarkables LTD Invoice ${invoiceData.invoiceNumber}`,
+          type: 'invoice',
+          id: invoiceData.id,
+          url: invoiceData.id ? `/api/invoices/${invoiceData.id}/pdf` : undefined
+        });
+      }
+      if (quoteData) {
+        attachmentsList.push({
+          name: `Treemarkables LTD Quote ${quoteData.quoteNumber}`,
+          type: 'quote',
+          id: quoteData.id,
+          url: undefined // PDF generation not yet implemented
+        });
+      }
+      if (proposalData) {
+        attachmentsList.push({
+          name: `Treemarkables LTD Proposal ${proposalData.proposalNumber || 'PROP-' + job.jobNumber}`,
+          type: 'proposal',
+          id: proposalData.id,
+          url: proposalData.id ? `/api/proposals/${proposalData.id}/pdf` : undefined
+        });
+      }
+      
+      setAttachments(attachmentsList);
+    }
+  }, [isOpen, invoiceData, quoteData, proposalData, job?.jobNumber]);
+
   // Pre-populate email data when modal opens (only on first open, not on data updates)
   useEffect(() => {
     if (isOpen && job && customer && !hasInitialized) {
@@ -165,34 +199,6 @@ export function EmailComposerModal({
       } else if (customer.name) {
         customerName = customer.name;
       }
-      
-      // Auto-attach appropriate document if available
-      const attachmentsList: TypedAttachment[] = [];
-      if (invoiceData) {
-        attachmentsList.push({
-          name: `Treemarkables LTD Invoice ${invoiceData.invoiceNumber}`,
-          type: 'invoice',
-          id: invoiceData.id,
-          url: invoiceData.id ? `/api/invoices/${invoiceData.id}/pdf` : undefined
-        });
-      }
-      if (quoteData) {
-        attachmentsList.push({
-          name: `Treemarkables LTD Quote ${quoteData.quoteNumber}`,
-          type: 'quote',
-          id: quoteData.id,
-          url: undefined // PDF generation not yet implemented
-        });
-      }
-      if (proposalData) {
-        attachmentsList.push({
-          name: `Treemarkables LTD Proposal ${proposalData.proposalNumber || 'PROP-' + job.jobNumber}`,
-          type: 'proposal',
-          id: proposalData.id,
-          url: proposalData.id ? `/api/proposals/${proposalData.id}/pdf` : undefined
-        });
-      }
-      setAttachments(attachmentsList);
 
       // Apply appropriate template based on context
       const template = getDefaultTemplate();
