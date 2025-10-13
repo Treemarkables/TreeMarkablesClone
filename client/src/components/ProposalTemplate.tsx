@@ -29,6 +29,7 @@ interface ProposalLineItem {
   }[];
   selectedChoiceId?: string;
   fixedPrice?: number;
+  priceIncludesTax?: boolean;
 }
 
 interface ProposalPhoto {
@@ -139,31 +140,45 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
 
   // Calculate totals from all sections
   const calculateTotals = () => {
-    let subtotalAmount = 0;
+    let subtotalExGst = 0;
+    let gstAmount = 0;
     
     sections.forEach(section => {
       section.lineItems.forEach(item => {
         if (item.selected) {
+          let itemPrice = 0;
           if (item.pricingType === 'choice' && item.selectedChoiceId) {
             const selectedChoice = item.choices?.find(c => c.id === item.selectedChoiceId);
             if (selectedChoice) {
-              subtotalAmount += selectedChoice.price * item.quantity;
+              itemPrice = selectedChoice.price * item.quantity;
             }
           } else if (item.pricingType === 'fixed' && item.fixedPrice) {
-            subtotalAmount += item.fixedPrice;
+            itemPrice = item.fixedPrice;
           } else {
-            subtotalAmount += item.totalPrice;
+            itemPrice = item.totalPrice;
+          }
+
+          const isInclusive = item.priceIncludesTax || false;
+          const gstRate = 0.15; // 15% GST for New Zealand
+          
+          if (isInclusive) {
+            // Price includes GST - extract the ex-GST amount
+            const exGst = itemPrice / (1 + gstRate);
+            subtotalExGst += exGst;
+            gstAmount += itemPrice - exGst;
+          } else {
+            // Price excludes GST - add it
+            subtotalExGst += itemPrice;
+            gstAmount += itemPrice * gstRate;
           }
         }
       });
     });
 
-    const gstRate = 0.15; // 15% GST for New Zealand
-    const gstAmount = subtotalAmount * gstRate;
-    const totalAmount = subtotalAmount + gstAmount;
+    const totalAmount = subtotalExGst + gstAmount;
 
     return {
-      subtotal: subtotalAmount,
+      subtotal: subtotalExGst,
       gst: gstAmount,
       total: totalAmount
     };
