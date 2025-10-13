@@ -96,6 +96,10 @@ async function processSMSReplies() {
         }
 
         // Create diary entry for the SMS reply
+        // SMS Everyone NZ timestamps are in NZ local time (UTC+12/13) without timezone indicator
+        // Parse explicitly to ensure correct timezone handling
+        const receivedTimestamp = new Date(reply.Received + '+13:00'); // Assume NZDT (UTC+13)
+        
         await db.insert(jobDiaryEntries).values({
           jobId: matchedJob.id,
           entryType: 'sms',
@@ -104,7 +108,7 @@ async function processSMSReplies() {
           authorName: customerName,
           authorRole: 'customer',
           tags: ['sms', 'reply', 'communication'],
-          createdAt: new Date(reply.Received)
+          createdAt: receivedTimestamp
         });
 
         // Update job's lastActivityAt to bring it to top of dispatch board
