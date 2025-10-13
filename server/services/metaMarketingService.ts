@@ -234,12 +234,12 @@ export class MetaMarketingService {
         `https://graph.facebook.com/v18.0/${postId}?fields=permalink_url,created_time&access_token=${this.pageAccessToken}`
       );
 
-      const postData = await postResponse.json();
+      const postDetails = await postResponse.json();
 
       return {
         postId,
-        permalink: postData.permalink_url || '',
-        createdTime: postData.created_time || new Date().toISOString(),
+        permalink: postDetails.permalink_url || '',
+        createdTime: postDetails.created_time || new Date().toISOString(),
       };
     } catch (error) {
       console.error('Error posting review to Facebook:', error);
