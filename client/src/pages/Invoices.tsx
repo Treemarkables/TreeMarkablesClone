@@ -36,6 +36,16 @@ export default function Invoices() {
     queryKey: ['/api/customers'],
   });
 
+  // Fetch all proposals with sections/line items
+  const { data: proposalsResponse } = useQuery<any>({
+    queryKey: ['/api/proposals'],
+    queryFn: async () => {
+      const response = await fetch('/api/proposals?includeSections=true');
+      if (!response.ok) throw new Error('Failed to fetch proposals');
+      return response.json();
+    },
+  });
+
   const sendToXeroMutation = useMutation({
     mutationFn: async (jobId: string) => {
       setSendingJobId(jobId);
@@ -62,14 +72,46 @@ export default function Invoices() {
 
   const jobs = jobsResponse?.data || [];
   const customers = customersResponse?.data || [];
+  const proposals = proposalsResponse?.data || [];
 
   // Only show jobs with status 'completed' (exclude 'invoiced' and 'archived')
   const completedJobs = jobs.filter(job => job.status === 'completed');
 
-  const jobsWithCustomers: JobWithCustomer[] = completedJobs.map(job => ({
-    ...job,
-    customer: customers.find(c => c.id === job.customerId),
-  }));
+  const jobsWithCustomers: JobWithCustomer[] = completedJobs.map(job => {
+    // Find the proposal for this job
+    const proposal = proposals.find((p: any) => p.jobId === job.id);
+    
+    // Calculate total from proposal sections/line items if available
+    let calculatedTotal = '0.00';
+    let calculatedGst = '0.00';
+    
+    if (proposal?.sections && Array.isArray(proposal.sections)) {
+      const subtotal = proposal.sections.reduce((sum: number, section: any) => {
+        if (section.lineItems && Array.isArray(section.lineItems)) {
+          const sectionTotal = section.lineItems.reduce((lineSum: number, item: any) => {
+            return lineSum + (Number(item.unitPrice) || 0) * (Number(item.quantity) || 1);
+          }, 0);
+          return sum + sectionTotal;
+        }
+        return sum;
+      }, 0);
+      
+      // Calculate GST (15%)
+      const gst = subtotal * 0.15;
+      const total = subtotal + gst;
+      
+      calculatedTotal = total.toFixed(2);
+      calculatedGst = gst.toFixed(2);
+    }
+    
+    return {
+      ...job,
+      customer: customers.find(c => c.id === job.customerId),
+      // Override totalAmount and totalIncludingGst with calculated values from proposal
+      totalAmount: calculatedTotal,
+      totalIncludingGst: calculatedTotal,
+    };
+  });
 
   const filteredJobs = jobsWithCustomers.filter(job => {
     const matchesSearch = 
