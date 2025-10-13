@@ -25,6 +25,7 @@ type JobWithCustomer = Job & {
 export default function Invoices() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "pending" | "sent">("all");
+  const [sendingJobId, setSendingJobId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: jobsResponse, isLoading } = useQuery<ApiResponse<Job>>({
@@ -37,17 +38,20 @@ export default function Invoices() {
 
   const sendToXeroMutation = useMutation({
     mutationFn: async (jobId: string) => {
+      setSendingJobId(jobId);
       const response = await apiRequest('POST', '/api/xero/send-invoice', { jobId });
       return await response.json();
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      setSendingJobId(null);
       toast({
         title: "Success",
         description: data?.message || "Invoice sent to Xero successfully",
       });
     },
     onError: (error: any) => {
+      setSendingJobId(null);
       toast({
         title: "Error",
         description: error.message || "Failed to send invoice to Xero",
@@ -239,11 +243,11 @@ export default function Invoices() {
                     <Button
                       className="w-full gap-2"
                       onClick={() => handleSendToXero(job.id)}
-                      disabled={job.xeroStatus === 'sent' || sendToXeroMutation.isPending}
+                      disabled={job.xeroStatus === 'sent' || sendingJobId === job.id}
                       data-testid={`button-send-to-xero-${job.id}`}
                     >
                       <Send className="h-4 w-4" />
-                      {sendToXeroMutation.isPending ? 'Sending...' : 
+                      {sendingJobId === job.id ? 'Sending...' : 
                        job.xeroStatus === 'sent' ? 'Sent to Xero' : 'Send to Xero'}
                     </Button>
                   </CardContent>
