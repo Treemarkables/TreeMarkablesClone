@@ -96,9 +96,11 @@ async function processSMSReplies() {
         }
 
         // Create diary entry for the SMS reply
-        // SMS Everyone NZ timestamps are in NZ local time (UTC+12/13) without timezone indicator
-        // Parse explicitly to ensure correct timezone handling
-        const receivedTimestamp = new Date(reply.Received + '+13:00'); // Assume NZDT (UTC+13)
+        // SMS Everyone NZ timestamps are in NZ local time (NZDT = UTC+13) without timezone indicator
+        // Convert to ISO-8601 format with timezone for correct parsing
+        // Example: "2025-10-13 11:25:40" -> "2025-10-13T11:25:40+13:00"
+        const isoTimestamp = reply.Received.replace(' ', 'T') + '+13:00';
+        const receivedTimestamp = new Date(isoTimestamp);
         
         await db.insert(jobDiaryEntries).values({
           jobId: matchedJob.id,
@@ -115,7 +117,7 @@ async function processSMSReplies() {
         await db
           .update(jobs)
           .set({ 
-            lastActivityAt: new Date(reply.Received)
+            lastActivityAt: receivedTimestamp
           })
           .where(eq(jobs.id, matchedJob.id));
 
