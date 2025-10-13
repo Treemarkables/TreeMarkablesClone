@@ -711,6 +711,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       case 'completed': return 'C';
       case 'unsuccessful': return 'U';
       case 'scheduled': return 'S';
+      case 'invoiced': return 'I';
+      case 'archived': return 'A';
       case 'work_order': return 'WO';
       case 'work order': return 'WO';
       case 'quote': return 'Q';
@@ -728,6 +730,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     switch (job.status) {
       case 'completed': return 'bg-green-600';
       case 'unsuccessful': return 'bg-red-600';
+      case 'invoiced': return 'bg-purple-600';
+      case 'archived': return 'bg-gray-500';
       case 'work_order': return 'bg-blue-600';
       case 'work order': return 'bg-blue-600';
       case 'scheduled': return 'bg-orange-600';
@@ -747,6 +751,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     switch (job.status) {
       case 'completed': return '#22c55e'; // green-500
       case 'unsuccessful': return '#ef4444'; // red-500
+      case 'invoiced': return '#a855f7'; // purple-500
+      case 'archived': return '#6b7280'; // gray-500
       case 'work_order': return '#3b82f6'; // blue-500
       case 'work order': return '#3b82f6'; // blue-500
       case 'scheduled': return '#3b82f6'; // blue-500 (same as work order)
