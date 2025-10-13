@@ -591,69 +591,69 @@ export function GlobalJobCard({
     return () => subscription.unsubscribe();
   }, [form]);
 
-  // Auto-save effect - saves changes after user stops typing (only in edit mode)
-  useEffect(() => {
-    if (mode !== 'edit' || !editingJob?.id) return;
-    
-    let timeoutId: NodeJS.Timeout;
-    
-    const subscription = form.watch(() => {
-      // Skip auto-save if we're currently loading data from the server
-      if (isLoadingDataRef.current) {
-        return;
-      }
-      
-      // Mark that the user has made a change
-      hasUserChangedRef.current = true;
-      
-      // Clear existing timeout
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      
-      // Set new timeout for auto-save
-      timeoutId = setTimeout(async () => {
-        // Only auto-save if the user actually changed something
-        if (!hasUserChangedRef.current) {
-          return;
-        }
-        
-        try {
-          setIsAutoSaving(true);
-          const formData = form.getValues();
-          
-          // Map new customer fields to job contact fields for backend compatibility
-          if (formData.isNewCustomer && formData.newCustomerName) {
-            const names = formData.newCustomerName.split(' ');
-            formData.jobContactFirstName = names[0] || '';
-            formData.jobContactLastName = names.slice(1).join(' ') || '';
-            formData.jobContactEmail = formData.newCustomerEmail || '';
-            formData.jobContactPhone = formData.newCustomerPhone || '';
-          }
-          
-          await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
-          setLastAutoSaveTime(new Date());
-          hasUserChangedRef.current = false;
-          
-          // Invalidate queries to refresh data across all views (mobile & desktop sync)
-          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-        } catch (error) {
-          console.error('Auto-save failed:', error);
-          hasUserChangedRef.current = false;
-        } finally {
-          setIsAutoSaving(false);
-        }
-      }, 2000); // 2 second debounce
-    });
-    
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      subscription.unsubscribe();
-    };
-  }, [form, mode, editingJob?.id, toast, queryClient]);
+  // Auto-save DISABLED - was causing data loss issues with proposals
+  // useEffect(() => {
+  //   if (mode !== 'edit' || !editingJob?.id) return;
+  //   
+  //   let timeoutId: NodeJS.Timeout;
+  //   
+  //   const subscription = form.watch(() => {
+  //     // Skip auto-save if we're currently loading data from the server
+  //     if (isLoadingDataRef.current) {
+  //       return;
+  //     }
+  //     
+  //     // Mark that the user has made a change
+  //     hasUserChangedRef.current = true;
+  //     
+  //     // Clear existing timeout
+  //     if (timeoutId) {
+  //       clearTimeout(timeoutId);
+  //     }
+  //     
+  //     // Set new timeout for auto-save
+  //     timeoutId = setTimeout(async () => {
+  //       // Only auto-save if the user actually changed something
+  //       if (!hasUserChangedRef.current) {
+  //         return;
+  //       }
+  //       
+  //       try {
+  //         setIsAutoSaving(true);
+  //         const formData = form.getValues();
+  //         
+  //         // Map new customer fields to job contact fields for backend compatibility
+  //         if (formData.isNewCustomer && formData.newCustomerName) {
+  //           const names = formData.newCustomerName.split(' ');
+  //           formData.jobContactFirstName = names[0] || '';
+  //           formData.jobContactLastName = names.slice(1).join(' ') || '';
+  //           formData.jobContactEmail = formData.newCustomerEmail || '';
+  //           formData.jobContactPhone = formData.newCustomerPhone || '';
+  //         }
+  //         
+  //         await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
+  //         setLastAutoSaveTime(new Date());
+  //         hasUserChangedRef.current = false;
+  //         
+  //         // Invalidate queries to refresh data across all views (mobile & desktop sync)
+  //         queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+  //         queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+  //       } catch (error) {
+  //         console.error('Auto-save failed:', error);
+  //         hasUserChangedRef.current = false;
+  //       } finally {
+  //         setIsAutoSaving(false);
+  //       }
+  //     }, 2000); // 2 second debounce
+  //   });
+  //   
+  //   return () => {
+  //     if (timeoutId) {
+  //       clearTimeout(timeoutId);
+  //     }
+  //     subscription.unsubscribe();
+  //   };
+  // }, [form, mode, editingJob?.id, toast, queryClient]);
 
   const formData = form.watch();
 
