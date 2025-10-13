@@ -59,6 +59,7 @@ export default function Invoices() {
   const jobs = jobsResponse?.data || [];
   const customers = customersResponse?.data || [];
 
+  // Only show jobs with status 'completed' (exclude 'invoiced' and 'archived')
   const completedJobs = jobs.filter(job => job.status === 'completed');
 
   const jobsWithCustomers: JobWithCustomer[] = completedJobs.map(job => ({

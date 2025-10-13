@@ -303,11 +303,12 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         const xeroInvoice = invoiceResponse.body.invoices![0];
         console.log(`✅ Invoice created in Xero: ${xeroInvoice.invoiceID}`);
         
-        // Update job with Xero invoice ID
+        // Update job with Xero invoice ID and change status to invoiced
         await storage.updateJob(jobId, {
           xeroInvoiceId: xeroInvoice.invoiceID || undefined,
           xeroStatus: 'sent',
           sentToXeroDate: new Date(),
+          status: 'invoiced',
         });
         
         // Create diary entry for Xero send
