@@ -15002,6 +15002,29 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Reviews API - Google and Facebook Reviews
+  const { fetchGoogleReviews, fetchFacebookReviews } = await import("./services/reviewsService");
+
+  app.get("/api/reviews/google", async (req, res) => {
+    try {
+      const reviews = await fetchGoogleReviews();
+      res.json({ success: true, reviews });
+    } catch (error) {
+      console.error('Error fetching Google reviews:', error);
+      res.json({ success: false, reviews: [], message: error instanceof Error ? error.message : 'Failed to fetch Google reviews' });
+    }
+  });
+
+  app.get("/api/reviews/facebook", async (req, res) => {
+    try {
+      const reviews = await fetchFacebookReviews();
+      res.json({ success: true, reviews });
+    } catch (error) {
+      console.error('Error fetching Facebook reviews:', error);
+      res.json({ success: false, reviews: [], message: error instanceof Error ? error.message : 'Failed to fetch Facebook reviews' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
