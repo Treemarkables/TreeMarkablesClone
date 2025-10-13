@@ -2959,3 +2959,61 @@ export type InsertJhaSignature = z.infer<typeof insertJhaSignatureSchema>;
 
 export type JhaRiskControlTemplate = typeof jhaRiskControlTemplates.$inferSelect;
 export type InsertJhaRiskControlTemplate = z.infer<typeof insertJhaRiskControlTemplateSchema>;
+
+// Marketing Campaigns
+export const marketingCampaigns = pgTable("marketing_campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Campaign basics
+  name: text("name").notNull(),
+  type: text("type").notNull(), // 'ad' or 'review_post'
+  platform: text("platform").notNull(), // 'facebook', 'instagram', or 'both'
+  status: text("status").notNull().default('draft'), // 'draft', 'scheduled', 'published', 'failed'
+  
+  // Scheduling
+  scheduledFor: timestamp("scheduled_for"),
+  publishedAt: timestamp("published_at"),
+  
+  // Ad campaign specific
+  objective: text("objective"), // 'awareness', 'traffic', 'engagement', 'leads', 'sales'
+  budget: decimal("budget", { precision: 10, scale: 2 }),
+  budgetType: text("budget_type"), // 'daily' or 'lifetime'
+  adCreative: jsonb("ad_creative"), // {headline, text, imageUrl, ctaText, ctaUrl}
+  targeting: jsonb("targeting"), // {location, age, interests, etc}
+  
+  // Review post specific
+  reviewId: text("review_id"), // Reference to Google/Facebook review
+  reviewText: text("review_text"),
+  reviewAuthor: text("review_author"),
+  reviewRating: integer("review_rating"),
+  reviewSource: text("review_source"), // 'google' or 'facebook'
+  
+  // Performance tracking
+  metaCampaignId: text("meta_campaign_id"), // Facebook/Instagram campaign ID
+  metaAdSetId: text("meta_ad_set_id"),
+  metaAdId: text("meta_ad_id"),
+  metaPostId: text("meta_post_id"), // For review posts
+  
+  reach: integer("reach").default(0),
+  impressions: integer("impressions").default(0),
+  clicks: integer("clicks").default(0),
+  engagement: integer("engagement").default(0),
+  spent: decimal("spent", { precision: 10, scale: 2 }).default('0'),
+  conversions: integer("conversions").default(0),
+  
+  // Metadata
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Marketing campaign insert schema
+export const insertMarketingCampaignSchema = createInsertSchema(marketingCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Marketing campaign types
+export type MarketingCampaign = typeof marketingCampaigns.$inferSelect;
+export type InsertMarketingCampaign = z.infer<typeof insertMarketingCampaignSchema>;
