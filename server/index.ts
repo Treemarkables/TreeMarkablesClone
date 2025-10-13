@@ -381,6 +381,10 @@ function startNotificationQueueWorker() {
     const { startSMSReplyPolling } = await import('./services/smsReplyPoller');
     startSMSReplyPolling();
 
+    // Start marketing campaign scheduler (checks every 5 minutes)
+    const { marketingScheduler } = await import('./services/marketingScheduler');
+    marketingScheduler.start();
+
   } catch (error) {
     const err = error as Error;
     log(`Server initialization failed: ${err.message}`, "error");
