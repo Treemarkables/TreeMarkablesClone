@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -3923,6 +3923,15 @@ export function GlobalJobCard({
       {isProfitTrackerOpen && editingJob?.id && (
         <Dialog open={isProfitTrackerOpen} onOpenChange={setIsProfitTrackerOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsProfitTrackerOpen(false)}
+              className="absolute left-2 top-2 h-9 w-9 z-10 sm:hidden"
+              data-testid="button-close-profit-tracker"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <DialogHeader>
               <DialogTitle>Profit Tracking - {editingJob.title}</DialogTitle>
             </DialogHeader>
