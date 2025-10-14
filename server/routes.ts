@@ -4596,7 +4596,22 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         return res.status(404).json({ success: false, message: 'Invoice not found' });
       }
       
-      res.json({ success: true, data: result[0] });
+      const invoice = result[0];
+      
+      // Fetch related customer and job data in parallel for faster loading
+      const [customerData, jobData] = await Promise.all([
+        invoice.customerId ? db.select().from(customers).where(eq(customers.id, invoice.customerId)).limit(1) : Promise.resolve([]),
+        invoice.jobId ? db.select().from(jobs).where(eq(jobs.id, invoice.jobId)).limit(1) : Promise.resolve([])
+      ]);
+      
+      res.json({ 
+        success: true, 
+        data: {
+          ...invoice,
+          customer: customerData[0] || null,
+          job: jobData[0] || null
+        }
+      });
     } catch (error) {
       console.error('Error fetching invoice:', error);
       res.status(500).json({ success: false, message: 'Error fetching invoice' });
