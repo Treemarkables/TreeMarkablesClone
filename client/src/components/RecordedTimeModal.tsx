@@ -70,12 +70,12 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     staleTime: 0,
   });
 
-  // Fetch existing time entries for this job
+  // Fetch ALL existing time entries for this job (not just today's)
   const today = new Date().toISOString().split('T')[0];
   const { data: timeEntriesData, refetch: refetchTimeEntries } = useQuery({
-    queryKey: ['time-entries', jobId, today],
+    queryKey: ['time-entries', jobId],
     queryFn: async () => {
-      const response = await fetch(`/api/time-entries/${jobId}/${today}`);
+      const response = await fetch(`/api/time-entries/${jobId}`);
       if (!response.ok) throw new Error('Failed to fetch time entries');
       const result = await response.json();
       return result;
@@ -191,7 +191,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       await apiRequest('DELETE', `/api/time-entries/job/${entryId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['time-entries', jobId, today] });
+      queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
       refetchTimeEntries();
       toast({
         title: "Success",
@@ -264,7 +264,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       
       // Invalidate related queries
       await queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
-      await queryClient.invalidateQueries({ queryKey: ['time-entries', jobId, today] });
+      await queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
       
       await refetchTimeEntries();
       

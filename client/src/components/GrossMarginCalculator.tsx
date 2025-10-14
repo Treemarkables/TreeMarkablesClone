@@ -96,12 +96,12 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
   const quotes = (quotesResponse as any)?.data || [];
   const proposals = (proposalsResponse as any)?.data || [];
 
-  // Fetch staff time entries from the new time tracking system
+  // Fetch ALL staff time entries from the new time tracking system
   const today = new Date().toISOString().split('T')[0];
   const { data: staffTimeData } = useQuery({
-    queryKey: ['time-entries', jobId, today],
+    queryKey: ['time-entries', jobId],
     queryFn: async () => {
-      const response = await fetch(`/api/time-entries/${jobId}/${today}`);
+      const response = await fetch(`/api/time-entries/${jobId}`);
       if (!response.ok) throw new Error('Failed to fetch staff time entries');
       return response.json();
     },

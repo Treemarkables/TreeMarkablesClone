@@ -63,12 +63,12 @@ export function StaffTimeManager({
     enabled: isAddDialogOpen || !!editingEntry,
   });
 
-  // Fetch staff time entries for the job from the new time tracking system
+  // Fetch ALL staff time entries for the job from the new time tracking system
   const today = new Date().toISOString().split('T')[0];
   const { data: staffTimeData, isLoading } = useQuery({
-    queryKey: ['time-entries', jobId, today],
+    queryKey: ['time-entries', jobId],
     queryFn: async () => {
-      const response = await fetch(`/api/time-entries/${jobId}/${today}`);
+      const response = await fetch(`/api/time-entries/${jobId}`);
       if (!response.ok) throw new Error('Failed to fetch staff time entries');
       return response.json();
     },
