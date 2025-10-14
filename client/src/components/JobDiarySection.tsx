@@ -305,7 +305,21 @@ export function JobDiarySection({
     const phone = jobData?.customerPhone || customerPhone || '';
     const email = jobData?.customerEmail || customerEmail || '';
     
+    // Extract first name from customer name
+    let firstName = '';
+    if (customerName) {
+      // Handle "LastName, FirstName" format
+      if (customerName.includes(',')) {
+        const parts = customerName.split(',').map(p => p.trim());
+        firstName = parts.length === 2 ? parts[1] : customerName.split(' ')[0];
+      } else {
+        // Extract first word as first name
+        firstName = customerName.split(' ')[0];
+      }
+    }
+    
     return template
+      .replace(/{firstName}/g, firstName)
       .replace(/{customerName}/g, customerName)
       .replace(/{jobNumber}/g, jobId)
       .replace(/{address}/g, address)
