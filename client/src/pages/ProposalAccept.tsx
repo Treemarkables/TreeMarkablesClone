@@ -40,6 +40,7 @@ export default function ProposalAccept() {
   // Extract data from combined response
   const proposal = proposalDataResponse?.data?.proposal;
   const customer = proposalDataResponse?.data?.customer;
+  const job = proposalDataResponse?.data?.job;
   const template = proposalDataResponse?.data?.template || {
     id: 'default',
     name: 'Default Template',
@@ -192,6 +193,7 @@ export default function ProposalAccept() {
               <ProposalTemplate
                 proposal={proposal}
                 customer={customer}
+                job={job}
                 template={template}
                 sections={proposal.sections || []}
                 showActions={false}
@@ -249,6 +251,7 @@ export default function ProposalAccept() {
             <ProposalTemplate
               proposal={proposal}
               customer={customer}
+              job={job}
               template={template}
               sections={proposal.sections || []}
               showActions={false}
