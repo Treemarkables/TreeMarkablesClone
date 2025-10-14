@@ -2032,8 +2032,8 @@ class DatabaseStorage implements IStorage {
       });
     }
     
-    // Include both 'completed' and 'invoiced' jobs in revenue calculation
-    const completedJobs = filteredJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
+    // Include completed jobs in revenue calculation (invoiced jobs remain as 'completed')
+    const completedJobs = filteredJobs.filter(job => job.status === 'completed');
     const totalRevenue = completedJobs.reduce((sum, job) => sum + (parseFloat(job.totalAmount?.toString() || '0')), 0);
     const leadsCount = filteredLeads.length;
     
@@ -2081,9 +2081,9 @@ class DatabaseStorage implements IStorage {
   }
 
   async getRevenueStats(fromDate?: Date, toDate?: Date): Promise<any> {
-    // Get all completed and invoiced jobs (exclude archived)
+    // Get all completed jobs (invoiced jobs remain as 'completed')
     const allJobs = await this.getAllJobs();
-    const completedJobs = allJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
+    const completedJobs = allJobs.filter(job => job.status === 'completed');
     
     // Filter by date range if provided
     let filteredJobs = completedJobs;
@@ -2310,12 +2310,12 @@ class DatabaseStorage implements IStorage {
         existing.jobIds.add(job.id);
 
         // Count quoted jobs (jobs with quotes/proposals)
-        if (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'completed' || job.status === 'invoiced') {
+        if (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'completed') {
           existing.quotedCount++;
         }
 
-        // Count won jobs (completed or invoiced with revenue)
-        if ((job.status === 'completed' || job.status === 'invoiced') && job.totalAmount && parseFloat(job.totalAmount) > 0) {
+        // Count won jobs (completed jobs with revenue - invoiced jobs remain as 'completed')
+        if (job.status === 'completed' && job.totalAmount && parseFloat(job.totalAmount) > 0) {
           existing.wonCount++;
           const revenue = parseFloat(job.totalAmount) || 0;
           existing.totalRevenue += revenue;
