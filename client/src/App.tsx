@@ -2,7 +2,7 @@ import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -150,9 +150,6 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
     setOpen(!isMobile);
   }, [isMobile, setOpen]);
   
-  // Detect Safari browser
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-  
   // Check if we're on dispatch page
   const isDispatchPage = location === '/dispatch';
   
@@ -168,19 +165,24 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   const handleRefresh = async () => {
     setIsRefreshing(true);
     
-    // Use refetchQueries instead of invalidateQueries to prevent Safari display issues
-    // This keeps the existing data visible while fetching new data
+    // Use refetchQueries to prevent Safari display issues
+    // This keeps existing data visible while fetching new data
+    // Refresh all key data endpoints
     await Promise.all([
       queryClient.refetchQueries({ queryKey: ['/api/jobs'] }),
       queryClient.refetchQueries({ queryKey: ['/api/customers'] }),
       queryClient.refetchQueries({ queryKey: ['/api/notifications/summary'] }),
       queryClient.refetchQueries({ queryKey: ['/api/leads'] }),
+      queryClient.refetchQueries({ queryKey: ['/api/employees'] }),
+      queryClient.refetchQueries({ queryKey: ['/api/equipment'] }),
+      queryClient.refetchQueries({ queryKey: ['/api/staff-assignments'] }),
+      queryClient.refetchQueries({ queryKey: ['/api/job-templates'] }),
     ]);
     
     // Show success toast
     toast({
       title: "Data refreshed",
-      description: "Job data has been reloaded from the server.",
+      description: "All data has been reloaded from the server.",
     });
     
     setTimeout(() => setIsRefreshing(false), 500);
@@ -236,18 +238,23 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {/* Notifications Bell - Mobile */}
               {isAdmin && <NotificationBell />}
               
-              {/* Refresh Button - Hidden in Safari */}
-              {!isSafari && (
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  data-testid="button-mobile-refresh"
-                >
-                  <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                </Button>
-              )}
+              {/* Refresh Button - Mobile */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    data-testid="button-mobile-refresh"
+                  >
+                    <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh all data</p>
+                </TooltipContent>
+              </Tooltip>
               
               {/* Logout Button - Crew Only */}
               {isCrew && (
@@ -303,18 +310,23 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {/* Notifications Bell */}
               <NotificationBell />
               
-              {/* Refresh Button - Hidden in Safari */}
-              {!isSafari && (
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  data-testid="button-desktop-refresh"
-                >
-                  <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                </Button>
-              )}
+              {/* Refresh Button - Desktop */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    data-testid="button-desktop-refresh"
+                  >
+                    <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh all data</p>
+                </TooltipContent>
+              </Tooltip>
               
               {/* Logout Button - Crew Only */}
               {isCrew && (
