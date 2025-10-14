@@ -66,15 +66,28 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   const job = jobResponse?.data;
 
   // Calculate totals from line items
-  const lineItemTotal = invoice.items?.reduce((sum: number, item: any) => {
+  const lineItems = invoice.lineItems || [];
+  const lineItemTotal = lineItems.reduce((sum: number, item: any) => {
     const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
     return sum + (itemTotal || 0);
-  }, 0) || 0;
+  }, 0);
 
   const gstRate = 0.15;
-  const totalAmount = lineItemTotal || invoice.totalAmount || 0;
-  const subtotal = totalAmount / (1 + gstRate);
-  const gstAmount = totalAmount - subtotal;
+  // Line items are ex-GST, so add GST to get total
+  const hasLineItems = lineItems.length > 0 && lineItemTotal > 0;
+  let totalAmount: number;
+  let subtotal: number;
+  let gstAmount: number;
+  
+  if (hasLineItems) {
+    subtotal = lineItemTotal;
+    gstAmount = subtotal * gstRate;
+    totalAmount = subtotal + gstAmount;
+  } else {
+    totalAmount = invoice.totalAmount || invoice.amount || 0;
+    subtotal = totalAmount / (1 + gstRate);
+    gstAmount = totalAmount - subtotal;
+  }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NZ', {
@@ -109,11 +122,6 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full">
         <div className="max-w-4xl mx-auto w-full">
-          {/* Logo */}
-          <div className="flex justify-center mb-4">
-            <img src={logoUrl} alt="Treemarkables" className="h-16 sm:h-20 object-contain" />
-          </div>
-          
           <div className="flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between">
             <div className="flex items-center gap-3">
               <Link href="/">
@@ -240,7 +248,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             )}
 
             {/* Line Items */}
-            {invoice.items && invoice.items.length > 0 && (
+            {lineItems && lineItems.length > 0 && (
               <div className="mb-3">
                 <h3 className="text-base font-semibold text-gray-900 mb-2">Services & Materials</h3>
                 <div className="w-full overflow-x-auto">
@@ -255,13 +263,13 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {invoice.items.map((item: any, index: number) => (
+                      {lineItems.map((item: any, index: number) => (
                         <tr key={index}>
                           <td className="border border-gray-300 px-2 py-1">{item.description}</td>
                           <td className="border border-gray-300 px-2 py-1 text-center">{item.quantity}</td>
                           <td className="border border-gray-300 px-2 py-1 text-center">{item.unit || 'each'}</td>
                           <td className="border border-gray-300 px-2 py-1 text-right">{formatCurrency(item.unitPrice)}</td>
-                          <td className="border border-gray-300 px-2 py-1 text-right">{formatCurrency(item.total)}</td>
+                          <td className="border border-gray-300 px-2 py-1 text-right">{formatCurrency(item.total * 1.15)}</td>
                         </tr>
                       ))}
                     </tbody>
