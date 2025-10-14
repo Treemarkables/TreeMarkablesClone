@@ -539,8 +539,10 @@ export function GlobalJobCard({
     return null;
   }, [mode, editingJob, customers, formCustomerId]);
 
-  // Get customer data for the editing job
-  const editingJobCustomer = editingJob ? customers.find(c => c.id === editingJob.customerId) : null;
+  // Get customer data for the editing job (memoized to properly track changes)
+  const editingJobCustomer = useMemo(() => {
+    return editingJob ? customers.find(c => c.id === editingJob.customerId) : null;
+  }, [editingJob, customers]);
 
   // Populate form with complete job data when editing an existing job
   useEffect(() => {
