@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { MicrophoneButton } from '@/components/MicrophoneButton';
 
 const smsFormSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
@@ -176,7 +177,18 @@ export function SMSComposerModal({
               name="message"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Message</FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Message</FormLabel>
+                    <MicrophoneButton
+                      onTranscript={(transcript) => {
+                        const currentValue = form.getValues('message');
+                        const newValue = currentValue ? `${currentValue} ${transcript}` : transcript;
+                        form.setValue('message', newValue);
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    />
+                  </div>
                   <FormControl>
                     <Textarea
                       {...field}
