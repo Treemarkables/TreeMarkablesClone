@@ -11242,10 +11242,11 @@ Transcription: ${transcriptText}`;
       }
       
       // Fetch all data in parallel for speed
-      const [sections, allLineItems, customer, template] = await Promise.all([
+      const [sections, allLineItems, customer, job, template] = await Promise.all([
         storage.getProposalSectionsByProposal(proposal.id),
         storage.getProposalLineItemsByProposal(proposal.id),
         proposal.customerId ? storage.getCustomer(proposal.customerId) : Promise.resolve(null),
+        proposal.jobId ? storage.getJob(proposal.jobId) : Promise.resolve(null),
         storage.getDefaultTemplate('proposal')
       ]);
       
@@ -11303,6 +11304,7 @@ Transcription: ${transcriptText}`;
         data: {
           proposal: { ...proposal, sections: sectionsWithPhotosAndLineItems },
           customer,
+          job,
           template: finalTemplate
         }
       });
