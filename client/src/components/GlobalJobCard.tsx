@@ -123,6 +123,9 @@ export function GlobalJobCard({
   const isMobile = useIsMobile();
   const { isAdmin } = useAuth();
   
+  // Save state to prevent double-clicking
+  const [isSaving, setIsSaving] = useState(false);
+  
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
   const [editingProposalId, setEditingProposalId] = useState<string | undefined>(undefined);
@@ -1394,6 +1397,12 @@ export function GlobalJobCard({
 
   // Save button handlers
   const handleSave = async () => {
+    // Prevent double-clicking
+    if (isSaving) {
+      console.log('Save already in progress, ignoring duplicate click');
+      return;
+    }
+    
     const formData = form.getValues();
     console.log('Form data before save:', formData);
     console.log('Form errors:', form.formState.errors);
@@ -1419,6 +1428,7 @@ export function GlobalJobCard({
       formData.jobContactPhone = formData.newCustomerPhone || '';
     }
     
+    setIsSaving(true);
     try {
       if (mode === "create") {
         await createJobMutation.mutateAsync(formData);
@@ -1432,10 +1442,18 @@ export function GlobalJobCard({
         description: error instanceof Error ? error.message : "Failed to save job",
         variant: "destructive"
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleSaveAndClose = async () => {
+    // Prevent double-clicking
+    if (isSaving) {
+      console.log('Save already in progress, ignoring duplicate click');
+      return;
+    }
+    
     const formData = form.getValues();
     
     // Map new customer fields to job contact fields for backend compatibility
@@ -1447,6 +1465,7 @@ export function GlobalJobCard({
       formData.jobContactPhone = formData.newCustomerPhone || '';
     }
     
+    setIsSaving(true);
     try {
       if (mode === "create") {
         await createJobMutation.mutateAsync(formData);
@@ -1456,6 +1475,8 @@ export function GlobalJobCard({
       onClose();
     } catch (error) {
       console.error('Save and close failed:', error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1680,10 +1701,10 @@ export function GlobalJobCard({
                 size="sm" 
                 className="h-7 sm:h-9 px-2 sm:px-3 md:px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
                 onClick={handleSave}
-                disabled={createJobMutation.isPending || updateJobMutation.isPending || isAutoSaving}
+                disabled={isSaving || createJobMutation.isPending || updateJobMutation.isPending || isAutoSaving}
                 data-testid="button-save"
               >
-                {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
+                {(isSaving || createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
               </Button>
             </div>
           </div>
