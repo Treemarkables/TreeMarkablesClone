@@ -167,6 +167,10 @@ export function GlobalJobCard({
   const [isSpeechToQuoteOpen, setIsSpeechToQuoteOpen] = useState(false);
   const [speechToQuoteContext, setSpeechToQuoteContext] = useState<'full' | 'job-description' | 'invoice-description'>('full');
 
+  // Track created job for edit mode switching
+  const [createdJobId, setCreatedJobId] = useState<string | null>(null);
+  const [internalMode, setInternalMode] = useState<'create' | 'edit'>(mode);
+
   // Auto-save state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
@@ -410,10 +414,18 @@ export function GlobalJobCard({
 
   // Get the currently editing job
   const editingJob = useMemo(() => {
-    if (mode === "edit" && (jobId || job?.id)) {
-      const result = job || jobs.find(j => j.id === jobId);
+    // Use internal mode and created job ID if available
+    const effectiveMode = createdJobId ? 'edit' : internalMode;
+    const effectiveJobId = createdJobId || jobId;
+    
+    if (effectiveMode === "edit" && (effectiveJobId || job?.id)) {
+      const result = job || jobs.find(j => j.id === effectiveJobId);
       console.log('EditingJob useMemo result:', { 
         mode,
+        internalMode,
+        createdJobId,
+        effectiveMode,
+        effectiveJobId,
         jobId, 
         jobProp: job, 
         jobsArrayLength: jobs.length,
@@ -423,7 +435,15 @@ export function GlobalJobCard({
       return result;
     }
     return null;
-  }, [mode, jobId, job, jobs]);
+  }, [mode, internalMode, createdJobId, jobId, job, jobs]);
+
+  // Reset internal state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setCreatedJobId(null);
+      setInternalMode(mode);
+    }
+  }, [isOpen, mode]);
 
   // Store last viewed job ID in localStorage for PWA bootstrap
   useEffect(() => {
@@ -699,22 +719,14 @@ export function GlobalJobCard({
         duration: 1000,
       });
       
-      // Reset form to default values
-      form.reset({
-        title: '',
-        description: '',
-        status: 'quote',
-        priority: 'medium',
-        customerId: '',
-        lineItems: [],
-        checklist: [],
-        totalAmount: '0',
-        paidAmount: '0',
-      });
-      
-      // Close modal and call callback
-      onJobCreated?.(newJob);
-      onClose();
+      // Switch to edit mode after creating the job - stay in modal
+      if (newJob?.data?.id) {
+        setCreatedJobId(newJob.data.id);
+        setInternalMode('edit');
+        // Call parent callback if provided
+        onJobCreated?.(newJob);
+        // Note: Not closing modal - staying open in edit mode for the newly created job
+      }
     },
     onError: (error) => {
       console.error('Error creating job:', error);
@@ -1552,11 +1564,11 @@ export function GlobalJobCard({
                     Schedule
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleQuoteClick} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-quote-mobile">
+                  <DropdownMenuItem onClick={handleQuoteClick} data-testid="menu-item-quote-mobile">
                     <Receipt className="w-4 h-4 mr-2" />
                     Quote
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleInvoiceClick} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-invoice-mobile">
+                  <DropdownMenuItem onClick={handleInvoiceClick} data-testid="menu-item-invoice-mobile">
                     <CreditCard className="w-4 h-4 mr-2" />
                     Invoice
                   </DropdownMenuItem>
@@ -1583,15 +1595,15 @@ export function GlobalJobCard({
                     Proposal
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setIsTimeTrackingOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-time-mobile">
+                  <DropdownMenuItem onClick={() => setIsTimeTrackingOpen(true)} data-testid="menu-item-time-mobile">
                     <Clock className="w-4 h-4 mr-2" />
                     Time Tracking
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsProfitTrackerOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-profit-mobile">
+                  <DropdownMenuItem onClick={() => setIsProfitTrackerOpen(true)} data-testid="menu-item-profit-mobile">
                     <DollarSign className="w-4 h-4 mr-2" />
                     Profit Tracker
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsPhotoCaptureOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-camera-mobile">
+                  <DropdownMenuItem onClick={() => setIsPhotoCaptureOpen(true)} data-testid="menu-item-camera-mobile">
                     <Camera className="w-4 h-4 mr-2" />
                     Camera
                   </DropdownMenuItem>
@@ -1725,7 +1737,6 @@ export function GlobalJobCard({
                 <DropdownMenuContent align="start">
                   <DropdownMenuItem 
                     onClick={handleQuoteClick}
-                    disabled={!editingJob?.id || mode === 'create'}
                     data-testid="menu-item-quote"
                   >
                     <Receipt className="w-4 h-4 mr-2" />
@@ -1733,7 +1744,6 @@ export function GlobalJobCard({
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={handleInvoiceClick}
-                    disabled={!editingJob?.id || mode === 'create'}
                     data-testid="menu-item-invoice"
                   >
                     <CreditCard className="w-4 h-4 mr-2" />
@@ -1768,7 +1778,6 @@ export function GlobalJobCard({
                 size="sm" 
                 className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col [&_svg]:!w-full [&_svg]:!h-auto" 
                 onClick={() => setIsProfitTrackerOpen(true)} 
-                disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-profit"
               >
                 <MdAttachMoney className="w-full h-auto max-w-[40px] max-h-[40px] text-teal-500" />
@@ -1779,7 +1788,6 @@ export function GlobalJobCard({
                 size="sm" 
                 className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col [&_svg]:!w-full [&_svg]:!h-auto" 
                 onClick={() => setIsTimeTrackingOpen(true)} 
-                disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-time"
               >
                 <MdAccessTime className="w-full h-auto max-w-[40px] max-h-[40px] text-purple-500" />
@@ -1790,7 +1798,6 @@ export function GlobalJobCard({
                 size="sm" 
                 className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col [&_svg]:!w-full [&_svg]:!h-auto" 
                 onClick={() => setIsPhotoCaptureOpen(true)}
-                disabled={!editingJob?.id || mode === 'create'}
                 data-testid="button-camera"
               >
                 <MdCameraAlt className="w-full h-auto max-w-[40px] max-h-[40px] text-pink-500" />
