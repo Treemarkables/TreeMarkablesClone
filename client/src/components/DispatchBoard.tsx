@@ -843,8 +843,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     const filtered = jobs
       .filter(job => {
-        // Exclude completed and unsuccessful jobs from dispatch board
-        return job.status !== 'unsuccessful' && job.status !== 'completed';
+        // Exclude completed, unsuccessful, and invoiced jobs from dispatch board
+        return job.status !== 'unsuccessful' && job.status !== 'completed' && job.status !== 'invoiced';
       })
       .filter(job => {
         // Apply search filter
