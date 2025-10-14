@@ -1,5 +1,10 @@
 import { randomUUID } from "crypto";
+import { eq, and, gte, lte } from "drizzle-orm";
+import { db } from "./db";
 import {
+  dailyTimeEntries,
+  jobTimeEntries,
+  staffRates,
   type DailyTimeEntry, type InsertDailyTimeEntry,
   type JobTimeEntry, type InsertJobTimeEntry,
   type StaffRate, type InsertStaffRate,
@@ -11,47 +16,33 @@ import {
  * Handles daily time entries, job time tracking, staff rates, and efficiency calculations
  */
 export class TimeTrackingService {
-  // In-memory storage for development (would be database in production)
-  private dailyTimeEntries = new Map<string, DailyTimeEntry>();
-  private jobTimeEntries = new Map<string, JobTimeEntry>();
-  private staffRates = new Map<string, StaffRate>();
 
   // ========================================
   // DAILY TIME ENTRY MANAGEMENT
   // ========================================
 
   async createDailyTimeEntry(entry: InsertDailyTimeEntry): Promise<DailyTimeEntry> {
-    const id = randomUUID();
-    const now = new Date();
-    const dailyEntry: DailyTimeEntry = {
-      ...entry,
-      id,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.dailyTimeEntries.set(id, dailyEntry);
-    return dailyEntry;
+    const [created] = await db.insert(dailyTimeEntries).values(entry).returning();
+    return created;
   }
 
   async getDailyTimeEntry(employeeId: string, entryDate: string): Promise<DailyTimeEntry | undefined> {
-    return Array.from(this.dailyTimeEntries.values())
-      .find(entry => entry.employeeId === employeeId && entry.entryDate === entryDate);
+    const [entry] = await db.select()
+      .from(dailyTimeEntries)
+      .where(and(eq(dailyTimeEntries.employeeId, employeeId), eq(dailyTimeEntries.entryDate, entryDate)))
+      .limit(1);
+    return entry;
   }
 
   async updateDailyTimeEntry(id: string, updates: Partial<InsertDailyTimeEntry>): Promise<DailyTimeEntry> {
-    const existing = this.dailyTimeEntries.get(id);
-    if (!existing) {
+    const [updated] = await db.update(dailyTimeEntries)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(dailyTimeEntries.id, id))
+      .returning();
+    
+    if (!updated) {
       throw new Error(`Daily time entry with id ${id} not found`);
     }
-
-    const updated: DailyTimeEntry = {
-      ...existing,
-      ...updates,
-      updatedAt: new Date(),
-    };
-
-    this.dailyTimeEntries.set(id, updated);
     return updated;
   }
 
@@ -60,21 +51,29 @@ export class TimeTrackingService {
     fromDate?: string, 
     toDate?: string
   ): Promise<DailyTimeEntry[]> {
-    let entries = Array.from(this.dailyTimeEntries.values());
-
+    const conditions = [];
+    
     if (employeeId) {
-      entries = entries.filter(entry => entry.employeeId === employeeId);
+      conditions.push(eq(dailyTimeEntries.employeeId, employeeId));
+    }
+    if (fromDate && !toDate) {
+      // Single date query
+      conditions.push(eq(dailyTimeEntries.entryDate, fromDate));
+    } else if (fromDate && toDate) {
+      // Date range query
+      conditions.push(gte(dailyTimeEntries.entryDate, fromDate));
+      conditions.push(lte(dailyTimeEntries.entryDate, toDate));
+    } else if (!fromDate && toDate) {
+      // Upper bound only
+      conditions.push(lte(dailyTimeEntries.entryDate, toDate));
     }
 
-    if (fromDate) {
-      entries = entries.filter(entry => entry.entryDate >= fromDate);
-    }
-
-    if (toDate) {
-      entries = entries.filter(entry => entry.entryDate <= toDate);
-    }
-
-    return entries.sort((a, b) => b.entryDate.localeCompare(a.entryDate));
+    const entries = await db.select()
+      .from(dailyTimeEntries)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(dailyTimeEntries.entryDate);
+    
+    return entries;
   }
 
   // ========================================
@@ -82,48 +81,41 @@ export class TimeTrackingService {
   // ========================================
 
   async createJobTimeEntry(entry: InsertJobTimeEntry): Promise<JobTimeEntry> {
-    const id = randomUUID();
-    const now = new Date();
-    const jobTimeEntry: JobTimeEntry = {
-      ...entry,
-      id,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.jobTimeEntries.set(id, jobTimeEntry);
-    return jobTimeEntry;
+    const [created] = await db.insert(jobTimeEntries).values(entry).returning();
+    return created;
   }
 
   async getJobTimeEntries(jobId: string, entryDate?: string): Promise<JobTimeEntry[]> {
-    let entries = Array.from(this.jobTimeEntries.values())
-      .filter(entry => entry.jobId === jobId);
-
+    const conditions = [eq(jobTimeEntries.jobId, jobId)];
+    
     if (entryDate) {
-      entries = entries.filter(entry => entry.entryDate === entryDate);
+      conditions.push(eq(jobTimeEntries.entryDate, entryDate));
     }
 
-    return entries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const entries = await db.select()
+      .from(jobTimeEntries)
+      .where(and(...conditions))
+      .orderBy(jobTimeEntries.createdAt);
+    
+    return entries;
   }
 
   async updateJobTimeEntry(id: string, updates: Partial<InsertJobTimeEntry>): Promise<JobTimeEntry> {
-    const existing = this.jobTimeEntries.get(id);
-    if (!existing) {
+    const [updated] = await db.update(jobTimeEntries)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(jobTimeEntries.id, id))
+      .returning();
+    
+    if (!updated) {
       throw new Error(`Job time entry with id ${id} not found`);
     }
-
-    const updated: JobTimeEntry = {
-      ...existing,
-      ...updates,
-      updatedAt: new Date(),
-    };
-
-    this.jobTimeEntries.set(id, updated);
     return updated;
   }
 
   async deleteJobTimeEntry(id: string): Promise<boolean> {
-    return this.jobTimeEntries.delete(id);
+    const result = await db.delete(jobTimeEntries)
+      .where(eq(jobTimeEntries.id, id));
+    return result.rowCount > 0;
   }
 
   // ========================================
@@ -131,57 +123,51 @@ export class TimeTrackingService {
   // ========================================
 
   async createStaffRate(rate: InsertStaffRate): Promise<StaffRate> {
-    const id = randomUUID();
-    const now = new Date();
-    const staffRate: StaffRate = {
-      ...rate,
-      id,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.staffRates.set(id, staffRate);
-    return staffRate;
+    const [created] = await db.insert(staffRates).values(rate).returning();
+    return created;
   }
 
   async getStaffRates(employeeId?: string, serviceType?: string): Promise<StaffRate[]> {
-    let rates = Array.from(this.staffRates.values())
-      .filter(rate => rate.isActive);
+    const conditions = [eq(staffRates.isActive, true)];
 
     if (employeeId) {
-      rates = rates.filter(rate => rate.employeeId === employeeId);
+      conditions.push(eq(staffRates.employeeId, employeeId));
     }
 
     if (serviceType) {
-      rates = rates.filter(rate => rate.serviceType === serviceType);
+      conditions.push(eq(staffRates.serviceType, serviceType));
     }
 
-    return rates.sort((a, b) => b.effectiveDate.getTime() - a.effectiveDate.getTime());
+    const rates = await db.select()
+      .from(staffRates)
+      .where(and(...conditions))
+      .orderBy(staffRates.effectiveDate);
+    
+    return rates;
   }
 
   async getActiveStaffRate(employeeId: string, serviceType: string): Promise<StaffRate | undefined> {
-    return Array.from(this.staffRates.values())
-      .filter(rate => 
-        rate.employeeId === employeeId && 
-        rate.serviceType === serviceType && 
-        rate.isActive
-      )
-      .sort((a, b) => b.effectiveDate.getTime() - a.effectiveDate.getTime())[0];
+    const [rate] = await db.select()
+      .from(staffRates)
+      .where(and(
+        eq(staffRates.employeeId, employeeId),
+        eq(staffRates.serviceType, serviceType),
+        eq(staffRates.isActive, true)
+      ))
+      .orderBy(staffRates.effectiveDate)
+      .limit(1);
+    return rate;
   }
 
   async updateStaffRate(id: string, updates: Partial<InsertStaffRate>): Promise<StaffRate> {
-    const existing = this.staffRates.get(id);
-    if (!existing) {
+    const [updated] = await db.update(staffRates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(staffRates.id, id))
+      .returning();
+    
+    if (!updated) {
       throw new Error(`Staff rate with id ${id} not found`);
     }
-
-    const updated: StaffRate = {
-      ...existing,
-      ...updates,
-      updatedAt: new Date(),
-    };
-
-    this.staffRates.set(id, updated);
     return updated;
   }
 
@@ -213,12 +199,13 @@ export class TimeTrackingService {
 
   async calculateStaffEfficiency(employeeId: string, fromDate: string, toDate: string): Promise<StaffEfficiencyReport> {
     const dailyEntries = await this.getDailyTimeEntries(employeeId, fromDate, toDate);
-    const jobEntries = Array.from(this.jobTimeEntries.values())
-      .filter(entry => 
-        entry.employeeId === employeeId &&
-        entry.entryDate >= fromDate &&
-        entry.entryDate <= toDate
-      );
+    const jobEntries = await db.select()
+      .from(jobTimeEntries)
+      .where(and(
+        eq(jobTimeEntries.employeeId, employeeId),
+        gte(jobTimeEntries.entryDate, fromDate),
+        lte(jobTimeEntries.entryDate, toDate)
+      ));
 
     // Calculate totals
     const totalHours = dailyEntries.reduce((sum, entry) => sum + Number(entry.totalDayHours), 0);
@@ -263,10 +250,9 @@ export class TimeTrackingService {
 
   async getEfficiencyReports(fromDate: string, toDate: string): Promise<StaffEfficiencyReport[]> {
     // Get unique employee IDs from daily entries in date range
+    const entries = await this.getDailyTimeEntries(undefined, fromDate, toDate);
     const employeeIds = Array.from(new Set(
-      Array.from(this.dailyTimeEntries.values())
-        .filter(entry => entry.entryDate >= fromDate && entry.entryDate <= toDate)
-        .map(entry => entry.employeeId)
+      entries.map(entry => entry.employeeId)
     ));
 
     const reports = await Promise.all(
