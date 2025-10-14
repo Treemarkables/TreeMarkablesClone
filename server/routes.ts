@@ -4067,7 +4067,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         to: to,
         from: 'info@treemarkables.co.nz',
         subject: subject,
-        text: body,
+        text: emailBody,
         html: emailHtml,
         replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
@@ -4086,7 +4086,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             // Those are only created by dedicated /api/proposals/:id/send-email endpoint
             const diaryDescription = `Email sent to ${to}${cc ? ` (CC: ${cc})` : ''}${
               emailAttachments.length > 0 ? `\n\nAttachments: ${emailAttachments.length} photo(s)` : ''
-            }\n\nMessage:\n${body}`;
+            }\n\nMessage:\n${emailBody}`;
             
             await storage.createJobDiaryEntry({
               jobId: jobId,
