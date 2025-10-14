@@ -26,7 +26,7 @@ interface EmailResult {
 class EmailService {
   private mailService: MailService;
   private isConfigured: boolean = false;
-  private fromEmail: string = 'jullianhalley@hotmail.com';
+  private fromEmail: string = 'info@treemarkables.co.nz';
 
   constructor() {
     this.mailService = new MailService();

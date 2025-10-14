@@ -235,7 +235,7 @@ function startNotificationQueueWorker() {
           if (notification.recipientEmail && (notification.notificationType === 'email' || notification.notificationType === 'both')) {
             await emailService.sendEmail({
               to: notification.recipientEmail,
-              from: 'jullianhalley@hotmail.com',
+              from: 'info@treemarkables.co.nz',
               subject: notification.subject || 'Job Notification',
               html: notification.message,
               text: notification.message.replace(/<[^>]*>/g, '') // Strip HTML for text version

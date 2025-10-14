@@ -358,7 +358,7 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
     if (employee.email) {
       await emailService.sendEmail({
         to: employee.email,
-        from: 'jullianhalley@hotmail.com',
+        from: 'info@treemarkables.co.nz',
         subject: `Job Scheduled: ${job?.title || 'Tree Service'}`,
         html: `
           <h2>You've been scheduled for a job</h2>
@@ -3807,7 +3807,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
-      const proposalNumber = proposal.proposalNumber || 'N/A';
+      
+      // Check if proposal still has a DRAFT number - if so, convert to proper PROP number
+      let proposalNumber = proposal.proposalNumber || 'N/A';
+      if (proposalNumber.startsWith('DRAFT-')) {
+        // Simply replace DRAFT- prefix with PROP- to preserve the original identifier
+        proposalNumber = proposalNumber.replace('DRAFT-', 'PROP-');
+        // Update the proposal with the new number
+        await storage.updateProposal(proposalId, {
+          proposalNumber: proposalNumber
+        });
+        console.log(`📋 Converted DRAFT number to ${proposalNumber}`);
+      }
       
       // Simple email - just a notification with link to view proposal online
 
@@ -3840,7 +3851,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const emailResult = await emailService.sendEmail({
         to,
         cc,
-        from: 'Treemarkables <jullianhalley@hotmail.com>', // Display name with verified sender address
+        from: 'Treemarkables <info@treemarkables.co.nz>', // Display name with verified sender address
         replyTo: replyToEmail || 'info@treemarkables.co.nz', // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
@@ -4054,7 +4065,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Send email using the emailService
       const emailResult = await emailService.sendEmail({
         to: to,
-        from: 'jullianhalley@hotmail.com',
+        from: 'info@treemarkables.co.nz',
         subject: subject,
         text: body,
         html: emailHtml,
@@ -7101,7 +7112,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
             await emailService.sendEmail({
               to: clientEmail,
-              from: 'jullianhalley@hotmail.com',
+              from: 'info@treemarkables.co.nz',
               subject: emailSubject,
               html: emailBody,
               text: `Booking Confirmation\n\nDear ${clientName},\n\nYour tree service has been scheduled!\n\nDate: ${scheduleDate}\nTime: ${startTimeStr} - ${endTimeStr}\nAddress: ${job.address || 'As discussed'}\n\n${job.description ? `Service Details:\n${job.description}\n\n` : ''}Our team will arrive at your property at the scheduled time.\n\nBest regards,\nTreemarkables Team`
@@ -11954,7 +11965,7 @@ Transcription: ${transcriptText}`;
 
     <div class="footer">
       <p>Treemarkables LTD - Qualified Arborists</p>
-      <p>Email: jullianhalley@hotmail.com | Phone: 0272166882</p>
+      <p>Email: info@treemarkables.co.nz | Phone: 0272166882</p>
     </div>
   </div>
 </body>
