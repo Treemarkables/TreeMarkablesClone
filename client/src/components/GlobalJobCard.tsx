@@ -800,7 +800,7 @@ export function GlobalJobCard({
     enabled: !!editingJob?.id,
   });
 
-  // Extract proposal line items for invoice
+  // Extract proposal line items for invoice (use latest sent proposal, or latest draft if none sent)
   const proposalLineItems = useMemo(() => {
     if (!jobProposalResponse?.success || !jobProposalResponse?.data?.length) {
       return [];
@@ -809,26 +809,28 @@ export function GlobalJobCard({
     const proposals = jobProposalResponse.data;
     const lineItems: any[] = [];
     
-    proposals.forEach((proposal: any) => {
-      if (proposal.sections && Array.isArray(proposal.sections)) {
-        proposal.sections.forEach((section: any) => {
-          if (section.lineItems && Array.isArray(section.lineItems)) {
-            section.lineItems.forEach((item: any) => {
-              lineItems.push({
-                id: item.id,
-                description: item.description,
-                quantity: Number(item.quantity) || 1,
-                unitPrice: Number(item.unitPrice) || Number(item.unit_price) || 0,
-                total: Number(item.totalPrice) || Number(item.total_price) || Number(item.total) || 0,
-                unit: item.unit || 'each',
-                category: item.category || 'service',
-                taxable: true
-              });
+    // Find the best proposal to use: prioritize sent proposals, then drafts
+    const sentProposal = proposals.find((p: any) => p.status === 'sent');
+    const proposalToUse = sentProposal || proposals[0]; // Use sent if available, otherwise use first (latest)
+    
+    if (proposalToUse && proposalToUse.sections && Array.isArray(proposalToUse.sections)) {
+      proposalToUse.sections.forEach((section: any) => {
+        if (section.lineItems && Array.isArray(section.lineItems)) {
+          section.lineItems.forEach((item: any) => {
+            lineItems.push({
+              id: item.id,
+              description: item.description,
+              quantity: Number(item.quantity) || 1,
+              unitPrice: Number(item.unitPrice) || Number(item.unit_price) || 0,
+              total: Number(item.totalPrice) || Number(item.total_price) || Number(item.total) || 0,
+              unit: item.unit || 'each',
+              category: item.category || 'service',
+              taxable: true
             });
-          }
-        });
-      }
-    });
+          });
+        }
+      });
+    }
     
     return lineItems;
   }, [jobProposalResponse]);
