@@ -11,22 +11,10 @@ interface InvoiceViewerProps {}
 export default function InvoiceViewer({}: InvoiceViewerProps) {
   const { invoiceId } = useParams();
   
-  // Fetch invoice data
+  // Fetch invoice data with embedded customer and job data (optimized - single API call)
   const { data: invoiceResponse, isLoading: invoiceLoading } = useQuery({
     queryKey: ["/api/invoices", invoiceId],
     enabled: !!invoiceId,
-  });
-
-  // Fetch customer data if invoice has customerId
-  const { data: customerResponse } = useQuery({
-    queryKey: ["/api/customers", invoiceResponse?.data?.customerId],
-    enabled: !!invoiceResponse?.data?.customerId,
-  });
-
-  // Fetch job data if invoice has jobId
-  const { data: jobResponse } = useQuery({
-    queryKey: ["/api/jobs", invoiceResponse?.data?.jobId],
-    enabled: !!invoiceResponse?.data?.jobId,
   });
 
   if (invoiceLoading) {
@@ -62,8 +50,8 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   }
 
   const invoice = invoiceResponse.data;
-  const customer = customerResponse?.data;
-  const job = jobResponse?.data;
+  const customer = invoice.customer;
+  const job = invoice.job;
 
   // Calculate totals from line items
   const lineItems = invoice.lineItems || [];
