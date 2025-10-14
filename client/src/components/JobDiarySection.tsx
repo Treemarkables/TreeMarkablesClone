@@ -200,7 +200,7 @@ export function JobDiarySection({
   const [replyToEmail, setReplyToEmail] = useState<string>("");
   const [replyToPhone, setReplyToPhone] = useState<string>("");
   const [replySubject, setReplySubject] = useState<string>("");
-  const [selectedEmailTemplate, setSelectedEmailTemplate] = useState<string>("");
+  const [selectedEmailTemplate, setSelectedEmailTemplate] = useState<string>("none");
   const [selectedSmsTemplate, setSelectedSmsTemplate] = useState<string>("");
   
   // Touch swipe state for photo gallery
