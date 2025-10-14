@@ -173,11 +173,14 @@ export function setupTimeTrackingRoutes(app: any) {
       if (!dailyEntry) {
         dailyEntry = await timeTrackingService.createDailyTimeEntry({
           employeeId: entries[0]?.employeeId || 'default',
+          employeeName: entries[0]?.employeeName || 'Unknown Employee',
           entryDate: today,
-          totalHours: 0,
-          breakTime: 0,
-          notes: 'Auto-generated for time tracking',
-          timeEntries: []
+          totalDayHours: 0,
+          billableHours: 0,
+          maintenanceHours: 0,
+          travelHours: 0,
+          adminHours: 0,
+          breakHours: 0
         });
       }
       
