@@ -140,14 +140,21 @@ export function ProposalBuilder({
     message: ''
   });
 
-  // Initialize proposal with job data when available
+  // Initialize proposal with job data when available (only in create mode)
   useEffect(() => {
-    if (jobData && (jobData as any)?.success && (jobData as any)?.data && isOpen) {
+    if (jobData && (jobData as any)?.success && (jobData as any)?.data && isOpen && mode === 'create') {
       const job = (jobData as any).data;
       
       // Check if job description should be included (defaults to true if not set)
       const includeDescription = job.includeDescriptionInQuotesProposals !== false;
       const descriptionValue = includeDescription ? (job.description || '') : '';
+      
+      console.log('🔵 Initializing proposal with job description:', {
+        includeDescription,
+        descriptionValue,
+        jobDescription: job.description,
+        checkbox: job.includeDescriptionInQuotesProposals
+      });
       
       // Update form with job information
       form.setValue('title', job.title || 'Tree Service Proposal');
@@ -182,9 +189,10 @@ export function ProposalBuilder({
       
       setSections([initialSection]);
       
-      console.log('Proposal initialized with job data:', job);
+      console.log('✅ Proposal initialized with job data:', job);
+      console.log('✅ Section description set to:', descriptionValue);
     }
-  }, [jobData, isOpen, form, customerId]);
+  }, [jobData, isOpen, form, customerId, mode]);
 
   // Initialize draftProposalId with existing proposalId when in edit mode
   useEffect(() => {
