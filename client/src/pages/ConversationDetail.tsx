@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { formatDistanceToNow } from 'date-fns';
+import { MicrophoneButton } from '@/components/MicrophoneButton';
 
 export default function ConversationDetail() {
   const [, params] = useRoute('/conversation/:id');
@@ -285,6 +286,12 @@ export default function ConversationDetail() {
             onChange={(e) => setReplyContent(e.target.value)}
             className="min-h-[40px] sm:min-h-[44px] max-h-[100px] sm:max-h-[120px] resize-none text-sm sm:text-base"
             data-testid="textarea-message-input"
+          />
+          <MicrophoneButton
+            onTranscript={(transcript) => {
+              setReplyContent(prev => prev ? `${prev} ${transcript}` : transcript);
+            }}
+            className="flex-shrink-0 h-10 w-10 sm:h-11 sm:w-11"
           />
           <Button
             size="icon"
