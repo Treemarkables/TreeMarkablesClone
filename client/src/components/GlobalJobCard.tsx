@@ -3961,6 +3961,7 @@ export function GlobalJobCard({
                   updatedAt: new Date().toISOString()
                 }}
                 customer={selectedCustomer || undefined}
+                jobAddress={formData?.address || editingJob.address || ''}
                 description={formData?.description || editingJob.description || ''}
                 lineItems={proposalLineItems.length > 0 
                   ? proposalLineItems 

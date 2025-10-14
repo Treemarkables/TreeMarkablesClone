@@ -44,6 +44,7 @@ interface InvoiceTemplateProps {
   photos?: any[];
   className?: string;
   showActions?: boolean;
+  jobAddress?: string;
   onEmail?: () => void;
   onDownload?: () => void;
   onCopy?: () => void;
@@ -59,6 +60,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   photos = [],
   className = '',
   showActions = false,
+  jobAddress,
   onEmail,
   onDownload,
   onCopy,
@@ -217,8 +219,8 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                     <h4 className="font-semibold text-gray-900" data-testid="text-customer-name">
                       {customer.name}
                     </h4>
-                    {customer.address && (
-                      <p className="text-gray-700 mt-2">{customer.address}</p>
+                    {(jobAddress || customer.address) && (
+                      <p className="text-gray-700 mt-2">{jobAddress || customer.address}</p>
                     )}
                   </div>
                   <div className="space-y-1">
