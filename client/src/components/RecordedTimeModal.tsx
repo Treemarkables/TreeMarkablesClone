@@ -292,15 +292,15 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-full h-full overflow-y-auto sm:max-w-4xl sm:max-h-[90vh] sm:h-auto">
+      <DialogContent className="w-full h-full overflow-y-auto sm:max-w-4xl sm:max-h-[90vh] sm:h-auto pt-safe">
         <Button
           variant="ghost"
           size="icon"
           onClick={onClose}
-          className="absolute right-2 top-2 h-8 w-8 z-10"
+          className="absolute left-2 top-14 sm:top-2 h-10 w-10 z-10"
           data-testid="button-close-modal"
         >
-          <X className="h-4 w-4" />
+          <X className="h-5 w-5" />
         </Button>
         
         <div className="space-y-4">
