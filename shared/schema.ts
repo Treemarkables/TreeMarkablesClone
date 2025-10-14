@@ -3018,3 +3018,6 @@ export const insertMarketingCampaignSchema = createInsertSchema(marketingCampaig
 // Marketing campaign types
 export type MarketingCampaign = typeof marketingCampaigns.$inferSelect;
 export type InsertMarketingCampaign = z.infer<typeof insertMarketingCampaignSchema>;
+
+// Export time tracking tables from timeTracking.ts
+export * from './timeTracking';
