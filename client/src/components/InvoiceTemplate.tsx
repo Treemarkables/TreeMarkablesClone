@@ -278,7 +278,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                         <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.quantity}</td>
                         <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.unit || 'ea'}</td>
                         <td className="border border-gray-200 px-4 py-3 text-right text-gray-700">{formatCurrency(item.unitPrice)}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(item.total)}</td>
+                        <td className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(item.total * 1.15)}</td>
                       </tr>
                     ))}
                   </tbody>
