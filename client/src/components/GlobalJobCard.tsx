@@ -800,6 +800,39 @@ export function GlobalJobCard({
     enabled: !!editingJob?.id,
   });
 
+  // Extract proposal line items for invoice
+  const proposalLineItems = useMemo(() => {
+    if (!jobProposalResponse?.success || !jobProposalResponse?.data?.length) {
+      return [];
+    }
+    
+    const proposals = jobProposalResponse.data;
+    const lineItems: any[] = [];
+    
+    proposals.forEach((proposal: any) => {
+      if (proposal.sections && Array.isArray(proposal.sections)) {
+        proposal.sections.forEach((section: any) => {
+          if (section.lineItems && Array.isArray(section.lineItems)) {
+            section.lineItems.forEach((item: any) => {
+              lineItems.push({
+                id: item.id,
+                description: item.description,
+                quantity: Number(item.quantity) || 1,
+                unitPrice: Number(item.unitPrice) || Number(item.unit_price) || 0,
+                total: Number(item.totalPrice) || Number(item.total_price) || Number(item.total) || 0,
+                unit: item.unit || 'each',
+                category: item.category || 'service',
+                taxable: true
+              });
+            });
+          }
+        });
+      }
+    });
+    
+    return lineItems;
+  }, [jobProposalResponse]);
+
   // Fetch quote data for this job (always fetch when job exists)
   const { data: jobQuoteResponse, refetch: refetchQuotes } = useQuery({
     queryKey: ["/api/quotes", editingJob?.id],
@@ -3891,7 +3924,9 @@ export function GlobalJobCard({
                   id: editingJob.id,
                   invoiceNumber: `INV-${editingJob.jobNumber || '0000'}`,
                   customerId: selectedCustomer?.id || '',
-                  amount: formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0) || 0,
+                  amount: (proposalLineItems.length > 0 
+                    ? proposalLineItems.reduce((sum, item) => sum + (item.total || 0), 0)
+                    : formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0)) || 0,
                   status: 'draft',
                   dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
                   issueDate: new Date().toISOString(),
@@ -3902,16 +3937,18 @@ export function GlobalJobCard({
                 }}
                 customer={selectedCustomer || undefined}
                 description={formData?.description || editingJob.description || ''}
-                lineItems={formData?.lineItems?.map(item => ({
-                  id: item.id,
-                  description: item.description,
-                  quantity: item.quantity,
-                  unitPrice: item.unitPrice,
-                  total: item.total,
-                  unit: 'each',
-                  category: 'service',
-                  taxable: true
-                })) || []}
+                lineItems={proposalLineItems.length > 0 
+                  ? proposalLineItems 
+                  : (formData?.lineItems?.map(item => ({
+                      id: item.id,
+                      description: item.description,
+                      quantity: item.quantity,
+                      unitPrice: item.unitPrice,
+                      total: item.total,
+                      unit: 'each',
+                      category: 'service',
+                      taxable: true
+                    })) || [])}
                 showActions={false}
               />
             </div>
