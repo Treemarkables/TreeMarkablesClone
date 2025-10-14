@@ -413,20 +413,22 @@ export function EmailComposerModal({
       .replace(/{proposalAmount}/g, proposalData?.totalAmount ? `$${proposalData.totalAmount.toFixed(2)}` : "$0.00");
     
     let populatedBody = template.body
-      .replace("{firstName}", firstName || "there")
-      .replace("{customerName}", customerName || "Valued Customer")
-      .replace("{jobDescription}", job?.description || job?.title || "tree service")
-      .replace("{invoiceLink}", invoiceData?.id ? `${window.location.origin}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
-      .replace("{quoteLink}", quoteData?.id ? `${window.location.origin}/quote/${quoteData.id}` : "View quote in your customer portal")
-      .replace("{proposalLink}", proposalData?.id ? `${window.location.origin}/proposal/${proposalData.id}` : "View proposal in your customer portal")
-      .replace("{quoteNumber}", quoteData?.quoteNumber || "")
-      .replace("{quoteExpiry}", quoteData?.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : "")
-      .replace("{quoteAmount}", quoteData?.totalAmount ? `$${quoteData.totalAmount}` : "$0.00")
-      .replace("{proposalNumber}", proposalData?.proposalNumber || (job?.jobNumber ? `PROP-${job.jobNumber}` : ""))
-      .replace("{contactName}", "Treemarkables Team")
-      .replace("{contactPhone}", customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
-      .replace("{invoiceAmount}", invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
-      .replace("{dueDate}", invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "");
+      .replace(/{firstName}/g, firstName || "there")
+      .replace(/{customerName}/g, customerName || "Valued Customer")
+      .replace(/{jobDescription}/g, job?.description || job?.title || "tree service")
+      .replace(/{address}/g, job?.address || customer?.address || "")
+      .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
+      .replace(/{invoiceLink}/g, invoiceData?.id ? `${window.location.origin}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
+      .replace(/{quoteLink}/g, quoteData?.id ? `${window.location.origin}/quote/${quoteData.id}` : "View quote in your customer portal")
+      .replace(/{proposalLink}/g, proposalData?.id ? `${window.location.origin}/proposal/${proposalData.id}` : "View proposal in your customer portal")
+      .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
+      .replace(/{quoteExpiry}/g, quoteData?.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : "")
+      .replace(/{quoteAmount}/g, quoteData?.totalAmount ? `$${quoteData.totalAmount}` : "$0.00")
+      .replace(/{proposalNumber}/g, proposalData?.proposalNumber || (job?.jobNumber ? `PROP-${job.jobNumber}` : ""))
+      .replace(/{contactName}/g, "Treemarkables Team")
+      .replace(/{contactPhone}/g, customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
+      .replace(/{invoiceAmount}/g, invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
+      .replace(/{dueDate}/g, invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "");
 
     // Convert URLs to clickable hyperlinks
     populatedBody = linkifyUrls(populatedBody);
