@@ -6,7 +6,7 @@ const starterEmailTemplates = [
     name: 'Quote Follow-up',
     category: 'quote',
     subject: 'Following up on your quote #{jobNumber}',
-    htmlContent: `Hi {customerName},
+    htmlContent: `Hi {firstName},
 
 I hope this email finds you well. I wanted to follow up on the quote we provided for the work at {address}.
 
@@ -17,7 +17,7 @@ Looking forward to hearing from you!
 Best regards,
 Treemarkables`,
     textContent: '',
-    variables: ['customerName', 'jobNumber', 'address'],
+    variables: ['firstName', 'customerName', 'jobNumber', 'address'],
     description: 'Follow up with customers about pending quotes',
     isActive: true,
     isDefault: false,
@@ -27,7 +27,7 @@ Treemarkables`,
     name: 'Job Confirmation',
     category: 'job_status',
     subject: 'Job Confirmed - {address}',
-    htmlContent: `Hi {customerName},
+    htmlContent: `Hi {firstName},
 
 This is to confirm that we have scheduled your tree service for {address}.
 
@@ -40,7 +40,7 @@ If you have any questions, please don't hesitate to reach out!
 Best regards,
 Treemarkables Team`,
     textContent: '',
-    variables: ['customerName', 'jobNumber', 'address'],
+    variables: ['firstName', 'customerName', 'jobNumber', 'address'],
     description: 'Confirm job booking with customer',
     isActive: true,
     isDefault: false,
@@ -50,7 +50,7 @@ Treemarkables Team`,
     name: 'Invoice',
     category: 'invoice',
     subject: 'Invoice {invoiceNumber} - ${invoiceAmount}',
-    htmlContent: `Hi {customerName},
+    htmlContent: `Hi {firstName},
 
 Please find attached invoice {invoiceNumber} for the tree service work we completed at {address}.
 
@@ -66,7 +66,7 @@ Thank you for your business!
 Best regards,
 Treemarkables`,
     textContent: '',
-    variables: ['customerName', 'invoiceNumber', 'invoiceAmount', 'dueDate', 'invoiceLink', 'address', 'jobNumber'],
+    variables: ['firstName', 'customerName', 'invoiceNumber', 'invoiceAmount', 'dueDate', 'invoiceLink', 'address', 'jobNumber'],
     description: 'Send invoice to customer',
     isActive: true,
     isDefault: false,
@@ -76,7 +76,7 @@ Treemarkables`,
     name: 'Invoice Reminder',
     category: 'invoice',
     subject: 'Payment Reminder - Invoice for {address}',
-    htmlContent: `Hi {customerName},
+    htmlContent: `Hi {firstName},
 
 This is a friendly reminder about the outstanding invoice for the tree service work we completed at {address}.
 
@@ -89,7 +89,7 @@ Thank you for your business!
 Best regards,
 Treemarkables`,
     textContent: '',
-    variables: ['customerName', 'jobNumber', 'address'],
+    variables: ['firstName', 'customerName', 'jobNumber', 'address'],
     description: 'Gentle reminder for unpaid invoices',
     isActive: true,
     isDefault: false,
@@ -99,7 +99,7 @@ Treemarkables`,
     name: 'Thank You',
     category: 'custom_message',
     subject: 'Thank you for choosing Treemarkables',
-    htmlContent: `Hi {customerName},
+    htmlContent: `Hi {firstName},
 
 Thank you for choosing Treemarkables for your tree service needs at {address}!
 
@@ -110,7 +110,7 @@ If you have any feedback or future tree service needs, please don't hesitate to 
 Best regards,
 Treemarkables Team`,
     textContent: '',
-    variables: ['customerName', 'address'],
+    variables: ['firstName', 'customerName', 'address'],
     description: 'Thank you message after job completion',
     isActive: true,
     isDefault: false,
@@ -122,8 +122,8 @@ const starterSmsTemplates = [
   {
     name: 'Job Confirmation SMS',
     category: 'confirmation',
-    message: 'Hi {customerName}, your tree service is confirmed for {address}. We\'ll contact you with timing details soon. - Treemarkables',
-    variables: ['customerName', 'address'],
+    message: 'Hi {firstName}, your tree service is confirmed for {address}. We\'ll contact you with timing details soon. - Treemarkables',
+    variables: ['firstName', 'customerName', 'address'],
     description: 'Quick SMS confirmation for scheduled jobs',
     maxLength: 160,
     isActive: true,
@@ -133,8 +133,8 @@ const starterSmsTemplates = [
   {
     name: 'On Our Way',
     category: 'job_status',
-    message: 'Hi {customerName}, we\'re on our way to {address} now. See you soon! - Treemarkables',
-    variables: ['customerName', 'address'],
+    message: 'Hi {firstName}, we\'re on our way to {address} now. See you soon! - Treemarkables',
+    variables: ['firstName', 'customerName', 'address'],
     description: 'Let customer know crew is en route',
     maxLength: 160,
     isActive: true,
@@ -144,8 +144,8 @@ const starterSmsTemplates = [
   {
     name: 'Quote Ready',
     category: 'quote',
-    message: 'Hi {customerName}, your quote for job #{jobNumber} is ready. Check your email for details. - Treemarkables',
-    variables: ['customerName', 'jobNumber'],
+    message: 'Hi {firstName}, your quote for job #{jobNumber} is ready. Check your email for details. - Treemarkables',
+    variables: ['firstName', 'customerName', 'jobNumber'],
     description: 'Notify customer quote is ready',
     maxLength: 160,
     isActive: true,
@@ -166,8 +166,8 @@ const starterSmsTemplates = [
   {
     name: 'Payment Received',
     category: 'invoice',
-    message: 'Payment received for job #{jobNumber}. Thank you {customerName}! - Treemarkables',
-    variables: ['customerName', 'jobNumber'],
+    message: 'Payment received for job #{jobNumber}. Thank you {firstName}! - Treemarkables',
+    variables: ['firstName', 'customerName', 'jobNumber'],
     description: 'Confirm payment receipt',
     maxLength: 160,
     isActive: true,
