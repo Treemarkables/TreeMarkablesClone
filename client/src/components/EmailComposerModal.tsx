@@ -127,11 +127,18 @@ export function EmailComposerModal({
   const getDefaultTemplate = () => {
     // Use explicit templateType to determine template (user intent)
     if (templateType === 'invoice') {
-      return EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('invoice')) || EMAIL_TEMPLATES[0];
+      // Prioritize exact match "Invoice", then any template with "invoice" in the name
+      return EMAIL_TEMPLATES.find(t => t.name === 'Invoice') || 
+             EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('invoice')) || 
+             EMAIL_TEMPLATES[0];
     } else if (templateType === 'quote') {
-      return EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('quote')) || EMAIL_TEMPLATES[0];
+      return EMAIL_TEMPLATES.find(t => t.name === 'Quote') || 
+             EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('quote')) || 
+             EMAIL_TEMPLATES[0];
     } else if (templateType === 'proposal') {
-      return EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('proposal')) || EMAIL_TEMPLATES[0];
+      return EMAIL_TEMPLATES.find(t => t.name === 'Proposal') || 
+             EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('proposal')) || 
+             EMAIL_TEMPLATES[0];
     }
     
     // When templateType is not specified, default to custom message for general emails
