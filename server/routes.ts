@@ -3801,12 +3801,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
-      // Get base URL for absolute image paths (required for email clients)
-      // Use REPLIT_DOMAINS for production, fall back to request host
-      const replitDomains = process.env.REPLIT_DOMAINS;
-      const baseUrl = replitDomains 
-        ? `https://${replitDomains.split(',')[0]}` 
-        : `${req.protocol}://${req.get('host')}`;
+      // Get base URL for customer-facing links
+      // Use production domain to avoid security warnings in emails
+      const baseUrl = 'https://app.treemarkables.co.nz';
       
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
