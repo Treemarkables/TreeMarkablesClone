@@ -2274,7 +2274,7 @@ export function GlobalJobCard({
                                 <FormItem>
                                   <FormControl>
                                     <Select value={field.value || ""} onValueChange={field.onChange}>
-                                      <SelectTrigger className="h-8 text-sm" data-testid="select-job-status">
+                                      <SelectTrigger className="h-9 text-base md:text-sm" data-testid="select-job-status">
                                         <SelectValue placeholder="Select status" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -2300,7 +2300,7 @@ export function GlobalJobCard({
                                 <FormItem>
                                   <FormControl>
                                     <Select value={field.value || ""} onValueChange={field.onChange}>
-                                      <SelectTrigger className="h-8 text-sm">
+                                      <SelectTrigger className="h-9 text-base md:text-sm">
                                         <SelectValue placeholder="Select source" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -2340,7 +2340,7 @@ export function GlobalJobCard({
                                     onAddressSelect={(parsed) => {
                                       form.setValue('address', parsed.fullAddress);
                                     }}
-                                    className="h-8 text-sm" 
+                                    className="h-9 text-base md:text-sm" 
                                     placeholder="Start typing address..."
                                     data-testid="input-job-address"
                                   />
@@ -2463,7 +2463,7 @@ export function GlobalJobCard({
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="First Name" />
+                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="First Name" />
                                   </FormControl>
                                 </FormItem>
                               )}
@@ -2474,7 +2474,7 @@ export function GlobalJobCard({
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="Last Name" />
+                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Last Name" />
                                   </FormControl>
                                 </FormItem>
                               )}
@@ -2487,7 +2487,7 @@ export function GlobalJobCard({
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="Email" type="email" />
+                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Email" type="email" />
                                   </FormControl>
                                 </FormItem>
                               )}
@@ -2498,7 +2498,7 @@ export function GlobalJobCard({
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="Phone" />
+                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Phone" />
                                   </FormControl>
                                 </FormItem>
                               )}
@@ -2509,7 +2509,7 @@ export function GlobalJobCard({
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-8 text-sm" placeholder="Mobile" />
+                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Mobile" />
                                   </FormControl>
                                 </FormItem>
                               )}
@@ -2572,7 +2572,7 @@ export function GlobalJobCard({
                                   <FormControl>
                                     <Input 
                                       {...field} 
-                                      className="h-8 text-sm" 
+                                      className="h-9 text-base md:text-sm" 
                                       placeholder="Billing Address"
                                       disabled={form.watch('sameAsJobAddress')}
                                     />
@@ -2642,7 +2642,7 @@ export function GlobalJobCard({
                                 <FormItem>
                                   <FormControl>
                                     <Select value={field.value || "tax_exclusive"} onValueChange={field.onChange}>
-                                      <SelectTrigger className="h-8 text-sm">
+                                      <SelectTrigger className="h-9 text-base md:text-sm">
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -2658,7 +2658,7 @@ export function GlobalJobCard({
                           </div>
                           <div>
                             <label className="text-xs font-medium text-gray-600 mb-1 block">GST Rate</label>
-                            <Input className="h-8 text-sm" defaultValue="15.00%" readOnly />
+                            <Input className="h-9 text-base md:text-sm" defaultValue="15.00%" readOnly />
                           </div>
                         </div>
                       </div>
@@ -3043,7 +3043,7 @@ export function GlobalJobCard({
                                                       const newQuantity = parseFloat(e.target.value) || 1;
                                                       quantityField.onChange(newQuantity);
                                                     }}
-                                                    className="h-8 text-sm"
+                                                    className="h-9 text-base md:text-sm"
                                                   />
                                                 </FormControl>
                                               </FormItem>
@@ -3107,7 +3107,7 @@ export function GlobalJobCard({
                                                     }}
                                                     disabled={!isAdmin}
                                                     readOnly={!isAdmin}
-                                                    className="h-8 text-sm"
+                                                    className="h-9 text-base md:text-sm"
                                                   />
                                                 </FormControl>
                                               </FormItem>

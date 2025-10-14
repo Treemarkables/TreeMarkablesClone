@@ -1513,7 +1513,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   // Normal search - let the regular filtering handle it
                 }
               }}
-              className="pl-7 pr-7 h-7 text-xs bg-white"
+              className="pl-7 pr-7 h-9 text-base bg-white"
               data-testid="mobile-job-search-input"
             />
             {isDeepSearchActive && (
