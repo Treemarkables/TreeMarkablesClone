@@ -233,7 +233,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
           template={template}
           proposal={proposal}
           customer={customer}
-          sections={[]} // TODO: Fetch proposal sections when implemented
+          sections={proposal.sections || []}
           showActions={false}
           className="bg-white"
         />
