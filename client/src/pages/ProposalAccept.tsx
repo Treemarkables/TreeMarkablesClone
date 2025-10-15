@@ -21,10 +21,11 @@ export default function ProposalAccept() {
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
-      return response;
+      const data = await response.json();
+      return data;
     },
-    onSuccess: (response: any) => {
-      console.log('Proposal accepted successfully:', response);
+    onSuccess: (data: any) => {
+      console.log('Proposal accepted successfully:', data);
       setAcceptanceStatus('success');
     },
     onError: (error: any) => {
