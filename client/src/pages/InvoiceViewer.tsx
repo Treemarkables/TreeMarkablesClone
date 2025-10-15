@@ -56,8 +56,10 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   // Calculate totals from line items
   const lineItems = invoice.lineItems || invoice.items || [];
   const lineItemTotal = lineItems.reduce((sum: number, item: any) => {
-    const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
-    return sum + (itemTotal || 0);
+    // Check both 'total' and 'amount' fields for backwards compatibility
+    const itemTotal = item.total || item.amount;
+    const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
+    return sum + total;
   }, 0);
 
   const gstRate = 0.15;
@@ -68,13 +70,16 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   let gstAmount: number;
   
   if (hasLineItems) {
+    // Line items contain ex-GST amounts
     subtotal = lineItemTotal;
     gstAmount = subtotal * gstRate;
     totalAmount = subtotal + gstAmount;
   } else {
-    totalAmount = invoice.totalAmount || invoice.amount || 0;
-    subtotal = totalAmount / (1 + gstRate);
-    gstAmount = totalAmount - subtotal;
+    // If no line items, treat invoice amount as ex-GST
+    const invoiceAmount = invoice.totalAmount || invoice.amount || 0;
+    subtotal = invoiceAmount;
+    gstAmount = subtotal * gstRate;
+    totalAmount = subtotal + gstAmount;
   }
 
   const formatCurrency = (amount: number) => {
