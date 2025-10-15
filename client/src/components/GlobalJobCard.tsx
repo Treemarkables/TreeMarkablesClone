@@ -795,6 +795,32 @@ export function GlobalJobCard({
     }
   });
 
+  const archiveJobMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingJob?.id) throw new Error('No job ID for archive');
+      const response = await apiRequest('PUT', `/api/jobs/${editingJob.id}`, { 
+        status: 'archived'
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      toast({
+        title: "Job Archived",
+        description: "Job has been archived successfully.",
+      });
+      onClose();
+    },
+    onError: (error) => {
+      console.error('Error archiving job:', error);
+      toast({
+        title: "Archive Error",
+        description: "Failed to archive job. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
   // Fetch proposal data for this job (always fetch when job exists)
   const { data: jobProposalResponse, isLoading: isProposalLoading, isFetching: isProposalFetching, refetch: refetchProposals } = useQuery({
     queryKey: ["/api/proposals", editingJob?.id],
@@ -1178,11 +1204,9 @@ export function GlobalJobCard({
 
   // Handle archive click
   const handleArchiveClick = () => {
-    toast({
-      title: "Archive Job",
-      description: "Job has been archived successfully.",
-      variant: "destructive"
-    });
+    if (confirm('Are you sure you want to archive this job? It will be hidden from the active jobs list.')) {
+      archiveJobMutation.mutate();
+    }
   };
 
   // Handle speech-to-quote data

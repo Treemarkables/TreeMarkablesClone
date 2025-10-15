@@ -353,8 +353,11 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   // Transform and filter jobs
   const allDisplayJobs: DisplayJob[] = jobs.length > 0 ? transformJobsForDisplay(jobs) : [];
   
-  // Filter jobs based on search query
+  // Filter jobs based on search query and exclude archived jobs
   const filteredJobs = allDisplayJobs.filter(job => {
+    // Always exclude archived jobs from the list
+    if (job.status === 'archived') return false;
+    
     if (!jobSearchQuery.trim()) return true;
     const query = jobSearchQuery.toLowerCase();
     return (
