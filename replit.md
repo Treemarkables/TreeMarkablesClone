@@ -18,7 +18,10 @@ Preferred communication style: Simple, everyday language.
 - **Routing**: Wouter
 - **UI Components**: Shadcn/ui (Radix UI primitives)
 - **Styling**: Tailwind CSS
-- **State Management**: TanStack Query
+- **State Management**: TanStack Query with cross-device auto-sync
+  - `refetchOnWindowFocus: "always"` - Instant sync when switching between desktop/mobile tabs
+  - `refetchInterval: 20000` - Background polling every 20 seconds for automatic updates
+  - `staleTime: 5000` - 5-second cache window to prevent duplicate requests
 - **Form Handling**: React Hook Form with Zod validation
 - **PWA Support**: Full Progressive Web App features, including mobile-optimized components and safe-area padding for iOS.
 
