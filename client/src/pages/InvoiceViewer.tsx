@@ -219,7 +219,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                   </div>
                   <div>
                     <span className="text-gray-600">Address:</span>
-                    <span className="font-medium ml-2">{job?.address || customer?.address || 'N/A'}</span>
+                    <span className="font-medium ml-2">{invoice.address || job?.address || customer?.address || 'N/A'}</span>
                   </div>
                 </div>
               </div>
