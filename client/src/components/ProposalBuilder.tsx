@@ -125,6 +125,7 @@ export function ProposalBuilder({
   const [showDiaryPhotoDialog, setShowDiaryPhotoDialog] = useState(false);
   const [currentPhotoSectionId, setCurrentPhotoSectionId] = useState<string>('');
   const [selectedDiaryPhotos, setSelectedDiaryPhotos] = useState<string[]>([]);
+  const [enlargedPhotoUrl, setEnlargedPhotoUrl] = useState<string | null>(null);
   const [draftProposalId, setDraftProposalId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -1482,14 +1483,18 @@ export function ProposalBuilder({
                                     <img
                                       src={photo.url}
                                       alt={photo.filename}
-                                      className="w-full h-20 object-cover rounded-lg"
+                                      className="w-full h-20 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                      onClick={() => setEnlargedPhotoUrl(photo.url)}
                                     />
                                     <Button
                                       type="button"
                                       variant="destructive"
                                       size="icon"
                                       className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                      onClick={() => removePhoto(section.id, photo.id)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        removePhoto(section.id, photo.id);
+                                      }}
                                       data-testid={`button-remove-photo-${photo.id}`}
                                     >
                                       <X className="h-3 w-3" />
@@ -2272,6 +2277,31 @@ export function ProposalBuilder({
                   Add {selectedDiaryPhotos.length > 0 ? `${selectedDiaryPhotos.length} ` : ''}Photo(s)
                 </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Photo Lightbox Modal */}
+      {enlargedPhotoUrl && (
+        <Dialog open={!!enlargedPhotoUrl} onOpenChange={() => setEnlargedPhotoUrl(null)}>
+          <DialogContent className="max-w-full sm:max-w-4xl h-[90vh] p-0 bg-black/95">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 z-50 text-white hover:bg-white/20"
+              onClick={() => setEnlargedPhotoUrl(null)}
+              data-testid="button-close-photo-lightbox"
+            >
+              <X className="h-6 w-6" />
+            </Button>
+            <div className="flex items-center justify-center h-full p-4">
+              <img
+                src={enlargedPhotoUrl}
+                alt="Enlarged view"
+                className="max-w-full max-h-full object-contain"
+                onClick={() => setEnlargedPhotoUrl(null)}
+              />
             </div>
           </DialogContent>
         </Dialog>
