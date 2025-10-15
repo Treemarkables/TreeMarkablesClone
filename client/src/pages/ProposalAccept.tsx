@@ -29,7 +29,7 @@ export default function ProposalAccept() {
     },
     onError: (error: any) => {
       console.error('Proposal acceptance error:', error);
-      if (error.message?.includes('already been accepted')) {
+      if (error.message?.includes('already') && error.message?.includes('accepted')) {
         setAcceptanceStatus('already_accepted');
       } else {
         setAcceptanceStatus('error');
