@@ -11674,9 +11674,10 @@ Transcription: ${transcriptText}`;
           const sections = sectionsByProposalId.get(proposal.id) || [];
           const lineItems = lineItemsByProposalId.get(proposal.id) || [];
 
-          // Attach line items to their sections
+          // Attach line items to their sections and map content to description
           const sectionsWithLineItems = sections.map(section => ({
             ...section,
+            description: section.content || '', // Map content to description for client compatibility
             lineItems: lineItems.filter(item => item.sectionId === section.id)
           }));
 
@@ -11825,9 +11826,10 @@ Transcription: ${transcriptText}`;
         })
       );
       
-      // Map images → photos and attach line items with choices to each section
+      // Map images → photos, content → description, and attach line items with choices to each section
       const sectionsWithPhotosAndLineItems = sections.map(section => ({
         ...section,
+        description: section.content || '', // Map content to description for client compatibility
         photos: (section.images || []).map((url: string) => ({
           id: `photo-${Date.now()}-${Math.random()}`,
           url,
@@ -12470,9 +12472,10 @@ Transcription: ${transcriptText}`;
     try {
       const sections = await storage.getProposalSectionsByProposal(req.params.proposalId);
       
-      // Map images → photos for frontend compatibility
+      // Map images → photos and content → description for frontend compatibility
       const sectionsWithPhotos = sections.map(section => ({
         ...section,
+        description: section.content || '', // Map content to description for client compatibility
         photos: (section.images || []).map((url: string) => ({
           id: `photo-${Date.now()}-${Math.random()}`,
           url,

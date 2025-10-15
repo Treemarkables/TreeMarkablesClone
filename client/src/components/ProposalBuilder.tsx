@@ -88,7 +88,7 @@ export function ProposalBuilder({
       jobId: jobId || "",
       customerId: customerId || "",
       title: "",
-      description: "",
+      introduction: "",
       validUntil: "",
       totalAmount: 0,
       taxRate: 15,
@@ -158,7 +158,7 @@ export function ProposalBuilder({
       
       // Update form with job information
       form.setValue('title', job.title || 'Tree Service Proposal');
-      form.setValue('description', descriptionValue);
+      form.setValue('introduction', descriptionValue);
       form.setValue('customerId', job.customerId || customerId || '');
       
       // Initialize sections with job description and line items (only if checkbox is checked)
@@ -217,7 +217,7 @@ export function ProposalBuilder({
       
       // Populate form with existing proposal data
       form.setValue('title', proposal.title || '');
-      form.setValue('description', proposal.description || '');
+      form.setValue('introduction', proposal.introduction || '');
       form.setValue('customerId', proposal.customerId || '');
       form.setValue('jobId', proposal.jobId || '');
       form.setValue('notes', proposal.notes || '');
@@ -229,7 +229,7 @@ export function ProposalBuilder({
         const loadedSections = proposal.sections.map((section: any) => ({
           id: section.id,
           title: section.title,
-          description: section.content || '',
+          description: section.description || '', // Already mapped by backend (content → description)
           photos: section.photos || [], // Already mapped by backend
           lineItems: (section.lineItems || []).map((item: any) => ({
             id: item.id,
@@ -859,7 +859,7 @@ export function ProposalBuilder({
       quoteId: formData.quoteId,
       proposalNumber: draftProposalId ? undefined : `PROP-${Date.now()}`,
       title: formData.title || 'Untitled Proposal',
-      description: formData.description,
+      introduction: formData.introduction,
       totalAmount: grandTotal.toString(),
       taxRate: (formData.taxRate || 15).toString(),
       status: 'draft',
@@ -1046,7 +1046,7 @@ export function ProposalBuilder({
       sections,
       formData: {
         title: formData.title,
-        description: formData.description,
+        introduction: formData.introduction,
         notes: formData.notes,
         taxRate: formData.taxRate,
       },
@@ -1082,7 +1082,7 @@ export function ProposalBuilder({
       jobId: formData.jobId || jobId,
       proposalNumber: draftProposalId ? undefined : `DRAFT-${Date.now()}`,
       title: formData.title || 'Untitled Proposal',
-      description: formData.description,
+      introduction: formData.introduction,
       totalAmount: grandTotal.toString(),
       taxRate: (formData.taxRate || 15).toString(),
       status: 'draft',
@@ -1116,7 +1116,7 @@ export function ProposalBuilder({
       id: 'preview-' + Date.now(),
       proposalNumber: 'PROP-PREVIEW',
       status: 'draft',
-      introduction: formData.description || '',
+      introduction: formData.introduction || '',
       conclusion: formData.notes || '',
       expiryDate: formData.validUntil || '',
       createdAt: new Date(),
@@ -1221,7 +1221,7 @@ export function ProposalBuilder({
       quoteId: formData.quoteId,
       proposalNumber: draftProposalId ? undefined : `PROP-${Date.now()}`,
       title: formData.title || 'Untitled Proposal',
-      description: formData.description,
+      introduction: formData.introduction,
       subtotal: subtotal.toString(),
       gstAmount: taxAmount.toString(),
       totalAmount: grandTotal.toString(),
@@ -1258,7 +1258,7 @@ export function ProposalBuilder({
         quoteId: data.quoteId, // Optional - can be undefined
         proposalNumber: data.proposalNumber || `PROP-${Date.now()}`, // Auto-generate if not provided
         title: data.title,
-        description: data.description,
+        introduction: data.introduction,
         subtotal: subtotal.toString(),
         gstAmount: taxAmount.toString(),
         totalAmount: grandTotal.toString(),
