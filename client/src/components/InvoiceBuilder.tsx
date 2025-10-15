@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Mail, X, Loader2, MapPin, FileText, Plus, Trash2, DollarSign } from 'lucide-react';
+import { Save, X, Loader2, MapPin, FileText, Plus, Trash2, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
 import { EmailComposerModal } from '@/components/EmailComposerModal';
@@ -358,21 +358,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                 </div>
 
                 {/* Description */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Description / Notes</Label>
-                  <Textarea
-                    value={editableDescription}
-                    onChange={(e) => setEditableDescription(e.target.value)}
-                    placeholder="Enter invoice description or notes"
-                    className="bg-white min-h-[80px]"
-                    data-testid="input-invoice-description"
-                  />
-                </div>
-
-                {/* Line Items */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">Line Items</Label>
+                    <Label className="text-sm font-medium">Description</Label>
                     <Button
                       type="button"
                       variant="outline"
@@ -384,6 +372,14 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                       Add Item
                     </Button>
                   </div>
+                  
+                  <Textarea
+                    value={editableDescription}
+                    onChange={(e) => setEditableDescription(e.target.value)}
+                    placeholder="Enter invoice description"
+                    className="bg-white min-h-[80px]"
+                    data-testid="input-invoice-description"
+                  />
 
                   <div className="space-y-2">
                     {lineItems.map((item, index) => (
@@ -472,17 +468,17 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   onClick={handleCreateAndSend}
                   disabled={isCreating}
                   className="bg-blue-600 hover:bg-blue-700"
-                  data-testid="button-create-send-invoice"
+                  data-testid="button-save-invoice"
                 >
                   {isCreating ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
+                      Saving...
                     </>
                   ) : (
                     <>
-                      <Mail className="h-4 w-4 mr-2" />
-                      Create & Send Invoice
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Invoice
                     </>
                   )}
                 </Button>
