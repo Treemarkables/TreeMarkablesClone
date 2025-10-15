@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Save, Send, X, Loader2, MapPin, FileText, Plus, Trash2, DollarSign } from 'lucide-react';
+import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
 import { EmailComposerModal } from '@/components/EmailComposerModal';
@@ -51,6 +51,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   
   // Editable fields
   const [editableAddress, setEditableAddress] = useState('');
+  const [editableEmail, setEditableEmail] = useState('');
   const [editableDescription, setEditableDescription] = useState('');
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
 
@@ -84,8 +85,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     const dataLoaded = !loadingProposals && !loadingQuotes;
     if (!dataLoaded) return;
 
-    // Set address
+    // Set address and email
     setEditableAddress(job.address || customer.address || '');
+    setEditableEmail(customer.email || '');
 
     // Get proposals and quotes
     const proposals = proposalsResponse?.data || [];
@@ -374,6 +376,22 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   />
                 </div>
 
+                {/* Email */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    <Mail className="h-4 w-4 text-blue-600" />
+                    Customer Email
+                  </Label>
+                  <Input
+                    type="email"
+                    value={editableEmail}
+                    onChange={(e) => setEditableEmail(e.target.value)}
+                    placeholder="Enter customer email"
+                    className="bg-white"
+                    data-testid="input-invoice-email"
+                  />
+                </div>
+
                 {/* Description */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -566,12 +584,14 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           }}
           job={job}
           customer={customer}
-          documentType="invoice"
-          documentData={{
+          customEmail={editableEmail}
+          invoiceData={{
+            id: createdInvoice.id,
             invoiceNumber: createdInvoice.invoiceNumber,
             amount: createdInvoice.amount,
             dueDate: createdInvoice.dueDate
           }}
+          templateType="invoice"
         />
       )}
     </>

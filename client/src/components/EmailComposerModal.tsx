@@ -44,6 +44,7 @@ interface EmailComposerModalProps {
   quoteData?: any;
   proposalData?: any;
   templateType?: 'invoice' | 'quote' | 'proposal';
+  customEmail?: string;
 }
 
 interface EmailTemplate {
@@ -61,7 +62,8 @@ export function EmailComposerModal({
   invoiceData,
   quoteData,
   proposalData,
-  templateType
+  templateType,
+  customEmail
 }: EmailComposerModalProps) {
   const [emailData, setEmailData] = useState({
     to: "",
@@ -182,7 +184,7 @@ export function EmailComposerModal({
   // Pre-populate email data when modal opens (only on first open, not on data updates)
   useEffect(() => {
     if (isOpen && job && customer && !hasInitialized) {
-      const billingEmail = job.jobContactEmail || customer.billingContactEmail || customer.email || customer.jobContactEmail;
+      const billingEmail = customEmail || job.jobContactEmail || customer.billingContactEmail || customer.email || customer.jobContactEmail;
       
       // Extract first name from customer data
       let firstName = "there";
