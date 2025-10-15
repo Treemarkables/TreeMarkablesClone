@@ -1034,8 +1034,8 @@ export function ProposalBuilder({
     setSmsForm({
       to: customerPhone,
       message: shortLink 
-        ? `Hi ${firstName}, your proposal is ready! Total: $${totalAmount} NZD. View: ${shortLink} - Treemarkables`
-        : `Hi ${firstName}, your proposal is ready! Total: $${totalAmount} NZD. We look forward to working with you. - Treemarkables`
+        ? `Hi ${firstName}, your proposal is ready! Total: $${totalAmount} NZD. View quote: ${shortLink}\nJules\nTreemarkables`
+        : `Hi ${firstName}, your proposal is ready! Total: $${totalAmount} NZD. We look forward to working with you.\nJules\nTreemarkables`
     });
   };
 
