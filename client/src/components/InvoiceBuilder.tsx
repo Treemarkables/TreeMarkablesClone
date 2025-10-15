@@ -128,7 +128,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
     try {
       // Create invoice
-      const response = await apiRequest('POST', `/api/jobs/${job.id}/convert-to-invoice`, {
+      const res = await apiRequest('POST', `/api/jobs/${job.id}/convert-to-invoice`, {
         invoiceType: 'full',
         customData: {
           address: invoiceData.address,
@@ -144,6 +144,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         }
       });
 
+      const response = await res.json();
       console.log('📄 Invoice response:', response);
 
       if (response.success) {
