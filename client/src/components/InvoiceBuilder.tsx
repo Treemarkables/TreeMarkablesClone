@@ -167,7 +167,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
-        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/diary`] }); // Refresh diary to show new invoice entry
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'diary-timeline'] }); // Refresh diary to show new invoice entry
       } else {
         console.error('❌ Invoice creation failed:', response);
         toast({
