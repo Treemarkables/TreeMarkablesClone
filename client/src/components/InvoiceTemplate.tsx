@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { format, addDays } from 'date-fns';
-import { FileText, Download, Mail, Copy, Calendar, CreditCard, MapPin, Phone, Mail as MailIcon } from 'lucide-react';
+import { FileText, Download, Mail, Copy, Calendar, CreditCard, MapPin, Phone, Mail as MailIcon, MessageSquare } from 'lucide-react';
 import type { DocumentTemplate, Customer } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
 
@@ -46,6 +46,7 @@ interface InvoiceTemplateProps {
   showActions?: boolean;
   jobAddress?: string;
   onEmail?: () => void;
+  onSms?: () => void;
   onDownload?: () => void;
   onCopy?: () => void;
   onAddPayment?: () => void;
@@ -62,6 +63,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   showActions = false,
   jobAddress,
   onEmail,
+  onSms,
   onDownload,
   onCopy,
   onAddPayment
@@ -156,6 +158,12 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <Button variant="outline" size="sm" onClick={onEmail} data-testid="button-email-invoice">
                 <Mail className="w-4 h-4 mr-2" />
                 Email
+              </Button>
+            )}
+            {onSms && (
+              <Button variant="outline" size="sm" onClick={onSms} data-testid="button-sms-invoice">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                SMS
               </Button>
             )}
             {onDownload && (

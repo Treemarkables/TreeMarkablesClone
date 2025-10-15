@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign } from 'lucide-react';
+import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
 import { EmailComposerModal } from '@/components/EmailComposerModal';
+import { SMSComposerModal } from '@/components/SMSComposerModal';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { DocumentTemplate, Customer, Job } from '@shared/schema';
 
@@ -47,6 +48,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const [isCreating, setIsCreating] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [showSmsComposer, setShowSmsComposer] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   
   // Editable fields
@@ -320,6 +322,14 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     }
   };
 
+  // Create and send invoice via SMS
+  const handleSmsInvoice = async () => {
+    const invoice = await createInvoice();
+    if (invoice) {
+      setShowSmsComposer(true);
+    }
+  };
+
   const handleClose = () => {
     setCreatedInvoice(null);
     setIsCreating(false);
@@ -518,6 +528,24 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   )}
                 </Button>
                 <Button
+                  onClick={handleSmsInvoice}
+                  disabled={isCreating}
+                  variant="outline"
+                  data-testid="button-sms-invoice-builder"
+                >
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      SMS Invoice
+                    </>
+                  )}
+                </Button>
+                <Button
                   onClick={handleSendInvoice}
                   disabled={isCreating}
                   className="bg-blue-600 hover:bg-blue-700"
@@ -585,6 +613,26 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           job={job}
           customer={customer}
           customEmail={editableEmail}
+          invoiceData={{
+            id: createdInvoice.id,
+            invoiceNumber: createdInvoice.invoiceNumber,
+            amount: createdInvoice.amount,
+            dueDate: createdInvoice.dueDate
+          }}
+          templateType="invoice"
+        />
+      )}
+
+      {/* SMS Composer Modal */}
+      {createdInvoice && (
+        <SMSComposerModal
+          isOpen={showSmsComposer}
+          onClose={() => {
+            setShowSmsComposer(false);
+            handleClose();
+          }}
+          job={job}
+          customer={customer}
           invoiceData={{
             id: createdInvoice.id,
             invoiceNumber: createdInvoice.invoiceNumber,
