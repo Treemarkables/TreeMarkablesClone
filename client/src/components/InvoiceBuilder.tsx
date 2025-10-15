@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Save, X, Loader2, MapPin, FileText, Plus, Trash2, DollarSign } from 'lucide-react';
+import { Save, Send, X, Loader2, MapPin, FileText, Plus, Trash2, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
 import { EmailComposerModal } from '@/components/EmailComposerModal';
@@ -222,8 +222,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     }
   };
 
-  // Create and send invoice
-  const handleCreateAndSend = async () => {
+  // Create invoice (shared logic)
+  const createInvoice = async () => {
     // Validate
     if (!editableAddress.trim()) {
       toast({
@@ -231,7 +231,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         description: "Please enter a service address for the invoice.",
         variant: "destructive"
       });
-      return;
+      return null;
     }
 
     if (lineItems.length === 0 || lineItems.every(item => !item.description.trim())) {
@@ -240,7 +240,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         description: "Please add at least one line item with a description.",
         variant: "destructive"
       });
-      return;
+      return null;
     }
 
     setIsCreating(true);
@@ -280,14 +280,14 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           description: `Invoice ${response.data.invoiceNumber} created successfully.`
         });
 
-        // Open email composer
-        setShowEmailComposer(true);
+        return response.data;
       } else {
         toast({
           title: "Error",
           description: response.message || "Failed to create invoice.",
           variant: "destructive"
         });
+        return null;
       }
     } catch (error) {
       console.error('Error creating invoice:', error);
@@ -296,8 +296,25 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         description: "Failed to create invoice. Please try again.",
         variant: "destructive"
       });
+      return null;
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  // Save invoice only
+  const handleSaveInvoice = async () => {
+    const invoice = await createInvoice();
+    if (invoice) {
+      handleClose();
+    }
+  };
+
+  // Create and send invoice
+  const handleSendInvoice = async () => {
+    const invoice = await createInvoice();
+    if (invoice) {
+      setShowEmailComposer(true);
     }
   };
 
@@ -455,7 +472,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                 </div>
               </div>
 
-              {/* Action Button */}
+              {/* Action Buttons */}
               <div className="flex gap-3 justify-end">
                 <Button
                   variant="outline"
@@ -465,9 +482,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   Cancel
                 </Button>
                 <Button
-                  onClick={handleCreateAndSend}
+                  onClick={handleSaveInvoice}
                   disabled={isCreating}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  variant="outline"
                   data-testid="button-save-invoice"
                 >
                   {isCreating ? (
@@ -479,6 +496,24 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     <>
                       <Save className="h-4 w-4 mr-2" />
                       Save Invoice
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={handleSendInvoice}
+                  disabled={isCreating}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  data-testid="button-send-invoice"
+                >
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Send Invoice
                     </>
                   )}
                 </Button>
