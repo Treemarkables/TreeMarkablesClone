@@ -2481,6 +2481,45 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Don't fail job creation if photo diary entry creation fails
       }
 
+      // Add promotional image to job diary (promo running until end of November 2024)
+      try {
+        const promoImagePath = path.join(__dirname, '..', 'attached_assets', 'promo-nov-2024.png');
+        
+        // Check if promo image exists and promo is still active
+        const now = new Date();
+        const promoEndDate = new Date('2024-12-01'); // End of November
+        
+        if (now < promoEndDate && fs.existsSync(promoImagePath)) {
+          const promoImageBuffer = await fs.promises.readFile(promoImagePath);
+          const photoStorage = new PhotoStorageService();
+          
+          // Upload promo image to object storage
+          const { url: promoPhotoUrl } = await photoStorage.uploadPhoto(
+            promoImageBuffer,
+            'promo-nov-2024.png',
+            'image/png'
+          );
+          
+          // Create diary entry with promo image
+          await storage.createJobDiaryEntry({
+            jobId: job.id,
+            entryType: 'photo',
+            title: 'Win up to $1000 off!',
+            description: 'Special promotion: Any job booked in Sep, Oct and Nov goes into the draw to win up to $1000 off their invoice. 1 in 105 chance of winning!',
+            authorName: 'System',
+            authorRole: 'system',
+            photoUrl: promoPhotoUrl,
+            photos: [promoPhotoUrl],
+            isPrivate: false,
+          });
+          
+          console.log(`🎁 Auto-added promotional image to job ${job.jobNumber}`);
+        }
+      } catch (error) {
+        console.error('Error adding promo image to job diary:', error);
+        // Don't fail job creation if promo image fails
+      }
+
       res.json({ success: true, data: job });
     } catch (error) {
       console.error('Error creating job:', error);
