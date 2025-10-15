@@ -384,23 +384,25 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                 </CardContent>
               </Card>
 
-              {/* Create Button */}
-              <Button
-                onClick={handleCreateInvoice}
-                disabled={isSubmitting}
-                className="w-full"
-                size="lg"
-                data-testid="button-create-invoice"
-              >
-                {isSubmitting ? (
-                  <>Creating Invoice...</>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Create Invoice
-                  </>
-                )}
-              </Button>
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleCreateInvoice}
+                  disabled={isSubmitting}
+                  className="flex-1"
+                  size="lg"
+                  data-testid="button-create-invoice"
+                >
+                  {isSubmitting ? (
+                    <>Creating...</>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Create & Close
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
 
