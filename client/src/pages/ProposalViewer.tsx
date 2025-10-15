@@ -81,11 +81,23 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     },
     onError: (error: any) => {
       console.error('Proposal acceptance error:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to accept proposal. Please try again.",
-        variant: "destructive"
-      });
+      
+      // If already accepted, refresh the proposal to show updated status
+      if (error.message?.includes('already been accepted')) {
+        queryClient.invalidateQueries({ queryKey: ["/api/proposals", proposalId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/proposals", { jobId: proposalId }] });
+        toast({
+          title: "Already Accepted",
+          description: "This proposal has already been accepted.",
+          variant: "default"
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to accept proposal. Please try again.",
+          variant: "destructive"
+        });
+      }
     }
   });
 
