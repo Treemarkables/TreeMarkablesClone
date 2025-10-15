@@ -2921,6 +2921,62 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Bulk archive jobs endpoint
+  app.put('/api/jobs/bulk-archive', async (req: Request, res: Response) => {
+    try {
+      const { jobIds } = req.body;
+      
+      if (!jobIds || !Array.isArray(jobIds)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid request: jobIds array is required'
+        });
+      }
+
+      if (jobIds.length === 0) {
+        return res.json({
+          success: true,
+          archived: 0,
+          message: 'No jobs to archive'
+        });
+      }
+
+      // Archive jobs by updating status to 'archived'
+      let archived = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const jobId of jobIds) {
+        try {
+          const job = await storage.updateJob(jobId, { status: 'archived' });
+          if (job) {
+            archived++;
+          } else {
+            failed++;
+            errors.push(`Job not found: ${jobId}`);
+          }
+        } catch (error) {
+          failed++;
+          errors.push(`Error archiving job ${jobId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        archived,
+        failed,
+        errors,
+        message: `Successfully archived ${archived} jobs${failed > 0 ? `, ${failed} failed` : ''}`
+      });
+    } catch (error) {
+      console.error('Error performing bulk job archive:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error performing bulk archive',
+      });
+    }
+  });
+
   // ========================================
   // JOB DIARY ROUTES
   // ========================================
