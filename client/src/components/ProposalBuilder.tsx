@@ -1320,33 +1320,6 @@ export function ProposalBuilder({
           <div className="flex-1 overflow-x-hidden overflow-y-auto w-full max-w-full min-w-0">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-8 w-full max-w-full min-w-0">
-              
-              {/* Proposal Overview */}
-              <Card className="w-full max-w-full min-w-0">
-                <CardHeader>
-                  <CardTitle>Proposal Overview</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Introduction / Summary</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            placeholder="Enter an overall introduction or summary for this proposal (this will appear before the detailed sections)..."
-                            className="min-h-[100px]"
-                            data-testid="textarea-proposal-description"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-              </Card>
 
               {/* Sections Management */}
               <Card className="w-full max-w-full min-w-0">
