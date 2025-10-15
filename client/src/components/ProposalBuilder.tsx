@@ -1966,22 +1966,23 @@ export function ProposalBuilder({
       {/* Preview Modal */}
       {showPreview && (
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
-          <DialogContent className="max-w-full sm:max-w-6xl h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
-            <DialogHeader className="flex-shrink-0 pb-2 sm:pb-4 border-b sticky top-0 bg-background z-10">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex-1">
-                  <DialogTitle className="text-lg sm:text-2xl font-bold text-primary">
+          <DialogContent className="max-w-full sm:max-w-6xl h-[90vh] overflow-hidden flex flex-col p-0">
+            <DialogHeader className="flex-shrink-0 p-3 sm:p-4 border-b sticky top-0 bg-background z-[60]">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <DialogTitle className="text-base sm:text-2xl font-bold text-primary">
                     Proposal Preview
                   </DialogTitle>
-                  <p className="text-sm text-muted-foreground hidden sm:block">
+                  <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">
                     Preview of your proposal as it will appear to customers
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <Button
                     onClick={() => acceptProposalMutation.mutate()}
                     disabled={acceptProposalMutation.isPending}
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    className="bg-green-600 hover:bg-green-700 text-white min-h-[44px] sm:min-h-9"
+                    size="default"
                     data-testid="button-accept-proposal"
                   >
                     {acceptProposalMutation.isPending ? (
@@ -1992,8 +1993,7 @@ export function ProposalBuilder({
                     ) : (
                       <>
                         <CheckCircle className="h-4 w-4 sm:mr-2" />
-                        <span className="hidden sm:inline">Accept Quote</span>
-                        <span className="sm:hidden">Accept</span>
+                        <span className="hidden sm:inline">Accept</span>
                       </>
                     )}
                   </Button>
@@ -2001,15 +2001,16 @@ export function ProposalBuilder({
                     variant="outline"
                     size="icon"
                     onClick={() => setShowPreview(false)}
+                    className="min-h-[44px] min-w-[44px] sm:h-9 sm:w-9"
                     data-testid="button-close-preview"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-5 w-5 sm:h-4 sm:w-4" />
                   </Button>
                 </div>
               </div>
             </DialogHeader>
 
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-auto p-4 sm:p-6">
               {(() => {
                 const previewData = getPreviewData();
                 return (
