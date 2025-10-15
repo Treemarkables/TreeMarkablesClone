@@ -617,6 +617,17 @@ export function GlobalJobCard({
     return () => subscription.unsubscribe();
   }, [form]);
 
+  // Auto-populate address from customer in create mode
+  useEffect(() => {
+    if (mode === 'create' && selectedCustomer?.address) {
+      const currentAddress = form.getValues('address');
+      // Only populate if address field is empty
+      if (!currentAddress || currentAddress.trim() === '') {
+        form.setValue('address', selectedCustomer.address);
+      }
+    }
+  }, [mode, selectedCustomer, form]);
+
   // Auto-save DISABLED - was causing data loss issues with proposals
   // useEffect(() => {
   //   if (mode !== 'edit' || !editingJob?.id) return;
