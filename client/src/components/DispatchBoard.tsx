@@ -460,6 +460,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     queryKey: ['/api/jobs'],
   });
 
+  // Debug logging for jobs data
+  useEffect(() => {
+    console.log('🔍 DispatchBoard - Jobs Data:', {
+      isLoading: jobsLoading,
+      hasError: !!jobsError,
+      error: jobsError,
+      dataExists: !!jobsData,
+      jobCount: jobsData?.data?.length || 0,
+      rawData: jobsData
+    });
+  }, [jobsData, jobsLoading, jobsError]);
+
   // Fetch customers for name lookup
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],
