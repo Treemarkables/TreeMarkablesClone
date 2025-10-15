@@ -1320,7 +1320,7 @@ export function ProposalBuilder({
 
           <div className="flex-1 overflow-x-hidden overflow-y-auto w-full max-w-full min-w-0">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-8 w-full max-w-full min-w-0">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-8 w-full max-w-full min-w-0 pb-20 sm:pb-8">
 
               {/* Sections Management */}
               <Card className="w-full max-w-full min-w-0">
