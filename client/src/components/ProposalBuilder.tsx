@@ -1868,91 +1868,100 @@ export function ProposalBuilder({
                 </CardContent>
               </Card>
 
-              {/* Form Actions */}
-              <div className="flex flex-wrap justify-between gap-2 pt-4">
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handlePreview}
-                    data-testid="button-preview-proposal"
-                    className="flex items-center gap-2"
-                  >
-                    <Eye className="h-4 w-4" />
-                    Preview
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      initializeEmailForm();
-                      setShowEmailDialog(true);
-                    }}
-                    data-testid="button-email-proposal"
-                    className="flex items-center gap-2"
-                  >
-                    <Mail className="h-4 w-4" />
-                    Email
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      initializeSmsForm();
-                      setShowSmsDialog(true);
-                    }}
-                    data-testid="button-sms-proposal"
-                    className="flex items-center gap-2"
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    SMS
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2 sm:gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={onClose}
-                    data-testid="button-cancel-proposal"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleManualSave}
-                    disabled={saveDraftMutation.isPending}
-                    data-testid="button-save-only-proposal"
-                  >
-                    {saveDraftMutation.isPending ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={createProposalMutation.isPending}
-                    data-testid="button-update-proposal"
-                  >
-                    {createProposalMutation.isPending ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                        {mode === "edit" ? "Updating..." : "Creating..."}
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        {mode === "edit" ? "Update Proposal" : "Create Proposal"}
-                      </>
-                    )}
-                  </Button>
+              {/* Form Actions - Sticky Footer */}
+              <div className="sticky bottom-0 -mx-4 sm:-mx-6 mt-8 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                <div className="px-4 sm:px-6 py-4">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    {/* Secondary Actions */}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handlePreview}
+                        data-testid="button-preview-proposal"
+                        className="flex items-center gap-2"
+                      >
+                        <Eye className="h-4 w-4" />
+                        <span className="hidden sm:inline">Preview</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          initializeEmailForm();
+                          setShowEmailDialog(true);
+                        }}
+                        data-testid="button-email-proposal"
+                        className="flex items-center gap-2"
+                      >
+                        <Mail className="h-4 w-4" />
+                        <span className="hidden sm:inline">Email</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          initializeSmsForm();
+                          setShowSmsDialog(true);
+                        }}
+                        data-testid="button-sms-proposal"
+                        className="flex items-center gap-2"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        <span className="hidden sm:inline">SMS</span>
+                      </Button>
+                    </div>
+
+                    {/* Primary Actions */}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={onClose}
+                        data-testid="button-cancel-proposal"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleManualSave}
+                        disabled={saveDraftMutation.isPending}
+                        data-testid="button-save-only-proposal"
+                        className="gap-2"
+                      >
+                        {saveDraftMutation.isPending ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            <span className="hidden sm:inline">Saving...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4" />
+                            <span className="hidden sm:inline">Save</span>
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={createProposalMutation.isPending}
+                        data-testid="button-update-proposal"
+                        className="gap-2"
+                      >
+                        {createProposalMutation.isPending ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span className="hidden sm:inline">{mode === "edit" ? "Updating..." : "Creating..."}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4" />
+                            <span className="hidden sm:inline">{mode === "edit" ? "Update Proposal" : "Create Proposal"}</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
