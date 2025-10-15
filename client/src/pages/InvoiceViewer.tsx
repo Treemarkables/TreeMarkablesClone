@@ -13,7 +13,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   
   // Fetch invoice data with embedded customer and job data (optimized - single API call)
   const { data: invoiceResponse, isLoading: invoiceLoading } = useQuery({
-    queryKey: ["/api/invoices", invoiceId],
+    queryKey: [`/api/invoices/${invoiceId}`],
     enabled: !!invoiceId,
   });
 
