@@ -558,11 +558,14 @@ export function JobDiarySection({
       return { type: 'quote', number: quoteMatch[0] };
     }
     
-    // Check for invoice - only if it explicitly says "Invoice sent" or has INV- number
-    const invoiceMatch = (entry.title + ' ' + entry.content).match(/INV-\d+/i);
-    if (invoiceMatch || content.includes('invoice sent')) {
-      // If we found an invoice number, use it; otherwise use a placeholder
-      const invoiceNumber = invoiceMatch ? invoiceMatch[0] : 'latest';
+    // Check for invoice - match full invoice number format INV-YYYY-MM-XXXXXX or metadata
+    const invoiceMatch = (entry.title + ' ' + entry.content).match(/INV-\d{4}-\d{2}-\d{6}/i) || 
+                         (entry.title + ' ' + entry.content).match(/INV-[\d-]+/i);
+    
+    // Also check metadata for invoice info
+    if (entry.metadata?.documentType === 'invoice' || invoiceMatch || content.includes('invoice sent') || content.includes('invoice created')) {
+      // If we found an invoice number in content, use it; otherwise check metadata; otherwise use a placeholder
+      const invoiceNumber = invoiceMatch ? invoiceMatch[0] : (entry.metadata?.invoiceNumber || entry.metadata?.documentNumber || 'latest');
       return { type: 'invoice', number: invoiceNumber };
     }
     
