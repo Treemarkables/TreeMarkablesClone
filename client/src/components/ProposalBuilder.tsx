@@ -1028,9 +1028,15 @@ export function ProposalBuilder({
     const proposalTitle = formData.title || 'Tree Service Proposal';
     const totalAmount = grandTotal.toFixed(2);
     
+    // Create proposal link if we have a proposal ID
+    const domain = window.location.origin;
+    const proposalLink = proposalId ? `${domain}/proposal/${proposalId}` : '';
+    
     setSmsForm({
       to: customerPhone,
-      message: `Hi ${customerName}, your ${proposalTitle} is ready! Total: $${totalAmount} NZD. We look forward to working with you. - Treemarkables`
+      message: proposalLink 
+        ? `Hi ${customerName}, your ${proposalTitle} is ready! Total: $${totalAmount} NZD. View: ${proposalLink} - Treemarkables`
+        : `Hi ${customerName}, your ${proposalTitle} is ready! Total: $${totalAmount} NZD. We look forward to working with you. - Treemarkables`
     });
   };
 
