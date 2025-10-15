@@ -4147,8 +4147,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         if (lineItems && lineItems.length > 0) {
           // Calculate from line items (ex-GST)
           subtotal = lineItems.reduce((sum: number, item: any) => {
-            const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : (item.total || 0);
-            return sum + itemTotal;
+            // Check both 'total' and 'amount' fields for backwards compatibility
+            const itemTotal = item.total || item.amount;
+            const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
+            return sum + total;
           }, 0);
           gstAmount = subtotal * gstRate;
           totalAmount = subtotal + gstAmount;
@@ -4170,14 +4172,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         };
         
         // Generate line items HTML
-        const lineItemsHtml = lineItems && lineItems.length > 0 ? lineItems.map((item: any) => `
+        const lineItemsHtml = lineItems && lineItems.length > 0 ? lineItems.map((item: any) => {
+          const itemTotal = item.total || item.amount;
+          const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
+          return `
           <tr>
             <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${item.description || ''}</td>
             <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity || 1}</td>
             <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0))}</td>
-            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${formatCurrency(typeof item.total === 'string' ? parseFloat(item.total) : (item.total || 0))}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${formatCurrency(total)}</td>
           </tr>
-        `).join('') : `
+        `;
+        }).join('') : `
           <tr>
             <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service'}</td>
             <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">1</td>
