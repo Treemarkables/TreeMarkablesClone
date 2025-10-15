@@ -20,38 +20,20 @@ export default function ProposalAccept() {
   // Accept proposal mutation
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
-      console.log('🚀 MUTATION STARTING - proposalId:', proposalId);
-      try {
-        const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
-        console.log('✅ API REQUEST SUCCESS - Response status:', response.status);
-        const data = await response.json();
-        console.log('📦 RESPONSE DATA:', data);
-        return data;
-      } catch (error) {
-        console.error('❌ MUTATION ERROR IN TRY-CATCH:', error);
-        throw error;
-      }
+      const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
+      const data = await response.json();
+      return data;
     },
-    onSuccess: (data: any) => {
-      console.log('✅ ON_SUCCESS CALLED - Data:', data);
+    onSuccess: () => {
       setAcceptanceStatus('success');
     },
     onError: (error: any) => {
-      console.error('❌ ON_ERROR CALLED - Error:', error);
-      console.error('❌ Error message:', error?.message);
-      console.error('❌ Error type:', typeof error);
-      console.error('❌ Error keys:', Object.keys(error || {}));
-      
       const errorMessage = error?.message || String(error);
-      console.log('❌ Checking error message:', errorMessage);
-      console.log('❌ Includes "already"?', errorMessage.toLowerCase().includes('already'));
-      console.log('❌ Includes "accepted"?', errorMessage.toLowerCase().includes('accepted'));
       
+      // Check if error is "already accepted"
       if (errorMessage.toLowerCase().includes('already') && errorMessage.toLowerCase().includes('accepted')) {
-        console.log('✅ Setting status to already_accepted');
         setAcceptanceStatus('already_accepted');
       } else {
-        console.log('❌ Setting status to error');
         setAcceptanceStatus('error');
       }
     }
@@ -182,7 +164,7 @@ export default function ProposalAccept() {
               </div>
               <Button 
                 onClick={() => acceptProposalMutation.mutate()}
-                disabled={acceptProposalMutation.isPending}
+                disabled={acceptProposalMutation.isPending || proposal?.status === 'accepted'}
                 className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap shrink-0 shadow-lg"
                 size="default"
                 data-testid="button-accept-proposal-sticky"
@@ -190,7 +172,12 @@ export default function ProposalAccept() {
                 {acceptProposalMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    Accept Proposal
+                    Accepting...
+                  </>
+                ) : proposal?.status === 'accepted' ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Already Accepted
                   </>
                 ) : (
                   <>
