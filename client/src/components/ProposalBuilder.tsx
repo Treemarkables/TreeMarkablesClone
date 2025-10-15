@@ -1283,7 +1283,7 @@ export function ProposalBuilder({
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-full sm:max-w-5xl h-screen sm:h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-2 sm:p-4 md:p-6 w-full min-w-0">
-          <DialogHeader className="flex-shrink-0 pb-2 sm:pb-3 md:pb-4 w-full min-w-0">
+          <DialogHeader className="flex-shrink-0 pb-2 sm:pb-3 md:pb-4 w-full min-w-0" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
             <div className="flex items-center justify-between flex-wrap gap-2 w-full min-w-0">
               <div>
                 <DialogTitle className="text-lg sm:text-2xl font-bold text-primary">
