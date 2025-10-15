@@ -2416,6 +2416,46 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      // Check for duplicate jobs (same customer, address, and description within last 5 minutes)
+      if (validation.data.customerId && validation.data.address) {
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const recentJobs = await storage.getJobsByCustomer(validation.data.customerId);
+        
+        const duplicate = recentJobs.find((existingJob: any) => {
+          // Skip if createdAt is missing or invalid (legacy/imported jobs)
+          if (!existingJob.createdAt) {
+            console.log(`[DUPLICATE CHECK] Skipping job #${existingJob.jobNumber} - missing createdAt`);
+            return false;
+          }
+          
+          const jobCreatedDate = new Date(existingJob.createdAt);
+          // Skip if the date is invalid
+          if (isNaN(jobCreatedDate.getTime())) {
+            console.log(`[DUPLICATE CHECK] Skipping job #${existingJob.jobNumber} - invalid createdAt`);
+            return false;
+          }
+          
+          // Skip if the existing job is too old (more than 5 minutes)
+          if (jobCreatedDate < fiveMinutesAgo) return false;
+          
+          // Check if address and description are similar
+          const sameAddress = existingJob.address?.trim().toLowerCase() === validation.data.address?.trim().toLowerCase();
+          const sameDescription = existingJob.description?.trim().toLowerCase() === validation.data.description?.trim().toLowerCase();
+          
+          return sameAddress && sameDescription;
+        });
+        
+        if (duplicate) {
+          console.log(`[DUPLICATE CHECK] Blocked duplicate job creation - existing job #${duplicate.jobNumber} found`);
+          return res.status(409).json({ 
+            success: false, 
+            message: `Duplicate job detected. A similar job (#${duplicate.jobNumber}) was just created for this customer.`,
+            duplicateJobNumber: duplicate.jobNumber,
+            duplicateJobId: duplicate.id
+          });
+        }
+      }
+
       const job = await storage.createJob(validation.data);
       
       // Update customer address if job has an address and customer doesn't have one
