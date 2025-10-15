@@ -12146,15 +12146,23 @@ Transcription: ${transcriptText}`;
   app.post('/api/proposals/:id/accept', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+      console.log('🚀 ACCEPT PROPOSAL REQUEST RECEIVED - Proposal ID:', id);
+      console.log('📋 Request method:', req.method);
+      console.log('🔐 Session ID:', req.session?.id);
+      console.log('👤 Employee ID:', req.session?.employeeId);
       
       // Get the proposal
       const proposal = await storage.getProposal(id);
+      console.log('📄 Proposal found:', proposal ? 'YES' : 'NO', proposal?.status);
+      
       if (!proposal) {
+        console.log('❌ Proposal not found:', id);
         return res.status(404).json({ success: false, message: 'Proposal not found' });
       }
 
       // Check if already accepted
       if (proposal.status === 'accepted') {
+        console.log('⚠️ Proposal already accepted:', id);
         return res.status(400).json({ success: false, message: 'Proposal has already been accepted' });
       }
 
