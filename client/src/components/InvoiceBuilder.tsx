@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Send, Mail, X, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Send, Mail, X, Loader2, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
 import { EmailComposerModal } from '@/components/EmailComposerModal';
@@ -35,6 +37,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const [isCreating, setIsCreating] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [editableAddress, setEditableAddress] = useState(job.address || customer.address || '');
 
   // Auto-create invoice when modal opens
   useEffect(() => {
@@ -48,6 +51,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     if (!isOpen) {
       setCreatedInvoice(null);
       setIsCreating(false);
+      setEditableAddress(job.address || customer.address || '');
     }
   }, [isOpen]);
 
@@ -73,7 +77,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       const res = await apiRequest('POST', `/api/jobs/${job.id}/convert-to-invoice`, {
         invoiceType: 'full',
         customData: {
-          address: job.address || customer.address || '',
+          address: editableAddress,
           dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           notes: job.notes || '',
           description: job.description || `Invoice for ${job.title || 'tree service'}`,
@@ -154,6 +158,22 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
             </div>
           ) : createdInvoice ? (
             <div className="space-y-6">
+              {/* Editable Address Field */}
+              <div className="space-y-2 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <Label className="flex items-center gap-2 text-sm font-medium">
+                  <MapPin className="h-4 w-4 text-blue-600" />
+                  Service Address (editable)
+                </Label>
+                <Input
+                  value={editableAddress}
+                  onChange={(e) => setEditableAddress(e.target.value)}
+                  placeholder="Enter service address"
+                  className="bg-white"
+                  data-testid="input-invoice-address"
+                />
+                <p className="text-xs text-blue-600">This address will appear on the invoice</p>
+              </div>
+
               {/* Action Buttons */}
               <div className="flex gap-3 justify-end border-b pb-4">
                 <Button
@@ -179,11 +199,12 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   invoice={{
                     ...createdInvoice,
                     customer,
-                    job
+                    job,
+                    address: editableAddress // Use the editable address
                   }}
                   customer={customer}
                   job={job}
-                  jobAddress={createdInvoice.address || job.address || customer.address || ''}
+                  jobAddress={editableAddress}
                   template={invoiceTemplate}
                 />
               </div>
