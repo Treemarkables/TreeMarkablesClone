@@ -182,7 +182,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
             ref={cameraInputRef}
             type="file"
             accept="*/*"
-            capture="environment"
+            {...(isMobile ? { capture: "environment" } : {})}
             onChange={handleFileSelect}
             className="hidden"
             data-testid="input-camera"
