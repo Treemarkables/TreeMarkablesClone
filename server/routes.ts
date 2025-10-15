@@ -9916,6 +9916,37 @@ Transcription: ${transcriptText}`;
           await storage.updateJob(job.id, { lastActivityAt: new Date() });
           jobFound = true;
           console.log(`📝 Email logged to job ${job.jobNumber} diary`);
+          
+          // Create notification for email reply
+          try {
+            const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+            const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
+            
+            const notificationData = {
+              title: 'Customer Email Reply',
+              message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
+              type: 'email_reply',
+              priority: 'high' as const,
+              isRead: false,
+              actionUrl: `/jobs/${job.id}`,
+              entityType: 'job',
+              entityId: job.id,
+              relatedEntityType: 'job',
+              relatedEntityId: job.id,
+              jobId: job.id,
+              metadata: { 
+                preview: previewText,
+                senderEmail: actualFromEmail || actualFrom,
+                senderName: actualFromName
+              }
+            };
+            
+            await storage.createNotification(notificationData);
+            console.log(`🔔 Notification created for email reply on job ${job.jobNumber}`);
+          } catch (notifError) {
+            console.error('Error creating email reply notification:', notifError);
+            // Don't fail the request if notification creation fails
+          }
         }
       }
       
@@ -9947,6 +9978,37 @@ Transcription: ${transcriptText}`;
           await storage.updateJob(job.id, { lastActivityAt: new Date() });
           jobFound = true;
           console.log(`📝 Email logged to job ${job.jobNumber} diary (via quote ${quoteNumber})`);
+          
+          // Create notification for email reply
+          try {
+            const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+            const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
+            
+            const notificationData = {
+              title: 'Customer Email Reply',
+              message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
+              type: 'email_reply',
+              priority: 'high' as const,
+              isRead: false,
+              actionUrl: `/jobs/${job.id}`,
+              entityType: 'job',
+              entityId: job.id,
+              relatedEntityType: 'job',
+              relatedEntityId: job.id,
+              jobId: job.id,
+              metadata: { 
+                preview: previewText,
+                senderEmail: actualFromEmail || actualFrom,
+                senderName: actualFromName
+              }
+            };
+            
+            await storage.createNotification(notificationData);
+            console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (via quote)`);
+          } catch (notifError) {
+            console.error('Error creating email reply notification:', notifError);
+            // Don't fail the request if notification creation fails
+          }
         }
       }
       
