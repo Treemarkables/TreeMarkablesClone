@@ -2418,6 +2418,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       const job = await storage.createJob(validation.data);
       
+      // Update customer address if job has an address and customer doesn't have one (or to keep it current)
+      if (job.customerId && job.address) {
+        try {
+          const customer = await storage.getCustomer(job.customerId);
+          // Update customer address if they don't have one, or if the job address is different
+          if (customer && (!customer.address || customer.address.trim() === '')) {
+            await storage.updateCustomer(job.customerId, { address: job.address });
+            console.log(`📍 Updated customer ${job.customerId} address to: ${job.address}`);
+          }
+        } catch (error) {
+          console.error('Error updating customer address:', error);
+          // Don't fail job creation if customer address update fails
+        }
+      }
+      
       // Migrate temporary diary entries if they exist
       const tempJobId = req.body.tempJobId; // Frontend should send this when creating from temp data
       if (tempJobId && tempJobId.startsWith('temp-') && (global as any).tempDiaryEntries) {
@@ -2893,6 +2908,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
+      // Update customer address if job has an address and customer doesn't have one
+      if (job.customerId && job.address && updateData.address) {
+        try {
+          const customer = await storage.getCustomer(job.customerId);
+          // Update customer address if they don't have one
+          if (customer && (!customer.address || customer.address.trim() === '')) {
+            await storage.updateCustomer(job.customerId, { address: job.address });
+            console.log(`📍 Updated customer ${job.customerId} address to: ${job.address}`);
+          }
+        } catch (error) {
+          console.error('Error updating customer address:', error);
+          // Don't fail job update if customer address update fails
+        }
+      }
+
       // Debug logging for updated job
       console.log('✅ JOB UPDATE RESULT DEBUG:', {
         jobId: job.id,
@@ -2929,6 +2959,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const job = await storage.updateJob(req.params.id, validation.data);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Update customer address if job has an address and customer doesn't have one
+      if (job.customerId && job.address && validation.data.address) {
+        try {
+          const customer = await storage.getCustomer(job.customerId);
+          // Update customer address if they don't have one
+          if (customer && (!customer.address || customer.address.trim() === '')) {
+            await storage.updateCustomer(job.customerId, { address: job.address });
+            console.log(`📍 Updated customer ${job.customerId} address to: ${job.address}`);
+          }
+        } catch (error) {
+          console.error('Error updating customer address:', error);
+          // Don't fail job update if customer address update fails
+        }
       }
 
       res.json({ success: true, data: job });
