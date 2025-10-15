@@ -47,6 +47,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const [isCreating, setIsCreating] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
   
   // Editable fields
   const [editableAddress, setEditableAddress] = useState('');
@@ -75,9 +76,13 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     enabled: isOpen
   });
 
-  // Initialize fields when modal opens or data loads
+  // Initialize fields when modal opens or data loads (only once to prevent overwriting user edits)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || hasInitialized) return;
+
+    // Only initialize if we have the data or if data loading is complete
+    const dataLoaded = !loadingProposals && !loadingQuotes;
+    if (!dataLoaded) return;
 
     // Set address
     setEditableAddress(job.address || customer.address || '');
@@ -114,8 +119,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           });
         }
       });
-    } else if (quote?.lineItems && Array.isArray(quote.lineItems)) {
-      // Get line items from quote
+    }
+
+    // If proposal had no line items, fall back to quote
+    if (extractedItems.length === 0 && quote?.lineItems && Array.isArray(quote.lineItems)) {
       quote.lineItems.forEach((item: any) => {
         extractedItems.push({
           id: Math.random().toString(),
@@ -125,8 +132,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           total: parseFloat(item.total || item.amount || 0)
         });
       });
-    } else if (job.lineItems && job.lineItems.length > 0) {
-      // Fallback to job line items
+    }
+
+    // If still no items, fall back to job line items
+    if (extractedItems.length === 0 && job.lineItems && job.lineItems.length > 0) {
       extractedItems = job.lineItems.map((item: any) => ({
         id: item.id || Math.random().toString(),
         description: item.description || '',
@@ -134,8 +143,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         unitPrice: item.unitPrice || 0,
         total: item.total || (item.quantity * item.unitPrice) || 0
       }));
-    } else {
-      // Default fallback
+    }
+
+    // Final fallback to job total
+    if (extractedItems.length === 0) {
       extractedItems = [{
         id: Math.random().toString(),
         description: job.description || 'Tree service',
@@ -155,7 +166,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     } else {
       setEditableDescription(job.description || '');
     }
-  }, [isOpen, proposalsResponse, quotesResponse, job, customer]);
+
+    // Mark as initialized to prevent overwriting user edits
+    setHasInitialized(true);
+  }, [isOpen, hasInitialized, loadingProposals, loadingQuotes, proposalsResponse, quotesResponse, job, customer]);
 
   // Reset when modal closes
   useEffect(() => {
@@ -163,6 +177,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       setCreatedInvoice(null);
       setIsCreating(false);
       setLineItems([]);
+      setHasInitialized(false);
     }
   }, [isOpen]);
 
