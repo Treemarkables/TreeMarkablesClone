@@ -54,7 +54,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   const job = invoice.job;
 
   // Calculate totals from line items
-  const lineItems = invoice.lineItems || [];
+  const lineItems = invoice.lineItems || invoice.items || [];
   const lineItemTotal = lineItems.reduce((sum: number, item: any) => {
     const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
     return sum + (itemTotal || 0);
