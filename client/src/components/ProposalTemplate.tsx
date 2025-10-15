@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar } from 'lucide-react';
+import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar, MessageSquare } from 'lucide-react';
 import type { DocumentTemplate, Proposal, Customer } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
 
@@ -60,6 +60,7 @@ interface ProposalTemplateProps {
   className?: string;
   showActions?: boolean;
   onEmail?: () => void;
+  onSms?: () => void;
   onDownload?: () => void;
   onCopy?: () => void;
 }
@@ -133,6 +134,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
   className = '',
   showActions = false,
   onEmail,
+  onSms,
   onDownload,
   onCopy
 }, ref) => {
@@ -240,6 +242,12 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               <Button variant="outline" size="sm" onClick={onEmail} data-testid="button-email-proposal">
                 <Mail className="w-4 h-4 mr-2" />
                 Email
+              </Button>
+            )}
+            {onSms && (
+              <Button variant="outline" size="sm" onClick={onSms} data-testid="button-sms-proposal-preview">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                SMS
               </Button>
             )}
             {onDownload && (
