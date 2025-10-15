@@ -87,12 +87,11 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     gstAmount = subtotal * gstRate;
     totalAmount = subtotal + gstAmount;
   } else {
-    // Fall back to invoice amount - check if it includes GST or not
+    // Fall back to invoice amount - treat as GST-exclusive
     const invoiceAmount = typeof invoice.amount === 'string' ? parseFloat(invoice.amount) : invoice.amount;
-    totalAmount = invoiceAmount || 0;
-    // Reverse calculate subtotal from total (total = subtotal + GST = subtotal * 1.15)
-    subtotal = totalAmount / (1 + gstRate);
-    gstAmount = totalAmount - subtotal;
+    subtotal = invoiceAmount || 0;
+    gstAmount = subtotal * gstRate;
+    totalAmount = subtotal + gstAmount;
   }
 
   // Get status color
