@@ -40,7 +40,7 @@ Preferred communication style: Simple, everyday language.
 - **Transactions**: Support for atomic multi-step operations.
 
 ### Key Features
-- **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board, ServiceM8-style Job Creation with dynamic checklists.
+- **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board, ServiceM8-style Job Creation with dynamic checklists, duplicate job prevention (blocks same customer/address/description within 5 minutes).
 - **Customer & Sales**: Lead Management (with analytics), Customer Management, Quote Management (including speech-to-quote and Twilio voice auto-quote generation).
 - **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation.
 - **Reporting & Analytics**: Business Analytics (including lead source tracking), Invoice Management (with Xero integration), Safety Reporting.
