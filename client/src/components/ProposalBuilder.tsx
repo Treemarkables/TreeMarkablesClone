@@ -1028,8 +1028,8 @@ export function ProposalBuilder({
     const firstName = customerName.split(' ')[0];
     const totalAmount = grandTotal.toFixed(2);
     
-    // Create short proposal link if we have a proposal ID
-    const shortLink = proposalId ? `${window.location.host}/proposal/${proposalId}` : '';
+    // Create short proposal link if we have a proposal ID (include https:// for clickability)
+    const shortLink = proposalId ? `https://${window.location.host}/proposal/${proposalId}` : '';
     
     setSmsForm({
       to: customerPhone,
