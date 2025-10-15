@@ -3723,25 +3723,30 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       });
 
       // Create diary entry for invoice creation with invoice-specific metadata
-      const diaryEntry = await storage.createJobDiaryEntry({
-        jobId: id,
-        entryType: 'email', // Use 'email' type so it can display with invoice icon
-        title: 'Invoice Created',
-        description: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`,
-        authorName: req.user?.name || 'System',
-        authorRole: req.user?.role || 'system',
-        metadata: {
-          invoiceId: invoice.id,
-          invoiceNumber: invoiceNumber,
-          amount: amount.toString(),
-          action: 'invoice_created',
-          documentType: 'invoice', // Mark this as an invoice document
-          documentNumber: invoiceNumber
-        }
-      });
-
-      console.log(`💰 Job ${job.jobNumber} converted to invoice ${invoiceNumber}`);
-      console.log(`📝 Diary entry created: ${diaryEntry.id}`);
+      try {
+        const diaryEntry = await storage.createJobDiaryEntry({
+          jobId: id,
+          entryType: 'email', // Use 'email' type so it can display with invoice icon
+          title: 'Invoice Created',
+          content: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`, // Changed from description to content
+          authorName: req.user?.name || 'System',
+          authorRole: req.user?.role || 'system',
+          metadata: {
+            invoiceId: invoice.id,
+            invoiceNumber: invoiceNumber,
+            amount: amount.toString(),
+            action: 'invoice_created',
+            documentType: 'invoice', // Mark this as an invoice document
+            documentNumber: invoiceNumber
+          }
+        });
+        
+        console.log(`💰 Job ${job.jobNumber} converted to invoice ${invoiceNumber}`);
+        console.log(`📝 Diary entry created: ${diaryEntry.id}`);
+      } catch (diaryError) {
+        console.error('❌ Failed to create diary entry for invoice:', diaryError);
+        // Don't fail the whole invoice creation if diary entry fails
+      }
 
       res.json({ 
         success: true, 
