@@ -4122,8 +4122,146 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         replyToEmail = `job-${job.jobNumber}@jobs.treemarkables.co.nz`;
       }
 
+      // Generate invoice HTML if invoice data is available
+      let invoiceHtml = '';
+      if (invoice || invoiceData) {
+        const invoiceDetails = invoice || invoiceData;
+        const lineItems = invoiceDetails.items || invoiceData?.lineItems || [];
+        
+        // Calculate totals
+        const gstRate = 0.15;
+        let subtotal = 0;
+        let gstAmount = 0;
+        let totalAmount = 0;
+        
+        if (lineItems && lineItems.length > 0) {
+          // Calculate from line items (ex-GST)
+          subtotal = lineItems.reduce((sum: number, item: any) => {
+            const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : (item.total || 0);
+            return sum + itemTotal;
+          }, 0);
+          gstAmount = subtotal * gstRate;
+          totalAmount = subtotal + gstAmount;
+        } else {
+          // Use invoice amount as ex-GST
+          const amount = typeof invoiceDetails.amount === 'string' ? parseFloat(invoiceDetails.amount) : (invoiceDetails.amount || 0);
+          subtotal = amount;
+          gstAmount = subtotal * gstRate;
+          totalAmount = subtotal + gstAmount;
+        }
+        
+        const formatCurrency = (num: number) => {
+          return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(num);
+        };
+        
+        const formatDate = (date: any) => {
+          if (!date) return '';
+          return new Date(date).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+        
+        // Generate line items HTML
+        const lineItemsHtml = lineItems && lineItems.length > 0 ? lineItems.map((item: any) => `
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${item.description || ''}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity || 1}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0))}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${formatCurrency(typeof item.total === 'string' ? parseFloat(item.total) : (item.total || 0))}</td>
+          </tr>
+        `).join('') : `
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service'}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">1</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(subtotal)}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${formatCurrency(subtotal)}</td>
+          </tr>
+        `;
+        
+        invoiceHtml = `
+        <div style="max-width: 800px; margin: 30px auto; padding: 40px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <!-- Header -->
+          <div style="border-bottom: 3px solid #f97316; padding-bottom: 20px; margin-bottom: 30px;">
+            <h1 style="color: #f97316; margin: 0; font-size: 28px;">INVOICE</h1>
+            <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 18px;">#${invoiceDetails.invoiceNumber || ''}</p>
+          </div>
+          
+          <!-- Business Details -->
+          <div style="margin-bottom: 30px;">
+            <h2 style="color: #111827; margin: 0 0 10px 0; font-size: 20px;">Treemarkables LTD</h2>
+            <p style="color: #6b7280; margin: 0; line-height: 1.6;">
+              26 Huxley Road<br>
+              Gisborne 4010<br>
+              New Zealand<br>
+              Phone: 027 216 6882
+            </p>
+          </div>
+          
+          <!-- Invoice Details -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+            <div>
+              <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;">Invoice Date:</p>
+              <p style="color: #111827; margin: 0; font-weight: 600;">${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}</p>
+            </div>
+            <div>
+              <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;">Due Date:</p>
+              <p style="color: #111827; margin: 0; font-weight: 600;">${formatDate(invoiceDetails.dueDate) || formatDate(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))}</p>
+            </div>
+          </div>
+          
+          <!-- Line Items -->
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <thead>
+              <tr style="background: #f9fafb;">
+                <th style="padding: 12px; text-align: left; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Description</th>
+                <th style="padding: 12px; text-align: center; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Qty</th>
+                <th style="padding: 12px; text-align: right; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Rate</th>
+                <th style="padding: 12px; text-align: right; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${lineItemsHtml}
+            </tbody>
+          </table>
+          
+          <!-- Totals -->
+          <div style="margin-left: auto; max-width: 300px;">
+            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+              <span style="color: #6b7280;">Subtotal (ex GST):</span>
+              <span style="color: #111827; font-weight: 600;">${formatCurrency(subtotal)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+              <span style="color: #6b7280;">GST (15%):</span>
+              <span style="color: #111827; font-weight: 600;">${formatCurrency(gstAmount)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 15px 0; background: #f9fafb; margin: 10px -10px 0; padding: 15px 10px; border-radius: 6px;">
+              <span style="color: #111827; font-weight: 700; font-size: 18px;">Total (inc GST):</span>
+              <span style="color: #f97316; font-weight: 700; font-size: 18px;">${formatCurrency(totalAmount)}</span>
+            </div>
+          </div>
+          
+          ${invoiceDetails.notes || invoiceData?.description ? `
+          <div style="margin-top: 30px; padding: 20px; background: #f9fafb; border-radius: 6px;">
+            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Notes:</h3>
+            <p style="color: #6b7280; margin: 0; white-space: pre-wrap;">${invoiceDetails.notes || invoiceData?.description || ''}</p>
+          </div>
+          ` : ''}
+          
+          <!-- Payment Button -->
+          <div style="margin-top: 30px; text-align: center;">
+            <a href="${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000'}/invoice/${invoiceDetails.id || invoiceData?.id}" 
+               style="display: inline-block; background: #f97316; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+              View & Pay Invoice Online
+            </a>
+          </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center;">
+            <p style="color: #9ca3af; margin: 0; font-size: 14px;">Thank you for your business!</p>
+          </div>
+        </div>
+        `;
+      }
+      
       // Prepare email content with any necessary formatting
-      const emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
+      const emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
       
       // Process photo attachments
       const emailAttachments = [];
