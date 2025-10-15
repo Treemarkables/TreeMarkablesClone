@@ -159,11 +159,25 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
   const libraryInputRef = useRef<HTMLInputElement>(null);
 
   const handleCameraClick = () => {
-    cameraInputRef.current?.click();
+    console.log('📸 Camera button clicked, isMobile:', isMobile);
+    console.log('📸 Camera input ref:', cameraInputRef.current);
+    if (cameraInputRef.current) {
+      console.log('📸 Triggering camera input click');
+      cameraInputRef.current.click();
+    } else {
+      console.error('📸 Camera input ref is null');
+    }
   };
 
   const handleLibraryClick = () => {
-    libraryInputRef.current?.click();
+    console.log('📸 Library button clicked, isMobile:', isMobile);
+    console.log('📸 Library input ref:', libraryInputRef.current);
+    if (libraryInputRef.current) {
+      console.log('📸 Triggering library input click');
+      libraryInputRef.current.click();
+    } else {
+      console.error('📸 Library input ref is null');
+    }
   };
 
   return (
