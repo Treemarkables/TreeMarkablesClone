@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -145,39 +145,12 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
   const handleClose = () => {
     setSelectedFiles([]);
     setPreviewUrls([]);
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
-    if (libraryInputRef.current) libraryInputRef.current.value = '';
     onClose();
   };
 
   const removePhoto = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     setPreviewUrls(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const libraryInputRef = useRef<HTMLInputElement>(null);
-
-  const handleCameraClick = () => {
-    console.log('📸 Camera button clicked, isMobile:', isMobile);
-    console.log('📸 Camera input ref:', cameraInputRef.current);
-    if (cameraInputRef.current) {
-      console.log('📸 Triggering camera input click');
-      cameraInputRef.current.click();
-    } else {
-      console.error('📸 Camera input ref is null');
-    }
-  };
-
-  const handleLibraryClick = () => {
-    console.log('📸 Library button clicked, isMobile:', isMobile);
-    console.log('📸 Library input ref:', libraryInputRef.current);
-    if (libraryInputRef.current) {
-      console.log('📸 Triggering library input click');
-      libraryInputRef.current.click();
-    } else {
-      console.error('📸 Library input ref is null');
-    }
   };
 
   return (
@@ -191,26 +164,6 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Hidden file inputs - separate for camera and library */}
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*,video/*"
-            {...(isMobile ? { capture: "environment" } : {})}
-            onChange={handleFileSelect}
-            className="hidden"
-            data-testid="input-camera"
-          />
-          <input
-            ref={libraryInputRef}
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
-            data-testid="input-library"
-          />
-
           {/* Preview or upload options */}
           {previewUrls.length > 0 ? (
             <div className="space-y-3">
@@ -241,27 +194,37 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Take Photo Button */}
-              <Button
-                variant="outline"
-                onClick={handleCameraClick}
-                className="w-full h-20 flex flex-col gap-2"
-                data-testid="button-take-photo"
-              >
-                <Camera className="w-8 h-8" />
-                <span className="text-base font-medium">Take Photo</span>
-              </Button>
+              {/* Take Photo - Using label for better PWA compatibility */}
+              <label className="cursor-pointer block">
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  {...(isMobile ? { capture: "environment" } : {})}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  data-testid="input-camera"
+                />
+                <div className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                  <Camera className="w-8 h-8" />
+                  <span className="text-base font-medium">Take Photo</span>
+                </div>
+              </label>
 
-              {/* Choose from Library Button */}
-              <Button
-                variant="outline"
-                onClick={handleLibraryClick}
-                className="w-full h-20 flex flex-col gap-2"
-                data-testid="button-choose-library"
-              >
-                <Upload className="w-8 h-8" />
-                <span className="text-base font-medium">Choose from Library</span>
-              </Button>
+              {/* Choose from Library - Using label for better PWA compatibility */}
+              <label className="cursor-pointer block">
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  data-testid="input-library"
+                />
+                <div className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                  <Upload className="w-8 h-8" />
+                  <span className="text-base font-medium">Choose from Library</span>
+                </div>
+              </label>
             </div>
           )}
 
