@@ -135,10 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [meResponse, currentUser, initialAuthCheckComplete]);
 
-  const isAuthenticated = !!currentUser;
-  const userRole = currentUser?.role as 'admin' | 'crew' | null;
+  // Dev mode: auto-authenticate as admin without login
+  const isDevelopment = import.meta.env.DEV;
+  const isAuthenticated = isDevelopment ? true : !!currentUser;
+  const userRole = isDevelopment && !currentUser ? 'admin' : (currentUser?.role as 'admin' | 'crew' | null);
   
-  // No dev mode backdoor - must be logged in with admin role
   const isAdmin = userRole === 'admin';
   const isCrew = userRole === 'crew';
   
@@ -161,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isCrew,
         isAuthenticated,
-        isLoading: !initialAuthCheckComplete || authQueryLoading,
+        isLoading: isDevelopment ? false : (!initialAuthCheckComplete || authQueryLoading),
         login,
         loginPending: loginMutation.isPending,
         logout,
