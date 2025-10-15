@@ -181,7 +181,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
           <input
             ref={cameraInputRef}
             type="file"
-            accept="*/*"
+            accept="image/*,video/*"
             {...(isMobile ? { capture: "environment" } : {})}
             onChange={handleFileSelect}
             className="hidden"
@@ -190,7 +190,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
           <input
             ref={libraryInputRef}
             type="file"
-            accept="*/*"
+            accept="image/*,video/*"
             multiple
             onChange={handleFileSelect}
             className="hidden"
