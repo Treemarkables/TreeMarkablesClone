@@ -245,7 +245,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           {/* Notes */}
           {(invoice.notes || description) && (
             <div className="p-3 sm:p-8 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Notes</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Description</h3>
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-notes">
                   <LinkifiedText text={[invoice.notes, description].filter(Boolean).join('\n\n')} />
