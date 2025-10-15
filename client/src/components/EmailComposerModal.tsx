@@ -65,6 +65,12 @@ export function EmailComposerModal({
   templateType,
   customEmail
 }: EmailComposerModalProps) {
+  // Safe amount formatter - handles strings, numbers, null, undefined
+  const formatAmount = (value: any): string => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num.toFixed(2) : "0.00";
+  };
+
   const [emailData, setEmailData] = useState({
     to: "",
     cc: "",
@@ -220,8 +226,8 @@ export function EmailComposerModal({
         .replace(/{jobNumber}/g, job.jobNumber || "")
         .replace(/{customerAddress}/g, job.address || "")
         .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
-        .replace(/{invoiceAmount}/g, invoiceData?.totalAmount || invoiceData?.amount ? `$${(invoiceData.totalAmount || invoiceData.amount).toFixed(2)}` : "$0.00")
-        .replace(/\$\{invoiceAmount\}/g, invoiceData?.totalAmount || invoiceData?.amount ? `$${(invoiceData.totalAmount || invoiceData.amount).toFixed(2)}` : "$0.00");
+        .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`)
+        .replace(/\$\{invoiceAmount\}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`);
       
       let populatedBody = template.body
         .replace(/{firstName}/g, firstName || "there")
@@ -233,10 +239,10 @@ export function EmailComposerModal({
         .replace(/{proposalLink}/g, proposalData?.id ? `${baseUrl}/proposal/${proposalData.id}` : "View proposal in your customer portal")
         .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
         .replace(/{quoteExpiry}/g, quoteData?.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : "")
-        .replace(/{quoteAmount}/g, quoteData?.totalAmount ? `$${quoteData.totalAmount}` : "$0.00")
+        .replace(/{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
         .replace(/{proposalNumber}/g, proposalData?.proposalNumber || (job?.jobNumber ? `PROP-${job.jobNumber}` : ""))
         .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
-        .replace(/{invoiceAmount}/g, invoiceData?.totalAmount || invoiceData?.amount ? `$${(invoiceData.totalAmount || invoiceData.amount).toFixed(2)}` : "$0.00")
+        .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`)
         .replace(/{dueDate}/g, invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "")
         .replace(/{contactName}/g, "Treemarkables Team")
         .replace(/{contactPhone}/g, "0272166882");
@@ -420,12 +426,12 @@ export function EmailComposerModal({
       .replace(/{jobNumber}/g, job?.jobNumber || "")
       .replace(/{customerAddress}/g, job?.address || "")
       .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
-      .replace(/{invoiceAmount}/g, invoiceData?.totalAmount || invoiceData?.amount ? `$${(invoiceData.totalAmount || invoiceData.amount).toFixed(2)}` : "$0.00")
-      .replace(/\$\{invoiceAmount\}/g, invoiceData?.totalAmount || invoiceData?.amount ? `$${(invoiceData.totalAmount || invoiceData.amount).toFixed(2)}` : "$0.00")
+      .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`)
+      .replace(/\$\{invoiceAmount\}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`)
       .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
-      .replace(/{quoteAmount}/g, quoteData?.totalAmount ? `$${quoteData.totalAmount.toFixed(2)}` : "$0.00")
+      .replace(/{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
       .replace(/{proposalNumber}/g, proposalData?.proposalNumber || "")
-      .replace(/{proposalAmount}/g, proposalData?.totalAmount ? `$${proposalData.totalAmount.toFixed(2)}` : "$0.00");
+      .replace(/{proposalAmount}/g, `$${formatAmount(proposalData?.totalAmount)}`);
     
     let populatedBody = template.body
       .replace(/{firstName}/g, firstName || "there")
@@ -438,11 +444,11 @@ export function EmailComposerModal({
       .replace(/{proposalLink}/g, proposalData?.id ? `${baseUrl}/proposal/${proposalData.id}` : "View proposal in your customer portal")
       .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
       .replace(/{quoteExpiry}/g, quoteData?.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : "")
-      .replace(/{quoteAmount}/g, quoteData?.totalAmount ? `$${quoteData.totalAmount}` : "$0.00")
+      .replace(/{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
       .replace(/{proposalNumber}/g, proposalData?.proposalNumber || (job?.jobNumber ? `PROP-${job.jobNumber}` : ""))
       .replace(/{contactName}/g, "Treemarkables Team")
       .replace(/{contactPhone}/g, customer?.jobContactPhone || customer?.billingContactPhone || "027-XXX-XXXX")
-      .replace(/{invoiceAmount}/g, invoiceData?.totalAmount || invoiceData?.amount ? `$${invoiceData.totalAmount || invoiceData.amount}` : "$0.00")
+      .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`)
       .replace(/{dueDate}/g, invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "");
 
     // Convert URLs to clickable hyperlinks
