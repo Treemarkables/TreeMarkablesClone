@@ -3723,7 +3723,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       });
 
       // Create diary entry for invoice creation with invoice-specific metadata
-      await storage.createJobDiaryEntry({
+      const diaryEntry = await storage.createJobDiaryEntry({
         jobId: id,
         entryType: 'email', // Use 'email' type so it can display with invoice icon
         title: 'Invoice Created',
@@ -3741,6 +3741,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       });
 
       console.log(`💰 Job ${job.jobNumber} converted to invoice ${invoiceNumber}`);
+      console.log(`📝 Diary entry created: ${diaryEntry.id}`);
 
       res.json({ 
         success: true, 
