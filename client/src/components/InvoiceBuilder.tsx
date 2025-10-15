@@ -99,6 +99,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Create invoice
   const handleCreateInvoice = async () => {
+    console.log('📄 Create Invoice clicked');
+    console.log('📄 Invoice data:', invoiceData);
+    console.log('📄 Line items:', lineItems);
+    
     // Validate
     if (!invoiceData.address.trim()) {
       toast({
@@ -110,6 +114,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     }
 
     if (lineItems.length === 0 || lineItems.every(item => !item.description.trim())) {
+      console.log('❌ Line items validation failed');
       toast({
         title: "Line Items Required",
         description: "Please add at least one line item.",
@@ -118,6 +123,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       return;
     }
 
+    console.log('✅ Validation passed, creating invoice...');
     setIsSubmitting(true);
 
     try {
@@ -138,6 +144,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         }
       });
 
+      console.log('📄 Invoice response:', response);
+
       if (response.success) {
         toast({
           title: "Invoice Created",
@@ -150,9 +158,16 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         await queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
         
         onClose();
+      } else {
+        console.error('❌ Invoice creation failed:', response);
+        toast({
+          title: "Error",
+          description: response.message || "Failed to create invoice.",
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      console.error('Error creating invoice:', error);
+      console.error('❌ Error creating invoice:', error);
       toast({
         title: "Error",
         description: "Failed to create invoice. Please try again.",
