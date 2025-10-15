@@ -4056,7 +4056,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       // If invoice data is provided but no invoiceId, create or find the invoice
       let emailBody = body; // Create mutable copy of body
-      if (invoiceData && !invoiceId) {
+      const effectiveInvoiceId = invoiceId || invoiceData?.id;
+      
+      if (invoiceData && !effectiveInvoiceId) {
         console.log('📋 Creating invoice from invoice data before sending email');
         console.log('📋 Invoice line items:', invoiceData.lineItems?.length || 0, 'items');
         try {
@@ -4105,8 +4107,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             console.log('✅ Updated invoice link in email body from', tempInvoiceId, 'to', invoice.id);
           }
         }
-      } else if (invoiceId) {
-        invoice = await storage.getInvoice(invoiceId);
+      } else if (effectiveInvoiceId) {
+        invoice = await storage.getInvoice(effectiveInvoiceId);
       }
       
       if (quoteId) {
