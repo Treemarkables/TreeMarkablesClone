@@ -1346,13 +1346,7 @@ export function ProposalBuilder({
                       <Card key={section.id} className="bg-accent/30 w-full max-w-full min-w-0">
                         <CardHeader className="w-full max-w-full min-w-0">
                           <div className="flex items-center justify-between w-full max-w-full min-w-0">
-                            <Input
-                              value={section.title}
-                              onChange={(e) => updateSectionTitle(section.id, e.target.value)}
-                              className="font-semibold text-lg border-none p-0 focus-visible:ring-0"
-                              placeholder="Section title..."
-                              data-testid={`input-section-title-${section.id}`}
-                            />
+                            <h3 className="font-semibold text-lg">{section.title}</h3>
                             <div className="flex items-center gap-2">
                               <Badge variant="outline">
                                 {section.lineItems.length} items
