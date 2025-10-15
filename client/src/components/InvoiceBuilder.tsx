@@ -30,6 +30,12 @@ interface InvoiceLineItem {
 export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate }: InvoiceBuilderProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(isOpen);
+  
+  // Sync dialog state with prop
+  useEffect(() => {
+    setIsDialogOpen(isOpen);
+  }, [isOpen]);
   
   // Initialize line items from job
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>(() => {
@@ -153,7 +159,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           description: "Invoice has been created successfully."
         });
         
-        // Close modal first
+        // Close modal first - both local and parent
+        setIsDialogOpen(false);
         onClose();
         
         // Then invalidate queries to refresh data in background
@@ -195,8 +202,15 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     updatedAt: new Date().toISOString()
   };
 
+  const handleClose = () => {
+    setIsDialogOpen(false);
+    onClose();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={() => onClose()}>
+    <Dialog open={isDialogOpen} onOpenChange={(open) => {
+      if (!open) handleClose();
+    }}>
       <DialogContent className="max-w-full sm:max-w-7xl h-[90vh] flex flex-col p-0">
         <DialogHeader className="p-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -209,7 +223,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
             <Button
               variant="outline"
               size="icon"
-              onClick={onClose}
+              onClick={handleClose}
               data-testid="button-close-invoice-builder"
             >
               <X className="h-4 w-4" />
