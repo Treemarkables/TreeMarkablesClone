@@ -104,9 +104,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Redirect to="/login" />;
   }
   
-  // Redirect crew users to job dashboard (they don't have access to admin pages)
+  // Redirect crew users to dispatch board (they don't have access to admin pages)
   if (isCrew) {
-    return <Redirect to="/job-dashboard" />;
+    return <Redirect to="/dispatch" />;
   }
   
   return <>{children}</>;

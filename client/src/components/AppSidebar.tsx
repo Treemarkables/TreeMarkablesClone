@@ -155,6 +155,16 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              {/* Dispatch Board - Available to both crew and admin - TOP OF MENU */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/dispatch"}>
+                  <Link href="/dispatch" onClick={() => isMobile && setOpen(false)} data-testid="link-dispatch">
+                    <Calendar className="h-4 w-4" />
+                    <span>Dispatch Board</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              
               {filteredDashboardItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
                   {item.isTab ? (
@@ -176,16 +186,6 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   )}
                 </SidebarMenuItem>
               ))}
-              
-              {/* Dispatch Board - Available to both crew and admin */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/dispatch"}>
-                  <Link href="/dispatch" onClick={() => isMobile && setOpen(false)} data-testid="link-dispatch">
-                    <Calendar className="h-4 w-4" />
-                    <span>Dispatch Board</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
               
               {/* Staff Schedule - Available to both crew and admin */}
               <SidebarMenuItem>
