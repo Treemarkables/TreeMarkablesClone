@@ -2033,6 +2033,10 @@ export function ProposalBuilder({
                       initializeEmailForm();
                       setShowEmailDialog(true);
                     }}
+                    onSms={() => {
+                      initializeSmsForm();
+                      setShowSmsDialog(true);
+                    }}
                     onDownload={() => console.log('Download proposal')}
                     onCopy={() => console.log('Copy proposal')}
                   />
