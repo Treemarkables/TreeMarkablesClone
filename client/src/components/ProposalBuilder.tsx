@@ -1310,6 +1310,7 @@ export function ProposalBuilder({
                 variant="outline"
                 size="icon"
                 onClick={onClose}
+                className="min-h-[44px] min-w-[44px]"
                 data-testid="button-close-proposal"
               >
                 <X className="h-4 w-4" />
@@ -1331,6 +1332,7 @@ export function ProposalBuilder({
                       variant="outline"
                       size="sm"
                       onClick={addNewSection}
+                      className="min-h-[44px]"
                       data-testid="button-add-section"
                     >
                       <FolderPlus className="h-4 w-4 mr-2" />
@@ -1361,6 +1363,7 @@ export function ProposalBuilder({
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => removeSection(section.id)}
+                                  className="min-h-[44px] min-w-[44px]"
                                   data-testid={`button-remove-section-${section.id}`}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -1379,7 +1382,7 @@ export function ProposalBuilder({
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                className="min-h-[44px] px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
                                 onClick={() => {
                                   // Simple voice-to-text using browser SpeechRecognition
                                   const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -1453,6 +1456,7 @@ export function ProposalBuilder({
                                     variant="outline"
                                     size="sm"
                                     disabled={photoUploading}
+                                    className="min-h-[44px]"
                                     data-testid={`button-upload-photo-${section.id}`}
                                     asChild
                                   >
@@ -1468,6 +1472,7 @@ export function ProposalBuilder({
                                   size="sm"
                                   onClick={() => openDiaryPhotoDialog(section.id)}
                                   disabled={getDiaryPhotos().length === 0}
+                                  className="min-h-[44px]"
                                   data-testid={`button-select-diary-photos-${section.id}`}
                                 >
                                   <FileText className="h-4 w-4 mr-2" />
@@ -1519,6 +1524,7 @@ export function ProposalBuilder({
                                     placeholder="Description"
                                     value={currentLineItem.description || ""}
                                     onChange={(e) => setCurrentLineItem(prev => ({ ...prev, description: e.target.value }))}
+                                    className="min-h-[44px] text-base"
                                     data-testid={`input-line-item-description-${section.id}`}
                                   />
                                 </div>
@@ -1579,6 +1585,7 @@ export function ProposalBuilder({
                                           placeholder="Quantity"
                                           value={currentLineItem.quantity || ""}
                                           onChange={(e) => setCurrentLineItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                                          className="min-h-[44px] text-base"
                                           data-testid={`input-line-item-quantity-${section.id}`}
                                         />
                                         <Input
@@ -1586,6 +1593,7 @@ export function ProposalBuilder({
                                           placeholder="Unit Price"
                                           value={currentLineItem.unitPrice || ""}
                                           onChange={(e) => setCurrentLineItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
+                                          className="min-h-[44px] text-base"
                                           data-testid={`input-line-item-price-${section.id}`}
                                         />
                                       </div>
@@ -1608,6 +1616,7 @@ export function ProposalBuilder({
                                         placeholder="Fixed Price"
                                         value={currentLineItem.fixedPrice || ""}
                                         onChange={(e) => setCurrentLineItem(prev => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
+                                        className="min-h-[44px] text-base"
                                         data-testid={`input-fixed-price-${section.id}`}
                                       />
                                       <div className="flex items-center space-x-2">
