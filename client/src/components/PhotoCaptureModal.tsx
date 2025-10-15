@@ -194,9 +194,10 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Take Photo - Using label for better PWA compatibility */}
-              <label className="cursor-pointer block">
+              {/* Take Photo */}
+              <div>
                 <input
+                  id="camera-input"
                   type="file"
                   accept="image/*,video/*"
                   {...(isMobile ? { capture: "environment" } : {})}
@@ -204,15 +205,19 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
                   className="hidden"
                   data-testid="input-camera"
                 />
-                <div className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                <label 
+                  htmlFor="camera-input"
+                  className="cursor-pointer block w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
                   <Camera className="w-8 h-8" />
                   <span className="text-base font-medium">Take Photo</span>
-                </div>
-              </label>
+                </label>
+              </div>
 
-              {/* Choose from Library - Using label for better PWA compatibility */}
-              <label className="cursor-pointer block">
+              {/* Choose from Library */}
+              <div>
                 <input
+                  id="library-input"
                   type="file"
                   accept="image/*,video/*"
                   multiple
@@ -220,11 +225,14 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
                   className="hidden"
                   data-testid="input-library"
                 />
-                <div className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                <label 
+                  htmlFor="library-input"
+                  className="cursor-pointer block w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
                   <Upload className="w-8 h-8" />
                   <span className="text-base font-medium">Choose from Library</span>
-                </div>
-              </label>
+                </label>
+              </div>
             </div>
           )}
 
