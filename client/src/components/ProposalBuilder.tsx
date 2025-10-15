@@ -1967,7 +1967,7 @@ export function ProposalBuilder({
       {showPreview && (
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
           <DialogContent className="max-w-full sm:max-w-6xl h-[90vh] overflow-hidden flex flex-col p-0">
-            <DialogHeader className="flex-shrink-0 p-3 sm:p-4 border-b sticky top-0 bg-background z-[60]">
+            <DialogHeader className="flex-shrink-0 p-3 sm:p-4 sticky top-0 bg-background z-[60]">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <DialogTitle className="text-base sm:text-2xl font-bold text-primary">
@@ -2232,10 +2232,10 @@ export function ProposalBuilder({
                   {getDiaryPhotos().map((photoUrl, index) => (
                     <div
                       key={`diary-photo-${index}`}
-                      className={`relative cursor-pointer rounded-lg border-2 transition-all ${
+                      className={`relative cursor-pointer rounded-lg transition-all ${
                         selectedDiaryPhotos.includes(photoUrl)
-                          ? 'border-blue-600 ring-2 ring-blue-600 ring-offset-2'
-                          : 'border-gray-200 hover:border-gray-400'
+                          ? 'ring-2 ring-blue-600 ring-offset-2'
+                          : 'hover:ring-2 hover:ring-muted-foreground/30'
                       }`}
                       onClick={() => toggleDiaryPhotoSelection(photoUrl)}
                       data-testid={`diary-photo-${index}`}
