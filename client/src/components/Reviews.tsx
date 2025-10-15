@@ -1,6 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Star } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Star, ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 
 interface Review {
   id: string;
@@ -86,6 +88,11 @@ const StarRating = ({ rating }: { rating: number }) => {
 };
 
 export default function Reviews() {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
   // Fetch Facebook reviews
   const { data: facebookReviews, isLoading: fbLoading } = useQuery<ApiResponse>({
     queryKey: ['/api/reviews/facebook'],
@@ -122,6 +129,72 @@ export default function Reviews() {
     displayReviews = allApiReviews;
   }
 
+  // Safely clamp current index for rendering
+  const safeIndex = Math.min(currentIndex, Math.max(0, displayReviews.length - 1));
+  
+  // Reset currentIndex when review count changes
+  useEffect(() => {
+    if (currentIndex >= displayReviews.length && displayReviews.length > 0) {
+      setCurrentIndex(0);
+    }
+  }, [displayReviews.length, currentIndex]);
+
+  // Auto-rotation timer
+  useEffect(() => {
+    if (isPaused || displayReviews.length <= 1) return;
+
+    const timer = setInterval(() => {
+      setCurrentIndex((prevIndex) => (prevIndex + 1) % displayReviews.length);
+    }, 5000); // Rotate every 5 seconds
+
+    return () => clearInterval(timer);
+  }, [isPaused, displayReviews.length]);
+
+  const goToNext = () => {
+    setCurrentIndex((prevIndex) => (prevIndex + 1) % displayReviews.length);
+  };
+
+  const goToPrevious = () => {
+    setCurrentIndex((prevIndex) => 
+      prevIndex === 0 ? displayReviews.length - 1 : prevIndex - 1
+    );
+  };
+
+  // Minimum swipe distance (in pixels) to trigger navigation
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+    setIsPaused(true); // Pause auto-rotation during touch
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    // Always resume auto-rotation, even if no swipe detected
+    setIsPaused(false);
+    
+    if (touchStart === null || touchEnd === null) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    if (isLeftSwipe) {
+      goToNext();
+    } else if (isRightSwipe) {
+      goToPrevious();
+    }
+  };
+
+  const onTouchCancel = () => {
+    // Resume auto-rotation if touch is cancelled
+    setIsPaused(false);
+  };
+
   return (
     <section className="py-16 bg-muted/30">
       <div className="max-w-6xl mx-auto px-6">
@@ -146,32 +219,85 @@ export default function Reviews() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayReviews.map((review) => (
-            <Card key={review.id} className="hover-elevate" data-testid={`review-card-${review.id}`}>
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-semibold text-foreground" data-testid={`review-name-${review.id}`}>
-                      {review.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground" data-testid={`review-location-${review.id}`}>
-                      {review.location}
+        <div className="relative max-w-4xl mx-auto">
+          {/* Current Review Card with smooth transition */}
+          <div 
+            className="transition-opacity duration-500"
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => setIsPaused(false)}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            onTouchCancel={onTouchCancel}
+          >
+            {displayReviews.length > 0 && (
+              <Card className="hover-elevate" data-testid={`review-card-${displayReviews[safeIndex].id}`}>
+                <CardContent className="p-8 md:p-12">
+                  <div className="flex flex-col items-center text-center">
+                    <StarRating rating={displayReviews[safeIndex].rating} />
+                    
+                    <p className="text-lg md:text-xl text-muted-foreground my-6 italic leading-relaxed" data-testid={`review-comment-${displayReviews[safeIndex].id}`}>
+                      "{displayReviews[safeIndex].comment}"
                     </p>
+                    
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-lg text-foreground" data-testid={`review-name-${displayReviews[safeIndex].id}`}>
+                        {displayReviews[safeIndex].name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground" data-testid={`review-location-${displayReviews[safeIndex].id}`}>
+                        {displayReviews[safeIndex].location}
+                      </p>
+                      <div className="text-xs text-primary font-medium bg-primary/10 px-3 py-1 rounded-md inline-block" data-testid={`review-service-${displayReviews[safeIndex].id}`}>
+                        {displayReviews[safeIndex].service}
+                      </div>
+                    </div>
                   </div>
-                  <StarRating rating={review.rating} />
-                </div>
-                
-                <p className="text-muted-foreground mb-4 italic" data-testid={`review-comment-${review.id}`}>
-                  "{review.comment}"
-                </p>
-                
-                <div className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-md inline-block" data-testid={`review-service-${review.id}`}>
-                  {review.service}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Navigation Controls */}
+          {displayReviews.length > 1 && (
+            <>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={goToPrevious}
+                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 md:-translate-x-12 min-h-[44px] min-w-[44px]"
+                data-testid="button-review-previous"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={goToNext}
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 md:translate-x-12 min-h-[44px] min-w-[44px]"
+                data-testid="button-review-next"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+
+              {/* Pagination Dots */}
+              <div className="flex justify-center gap-2 mt-6">
+                {displayReviews.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentIndex(index)}
+                    className={`h-2 rounded-full transition-all ${
+                      index === safeIndex 
+                        ? 'w-8 bg-primary' 
+                        : 'w-2 bg-muted-foreground/30 hover-elevate'
+                    }`}
+                    data-testid={`button-review-dot-${index}`}
+                    aria-label={`Go to review ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="text-center mt-12">
