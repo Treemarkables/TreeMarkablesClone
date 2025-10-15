@@ -20,19 +20,38 @@ export default function ProposalAccept() {
   // Accept proposal mutation
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
-      const data = await response.json();
-      return data;
+      console.log('🚀 MUTATION STARTING - proposalId:', proposalId);
+      try {
+        const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
+        console.log('✅ API REQUEST SUCCESS - Response status:', response.status);
+        const data = await response.json();
+        console.log('📦 RESPONSE DATA:', data);
+        return data;
+      } catch (error) {
+        console.error('❌ MUTATION ERROR IN TRY-CATCH:', error);
+        throw error;
+      }
     },
     onSuccess: (data: any) => {
-      console.log('Proposal accepted successfully:', data);
+      console.log('✅ ON_SUCCESS CALLED - Data:', data);
       setAcceptanceStatus('success');
     },
     onError: (error: any) => {
-      console.error('Proposal acceptance error:', error);
-      if (error.message?.includes('already') && error.message?.includes('accepted')) {
+      console.error('❌ ON_ERROR CALLED - Error:', error);
+      console.error('❌ Error message:', error?.message);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error keys:', Object.keys(error || {}));
+      
+      const errorMessage = error?.message || String(error);
+      console.log('❌ Checking error message:', errorMessage);
+      console.log('❌ Includes "already"?', errorMessage.toLowerCase().includes('already'));
+      console.log('❌ Includes "accepted"?', errorMessage.toLowerCase().includes('accepted'));
+      
+      if (errorMessage.toLowerCase().includes('already') && errorMessage.toLowerCase().includes('accepted')) {
+        console.log('✅ Setting status to already_accepted');
         setAcceptanceStatus('already_accepted');
       } else {
+        console.log('❌ Setting status to error');
         setAcceptanceStatus('error');
       }
     }
