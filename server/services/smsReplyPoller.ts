@@ -1,6 +1,6 @@
 import { retrieveSMSReplies } from './smsEveryoneClient';
 import { db } from '../db';
-import { jobs, jobDiaryEntries, customers } from '@shared/schema';
+import { jobs, jobDiaryEntries, customers, notifications } from '@shared/schema';
 import { eq, or, sql } from 'drizzle-orm';
 
 const POLLING_INTERVAL_MS = 60 * 1000; // 1 minute (60 seconds)
@@ -113,6 +113,18 @@ async function processSMSReplies() {
           createdAt: receivedTimestamp
         });
 
+        // Create notification for SMS reply
+        await db.insert(notifications).values({
+          title: `📱 SMS Reply from ${customerName}`,
+          message: `${reply.MessageText.substring(0, 100)}${reply.MessageText.length > 100 ? '...' : ''}`,
+          type: 'sms_reply',
+          priority: 'medium',
+          jobId: matchedJob.id,
+          customerId: matchedJob.customerId,
+          actionUrl: `/job-dashboard?job=${matchedJob.id}`,
+          createdAt: receivedTimestamp
+        });
+
         // Update job's lastActivityAt to bring it to top of dispatch board
         await db
           .update(jobs)
@@ -121,7 +133,7 @@ async function processSMSReplies() {
           })
           .where(eq(jobs.id, matchedJob.id));
 
-        console.log(`📱 ✅ Stored SMS reply as diary entry in job #${matchedJob.jobNumber}`);
+        console.log(`📱 ✅ Stored SMS reply as diary entry and notification in job #${matchedJob.jobNumber}`);
       } catch (error) {
         console.error(`📱 Error processing SMS reply from ${reply.Originator}:`, error);
       }
