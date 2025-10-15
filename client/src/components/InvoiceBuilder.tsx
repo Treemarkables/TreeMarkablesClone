@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Save, X, Plus, Trash2, Calendar, DollarSign } from 'lucide-react';
+import { Send, Mail, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
+import { EmailComposerModal } from '@/components/EmailComposerModal';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { DocumentTemplate, Customer, Job } from '@shared/schema';
 
@@ -19,415 +16,219 @@ interface InvoiceBuilderProps {
   invoiceTemplate: DocumentTemplate;
 }
 
-interface InvoiceLineItem {
+interface CreatedInvoice {
   id: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
+  invoiceNumber: string;
+  customerId: string;
+  jobId: string;
+  amount: string;
+  status: string;
+  dueDate: string;
+  issueDate: string;
+  items: any[];
+  notes: string;
+  address: string;
 }
 
 export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate }: InvoiceBuilderProps) {
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(isOpen);
-  
-  // Sync dialog state with prop
+  const [isCreating, setIsCreating] = useState(false);
+  const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null);
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
+
+  // Auto-create invoice when modal opens
   useEffect(() => {
-    setIsDialogOpen(isOpen);
+    if (isOpen && !createdInvoice && !isCreating) {
+      createInvoice();
+    }
   }, [isOpen]);
-  
-  // Initialize line items from job
-  const [lineItems, setLineItems] = useState<InvoiceLineItem[]>(() => {
-    if (job.lineItems && job.lineItems.length > 0) {
-      return job.lineItems.map((item: any) => ({
-        id: item.id || Math.random().toString(),
-        description: item.description || '',
-        quantity: item.quantity || 1,
-        unitPrice: item.unitPrice || 0,
-        total: item.total || (item.quantity * item.unitPrice) || 0
-      }));
+
+  // Reset when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setCreatedInvoice(null);
+      setIsCreating(false);
     }
-    return [{
-      id: Math.random().toString(),
-      description: '',
-      quantity: 1,
-      unitPrice: 0,
-      total: 0
-    }];
-  });
+  }, [isOpen]);
 
-  // Invoice data
-  const [invoiceData, setInvoiceData] = useState({
-    address: job.address || customer.address || '',
-    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
-    notes: job.notes || '',
-    description: job.description || `Invoice for ${job.title || 'tree service'}`
-  });
-
-  // Calculate total
-  const calculateTotal = () => {
-    return lineItems.reduce((sum, item) => sum + (item.total || 0), 0);
-  };
-
-  // Update line item
-  const updateLineItem = (id: string, field: keyof InvoiceLineItem, value: any) => {
-    setLineItems(items => items.map(item => {
-      if (item.id === id) {
-        const updated = { ...item, [field]: value };
-        // Recalculate total if quantity or unitPrice changed
-        if (field === 'quantity' || field === 'unitPrice') {
-          updated.total = updated.quantity * updated.unitPrice;
-        }
-        return updated;
-      }
-      return item;
-    }));
-  };
-
-  // Add new line item
-  const addLineItem = () => {
-    setLineItems(items => [...items, {
-      id: Math.random().toString(),
-      description: '',
-      quantity: 1,
-      unitPrice: 0,
-      total: 0
-    }]);
-  };
-
-  // Remove line item
-  const removeLineItem = (id: string) => {
-    if (lineItems.length > 1) {
-      setLineItems(items => items.filter(item => item.id !== id));
-    }
-  };
-
-  // Create invoice
-  const handleCreateInvoice = async () => {
-    console.log('📄 Create Invoice clicked');
-    console.log('📄 Invoice data:', invoiceData);
-    console.log('📄 Line items:', lineItems);
+  const createInvoice = async () => {
+    setIsCreating(true);
     
-    // Validate
-    if (!invoiceData.address.trim()) {
-      toast({
-        title: "Address Required",
-        description: "Please enter a service address for the invoice.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (lineItems.length === 0 || lineItems.every(item => !item.description.trim())) {
-      console.log('❌ Line items validation failed');
-      toast({
-        title: "Line Items Required",
-        description: "Please add at least one line item.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    console.log('✅ Validation passed, creating invoice...');
-    setIsSubmitting(true);
-
     try {
-      // Create invoice
+      // Use job's line items or create a simple default
+      const lineItems = job.lineItems && job.lineItems.length > 0 
+        ? job.lineItems.map((item: any) => ({
+            description: item.description || '',
+            quantity: item.quantity || 1,
+            rate: item.unitPrice || 0,
+            amount: item.total || (item.quantity * item.unitPrice) || 0
+          }))
+        : [{
+            description: job.description || 'Tree service',
+            quantity: 1,
+            rate: parseFloat(job.totalAmount || '0'),
+            amount: parseFloat(job.totalAmount || '0')
+          }];
+
       const res = await apiRequest('POST', `/api/jobs/${job.id}/convert-to-invoice`, {
         invoiceType: 'full',
         customData: {
-          address: invoiceData.address,
-          dueDate: invoiceData.dueDate,
-          notes: invoiceData.notes,
-          description: invoiceData.description,
-          lineItems: lineItems.map(item => ({
-            description: item.description,
-            quantity: item.quantity,
-            rate: item.unitPrice,
-            amount: item.total
-          }))
+          address: job.address || customer.address || '',
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          notes: job.notes || '',
+          description: job.description || `Invoice for ${job.title || 'tree service'}`,
+          lineItems
         }
       });
 
       const response = await res.json();
-      console.log('📄 Invoice response:', response);
 
       if (response.success) {
-        toast({
-          title: "Invoice Created",
-          description: "Invoice has been created successfully."
-        });
+        setCreatedInvoice(response.data);
         
-        // Close modal first - both local and parent
-        setIsDialogOpen(false);
-        onClose();
-        
-        // Then invalidate queries to refresh data in background
+        // Invalidate queries to refresh data
         queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'diary-timeline'] }); // Refresh diary to show new invoice entry
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'diary-timeline'] });
+        
+        toast({
+          title: "Invoice Created",
+          description: `Invoice ${response.data.invoiceNumber} created successfully.`
+        });
       } else {
-        console.error('❌ Invoice creation failed:', response);
         toast({
           title: "Error",
           description: response.message || "Failed to create invoice.",
           variant: "destructive"
         });
+        onClose();
       }
     } catch (error) {
-      console.error('❌ Error creating invoice:', error);
+      console.error('Error creating invoice:', error);
       toast({
         title: "Error",
         description: "Failed to create invoice. Please try again.",
         variant: "destructive"
       });
+      onClose();
     } finally {
-      setIsSubmitting(false);
+      setIsCreating(false);
     }
   };
 
-  // Preview invoice data
-  const previewInvoice = {
-    id: job.id,
-    invoiceNumber: `INV-${job.jobNumber || '0000'}`,
-    customerId: customer.id,
-    amount: calculateTotal(),
-    status: 'draft' as const,
-    dueDate: new Date(invoiceData.dueDate).toISOString(),
-    issueDate: new Date().toISOString(),
-    paymentTerms: invoiceTemplate?.paymentTerms || 'Payment due within 30 days',
-    notes: invoiceData.notes,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+  const handleSendEmail = () => {
+    if (createdInvoice) {
+      setShowEmailComposer(true);
+    }
   };
 
   const handleClose = () => {
-    setIsDialogOpen(false);
+    setCreatedInvoice(null);
+    setIsCreating(false);
     onClose();
   };
 
   return (
-    <Dialog open={isDialogOpen} onOpenChange={(open) => {
-      if (!open) handleClose();
-    }}>
-      <DialogContent className="max-w-full sm:max-w-7xl h-[90vh] flex flex-col p-0">
-        <DialogHeader className="p-4 border-b flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">Create Invoice</h2>
-              <p className="text-sm text-muted-foreground">
-                Review and edit invoice details before creating
-              </p>
+    <>
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Invoice Preview</span>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleClose}
+                data-testid="button-close-invoice"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+
+          {isCreating ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <span className="ml-3 text-gray-600">Creating invoice...</span>
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleClose}
-              data-testid="button-close-invoice-builder"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-hidden flex flex-col sm:flex-row">
-          {/* Left side - Editor */}
-          <div className="w-full sm:w-1/2 p-4 overflow-y-auto border-b sm:border-b-0 sm:border-r">
-            <div className="space-y-4">
-              {/* Address */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Service Address</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Textarea
-                    value={invoiceData.address}
-                    onChange={(e) => setInvoiceData(prev => ({ ...prev, address: e.target.value }))}
-                    placeholder="Enter service address..."
-                    className="min-h-[80px]"
-                    data-testid="textarea-invoice-address"
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Due Date */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Due Date</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Input
-                    type="date"
-                    value={invoiceData.dueDate}
-                    onChange={(e) => setInvoiceData(prev => ({ ...prev, dueDate: e.target.value }))}
-                    data-testid="input-invoice-due-date"
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Line Items */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">Line Items</CardTitle>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={addLineItem}
-                      data-testid="button-add-line-item"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Item
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {lineItems.map((item, index) => (
-                    <div key={item.id} className="border rounded-lg p-3 space-y-2">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">Item {index + 1}</span>
-                        {lineItems.length > 1 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeLineItem(item.id)}
-                            data-testid={`button-remove-item-${index}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <div>
-                          <Label className="text-xs">Description</Label>
-                          <Input
-                            value={item.description}
-                            onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                            placeholder="Item description..."
-                            data-testid={`input-item-description-${index}`}
-                          />
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <Label className="text-xs">Quantity</Label>
-                            <Input
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                              min="0"
-                              step="0.01"
-                              data-testid={`input-item-quantity-${index}`}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Unit Price</Label>
-                            <Input
-                              type="number"
-                              value={item.unitPrice}
-                              onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                              min="0"
-                              step="0.01"
-                              data-testid={`input-item-unit-price-${index}`}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Total</Label>
-                            <Input
-                              type="number"
-                              value={item.total}
-                              readOnly
-                              className="bg-muted"
-                              data-testid={`input-item-total-${index}`}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  <div className="pt-3 border-t">
-                    <div className="flex justify-between items-center font-semibold">
-                      <span>Subtotal (ex GST):</span>
-                      <span data-testid="text-invoice-subtotal">
-                        ${calculateTotal().toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm text-muted-foreground">
-                      <span>GST (15%):</span>
-                      <span>${(calculateTotal() * 0.15).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-lg font-bold mt-1">
-                      <span>Total (inc GST):</span>
-                      <span data-testid="text-invoice-total">
-                        ${(calculateTotal() * 1.15).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Notes */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Notes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Textarea
-                    value={invoiceData.notes}
-                    onChange={(e) => setInvoiceData(prev => ({ ...prev, notes: e.target.value }))}
-                    placeholder="Add any additional notes or payment instructions..."
-                    className="min-h-[80px]"
-                    data-testid="textarea-invoice-notes"
-                  />
-                </CardContent>
-              </Card>
-
+          ) : createdInvoice ? (
+            <div className="space-y-6">
               {/* Action Buttons */}
-              <div className="flex gap-2">
+              <div className="flex gap-3 justify-end border-b pb-4">
                 <Button
-                  onClick={handleCreateInvoice}
-                  disabled={isSubmitting}
-                  className="flex-1"
-                  size="lg"
-                  data-testid="button-create-invoice"
+                  onClick={handleSendEmail}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  data-testid="button-send-invoice"
                 >
-                  {isSubmitting ? (
-                    <>Creating...</>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Create & Close
-                    </>
-                  )}
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send Invoice
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  data-testid="button-close"
+                >
+                  Close
+                </Button>
+              </div>
+
+              {/* Invoice Preview */}
+              <div className="border rounded-lg p-6 bg-white">
+                <InvoiceTemplate
+                  invoice={{
+                    ...createdInvoice,
+                    customer,
+                    job
+                  }}
+                  customer={customer}
+                  job={job}
+                  jobAddress={createdInvoice.address || job.address || customer.address || ''}
+                  template={invoiceTemplate}
+                />
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="flex gap-3 justify-end border-t pt-4">
+                <Button
+                  onClick={handleSendEmail}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  data-testid="button-send-invoice-bottom"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send Invoice
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  data-testid="button-close-bottom"
+                >
+                  Close
                 </Button>
               </div>
             </div>
-          </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
-          {/* Right side - Preview */}
-          <div className="w-full sm:w-1/2 p-4 overflow-y-auto bg-muted/30">
-            <div className="mb-3">
-              <h3 className="text-sm font-semibold text-muted-foreground">Preview</h3>
-            </div>
-            <InvoiceTemplate
-              template={invoiceTemplate}
-              invoice={previewInvoice}
-              customer={customer}
-              jobAddress={invoiceData.address}
-              description={invoiceData.description}
-              lineItems={lineItems.map(item => ({
-                ...item,
-                unit: 'each',
-                category: 'service',
-                taxable: true
-              }))}
-              showActions={false}
-            />
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      {/* Email Composer Modal */}
+      {createdInvoice && (
+        <EmailComposerModal
+          isOpen={showEmailComposer}
+          onClose={() => {
+            setShowEmailComposer(false);
+            handleClose(); // Close invoice modal after sending
+          }}
+          job={job}
+          customer={customer}
+          documentType="invoice"
+          documentData={{
+            invoiceNumber: createdInvoice.invoiceNumber,
+            amount: createdInvoice.amount,
+            dueDate: createdInvoice.dueDate
+          }}
+        />
+      )}
+    </>
   );
 }
