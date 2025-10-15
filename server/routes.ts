@@ -3722,6 +3722,24 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         invoiceBlocked: false
       });
 
+      // Create diary entry for invoice creation with invoice-specific metadata
+      await storage.createJobDiaryEntry({
+        jobId: id,
+        entryType: 'email', // Use 'email' type so it can display with invoice icon
+        title: 'Invoice Created',
+        description: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`,
+        authorName: req.user?.name || 'System',
+        authorRole: req.user?.role || 'system',
+        metadata: {
+          invoiceId: invoice.id,
+          invoiceNumber: invoiceNumber,
+          amount: amount.toString(),
+          action: 'invoice_created',
+          documentType: 'invoice', // Mark this as an invoice document
+          documentNumber: invoiceNumber
+        }
+      });
+
       console.log(`💰 Job ${job.jobNumber} converted to invoice ${invoiceNumber}`);
 
       res.json({ 
