@@ -136,7 +136,7 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 // Inner component that uses useSidebar hook
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const { isCrew, isAdmin, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState(isCrew ? "jobs" : "overview");
+  const [activeTab, setActiveTab] = useState("jobs");
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
