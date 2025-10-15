@@ -223,14 +223,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
     <div ref={ref} className={`max-w-4xl mx-auto bg-white w-full ${className}`}>
       {/* Action Bar */}
       {showActions && (
-        <div className="flex justify-between items-center mb-6 p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center gap-3">
-            <FileText className="w-5 h-5 text-orange-600" />
-            <div>
-              <h3 className="font-semibold text-gray-900">Proposal #{proposal.proposalNumber || 'P-' + proposal.id}</h3>
-              <p className="text-sm text-gray-600">Using template: {template.name}</p>
-            </div>
-          </div>
+        <div className="flex justify-end items-center mb-6 p-4 bg-gray-50 rounded-lg">
           <div className="flex gap-2">
             {onCopy && (
               <Button variant="outline" size="sm" onClick={onCopy} data-testid="button-copy-proposal">
