@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -38,6 +39,15 @@ export function SMSComposerModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [characterCount, setCharacterCount] = useState(0);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+
+  // Fetch SMS templates
+  const { data: smsTemplatesData } = useQuery({
+    queryKey: ['/api/sms-templates'],
+    enabled: isOpen,
+  });
+
+  const smsTemplates = (smsTemplatesData as any)?.data || [];
 
   const form = useForm<SMSFormData>({
     resolver: zodResolver(smsFormSchema),
@@ -53,7 +63,7 @@ export function SMSComposerModal({
       const phone = customer.phone || customer.mobile || "";
       form.setValue("phone", phone);
       
-      // Generate default SMS message with invoice link
+      // Generate default SMS message with invoice link if invoice context
       if (invoiceData) {
         const defaultMessage = `Hi ${customer.name || 'there'}, invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.totalAmount || '0.00'} ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
         form.setValue("message", defaultMessage);
@@ -61,6 +71,31 @@ export function SMSComposerModal({
       }
     }
   }, [customer, job, invoiceData, isOpen, form]);
+
+  // Handle template selection
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    const template = smsTemplates.find((t: any) => t.id === templateId);
+    
+    if (template) {
+      let message = template.message || "";
+      
+      // Replace placeholders with actual values
+      if (customer) {
+        message = message.replace(/\{customer_name\}/g, customer.name || "");
+        message = message.replace(/\{customer_first_name\}/g, customer.name?.split(' ')[0] || "");
+      }
+      
+      if (job) {
+        message = message.replace(/\{job_number\}/g, job.jobNumber || "");
+        message = message.replace(/\{job_address\}/g, job.address || "");
+        message = message.replace(/\{job_date\}/g, job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : "");
+      }
+      
+      form.setValue("message", message);
+      setCharacterCount(message.length);
+    }
+  };
 
   // Watch message field to update character count
   const watchedMessage = form.watch("message");
@@ -113,7 +148,9 @@ export function SMSComposerModal({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
-              <DialogTitle className="text-white">Send SMS Invoice</DialogTitle>
+              <DialogTitle className="text-white">
+                {invoiceData ? "Send SMS Invoice" : "Send SMS"}
+              </DialogTitle>
             </div>
             <Button
               variant="ghost"
@@ -150,6 +187,28 @@ export function SMSComposerModal({
                 </FormItem>
               )}
             />
+
+            {/* SMS Template Selector - Only show if NOT invoice context */}
+            {!invoiceData && smsTemplates.length > 0 && (
+              <div className="space-y-2">
+                <FormLabel>SMS Template (optional)</FormLabel>
+                <Select
+                  value={selectedTemplate}
+                  onValueChange={handleTemplateSelect}
+                >
+                  <SelectTrigger data-testid="select-sms-template">
+                    <SelectValue placeholder="Select a template..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {smsTemplates.map((template: any) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Invoice Attachment Preview */}
             {invoiceData && (
