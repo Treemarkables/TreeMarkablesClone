@@ -4124,9 +4124,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       // Generate invoice HTML if invoice data is available
       let invoiceHtml = '';
+      console.log('🎨 Checking invoice HTML generation:', {
+        hasInvoice: !!invoice,
+        hasInvoiceData: !!invoiceData,
+        willGenerate: !!(invoice || invoiceData)
+      });
       if (invoice || invoiceData) {
         const invoiceDetails = invoice || invoiceData;
         const lineItems = invoiceDetails.items || invoiceData?.lineItems || [];
+        console.log('🎨 Invoice details for HTML:', {
+          invoiceNumber: invoiceDetails.invoiceNumber,
+          amount: invoiceDetails.amount,
+          lineItemsCount: lineItems?.length || 0
+        });
         
         // Calculate totals
         const gstRate = 0.15;
