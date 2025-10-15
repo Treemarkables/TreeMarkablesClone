@@ -2432,7 +2432,20 @@ export function GlobalJobCard({
                               type="checkbox"
                               id="includeInQuotesProposals"
                               checked={form.watch('includeDescriptionInQuotesProposals') !== false}
-                              onChange={(e) => form.setValue('includeDescriptionInQuotesProposals', e.target.checked)}
+                              onChange={(e) => {
+                                const newValue = e.target.checked;
+                                form.setValue('includeDescriptionInQuotesProposals', newValue);
+                                
+                                // Auto-save when checkbox is toggled (only in edit mode)
+                                if (mode === 'edit' && editingJob?.id) {
+                                  updateJobMutation.mutate({
+                                    id: editingJob.id,
+                                    updates: {
+                                      includeDescriptionInQuotesProposals: newValue
+                                    }
+                                  });
+                                }
+                              }}
                               className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                             />
                             <label htmlFor="includeInQuotesProposals" className="text-xs text-gray-600">
