@@ -196,7 +196,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-full sm:max-w-7xl h-[90vh] flex flex-col p-0">
         <DialogHeader className="p-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
