@@ -211,6 +211,9 @@ export function EmailComposerModal({
       const template = getDefaultTemplate();
       const documentData = invoiceData || quoteData || proposalData;
       
+      // Use current domain for links (works in both dev and production)
+      const baseUrl = window.location.origin;
+      
       const populatedSubject = template.subject
         .replace(/{jobNumber}/g, job.jobNumber || "")
         .replace(/{customerAddress}/g, job.address || "")
@@ -223,9 +226,9 @@ export function EmailComposerModal({
         .replace(/{customerName}/g, customerName || "Valued Customer")
         .replace(/{jobDescription}/g, job.description || job.title || "tree service")
         .replace(/{address}/g, job.address || customer.address || "")
-        .replace(/{invoiceLink}/g, invoiceData?.id ? `https://app.treemarkables.co.nz/invoice/${invoiceData.id}` : "View invoice in your customer portal")
-        .replace(/{quoteLink}/g, quoteData?.id ? `https://app.treemarkables.co.nz/quote/${quoteData.id}` : "View quote in your customer portal")
-        .replace(/{proposalLink}/g, proposalData?.id ? `https://app.treemarkables.co.nz/proposal/${proposalData.id}` : "View proposal in your customer portal")
+        .replace(/{invoiceLink}/g, invoiceData?.id ? `${baseUrl}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
+        .replace(/{quoteLink}/g, quoteData?.id ? `${baseUrl}/quote/${quoteData.id}` : "View quote in your customer portal")
+        .replace(/{proposalLink}/g, proposalData?.id ? `${baseUrl}/proposal/${proposalData.id}` : "View proposal in your customer portal")
         .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
         .replace(/{quoteExpiry}/g, quoteData?.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : "")
         .replace(/{quoteAmount}/g, quoteData?.totalAmount ? `$${quoteData.totalAmount}` : "$0.00")
@@ -408,6 +411,9 @@ export function EmailComposerModal({
 
     const customerName = customer?.name || `${customer?.firstName || ''} ${customer?.lastName || ''}`.trim();
     
+    // Use current domain for links (works in both dev and production)
+    const baseUrl = window.location.origin;
+    
     const populatedSubject = template.subject
       .replace(/{jobNumber}/g, job?.jobNumber || "")
       .replace(/{customerAddress}/g, job?.address || "")
@@ -425,9 +431,9 @@ export function EmailComposerModal({
       .replace(/{jobDescription}/g, job?.description || job?.title || "tree service")
       .replace(/{address}/g, job?.address || customer?.address || "")
       .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
-      .replace(/{invoiceLink}/g, invoiceData?.id ? `https://app.treemarkables.co.nz/invoice/${invoiceData.id}` : "View invoice in your customer portal")
-      .replace(/{quoteLink}/g, quoteData?.id ? `https://app.treemarkables.co.nz/quote/${quoteData.id}` : "View quote in your customer portal")
-      .replace(/{proposalLink}/g, proposalData?.id ? `https://app.treemarkables.co.nz/proposal/${proposalData.id}` : "View proposal in your customer portal")
+      .replace(/{invoiceLink}/g, invoiceData?.id ? `${baseUrl}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
+      .replace(/{quoteLink}/g, quoteData?.id ? `${baseUrl}/quote/${quoteData.id}` : "View quote in your customer portal")
+      .replace(/{proposalLink}/g, proposalData?.id ? `${baseUrl}/proposal/${proposalData.id}` : "View proposal in your customer portal")
       .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
       .replace(/{quoteExpiry}/g, quoteData?.validUntil ? new Date(quoteData.validUntil).toLocaleDateString() : "")
       .replace(/{quoteAmount}/g, quoteData?.totalAmount ? `$${quoteData.totalAmount}` : "$0.00")
