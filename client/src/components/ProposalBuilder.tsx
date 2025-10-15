@@ -1343,7 +1343,7 @@ export function ProposalBuilder({
                 <CardContent className="w-full max-w-full min-w-0">
                   <div className="space-y-6 w-full max-w-full min-w-0">
                     {sections.map((section) => (
-                      <Card key={section.id} className="border-l-4 border-l-primary w-full max-w-full min-w-0">
+                      <Card key={section.id} className="bg-accent/30 w-full max-w-full min-w-0">
                         <CardHeader className="w-full max-w-full min-w-0">
                           <div className="flex items-center justify-between w-full max-w-full min-w-0">
                             <Input
@@ -1488,7 +1488,7 @@ export function ProposalBuilder({
                                     <img
                                       src={photo.url}
                                       alt={photo.filename}
-                                      className="w-full h-20 object-cover rounded-lg border"
+                                      className="w-full h-20 object-cover rounded-lg"
                                     />
                                     <Button
                                       type="button"
@@ -1633,7 +1633,7 @@ export function ProposalBuilder({
                                   {/* Multiple Choice Options */}
                                   {currentLineItem.pricingType === "choice" && (
                                     <div className="space-y-2">
-                                      <div className="border rounded-lg p-2">
+                                      <div className="bg-muted/50 rounded-lg p-2">
                                         <h5 className="text-sm font-medium mb-2">Add Choice Option</h5>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
                                           <Input
@@ -1682,7 +1682,7 @@ export function ProposalBuilder({
                                           <h5 className="text-sm font-medium mb-1.5">Choice Options ({currentLineItem.choices.length})</h5>
                                           <div className="space-y-1.5">
                                             {currentLineItem.choices.map((choice) => (
-                                              <div key={choice.id} className="flex flex-wrap items-center justify-between gap-2 p-1.5 border rounded text-sm">
+                                              <div key={choice.id} className="flex flex-wrap items-center justify-between gap-2 p-1.5 bg-background rounded text-sm">
                                                 <div className="flex-1 min-w-0">
                                                   <div className="flex flex-wrap items-center gap-2">
                                                     <span className="font-medium">{choice.label}</span>
@@ -1736,7 +1736,7 @@ export function ProposalBuilder({
                             {section.lineItems.length > 0 && (
                               <div className="space-y-1.5">
                                 {section.lineItems.map((item) => (
-                                  <Card key={item.id} className="border-l-2 border-l-muted">
+                                  <Card key={item.id} className="bg-muted/30">
                                     <CardContent className="p-2 sm:p-3">
                                       <div className="flex flex-wrap items-start justify-between gap-2">
                                         <div className="flex items-start gap-2 flex-1 min-w-0">
