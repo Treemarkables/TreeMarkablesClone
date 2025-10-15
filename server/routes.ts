@@ -3598,37 +3598,59 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const today = new Date();
       const invoiceNumber = `INV-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${Date.now().toString().slice(-6)}`;
 
-      // Calculate amount based on invoice type
-      let amount = job.totalAmount ? parseFloat(job.totalAmount) : 0;
+      // Calculate due date - use custom date if provided, otherwise default to 30 days
+      const issueDate = new Date();
+      let dueDate: Date;
+      if (customData.dueDate) {
+        dueDate = new Date(customData.dueDate);
+      } else {
+        dueDate = new Date();
+        const defaultDueDays = 30; // fallback to 30 days
+        dueDate.setDate(dueDate.getDate() + defaultDueDays);
+      }
+
+      // Transform line items - use custom line items if provided, otherwise use job line items
+      let transformedLineItems;
+      if (customData.lineItems && customData.lineItems.length > 0) {
+        transformedLineItems = customData.lineItems;
+      } else {
+        transformedLineItems = job.lineItems ? job.lineItems.map((item: any) => ({
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.unitPrice || item.rate || 0,
+          amount: item.total || item.amount || (item.quantity * (item.unitPrice || item.rate || 0))
+        })) : [];
+      }
+
+      // Calculate amount from line items (sum of all line item amounts)
+      let amount = 0;
+      if (transformedLineItems && transformedLineItems.length > 0) {
+        amount = transformedLineItems.reduce((sum: number, item: any) => {
+          const itemAmount = typeof item.amount === 'string' ? parseFloat(item.amount) : (item.amount || 0);
+          return sum + itemAmount;
+        }, 0);
+      } else {
+        // Fallback to job total amount if no line items
+        amount = job.totalAmount ? parseFloat(job.totalAmount) : 0;
+      }
+
+      // Apply partial percentage if specified
       if (invoiceType === 'partial' && customData.percentage) {
         amount = amount * (parseFloat(customData.percentage) / 100);
       }
 
-      // Calculate due date based on template or default to 30 days
-      const issueDate = new Date();
-      const dueDate = new Date();
-      const defaultDueDays = 30; // fallback to 30 days
-      dueDate.setDate(dueDate.getDate() + defaultDueDays);
-
-      // Transform job line items to invoice format (unitPrice -> rate, total -> amount)
-      const transformedLineItems = job.lineItems ? job.lineItems.map((item: any) => ({
-        description: item.description,
-        quantity: item.quantity,
-        rate: item.unitPrice || item.rate || 0, // Handle both unitPrice (jobs) and rate (invoices)
-        amount: item.total || item.amount || (item.quantity * (item.unitPrice || item.rate || 0))
-      })) : [];
-
-      // Create invoice data with template integration and job description
+      // Create invoice data with custom or default values
       const invoiceData = {
         customerId: job.customerId!,
         jobId: job.id,
         invoiceNumber,
         jobTitle: job.title || 'Unnamed Job',
+        address: customData.address || job.address || '', // Store the service address
         issueDate,
         dueDate,
         amount: amount.toString(),
         status: 'draft' as const,
-        description: job.description || `Invoice for ${job.title || 'tree service'}`, // Use job description
+        description: customData.description || job.description || `Invoice for ${job.title || 'tree service'}`,
         items: transformedLineItems,
         notes: customData.notes || '',
         templateId: defaultTemplate?.id || null,
