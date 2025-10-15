@@ -4057,6 +4057,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // If invoice data is provided but no invoiceId, create or find the invoice
       let emailBody = body; // Create mutable copy of body
       const effectiveInvoiceId = invoiceId || invoiceData?.id;
+      console.log('📋 Effective Invoice ID:', effectiveInvoiceId || 'NONE');
       
       if (invoiceData && !effectiveInvoiceId) {
         console.log('📋 Creating invoice from invoice data before sending email');
