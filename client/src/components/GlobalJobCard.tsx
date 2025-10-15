@@ -10,6 +10,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilder } from "./ProposalBuilder";
+import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
@@ -3875,111 +3876,15 @@ export function GlobalJobCard({
         </Dialog>
       )}
 
-      {/* Invoice Management Modal */}
-      {isInvoiceModalOpen && editingJob && invoiceTemplate && (
-        <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
-          <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
-            <DialogHeader className="p-3 sm:p-6 border-b">
-              <div className="flex justify-center sm:justify-end">
-                <div className="flex gap-1 sm:gap-2 w-full sm:w-auto">
-                  <Button 
-                    size="sm" 
-                    onClick={() => {
-                      toast({
-                        title: "Invoice Saved",
-                        description: "Invoice has been saved successfully.",
-                      });
-                    }} 
-                    data-testid="button-save-invoice" 
-                    className="bg-green-600 hover:bg-green-700 text-white h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Save className="w-4 h-4 mr-1" />
-                    <span>Save</span>
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => {
-                      toast({
-                        title: "Copied",
-                        description: "Invoice details copied to clipboard.",
-                      });
-                    }} 
-                    data-testid="button-copy-invoice"
-                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Copy className="w-4 h-4 mr-1" />
-                    <span>Copy</span>
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => {
-                      setIsInvoiceModalOpen(false);
-                      handleEmailClick('invoice');
-                    }} 
-                    data-testid="button-email-invoice"
-                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Mail className="w-4 h-4 mr-1" />
-                    <span>Email</span>
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => {
-                      toast({
-                        title: "Download Started",
-                        description: "Invoice PDF download will be available soon.",
-                      });
-                    }} 
-                    data-testid="button-download-invoice"
-                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Download className="w-4 h-4 mr-1" />
-                    <span>PDF</span>
-                  </Button>
-                </div>
-              </div>
-            </DialogHeader>
-            <div className="p-3 sm:p-6">
-              <InvoiceTemplate
-                template={invoiceTemplate}
-                invoice={{
-                  id: editingJob.id,
-                  invoiceNumber: `INV-${editingJob.jobNumber || '0000'}`,
-                  customerId: selectedCustomer?.id || '',
-                  amount: (proposalLineItems.length > 0 
-                    ? proposalLineItems.reduce((sum, item) => sum + (item.total || 0), 0)
-                    : formData?.lineItems?.reduce((sum, item) => sum + (item.total || 0), 0)) || 0,
-                  status: 'draft',
-                  dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-                  issueDate: new Date().toISOString(),
-                  paymentTerms: invoiceTemplate?.paymentTerms || 'Payment due within 30 days',
-                  notes: editingJob.notes || '',
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }}
-                customer={selectedCustomer || undefined}
-                jobAddress={formData?.address || editingJob.address || ''}
-                description={formData?.description || editingJob.description || ''}
-                lineItems={proposalLineItems.length > 0 
-                  ? proposalLineItems 
-                  : (formData?.lineItems?.map(item => ({
-                      id: item.id,
-                      description: item.description,
-                      quantity: item.quantity,
-                      unitPrice: item.unitPrice,
-                      total: item.total,
-                      unit: 'each',
-                      category: 'service',
-                      taxable: true
-                    })) || [])}
-                showActions={false}
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+      {/* Invoice Builder Modal */}
+      {isInvoiceModalOpen && editingJob && invoiceTemplate && selectedCustomer && (
+        <InvoiceBuilder
+          isOpen={isInvoiceModalOpen}
+          onClose={() => setIsInvoiceModalOpen(false)}
+          job={editingJob}
+          customer={selectedCustomer}
+          invoiceTemplate={invoiceTemplate}
+        />
       )}
 
       {/* Profit Tracker */}
