@@ -122,23 +122,20 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
     try {
       // Create invoice
-      const response = await apiRequest<{ success: boolean; data: any }>(`/api/jobs/${job.id}/convert-to-invoice`, {
-        method: 'POST',
-        body: JSON.stringify({
-          invoiceType: 'full',
-          customData: {
-            address: invoiceData.address,
-            dueDate: invoiceData.dueDate,
-            notes: invoiceData.notes,
-            description: invoiceData.description,
-            lineItems: lineItems.map(item => ({
-              description: item.description,
-              quantity: item.quantity,
-              rate: item.unitPrice,
-              amount: item.total
-            }))
-          }
-        })
+      const response = await apiRequest('POST', `/api/jobs/${job.id}/convert-to-invoice`, {
+        invoiceType: 'full',
+        customData: {
+          address: invoiceData.address,
+          dueDate: invoiceData.dueDate,
+          notes: invoiceData.notes,
+          description: invoiceData.description,
+          lineItems: lineItems.map(item => ({
+            description: item.description,
+            quantity: item.quantity,
+            rate: item.unitPrice,
+            amount: item.total
+          }))
+        }
       });
 
       if (response.success) {
