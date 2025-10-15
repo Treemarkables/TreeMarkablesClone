@@ -57,14 +57,15 @@ export function SMSComposerModal({
     },
   });
 
-  // Pre-populate phone number from customer data
+  // Pre-populate phone number from job contact or customer data
   useEffect(() => {
-    if (customer && isOpen) {
-      const phone = customer.phone || customer.mobile || "";
+    if (isOpen) {
+      // Try job contact phone, billing contact mobile, then customer phone/mobile
+      const phone = job?.jobContactPhone || job?.billingContactMobile || customer?.phone || customer?.mobile || "";
       form.setValue("phone", phone);
       
       // Generate default SMS message with invoice link if invoice context
-      if (invoiceData) {
+      if (invoiceData && customer) {
         const defaultMessage = `Hi ${customer.name || 'there'}, invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.totalAmount || '0.00'} ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
         form.setValue("message", defaultMessage);
         setCharacterCount(defaultMessage.length);
@@ -80,11 +81,15 @@ export function SMSComposerModal({
     if (template) {
       let message = template.message || "";
       
+      // Get contact name - use job contact if available, otherwise customer
+      const contactName = job?.jobContactFirstName && job?.jobContactLastName 
+        ? `${job.jobContactFirstName} ${job.jobContactLastName}`
+        : customer?.name || "";
+      const firstName = job?.jobContactFirstName || customer?.name?.split(' ')[0] || "";
+      
       // Replace placeholders with actual values
-      if (customer) {
-        message = message.replace(/\{customer_name\}/g, customer.name || "");
-        message = message.replace(/\{customer_first_name\}/g, customer.name?.split(' ')[0] || "");
-      }
+      message = message.replace(/\{customer_name\}/g, contactName);
+      message = message.replace(/\{customer_first_name\}/g, firstName);
       
       if (job) {
         message = message.replace(/\{job_number\}/g, job.jobNumber || "");
