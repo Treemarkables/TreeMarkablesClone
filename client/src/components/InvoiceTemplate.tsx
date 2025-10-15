@@ -116,9 +116,9 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     }).format(amount);
   };
 
-  // Get invoice dates
-  const issueDate = new Date(invoice.issueDate);
-  const dueDate = new Date(invoice.dueDate);
+  // Get invoice dates with fallbacks
+  const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
+  const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : addDays(issueDate, 14);
   const isOverdue = dueDate < new Date() && invoice.status !== 'paid';
 
   // Calculate payment status
