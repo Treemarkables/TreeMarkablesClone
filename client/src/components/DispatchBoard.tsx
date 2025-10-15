@@ -799,8 +799,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
 
     const searchQuery = query.toLowerCase().trim();
-    // Deep search includes ALL jobs (completed, unsuccessful, etc.)
+    // Deep search includes ALL jobs (completed, unsuccessful, etc.) but excludes archived
     const allMatchingJobs = jobs.filter(job => {
+      // Exclude archived jobs from deep search
+      if (job.status === 'archived') return false;
       const customerName = job.customerName?.toLowerCase() || '';
       const address = job.address?.toLowerCase() || '';
       const serviceType = job.serviceType?.toLowerCase() || '';
