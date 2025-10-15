@@ -132,6 +132,9 @@ export function CalendarGrid() {
   // Get jobs for a specific employee and time slot
   const getJobsForSlot = (employeeId: string, date: Date, hour: number) => {
     return allJobs.filter(job => {
+      // Exclude archived jobs from calendar
+      if (job.status === 'archived') return false;
+      
       // Check if job is scheduled for this date (primary filter)
       if (!job.scheduledDate) return false;
       const jobDate = parseISO(job.scheduledDate);
@@ -373,6 +376,7 @@ export function CalendarGrid() {
                 dateRange.map(date => {
                   // Get all jobs for this employee on this date
                   const dayJobs = allJobs.filter(job => 
+                    job.status !== 'archived' &&
                     job.assignedTo?.includes(employee.id) &&
                     job.scheduledDate &&
                     isSameDay(parseISO(job.scheduledDate), date)
