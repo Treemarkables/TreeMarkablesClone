@@ -4713,7 +4713,32 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                   response_format: 'text'
                 });
                 
-                const transcript = typeof transcription === 'string' ? transcription : (transcription as any).text || String(transcription);
+                const rawTranscript = typeof transcription === 'string' ? transcription : (transcription as any).text || String(transcription);
+                
+                // Capitalize names in transcript using GPT
+                let transcript = rawTranscript;
+                try {
+                  const capitalizationResponse = await openai.chat.completions.create({
+                    model: 'gpt-4o',
+                    messages: [
+                      {
+                        role: 'system',
+                        content: 'You are a text formatter. Your only job is to take transcribed text and properly capitalize all proper nouns (names of people, places, companies) while keeping everything else exactly as it is. Return ONLY the corrected text with no explanations or formatting.'
+                      },
+                      {
+                        role: 'user',
+                        content: rawTranscript
+                      }
+                    ],
+                    temperature: 0.1
+                  });
+                  
+                  transcript = capitalizationResponse.choices[0].message.content?.trim() || rawTranscript;
+                  console.log(`✅ Names capitalized in transcript`);
+                } catch (capError) {
+                  console.warn('⚠️ Could not capitalize names, using raw transcript:', capError);
+                  transcript = rawTranscript;
+                }
                 
                 // Update call with transcript
                 await storage.updateCall(call.id, { transcriptText: transcript });
@@ -9242,9 +9267,34 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       });
 
       // Extract text from response (handles both string and object responses)
-      const transcriptText = typeof transcription === 'string' 
+      const rawTranscriptText = typeof transcription === 'string' 
         ? transcription 
         : (transcription as any).text || String(transcription);
+
+      // Capitalize names in transcript using GPT
+      let transcriptText = rawTranscriptText;
+      try {
+        const capitalizationResponse = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a text formatter. Your only job is to take transcribed text and properly capitalize all proper nouns (names of people, places, companies) while keeping everything else exactly as it is. Return ONLY the corrected text with no explanations or formatting.'
+            },
+            {
+              role: 'user',
+              content: rawTranscriptText
+            }
+          ],
+          temperature: 0.1
+        });
+        
+        transcriptText = capitalizationResponse.choices[0].message.content?.trim() || rawTranscriptText;
+        console.log(`✅ Names capitalized in transcript`);
+      } catch (capError) {
+        console.warn('⚠️ Could not capitalize names, using raw transcript:', capError);
+        transcriptText = rawTranscriptText;
+      }
 
       // Update call record with transcript
       const updatedCall = await storage.updateCall(callId, {
@@ -9501,7 +9551,33 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       });
 
       // When using response_format: "text", transcription is a string, not an object
-      const transcriptText = typeof transcription === 'string' ? transcription : transcription.text;
+      const rawTranscriptText = typeof transcription === 'string' ? transcription : transcription.text;
+      
+      // Capitalize names in transcript using GPT
+      let transcriptText = rawTranscriptText;
+      try {
+        const capitalizationResponse = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a text formatter. Your only job is to take transcribed text and properly capitalize all proper nouns (names of people, places, companies) while keeping everything else exactly as it is. Return ONLY the corrected text with no explanations or formatting.'
+            },
+            {
+              role: 'user',
+              content: rawTranscriptText
+            }
+          ],
+          temperature: 0.1
+        });
+        
+        transcriptText = capitalizationResponse.choices[0].message.content?.trim() || rawTranscriptText;
+        console.log(`✅ Names capitalized in mobile transcription`);
+      } catch (capError) {
+        console.warn('⚠️ Could not capitalize names, using raw transcript:', capError);
+        transcriptText = rawTranscriptText;
+      }
+      
       console.log('📝 Mobile Transcription:', transcriptText);
 
       // Step 2: Extract quote details using GPT-5
@@ -14531,7 +14607,33 @@ Transcription: ${transcriptText}`;
       });
 
       // When using response_format: "text", transcription is a string, not an object
-      const transcriptText = typeof transcription === 'string' ? transcription : transcription.text;
+      const rawTranscriptText = typeof transcription === 'string' ? transcription : transcription.text;
+      
+      // Capitalize names in transcript using GPT
+      let transcriptText = rawTranscriptText;
+      try {
+        const capitalizationResponse = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a text formatter. Your only job is to take transcribed text and properly capitalize all proper nouns (names of people, places, companies) while keeping everything else exactly as it is. Return ONLY the corrected text with no explanations or formatting.'
+            },
+            {
+              role: 'user',
+              content: rawTranscriptText
+            }
+          ],
+          temperature: 0.1
+        });
+        
+        transcriptText = capitalizationResponse.choices[0].message.content?.trim() || rawTranscriptText;
+        console.log(`✅ Names capitalized in web transcription`);
+      } catch (capError) {
+        console.warn('⚠️ Could not capitalize names, using raw transcript:', capError);
+        transcriptText = rawTranscriptText;
+      }
+      
       console.log('📝 Transcription:', transcriptText);
 
       // If context is description-only, format transcription as structured list
