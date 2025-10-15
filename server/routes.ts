@@ -14773,7 +14773,7 @@ Take this voice transcription and format it as a clean, structured list of tasks
 Rules:
 1. Remove filler words like "okay", "um", "so", etc.
 2. Capitalize the first letter of each task
-3. Keep technical terms like tree species names capitalized (e.g., "Eucalyptus", "Oak", "Pine")
+3. Keep technical terms like tree species names capitalized (e.g., "Olive", "Eucalyptus", "Oak", "Pine", "Pittosporum", "Akeake", "Palm", "Macrocarpa", "Totara", "Kauri", "Pohutukawa", "Kowhai", "Poplar", "Willow", "Plum", "Cherry", "Apple", "Lemon")
 4. Each task should be a clear, concise action item
 5. Return ONLY the formatted task list, with each task on a new line
 6. Do NOT add bullet points or dashes - just line breaks between tasks
