@@ -3728,7 +3728,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           jobId: id,
           entryType: 'email', // Use 'email' type so it can display with invoice icon
           title: 'Invoice Created',
-          content: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`, // Changed from description to content
+          description: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`, // Database requires description field
+          content: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`,
           authorName: req.user?.name || 'System',
           authorRole: req.user?.role || 'system',
           metadata: {
