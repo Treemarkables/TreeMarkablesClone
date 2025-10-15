@@ -11868,6 +11868,19 @@ Transcription: ${transcriptText}`;
       
       // Save proposal sections and line items if provided
       if (req.body.sections && Array.isArray(req.body.sections)) {
+        // Update job description from first section's content (or clear if no sections)
+        if (proposal.jobId) {
+          const firstSectionContent = req.body.sections.length > 0 
+            ? (req.body.sections[0].description || '') 
+            : '';
+          try {
+            await storage.updateJob(proposal.jobId, { description: firstSectionContent });
+            console.log('✅ Updated job description from proposal:', firstSectionContent ? 'with content' : 'cleared');
+          } catch (error) {
+            console.error('❌ Error updating job description:', error);
+          }
+        }
+
         for (const section of req.body.sections) {
           // Create section
           const createdSection = await storage.createProposalSection({
@@ -11977,6 +11990,19 @@ Transcription: ${transcriptText}`;
           await storage.deleteProposalSection(section.id);
         }
         
+        // Update job description from first section's content (or clear if no sections)
+        if (proposal.jobId) {
+          const firstSectionContent = req.body.sections.length > 0 
+            ? (req.body.sections[0].description || '') 
+            : '';
+          try {
+            await storage.updateJob(proposal.jobId, { description: firstSectionContent });
+            console.log('✅ Updated job description from proposal:', firstSectionContent ? 'with content' : 'cleared');
+          } catch (error) {
+            console.error('❌ Error updating job description:', error);
+          }
+        }
+
         // Now create new sections
         for (const section of req.body.sections) {
           // Create section
