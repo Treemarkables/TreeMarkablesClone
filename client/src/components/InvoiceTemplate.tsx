@@ -242,17 +242,21 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           )}
 
-          {/* Line Items */}
-          {hasLineItems ? (
+          {/* Notes */}
+          {(invoice.notes || description) && (
             <div className="p-3 sm:p-8 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
-              {description && (
-                <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    <LinkifiedText text={description} />
-                  </p>
-                </div>
-              )}
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Notes</h3>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-notes">
+                  <LinkifiedText text={[invoice.notes, description].filter(Boolean).join('\n\n')} />
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Line Items */}
+          {hasLineItems && (
+            <div className="p-3 sm:p-8 border-b border-gray-200">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
                   <thead className="bg-gray-50">
@@ -285,19 +289,6 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </div>
-          ) : (
-            // Fallback for invoices without line items
-            <div className="p-3 sm:p-8 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Provided</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  <LinkifiedText text={description || 'Professional Tree Services'} />
-                </p>
-                {!description && (
-                  <p className="text-sm text-gray-600 mt-2">Total amount includes all services as agreed</p>
-                )}
               </div>
             </div>
           )}
@@ -383,18 +374,6 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               </div>
             </div>
           </div>
-
-          {/* Notes */}
-          {invoice.notes && (
-            <div className="p-3 sm:p-8 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Notes</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-notes">
-                  {invoice.notes}
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Payment Instructions */}
           <div className="p-3 sm:p-8 border-b border-gray-200">
