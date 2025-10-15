@@ -145,7 +145,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   return (
     <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full">
+      <div className="sticky top-0 z-50 bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full shadow-sm">
         <div className="max-w-4xl mx-auto w-full">
           {/* Logo */}
           <div className="flex justify-center mb-4">
