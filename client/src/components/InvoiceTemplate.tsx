@@ -70,8 +70,10 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
   // Calculate totals - use line items if available, otherwise fall back to invoice amount
   const lineItemSubtotal = lineItems.reduce((sum, item) => {
-    const itemTotal = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
-    return sum + (itemTotal || 0);
+    // Check both 'total' and 'amount' fields for backwards compatibility
+    const itemTotal = item.total || item.amount;
+    const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : itemTotal;
+    return sum + (total || 0);
   }, 0);
   const hasLineItems = lineItems.length > 0 && lineItemSubtotal > 0;
   
@@ -281,9 +283,9 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                           )}
                         </td>
                         <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.quantity}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.unit || 'ea'}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-right text-gray-700">{formatCurrency(item.unitPrice)}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(item.total * 1.15)}</td>
+                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.unit || 'each'}</td>
+                        <td className="border border-gray-200 px-4 py-3 text-right text-gray-700">{formatCurrency(item.unitPrice || item.rate)}</td>
+                        <td className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency((item.total || item.amount) * 1.15)}</td>
                       </tr>
                     ))}
                   </tbody>
