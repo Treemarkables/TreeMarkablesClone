@@ -4902,25 +4902,6 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
-  app.put('/api/jobs/:id', async (req: Request, res: Response) => {
-    try {
-      const updates = insertJobSchema.partial().safeParse(req.body);
-      if (!updates.success) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid update data',
-          errors: updates.error.errors 
-        });
-      }
-
-      const job = await storage.updateJob(req.params.id, updates.data);
-      res.json({ success: true, data: job });
-    } catch (error) {
-      console.error('Error updating job:', error);
-      res.status(500).json({ success: false, message: 'Error updating job' });
-    }
-  });
-
   // ========================================
   // ACTIVITY TRACKING API ROUTES
   // ========================================
