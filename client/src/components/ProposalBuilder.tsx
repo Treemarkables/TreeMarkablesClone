@@ -1282,8 +1282,8 @@ export function ProposalBuilder({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-full sm:max-w-5xl h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-4 sm:p-6 w-full min-w-0">
-          <DialogHeader className="flex-shrink-0 pb-2 sm:pb-4 w-full min-w-0">
+        <DialogContent className="max-w-full sm:max-w-5xl h-screen sm:h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-2 sm:p-4 md:p-6 w-full min-w-0">
+          <DialogHeader className="flex-shrink-0 pb-2 sm:pb-3 md:pb-4 w-full min-w-0">
             <div className="flex items-center justify-between flex-wrap gap-2 w-full min-w-0">
               <div>
                 <DialogTitle className="text-lg sm:text-2xl font-bold text-primary">
@@ -1442,6 +1442,7 @@ export function ProposalBuilder({
                                   type="file"
                                   multiple
                                   accept="image/*"
+                                  capture="environment"
                                   onChange={(e) => handlePhotoUpload(e, section.id)}
                                   className="hidden"
                                   id={`photo-upload-${section.id}`}
