@@ -153,12 +153,13 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           description: "Invoice has been created successfully."
         });
         
-        // Invalidate queries to refresh data
-        await queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-        await queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
-        await queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
-        
+        // Close modal first
         onClose();
+        
+        // Then invalidate queries to refresh data in background
+        queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
       } else {
         console.error('❌ Invoice creation failed:', response);
         toast({
@@ -195,7 +196,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-full sm:max-w-7xl h-[90vh] flex flex-col p-0">
         <DialogHeader className="p-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
