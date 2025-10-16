@@ -535,28 +535,6 @@ export default function Opportunities() {
         )}
       </ScrollArea>
 
-      {/* Floating Action Button - Create New Job */}
-      <Button
-        size="icon"
-        className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 h-16 w-16 sm:h-14 sm:w-14 rounded-full shadow-2xl bg-blue-600 hover:bg-blue-700 z-50"
-        data-testid="button-new-conversation"
-        onClick={() => {
-          jobForm.reset({
-            name: '',
-            email: '',
-            phone: '',
-            address: '',
-            serviceRequested: '',
-            urgency: 'medium',
-            status: 'new',
-            notes: ''
-          });
-          setShowCreateJobDialog(true);
-        }}
-      >
-        <Plus className="h-7 w-7 sm:h-6 sm:w-6" />
-      </Button>
-
       {/* Reply Dialog */}
       <Dialog open={showReplyDialog} onOpenChange={setShowReplyDialog}>
         <DialogContent className="sm:max-w-[600px]">
