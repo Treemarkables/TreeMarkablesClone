@@ -324,6 +324,7 @@ export default function Opportunities() {
           <div className="min-w-0">
             <div className="flex items-center gap-1 sm:gap-2">
               <h1 className="text-base sm:text-lg font-semibold truncate" data-testid="text-title">Treemarkables</h1>
+              <span className="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded">v12</span>
               <ChevronDown className="h-4 w-4 text-gray-500 flex-shrink-0" />
             </div>
             <p className="text-xs text-gray-500">Gisborne</p>
