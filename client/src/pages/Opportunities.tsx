@@ -433,19 +433,20 @@ export default function Opportunities() {
                   </div>
                 </div>
                 
-                {/* Action Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
-                      className="flex-shrink-0 h-8 w-8 border-gray-300" 
-                      onClick={(e) => e.stopPropagation()}
-                      data-testid={`button-actions-${conversation.id}`}
-                    >
-                      <MoreVertical className="h-5 w-5" />
-                    </Button>
-                  </DropdownMenuTrigger>
+                {/* Action Menu - v13 DEBUG */}
+                <div className="flex-shrink-0 bg-red-500 p-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="flex-shrink-0 h-8 w-8 border-2 border-black bg-yellow-300" 
+                        onClick={(e) => e.stopPropagation()}
+                        data-testid={`button-actions-${conversation.id}`}
+                      >
+                        <MoreVertical className="h-5 w-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem 
                       onClick={async (e) => {
@@ -522,7 +523,8 @@ export default function Opportunities() {
                       Create Opportunity
                     </DropdownMenuItem>
                   </DropdownMenuContent>
-                </DropdownMenu>
+                  </DropdownMenu>
+                </div>
               </div>
             ))}
           </div>
