@@ -460,11 +460,15 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
 }
 
 function Router() {
+  const [location] = useLocation();
+  
+  // Redirect root to dispatch
+  if (location === '/') {
+    return <Redirect to="/dispatch" />;
+  }
+  
   return (
     <Switch>
-      <Route path="/">
-        {() => <Redirect to="/dispatch" />}
-      </Route>
       <Route path="/login" component={Login}/>
       <Route path="/home" component={Home}/>
       <Route path="/tree-removal" component={TreeRemoval}/>
