@@ -609,18 +609,18 @@ export default function Opportunities() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Quote Dialog */}
+      {/* Create Job Dialog */}
       <LeadFormDialog
         open={showCreateJobDialog}
         onOpenChange={setShowCreateJobDialog}
-        title="Create New Quote"
-        description="Create a quote from this conversation"
-        submitLabel="Create Quote"
+        title="Create Job from Lead"
+        description="Create a new job from this conversation"
+        submitLabel="Create Job"
         isSubmitting={createJobMutation.isPending}
         form={jobForm}
         onSubmit={(values) => createJobMutation.mutate({ ...values, status: 'new' })}
         includeStatus={false}
-        testIdPrefix="quote"
+        testIdPrefix="job"
       />
 
       {/* Create Opportunity Dialog */}
