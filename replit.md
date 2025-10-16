@@ -8,9 +8,9 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 ### October 16, 2025
+- **Default Landing Page Fix**: Fixed all navigation routes to properly default to the dispatch board. After login, the app now correctly redirects to `/dispatch` instead of `/job-dashboard`. The `/dashboard` shortcut also redirects to `/dispatch` for consistency. This ensures users always land on the dispatch board for faster daily workflow access.
 - **Mobile UI Optimization - Conversations Page**: Enhanced the floating action button (FAB) for mobile devices. Button is now larger (64px × 64px), positioned higher to avoid iOS bottom bar interference, and includes a larger icon for easier touch interaction. The button now opens the create job dialog instead of showing a placeholder message.
 - **Customer Data Persistence Fix**: Customer phone numbers now automatically sync from job contact information. When a job is created or updated with a contact phone, the system will update the customer's phone number if they don't have one. This ensures customer data stays complete and up-to-date.
-- **Default Landing Page**: App now correctly redirects to dispatch board (`/dispatch`) on startup, providing immediate access to daily workflow.
 
 ## System Architecture
 ### Core Design Principles
