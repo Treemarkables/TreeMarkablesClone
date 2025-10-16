@@ -6,6 +6,11 @@ This application is a comprehensive business management platform for Treemarkabl
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+### October 16, 2025
+- **Customer Data Persistence Fix**: Customer phone numbers now automatically sync from job contact information. When a job is created or updated with a contact phone, the system will update the customer's phone number if they don't have one. This ensures customer data stays complete and up-to-date.
+- **Default Landing Page**: App now correctly redirects to dispatch board (`/dispatch`) on startup, providing immediate access to daily workflow.
+
 ## System Architecture
 ### Core Design Principles
 - **UI/UX**: Mobile-first responsive design with a professional orange/blue theme, optimized for mobile viewing without horizontal scrolling.
