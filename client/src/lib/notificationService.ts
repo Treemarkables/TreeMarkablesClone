@@ -129,6 +129,9 @@ export class NotificationService {
    * Get current permission status
    */
   public getPermissionStatus(): NotificationPermission {
+    if (!('Notification' in window)) {
+      return 'denied';
+    }
     return Notification.permission;
   }
 }
