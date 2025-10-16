@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v10-thumbnail-fix';
-const STATIC_CACHE = 'treemarkables-static-v10-thumbnail-fix';
-const API_CACHE = 'treemarkables-api-v10-thumbnail-fix';
+const CACHE_NAME = 'treemarkables-v11-dispatch-fix';
+const STATIC_CACHE = 'treemarkables-static-v11-dispatch-fix';
+const API_CACHE = 'treemarkables-api-v11-dispatch-fix';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -31,9 +31,9 @@ self.addEventListener('activate', function(event) {
       console.log('[SW v9] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          // Delete ANY cache that's not v10
-          if (!cacheName.includes('v10-thumbnail-fix')) {
-            console.log('[SW v10] DELETING old cache:', cacheName);
+          // Delete ANY cache that's not v11
+          if (!cacheName.includes('v11-dispatch-fix')) {
+            console.log('[SW v11] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -53,8 +53,10 @@ self.addEventListener('fetch', function(event) {
   // These endpoints use localStorage fallback in React Query and must not be intercepted
   if (url.pathname === '/api/jobs' || 
       url.pathname === '/api/customers' || 
-      url.pathname === '/api/staff-assignments') {
-    console.log('[SW v9] BYPASSING Service Worker for localStorage-backed endpoint:', url.pathname);
+      url.pathname === '/api/staff-assignments' ||
+      url.pathname === '/api/conversations' ||
+      url.pathname.includes('/api/conversations/')) {
+    console.log('[SW v11] BYPASSING Service Worker for localStorage-backed endpoint:', url.pathname);
     // Don't call event.respondWith() - let the browser handle it directly
     return;
   }
