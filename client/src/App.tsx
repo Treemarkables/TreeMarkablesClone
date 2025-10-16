@@ -480,13 +480,18 @@ function Router() {
       <Route path="/summer-offer" component={SummerOffer}/>
       <Route path="/contact" component={Contact}/>
       
-      {/* Redirect /dashboard and /job-dashboard to /dispatch for convenience */}
+      {/* Redirect /dashboard to /dispatch for convenience (default landing page) */}
       <Route path="/dashboard">
         {() => <Redirect to="/dispatch" />}
       </Route>
       
+      {/* Job Dashboard - All Jobs list page */}
       <Route path="/job-dashboard">
-        {() => <Redirect to="/dispatch" />}
+        <ProtectedRoute>
+          <SidebarLayout activeTab="jobs">
+            <JobDashboard />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/metrics">
         <ProtectedRoute>
