@@ -12167,10 +12167,18 @@ Transcription: ${transcriptText}`;
         return res.status(404).json({ success: false, message: 'Proposal not found' });
       }
 
-      // Check if already accepted
+      // Check if already accepted - if so, just return success (customer-friendly)
       if (proposal.status === 'accepted') {
-        console.log('⚠️ Proposal already accepted:', id);
-        return res.status(400).json({ success: false, message: 'Proposal has already been accepted' });
+        console.log('⚠️ Proposal already accepted, returning success:', id);
+        const job = proposal.jobId ? await storage.getJob(proposal.jobId) : null;
+        return res.json({ 
+          success: true, 
+          data: { 
+            proposal: proposal, 
+            workOrder: job,
+            message: 'Proposal accepted successfully'
+          }
+        });
       }
 
       // Check if expired
