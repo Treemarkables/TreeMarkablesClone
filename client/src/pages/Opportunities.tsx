@@ -386,7 +386,10 @@ export default function Opportunities() {
           </div>
         ) : (
           <div className="divide-y">
-            {conversations.map((conversation: Conversation) => (
+            {console.log('🔍 [v13 DEBUG] Rendering conversations:', conversations.length, conversations.map(c => c.id))}
+            {conversations.map((conversation: Conversation) => {
+              console.log('🔍 [v13 DEBUG] Rendering conversation item:', conversation.id, conversation.title);
+              return (
               <div
                 key={conversation.id}
                 className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2"
@@ -526,7 +529,8 @@ export default function Opportunities() {
                   </DropdownMenu>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </ScrollArea>
