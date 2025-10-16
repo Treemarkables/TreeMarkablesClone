@@ -480,21 +480,13 @@ function Router() {
       <Route path="/summer-offer" component={SummerOffer}/>
       <Route path="/contact" component={Contact}/>
       
-      {/* Redirect /dashboard to /dispatch for convenience */}
+      {/* Redirect /dashboard and /job-dashboard to /dispatch for convenience */}
       <Route path="/dashboard">
         {() => <Redirect to="/dispatch" />}
       </Route>
       
       <Route path="/job-dashboard">
-        {() => (
-          <AuthenticatedRoute>
-            <SidebarLayout>
-              {(activeTab, onTabChange) => (
-                <JobDashboard activeTab={activeTab} onTabChange={onTabChange} />
-              )}
-            </SidebarLayout>
-          </AuthenticatedRoute>
-        )}
+        {() => <Redirect to="/dispatch" />}
       </Route>
       <Route path="/metrics">
         <ProtectedRoute>
