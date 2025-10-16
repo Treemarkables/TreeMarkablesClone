@@ -478,3 +478,10 @@
   position: -webkit-sticky; /* Safari */
   position: sticky;
 }
+
+/* Safe area padding for mobile devices (iPhone notch) */
+@layer utilities {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
