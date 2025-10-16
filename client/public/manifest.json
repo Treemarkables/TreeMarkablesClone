@@ -2,7 +2,7 @@
   "name": "Treemarkables Job Manager",
   "short_name": "TreeJobs",
   "description": "Professional tree removal job management system",
-  "start_url": "/job-dashboard",
+  "start_url": "/dispatch",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#ea8c3e",
@@ -28,14 +28,14 @@
       "name": "New Job",
       "short_name": "New Job",
       "description": "Create a new job quickly",
-      "url": "/job-dashboard?action=new",
+      "url": "/dispatch?action=new",
       "icons": [{"src": "/tree-icon-192.png", "sizes": "192x192"}]
     },
     {
       "name": "Today's Jobs",
       "short_name": "Today",
       "description": "View today's scheduled jobs",
-      "url": "/job-dashboard?filter=today",
+      "url": "/dispatch?filter=today",
       "icons": [{"src": "/tree-icon-192.png", "sizes": "192x192"}]
     }
   ]
