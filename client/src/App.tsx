@@ -489,7 +489,7 @@ function Router() {
       <Route path="/job-dashboard">
         <ProtectedRoute>
           <SidebarLayout activeTab="jobs">
-            <JobDashboard />
+            <JobDashboard activeTab="jobs" />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
