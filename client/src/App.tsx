@@ -451,7 +451,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   };
 
   return (
-    <SidebarProvider style={style as React.CSSProperties} defaultOpen={false}>
+    <SidebarProvider style={style as React.CSSProperties} defaultOpen={!isMobile}>
       <SidebarContent>
         {children}
       </SidebarContent>

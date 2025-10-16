@@ -130,11 +130,12 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   const isMobile = useIsMobile();
   const { logout, currentUser, isAdmin, isCrew } = useAuth();
   
-  // Close sidebar automatically whenever location changes
+  // Close sidebar automatically on mobile when location changes
   useEffect(() => {
-    console.log('🔄 Location changed to:', location, '- Closing sidebar');
-    setOpen(false);
-  }, [location, setOpen]);
+    if (isMobile) {
+      setOpen(false);
+    }
+  }, [location, setOpen, isMobile]);
   
   const handleTabClick = (tabValue: string) => {
     // If not on job dashboard, navigate there first
@@ -143,13 +144,17 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     }
     // Set the tab
     onTabChange(tabValue);
-    // Sidebar will close automatically via useEffect
+    // Close sidebar on mobile only
+    if (isMobile) {
+      setOpen(false);
+    }
   };
   
   const handleLinkClick = (e: React.MouseEvent) => {
-    // Sidebar will close automatically via useEffect when location changes
-    // This is just for immediate feedback
-    setOpen(false);
+    // Close sidebar on mobile only for immediate feedback
+    if (isMobile) {
+      setOpen(false);
+    }
   };
 
   // Filter items based on role - crew can only see All Jobs and Safety
@@ -371,7 +376,9 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   data-testid="button-tab-settings"
                   onClick={() => {
                     onTabChange("settings");
-                    setOpen(false);
+                    if (isMobile) {
+                      setOpen(false);
+                    }
                   }}
                 >
                   <Settings className="h-4 w-4" />
@@ -387,7 +394,9 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 data-testid="button-logout"
                 onClick={() => {
                   logout();
-                  setOpen(false);
+                  if (isMobile) {
+                    setOpen(false);
+                  }
                 }}
               >
                 <LogOut className="h-4 w-4" />
