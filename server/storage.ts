@@ -3419,7 +3419,8 @@ class DatabaseStorage implements IStorage {
   async getConversation(id: string): Promise<any> {
     const [result] = await db.select({
       conversation: schema.conversations,
-      customerName: sql<string>`CONCAT(${schema.customers.firstName}, ' ', ${schema.customers.lastName})`,
+      customerFirstName: schema.customers.firstName,
+      customerLastName: schema.customers.lastName,
       customerPhone: schema.customers.phone,
       customerEmail: schema.customers.email,
       customerAddress: schema.customers.address
@@ -3430,10 +3431,14 @@ class DatabaseStorage implements IStorage {
     
     if (!result) return undefined;
     
-    // Flatten the response for easier access
+    // Flatten the response and combine first/last name
+    const customerName = result.customerFirstName && result.customerLastName 
+      ? `${result.customerFirstName} ${result.customerLastName}`.trim()
+      : result.customerFirstName || result.customerLastName || '';
+    
     return {
       ...result.conversation,
-      customerName: result.customerName,
+      customerName,
       customerPhone: result.customerPhone,
       customerEmail: result.customerEmail,
       customerAddress: result.customerAddress
