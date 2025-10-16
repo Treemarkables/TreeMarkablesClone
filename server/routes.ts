@@ -11897,14 +11897,21 @@ Transcription: ${transcriptText}`;
   // Create new proposal
   app.post('/api/proposals', async (req: Request, res: Response) => {
     try {
+      console.log('🚀 CREATE PROPOSAL REQUEST - Status from frontend:', req.body.status);
+      
       // Auto-generate proposalNumber if not provided
       const proposalData = {
         ...req.body,
         proposalNumber: req.body.proposalNumber || `PROP-${Date.now()}`,
       };
       
+      console.log('📋 Proposal data before validation - Status:', proposalData.status);
+      
       const validatedData = insertProposalSchema.parse(proposalData);
+      console.log('✅ Validated data - Status:', validatedData.status);
+      
       const proposal = await storage.createProposal(validatedData);
+      console.log('💾 Created proposal - Status:', proposal.status, 'ID:', proposal.id);
       
       // Save proposal sections and line items if provided
       if (req.body.sections && Array.isArray(req.body.sections)) {
