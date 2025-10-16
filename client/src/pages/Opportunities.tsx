@@ -436,13 +436,13 @@ export default function Opportunities() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button 
-                      variant="ghost" 
+                      variant="outline" 
                       size="icon" 
-                      className="flex-shrink-0" 
+                      className="flex-shrink-0 h-8 w-8 border-gray-300" 
                       onClick={(e) => e.stopPropagation()}
                       data-testid={`button-actions-${conversation.id}`}
                     >
-                      <MoreVertical className="h-4 w-4" />
+                      <MoreVertical className="h-5 w-5" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -478,10 +478,10 @@ export default function Opportunities() {
                         });
                         setShowCreateJobDialog(true);
                       }}
-                      data-testid={`menuitem-create-quote-${conversation.id}`}
+                      data-testid={`menuitem-create-job-${conversation.id}`}
                     >
                       <Briefcase className="h-4 w-4 mr-2" />
-                      Create New Quote
+                      Create Job from Lead
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={async (e) => {
