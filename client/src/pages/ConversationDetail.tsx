@@ -85,6 +85,100 @@ export default function ConversationDetail() {
 
   const messages: ConversationMessage[] = messagesResponse?.data || [];
 
+  // Helper function to extract contact details from conversation and messages
+  const extractContactDetails = () => {
+    let name = '';
+    let email = '';
+    let phone = '';
+    let address = '';
+    let description = '';
+
+    // Extract from conversation title/metadata
+    if (conversation?.title) {
+      // Check if title looks like a name (not a message snippet)
+      const titleWords = conversation.title.trim().split(' ');
+      if (titleWords.length <= 4 && !/[.!?]/.test(conversation.title)) {
+        name = conversation.title;
+      } else {
+        // Title is probably the message content, use it as description
+        description = conversation.title;
+      }
+    }
+
+    // Extract from messages
+    messages.forEach(msg => {
+      const content = msg.content || '';
+      
+      // Extract email (look for email patterns)
+      const emailMatch = content.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
+      if (emailMatch && !email) {
+        email = emailMatch[0];
+      }
+
+      // Extract phone (NZ format: +64, 021, (021), 021-xxx-xxxx, etc.)
+      const phonePatterns = [
+        /\+64\s?\d{1,3}\s?\d{3,4}\s?\d{4}/,  // +64 21 123 4567
+        /\b0\d{1,3}[-\s]?\d{3,4}[-\s]?\d{4}\b/,  // 021-123-4567, 021 123 4567
+        /\(\d{2,3}\)\s?\d{3,4}[-\s]?\d{4}/  // (021) 123-4567
+      ];
+      
+      for (const pattern of phonePatterns) {
+        const phoneMatch = content.match(pattern);
+        if (phoneMatch && !phone) {
+          phone = phoneMatch[0].replace(/\s+/g, ' ').trim();
+          break;
+        }
+      }
+
+      // Extract address (look for NZ address patterns)
+      const addressPatterns = [
+        /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Place|Pl|Way|Terrace|Tce|Crescent|Cres|Court|Ct|Close|Highway|Hwy)[,\s]+[A-Z][a-z]+/i,
+        /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr)/i
+      ];
+      
+      for (const pattern of addressPatterns) {
+        const addressMatch = content.match(pattern);
+        if (addressMatch && !address) {
+          address = addressMatch[0].trim();
+          break;
+        }
+      }
+
+      // Build description from message content
+      if (!description && content.length > 20) {
+        description = content;
+      }
+    });
+
+    // If we couldn't extract a proper name, try to get it from metadata
+    if (!name && (conversation as any)?.customerName) {
+      name = (conversation as any).customerName;
+    }
+
+    // Extract first name and last name from full name
+    let firstName = '';
+    let lastName = '';
+    if (name) {
+      const nameParts = name.trim().split(/\s+/);
+      if (nameParts.length === 1) {
+        firstName = nameParts[0];
+      } else if (nameParts.length >= 2) {
+        firstName = nameParts[0];
+        lastName = nameParts.slice(1).join(' ');
+      }
+    }
+
+    return {
+      name,
+      firstName,
+      lastName,
+      email,
+      phone,
+      address,
+      description: description.substring(0, 500) // Limit description length
+    };
+  };
+
   // Reply mutation
   const replyMutation = useMutation({
     mutationFn: async ({ content }: { content: string }) => {
@@ -339,15 +433,19 @@ export default function ConversationDetail() {
               onClick={() => {
                 setShowManageMenu(false);
                 setShowCreateOpportunity(true);
+                
+                // Extract all contact details from conversation and messages
+                const extracted = extractContactDetails();
+                
                 setLeadForm({
-                  name: conversation?.title || '',
-                  email: '',
-                  phone: '',
-                  address: '',
-                  serviceRequested: '',
+                  name: extracted.name || '',
+                  email: extracted.email || '',
+                  phone: extracted.phone || '',
+                  address: extracted.address || '',
+                  serviceRequested: extracted.description || '',
                   urgency: 'medium',
                   status: 'new',
-                  notes: `Converted from conversation: ${conversation?.title || ''}`
+                  notes: `Opportunity from conversation${extracted.firstName ? ` with ${extracted.firstName} ${extracted.lastName}`.trim() : ''}`
                 });
               }}
               className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
@@ -364,15 +462,19 @@ export default function ConversationDetail() {
               onClick={() => {
                 setShowManageMenu(false);
                 setShowCreateJob(true);
+                
+                // Extract all contact details from conversation and messages
+                const extracted = extractContactDetails();
+                
                 setLeadForm({
-                  name: conversation?.title || '',
-                  email: '',
-                  phone: '',
-                  address: '',
-                  serviceRequested: '',
+                  name: extracted.name || '',
+                  email: extracted.email || '',
+                  phone: extracted.phone || '',
+                  address: extracted.address || '',
+                  serviceRequested: extracted.description || '',
                   urgency: 'medium',
                   status: 'new',
-                  notes: `From conversation: ${conversation?.title || ''}`
+                  notes: `Lead from conversation${extracted.firstName ? ` with ${extracted.firstName} ${extracted.lastName}`.trim() : ''}`
                 });
               }}
               className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
