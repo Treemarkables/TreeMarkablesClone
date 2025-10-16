@@ -117,7 +117,7 @@ export default function ProposalAccept() {
               </div>
               <Button 
                 onClick={() => acceptProposalMutation.mutate()}
-                disabled={acceptProposalMutation.isPending || proposal?.status === 'accepted'}
+                disabled={acceptProposalMutation.isPending}
                 className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap shrink-0 shadow-lg"
                 size="default"
                 data-testid="button-accept-proposal-sticky"
