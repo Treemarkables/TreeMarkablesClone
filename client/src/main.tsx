@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-// Service worker registration - v11 dispatch fix
+// Service worker registration - v12 cache fix
 if ('serviceWorker' in navigator) {
   // FORCE clear all old service workers first
   navigator.serviceWorker.getRegistrations().then(registrations => {
@@ -28,7 +28,7 @@ if ('serviceWorker' in navigator) {
     setTimeout(() => {
       navigator.serviceWorker.register('/sw.js')
         .then(registration => {
-          console.log('✅ [v11] Service Worker registered:', registration.scope);
+          console.log('✅ [v12] Service Worker registered:', registration.scope);
           
           // Check for updates every 5 minutes
           setInterval(() => {
@@ -36,7 +36,7 @@ if ('serviceWorker' in navigator) {
           }, 5 * 60 * 1000);
         })
         .catch(error => {
-          console.error('❌ [v11] Service Worker registration failed:', error);
+          console.error('❌ [v12] Service Worker registration failed:', error);
         });
     }, 1000);
   });
