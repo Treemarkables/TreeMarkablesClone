@@ -480,9 +480,9 @@ function Router() {
       <Route path="/summer-offer" component={SummerOffer}/>
       <Route path="/contact" component={Contact}/>
       
-      {/* Redirect /dashboard to /job-dashboard for convenience */}
+      {/* Redirect /dashboard to /dispatch for convenience */}
       <Route path="/dashboard">
-        {() => <Redirect to="/job-dashboard" />}
+        {() => <Redirect to="/dispatch" />}
       </Route>
       
       <Route path="/job-dashboard">
