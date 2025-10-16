@@ -93,9 +93,18 @@ export default function ConversationDetail() {
     let address = '';
     let description = '';
 
-    // First priority: Extract customer name from metadata
+    // First priority: Extract customer data from joined API response
     if ((conversation as any)?.customerName) {
-      name = (conversation as any).customerName;
+      name = (conversation as any).customerName.trim();
+    }
+    if ((conversation as any)?.customerPhone) {
+      phone = (conversation as any).customerPhone;
+    }
+    if ((conversation as any)?.customerEmail) {
+      email = (conversation as any).customerEmail;
+    }
+    if ((conversation as any)?.customerAddress) {
+      address = (conversation as any).customerAddress;
     }
 
     // Use conversation title as description (it's usually the first message)
@@ -103,66 +112,49 @@ export default function ConversationDetail() {
       description = conversation.title;
     }
 
-    // Extract from messages
-    messages.forEach(msg => {
-      const content = msg.content || '';
-      
-      // Extract email (look for email patterns)
-      const emailMatch = content.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
-      if (emailMatch && !email) {
-        email = emailMatch[0];
-      }
-
-      // Extract phone (NZ format: +64, 021, (021), 021-xxx-xxxx, etc.)
-      const phonePatterns = [
-        /\+64\s?\d{1,3}\s?\d{3,4}\s?\d{4}/,  // +64 21 123 4567
-        /\b0\d{1,3}[-\s]?\d{3,4}[-\s]?\d{4}\b/,  // 021-123-4567, 021 123 4567
-        /\(\d{2,3}\)\s?\d{3,4}[-\s]?\d{4}/  // (021) 123-4567
-      ];
-      
-      for (const pattern of phonePatterns) {
-        const phoneMatch = content.match(pattern);
-        if (phoneMatch && !phone) {
-          phone = phoneMatch[0].replace(/\s+/g, ' ').trim();
-          break;
-        }
-      }
-
-      // Extract address (look for NZ address patterns)
-      const addressPatterns = [
-        /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Place|Pl|Way|Terrace|Tce|Crescent|Cres|Court|Ct|Close|Highway|Hwy)[,\s]+[A-Z][a-z]+/i,
-        /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr)/i
-      ];
-      
-      for (const pattern of addressPatterns) {
-        const addressMatch = content.match(pattern);
-        if (addressMatch && !address) {
-          address = addressMatch[0].trim();
-          break;
-        }
-      }
-
-      // Build description from message content (use first message if available)
-      if (!description && content.length > 20) {
-        description = content;
-      }
-    });
-
-    // If name is still empty, check messages for "My name is..." patterns
-    if (!name) {
+    // Only extract from messages if customer data isn't already available
+    if (!email || !phone || !address || !name) {
       messages.forEach(msg => {
         const content = msg.content || '';
-        const namePatterns = [
-          /my name is ([A-Z][a-z]+ [A-Z][a-z]+)/i,
-          /I'm ([A-Z][a-z]+ [A-Z][a-z]+)/i,
-          /This is ([A-Z][a-z]+ [A-Z][a-z]+)/i
-        ];
         
-        for (const pattern of namePatterns) {
-          const match = content.match(pattern);
-          if (match && !name) {
-            name = match[1];
-            break;
+        // Extract email (look for email patterns) - only if not already set
+        if (!email) {
+          const emailMatch = content.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
+          if (emailMatch) {
+            email = emailMatch[0];
+          }
+        }
+
+        // Extract phone (NZ format) - only if not already set
+        if (!phone) {
+          const phonePatterns = [
+            /\+64\s?\d{1,3}\s?\d{3,4}\s?\d{4}/,  // +64 21 123 4567
+            /\b0\d{1,3}[-\s]?\d{3,4}[-\s]?\d{4}\b/,  // 021-123-4567, 021 123 4567
+            /\(\d{2,3}\)\s?\d{3,4}[-\s]?\d{4}/  // (021) 123-4567
+          ];
+          
+          for (const pattern of phonePatterns) {
+            const phoneMatch = content.match(pattern);
+            if (phoneMatch) {
+              phone = phoneMatch[0].replace(/\s+/g, ' ').trim();
+              break;
+            }
+          }
+        }
+
+        // Extract address (NZ patterns) - only if not already set
+        if (!address) {
+          const addressPatterns = [
+            /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Place|Pl|Way|Terrace|Tce|Crescent|Cres|Court|Ct|Close|Highway|Hwy)[,\s]+[A-Z][a-z]+/i,
+            /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr)/i
+          ];
+          
+          for (const pattern of addressPatterns) {
+            const addressMatch = content.match(pattern);
+            if (addressMatch) {
+              address = addressMatch[0].trim();
+              break;
+            }
           }
         }
       });

@@ -3416,9 +3416,28 @@ class DatabaseStorage implements IStorage {
     return newConversation;
   }
 
-  async getConversation(id: string): Promise<Conversation | undefined> {
-    const [conversation] = await db.select().from(schema.conversations).where(eq(schema.conversations.id, id));
-    return conversation || undefined;
+  async getConversation(id: string): Promise<any> {
+    const [result] = await db.select({
+      conversation: schema.conversations,
+      customerName: sql<string>`CONCAT(${schema.customers.firstName}, ' ', ${schema.customers.lastName})`,
+      customerPhone: schema.customers.phone,
+      customerEmail: schema.customers.email,
+      customerAddress: schema.customers.address
+    })
+    .from(schema.conversations)
+    .leftJoin(schema.customers, eq(schema.conversations.customerId, schema.customers.id))
+    .where(eq(schema.conversations.id, id));
+    
+    if (!result) return undefined;
+    
+    // Flatten the response for easier access
+    return {
+      ...result.conversation,
+      customerName: result.customerName,
+      customerPhone: result.customerPhone,
+      customerEmail: result.customerEmail,
+      customerAddress: result.customerAddress
+    };
   }
 
   async updateConversation(id: string, updates: UpdateConversation): Promise<Conversation> {
