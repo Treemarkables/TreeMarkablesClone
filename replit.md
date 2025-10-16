@@ -8,6 +8,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 ### October 16, 2025
+- **Mobile UI Optimization - Conversations Page**: Enhanced the floating action button (FAB) for mobile devices. Button is now larger (64px × 64px), positioned higher to avoid iOS bottom bar interference, and includes a larger icon for easier touch interaction. The button now opens the create job dialog instead of showing a placeholder message.
 - **Customer Data Persistence Fix**: Customer phone numbers now automatically sync from job contact information. When a job is created or updated with a contact phone, the system will update the customer's phone number if they don't have one. This ensures customer data stays complete and up-to-date.
 - **Default Landing Page**: App now correctly redirects to dispatch board (`/dispatch`) on startup, providing immediate access to daily workflow.
 
