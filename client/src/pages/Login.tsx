@@ -27,7 +27,7 @@ export default function Login() {
     try {
       const result = await login({ email, password });
       if (result.success) {
-        setLocation('/job-dashboard');
+        setLocation('/dispatch');
       } else {
         setError(result.message || 'Login failed');
       }
