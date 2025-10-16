@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   Calendar,
   CalendarDays,
@@ -129,6 +130,12 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   const isMobile = useIsMobile();
   const { logout, currentUser, isAdmin, isCrew } = useAuth();
   
+  // Close sidebar automatically whenever location changes
+  useEffect(() => {
+    console.log('🔄 Location changed to:', location, '- Closing sidebar');
+    setOpen(false);
+  }, [location, setOpen]);
+  
   const handleTabClick = (tabValue: string) => {
     // If not on job dashboard, navigate there first
     if (location !== "/job-dashboard") {
@@ -136,12 +143,12 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     }
     // Set the tab
     onTabChange(tabValue);
-    // Always collapse sidebar after navigation
-    setOpen(false);
+    // Sidebar will close automatically via useEffect
   };
   
-  const handleLinkClick = () => {
-    // Always collapse sidebar after clicking any link
+  const handleLinkClick = (e: React.MouseEvent) => {
+    // Sidebar will close automatically via useEffect when location changes
+    // This is just for immediate feedback
     setOpen(false);
   };
 
