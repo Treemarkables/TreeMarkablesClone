@@ -3,27 +3,22 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-// Service worker registration - v10 thumbnail update
+// Service worker registration - v11 dispatch fix
 if ('serviceWorker' in navigator) {
-  // Force clear ALL caches and unregister ALL service workers
-  navigator.serviceWorker.getRegistrations().then(registrations => {
-    registrations.forEach(registration => {
-      console.log('🧹 [v10] Unregistering service worker:', registration.scope);
-      registration.unregister();
-    });
-  });
-  
-  // Clear all caches to force fresh bundle load
-  if ('caches' in window) {
-    caches.keys().then(keys => {
-      keys.forEach(key => {
-        console.log('🧹 [v10] Deleting cache:', key);
-        caches.delete(key);
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => {
+        console.log('✅ [v11] Service Worker registered:', registration.scope);
+        
+        // Check for updates every 5 minutes
+        setInterval(() => {
+          registration.update();
+        }, 5 * 60 * 1000);
+      })
+      .catch(error => {
+        console.error('❌ [v11] Service Worker registration failed:', error);
       });
-    });
-  }
-  
-  console.log('📴 [v10] Service Worker disabled - caches cleared - using localStorage');
+  });
 }
 
 createRoot(document.getElementById("root")!).render(
