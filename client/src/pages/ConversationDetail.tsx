@@ -16,7 +16,8 @@ import {
   Star,
   Activity,
   MessageSquare,
-  Trash2
+  Trash2,
+  Briefcase
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -40,6 +41,7 @@ export default function ConversationDetail() {
   const [showManageMenu, setShowManageMenu] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [showCreateOpportunity, setShowCreateOpportunity] = useState(false);
+  const [showCreateJob, setShowCreateJob] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Create Opportunity form state
@@ -357,6 +359,31 @@ export default function ConversationDetail() {
               <span className="text-base font-medium text-gray-900">Create Opportunity</span>
             </button>
 
+            {/* Create Job from Lead */}
+            <button
+              onClick={() => {
+                setShowManageMenu(false);
+                setShowCreateJob(true);
+                setLeadForm({
+                  name: conversation?.title || '',
+                  email: '',
+                  phone: '',
+                  address: '',
+                  serviceRequested: '',
+                  urgency: 'medium',
+                  status: 'new',
+                  notes: `From conversation: ${conversation?.title || ''}`
+                });
+              }}
+              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
+              data-testid="button-create-job"
+            >
+              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                <Briefcase className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-base font-medium text-gray-900">Create Job from Lead</span>
+            </button>
+
             {/* Send Review Request */}
             <button
               onClick={() => {
@@ -548,6 +575,99 @@ export default function ConversationDetail() {
               ) : (
                 'Create Opportunity'
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Job Dialog */}
+      <Dialog open={showCreateJob} onOpenChange={setShowCreateJob}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Create Job from Lead</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="job-name">Name</Label>
+              <Input
+                id="job-name"
+                value={leadForm.name}
+                onChange={(e) => setLeadForm({ ...leadForm, name: e.target.value })}
+                placeholder="Customer name"
+                data-testid="input-job-name"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="job-phone">Phone</Label>
+              <Input
+                id="job-phone"
+                value={leadForm.phone}
+                onChange={(e) => setLeadForm({ ...leadForm, phone: e.target.value })}
+                placeholder="Phone number"
+                data-testid="input-job-phone"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="job-email">Email</Label>
+              <Input
+                id="job-email"
+                type="email"
+                value={leadForm.email}
+                onChange={(e) => setLeadForm({ ...leadForm, email: e.target.value })}
+                placeholder="Email address"
+                data-testid="input-job-email"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="job-address">Address</Label>
+              <Input
+                id="job-address"
+                value={leadForm.address}
+                onChange={(e) => setLeadForm({ ...leadForm, address: e.target.value })}
+                placeholder="Property address"
+                data-testid="input-job-address"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="job-service">Service Requested</Label>
+              <Textarea
+                id="job-service"
+                value={leadForm.serviceRequested}
+                onChange={(e) => setLeadForm({ ...leadForm, serviceRequested: e.target.value })}
+                placeholder="Describe the work needed"
+                className="min-h-[80px]"
+                data-testid="textarea-job-service"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="job-notes">Notes</Label>
+              <Textarea
+                id="job-notes"
+                value={leadForm.notes}
+                onChange={(e) => setLeadForm({ ...leadForm, notes: e.target.value })}
+                placeholder="Additional notes or context"
+                className="min-h-[80px]"
+                data-testid="textarea-job-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateJob(false)}
+              data-testid="button-cancel-job"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                toast({ title: 'Create Job', description: 'Creating job - navigating to full form...' });
+                setShowCreateJob(false);
+                setLocation('/jobs/new');
+              }}
+              data-testid="button-submit-job"
+            >
+              Create Job
             </Button>
           </DialogFooter>
         </DialogContent>
