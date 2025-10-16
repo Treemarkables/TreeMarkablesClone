@@ -3417,32 +3417,33 @@ class DatabaseStorage implements IStorage {
   }
 
   async getConversation(id: string): Promise<any> {
-    const [result] = await db.select({
-      conversation: schema.conversations,
-      customerFirstName: schema.customers.firstName,
-      customerLastName: schema.customers.lastName,
-      customerPhone: schema.customers.phone,
-      customerEmail: schema.customers.email,
-      customerAddress: schema.customers.address
-    })
-    .from(schema.conversations)
-    .leftJoin(schema.customers, eq(schema.conversations.customerId, schema.customers.id))
-    .where(eq(schema.conversations.id, id));
+    // Get the conversation first
+    const [conversation] = await db.select()
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, id));
     
-    if (!result) return undefined;
+    if (!conversation) return undefined;
     
-    // Flatten the response and combine first/last name
-    const customerName = result.customerFirstName && result.customerLastName 
-      ? `${result.customerFirstName} ${result.customerLastName}`.trim()
-      : result.customerFirstName || result.customerLastName || '';
+    // If there's a customerId, fetch customer data separately
+    if (conversation.customerId) {
+      const [customer] = await db.select()
+        .from(schema.customers)
+        .where(eq(schema.customers.id, conversation.customerId));
+      
+      if (customer) {
+        const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+        return {
+          ...conversation,
+          customerName: customerName || undefined,
+          customerPhone: customer.phone,
+          customerEmail: customer.email,
+          customerAddress: customer.address
+        };
+      }
+    }
     
-    return {
-      ...result.conversation,
-      customerName,
-      customerPhone: result.customerPhone,
-      customerEmail: result.customerEmail,
-      customerAddress: result.customerAddress
-    };
+    // Return conversation without customer data
+    return conversation;
   }
 
   async updateConversation(id: string, updates: UpdateConversation): Promise<Conversation> {
