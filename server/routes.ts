@@ -2472,6 +2472,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           // Don't fail job creation if customer address update fails
         }
       }
+
+      // Update customer phone if job has a contact phone and customer doesn't have one
+      if (job.customerId && job.jobContactPhone && job.jobContactPhone.trim() !== '') {
+        try {
+          const customer = await storage.getCustomer(job.customerId);
+          // Update customer phone if they don't have one or it's empty
+          if (customer && (!customer.phone || customer.phone.trim() === '')) {
+            await storage.updateCustomer(job.customerId, { phone: job.jobContactPhone.trim() });
+            console.log(`📞 Created job - updated customer ${job.customerId} phone to: ${job.jobContactPhone.trim()}`);
+          }
+        } catch (error) {
+          console.error('Error updating customer phone:', error);
+          // Don't fail job creation if customer phone update fails
+        }
+      }
       
       // Migrate temporary diary entries if they exist
       const tempJobId = req.body.tempJobId; // Frontend should send this when creating from temp data
@@ -3016,6 +3031,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         } catch (error) {
           console.error('Error updating customer address:', error);
           // Don't fail job update if customer address update fails
+        }
+      }
+
+      // Update customer phone if job has a contact phone and customer doesn't have one
+      if (job.customerId && job.jobContactPhone && job.jobContactPhone.trim() !== '') {
+        try {
+          const customer = await storage.getCustomer(job.customerId);
+          // Update customer phone if they don't have one or it's empty
+          if (customer && (!customer.phone || customer.phone.trim() === '')) {
+            await storage.updateCustomer(job.customerId, { phone: job.jobContactPhone.trim() });
+            console.log(`📞 Updated job - synced customer ${job.customerId} phone to: ${job.jobContactPhone.trim()}`);
+          }
+        } catch (error) {
+          console.error('Error updating customer phone:', error);
+          // Don't fail job update if customer phone update fails
         }
       }
 
