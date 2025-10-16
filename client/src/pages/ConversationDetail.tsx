@@ -93,16 +93,14 @@ export default function ConversationDetail() {
     let address = '';
     let description = '';
 
-    // Extract from conversation title/metadata
+    // First priority: Extract customer name from metadata
+    if ((conversation as any)?.customerName) {
+      name = (conversation as any).customerName;
+    }
+
+    // Use conversation title as description (it's usually the first message)
     if (conversation?.title) {
-      // Check if title looks like a name (not a message snippet)
-      const titleWords = conversation.title.trim().split(' ');
-      if (titleWords.length <= 4 && !/[.!?]/.test(conversation.title)) {
-        name = conversation.title;
-      } else {
-        // Title is probably the message content, use it as description
-        description = conversation.title;
-      }
+      description = conversation.title;
     }
 
     // Extract from messages
@@ -144,15 +142,30 @@ export default function ConversationDetail() {
         }
       }
 
-      // Build description from message content
+      // Build description from message content (use first message if available)
       if (!description && content.length > 20) {
         description = content;
       }
     });
 
-    // If we couldn't extract a proper name, try to get it from metadata
-    if (!name && (conversation as any)?.customerName) {
-      name = (conversation as any).customerName;
+    // If name is still empty, check messages for "My name is..." patterns
+    if (!name) {
+      messages.forEach(msg => {
+        const content = msg.content || '';
+        const namePatterns = [
+          /my name is ([A-Z][a-z]+ [A-Z][a-z]+)/i,
+          /I'm ([A-Z][a-z]+ [A-Z][a-z]+)/i,
+          /This is ([A-Z][a-z]+ [A-Z][a-z]+)/i
+        ];
+        
+        for (const pattern of namePatterns) {
+          const match = content.match(pattern);
+          if (match && !name) {
+            name = match[1];
+            break;
+          }
+        }
+      });
     }
 
     // Extract first name and last name from full name
@@ -167,6 +180,16 @@ export default function ConversationDetail() {
         lastName = nameParts.slice(1).join(' ');
       }
     }
+
+    console.log('🔍 Extracted contact details:', {
+      name,
+      firstName,
+      lastName,
+      email,
+      phone,
+      address,
+      description: description.substring(0, 100)
+    });
 
     return {
       name,
