@@ -126,16 +126,15 @@ const businessItems = [
 
 export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   const [location, setLocation] = useLocation();
-  const { setOpen } = useSidebar();
-  const isMobile = useIsMobile();
+  const { setOpen, setOpenMobile, isMobile } = useSidebar();
   const { logout, currentUser, isAdmin, isCrew } = useAuth();
   
   // Close sidebar automatically on mobile when location changes
   useEffect(() => {
     if (isMobile) {
-      setOpen(false);
+      setOpenMobile(false);
     }
-  }, [location, setOpen, isMobile]);
+  }, [location, setOpenMobile, isMobile]);
   
   const handleTabClick = (tabValue: string) => {
     // If not on job dashboard, navigate there first
@@ -146,14 +145,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     onTabChange(tabValue);
     // Close sidebar on mobile only
     if (isMobile) {
-      setOpen(false);
+      setOpenMobile(false);
     }
   };
   
   const handleLinkClick = (e: React.MouseEvent) => {
     // Close sidebar on mobile only for immediate feedback
     if (isMobile) {
-      setOpen(false);
+      setOpenMobile(false);
     }
   };
 
@@ -377,7 +376,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   onClick={() => {
                     onTabChange("settings");
                     if (isMobile) {
-                      setOpen(false);
+                      setOpenMobile(false);
                     }
                   }}
                 >
@@ -395,7 +394,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 onClick={() => {
                   logout();
                   if (isMobile) {
-                    setOpen(false);
+                    setOpenMobile(false);
                   }
                 }}
               >
