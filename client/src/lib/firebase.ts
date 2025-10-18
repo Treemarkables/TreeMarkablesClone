@@ -45,9 +45,18 @@ export async function initializeFirebase() {
       
       app = initializeApp(firebaseConfig);
       
-      // Initialize messaging if supported
-      if ('serviceWorker' in navigator && 'PushManager' in window) {
-        messaging = getMessaging(app);
+      // Initialize messaging only if all required APIs are supported
+      // This prevents errors in browsers that don't support messaging
+      if (isNotificationSupported()) {
+        try {
+          messaging = getMessaging(app);
+          console.log('✅ Firebase Messaging initialized');
+        } catch (messagingError) {
+          console.warn('⚠️ Firebase Messaging not supported in this browser:', messagingError);
+          messaging = null;
+        }
+      } else {
+        console.warn('⚠️ Push notifications not supported in this browser');
       }
     }
     return { app, messaging };
