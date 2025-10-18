@@ -196,7 +196,10 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           {/* Mobile header - sidebar toggle, refresh, and actions */}
           <header className="md:hidden flex items-center justify-between px-2 border-b bg-white" style={{ paddingTop: 'max(2rem, calc(env(safe-area-inset-top) + 1rem))' }}>
             <div className="flex items-center gap-2">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <SidebarTrigger 
+                data-testid="button-sidebar-toggle" 
+                className="h-11 w-11 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 text-white [&>svg]:h-6 [&>svg]:w-6"
+              />
             </div>
             
             <div className="flex items-center gap-2">
