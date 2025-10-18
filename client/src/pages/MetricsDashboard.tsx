@@ -123,6 +123,23 @@ export default function MetricsDashboard() {
     }).format(amount);
   };
 
+  // Format lead source for display
+  const formatLeadSource = (source: string) => {
+    const sourceMap: Record<string, string> = {
+      'website': 'Website',
+      'phone': 'Phone Call',
+      'referral': 'Referral',
+      'friend_saw_working': 'Friend and saw us working',
+      'repeat': 'Repeat',
+      'google': 'Google Search',
+      'facebook': 'Facebook',
+      'direct': 'Direct',
+      'advertisement': 'Advertisement',
+      'other': 'Other'
+    };
+    return sourceMap[source] || source.charAt(0).toUpperCase() + source.slice(1);
+  };
+
   // Helper to get date range based on preset
   const getDateRange = () => {
     if (dateRangePreset === "custom" && startDate && endDate) {
@@ -748,7 +765,7 @@ export default function MetricsDashboard() {
                           className="border-b hover-elevate"
                           data-testid={`row-lead-source-${source.source}`}
                         >
-                          <td className="py-3 px-4 font-medium capitalize">{source.source}</td>
+                          <td className="py-3 px-4 font-medium">{formatLeadSource(source.source)}</td>
                           <td className="text-right py-3 px-4">{source.quotedCount}</td>
                           <td className="text-right py-3 px-4">{source.wonCount}</td>
                           <td className="text-right py-3 px-4">

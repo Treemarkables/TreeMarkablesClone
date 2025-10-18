@@ -2378,6 +2378,7 @@ export function GlobalJobCard({
                                       <SelectContent>
                                         <SelectItem value="website">Website</SelectItem>
                                         <SelectItem value="referral">Referral</SelectItem>
+                                        <SelectItem value="friend_saw_working">Friend and saw us working</SelectItem>
                                         <SelectItem value="repeat">Repeat</SelectItem>
                                         <SelectItem value="google">Google Search</SelectItem>
                                         <SelectItem value="facebook">Facebook</SelectItem>
