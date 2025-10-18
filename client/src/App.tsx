@@ -291,6 +291,47 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         </div>
                       </Link>
                     </DropdownMenuItem>
+                    
+                    <DropdownMenuItem asChild>
+                      <Link href="/clients" className="flex items-center w-full" data-testid="menu-clients-mobile">
+                        <Users className="w-4 h-4 mr-3 text-blue-600" />
+                        <div>
+                          <div className="font-medium">Clients</div>
+                          <div className="text-sm text-muted-foreground">Import & manage your customer list</div>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem asChild>
+                      <Link href="/materials-services" className="flex items-center w-full" data-testid="menu-materials-services-mobile">
+                        <Package className="w-4 h-4 mr-3 text-orange-600" />
+                        <div>
+                          <div className="font-medium">Materials & Services</div>
+                          <div className="text-sm text-muted-foreground">Import & manage items you sell</div>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings" className="flex items-center w-full" data-testid="menu-settings-mobile">
+                        <Settings2 className="w-4 h-4 mr-3 text-gray-600" />
+                        <div>
+                          <div className="font-medium">Settings</div>
+                          <div className="text-sm text-muted-foreground">Add staff & manage your account</div>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem asChild>
+                      <Link href="/developer" className="flex items-center w-full" data-testid="menu-developer-mobile">
+                        <Code className="w-4 h-4 mr-3 text-purple-600" />
+                        <div>
+                          <div className="font-medium">Developer</div>
+                          <div className="text-sm text-muted-foreground">API access and integrations</div>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                    
                     <DropdownMenuItem onClick={logout} className="flex items-center" data-testid="menu-logout-mobile">
                       <LogOut className="w-4 h-4 mr-3 text-red-600" />
                       <div>
