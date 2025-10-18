@@ -1579,7 +1579,7 @@ export function GlobalJobCard({
           currentStatus === 'work order' ? 'bg-blue-600 border-blue-700' :
           currentStatus === 'quote' ? 'bg-orange-600 border-orange-700' :
           currentStatus === 'lead' ? 'bg-cyan-600 border-cyan-700' :
-          currentStatus === 'scheduled' ? 'bg-orange-600 border-orange-700' :
+          currentStatus === 'scheduled' ? 'bg-blue-600 border-blue-700' :
           currentStatus === 'unsuccessful' ? 'bg-red-600 border-red-700' :
           'bg-gray-600 border-gray-700'
         }`} style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
@@ -1596,7 +1596,7 @@ export function GlobalJobCard({
                     currentStatus === 'work order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
                     currentStatus === 'quote' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
                     currentStatus === 'lead' ? 'bg-cyan-700 hover:bg-cyan-800 text-white' :
-                    currentStatus === 'scheduled' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
+                    currentStatus === 'scheduled' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
                     currentStatus === 'unsuccessful' ? 'bg-red-700 hover:bg-red-800 text-white' :
                     'bg-gray-700 hover:bg-gray-800 text-white'
                   }`}
