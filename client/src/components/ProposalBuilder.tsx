@@ -1889,7 +1889,7 @@ export function ProposalBuilder({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-56">
                         <DropdownMenuItem onClick={handlePreview} data-testid="menu-preview-proposal">
-                          <Eye className="h-4 w-4 mr-2" />
+                          <Eye className="h-4 w-4 mr-2 text-blue-600" />
                           Preview
                         </DropdownMenuItem>
                         <DropdownMenuItem 
@@ -1899,7 +1899,7 @@ export function ProposalBuilder({
                           }}
                           data-testid="menu-email-proposal"
                         >
-                          <Mail className="h-4 w-4 mr-2" />
+                          <Mail className="h-4 w-4 mr-2 text-blue-600" />
                           Email
                         </DropdownMenuItem>
                         <DropdownMenuItem 
@@ -1909,7 +1909,7 @@ export function ProposalBuilder({
                           }}
                           data-testid="menu-sms-proposal"
                         >
-                          <MessageSquare className="h-4 w-4 mr-2" />
+                          <MessageSquare className="h-4 w-4 mr-2 text-green-600" />
                           SMS
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -1918,11 +1918,11 @@ export function ProposalBuilder({
                           disabled={saveDraftMutation.isPending}
                           data-testid="menu-save-proposal"
                         >
-                          <Save className="h-4 w-4 mr-2" />
+                          <Save className="h-4 w-4 mr-2 text-orange-600" />
                           {saveDraftMutation.isPending ? "Saving..." : "Save Draft"}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={onClose} data-testid="menu-cancel-proposal">
-                          <X className="h-4 w-4 mr-2" />
+                          <X className="h-4 w-4 mr-2 text-red-600" />
                           Cancel
                         </DropdownMenuItem>
                       </DropdownMenuContent>
