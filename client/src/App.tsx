@@ -83,6 +83,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { useAuth } from "@/contexts/AuthContext";
 import { Redirect } from "wouter";
+import { initializeFirebase } from "@/lib/firebase";
 import { useQuery } from "@tanstack/react-query";
 import { addDays, subDays } from "date-fns";
 
@@ -773,6 +774,16 @@ function Router() {
 }
 
 function App() {
+  // Initialize Firebase on app startup for push notifications
+  useEffect(() => {
+    try {
+      initializeFirebase();
+      console.log('✅ Firebase initialized on app startup');
+    } catch (error) {
+      console.error('❌ Failed to initialize Firebase:', error);
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
