@@ -404,14 +404,14 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className={`relative h-11 w-11 ${
-            summary.unread > 0 
-              ? 'bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 hover:from-orange-600 hover:via-red-600 hover:to-pink-600' 
-              : 'bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 hover:from-blue-600 hover:via-indigo-600 hover:to-purple-600'
-          }`}
+          className="relative h-11 w-11"
           data-testid="button-notifications"
         >
-          <Bell className={`h-6 w-6 text-white ${summary.unread > 0 ? 'animate-pulse' : ''}`} />
+          <Bell className={`h-6 w-6 stroke-[2.5] ${summary.unread > 0 ? 'animate-pulse' : ''} ${
+            summary.unread > 0
+              ? 'text-orange-500'
+              : 'text-blue-500'
+          }`} />
           {summary.unread > 0 && (
             <>
               <div className="absolute inset-0 rounded-md bg-orange-400/30 animate-ping" />

@@ -198,7 +198,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             <div className="flex items-center gap-2">
               <SidebarTrigger 
                 data-testid="button-sidebar-toggle" 
-                className="h-11 w-11 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 text-white [&>svg]:h-6 [&>svg]:w-6"
+                className="h-11 w-11 [&>svg]:h-6 [&>svg]:w-6 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
               />
             </div>
             
