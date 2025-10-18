@@ -2293,7 +2293,7 @@ class DatabaseStorage implements IStorage {
       }>();
 
       // Initialize all possible lead sources
-      const leadSources = ['website', 'phone', 'referral', 'repeat', 'google', 'facebook', 'direct', 'advertisement', 'other'];
+      const leadSources = ['website', 'phone', 'referral', 'friend_saw_working', 'repeat', 'google', 'facebook', 'direct', 'advertisement', 'other'];
       leadSources.forEach(source => {
         sourceMap.set(source, {
           count: 0,
