@@ -145,11 +145,20 @@ export function isNotificationSupported(): boolean {
     const hasIndexedDB = 'indexedDB' in window;
     
     // Safari (both iOS and macOS) doesn't fully support Firebase Cloud Messaging
-    // Check for Safari browser by looking for Safari in user agent but not Chrome/Chromium
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    // We need to detect ACTUAL Safari, not Chrome/Firefox/Brave on iOS
+    const userAgent = navigator.userAgent;
     
-    // Exclude Safari from notification support for now
-    if (isSafari) {
+    // Chrome on iOS uses "CriOS", Firefox uses "FxiOS", Brave is similar to Chrome
+    const isChrome = /CriOS|Chrome/i.test(userAgent);
+    const isFirefox = /FxiOS|Firefox/i.test(userAgent);
+    const isBrave = /Brave/i.test(userAgent);
+    const hasSafari = /Safari/i.test(userAgent);
+    
+    // It's Safari ONLY if it has Safari in UA but none of the other browsers
+    const isActualSafari = hasSafari && !isChrome && !isFirefox && !isBrave;
+    
+    // Exclude ONLY actual Safari from notification support
+    if (isActualSafari) {
       console.log('⚠️ Safari browser detected - Firebase messaging not supported');
       return false;
     }
