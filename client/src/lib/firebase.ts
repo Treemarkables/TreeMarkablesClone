@@ -138,7 +138,27 @@ export function onForegroundMessage(callback: (payload: any) => void) {
 
 // Check if notifications are supported
 export function isNotificationSupported(): boolean {
-  return 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+  try {
+    // Basic API checks
+    const hasServiceWorker = 'serviceWorker' in navigator;
+    const hasPushManager = 'PushManager' in window;
+    const hasNotification = 'Notification' in window;
+    const hasIndexedDB = 'indexedDB' in window;
+    
+    // Safari (both iOS and macOS) doesn't fully support Firebase Cloud Messaging
+    // Check for Safari browser by looking for Safari in user agent but not Chrome/Chromium
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    
+    // Exclude Safari from notification support for now
+    if (isSafari) {
+      console.log('⚠️ Safari browser detected - Firebase messaging not supported');
+      return false;
+    }
+    
+    return hasServiceWorker && hasPushManager && hasNotification && hasIndexedDB;
+  } catch {
+    return false;
+  }
 }
 
 // Get current notification permission status
