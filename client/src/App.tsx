@@ -198,7 +198,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             <div className="flex items-center gap-2">
               <SidebarTrigger 
                 data-testid="button-sidebar-toggle" 
-                className="h-11 w-11 [&>svg]:h-6 [&>svg]:w-6 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
+                className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
               />
             </div>
             
@@ -216,7 +216,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     disabled={isRefreshing}
                     data-testid="button-mobile-refresh"
                   >
-                    <RefreshCw className={`h-10 w-10 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -244,7 +244,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="flex items-center gap-1" data-testid="button-account-dropdown-mobile">
                       Account
-                      <ChevronDown className="h-8 w-8" />
+                      <ChevronDown className="h-16 w-16" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
@@ -329,7 +329,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     disabled={isRefreshing}
                     data-testid="button-desktop-refresh"
                   >
-                    <RefreshCw className={`h-10 w-10 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -357,7 +357,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-1" data-testid="button-account-dropdown">
                     Account
-                    <ChevronDown className="h-8 w-8" />
+                    <ChevronDown className="h-16 w-16" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">

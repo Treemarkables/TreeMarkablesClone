@@ -404,10 +404,10 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative h-11 w-11"
+          className="relative h-22 w-22"
           data-testid="button-notifications"
         >
-          <Bell className={`h-6 w-6 fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${summary.unread > 0 ? 'animate-pulse' : ''}`} />
+          <Bell className={`h-12 w-12 fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${summary.unread > 0 ? 'animate-pulse' : ''}`} />
           {summary.unread > 0 && (
             <>
               <div className="absolute inset-0 rounded-md bg-orange-400/30 animate-ping" />
