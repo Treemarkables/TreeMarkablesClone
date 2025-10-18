@@ -27,10 +27,11 @@ export function NotificationSettings() {
   const [permissionState, setPermissionState] = useState<NotificationPermission>("default");
 
   useEffect(() => {
-    // Check if notifications are supported
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      setNotificationsSupported(false);
-    } else {
+    // Check if notifications are supported (includes Safari detection)
+    const supported = checkNotificationSupport();
+    setNotificationsSupported(supported);
+    
+    if (supported && "Notification" in window) {
       setPermissionState(Notification.permission);
     }
   }, []);
@@ -159,8 +160,20 @@ export function NotificationSettings() {
   if (!notificationsSupported) {
     return (
       <Alert>
-        <AlertDescription>
-          Push notifications are not supported in your browser. Please use a modern browser like Chrome, Firefox, or Edge.
+        <BellOff className="h-4 w-4" />
+        <AlertDescription className="space-y-2">
+          <p className="font-semibold">Push notifications not available in this browser</p>
+          <p className="text-sm">
+            Safari doesn't fully support Firebase Cloud Messaging yet. For push notifications, please use:
+          </p>
+          <ul className="text-sm list-disc list-inside space-y-1 ml-2">
+            <li><strong>Chrome</strong> - Best compatibility</li>
+            <li><strong>Firefox</strong> - Fully supported</li>
+            <li><strong>Brave</strong> - Fully supported</li>
+          </ul>
+          <p className="text-sm mt-2 text-muted-foreground">
+            The notification system is fully configured and works great on supported browsers!
+          </p>
         </AlertDescription>
       </Alert>
     );
@@ -203,7 +216,7 @@ export function NotificationSettings() {
                 <ul className="text-sm list-disc list-inside space-y-1 ml-2">
                   <li>Open this app in an <strong>Incognito/Private window</strong> and click Enable</li>
                   <li>Open this app on your <strong>mobile device</strong></li>
-                  <li>Use a <strong>different browser</strong> (Chrome, Firefox, Safari)</li>
+                  <li>Use a <strong>different browser</strong> (Chrome, Firefox, or Brave)</li>
                 </ul>
                 <p className="text-sm mt-2">The notification system is fully set up and ready - it's just waiting for browser permission!</p>
               </AlertDescription>
