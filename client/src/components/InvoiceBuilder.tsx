@@ -675,7 +675,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                       invoiceNumber: `INV-Preview`,
                       customerId: customer.id,
                       jobId: job.id,
-                      amount: total.toString(),
+                      amount: subtotal.toString(),
                       status: 'draft' as const,
                       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                       issueDate: new Date().toISOString(),
@@ -694,6 +694,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     job={job}
                     jobAddress={editableAddress}
                     template={invoiceTemplate}
+                    lineItems={lineItems}
+                    description={editableDescription}
                   />
                 </div>
               </div>
