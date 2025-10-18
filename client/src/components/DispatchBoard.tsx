@@ -1325,7 +1325,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     <>
     <div className="flex flex-col flex-1 min-h-0">
       {/* Desktop Layout: Split Screen with Resizable Panels */}
-      <div className="hidden lg:flex flex-1 min-h-0 p-4 overflow-hidden" data-testid="dispatch-desktop-layout">
+      <div className="hidden lg:flex flex-1 min-h-0 p-4 overflow-hidden bg-blue-100" data-testid="dispatch-desktop-layout">
+        <div className="absolute top-0 left-0 bg-yellow-400 text-black p-4 z-50 font-bold">
+          DESKTOP LAYOUT IS RENDERING! showGlobalJobCard: {showGlobalJobCard ? 'TRUE' : 'FALSE'}
+        </div>
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
           {/* Left Panel: Dispatch Board (Calendar + Job Cards) */}
           <ResizablePanel defaultSize={showGlobalJobCard ? 50 : 100} minSize={30}>
