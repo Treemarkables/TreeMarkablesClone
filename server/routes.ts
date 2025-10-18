@@ -15923,19 +15923,33 @@ Transcription: ${transcriptText}`;
 
   // Get Firebase config for service worker (public endpoint, no secrets)
   app.get("/api/firebase-config", async (req, res) => {
-    // Return Firebase config from environment variables
-    // These are public values, safe to expose to the client
-    const config = {
-      apiKey: process.env.FIREBASE_API_KEY || '',
-      authDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
-      projectId: process.env.FIREBASE_PROJECT_ID || '',
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || '',
-      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
-      appId: process.env.FIREBASE_APP_ID || ''
+    // Helper function to clean Firebase config values (remove quotes and extra characters)
+    const cleanValue = (value: string | undefined): string => {
+      if (!value) return '';
+      // Remove leading/trailing quotes, colons, and commas
+      return value.replace(/^[:\s"']+|[,\s"']+$/g, '').trim();
     };
     
-    // Check if Firebase is configured
-    const isConfigured = Object.values(config).every(val => val !== '');
+    // Return Firebase config from environment variables
+    // These are public values, safe to expose to the client
+    const rawProjectId = cleanValue(process.env.FIREBASE_PROJECT_ID);
+    const config = {
+      apiKey: cleanValue(process.env.FIREBASE_API_KEY),
+      authDomain: cleanValue(process.env.FIREBASE_AUTH_DOMAIN) || `${rawProjectId}.firebaseapp.com`,
+      projectId: rawProjectId,
+      storageBucket: cleanValue(process.env.FIREBASE_STORAGE_BUCKET) || `${rawProjectId}.appspot.com`,
+      messagingSenderId: cleanValue(process.env.FIREBASE_MESSAGING_SENDER_ID),
+      appId: cleanValue(process.env.FIREBASE_APP_ID)
+    };
+    
+    // Check if Firebase Cloud Messaging is configured (only required fields)
+    const requiredFields = [
+      config.apiKey,
+      config.projectId,
+      config.messagingSenderId,
+      config.appId
+    ];
+    const isConfigured = requiredFields.every(val => val !== '');
     
     res.json({ 
       success: true, 
