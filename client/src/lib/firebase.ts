@@ -148,14 +148,21 @@ export function isNotificationSupported(): boolean {
     // We need to detect ACTUAL Safari, not Chrome/Firefox/Brave on iOS
     const userAgent = navigator.userAgent;
     
+    // Debug: Log user agent to understand what Chrome on iPhone sends
+    console.log('🔍 Browser User Agent:', userAgent);
+    
     // Chrome on iOS uses "CriOS", Firefox uses "FxiOS", Brave is similar to Chrome
     const isChrome = /CriOS|Chrome/i.test(userAgent);
     const isFirefox = /FxiOS|Firefox/i.test(userAgent);
     const isBrave = /Brave/i.test(userAgent);
     const hasSafari = /Safari/i.test(userAgent);
     
+    console.log('🔍 Browser Detection:', { isChrome, isFirefox, isBrave, hasSafari });
+    
     // It's Safari ONLY if it has Safari in UA but none of the other browsers
     const isActualSafari = hasSafari && !isChrome && !isFirefox && !isBrave;
+    
+    console.log('🔍 Is Actual Safari?', isActualSafari);
     
     // Exclude ONLY actual Safari from notification support
     if (isActualSafari) {
@@ -163,6 +170,7 @@ export function isNotificationSupported(): boolean {
       return false;
     }
     
+    console.log('✅ Browser supports notifications');
     return hasServiceWorker && hasPushManager && hasNotification && hasIndexedDB;
   } catch {
     return false;
