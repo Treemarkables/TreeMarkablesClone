@@ -60,6 +60,13 @@ export function setupTimeTrackingRoutes(app: any) {
 
       const result = await timeTrackingService.saveDailyTimeEntry(validation.data);
       
+      // Update actual man-hours for all affected jobs
+      const jobIds = [...new Set(validation.data.timeEntries.map((entry: any) => entry.jobId))];
+      const { manHoursService } = await import('./manHoursService');
+      for (const jobId of jobIds) {
+        await manHoursService.updateActualManHours(jobId);
+      }
+      
       res.json({ 
         success: true, 
         data: result,

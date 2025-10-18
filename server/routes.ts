@@ -83,6 +83,7 @@ import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
+import { manHoursService } from "./manHoursService";
 import { PhotoStorageService } from "./photoStorage";
 import { googleCalendarService } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
@@ -7512,6 +7513,9 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           status: 'scheduled'
         });
       }
+
+      // Calculate and update estimated man-hours based on staff assignments
+      await manHoursService.updateEstimatedManHours(jobId);
 
       // Send notifications if requested (will be queued for business hours)
       if (sendNotifications) {
