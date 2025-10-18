@@ -1608,7 +1608,7 @@ export function GlobalJobCard({
             </div>
             
             {/* Right: Actions Menu (Mobile), Close Button (Mobile), Save Button & Auto-save Indicator */}
-            <div className="flex items-center gap-1.5 sm:gap-3">
+            <div className="flex items-center gap-3 sm:gap-4">
               {/* Auto-save status - Hide on mobile */}
               {mode === 'edit' && (
                 <div className="hidden sm:flex text-xs text-white/80 items-center gap-1.5">
