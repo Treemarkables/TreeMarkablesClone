@@ -1889,8 +1889,8 @@ export function ProposalBuilder({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-56">
                         <DropdownMenuItem onClick={handlePreview} data-testid="menu-preview-proposal" className="py-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 mr-3">
-                            <Eye className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 shadow-md mr-3">
+                            <Eye className="h-6 w-6 text-white" strokeWidth={2.5} />
                           </div>
                           <span className="font-medium">Preview</span>
                         </DropdownMenuItem>
@@ -1902,8 +1902,8 @@ export function ProposalBuilder({
                           data-testid="menu-email-proposal"
                           className="py-3"
                         >
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 mr-3">
-                            <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 shadow-md mr-3">
+                            <Mail className="h-6 w-6 text-white" strokeWidth={2.5} />
                           </div>
                           <span className="font-medium">Email</span>
                         </DropdownMenuItem>
@@ -1915,8 +1915,8 @@ export function ProposalBuilder({
                           data-testid="menu-sms-proposal"
                           className="py-3"
                         >
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 mr-3">
-                            <MessageSquare className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-green-400 to-green-600 shadow-md mr-3">
+                            <MessageSquare className="h-6 w-6 text-white" strokeWidth={2.5} />
                           </div>
                           <span className="font-medium">SMS</span>
                         </DropdownMenuItem>
@@ -1927,14 +1927,14 @@ export function ProposalBuilder({
                           data-testid="menu-save-proposal"
                           className="py-3"
                         >
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 mr-3">
-                            <Save className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 shadow-md mr-3">
+                            <Save className="h-6 w-6 text-white" strokeWidth={2.5} />
                           </div>
                           <span className="font-medium">{saveDraftMutation.isPending ? "Saving..." : "Save Draft"}</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={onClose} data-testid="menu-cancel-proposal" className="py-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30 mr-3">
-                            <X className="h-5 w-5 text-red-600 dark:text-red-400" />
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-red-400 to-red-600 shadow-md mr-3">
+                            <X className="h-6 w-6 text-white" strokeWidth={2.5} />
                           </div>
                           <span className="font-medium">Cancel</span>
                         </DropdownMenuItem>
