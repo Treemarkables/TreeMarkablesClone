@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
+import { nzTimeToUTC, utcToNZTime } from '@shared/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -1036,15 +1037,35 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Handle scheduling functionality
   const handleScheduleJob = (job: JobAssignment) => {
     setJobToSchedule(job);
-    // Safari-safe date parsing
-    const startTime = new Date(job.startTime);
-    const endTime = new Date(job.endTime);
+    
+    // Convert UTC times from database to NZ local time for display
+    const startTimeUTC = new Date(job.startTime);
+    const endTimeUTC = new Date(job.endTime);
     const now = new Date();
     
+    // Convert to NZ timezone for user input
+    let dateStr, startTimeStr, endTimeStr;
+    
+    if (!isNaN(startTimeUTC.getTime())) {
+      const nzStart = utcToNZTime(startTimeUTC);
+      dateStr = nzStart.date;
+      startTimeStr = nzStart.time;
+    } else {
+      dateStr = format(now, 'yyyy-MM-dd');
+      startTimeStr = '09:00';
+    }
+    
+    if (!isNaN(endTimeUTC.getTime())) {
+      const nzEnd = utcToNZTime(endTimeUTC);
+      endTimeStr = nzEnd.time;
+    } else {
+      endTimeStr = '17:00';
+    }
+    
     setSchedulingData({
-      date: !isNaN(startTime.getTime()) ? format(startTime, 'yyyy-MM-dd') : format(now, 'yyyy-MM-dd'),
-      startTime: !isNaN(startTime.getTime()) ? format(startTime, 'HH:mm') : '09:00',
-      endTime: !isNaN(endTime.getTime()) ? format(endTime, 'HH:mm') : '17:00',
+      date: dateStr,
+      startTime: startTimeStr,
+      endTime: endTimeStr,
       assignedTo: job.teamId || job.staffId || '',
       notes: job.notes || ''
     });
@@ -1081,9 +1102,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return;
     }
 
-    // Create new start and end times (Safari-compatible)
-    const startDateTime = new Date(`${schedulingData.date}T${schedulingData.startTime}:00`);
-    const endDateTime = new Date(`${schedulingData.date}T${schedulingData.endTime}:00`);
+    // Convert NZ local time to UTC for storage
+    // User inputs NZ time, we store UTC in database
+    const startDateTime = nzTimeToUTC(schedulingData.date, schedulingData.startTime);
+    const endDateTime = nzTimeToUTC(schedulingData.date, schedulingData.endTime);
     
     // Validate dates are valid
     if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
@@ -1105,8 +1127,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return;
     }
 
-    // Validate that scheduling is not in the past
-    if (startDateTime < new Date()) {
+    // Validate that scheduling is not in the past (compare in NZ timezone)
+    const nowNZ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+    if (startDateTime < nowNZ) {
       toast({
         title: "Invalid Date",
         description: "Cannot schedule jobs in the past.",
@@ -1120,6 +1143,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const estimatedDuration = Math.round(durationMs / (1000 * 60 * 60)); // Convert to hours
 
     // Create updates object for backend (aligned with schema)
+    // Store as UTC ISO string - will be converted back to NZ time for display
     const updates: any = {
       scheduledDate: startDateTime.toISOString(),
       estimatedDuration: estimatedDuration,
