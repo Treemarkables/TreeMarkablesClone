@@ -1638,39 +1638,53 @@ export function GlobalJobCard({
                     <Menu className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-64">
                   <DropdownMenuItem onClick={() => {
                     setSpeechToQuoteContext('full');
                     setIsSpeechToQuoteOpen(true);
-                  }} data-testid="menu-item-speech-to-quote-mobile">
-                    <Mic className="w-4 h-4 mr-2" />
-                    Speech to Quote
+                  }} data-testid="menu-item-speech-to-quote-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 shadow-md mr-3">
+                      <Mic className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Speech to Quote</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleEmailClick} data-testid="menu-item-email-mobile">
-                    <Mail className="w-4 h-4 mr-2" />
-                    Email
+                  <DropdownMenuItem onClick={handleEmailClick} data-testid="menu-item-email-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 shadow-md mr-3">
+                      <Mail className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Email</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsSMSComposerOpen(true)} data-testid="menu-item-sms-mobile">
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    SMS
+                  <DropdownMenuItem onClick={() => setIsSMSComposerOpen(true)} data-testid="menu-item-sms-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-green-400 to-green-600 shadow-md mr-3">
+                      <MessageSquare className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">SMS</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleCallClick} data-testid="menu-item-call-mobile">
-                    <Phone className="w-4 h-4 mr-2" />
-                    Call
+                  <DropdownMenuItem onClick={handleCallClick} data-testid="menu-item-call-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-600 shadow-md mr-3">
+                      <Phone className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Call</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleScheduleClick} data-testid="menu-item-schedule-mobile">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    Schedule
+                  <DropdownMenuItem onClick={handleScheduleClick} data-testid="menu-item-schedule-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-400 to-indigo-600 shadow-md mr-3">
+                      <Calendar className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Schedule</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleQuoteClick} data-testid="menu-item-quote-mobile">
-                    <Receipt className="w-4 h-4 mr-2" />
-                    Quote
+                  <DropdownMenuItem onClick={handleQuoteClick} data-testid="menu-item-quote-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 shadow-md mr-3">
+                      <Receipt className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Quote</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleInvoiceClick} data-testid="menu-item-invoice-mobile">
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Invoice
+                  <DropdownMenuItem onClick={handleInvoiceClick} data-testid="menu-item-invoice-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-md mr-3">
+                      <CreditCard className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Invoice</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={() => {
@@ -1690,22 +1704,31 @@ export function GlobalJobCard({
                       setIsProposalBuilderOpen(true);
                     }}
                     data-testid="menu-item-proposal-mobile"
+                    className="py-3"
                   >
-                    <Presentation className="w-4 h-4 mr-2" />
-                    Proposal
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-pink-400 to-pink-600 shadow-md mr-3">
+                      <Presentation className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Proposal</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setIsTimeTrackingOpen(true)} data-testid="menu-item-time-mobile">
-                    <Clock className="w-4 h-4 mr-2" />
-                    Time Tracking
+                  <DropdownMenuItem onClick={() => setIsTimeTrackingOpen(true)} data-testid="menu-item-time-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 shadow-md mr-3">
+                      <Clock className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Time Tracking</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsProfitTrackerOpen(true)} data-testid="menu-item-profit-mobile">
-                    <DollarSign className="w-4 h-4 mr-2" />
-                    Profit Tracker
+                  <DropdownMenuItem onClick={() => setIsProfitTrackerOpen(true)} data-testid="menu-item-profit-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 shadow-md mr-3">
+                      <DollarSign className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Profit Tracker</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsPhotoCaptureOpen(true)} data-testid="menu-item-camera-mobile">
-                    <Camera className="w-4 h-4 mr-2" />
-                    Camera
+                  <DropdownMenuItem onClick={() => setIsPhotoCaptureOpen(true)} data-testid="menu-item-camera-mobile" className="py-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-violet-400 to-violet-600 shadow-md mr-3">
+                      <Camera className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">Camera</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
@@ -1718,13 +1741,18 @@ export function GlobalJobCard({
                       sendToXeroMutation.isPending
                     }
                     data-testid="menu-item-send-xero-mobile"
+                    className="py-3"
                   >
-                    <FileText className="w-4 h-4 mr-2" />
-                    {sendToXeroMutation.isPending 
-                      ? 'Sending...' 
-                      : editingJob?.xeroStatus === 'sent' 
-                      ? 'Sent to Xero' 
-                      : 'Send to Xero'}
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-slate-400 to-slate-600 shadow-md mr-3">
+                      <FileText className="h-6 w-6 text-white" strokeWidth={2.5} />
+                    </div>
+                    <span className="font-medium">
+                      {sendToXeroMutation.isPending 
+                        ? 'Sending...' 
+                        : editingJob?.xeroStatus === 'sent' 
+                        ? 'Sent to Xero' 
+                        : 'Send to Xero'}
+                    </span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
