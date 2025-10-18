@@ -16,9 +16,8 @@ async function fetchFirebaseConfig() {
     if (data.success && data.configured && data.config) {
       firebaseConfig = data.config;
       
-      // Fetch VAPID key from environment or use default
-      // Note: VAPID key must be set in environment variables with VITE_ prefix
-      vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
+      // Get VAPID key from API response
+      vapidKey = data.vapidKey || '';
       
       return true;
     }

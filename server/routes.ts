@@ -15954,7 +15954,8 @@ Transcription: ${transcriptText}`;
     res.json({ 
       success: true, 
       configured: isConfigured,
-      config: isConfigured ? config : null 
+      config: isConfigured ? config : null,
+      vapidKey: cleanValue(process.env.FIREBASE_VAPID_KEY) || '' 
     });
   });
 
