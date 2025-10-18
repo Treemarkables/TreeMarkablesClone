@@ -3020,5 +3020,62 @@ export const insertMarketingCampaignSchema = createInsertSchema(marketingCampaig
 export type MarketingCampaign = typeof marketingCampaigns.$inferSelect;
 export type InsertMarketingCampaign = z.infer<typeof insertMarketingCampaignSchema>;
 
+// ========================================
+// PUSH NOTIFICATIONS - FCM Tokens
+// ========================================
+
+// FCM (Firebase Cloud Messaging) notification tokens
+export const fcmTokens = pgTable("fcm_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id, { onDelete: 'cascade' }),
+  token: text("token").notNull().unique(),
+  deviceInfo: text("device_info"), // Browser/device information
+  isActive: boolean("is_active").notNull().default(true),
+  lastUsedAt: timestamp("last_used_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Notification preferences for each employee
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employees.id, { onDelete: 'cascade' }).unique(),
+  
+  // Job-related notifications
+  jobAssignments: boolean("job_assignments").notNull().default(true),
+  scheduleChanges: boolean("schedule_changes").notNull().default(true),
+  jobStatusUpdates: boolean("job_status_updates").notNull().default(false),
+  
+  // Business notifications
+  newLeads: boolean("new_leads").notNull().default(false), // Admin only
+  invoicePayments: boolean("invoice_payments").notNull().default(false), // Admin only
+  quoteAccepted: boolean("quote_accepted").notNull().default(false), // Admin only
+  
+  // Communication notifications
+  customerMessages: boolean("customer_messages").notNull().default(true),
+  teamMessages: boolean("team_messages").notNull().default(true),
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// FCM tokens schemas
+export const insertFcmTokenSchema = createInsertSchema(fcmTokens).omit({
+  id: true,
+  createdAt: true,
+  lastUsedAt: true,
+});
+
+export const insertNotificationPreferencesSchema = createInsertSchema(notificationPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type FcmToken = typeof fcmTokens.$inferSelect;
+export type InsertFcmToken = z.infer<typeof insertFcmTokenSchema>;
+export type NotificationPreferences = typeof notificationPreferences.$inferSelect;
+export type InsertNotificationPreferences = z.infer<typeof insertNotificationPreferencesSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';
