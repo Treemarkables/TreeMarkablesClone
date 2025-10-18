@@ -404,15 +404,19 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
+          className={`relative h-11 w-11 ${
+            summary.unread > 0 
+              ? 'bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 hover:from-orange-600 hover:via-red-600 hover:to-pink-600' 
+              : 'bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 hover:from-blue-600 hover:via-indigo-600 hover:to-purple-600'
+          }`}
           data-testid="button-notifications"
         >
-          <Bell className={`h-5 w-5 ${summary.unread > 0 ? 'animate-pulse text-orange-500' : ''}`} />
+          <Bell className={`h-6 w-6 text-white ${summary.unread > 0 ? 'animate-pulse' : ''}`} />
           {summary.unread > 0 && (
             <>
-              <div className="absolute inset-0 rounded-full bg-orange-500/20 animate-ping" />
-              <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-white text-xs flex items-center justify-center animate-pulse">
-                <span className="text-[10px] font-bold" data-testid="text-notification-count">
+              <div className="absolute inset-0 rounded-md bg-orange-400/30 animate-ping" />
+              <div className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-gradient-to-br from-red-500 to-red-700 text-white text-xs flex items-center justify-center shadow-lg animate-bounce border-2 border-white">
+                <span className="text-[11px] font-bold" data-testid="text-notification-count">
                   {summary.unread > 99 ? '99+' : summary.unread}
                 </span>
               </div>
