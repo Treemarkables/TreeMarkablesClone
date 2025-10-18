@@ -158,21 +158,45 @@ export function NotificationSettings() {
   }
 
   if (!notificationsSupported) {
+    // Detect if user is on iOS
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
     return (
       <Alert>
         <BellOff className="h-4 w-4" />
-        <AlertDescription className="space-y-2">
-          <p className="font-semibold">Push notifications not available in this browser</p>
-          <p className="text-sm">
-            Safari doesn't fully support Firebase Cloud Messaging yet. For push notifications, please use:
-          </p>
-          <ul className="text-sm list-disc list-inside space-y-1 ml-2">
-            <li><strong>Chrome</strong> - Best compatibility</li>
-            <li><strong>Firefox</strong> - Fully supported</li>
-            <li><strong>Brave</strong> - Fully supported</li>
-          </ul>
-          <p className="text-sm mt-2 text-muted-foreground">
-            The notification system is fully configured and works great on supported browsers!
+        <AlertDescription className="space-y-3">
+          <p className="font-semibold">Push notifications not available on this device</p>
+          
+          {isIOS ? (
+            <>
+              <p className="text-sm">
+                Apple doesn't allow push notifications in any iPhone browser (Safari, Chrome, Firefox, or Brave). 
+                This is an Apple restriction, not a limitation of this app.
+              </p>
+              <div className="bg-muted/50 p-3 rounded-md space-y-2">
+                <p className="text-sm font-medium">How to get notifications:</p>
+                <ul className="text-sm list-disc list-inside space-y-1 ml-2">
+                  <li><strong>Use on desktop/laptop</strong> - Full push notification support</li>
+                  <li><strong>SMS alerts</strong> - You already have SMS Everyone integration set up</li>
+                  <li><strong>Email notifications</strong> - Alternative for important updates</li>
+                </ul>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm">
+                Safari doesn't fully support push notifications yet. For notifications, please use:
+              </p>
+              <ul className="text-sm list-disc list-inside space-y-1 ml-2">
+                <li><strong>Chrome</strong> - Best compatibility</li>
+                <li><strong>Firefox</strong> - Fully supported</li>
+                <li><strong>Brave</strong> - Fully supported</li>
+              </ul>
+            </>
+          )}
+          
+          <p className="text-sm text-muted-foreground">
+            The notification system is fully configured and works great on desktop browsers!
           </p>
         </AlertDescription>
       </Alert>
