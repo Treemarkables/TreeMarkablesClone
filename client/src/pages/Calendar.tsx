@@ -38,6 +38,7 @@ import {
 } from "date-fns";
 import type { Job, Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { formatNZTime } from "@shared/dateUtils";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -140,10 +141,12 @@ export default function Calendar() {
     setSelectedJob(job);
     const customerName = job.customer?.name || "Customer";
     const jobTitle = job.title || "your appointment";
+    
+    // Convert UTC time from database to NZ time for display
     const scheduledTime = job.scheduledDate 
-      ? format(
-          typeof job.scheduledDate === 'string' ? parseISO(job.scheduledDate) : job.scheduledDate,
-          'MMMM d, yyyy \'at\' h:mm a'
+      ? formatNZTime(
+          typeof job.scheduledDate === 'string' ? job.scheduledDate : job.scheduledDate.toISOString(),
+          'full'
         )
       : "soon";
     
@@ -465,11 +468,11 @@ export default function Calendar() {
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <Clock className="h-4 w-4" />
                                 <span data-testid={`text-time-${appointment.id}`}>
-                                  {format(
+                                  {formatNZTime(
                                     typeof appointment.scheduledDate === 'string'
-                                      ? parseISO(appointment.scheduledDate)
-                                      : appointment.scheduledDate,
-                                    'h:mm a'
+                                      ? appointment.scheduledDate
+                                      : appointment.scheduledDate.toISOString(),
+                                    'time'
                                   )}
                                 </span>
                               </div>
@@ -548,11 +551,11 @@ export default function Calendar() {
                         </p>
                         {appointment.scheduledDate && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            {format(
+                            {formatNZTime(
                               typeof appointment.scheduledDate === 'string'
-                                ? parseISO(appointment.scheduledDate)
-                                : appointment.scheduledDate,
-                              'h:mm a'
+                                ? appointment.scheduledDate
+                                : appointment.scheduledDate.toISOString(),
+                              'time'
                             )}
                           </p>
                         )}
