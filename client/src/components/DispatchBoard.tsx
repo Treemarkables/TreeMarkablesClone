@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { 
   Calendar,
   Clock,
@@ -1323,19 +1324,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   return (
     <>
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Desktop Layout: Calendar + Job Cards */}
-      <div className="hidden lg:flex gap-4 flex-1 min-h-0 p-4 overflow-hidden" data-testid="dispatch-desktop-layout">
-        {/* Calendar Grid */}
-        <div className="w-[70%] h-full" data-testid="calendar-grid-container">
-          <Card className="h-full overflow-hidden">
-            <CalendarGrid />
-          </Card>
-        </div>
+      {/* Desktop Layout: Split Screen with Resizable Panels */}
+      <div className="hidden lg:flex flex-1 min-h-0 p-4 overflow-hidden" data-testid="dispatch-desktop-layout">
+        <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+          {/* Left Panel: Dispatch Board (Calendar + Job Cards) */}
+          <ResizablePanel defaultSize={showGlobalJobCard ? 50 : 100} minSize={30}>
+            <div className="flex gap-4 h-full pr-2">
+              {/* Calendar Grid */}
+              <div className="w-[70%] h-full" data-testid="calendar-grid-container">
+                <Card className="h-full overflow-hidden">
+                  <CalendarGrid />
+                </Card>
+              </div>
 
-        {/* Job Cards Panel */}
-        <div className="flex w-[30%] h-full flex-col" data-testid="job-cards-container">
-          <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0" style={{pointerEvents: 'auto'}}>
-            <CardHeader className="flex-shrink-0 border-b pb-3">
+              {/* Job Cards Panel */}
+              <div className="flex w-[30%] h-full flex-col" data-testid="job-cards-container">
+                <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0" style={{pointerEvents: 'auto'}}>
+                  <CardHeader className="flex-shrink-0 border-b pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Jobs</CardTitle>
                 <div className="flex items-center gap-2">
@@ -1520,6 +1525,52 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </CardContent>
           </Card>
         </div>
+            </div>
+          </ResizablePanel>
+
+          {/* Resizable Handle */}
+          {showGlobalJobCard && (
+            <>
+              <ResizableHandle withHandle />
+              
+              {/* Right Panel: Job Card */}
+              <ResizablePanel defaultSize={50} minSize={30}>
+                <div className="h-full pl-2 overflow-hidden">
+                  <div className="h-full bg-gray-50 rounded-lg border overflow-hidden flex flex-col">
+                    {/* Close button */}
+                    <div className="flex items-center justify-between p-2 border-b bg-white">
+                      <h2 className="text-sm font-semibold">Job Details</h2>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setShowGlobalJobCard(false);
+                          setJobToEdit(null);
+                        }}
+                        className="h-8 w-8"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    {/* GlobalJobCard content */}
+                    <div className="flex-1 overflow-auto">
+                      <GlobalJobCard
+                        isOpen={true}
+                        mode={globalJobCardMode}
+                        jobId={jobToEdit?.id}
+                        onClose={() => {
+                          setShowGlobalJobCard(false);
+                          setJobToEdit(null);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
       </div>
 
       {/* Mobile Layout: Show job cards in traditional list view */}
@@ -1699,17 +1750,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       </div>
     </div>
 
-    {/* Global Job Card Modal */}
+    {/* Modal version for mobile */}
     {showGlobalJobCard && (
-      <GlobalJobCard
-        isOpen={showGlobalJobCard}
-        mode={globalJobCardMode}
-        jobId={jobToEdit?.id}
-        onClose={() => {
-          setShowGlobalJobCard(false);
-          setJobToEdit(null);
-        }}
-      />
+      <div className="lg:hidden">
+        <GlobalJobCard
+          isOpen={showGlobalJobCard}
+          mode={globalJobCardMode}
+          jobId={jobToEdit?.id}
+          onClose={() => {
+            setShowGlobalJobCard(false);
+            setJobToEdit(null);
+          }}
+        />
+      </div>
     )}
   </>
   );
