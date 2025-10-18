@@ -1751,19 +1751,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       </div>
     </div>
 
-    {/* Modal version for mobile */}
-    {showGlobalJobCard && (
-      <div className="lg:hidden">
-        <GlobalJobCard
-          isOpen={showGlobalJobCard}
-          mode={globalJobCardMode}
-          jobId={jobToEdit?.id}
-          onClose={() => {
-            setShowGlobalJobCard(false);
-            setJobToEdit(null);
-          }}
-        />
-      </div>
+    {/* Modal version for mobile only - check window size to prevent Dialog rendering on desktop */}
+    {showGlobalJobCard && typeof window !== 'undefined' && window.innerWidth < 1024 && (
+      <GlobalJobCard
+        isOpen={showGlobalJobCard}
+        mode={globalJobCardMode}
+        jobId={jobToEdit?.id}
+        onClose={() => {
+          setShowGlobalJobCard(false);
+          setJobToEdit(null);
+        }}
+      />
     )}
   </>
   );
