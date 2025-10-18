@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
-  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle, Mic
+  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle, Mic, MoreVertical
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { insertProposalSchema } from "@shared/schema";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
@@ -1876,7 +1877,79 @@ export function ProposalBuilder({
               {/* Form Actions - Sticky Footer */}
               <div className="sticky bottom-0 -mx-4 sm:-mx-6 mt-8 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
                 <div className="px-4 sm:px-6 py-4">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  
+                  {/* Mobile Layout - Dropdown Menu */}
+                  <div className="sm:hidden flex items-center justify-between gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="default" className="flex-1" data-testid="button-actions-menu">
+                          <MoreVertical className="h-4 w-4 mr-2" />
+                          Actions
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-56">
+                        <DropdownMenuItem onClick={handlePreview} data-testid="menu-preview-proposal">
+                          <Eye className="h-4 w-4 mr-2" />
+                          Preview
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            initializeEmailForm();
+                            setShowEmailDialog(true);
+                          }}
+                          data-testid="menu-email-proposal"
+                        >
+                          <Mail className="h-4 w-4 mr-2" />
+                          Email
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            initializeSmsForm();
+                            setShowSmsDialog(true);
+                          }}
+                          data-testid="menu-sms-proposal"
+                        >
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          SMS
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={handleManualSave}
+                          disabled={saveDraftMutation.isPending}
+                          data-testid="menu-save-proposal"
+                        >
+                          <Save className="h-4 w-4 mr-2" />
+                          {saveDraftMutation.isPending ? "Saving..." : "Save Draft"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={onClose} data-testid="menu-cancel-proposal">
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    
+                    <Button
+                      type="submit"
+                      disabled={createProposalMutation.isPending}
+                      data-testid="button-update-proposal-mobile"
+                      className="gap-2"
+                    >
+                      {createProposalMutation.isPending ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          {mode === "edit" ? "Updating..." : "Creating..."}
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4" />
+                          {mode === "edit" ? "Update" : "Create"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Desktop Layout - Individual Buttons */}
+                  <div className="hidden sm:flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     {/* Secondary Actions */}
                     <div className="flex flex-wrap gap-2">
                       <Button
