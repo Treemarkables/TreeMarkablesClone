@@ -231,21 +231,42 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     const proposals = proposalsResponse?.data || [];
     const quotes = quotesResponse?.data || [];
 
+    console.log('🔍 Import Debug - Proposals:', proposals);
+    console.log('🔍 Import Debug - Quotes:', quotes);
+
     // Find accepted proposal or most recent sent proposal
     const acceptedProposal = proposals.find((p: any) => p.status === 'accepted');
     const sentProposal = proposals.find((p: any) => p.status === 'sent');
     const proposal = acceptedProposal || sentProposal || proposals[0];
+
+    console.log('🔍 Import Debug - Selected Proposal:', proposal);
 
     // Find accepted or sent quote
     const acceptedQuote = quotes.find((q: any) => q.status === 'accepted');
     const sentQuote = quotes.find((q: any) => q.status === 'sent');
     const quote = acceptedQuote || sentQuote || quotes[0];
 
-    // Extract line items from proposal sections or quote
+    console.log('🔍 Import Debug - Selected Quote:', quote);
+
+    // Extract line items from proposal or quote
     let extractedItems: InvoiceLineItem[] = [];
 
-    if (proposal?.sections) {
-      // Get line items from proposal sections
+    // Check if proposal has direct line items array
+    if (proposal?.lineItems && Array.isArray(proposal.lineItems)) {
+      console.log('🔍 Import Debug - Found proposal.lineItems:', proposal.lineItems);
+      proposal.lineItems.forEach((item: any) => {
+        extractedItems.push({
+          id: Math.random().toString(),
+          description: item.description || '',
+          quantity: item.quantity || 1,
+          unitPrice: parseFloat(item.unitPrice || 0),
+          total: parseFloat(item.totalPrice || item.total || 0)
+        });
+      });
+    }
+    // Check if proposal has sections with line items
+    else if (proposal?.sections && Array.isArray(proposal.sections)) {
+      console.log('🔍 Import Debug - Found proposal.sections:', proposal.sections);
       proposal.sections.forEach((section: any) => {
         if (section.lineItems && Array.isArray(section.lineItems)) {
           section.lineItems.forEach((item: any) => {
@@ -253,8 +274,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
               id: Math.random().toString(),
               description: item.description || '',
               quantity: item.quantity || 1,
-              unitPrice: parseFloat(item.rate || item.unitPrice || 0),
-              total: parseFloat(item.total || item.amount || 0)
+              unitPrice: parseFloat(item.unitPrice || 0),
+              total: parseFloat(item.totalPrice || item.total || 0)
             });
           });
         }
@@ -263,6 +284,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
     // If proposal had no line items, fall back to quote
     if (extractedItems.length === 0 && quote?.lineItems && Array.isArray(quote.lineItems)) {
+      console.log('🔍 Import Debug - Using quote.lineItems:', quote.lineItems);
       quote.lineItems.forEach((item: any) => {
         extractedItems.push({
           id: Math.random().toString(),
@@ -273,6 +295,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         });
       });
     }
+
+    console.log('🔍 Import Debug - Extracted Items:', extractedItems);
 
     if (extractedItems.length > 0) {
       setLineItems(extractedItems);
