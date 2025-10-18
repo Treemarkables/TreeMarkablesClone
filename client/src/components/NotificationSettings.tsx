@@ -197,8 +197,15 @@ export function NotificationSettings() {
 
           {permissionState === "denied" && (
             <Alert variant="destructive">
-              <AlertDescription>
-                Notifications are blocked. Please enable them in your browser settings.
+              <AlertDescription className="space-y-2">
+                <p className="font-semibold">Notifications are blocked by your browser</p>
+                <p className="text-sm">To enable notifications, try one of these options:</p>
+                <ul className="text-sm list-disc list-inside space-y-1 ml-2">
+                  <li>Open this app in an <strong>Incognito/Private window</strong> and click Enable</li>
+                  <li>Open this app on your <strong>mobile device</strong></li>
+                  <li>Use a <strong>different browser</strong> (Chrome, Firefox, Safari)</li>
+                </ul>
+                <p className="text-sm mt-2">The notification system is fully set up and ready - it's just waiting for browser permission!</p>
               </AlertDescription>
             </Alert>
           )}
