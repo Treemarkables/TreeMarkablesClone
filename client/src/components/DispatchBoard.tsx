@@ -1535,15 +1535,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               
               {/* Right Panel: Job Card */}
               <ResizablePanel defaultSize={50} minSize={30}>
-                <div className="h-full pl-2 overflow-hidden">
+                <div className="h-full pl-2 overflow-hidden" style={{backgroundColor: 'red', minWidth: '200px'}} data-testid="desktop-job-panel">
                   <div className="h-full bg-gray-50 rounded-lg border overflow-hidden flex flex-col">
                     {/* Close button */}
                     <div className="flex items-center justify-between p-2 border-b bg-white">
-                      <h2 className="text-sm font-semibold">Job Details</h2>
+                      <h2 className="text-sm font-semibold">Job Details (DESKTOP PANEL)</h2>
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => {
+                          console.log('❌ Closing desktop panel');
                           setShowGlobalJobCard(false);
                           setJobToEdit(null);
                         }}
