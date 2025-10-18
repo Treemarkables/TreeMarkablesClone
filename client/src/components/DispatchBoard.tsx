@@ -1325,10 +1325,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     <>
     <div className="flex flex-col flex-1 min-h-0">
       {/* Desktop Layout: Split Screen with Resizable Panels */}
-      <div className="flex flex-1 min-h-0 p-4 overflow-hidden bg-blue-100" data-testid="dispatch-desktop-layout">
-        <div className="absolute top-0 left-0 bg-yellow-400 text-black p-4 z-50 font-bold">
-          DESKTOP LAYOUT IS RENDERING! showGlobalJobCard: {showGlobalJobCard ? 'TRUE' : 'FALSE'}
-        </div>
+      <div className="hidden lg:flex flex-1 min-h-0 p-4 overflow-hidden" data-testid="dispatch-desktop-layout">
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
           {/* Left Panel: Dispatch Board (Calendar + Job Cards) */}
           <ResizablePanel defaultSize={showGlobalJobCard ? 50 : 100} minSize={30}>
@@ -1538,11 +1535,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               
               {/* Right Panel: Job Card */}
               <ResizablePanel defaultSize={50} minSize={30}>
-                <div className="h-full pl-2 overflow-hidden" style={{backgroundColor: 'red', minWidth: '200px'}} data-testid="desktop-job-panel">
+                <div className="h-full pl-2 overflow-hidden" data-testid="desktop-job-panel">
                   <div className="h-full bg-gray-50 rounded-lg border overflow-hidden flex flex-col">
                     {/* Close button */}
                     <div className="flex items-center justify-between p-2 border-b bg-white">
-                      <h2 className="text-sm font-semibold">Job Details (DESKTOP PANEL)</h2>
+                      <h2 className="text-sm font-semibold">Job Details</h2>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1755,9 +1752,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       </div>
     </div>
 
-    {/* Modal version for mobile only - check window size to prevent Dialog rendering on desktop */}
-    {/* TEMPORARILY DISABLED FOR DESKTOP TESTING */}
-    {false && showGlobalJobCard && typeof window !== 'undefined' && window.innerWidth < 1024 && (
+    {/* Modal version for mobile only - renders as Dialog on screens < 1024px */}
+    <div className="lg:hidden">
       <GlobalJobCard
         isOpen={showGlobalJobCard}
         mode={globalJobCardMode}
@@ -1767,7 +1763,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           setJobToEdit(null);
         }}
       />
-    )}
+    </div>
   </>
   );
 }
