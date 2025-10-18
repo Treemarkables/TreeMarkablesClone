@@ -1577,7 +1577,7 @@ export function GlobalJobCard({
       {/* ServiceM8-style Header */}
         <div className={`border-b px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 rounded-t-lg ${
           currentStatus === 'completed' ? 'bg-green-600 border-green-700' :
-          currentStatus === 'work order' ? 'bg-blue-600 border-blue-700' :
+          currentStatus === 'work_order' ? 'bg-blue-600 border-blue-700' :
           currentStatus === 'quote' ? 'bg-orange-600 border-orange-700' :
           currentStatus === 'lead' ? 'bg-cyan-600 border-cyan-700' :
           currentStatus === 'scheduled' ? 'bg-blue-600 border-blue-700' :
@@ -1594,7 +1594,7 @@ export function GlobalJobCard({
                 <Badge 
                   className={`text-xs whitespace-nowrap ${
                     currentStatus === 'completed' ? 'bg-green-700 hover:bg-green-800 text-white' :
-                    currentStatus === 'work order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
+                    currentStatus === 'work_order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
                     currentStatus === 'quote' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
                     currentStatus === 'lead' ? 'bg-cyan-700 hover:bg-cyan-800 text-white' :
                     currentStatus === 'scheduled' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
