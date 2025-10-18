@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign, MessageSquare } from 'lucide-react';
+import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign, MessageSquare, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
 import { EmailComposerModal } from '@/components/EmailComposerModal';
@@ -226,6 +226,69 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     }
   };
 
+  // Import line items from quote or proposal
+  const importFromQuoteOrProposal = () => {
+    const proposals = proposalsResponse?.data || [];
+    const quotes = quotesResponse?.data || [];
+
+    // Find accepted proposal or most recent sent proposal
+    const acceptedProposal = proposals.find((p: any) => p.status === 'accepted');
+    const sentProposal = proposals.find((p: any) => p.status === 'sent');
+    const proposal = acceptedProposal || sentProposal || proposals[0];
+
+    // Find accepted or sent quote
+    const acceptedQuote = quotes.find((q: any) => q.status === 'accepted');
+    const sentQuote = quotes.find((q: any) => q.status === 'sent');
+    const quote = acceptedQuote || sentQuote || quotes[0];
+
+    // Extract line items from proposal sections or quote
+    let extractedItems: InvoiceLineItem[] = [];
+
+    if (proposal?.sections) {
+      // Get line items from proposal sections
+      proposal.sections.forEach((section: any) => {
+        if (section.lineItems && Array.isArray(section.lineItems)) {
+          section.lineItems.forEach((item: any) => {
+            extractedItems.push({
+              id: Math.random().toString(),
+              description: item.description || '',
+              quantity: item.quantity || 1,
+              unitPrice: parseFloat(item.rate || item.unitPrice || 0),
+              total: parseFloat(item.total || item.amount || 0)
+            });
+          });
+        }
+      });
+    }
+
+    // If proposal had no line items, fall back to quote
+    if (extractedItems.length === 0 && quote?.lineItems && Array.isArray(quote.lineItems)) {
+      quote.lineItems.forEach((item: any) => {
+        extractedItems.push({
+          id: Math.random().toString(),
+          description: item.description || '',
+          quantity: item.quantity || 1,
+          unitPrice: parseFloat(item.rate || item.unitPrice || 0),
+          total: parseFloat(item.total || item.amount || 0)
+        });
+      });
+    }
+
+    if (extractedItems.length > 0) {
+      setLineItems(extractedItems);
+      toast({
+        title: "Line Items Imported",
+        description: `Imported ${extractedItems.length} line item(s) from ${proposal ? 'proposal' : 'quote'}.`
+      });
+    } else {
+      toast({
+        title: "No Items Found",
+        description: "No line items found in the quote or proposal for this job.",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Create invoice (shared logic)
   const createInvoice = async () => {
     // Validate
@@ -406,16 +469,29 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-medium">Description</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addLineItem}
-                      data-testid="button-add-line-item"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Item
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={importFromQuoteOrProposal}
+                        disabled={loadingProposals || loadingQuotes}
+                        data-testid="button-import-from-quote"
+                      >
+                        <FileDown className="h-4 w-4 mr-1" />
+                        Import from Quote/Proposal
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addLineItem}
+                        data-testid="button-add-line-item"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Item
+                      </Button>
+                    </div>
                   </div>
                   
                   <Textarea
