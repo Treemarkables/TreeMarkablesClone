@@ -60,32 +60,53 @@ export async function initializeFirebase() {
 // Request notification permission and get FCM token
 export async function requestNotificationPermission(): Promise<string | null> {
   try {
-    console.log('Requesting notification permission...');
+    console.log('🔔 Requesting notification permission...');
+    
+    // Check if Firebase is configured
+    if (!firebaseConfig) {
+      console.log('📡 Firebase not initialized yet, fetching config...');
+      const initialized = await fetchFirebaseConfig();
+      if (!initialized) {
+        console.error('❌ Firebase not configured - cannot request notifications');
+        throw new Error('Firebase not configured. Please contact your administrator.');
+      }
+    }
+    
+    // Check VAPID key
+    if (!vapidKey) {
+      console.error('❌ VAPID key not found');
+      throw new Error('VAPID key not configured. Please contact your administrator.');
+    }
+    console.log('✅ VAPID key loaded');
+    
     const permission = await Notification.requestPermission();
+    console.log('📱 Permission result:', permission);
     
     if (permission !== 'granted') {
-      console.log('Notification permission denied');
+      console.log('❌ Notification permission denied');
       return null;
     }
 
-    console.log('Notification permission granted');
+    console.log('✅ Notification permission granted');
     
-    // Get FCM token
+    // Initialize Firebase and messaging if not already done
     if (!messaging) {
-      initializeFirebase();
+      console.log('🔧 Initializing messaging...');
+      await initializeFirebase();
     }
     
     if (!messaging) {
-      console.error('Messaging not initialized');
-      return null;
+      console.error('❌ Messaging not initialized after Firebase init');
+      throw new Error('Failed to initialize Firebase messaging');
     }
 
-    const token = await getToken(messaging, { vapidKey });
-    console.log('FCM Token obtained:', token);
+    console.log('📡 Getting FCM token with VAPID key...');
+    const token = await getToken(messaging, { vapidKey: vapidKey! });
+    console.log('✅ FCM Token obtained:', token.substring(0, 20) + '...');
     return token;
   } catch (error) {
-    console.error('Error getting FCM token:', error);
-    return null;
+    console.error('❌ Error in requestNotificationPermission:', error);
+    throw error;
   }
 }
 
