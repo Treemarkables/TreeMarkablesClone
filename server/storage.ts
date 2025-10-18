@@ -841,6 +841,22 @@ export interface IStorage {
   getScheduledMarketingCampaigns(): Promise<schema.MarketingCampaign[]>;
   updateMarketingCampaign(id: string, updates: Partial<schema.InsertMarketingCampaign>): Promise<schema.MarketingCampaign>;
   deleteMarketingCampaign(id: string): Promise<void>;
+
+  // Push Notifications - FCM Tokens
+  createFcmToken(token: schema.InsertFcmToken): Promise<schema.FcmToken>;
+  getFcmToken(id: string): Promise<schema.FcmToken | undefined>;
+  getFcmTokensByEmployee(employeeId: string): Promise<schema.FcmToken[]>;
+  getFcmTokenByToken(token: string): Promise<schema.FcmToken | undefined>;
+  updateFcmToken(id: string, updates: Partial<schema.InsertFcmToken>): Promise<schema.FcmToken>;
+  deleteFcmToken(id: string): Promise<void>;
+  deleteFcmTokenByToken(token: string): Promise<void>;
+  getActiveFcmTokens(employeeId: string): Promise<schema.FcmToken[]>;
+  markFcmTokenAsUsed(token: string): Promise<void>;
+  
+  // Push Notifications - Preferences
+  createNotificationPreferences(prefs: schema.InsertNotificationPreferences): Promise<schema.NotificationPreferences>;
+  getNotificationPreferences(employeeId: string): Promise<schema.NotificationPreferences | undefined>;
+  updateNotificationPreferences(employeeId: string, updates: Partial<schema.InsertNotificationPreferences>): Promise<schema.NotificationPreferences>;
 }
 
 // Database Storage Implementation
@@ -4777,6 +4793,100 @@ class DatabaseStorage implements IStorage {
   async deleteMarketingCampaign(id: string): Promise<void> {
     await db.delete(schema.marketingCampaigns)
       .where(eq(schema.marketingCampaigns.id, id));
+  }
+
+  // ========================================
+  // PUSH NOTIFICATIONS - FCM TOKENS
+  // ========================================
+
+  async createFcmToken(token: schema.InsertFcmToken): Promise<schema.FcmToken> {
+    const [result] = await db.insert(schema.fcmTokens)
+      .values(token)
+      .returning();
+    return result;
+  }
+
+  async getFcmToken(id: string): Promise<schema.FcmToken | undefined> {
+    const [result] = await db.select()
+      .from(schema.fcmTokens)
+      .where(eq(schema.fcmTokens.id, id));
+    return result;
+  }
+
+  async getFcmTokensByEmployee(employeeId: string): Promise<schema.FcmToken[]> {
+    return await db.select()
+      .from(schema.fcmTokens)
+      .where(eq(schema.fcmTokens.employeeId, employeeId))
+      .orderBy(desc(schema.fcmTokens.lastUsedAt));
+  }
+
+  async getFcmTokenByToken(token: string): Promise<schema.FcmToken | undefined> {
+    const [result] = await db.select()
+      .from(schema.fcmTokens)
+      .where(eq(schema.fcmTokens.token, token));
+    return result;
+  }
+
+  async updateFcmToken(id: string, updates: Partial<schema.InsertFcmToken>): Promise<schema.FcmToken> {
+    const [result] = await db.update(schema.fcmTokens)
+      .set(updates)
+      .where(eq(schema.fcmTokens.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteFcmToken(id: string): Promise<void> {
+    await db.delete(schema.fcmTokens)
+      .where(eq(schema.fcmTokens.id, id));
+  }
+
+  async deleteFcmTokenByToken(token: string): Promise<void> {
+    await db.delete(schema.fcmTokens)
+      .where(eq(schema.fcmTokens.token, token));
+  }
+
+  async getActiveFcmTokens(employeeId: string): Promise<schema.FcmToken[]> {
+    return await db.select()
+      .from(schema.fcmTokens)
+      .where(
+        and(
+          eq(schema.fcmTokens.employeeId, employeeId),
+          eq(schema.fcmTokens.isActive, true)
+        )
+      )
+      .orderBy(desc(schema.fcmTokens.lastUsedAt));
+  }
+
+  async markFcmTokenAsUsed(token: string): Promise<void> {
+    await db.update(schema.fcmTokens)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(schema.fcmTokens.token, token));
+  }
+
+  // ========================================
+  // PUSH NOTIFICATIONS - PREFERENCES
+  // ========================================
+
+  async createNotificationPreferences(prefs: schema.InsertNotificationPreferences): Promise<schema.NotificationPreferences> {
+    const [result] = await db.insert(schema.notificationPreferences)
+      .values(prefs)
+      .returning();
+    return result;
+  }
+
+  async getNotificationPreferences(employeeId: string): Promise<schema.NotificationPreferences | undefined> {
+    const [result] = await db.select()
+      .from(schema.notificationPreferences)
+      .where(eq(schema.notificationPreferences.employeeId, employeeId));
+    return result;
+  }
+
+  async updateNotificationPreferences(employeeId: string, updates: Partial<schema.InsertNotificationPreferences>): Promise<schema.NotificationPreferences> {
+    const [result] = await db.update(schema.notificationPreferences)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.notificationPreferences.employeeId, employeeId))
+      .returning();
+    return result;
   }
 }
 

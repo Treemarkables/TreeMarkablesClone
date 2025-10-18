@@ -85,6 +85,7 @@ import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
 import { PhotoStorageService } from "./photoStorage";
 import { googleCalendarService } from "./services/googleCalendarService";
+import * as notificationHelper from "./services/notificationHelper";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -3061,6 +3062,29 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         console.log(`🔔 Job status change detected: ${job.title} (${oldStatus} → ${validation.data.status})`);
         AutomatedTriggers.onJobStatusChange(job.id, oldStatus, validation.data.status)
           .catch(error => console.error('Error triggering job status change notification:', error));
+      }
+
+      // Send push notifications if scheduled date changed
+      if (validation.data.scheduledDate && oldJob?.scheduledDate) {
+        const oldDate = new Date(oldJob.scheduledDate).getTime();
+        const newDate = new Date(validation.data.scheduledDate).getTime();
+        
+        if (oldDate !== newDate && job.assignedTeam && job.assignedTeam.length > 0) {
+          // Notify all assigned team members about schedule change
+          const newDateStr = new Date(validation.data.scheduledDate).toLocaleDateString('en-NZ', {
+            weekday: 'long',
+            month: 'short',
+            day: 'numeric'
+          });
+          
+          for (const employeeId of job.assignedTeam) {
+            await notificationHelper.notifyScheduleChange(
+              employeeId,
+              job.jobNumber || '',
+              newDateStr
+            );
+          }
+        }
       }
 
       res.json({ success: true, data: job });
@@ -7497,6 +7521,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             // Queue notification - will be sent during business hours
             await queueScheduleNotification(employee, job, assignment);
           }
+          
+          // Send push notification immediately
+          if (employee && job) {
+            await notificationHelper.notifyJobAssignment(
+              employee.id,
+              job.jobNumber || '',
+              job.title || ''
+            );
+          }
         }
       }
 
@@ -9062,6 +9095,24 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       }
 
       const conversation = await storage.createConversation(validation.data);
+      
+      // Send push notification to admin users about new lead
+      try {
+        const employees = await storage.getAllEmployees();
+        const admins = employees.filter(emp => emp.role === 'admin');
+        
+        for (const admin of admins) {
+          await notificationHelper.notifyNewLead(
+            admin.id,
+            conversation.title || 'Unknown',
+            conversation.source || 'website'
+          );
+        }
+      } catch (notifError) {
+        console.error('Error sending new lead notification:', notifError);
+        // Don't fail the request if notification fails
+      }
+      
       res.json({ success: true, data: conversation });
     } catch (error) {
       console.error('Error creating conversation:', error);
@@ -15863,6 +15914,163 @@ Transcription: ${transcriptText}`;
     } catch (error) {
       console.error('Error refreshing campaign stats:', error);
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to refresh stats' });
+    }
+  });
+
+  // ========================================
+  // PUSH NOTIFICATIONS - FCM TOKENS
+  // ========================================
+
+  // Get Firebase config for service worker (public endpoint, no secrets)
+  app.get("/api/firebase-config", async (req, res) => {
+    // Return Firebase config from environment variables
+    // These are public values, safe to expose to the client
+    const config = {
+      apiKey: process.env.FIREBASE_API_KEY || '',
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
+      projectId: process.env.FIREBASE_PROJECT_ID || '',
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || '',
+      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+      appId: process.env.FIREBASE_APP_ID || ''
+    };
+    
+    // Check if Firebase is configured
+    const isConfigured = Object.values(config).every(val => val !== '');
+    
+    res.json({ 
+      success: true, 
+      configured: isConfigured,
+      config: isConfigured ? config : null 
+    });
+  });
+
+  // Register FCM token for push notifications
+  app.post("/api/notifications/register-token", async (req, res) => {
+    try {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+
+      const { token, deviceInfo } = req.body;
+      if (!token) {
+        return res.status(400).json({ success: false, message: 'Token is required' });
+      }
+
+      // Check if token already exists
+      const existingToken = await storage.getFcmTokenByToken(token);
+      if (existingToken) {
+        // Update last used timestamp
+        await storage.markFcmTokenAsUsed(token);
+        return res.json({ success: true, message: 'Token already registered' });
+      }
+
+      // Create new token
+      await storage.createFcmToken({
+        employeeId,
+        token,
+        deviceInfo: deviceInfo || null,
+        isActive: true
+      });
+
+      // Create default notification preferences if they don't exist
+      const existingPrefs = await storage.getNotificationPreferences(employeeId);
+      if (!existingPrefs) {
+        await storage.createNotificationPreferences({
+          employeeId
+        });
+      }
+
+      console.log(`✅ FCM token registered for employee ${employeeId}`);
+      res.json({ success: true, message: 'Token registered successfully' });
+    } catch (error) {
+      console.error('Error registering FCM token:', error);
+      res.status(500).json({ success: false, message: 'Failed to register token' });
+    }
+  });
+
+  // Get notification preferences
+  app.get("/api/notifications/preferences", async (req, res) => {
+    try {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+
+      let prefs = await storage.getNotificationPreferences(employeeId);
+      
+      // Create default preferences if they don't exist
+      if (!prefs) {
+        prefs = await storage.createNotificationPreferences({
+          employeeId
+        });
+      }
+
+      res.json({ success: true, data: prefs });
+    } catch (error) {
+      console.error('Error fetching notification preferences:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch preferences' });
+    }
+  });
+
+  // Update notification preferences
+  app.put("/api/notifications/preferences", async (req, res) => {
+    try {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+
+      const updates = req.body;
+      const prefs = await storage.updateNotificationPreferences(employeeId, updates);
+
+      res.json({ success: true, data: prefs });
+    } catch (error) {
+      console.error('Error updating notification preferences:', error);
+      res.status(500).json({ success: false, message: 'Failed to update preferences' });
+    }
+  });
+
+  // Test notification endpoint (for debugging)
+  app.post("/api/notifications/test", async (req, res) => {
+    try {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+
+      const { firebaseMessagingService } = await import('./services/firebaseMessagingService.js');
+      
+      // Get active tokens for the current employee
+      const tokens = await storage.getActiveFcmTokens(employeeId);
+      if (tokens.length === 0) {
+        return res.json({ success: false, message: 'No active notification tokens found. Please enable notifications first.' });
+      }
+
+      // Send test notification to all active devices
+      let successCount = 0;
+      for (const tokenRecord of tokens) {
+        const sent = await firebaseMessagingService.sendToDevice(tokenRecord.token, {
+          title: '🧪 Test Notification',
+          body: 'Push notifications are working! You\'ll receive alerts for job assignments, schedule changes, and more.',
+          clickAction: '/dispatch',
+          data: {
+            type: 'test',
+          },
+        });
+        if (sent) {
+          successCount++;
+        }
+      }
+
+      res.json({ 
+        success: true, 
+        message: `Test notification sent to ${successCount} device(s)`,
+        devicesNotified: successCount
+      });
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to send test notification' });
     }
   });
 
