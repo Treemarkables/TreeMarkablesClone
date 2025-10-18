@@ -1574,7 +1574,7 @@ export function GlobalJobCard({
       )}
       
       {/* ServiceM8-style Header */}
-        <div className={`border-b px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 sm:rounded-t-xl ${
+        <div className={`border-b px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 rounded-t-lg ${
           currentStatus === 'completed' ? 'bg-green-600 border-green-700' :
           currentStatus === 'work order' ? 'bg-blue-600 border-blue-700' :
           currentStatus === 'quote' ? 'bg-orange-600 border-orange-700' :
