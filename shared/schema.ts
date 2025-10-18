@@ -352,6 +352,12 @@ export const jobs = pgTable("jobs", {
   laborHours: decimal("labor_hours", { precision: 8, scale: 2 }),
   hourlyRate: decimal("hourly_rate", { precision: 8, scale: 2 }),
   
+  // Man-Hours Tracking & Estimation Accuracy
+  estimatedManHours: decimal("estimated_man_hours", { precision: 8, scale: 2 }), // People × Scheduled Hours
+  actualManHours: decimal("actual_man_hours", { precision: 8, scale: 2 }), // Sum of time tracking entries
+  estimationAccuracy: decimal("estimation_accuracy", { precision: 5, scale: 2 }), // (1 - |estimated - actual| / estimated) × 100
+  estimationVariance: decimal("estimation_variance", { precision: 8, scale: 2 }), // actual - estimated (positive = over, negative = under)
+  
   // Enhanced Expense Tracking
   actualLaborCosts: decimal("actual_labor_costs", { precision: 10, scale: 2 }),
   actualMaterialsCosts: decimal("actual_materials_costs", { precision: 10, scale: 2 }),
