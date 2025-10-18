@@ -216,7 +216,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     disabled={isRefreshing}
                     data-testid="button-mobile-refresh"
                   >
-                    <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-10 w-10 ${isRefreshing ? 'animate-spin' : ''}`} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -233,7 +233,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   data-testid="button-crew-logout-mobile"
                   className="flex items-center gap-1"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut className="h-8 w-8" />
                   Logout
                 </Button>
               )}
@@ -244,13 +244,13 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="flex items-center gap-1" data-testid="button-account-dropdown-mobile">
                       Account
-                      <ChevronDown className="h-4 w-4" />
+                      <ChevronDown className="h-8 w-8" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
                     <DropdownMenuItem asChild>
                       <Link href="/history" className="flex items-center w-full" data-testid="menu-history-mobile">
-                        <HistoryIcon className="w-4 h-4 mr-3 text-gray-600" />
+                        <HistoryIcon className="w-8 h-8 mr-3 text-gray-600" />
                         <div>
                           <div className="font-medium">History</div>
                           <div className="text-sm text-muted-foreground">Find any past job</div>
@@ -260,7 +260,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/clients" className="flex items-center w-full" data-testid="menu-clients-mobile">
-                        <Users className="w-4 h-4 mr-3 text-blue-600" />
+                        <Users className="w-8 h-8 mr-3 text-blue-600" />
                         <div>
                           <div className="font-medium">Clients</div>
                           <div className="text-sm text-muted-foreground">Import & manage your customer list</div>
@@ -270,7 +270,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/materials-services" className="flex items-center w-full" data-testid="menu-materials-services-mobile">
-                        <Package className="w-4 h-4 mr-3 text-orange-600" />
+                        <Package className="w-8 h-8 mr-3 text-orange-600" />
                         <div>
                           <div className="font-medium">Materials & Services</div>
                           <div className="text-sm text-muted-foreground">Import & manage items you sell</div>
@@ -280,7 +280,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/settings" className="flex items-center w-full" data-testid="menu-settings-mobile">
-                        <Settings2 className="w-4 h-4 mr-3 text-gray-600" />
+                        <Settings2 className="w-8 h-8 mr-3 text-gray-600" />
                         <div>
                           <div className="font-medium">Settings</div>
                           <div className="text-sm text-muted-foreground">Add staff & manage your account</div>
@@ -290,7 +290,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/developer" className="flex items-center w-full" data-testid="menu-developer-mobile">
-                        <Code className="w-4 h-4 mr-3 text-purple-600" />
+                        <Code className="w-8 h-8 mr-3 text-purple-600" />
                         <div>
                           <div className="font-medium">Developer</div>
                           <div className="text-sm text-muted-foreground">API access and integrations</div>
@@ -299,7 +299,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     </DropdownMenuItem>
                     
                     <DropdownMenuItem onClick={logout} className="flex items-center" data-testid="menu-logout-mobile">
-                      <LogOut className="w-4 h-4 mr-3 text-red-600" />
+                      <LogOut className="w-8 h-8 mr-3 text-red-600" />
                       <div>
                         <div className="font-medium">Logout</div>
                         <div className="text-sm text-muted-foreground">Sign out of your account</div>
@@ -329,7 +329,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     disabled={isRefreshing}
                     data-testid="button-desktop-refresh"
                   >
-                    <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-10 w-10 ${isRefreshing ? 'animate-spin' : ''}`} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -346,7 +346,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   data-testid="button-crew-logout"
                   className="flex items-center gap-1"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut className="h-8 w-8" />
                   Logout
                 </Button>
               )}
@@ -357,13 +357,13 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-1" data-testid="button-account-dropdown">
                     Account
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-8 w-8" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
                   <DropdownMenuItem asChild>
                     <Link href="/history" className="flex items-center w-full" data-testid="menu-history">
-                      <HistoryIcon className="w-4 h-4 mr-3 text-gray-600" />
+                      <HistoryIcon className="w-8 h-8 mr-3 text-gray-600" />
                       <div>
                         <div className="font-medium">History</div>
                         <div className="text-sm text-muted-foreground">Find any past job, saved forever</div>
@@ -373,7 +373,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/clients" className="flex items-center w-full" data-testid="menu-clients">
-                      <Users className="w-4 h-4 mr-3 text-blue-600" />
+                      <Users className="w-8 h-8 mr-3 text-blue-600" />
                       <div>
                         <div className="font-medium">Clients</div>
                         <div className="text-sm text-muted-foreground">Import & manage your customer list</div>
@@ -383,7 +383,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/materials-services" className="flex items-center w-full" data-testid="menu-materials-services">
-                      <Package className="w-4 h-4 mr-3 text-orange-600" />
+                      <Package className="w-8 h-8 mr-3 text-orange-600" />
                       <div>
                         <div className="font-medium">Materials & Services</div>
                         <div className="text-sm text-muted-foreground">Import & manage items you sell</div>
@@ -393,7 +393,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/settings" className="flex items-center w-full" data-testid="menu-settings">
-                      <Settings2 className="w-4 h-4 mr-3 text-gray-600" />
+                      <Settings2 className="w-8 h-8 mr-3 text-gray-600" />
                       <div>
                         <div className="font-medium">Settings</div>
                         <div className="text-sm text-muted-foreground">Add staff & manage your account</div>
@@ -403,7 +403,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/developer" className="flex items-center w-full" data-testid="menu-developer">
-                      <Code className="w-4 h-4 mr-3 text-purple-600" />
+                      <Code className="w-8 h-8 mr-3 text-purple-600" />
                       <div>
                         <div className="font-medium">Developer</div>
                         <div className="text-sm text-muted-foreground">API access and integrations</div>
@@ -421,7 +421,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 data-testid="global-new-job-btn"
                 className="bg-amber-500 hover:bg-amber-600 text-white"
               >
-                <Plus className="h-4 w-4 mr-1" />
+                <Plus className="h-8 w-8 mr-1" />
                 New Job
               </Button>
             </div>
