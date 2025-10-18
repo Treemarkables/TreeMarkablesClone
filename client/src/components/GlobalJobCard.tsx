@@ -43,6 +43,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertJobSchema, type ChecklistItem, type Job, type Customer } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { formatTime12Hour } from "@shared/dateUtils";
 
 // Form validation schema extending the base insertJobSchema
 const globalJobCardSchema = insertJobSchema.extend({
@@ -2523,7 +2524,7 @@ export function GlobalJobCard({
                                 const employee = employees.find((e: any) => e.id === employeeId);
                                 const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
                                 const scheduledDate = editingJob.scheduledDate ? new Date(editingJob.scheduledDate).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-                                const scheduledTime = editingJob.scheduledStartTime || '';
+                                const scheduledTime = editingJob.scheduledStartTime ? formatTime12Hour(editingJob.scheduledStartTime) : '';
                                 
                                 return (
                                   <div key={employeeId} className="flex items-center gap-2">
