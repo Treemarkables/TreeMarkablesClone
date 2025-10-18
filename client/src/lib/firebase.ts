@@ -2,26 +2,47 @@
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage, type Messaging } from 'firebase/messaging';
 
-// Firebase configuration - loaded from environment variables
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
-
-// VAPID key for web push notifications
-const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-
 let app: any;
 let messaging: Messaging | null = null;
+let firebaseConfig: any = null;
+let vapidKey: string | null = null;
+
+// Fetch Firebase config from API
+async function fetchFirebaseConfig() {
+  try {
+    const response = await fetch('/api/firebase-config');
+    const data = await response.json();
+    
+    if (data.success && data.configured && data.config) {
+      firebaseConfig = data.config;
+      
+      // Fetch VAPID key from environment or use default
+      // Note: VAPID key must be set in environment variables with VITE_ prefix
+      vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
+      
+      return true;
+    }
+    
+    console.warn('⚠️ Firebase not configured - push notifications disabled');
+    return false;
+  } catch (error) {
+    console.error('❌ Error fetching Firebase config:', error);
+    return false;
+  }
+}
 
 // Initialize Firebase
-export function initializeFirebase() {
+export async function initializeFirebase() {
   try {
     if (!app) {
+      // Fetch config if not already loaded
+      if (!firebaseConfig) {
+        const configured = await fetchFirebaseConfig();
+        if (!configured) {
+          return { app: null, messaging: null };
+        }
+      }
+      
       app = initializeApp(firebaseConfig);
       
       // Initialize messaging if supported
