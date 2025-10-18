@@ -197,30 +197,6 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           <header className="md:hidden flex items-center justify-between px-2 border-b bg-white" style={{ paddingTop: 'max(2rem, calc(env(safe-area-inset-top) + 1rem))' }}>
             <div className="flex items-center gap-2">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
-              
-              {/* Dispatch-specific: Date navigation */}
-              {isDispatchPage && (
-                <>
-                  <div className="flex items-center gap-0.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDispatchDate(subDays(dispatchDate, 1))}
-                      className="h-6 w-6 p-0"
-                    >
-                      <ChevronLeft className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDispatchDate(addDays(dispatchDate, 1))}
-                      className="h-6 w-6 p-0"
-                    >
-                      <ChevronRight className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </>
-              )}
             </div>
             
             <div className="flex items-center gap-2">
