@@ -198,13 +198,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             <div className="flex items-center gap-2">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               
-              {/* Dispatch-specific: Jobs count and date navigation */}
+              {/* Dispatch-specific: Date navigation */}
               {isDispatchPage && (
                 <>
-                  <div className="flex items-center gap-1 text-xs font-semibold">
-                    <CalendarIcon className="h-3.5 w-3.5" />
-                    <span>Jobs ({jobCount})</span>
-                  </div>
                   <div className="flex items-center gap-0.5">
                     <Button
                       variant="outline"
