@@ -1574,7 +1574,7 @@ export function GlobalJobCard({
       )}
       
       {/* ServiceM8-style Header */}
-        <div className={`border-b px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 flex-shrink-0 sm:rounded-t-xl ${
+        <div className={`border-b px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 sm:rounded-t-xl ${
           currentStatus === 'completed' ? 'bg-green-600 border-green-700' :
           currentStatus === 'work order' ? 'bg-blue-600 border-blue-700' :
           currentStatus === 'quote' ? 'bg-orange-600 border-orange-700' :
@@ -1582,7 +1582,7 @@ export function GlobalJobCard({
           currentStatus === 'scheduled' ? 'bg-orange-600 border-orange-700' :
           currentStatus === 'unsuccessful' ? 'bg-red-600 border-red-700' :
           'bg-gray-600 border-gray-700'
-        }`} style={{ paddingTop: 'max(0.25rem, env(safe-area-inset-top))' }}>
+        }`} style={{ paddingTop: 'max(0.125rem, env(safe-area-inset-top))' }}>
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Left: Job Title & Status */}
             <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
