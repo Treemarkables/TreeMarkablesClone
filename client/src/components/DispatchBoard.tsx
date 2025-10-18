@@ -1756,7 +1756,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     </div>
 
     {/* Modal version for mobile only - check window size to prevent Dialog rendering on desktop */}
-    {showGlobalJobCard && typeof window !== 'undefined' && window.innerWidth < 1024 && (
+    {/* TEMPORARILY DISABLED FOR DESKTOP TESTING */}
+    {false && showGlobalJobCard && typeof window !== 'undefined' && window.innerWidth < 1024 && (
       <GlobalJobCard
         isOpen={showGlobalJobCard}
         mode={globalJobCardMode}
