@@ -1888,9 +1888,11 @@ export function ProposalBuilder({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-56">
-                        <DropdownMenuItem onClick={handlePreview} data-testid="menu-preview-proposal">
-                          <Eye className="h-4 w-4 mr-2 text-blue-600" />
-                          Preview
+                        <DropdownMenuItem onClick={handlePreview} data-testid="menu-preview-proposal" className="py-3">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 mr-3">
+                            <Eye className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <span className="font-medium">Preview</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => {
@@ -1898,9 +1900,12 @@ export function ProposalBuilder({
                             setShowEmailDialog(true);
                           }}
                           data-testid="menu-email-proposal"
+                          className="py-3"
                         >
-                          <Mail className="h-4 w-4 mr-2 text-blue-600" />
-                          Email
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 mr-3">
+                            <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <span className="font-medium">Email</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => {
@@ -1908,22 +1913,30 @@ export function ProposalBuilder({
                             setShowSmsDialog(true);
                           }}
                           data-testid="menu-sms-proposal"
+                          className="py-3"
                         >
-                          <MessageSquare className="h-4 w-4 mr-2 text-green-600" />
-                          SMS
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 mr-3">
+                            <MessageSquare className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          </div>
+                          <span className="font-medium">SMS</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
                           onClick={handleManualSave}
                           disabled={saveDraftMutation.isPending}
                           data-testid="menu-save-proposal"
+                          className="py-3"
                         >
-                          <Save className="h-4 w-4 mr-2 text-orange-600" />
-                          {saveDraftMutation.isPending ? "Saving..." : "Save Draft"}
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 mr-3">
+                            <Save className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                          </div>
+                          <span className="font-medium">{saveDraftMutation.isPending ? "Saving..." : "Save Draft"}</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={onClose} data-testid="menu-cancel-proposal">
-                          <X className="h-4 w-4 mr-2 text-red-600" />
-                          Cancel
+                        <DropdownMenuItem onClick={onClose} data-testid="menu-cancel-proposal" className="py-3">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30 mr-3">
+                            <X className="h-5 w-5 text-red-600 dark:text-red-400" />
+                          </div>
+                          <span className="font-medium">Cancel</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
