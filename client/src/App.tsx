@@ -46,6 +46,7 @@ import SettingsPreferences from "@/pages/SettingsPreferences";
 import CommunicationTemplates from "@/pages/CommunicationTemplates";
 import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
 import NotificationPreferences from "@/pages/NotificationPreferences";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import VehicleInspection from "@/pages/VehicleInspection";
 import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
 import JHATemplates from "@/pages/JHATemplates";
@@ -738,7 +739,14 @@ function Router() {
       </Route>
       <Route path="/settings/notifications">
         <SidebarLayout>
-          <NotificationPreferences />
+          <div className="p-6 space-y-6">
+            <div>
+              <h1 className="text-3xl font-bold">Notification Preferences</h1>
+              <p className="text-muted-foreground mt-2">Control which events trigger notifications and how you receive them</p>
+            </div>
+            <NotificationSettings />
+            <NotificationPreferences />
+          </div>
         </SidebarLayout>
       </Route>
       <Route path="/settings/templates">
