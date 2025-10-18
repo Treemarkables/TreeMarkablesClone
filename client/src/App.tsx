@@ -213,14 +213,6 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setDispatchDate(new Date())}
-                      className="h-6 px-1.5 text-[10px]"
-                    >
-                      Today
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
                       onClick={() => setDispatchDate(addDays(dispatchDate, 1))}
                       className="h-6 w-6 p-0"
                     >
