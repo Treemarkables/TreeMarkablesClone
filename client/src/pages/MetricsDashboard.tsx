@@ -653,7 +653,7 @@ export default function MetricsDashboard() {
         )}
 
         {/* Additional Metrics Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -675,29 +675,6 @@ export default function MetricsDashboard() {
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium">Jobs Completed</span>
                 <span className="font-bold text-lg">{revenueStats?.jobsCompleted || 0}</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-blue-500" />
-                Lead Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Total Leads</span>
-                <span className="font-bold text-lg">{dashboardStats?.totalLeads || 0}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Conversion Rate</span>
-                <span className="font-bold text-lg">{dashboardStats?.conversionRate?.toFixed(1) || 0}%</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Missed Opportunities</span>
-                <span className="font-bold text-lg text-orange-600">{dashboardStats?.missedCalls || 0}</span>
               </div>
             </CardContent>
           </Card>
