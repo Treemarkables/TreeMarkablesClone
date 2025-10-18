@@ -83,8 +83,25 @@ interface LeadSourceData {
   roi: number;
 }
 
+interface ManHoursMetrics {
+  totalJobs: number;
+  jobsWithEstimates: number;
+  averageAccuracy: number;
+  accuracyDistribution: {
+    excellent: number;
+    good: number;
+    fair: number;
+    poor: number;
+  };
+  totalEstimatedHours: number;
+  totalActualHours: number;
+  overestimatedJobs: number;
+  underestimatedJobs: number;
+}
+
 export default function MetricsDashboard() {
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
+  const [manHoursCollapsed, setManHoursCollapsed] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [customReportDialog, setCustomReportDialog] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<string>("");
@@ -172,6 +189,11 @@ export default function MetricsDashboard() {
       if (dateRange?.to) params.append('toDate', dateRange.to);
       return fetch(`/api/lead-source-analysis?${params}`).then(res => res.json()).then(res => res.data);
     }
+  });
+
+  const { data: manHoursMetrics, isLoading: manHoursLoading } = useQuery<ManHoursMetrics>({
+    queryKey: ['/api/man-hours-metrics'],
+    queryFn: () => fetch('/api/man-hours-metrics').then(res => res.json()).then(res => res.data)
   });
 
   // Export handler
@@ -526,6 +548,109 @@ export default function MetricsDashboard() {
             />
           </div>
         </div>
+
+        {/* Job Estimation Accuracy Section */}
+        {!manHoursLoading && manHoursMetrics && manHoursMetrics.jobsWithEstimates > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Job Estimation Accuracy
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setManHoursCollapsed(!manHoursCollapsed)}
+                data-testid="button-toggle-man-hours"
+              >
+                {manHoursCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 ${manHoursCollapsed ? 'hidden md:grid' : ''}`}>
+              <MetricCard
+                title="Overall Accuracy"
+                value={`${manHoursMetrics.averageAccuracy.toFixed(1)}%`}
+                subtitle={`${manHoursMetrics.jobsWithEstimates} jobs analyzed`}
+                icon={Target}
+                testId="card-estimation-accuracy"
+                colorful={true}
+                valueColor={manHoursMetrics.averageAccuracy >= 90 ? "text-green-600" : manHoursMetrics.averageAccuracy >= 75 ? "text-blue-600" : "text-orange-600"}
+              />
+
+              <MetricCard
+                title="Excellent Accuracy"
+                value={manHoursMetrics.accuracyDistribution.excellent}
+                subtitle="≥ 90% accurate jobs"
+                icon={CheckCircle}
+                testId="card-excellent-accuracy"
+                valueColor="text-green-600"
+              />
+
+              <MetricCard
+                title="Total Estimated Hours"
+                value={manHoursMetrics.totalEstimatedHours.toFixed(1)}
+                subtitle={`${manHoursMetrics.totalActualHours.toFixed(1)} actual hours`}
+                icon={Clock}
+                testId="card-estimated-hours"
+              />
+
+              <MetricCard
+                title="Estimation Trend"
+                value={manHoursMetrics.overestimatedJobs > manHoursMetrics.underestimatedJobs ? "Over-estimating" : "Under-estimating"}
+                subtitle={`${Math.max(manHoursMetrics.overestimatedJobs, manHoursMetrics.underestimatedJobs)} jobs`}
+                icon={TrendingUp}
+                testId="card-estimation-trend"
+                valueColor={manHoursMetrics.overestimatedJobs > manHoursMetrics.underestimatedJobs ? "text-blue-600" : "text-orange-600"}
+              />
+            </div>
+
+            {/* Detailed breakdown */}
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>Accuracy Distribution</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">{manHoursMetrics.accuracyDistribution.excellent}</div>
+                    <div className="text-sm text-muted-foreground mt-1">Excellent (≥90%)</div>
+                  </div>
+                  <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">{manHoursMetrics.accuracyDistribution.good}</div>
+                    <div className="text-sm text-muted-foreground mt-1">Good (75-89%)</div>
+                  </div>
+                  <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-yellow-600">{manHoursMetrics.accuracyDistribution.fair}</div>
+                    <div className="text-sm text-muted-foreground mt-1">Fair (60-74%)</div>
+                  </div>
+                  <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-red-600">{manHoursMetrics.accuracyDistribution.poor}</div>
+                    <div className="text-sm text-muted-foreground mt-1">Poor (&lt;60%)</div>
+                  </div>
+                </div>
+                <div className="mt-6 space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Total Jobs Completed:</span>
+                    <span className="font-semibold">{manHoursMetrics.totalJobs}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Jobs with Estimates:</span>
+                    <span className="font-semibold">{manHoursMetrics.jobsWithEstimates}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Over-estimated Jobs:</span>
+                    <span className="font-semibold text-blue-600">{manHoursMetrics.overestimatedJobs}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Under-estimated Jobs:</span>
+                    <span className="font-semibold text-orange-600">{manHoursMetrics.underestimatedJobs}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Additional Metrics Information */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
