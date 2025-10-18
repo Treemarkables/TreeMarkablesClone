@@ -97,6 +97,7 @@ interface GlobalJobCardProps {
   customerId?: string;
   onJobCreated?: (job: any) => void;
   onJobUpdated?: (job: any) => void;
+  renderInline?: boolean; // For split-screen panel rendering (desktop)
 }
 
 export function GlobalJobCard({ 
@@ -107,7 +108,8 @@ export function GlobalJobCard({
   job, 
   customerId, 
   onJobCreated, 
-  onJobUpdated 
+  onJobUpdated,
+  renderInline = false
 }: GlobalJobCardProps) {
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
     Array.isArray(job?.checklist) ? job.checklist : []
@@ -1556,18 +1558,22 @@ export function GlobalJobCard({
   // Get current status from form or editingJob
   const currentStatus = editingJob?.status || form.watch('status');
 
-  return (
-    <>
-      <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-      <DialogContent className="w-full h-full max-w-full flex flex-col p-4 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
-        <DialogTitle className="sr-only">
-          {mode === "create" ? "Create New Job" : `Job ${editingJob?.jobNumber || ""}`}
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          {mode === "create" ? "Create a new job with customer details and specifications" : "View and edit job details, contacts, and settings"}
-        </DialogDescription>
-        
-        {/* ServiceM8-style Header */}
+  // Job card content (can be rendered inline or in a dialog)
+  const jobCardContent = (
+    <div className={renderInline ? "h-full w-full flex flex-col bg-gray-50" : "w-full h-full max-w-full flex flex-col p-4 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"}>
+      {/* Hidden titles for accessibility */}
+      {!renderInline && (
+        <>
+          <DialogTitle className="sr-only">
+            {mode === "create" ? "Create New Job" : `Job ${editingJob?.jobNumber || ""}`}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {mode === "create" ? "Create a new job with customer details and specifications" : "View and edit job details, contacts, and settings"}
+          </DialogDescription>
+        </>
+      )}
+      
+      {/* ServiceM8-style Header */}
         <div className={`border-b px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 flex-shrink-0 sm:rounded-t-xl ${
           currentStatus === 'completed' ? 'bg-green-600 border-green-700' :
           currentStatus === 'work order' ? 'bg-blue-600 border-blue-700' :
@@ -3681,8 +3687,6 @@ export function GlobalJobCard({
             </Form>
           </div>
         </div>
-      </DialogContent>
-      </Dialog>
 
       {/* Email Composer Modal */}
       {isEmailComposerOpen && (
@@ -4256,6 +4260,22 @@ export function GlobalJobCard({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+
+  return (
+    <>
+      {renderInline ? (
+        // Inline rendering for split-screen panel (desktop)
+        jobCardContent
+      ) : (
+        // Dialog rendering for mobile and standalone use
+        <Dialog open={isOpen} onOpenChange={handleDialogClose}>
+          <DialogContent className="w-full h-full max-w-full flex flex-col p-4 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
+            {jobCardContent}
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Job Description Popup - Responsive Width */}
       <Dialog open={descriptionPopupOpen} onOpenChange={setDescriptionPopupOpen}>

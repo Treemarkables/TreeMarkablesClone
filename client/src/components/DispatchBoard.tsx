@@ -1563,6 +1563,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           setShowGlobalJobCard(false);
                           setJobToEdit(null);
                         }}
+                        renderInline={true}
                       />
                     </div>
                   </div>
