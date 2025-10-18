@@ -160,6 +160,19 @@ export default function ConversationDetail() {
       });
     }
 
+    // If name is still empty but we have email, extract name from email
+    if (!name && email) {
+      const emailParts = email.split('@')[0]; // Get part before @
+      const nameParts = emailParts.split(/[._-]/); // Split on dots, underscores, hyphens
+      
+      // Capitalize each part
+      const capitalizedParts = nameParts.map(part => 
+        part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+      );
+      
+      name = capitalizedParts.join(' ').trim();
+    }
+
     // Extract first name and last name from full name
     let firstName = '';
     let lastName = '';
