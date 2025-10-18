@@ -5734,6 +5734,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Get man-hours estimation accuracy metrics
+  app.get('/api/man-hours-metrics', async (req: Request, res: Response) => {
+    try {
+      const metrics = await manHoursService.getOverallEstimationMetrics();
+      res.json({ success: true, data: metrics });
+    } catch (error) {
+      console.error('Error fetching man-hours metrics:', error);
+      res.status(500).json({ success: false, message: 'Error fetching man-hours estimation metrics' });
+    }
+  });
+
   // ========================================
   // ENHANCED LEAD ANALYTICS ENDPOINTS
   // ========================================
