@@ -7633,11 +7633,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         // Don't fail the request if diary entry creation fails
       }
 
-      // Sync to Google Calendar
+      // Sync to Google Calendar ONLY if the current user is scheduling themselves
       try {
-        const googleEventId = await googleCalendarService.syncJobToCalendar(job, created);
-        if (googleEventId) {
-          console.log(`✅ Job synced to Google Calendar: ${googleEventId}`);
+        const currentUserId = req.session.employeeId;
+        const isSchedulingSelf = currentUserId && employeeIds.includes(currentUserId);
+        
+        if (isSchedulingSelf) {
+          const googleEventId = await googleCalendarService.syncJobToCalendar(job, created);
+          if (googleEventId) {
+            console.log(`✅ Job synced to Google Calendar (user scheduling themselves): ${googleEventId}`);
+          }
+        } else {
+          console.log(`ℹ️  Skipping Google Calendar sync (user not scheduling themselves)`);
         }
       } catch (calendarError) {
         console.error('❌ Error syncing to Google Calendar:', calendarError);
