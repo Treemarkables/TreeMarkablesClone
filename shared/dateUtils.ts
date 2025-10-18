@@ -137,3 +137,21 @@ export function isInPastNZ(date: Date): boolean {
   const now = getNZNow();
   return date < now;
 }
+
+/**
+ * Convert 24-hour time string to 12-hour format with AM/PM
+ * @param time24 - Time string in 24-hour format (e.g., "10:00", "14:30")
+ * @returns Time string in 12-hour format with AM/PM (e.g., "10:00 AM", "2:30 PM")
+ */
+export function formatTime12Hour(time24: string): string {
+  if (!time24) return '';
+  
+  const [hoursStr, minutesStr] = time24.split(':');
+  const hours = parseInt(hoursStr, 10);
+  const minutes = minutesStr || '00';
+  
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  
+  return `${hours12}:${minutes} ${period}`;
+}
