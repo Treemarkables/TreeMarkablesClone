@@ -2515,7 +2515,7 @@ export function GlobalJobCard({
                           </div>
                         </div>
 
-                        {/* Upcoming Bookings */}
+                        {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
                         {editingJob?.scheduledDate && editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
                           <div>
                             <label className="text-xs font-medium text-gray-600 mb-2 block">Upcoming Bookings</label>
