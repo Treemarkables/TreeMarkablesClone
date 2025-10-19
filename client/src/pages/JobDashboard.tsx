@@ -200,7 +200,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
 
   // Fetch jobs data with proper typing
   const { data: jobsResponse, isLoading: jobsLoading } = useQuery<ApiResponse<Job>>({
-    queryKey: ['/api/jobs'],
+    queryKey: ['/api/jobs?limit=1000'], // Load more jobs for dashboard view
     // Refetch on mount to ensure fresh data on PWA
     refetchOnMount: 'always',
     // Disable caching for jobs list to always get fresh order

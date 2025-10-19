@@ -177,7 +177,7 @@ export interface IStorage {
   updateJob(id: string, updates: Partial<InsertJob>): Promise<Job>;
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
-  getAllJobs(): Promise<Job[]>;
+  getAllJobs(options?: { limit?: number; offset?: number; status?: string }): Promise<{ jobs: Job[]; total: number }>;
   createJobFromCall(params: {
     callId: string;
     customerName: string;
@@ -1452,8 +1452,30 @@ class DatabaseStorage implements IStorage {
       .orderBy(desc(schema.jobs.createdAt));
   }
 
-  async getAllJobs(): Promise<Job[]> {
-    return await db.select().from(schema.jobs).orderBy(desc(schema.jobs.createdAt));
+  async getAllJobs(options?: { limit?: number; offset?: number; status?: string }): Promise<{ jobs: Job[]; total: number }> {
+    const limit = options?.limit ?? 10; // Default to 10 jobs
+    const offset = options?.offset ?? 0;
+    
+    // Build the query with optional status filter
+    let query = db.select().from(schema.jobs);
+    
+    if (options?.status) {
+      query = query.where(eq(schema.jobs.status, options.status)) as any;
+    }
+    
+    // Get total count (for pagination)
+    const countQuery = options?.status 
+      ? db.select({ count: sql<number>`count(*)` }).from(schema.jobs).where(eq(schema.jobs.status, options.status))
+      : db.select({ count: sql<number>`count(*)` }).from(schema.jobs);
+    
+    const [jobs, totalResult] = await Promise.all([
+      query.orderBy(desc(schema.jobs.createdAt)).limit(limit).offset(offset),
+      countQuery
+    ]);
+    
+    const total = Number(totalResult[0]?.count) || 0;
+    
+    return { jobs, total };
   }
 
   async clearAllJobs(): Promise<number> {
@@ -2022,7 +2044,7 @@ class DatabaseStorage implements IStorage {
   async getPriceRulesByService(serviceName: string): Promise<PriceRule[]> { return []; }
 
   async getDashboardStats(fromDate?: Date, toDate?: Date): Promise<any> {
-    const allJobs = await this.getAllJobs();
+    const { jobs: allJobs } = await this.getAllJobs({ limit: 999999 }); // Get all jobs for accurate stats
     const allCustomers = await this.getAllCustomers();
     const allLeads = await this.getLeads();
     
@@ -2098,7 +2120,7 @@ class DatabaseStorage implements IStorage {
 
   async getRevenueStats(fromDate?: Date, toDate?: Date): Promise<any> {
     // Get all completed jobs (invoiced jobs remain as 'completed')
-    const allJobs = await this.getAllJobs();
+    const { jobs: allJobs } = await this.getAllJobs({ limit: 999999 }); // Get all jobs for accurate stats
     const completedJobs = allJobs.filter(job => job.status === 'completed');
     
     // Filter by date range if provided
