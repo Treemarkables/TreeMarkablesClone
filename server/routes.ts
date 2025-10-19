@@ -2811,27 +2811,47 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   app.get('/api/jobs', async (req: Request, res: Response) => {
     try {
-      const { customerId, status } = req.query;
-      let jobs;
+      const { customerId, status, limit, offset } = req.query;
       
+      // Parse pagination params
+      const parsedLimit = limit ? parseInt(limit as string) : 10;
+      const parsedOffset = offset ? parseInt(offset as string) : 0;
+      
+      // Handle customer-specific queries (return all jobs for that customer, no pagination)
       if (customerId && typeof customerId === 'string') {
-        jobs = await storage.getJobsByCustomer(customerId);
-      } else if (status && typeof status === 'string') {
-        jobs = await storage.getJobsByStatus(status);
-      } else {
-        jobs = await storage.getAllJobs();
+        const jobs = await storage.getJobsByCustomer(customerId);
+        return res.json({ success: true, data: jobs, total: jobs.length, limit: jobs.length, offset: 0 });
       }
       
-      // Debug: Check if job 3325 is in the results
-      const job3325 = jobs.find((j: any) => j.jobNumber === '3325');
-      console.log('🔍 API JOBS DEBUG:', {
-        totalJobs: jobs.length,
-        hasJob3325: !!job3325,
-        job3325Details: job3325 ? { id: job3325.id, jobNumber: job3325.jobNumber, title: job3325.title, status: job3325.status } : null,
-        first5Jobs: jobs.slice(0, 5).map((j: any) => ({ jobNumber: j.jobNumber, title: j.title }))
+      // Handle status-specific queries with pagination
+      if (status && typeof status === 'string') {
+        const result = await storage.getAllJobs({ 
+          limit: parsedLimit, 
+          offset: parsedOffset, 
+          status 
+        });
+        return res.json({ 
+          success: true, 
+          data: result.jobs, 
+          total: result.total,
+          limit: parsedLimit,
+          offset: parsedOffset
+        });
+      }
+      
+      // Default: get all jobs with pagination (default 10 jobs)
+      const result = await storage.getAllJobs({ 
+        limit: parsedLimit, 
+        offset: parsedOffset 
       });
       
-      res.json({ success: true, data: jobs });
+      res.json({ 
+        success: true, 
+        data: result.jobs, 
+        total: result.total,
+        limit: parsedLimit,
+        offset: parsedOffset
+      });
     } catch (error) {
       console.error('Error fetching jobs:', error);
       res.status(500).json({ success: false, message: 'Error fetching jobs' });

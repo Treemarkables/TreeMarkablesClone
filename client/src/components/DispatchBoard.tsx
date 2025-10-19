@@ -457,10 +457,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     notes: ''
   });
 
-  // Fetch jobs from backend API
+  // Pagination state
+  const [jobsLimit, setJobsLimit] = useState(50); // Start with 50 jobs for dispatch board
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Fetch jobs from backend API with pagination
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
-    queryKey: ['/api/jobs'],
+    queryKey: [`/api/jobs?limit=${jobsLimit}&offset=0`],
   });
+
+  // Calculate if there are more jobs to load
+  const hasMoreJobs = jobsData && jobsData.total > jobsData.data.length;
+  
+  // Function to load more jobs
+  const loadMoreJobs = () => {
+    if (!loadingMore && hasMoreJobs) {
+      setLoadingMore(true);
+      setJobsLimit(prev => prev + 50);
+      // Loading state will be cleared when query refetches
+      setTimeout(() => setLoadingMore(false), 500);
+    }
+  };
 
   // Debug logging for jobs data
   useEffect(() => {
@@ -1730,8 +1747,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               );
             })}
 
-            {/* Empty State */}
-            {getTodaysJobs().length === 0 && (
+            {/* Load More Button - Show whenever there are more jobs, even if current slice has zero today jobs */}
+            {hasMoreJobs && (
+              <div className="p-4 text-center border-t border-gray-200">
+                <Button
+                  onClick={loadMoreJobs}
+                  disabled={loadingMore}
+                  variant="outline"
+                  size="sm"
+                  data-testid="button-load-more-jobs"
+                >
+                  {loadingMore ? 'Loading...' : `Load More Jobs (${jobsData?.total - jobsData?.data.length} remaining)`}
+                </Button>
+              </div>
+            )}
+
+            {/* Empty State - Only show if no jobs AND no more to load */}
+            {getTodaysJobs().length === 0 && !hasMoreJobs && (
               <div className="p-8 text-center text-gray-500">
                 <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
                 <p className="text-sm">No jobs scheduled for this date</p>
