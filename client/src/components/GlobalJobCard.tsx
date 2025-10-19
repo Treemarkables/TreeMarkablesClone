@@ -1558,6 +1558,15 @@ export function GlobalJobCard({
 
   // Get current status - prioritize editingJob status when available to prevent flash of wrong status
   const currentStatus = (mode === 'edit' && editingJob?.status) ? editingJob.status : form.watch('status');
+  
+  // Debug: Log status when job card opens
+  console.log('🔍 GlobalJobCard Status Debug:', {
+    mode,
+    editingJobStatus: editingJob?.status,
+    formStatus: form.watch('status'),
+    currentStatus,
+    jobNumber: editingJob?.jobNumber
+  });
 
   // Job card content (can be rendered inline or in a dialog)
   const jobCardContent = (
