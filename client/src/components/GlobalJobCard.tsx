@@ -1556,16 +1556,10 @@ export function GlobalJobCard({
     }
   };
 
-  // Get current status - always use editingJob.status in edit mode since we wait for it to load
+  // Get current status - use editingJob.status in edit mode if available, otherwise form watch
   const currentStatus = (mode === 'edit' && editingJob?.status) 
     ? editingJob.status 
     : form.watch('status');
-  
-  // CRITICAL: In edit mode, don't render until job data is loaded to prevent status flash
-  // This ensures the correct status color shows immediately (e.g., blue for scheduled/work_order)
-  if (mode === 'edit' && (!editingJob?.id || !editingJob?.status)) {
-    return null;
-  }
 
   // Job card content (can be rendered inline or in a dialog)
   const jobCardContent = (
