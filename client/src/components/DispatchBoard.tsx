@@ -1463,6 +1463,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     className="p-4 border-b hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden h-[140px]"
                     onClick={() => handleEditJob(job)}
                     data-testid={`desktop-job-card-${job.id}`}
+                    style={{pointerEvents: 'auto', position: 'relative', zIndex: 1}}
                   >
                     <div className="flex items-start gap-3 h-full">
                       {/* Status Avatar Circle with Activity Indicator */}
@@ -1676,6 +1677,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full"
                   onClick={() => handleEditJob(job)}
                   data-testid={`job-card-${job.id}`}
+                  style={{pointerEvents: 'auto', position: 'relative', zIndex: 1}}
                 >
                   <div className="flex items-start gap-3 sm:gap-5 p-3 sm:p-5 min-w-0">
                     {/* Status Avatar with Activity Indicator */}
