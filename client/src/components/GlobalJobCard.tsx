@@ -234,7 +234,7 @@ export function GlobalJobCard({
 
   // Fetch all jobs for address lookup
   const { data: jobsData } = useQuery({
-    queryKey: ['/api/jobs'],
+    queryKey: ['/api/jobs?limit=1000'], // Fetch enough jobs for editing any job
     enabled: isOpen,
   });
 
