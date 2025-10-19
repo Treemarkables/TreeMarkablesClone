@@ -1562,15 +1562,9 @@ export function GlobalJobCard({
     ? editingJob.status 
     : form.watch('status');
   
-  // Debug logging
-  if (mode === 'edit' && editingJob?.jobNumber) {
-    console.log('🔍 STATUS DEBUG', editingJob.jobNumber, {
-      hasId: !!editingJob?.id,
-      hasStatus: !!editingJob?.status,
-      editingJobStatus: editingJob?.status,
-      formStatus: form.watch('status'),
-      currentStatus
-    });
+  // In edit mode, don't render until job data is loaded to prevent status flash
+  if (mode === 'edit' && (!editingJob?.id || !editingJob?.status)) {
+    return null; // Don't render anything until job is fully loaded
   }
 
   // Job card content (can be rendered inline or in a dialog)
