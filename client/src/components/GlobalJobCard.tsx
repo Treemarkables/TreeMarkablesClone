@@ -1561,6 +1561,17 @@ export function GlobalJobCard({
   const currentStatus = (mode === 'edit' && editingJob?.id && editingJob?.status) 
     ? editingJob.status 
     : form.watch('status');
+  
+  // Debug logging
+  if (mode === 'edit' && editingJob?.jobNumber) {
+    console.log('🔍 STATUS DEBUG', editingJob.jobNumber, {
+      hasId: !!editingJob?.id,
+      hasStatus: !!editingJob?.status,
+      editingJobStatus: editingJob?.status,
+      formStatus: form.watch('status'),
+      currentStatus
+    });
+  }
 
   // Job card content (can be rendered inline or in a dialog)
   const jobCardContent = (
