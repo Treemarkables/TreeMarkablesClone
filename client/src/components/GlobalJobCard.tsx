@@ -1583,11 +1583,9 @@ export function GlobalJobCard({
     }
   };
 
-  // Get current status - use editingJob.status in edit mode if available, otherwise form watch
-  // In edit mode, if job hasn't loaded yet, return null to hide badge (prevents status flash)
-  const currentStatus = mode === 'edit' 
-    ? (editingJob?.status || null)
-    : form.watch('status');
+  // Get current status from form (always reflects current state)
+  // Form is populated from editingJob in edit mode, so this works for both create and edit
+  const currentStatus = form.watch('status');
 
   // Job card content (can be rendered inline or in a dialog)
   const jobCardContent = (
