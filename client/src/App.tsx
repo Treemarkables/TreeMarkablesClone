@@ -61,6 +61,7 @@ import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
 import PublicReview from "@/pages/PublicReview";
 import ActivityDashboard from "@/pages/ActivityDashboard";
+import TimeTracking from "@/pages/TimeTracking";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
@@ -596,6 +597,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Equipment />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/time-tracking">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <TimeTracking />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
