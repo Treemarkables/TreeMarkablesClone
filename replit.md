@@ -6,6 +6,11 @@ This application is a comprehensive business management platform for Treemarkabl
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+### October 20, 2025
+- **Create New Job Address Pre-Population Bug - FIXED**: Resolved issue where "Create New Job" form pre-filled address field with data from previously viewed job. Root cause was auto-populate effect running with stale customer data. Implemented `hasUserSelectedCustomer` flag that tracks explicit user selections versus residual state. Flag resets to false on form reset and sets to true only when user selects customer from dropdown, preventing unintended address population while preserving intentional auto-fill functionality.
+- **Job Card Loading Race Condition - FIXED**: Resolved issue where job cards opened blank on first click due to async data fetching. Added loading spinner that displays while specific job data loads from `/api/jobs/:id` endpoint (60-150ms). Extracted `isLoadingSpecificJob` from useQuery and added conditional rendering to prevent blank forms. Job details now populate immediately after data loads without requiring modal reopening.
+
 ## System Architecture
 ### Core Design Principles
 - **UI/UX**: Mobile-first responsive design with a professional orange/blue theme, optimized for mobile viewing without horizontal scrolling. Split-screen layout for dispatch board on larger screens.
