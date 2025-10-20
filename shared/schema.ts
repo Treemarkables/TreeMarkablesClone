@@ -2151,6 +2151,15 @@ export const xeroConnections = pgTable("xero_connections", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Xero Settings - Configurable account codes and tax types
+export const xeroSettings = pgTable("xero_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  salesAccountCode: text("sales_account_code").notNull().default("200"), // Default sales account code
+  taxType: text("tax_type").notNull().default("OUTPUT2"), // Default tax type (OUTPUT2 = 15% GST for NZ)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Service Requests from Customer Portal
 export const serviceRequests = pgTable("service_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2188,6 +2197,12 @@ export const insertXeroConnectionSchema = createInsertSchema(xeroConnections).om
   updatedAt: true,
 });
 
+export const insertXeroSettingsSchema = createInsertSchema(xeroSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertServiceRequestSchema = createInsertSchema(serviceRequests).omit({
   id: true,
   createdAt: true,
@@ -2207,6 +2222,8 @@ export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type XeroConnection = typeof xeroConnections.$inferSelect;
 export type InsertXeroConnection = z.infer<typeof insertXeroConnectionSchema>;
+export type XeroSettings = typeof xeroSettings.$inferSelect;
+export type InsertXeroSettings = z.infer<typeof insertXeroSettingsSchema>;
 export type ServiceRequest = typeof serviceRequests.$inferSelect;
 export type InsertServiceRequest = z.infer<typeof insertServiceRequestSchema>;
 export type CustomerAuth = typeof customerAuth.$inferSelect;

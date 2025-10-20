@@ -283,6 +283,13 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         });
       }
       
+      // Get Xero settings for account code and tax type
+      const xeroSettings = await storage.getXeroSettings();
+      const accountCode = xeroSettings?.salesAccountCode || '200';
+      const taxType = xeroSettings?.taxType || 'OUTPUT2';
+      
+      console.log(`📋 Using Xero settings - Account Code: ${accountCode}, Tax Type: ${taxType}`);
+      
       // Step 2: Create invoice in Xero
       try {
         console.log(`🚀 XERO INVOICE: Starting invoice creation for job ${job.id}`);
@@ -305,8 +312,8 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
               description: item.description || 'Tree Service',
               quantity: Number(item.quantity) || 1,
               unitAmount: Number(item.rate || item.unitPrice) || 0,
-              accountCode: '200', // Sales account - adjust as needed
-              taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
+              accountCode,
+              taxType,
             });
           }
         }
@@ -330,8 +337,8 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
                 description: item.description || 'Tree Service',
                 quantity: Number(item.quantity) || 1,
                 unitAmount: Number(item.unitPrice) || 0,
-                accountCode: '200', // Sales account - adjust as needed
-                taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
+                accountCode,
+                taxType,
               });
             }
           }
@@ -350,8 +357,8 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
             description: item.description || 'Tree Service',
             quantity: item.quantity || 1,
             unitAmount: parseFloat(item.unitPrice || item.total || 0),
-            accountCode: '200', // Sales account - adjust as needed
-            taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
+            accountCode,
+            taxType,
           }));
         }
         
@@ -415,7 +422,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           invoiceNumber: xeroInvoice.invoiceNumber,
           invoiceId: xeroInvoice.invoiceID,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error creating Xero invoice:', error);
         
         // Update job with error status
@@ -424,9 +431,25 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           sentToXeroDate: new Date(),
         });
         
+        // Provide detailed error message for Xero validation errors
+        let errorMessage = 'Failed to create invoice in Xero';
+        
+        if (error?.response?.body?.Elements?.[0]?.ValidationErrors) {
+          const validationErrors = error.response.body.Elements[0].ValidationErrors;
+          const errorDetails = validationErrors.map((e: any) => e.Message).join('; ');
+          errorMessage = `Xero validation error: ${errorDetails}. Please check your Xero settings (Account Code: ${accountCode}, Tax Type: ${taxType}) in Settings > Xero Configuration.`;
+        } else if (error?.response?.body?.Message) {
+          errorMessage = `Xero error: ${error.response.body.Message}. This may be caused by incorrect Account Code (${accountCode}) or Tax Type (${taxType}). Please verify these settings exist in your Xero chart of accounts.`;
+        }
+        
         res.status(500).json({ 
           success: false, 
-          message: 'Failed to create invoice in Xero' 
+          message: errorMessage,
+          details: {
+            accountCode,
+            taxType,
+            suggestion: 'If this error persists, please verify that the Account Code and Tax Type exist in your Xero organization. You can configure these in Settings > Xero Configuration.'
+          }
         });
       }
     } catch (error) {
@@ -470,6 +493,72 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       res.status(500).json({ 
         success: false, 
         message: 'Failed to test Xero connection' 
+      });
+    }
+  });
+  
+  // Get Xero settings (account code and tax type)
+  app.get('/api/xero/settings', async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.getXeroSettings();
+      
+      if (!settings) {
+        // Return defaults if no settings exist
+        return res.json({
+          success: true,
+          data: {
+            salesAccountCode: '200',
+            taxType: 'OUTPUT2',
+          }
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          salesAccountCode: settings.salesAccountCode,
+          taxType: settings.taxType,
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching Xero settings:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch Xero settings' 
+      });
+    }
+  });
+  
+  // Update Xero settings (account code and tax type)
+  app.put('/api/xero/settings', async (req: Request, res: Response) => {
+    try {
+      const { salesAccountCode, taxType } = req.body;
+      
+      if (!salesAccountCode || !taxType) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sales Account Code and Tax Type are required'
+        });
+      }
+      
+      const updated = await storage.updateXeroSettings({
+        salesAccountCode,
+        taxType,
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          salesAccountCode: updated.salesAccountCode,
+          taxType: updated.taxType,
+        },
+        message: 'Xero settings updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating Xero settings:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to update Xero settings' 
       });
     }
   });

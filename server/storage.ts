@@ -659,6 +659,10 @@ export interface IStorage {
   getActiveXeroConnection(): Promise<XeroConnection | undefined>;
   updateXeroConnection(tenantId: string, updates: Partial<InsertXeroConnection>): Promise<XeroConnection>;
   deleteXeroConnection(tenantId: string): Promise<void>;
+  
+  // Xero Settings
+  getXeroSettings(): Promise<XeroSettings | undefined>;
+  updateXeroSettings(updates: Partial<InsertXeroSettings>): Promise<XeroSettings>;
 
   // Safety Incident Management
   getSafetyIncidents(): Promise<SafetyIncident[]>;
@@ -3822,6 +3826,33 @@ class DatabaseStorage implements IStorage {
   async deleteXeroConnection(tenantId: string): Promise<void> {
     await db.delete(schema.xeroConnections)
       .where(eq(schema.xeroConnections.tenantId, tenantId));
+  }
+  
+  // Xero Settings Implementation
+  async getXeroSettings(): Promise<XeroSettings | undefined> {
+    const [result] = await db.select()
+      .from(schema.xeroSettings)
+      .limit(1);
+    return result;
+  }
+  
+  async updateXeroSettings(updates: Partial<InsertXeroSettings>): Promise<XeroSettings> {
+    // Get existing settings or create if not exists
+    const existing = await this.getXeroSettings();
+    
+    if (existing) {
+      const [result] = await db.update(schema.xeroSettings)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(schema.xeroSettings.id, existing.id))
+        .returning();
+      return result;
+    } else {
+      // Create new settings if none exist
+      const [result] = await db.insert(schema.xeroSettings)
+        .values({ ...updates })
+        .returning();
+      return result;
+    }
   }
 
   async getSafetyIncidents(): Promise<SafetyIncident[]> { return []; }
