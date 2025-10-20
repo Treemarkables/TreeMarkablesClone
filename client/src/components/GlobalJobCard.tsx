@@ -2243,7 +2243,7 @@ export function GlobalJobCard({
                                                 form.setValue('jobContactLastName', nameParts.slice(1).join(' ') || '');
                                                 form.setValue('jobContactEmail', customer.email || '');
                                                 form.setValue('jobContactPhone', customer.phone || '');
-                                                form.setValue('newCustomerAddress', customer.address || '');
+                                                form.setValue('address', customer.address || '');
                                                 
                                                 setCustomerSearchOpen(false);
                                               }}
