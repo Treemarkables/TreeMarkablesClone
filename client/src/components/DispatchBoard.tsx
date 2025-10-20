@@ -429,6 +429,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isDeepSearchActive, setIsDeepSearchActive] = useState<boolean>(false);
   const [deepSearchResults, setDeepSearchResults] = useState<JobAssignment[]>([]);
+  const [isDeepSearchLoading, setIsDeepSearchLoading] = useState<boolean>(false);
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('individual');
   const [jobFilter, setJobFilter] = useState<string>('all');
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
@@ -822,50 +823,72 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   // Deep search function that searches ALL jobs including completed and unsuccessful
-  const performDeepSearch = (query: string) => {
+  const performDeepSearch = async (query: string) => {
     if (!query.trim()) {
       setIsDeepSearchActive(false);
       setDeepSearchResults([]);
       return;
     }
 
-    const searchQuery = query.toLowerCase().trim();
-    // Deep search includes ALL jobs (completed, unsuccessful, etc.) but excludes archived
-    const allMatchingJobs = jobs.filter(job => {
-      // Exclude archived jobs from deep search
-      if (job.status === 'archived') return false;
-      const customerName = job.customerName?.toLowerCase() || '';
-      const address = job.address?.toLowerCase() || '';
-      const serviceType = job.serviceType?.toLowerCase() || '';
-      const description = job.description?.toLowerCase() || '';
-      const jobId = job.id?.toLowerCase() || '';
-      const jobNumber = job.jobNumber?.toLowerCase() || '';
-      const notes = job.notes?.toLowerCase() || '';
-      const specialInstructions = job.specialInstructions?.toLowerCase() || '';
-
-      return customerName.includes(searchQuery) ||
-             address.includes(searchQuery) ||
-             serviceType.includes(searchQuery) ||
-             description.includes(searchQuery) ||
-             jobId.includes(searchQuery) ||
-             jobNumber.includes(searchQuery) ||
-             notes.includes(searchQuery) ||
-             specialInstructions.includes(searchQuery);
-    });
-
-    // Deduplicate jobs by ID (keep the most recent assignment for each unique job)
-    const uniqueJobs = Array.from(
-      allMatchingJobs.reduce((map, job) => {
-        const existing = map.get(job.id);
-        if (!existing || new Date(job.startTime) > new Date(existing.startTime)) {
-          map.set(job.id, job);
-        }
-        return map;
-      }, new Map<string, JobAssignment>()).values()
-    );
-
-    setIsDeepSearchActive(true);
-    setDeepSearchResults(uniqueJobs.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())); // Sort by newest first
+    setIsDeepSearchLoading(true);
+    
+    try {
+      // Call the server-side search endpoint
+      const response = await fetch(`/api/jobs/search?q=${encodeURIComponent(query.trim())}&limit=100&excludeArchived=true`);
+      
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Search failed');
+      }
+      
+      // Transform Job objects into JobAssignment format
+      const searchResults: JobAssignment[] = result.data.map((job: any) => ({
+        id: job.id,
+        jobNumber: job.jobNumber,
+        customerName: job.customerName || 'Unknown Customer',
+        customerPhone: job.customerPhone || '',
+        address: job.address || '',
+        serviceType: job.serviceType || '',
+        description: job.description || '',
+        status: job.status,
+        priority: job.priority || 'medium',
+        startTime: job.startTime || job.scheduledDate || new Date().toISOString(),
+        endTime: job.endTime || job.scheduledDate || new Date().toISOString(),
+        duration: job.duration || 2,
+        assignedTeam: job.assignedStaff || [],
+        notes: job.notes || '',
+        specialInstructions: job.specialInstructions || '',
+        estimatedValue: job.quoteAmount || 0,
+        completionPercentage: job.completionPercentage || 0,
+        customerId: job.customerId,
+        teamId: undefined,
+        staffId: undefined
+      }));
+      
+      setIsDeepSearchActive(true);
+      setDeepSearchResults(searchResults);
+      
+      toast({
+        title: 'Search Complete',
+        description: `Found ${searchResults.length} matching job${searchResults.length !== 1 ? 's' : ''}`,
+      });
+    } catch (error) {
+      console.error('Deep search error:', error);
+      toast({
+        title: 'Search Failed',
+        description: error instanceof Error ? error.message : 'An error occurred during search',
+        variant: 'destructive',
+      });
+      setIsDeepSearchActive(false);
+      setDeepSearchResults([]);
+    } finally {
+      setIsDeepSearchLoading(false);
+    }
   };
 
   const getTodaysJobs = () => {
@@ -1435,10 +1458,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   variant="outline"
                   className="w-full h-7 text-xs mt-2"
                   onClick={() => performDeepSearch(searchQuery)}
+                  disabled={isDeepSearchLoading}
                   data-testid="btn-deep-search-desktop"
                 >
                   <Search className="h-3 w-3 mr-1" />
-                  Deep Search
+                  {isDeepSearchLoading ? 'Searching...' : 'Deep Search'}
                 </Button>
               )}
               
@@ -1649,10 +1673,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               variant="outline"
               className="w-full h-6 text-[10px]"
               onClick={() => performDeepSearch(searchQuery)}
+              disabled={isDeepSearchLoading}
               data-testid="btn-deep-search-mobile"
             >
               <Search className="h-2.5 w-2.5 mr-1" />
-              Deep Search
+              {isDeepSearchLoading ? 'Searching...' : 'Deep Search'}
             </Button>
           )}
           
