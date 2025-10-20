@@ -1479,7 +1479,7 @@ class DatabaseStorage implements IStorage {
     return { jobs, total };
   }
 
-  async searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }> {
+  async searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: any[]; total: number }> {
     const limit = options?.limit ?? 100; // Default to 100 results for search
     const offset = options?.offset ?? 0;
     const excludeArchived = options?.excludeArchived ?? true;
@@ -1502,14 +1502,28 @@ class DatabaseStorage implements IStorage {
       ? and(searchConditions, sql`${schema.jobs.status} != 'archived'`)
       : searchConditions;
     
-    // Execute search query with pagination
-    const jobs = await db
-      .select()
+    // Execute search query with LEFT JOIN to include customer data
+    const results = await db
+      .select({
+        job: schema.jobs,
+        customerName: schema.customers.name,
+        customerEmail: schema.customers.email,
+        customerPhone: schema.customers.phone,
+      })
       .from(schema.jobs)
+      .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
       .where(whereClause)
       .orderBy(desc(schema.jobs.createdAt))
       .limit(limit)
       .offset(offset);
+    
+    // Transform results to include customer data in job object
+    const jobs = results.map(row => ({
+      ...row.job,
+      customerName: row.customerName,
+      customerEmail: row.customerEmail,
+      customerPhone: row.customerPhone,
+    }));
     
     // Get total count
     const totalResult = await db
