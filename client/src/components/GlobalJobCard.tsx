@@ -227,10 +227,10 @@ export function GlobalJobCard({
     enabled: isOpen && mode === 'edit' && !!(jobId || createdJobId) && !job,
   });
 
-  // Lazy load templates - only when billing tab is active (desktop uses sidebarTab, mobile uses activeTab)
+  // Lazy load templates - only when billing tab is active or invoice modal is open
   const { data: invoiceTemplateData } = useQuery({
     queryKey: ['/api/templates/default/invoice'],
-    enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
+    enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing' || isInvoiceModalOpen),
   });
 
   const { data: quoteTemplateData } = useQuery({
