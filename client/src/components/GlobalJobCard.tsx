@@ -226,26 +226,26 @@ export function GlobalJobCard({
     enabled: isOpen && mode === 'edit' && !!(jobId || createdJobId) && !job,
   });
 
-  // Lazy load templates - only when billing tab is active
+  // Lazy load templates - only when billing tab is active (desktop uses sidebarTab, mobile uses activeTab)
   const { data: invoiceTemplateData } = useQuery({
     queryKey: ['/api/templates/default/invoice'],
-    enabled: isOpen && activeTab === 'billing',
+    enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
   });
 
   const { data: quoteTemplateData } = useQuery({
     queryKey: ['/api/templates/default/quote'],
-    enabled: isOpen && activeTab === 'billing',
+    enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
   });
 
-  // Lazy load materials and services - only when billing tab is active
+  // Lazy load materials and services - only when billing tab is active (desktop uses sidebarTab, mobile uses activeTab)
   const { data: materialsData } = useQuery({
     queryKey: ['/api/materials'],
-    enabled: isOpen && activeTab === 'billing',
+    enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
   });
 
   const { data: servicesData } = useQuery({
     queryKey: ['/api/services'],
-    enabled: isOpen && activeTab === 'billing',
+    enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
   });
 
   const customers: Customer[] = (customersData as any)?.data || [];
