@@ -22,7 +22,8 @@ import {
   LogOut,
   ClipboardCheck,
   History as HistoryIconLucide,
-  Megaphone
+  Megaphone,
+  Clock
 } from "lucide-react";
 import {
   Sidebar,
@@ -113,6 +114,13 @@ const businessItems = [
     url: "/equipment",
     icon: Settings,
     value: "equipment",
+    isTab: false
+  },
+  {
+    title: "Time Tracking",
+    url: "/time-tracking",
+    icon: Clock,
+    value: "time-tracking",
     isTab: false
   },
   {
