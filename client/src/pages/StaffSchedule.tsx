@@ -25,9 +25,14 @@ export default function StaffSchedule() {
     queryKey: ['/api/customers'],
   });
 
+  const { data: staffAssignmentsData } = useQuery<{ success: boolean; data: any[] }>({
+    queryKey: ['/api/staff-assignments'],
+  });
+
   const jobs = jobsData?.data || [];
   const employees = employeesData?.data || [];
   const customers = customersData?.data || [];
+  const staffAssignments = staffAssignmentsData?.data || [];
 
   // Create a map of customer IDs to customer names for quick lookup
   const customerMap = useMemo(() => {
@@ -46,42 +51,61 @@ export default function StaffSchedule() {
     return 'No Customer';
   };
 
-  // Filter jobs for selected date (using Pacific/Auckland timezone)
-  const dateJobs = jobs.filter(job => {
-    if (!job.scheduledDate) return false;
-    
-    // Convert the UTC date from database to NZ timezone date string
-    const jobDateUTC = new Date(job.scheduledDate);
-    const nzDateStr = jobDateUTC.toLocaleDateString('en-NZ', {
-      timeZone: 'Pacific/Auckland',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
+  // Create a map of job IDs to jobs for quick lookup
+  const jobMap = useMemo(() => {
+    const map = new Map<string, Job>();
+    jobs.forEach(job => {
+      map.set(job.id, job);
     });
-    
-    // Convert selected date to NZ timezone date string
+    return map;
+  }, [jobs]);
+
+  // Get jobs for each employee based on staff assignments
+  const getEmployeeJobs = (employeeId: string) => {
+    // Convert selected date to NZ timezone date string for comparison
     const selectedDateStr = selectedDate.toLocaleDateString('en-NZ', {
       timeZone: 'Pacific/Auckland',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
     });
-    
-    // Compare date strings directly
-    return nzDateStr === selectedDateStr;
-  });
 
-  // Get jobs for each employee
-  const getEmployeeJobs = (employeeId: string) => {
-    return dateJobs
-      .filter(job => job.assignedTo?.includes(employeeId))
-      .sort((a, b) => {
-        // Sort by scheduled start time
-        if (!a.scheduledStartTime && !b.scheduledStartTime) return 0;
-        if (!a.scheduledStartTime) return 1;
-        if (!b.scheduledStartTime) return -1;
-        return a.scheduledStartTime.localeCompare(b.scheduledStartTime);
+    // Filter assignments for this employee and date
+    const employeeAssignments = staffAssignments.filter(assignment => {
+      if (assignment.employeeId !== employeeId) return false;
+      
+      // Check if assignment date matches selected date
+      const assignmentDate = new Date(assignment.startTime);
+      if (isNaN(assignmentDate.getTime())) return false;
+      
+      const assignmentDateStr = assignmentDate.toLocaleDateString('en-NZ', {
+        timeZone: 'Pacific/Auckland',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
       });
+      
+      return assignmentDateStr === selectedDateStr;
+    });
+
+    // Get jobs from assignments and sort by start time
+    return employeeAssignments
+      .map(assignment => {
+        const job = jobMap.get(assignment.jobId);
+        if (!job) return null;
+        
+        // Attach the assignment start time to the job for sorting
+        return {
+          ...job,
+          _assignmentStartTime: assignment.startTime
+        };
+      })
+      .filter((job): job is Job & { _assignmentStartTime: string } => job !== null)
+      .sort((a, b) => {
+        // Sort by assignment start time
+        return new Date(a._assignmentStartTime).getTime() - new Date(b._assignmentStartTime).getTime();
+      })
+      .map(({ _assignmentStartTime, ...job }) => job as Job); // Remove the temporary field
   };
 
   const getStatusColor = (status?: string) => {
