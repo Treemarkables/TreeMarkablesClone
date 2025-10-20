@@ -555,7 +555,7 @@ export function GlobalJobCard({
       form.reset({
         title: '',
         description: '',
-        status: 'work_order',
+        status: 'quote',
         priority: 'medium',
         customerId: '',
         leadSource: '',
