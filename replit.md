@@ -1,40 +1,14 @@
 # Tree Removal Service Application
 
 ## Overview
-This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It provides advanced scheduling, job management, customer relationship tools, and operational analytics. The system aims to streamline operations and enhance business efficiency for tree removal services, supporting business growth and improved service delivery. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation.
+This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It provides advanced scheduling, job management, customer relationship tools, and operational analytics to streamline operations and enhance business efficiency for tree removal services. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to support business growth and improve service delivery.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes
-### October 20, 2025
-- **Create New Job Form Reset - FIXED**: Fixed bug where clicking "Create New Job" showed data from a previously viewed quote instead of a blank form. Root cause: form reset logic only triggered when editing existing jobs. Solution: Added reset logic for create mode that clears all fields, line items, and customer selection when mode is 'create' and editingJob is null. New job forms now always start completely blank.
-- **Job Card "Loading" Badge - FIXED**: Removed confusing "Loading" badge that appeared briefly in job card header. Changed status badge to hide entirely while job data loads instead of showing "Loading" text. Job cards now display job number immediately with status badge appearing once data loads.
-- **Job Card Loading Performance - OPTIMIZED**: Dramatically improved job card loading speed by implementing lazy loading and eliminating wasteful queries. Reduced initial API requests from 20+ to just 2 (customers + employees). Changes: (1) Replaced fetching all 1000 jobs with targeted `/api/jobs/:id` endpoint when editing, (2) Lazy-loaded materials/services/templates - only fetch when billing tab is active (not on initial open), (3) Eliminated redundant data fetching. Job cards now open instantly instead of showing "Loading" spinner.
-- **Deep Search Customer Name Display - FIXED**: Fixed "Unknown Customer" issue in search results by implementing LEFT JOIN in searchJobs method to fetch customer data (name, email, phone) alongside job data. Search results now display actual customer names instead of "Unknown Customer". Tested successfully with search for "carol" returning proper customer names: Caroline Twentyman, Caroline Anderson, Carol Nepe.
-- **Deep Search Implementation - COMPLETE**: Implemented server-side deep search functionality that searches across ALL jobs in the database (not limited to the 50 jobs shown in paginated dispatch board). Created dedicated `/api/jobs/search` endpoint with SQL LIKE queries across job fields (jobNumber, title, description, address, notes, specialInstructions) AND customer fields (customer name, customer email via LEFT JOIN), proper pagination (default 100 results), and archived job filtering. Updated DispatchBoard to use async API call instead of client-side filtering, with loading state management and proper Job-to-JobAssignment transformation that preserves scheduling data. Users can now search for any job regardless of status or pagination by searching job details OR customer names/emails, making it easy to find historical jobs, completed work, and quotes from any time period.
-
-### October 19, 2025
-- **Status Flash Bug Fix - COMPLETE**: Fixed critical bug where job cards initially displayed orange "quote" status before showing correct status when opened from dispatch board. Root cause: GlobalJobCard was rendering before job data loaded. Solution: Added conditional check to prevent rendering in edit mode until job data is fully loaded (`editingJob.id` and `editingJob.status` both present). Scheduled and work_order jobs now immediately display correct blue header without any flash.
-
-### October 18, 2025
-- **Lead Analytics Streamlining - COMPLETE**: Removed "Lead Performance" card from Business Analytics dashboard and simplified Lead Source Performance table. Dashboard now focuses on actionable metrics: Quote Performance and Financial Performance cards, followed by simplified Lead Source table showing only: Lead Source, Quoted, Won, Quote Conv. (Won÷Quoted%), and Total Revenue. Eliminates confusing "lead" terminology and focuses purely on quoted job conversion rates.
-- **Man-Hours Tracking System - COMPLETE**: Implemented comprehensive job estimation accuracy tracking to measure how accurately jobs are estimated. System automatically calculates estimated man-hours from staff assignments and actual man-hours from time tracking entries, then computes estimation accuracy as a percentage. Features include: database fields (`estimatedManHours`, `actualManHours`, `estimationAccuracy`, `estimationVariance`), calculation utilities in `shared/manHoursUtils.ts`, `manHoursService` for automatic updates, automatic integration with staff assignment and time tracking workflows, and Business Analytics dashboard section displaying overall accuracy percentage, accuracy distribution (Excellent/Good/Fair/Poor), total estimated vs actual hours, and over/under-estimation trends. Helps identify whether jobs are consistently over-estimated or under-estimated, enabling better future estimates and improved profitability.
-- **Split-Screen Layout Implementation - COMPLETE**: Implemented fully functional split-screen layout in DispatchBoard with resizable panels (60%/40% default split). Desktop users (screens ≥1024px) can now view the dispatch board on the left and job details on the right simultaneously with an adjustable divider. Mobile users continue using the full-screen Dialog modal. Fixed critical issue where two GlobalJobCard instances were rendering simultaneously (desktop panel + mobile Dialog), preventing state updates. Solution: Wrapped mobile Dialog in `lg:hidden` wrapper to ensure only the appropriate component renders based on screen size. Users can resize panels, close job details with X button, and the left panel automatically expands to 100% when no job is selected.
-- **Push Notification System - COMPLETE & TESTED**: Successfully built and tested complete Firebase Cloud Messaging infrastructure for real-time notifications. System includes: database schema (`fcm_tokens`, `notification_preferences`), storage methods, Firebase services (frontend/backend), service worker with retry logic and immediate initialization, API endpoints, and notification triggers. Notifications automatically sent for: job assignments, schedule changes, new leads, invoice payments, and quote acceptances. NotificationSettings UI (Settings → Notifications) allows users to enable notifications and manage preferences. Test notification feature confirmed working. Firebase credentials configured successfully. **Note**: Push notifications work on desktop browsers (Chrome, Firefox, Brave) but NOT on iOS (iPhone/iPad) due to Apple platform restrictions - iOS users should use desktop for notifications or rely on SMS/email alerts.
-- **Timezone Fix - COMPLETE**: Fixed critical timezone bug where scheduled jobs were displaying incorrect times (10am showing as 11pm). Root cause was improper UTC conversion. Created timezone utility functions in `shared/dateUtils.ts` with three key functions: `nzTimeToUTC()` for saving user input to database, `utcToNZTime()` for converting database times for editing, and `formatNZTime()` for display. Updated DispatchBoard scheduling and Calendar display to properly convert between NZ local time and UTC. All times now display correctly in Pacific/Auckland timezone, and reminders will be sent at the correct local time.
-- **Customer Name Extraction - COMPLETE**: Fixed conversation page "Create Job from Lead" dialog not extracting customer names. Added logic to derive names from email addresses when customer name is not available (e.g., "lyn.armstrong@hotmail.com" → "Lyn Armstrong"). Names are now properly capitalized and formatted.
-- **Sidebar Mobile Collapse Fix - COMPLETE**: Fixed sidebar not collapsing on mobile when clicking navigation items. Root cause was using wrong state setter - shadcn Sidebar uses `openMobile`/`setOpenMobile` for mobile drawer behavior, not `open`/`setOpen`. Updated all navigation click handlers to use correct mobile state management.
-
-### October 16, 2025
-- **Default Landing Page Fix - COMPLETE**: Fixed all navigation routes to properly default to the dispatch board. After login, the app now correctly redirects to `/dispatch`. Both `/dashboard` and `/job-dashboard` now redirect to `/dispatch` for consistency. This ensures users always land on the dispatch board for faster daily workflow access, regardless of bookmarks or direct URLs.
-- **Conversations Page - Action Menu Complete Fix**: The three dots menu button next to each conversation is now clearly visible with an outline border. Menu item changed from "Create New Quote" to "Create Job from Lead". Dialog now correctly shows "Create Job from Lead" title with "Create Job" button (previously showed "Create New Quote"). Contact details automatically pre-fill from conversation. All UI elements now consistently use "Job" terminology, making it easy to create jobs directly from leads on mobile devices.
-- **Mobile UI Optimization - Conversations Page**: Enhanced the floating action button (FAB) for mobile devices. Button is now larger (64px × 64px), positioned higher to avoid iOS bottom bar interference, and includes a larger icon for easier touch interaction. The button now opens the create job dialog instead of showing a placeholder message.
-- **Customer Data Persistence Fix**: Customer phone numbers now automatically sync from job contact information. When a job is created or updated with a contact phone, the system will update the customer's phone number if they don't have one. This ensures customer data stays complete and up-to-date.
-
 ## System Architecture
 ### Core Design Principles
-- **UI/UX**: Mobile-first responsive design with a professional orange/blue theme, optimized for mobile viewing without horizontal scrolling.
+- **UI/UX**: Mobile-first responsive design with a professional orange/blue theme, optimized for mobile viewing without horizontal scrolling. Split-screen layout for dispatch board on larger screens.
 - **Security**: Role-Based Access Control (RBAC) and secure password authentication with bcrypt hashing and server-controlled session management.
 - **Performance**: Optimized for fast loading on mobile through API parallelization, image lazy loading, and thumbnail generation.
 - **Workflow Automation**: Intelligent process automation, event-driven architecture, and a comprehensive job diary system with a complete notification system.
@@ -44,10 +18,7 @@ Preferred communication style: Simple, everyday language.
 - **Routing**: Wouter
 - **UI Components**: Shadcn/ui (Radix UI primitives)
 - **Styling**: Tailwind CSS
-- **State Management**: TanStack Query with cross-device auto-sync
-  - `refetchOnWindowFocus: "always"` - Instant sync when switching between desktop/mobile tabs
-  - `refetchInterval: 20000` - Background polling every 20 seconds for automatic updates
-  - `staleTime: 5000` - 5-second cache window to prevent duplicate requests
+- **State Management**: TanStack Query with cross-device auto-sync, background polling, and 5-second cache window.
 - **Form Handling**: React Hook Form with Zod validation
 - **PWA Support**: Full Progressive Web App features, including mobile-optimized components and safe-area padding for iOS.
 
@@ -66,16 +37,21 @@ Preferred communication style: Simple, everyday language.
 - **Transactions**: Support for atomic multi-step operations.
 
 ### Key Features
-- **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board, ServiceM8-style Job Creation with dynamic checklists, duplicate job prevention (blocks same customer/address/description within 5 minutes), man-hours tracking for job estimation accuracy.
+- **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board, ServiceM8-style Job Creation with dynamic checklists, duplicate job prevention, man-hours tracking for job estimation accuracy, server-side deep search across all jobs and customer data.
 - **Customer & Sales**: Lead Management (with analytics), Customer Management, Quote Management (including speech-to-quote and Twilio voice auto-quote generation).
-- **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation.
-- **Reporting & Analytics**: Business Analytics (including lead source tracking and job estimation accuracy metrics), Invoice Management (with Xero integration), Safety Reporting.
+- **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation, Timezone utility for correct scheduling display.
+- **Reporting & Analytics**: Business Analytics (including lead source tracking and job estimation accuracy metrics), Invoice Management, Safety Reporting.
 - **Marketing Automation**: Marketing Planner for Facebook/Instagram ad campaigns, automated review posting, campaign scheduling, and performance analytics dashboard.
-- **Push Notifications**: Firebase Cloud Messaging infrastructure with service worker, automatic notifications for job assignments/schedule changes/new leads, user preference management, and test notification capability.
-- **Integrations**: Twilio Voice, OpenAI (Whisper transcription & GPT-5 extraction), Email-to-Job-Diary, Mobile App Integration, Xero Accounting, Addy.co.nz Address Autocomplete, SendGrid, SMS Everyone NZ, Facebook/Instagram Marketing API, Firebase Cloud Messaging.
+- **Push Notifications**: Firebase Cloud Messaging infrastructure for real-time notifications (job assignments, schedule changes, new leads, invoice payments, quote acceptances), with user preference management.
 - **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories, etc.
 
 ## External Dependencies
-- **UI & Styling**: `@radix-ui/*`, `lucide-react`, `tailwindcss`, Google Fonts
 - **Database & Validation**: `drizzle-orm`, `drizzle-kit`, `@neondatabase/serverless`, `zod`
-- **Other Integrations**: SendGrid, SMS Everyone NZ, OpenAI (Whisper API), Multer, Xero (`xero-node` SDK), Addy Solutions (NZ address API), Twilio, Meta Marketing API (for Facebook/Instagram).
+- **Email**: SendGrid
+- **SMS**: SMS Everyone NZ
+- **AI/ML**: OpenAI (Whisper API for transcription & GPT-5 for extraction)
+- **Accounting**: Xero (`xero-node` SDK)
+- **Address Autocomplete**: Addy Solutions (NZ address API)
+- **Telephony**: Twilio
+- **Marketing**: Meta Marketing API (for Facebook/Instagram)
+- **Notifications**: Firebase Cloud Messaging
