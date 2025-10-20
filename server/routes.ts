@@ -1433,7 +1433,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       if (!customer) {
         const customerData = {
           name: name || 'Unknown',
-          email: email || '',
+          email: email ? email.toLowerCase() : '',
           phone: phone || '',
           address: address || '',
           contactPreference: 'email' as const,
@@ -7361,10 +7361,11 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       
       // Get ALL employees with this email (to see duplicates)
       const allEmployees = await storage.getAllEmployees();
-      const matchingEmployees = allEmployees.filter(emp => emp.email === email);
+      const normalizedEmail = email.toLowerCase();
+      const matchingEmployees = allEmployees.filter(emp => emp.email?.toLowerCase() === normalizedEmail);
       
       // Get the one that would be returned by getEmployeeByEmail
-      const selectedEmployee = await storage.getEmployeeByEmail(email);
+      const selectedEmployee = await storage.getEmployeeByEmail(normalizedEmail);
       
       res.json({
         success: true,
@@ -7408,7 +7409,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       }
       
       // Find employee by email
-      const employee = await storage.getEmployeeByEmail(email);
+      const employee = await storage.getEmployeeByEmail(email.toLowerCase());
       
       if (!employee) {
         return res.status(404).json({

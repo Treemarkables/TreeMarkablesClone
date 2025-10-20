@@ -116,7 +116,7 @@ export const leadSourceSchema = z.object({
 // Contact Form Data Schema
 export const contactFormSchema = z.object({
   name: z.string().min(1).max(255),
-  email: z.string().email().max(255),
+  email: z.string().email().max(255).transform(val => val.toLowerCase()),
   phone: z.string().max(50).optional(),
   address: z.string().max(500).optional(),
   hearAbout: z.string().max(255).optional(),
@@ -779,9 +779,13 @@ export const priceRules = pgTable("price_rules", {
 export const insertTeamSchema = createInsertSchema(teams).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCustomerImportBatchSchema = createInsertSchema(customerImportBatches).omit({ id: true, createdAt: true });
 export const updateCustomerImportBatchSchema = createInsertSchema(customerImportBatches).omit({ id: true, createdAt: true }).partial();
-export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  email: z.string().optional().transform(val => val ? val.toLowerCase() : val),
+});
 export const insertCommunicationPreferencesSchema = createInsertSchema(communicationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  email: z.string().optional().transform(val => val ? val.toLowerCase() : val),
+});
 export const insertCallSchema = createInsertSchema(calls).omit({ id: true, createdAt: true });
 export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, createdAt: true, lastUsedAt: true });
 export const insertQuoteSchema = createInsertSchema(quotes)
@@ -1202,6 +1206,7 @@ export const employees = pgTable("employees", {
 });
 
 export const insertEmployeeSchema = createInsertSchema(employees).extend({
+  email: z.string().optional().transform(val => val ? val.toLowerCase() : val),
   password: z.string().min(8).optional(),
   hireDate: z.string().optional().or(z.date().optional()),
 });
