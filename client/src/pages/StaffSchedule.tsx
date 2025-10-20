@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -46,11 +46,29 @@ export default function StaffSchedule() {
     return 'No Customer';
   };
 
-  // Filter jobs for selected date
+  // Filter jobs for selected date (using Pacific/Auckland timezone)
   const dateJobs = jobs.filter(job => {
     if (!job.scheduledDate) return false;
-    const jobDate = parseISO(job.scheduledDate);
-    return jobDate >= startOfDay(selectedDate) && jobDate <= endOfDay(selectedDate);
+    
+    // Convert the UTC date from database to NZ timezone date string
+    const jobDateUTC = new Date(job.scheduledDate);
+    const nzDateStr = jobDateUTC.toLocaleDateString('en-NZ', {
+      timeZone: 'Pacific/Auckland',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    
+    // Convert selected date to NZ timezone date string
+    const selectedDateStr = selectedDate.toLocaleDateString('en-NZ', {
+      timeZone: 'Pacific/Auckland',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    
+    // Compare date strings directly
+    return nzDateStr === selectedDateStr;
   });
 
   // Get jobs for each employee
