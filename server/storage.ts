@@ -1486,14 +1486,15 @@ class DatabaseStorage implements IStorage {
     
     const searchTerm = `%${query.toLowerCase()}%`;
     
-    // Build WHERE clause conditions
+    // Build WHERE clause conditions including customer name search via raw SQL
     const searchConditions = or(
       sql`LOWER(${schema.jobs.jobNumber}) LIKE ${searchTerm}`,
       sql`LOWER(${schema.jobs.title}) LIKE ${searchTerm}`,
       sql`LOWER(${schema.jobs.description}) LIKE ${searchTerm}`,
       sql`LOWER(${schema.jobs.address}) LIKE ${searchTerm}`,
       sql`LOWER(${schema.jobs.notes}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.specialInstructions}) LIKE ${searchTerm}`
+      sql`LOWER(${schema.jobs.specialInstructions}) LIKE ${searchTerm}`,
+      sql`EXISTS (SELECT 1 FROM customers WHERE customers.id = ${schema.jobs.customerId} AND (LOWER(customers.name) LIKE ${searchTerm} OR LOWER(customers.email) LIKE ${searchTerm}))`
     );
     
     // Add archived filter if needed
