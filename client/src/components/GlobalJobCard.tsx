@@ -548,9 +548,36 @@ export function GlobalJobCard({
     return editingJob ? customers.find(c => c.id === editingJob.customerId) : null;
   }, [editingJob, customers]);
 
-  // Populate form with complete job data when editing an existing job
+  // Reset form when switching to create mode OR populate form when editing an existing job
   useEffect(() => {
-    if (editingJob && editingJob.id) {
+    if (mode === 'create' && !editingJob) {
+      // Reset to blank form when creating new job
+      form.reset({
+        title: '',
+        description: '',
+        status: 'work_order',
+        priority: 'medium',
+        customerId: '',
+        leadSource: '',
+        address: '',
+        totalAmount: '0',
+        paidAmount: '0',
+        notes: '',
+        jobContactFirstName: '',
+        jobContactLastName: '',
+        jobContactEmail: '',
+        jobContactPhone: '',
+        billingContactPhone: '',
+        billingContactMobile: '',
+        billingAddress: '',
+        invoiceDescription: '',
+        sameAsJobAddress: true,
+        taxMode: 'tax_exclusive',
+        checklist: [],
+      });
+      replaceLineItems([]); // Clear line items
+      setSelectedCustomerName(''); // Clear customer selection
+    } else if (editingJob && editingJob.id) {
       // Mark that we're loading data to prevent auto-save
       isLoadingDataRef.current = true;
       hasUserChangedRef.current = false;
@@ -604,7 +631,7 @@ export function GlobalJobCard({
         isLoadingDataRef.current = false;
       }, 500);
     }
-  }, [editingJob, editingJobCustomer, form, replaceLineItems]);
+  }, [mode, editingJob, editingJobCustomer, form, replaceLineItems]);
 
   // Keep billing address in sync with job address when "same as job address" is enabled
   useEffect(() => {
