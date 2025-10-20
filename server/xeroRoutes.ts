@@ -337,7 +337,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         
         const lineItems = invoiceLineItems;
         
-        const invoice = {
+        const xeroInvoicePayload = {
           type: 'ACCREC' as any, // Accounts Receivable (sales invoice)
           contact: {
             contactID: xeroContactId,
@@ -351,7 +351,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         
         const invoiceResponse = await client.accountingApi.createInvoices(
           tenantId,
-          { invoices: [invoice] }
+          { invoices: [xeroInvoicePayload] }
         );
         
         const xeroInvoice = invoiceResponse.body.invoices![0];
