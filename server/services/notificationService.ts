@@ -229,7 +229,7 @@ class NotificationService {
       priority: 'low',
       jobId: job.id,
       customerId: job.customerId,
-      actionUrl: `/job-dashboard?job=${job.id}`
+      actionUrl: `/dispatch?job=${job.id}`
     });
 
     console.log(`✅ Job completion notifications sent for job ${job.id}`);
