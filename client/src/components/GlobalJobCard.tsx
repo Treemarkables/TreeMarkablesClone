@@ -1600,9 +1600,9 @@ export function GlobalJobCard({
     }
   };
 
-  // Get current status from form (always reflects current state)
-  // Form is populated from editingJob in edit mode, so this works for both create and edit
-  const currentStatus = form.watch('status');
+  // Get current status - use editingJob.status directly to avoid showing stale form data during loading
+  // In create mode, use form.watch since there's no editingJob yet
+  const currentStatus = mode === 'edit' ? editingJob?.status : form.watch('status');
 
   // Loading check - show spinner while fetching specific job data in edit mode
   if (mode === 'edit' && isLoadingSpecificJob && !job) {
