@@ -551,7 +551,7 @@ export function GlobalJobCard({
   // Reset form when switching to create mode OR populate form when editing an existing job
   useEffect(() => {
     if (mode === 'create' && !editingJob) {
-      // Reset to blank form when creating new job
+      // Reset to blank form when creating new job (don't wait for customers in create mode)
       form.reset({
         title: '',
         description: '',
@@ -577,6 +577,7 @@ export function GlobalJobCard({
       });
       replaceLineItems([]); // Clear line items
       setSelectedCustomerName(''); // Clear customer selection
+      setCustomerSearchValue(''); // Clear customer search field
     } else if (editingJob && editingJob.id && !customersLoading) {
       // Wait for customers to load before populating form to avoid missing customer data
       // Mark that we're loading data to prevent auto-save
