@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, Search, Send, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import type { Job, Customer } from "@shared/schema";
+import type { Job, Customer, Invoice } from "@shared/schema";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -18,8 +18,9 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-type JobWithCustomer = Job & {
+type InvoiceWithRelations = Invoice & {
   customer?: Customer;
+  job?: Job;
 };
 
 export default function Invoices() {
@@ -28,22 +29,9 @@ export default function Invoices() {
   const [sendingJobId, setSendingJobId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const { data: jobsResponse, isLoading } = useQuery<ApiResponse<Job>>({
-    queryKey: ['/api/jobs'],
-  });
-
-  const { data: customersResponse } = useQuery<ApiResponse<Customer>>({
-    queryKey: ['/api/customers'],
-  });
-
-  // Fetch all proposals with sections/line items
-  const { data: proposalsResponse } = useQuery<any>({
-    queryKey: ['/api/proposals'],
-    queryFn: async () => {
-      const response = await fetch('/api/proposals?includeSections=true');
-      if (!response.ok) throw new Error('Failed to fetch proposals');
-      return response.json();
-    },
+  // Fetch all invoices with customer and job data
+  const { data: invoicesResponse, isLoading } = useQuery<ApiResponse<InvoiceWithRelations>>({
+    queryKey: ['/api/invoices'],
   });
 
   const sendToXeroMutation = useMutation({
@@ -53,6 +41,7 @@ export default function Invoices() {
       return await response.json();
     },
     onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       setSendingJobId(null);
       toast({
@@ -70,90 +59,23 @@ export default function Invoices() {
     },
   });
 
-  const jobs = jobsResponse?.data || [];
-  const customers = customersResponse?.data || [];
-  const proposals = proposalsResponse?.data || [];
+  const invoices = invoicesResponse?.data || [];
 
-  // Only show jobs with status 'completed' (exclude 'invoiced' and 'archived')
-  const completedJobs = jobs.filter(job => job.status === 'completed');
-
-  const jobsWithCustomers: JobWithCustomer[] = completedJobs.map(job => {
-    // Find the proposal for this job
-    const proposal = proposals.find((p: any) => p.jobId === job.id);
-    
-    // Calculate total from proposal sections/line items if available
-    let calculatedTotal = '0.00';
-    let calculatedGst = '0.00';
-    
-    if (proposal?.sections && Array.isArray(proposal.sections)) {
-      const subtotal = proposal.sections.reduce((sum: number, section: any) => {
-        if (section.lineItems && Array.isArray(section.lineItems)) {
-          const sectionTotal = section.lineItems.reduce((lineSum: number, item: any) => {
-            return lineSum + (Number(item.unitPrice) || 0) * (Number(item.quantity) || 1);
-          }, 0);
-          return sum + sectionTotal;
-        }
-        return sum;
-      }, 0);
-      
-      // Calculate GST (15%)
-      const gst = subtotal * 0.15;
-      const total = subtotal + gst;
-      
-      calculatedTotal = total.toFixed(2);
-      calculatedGst = gst.toFixed(2);
-    }
-    
-    return {
-      ...job,
-      customer: customers.find(c => c.id === job.customerId),
-      // Override totalAmount and totalIncludingGst with calculated values from proposal
-      totalAmount: calculatedTotal,
-      totalIncludingGst: calculatedTotal,
-    };
-  });
-
-  const filteredJobs = jobsWithCustomers.filter(job => {
+  // Filter invoices based on search and tab
+  const filteredInvoices = invoices.filter(invoice => {
     const matchesSearch = 
-      (job.title?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
-      (job.customer?.name?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
-      (job.address?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
-      (job.jobNumber?.toLowerCase() ?? "").includes(searchQuery.toLowerCase());
+      (invoice.jobTitle?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
+      (invoice.customer?.name?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
+      (invoice.address?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
+      (invoice.invoiceNumber?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
+      (invoice.job?.jobNumber?.toLowerCase() ?? "").includes(searchQuery.toLowerCase());
 
     const matchesTab = 
       activeTab === "all" ||
-      (activeTab === "pending" && (!job.xeroStatus || job.xeroStatus === 'pending'));
+      (activeTab === "pending" && invoice.status === 'pending');
 
     return matchesSearch && matchesTab;
   });
-
-  const getStatusBadge = (xeroStatus?: string | null) => {
-    if (!xeroStatus || xeroStatus === 'pending') {
-      return (
-        <Badge variant="outline" className="gap-1" data-testid={`badge-xero-status-pending`}>
-          <Clock className="h-3 w-3" />
-          Pending
-        </Badge>
-      );
-    }
-    if (xeroStatus === 'sent') {
-      return (
-        <Badge className="gap-1 bg-green-100 text-green-800" data-testid={`badge-xero-status-sent`}>
-          <CheckCircle className="h-3 w-3" />
-          Sent to Xero
-        </Badge>
-      );
-    }
-    if (xeroStatus === 'error') {
-      return (
-        <Badge variant="destructive" className="gap-1" data-testid={`badge-xero-status-error`}>
-          <AlertCircle className="h-3 w-3" />
-          Error
-        </Badge>
-      );
-    }
-    return null;
-  };
 
   const formatCurrency = (amount?: string | null) => {
     console.log(`💵 formatCurrency input: "${amount}" (type: ${typeof amount})`);
@@ -216,90 +138,99 @@ export default function Invoices() {
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
         <TabsList className="grid w-full grid-cols-2 max-w-full" data-testid="tabs-invoice-filter">
           <TabsTrigger value="all" data-testid="tab-all-invoices">
-            All ({completedJobs.length})
+            All ({invoices.length})
           </TabsTrigger>
           <TabsTrigger value="pending" data-testid="tab-pending-invoices">
-            Pending ({completedJobs.filter(j => !j.xeroStatus || j.xeroStatus === 'pending').length})
+            Pending ({invoices.filter(inv => inv.status === 'pending').length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="mt-6">
-          {filteredJobs.length === 0 ? (
+          {filteredInvoices.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <FileText className="h-12 w-12 text-muted-foreground mb-4" />
                 <p className="text-lg font-medium" data-testid="text-no-invoices">No invoices found</p>
                 <p className="text-sm text-muted-foreground" data-testid="text-no-invoices-description">
-                  {activeTab === "all" && "Complete jobs to create invoices"}
+                  {activeTab === "all" && "No invoices created yet"}
                   {activeTab === "pending" && "No pending invoices"}
                 </p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full max-w-full">
-              {filteredJobs.map((job) => (
-                <Card key={job.id} className="hover-elevate min-w-0" data-testid={`card-invoice-${job.id}`}>
+              {filteredInvoices.map((invoice) => (
+                <Card key={invoice.id} className="hover-elevate min-w-0" data-testid={`card-invoice-${invoice.id}`}>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-4">
                     <div className="space-y-1 flex-1 min-w-0">
-                      <CardTitle className="text-base sm:text-lg truncate" data-testid={`text-job-number-${job.id}`}>
-                        {job.jobNumber}
+                      <CardTitle className="text-base sm:text-lg truncate" data-testid={`text-invoice-number-${invoice.id}`}>
+                        {invoice.invoiceNumber}
                       </CardTitle>
-                      <p className="text-sm text-muted-foreground truncate" data-testid={`text-customer-${job.id}`}>
-                        {job.customer?.name || 'Unknown Customer'}
+                      <p className="text-sm text-muted-foreground truncate" data-testid={`text-customer-${invoice.id}`}>
+                        {invoice.customer?.name || 'Unknown Customer'}
                       </p>
                     </div>
                     <div className="flex-shrink-0">
-                      {getStatusBadge(job.xeroStatus)}
+                      {invoice.status === 'paid' ? (
+                        <Badge variant="default" className="gap-1" data-testid={`badge-status-${invoice.id}`}>
+                          <CheckCircle className="h-3 w-3" />
+                          Paid
+                        </Badge>
+                      ) : invoice.status === 'pending' ? (
+                        <Badge variant="secondary" className="gap-1" data-testid={`badge-status-${invoice.id}`}>
+                          <Clock className="h-3 w-3" />
+                          Pending
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" data-testid={`badge-status-${invoice.id}`}>
+                          {invoice.status}
+                        </Badge>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2 min-w-0">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate" data-testid={`text-job-title-${job.id}`}>
-                          {job.title || job.customer?.name || 'Untitled Job'}
+                        <p className="text-sm font-medium truncate" data-testid={`text-job-title-${invoice.id}`}>
+                          {invoice.jobTitle}
                         </p>
-                        <p className="text-sm text-muted-foreground truncate" data-testid={`text-address-${job.id}`}>
-                          {job.address || 'No address'}
+                        <p className="text-sm text-muted-foreground truncate" data-testid={`text-address-${invoice.id}`}>
+                          {invoice.address || 'No address'}
                         </p>
                       </div>
                       
                       <div className="flex items-center justify-between pt-2 border-t">
                         <span className="text-sm text-muted-foreground">Total Amount</span>
-                        <span className="text-lg font-bold" data-testid={`text-amount-${job.id}`}>
-                          {(() => {
-                            const gst = job.totalIncludingGst;
-                            const total = job.totalAmount;
-                            const useGst = gst && gst !== '0.00' && gst !== '0' && parseFloat(gst) > 0;
-                            const displayValue = useGst ? gst : total;
-                            console.log(`💰 Job ${job.jobNumber}: gst=${gst}, total=${total}, useGst=${useGst}, display=${displayValue}`);
-                            return formatCurrency(displayValue);
-                          })()}
+                        <span className="text-lg font-bold" data-testid={`text-amount-${invoice.id}`}>
+                          {formatCurrency(invoice.amount?.toString())}
                         </span>
                       </div>
 
-                      {job.sentToXeroDate && (
-                        <p className="text-xs text-muted-foreground" data-testid={`text-sent-date-${job.id}`}>
-                          Sent: {format(new Date(job.sentToXeroDate), 'MMM d, yyyy')}
+                      {invoice.xeroSyncedAt && (
+                        <p className="text-xs text-muted-foreground" data-testid={`text-sent-date-${invoice.id}`}>
+                          Sent to Xero: {format(new Date(invoice.xeroSyncedAt), 'MMM d, yyyy')}
                         </p>
                       )}
 
-                      {job.xeroInvoiceId && (
-                        <p className="text-xs text-muted-foreground truncate" data-testid={`text-xero-id-${job.id}`}>
-                          Xero ID: {job.xeroInvoiceId}
+                      {invoice.xeroInvoiceId && (
+                        <p className="text-xs text-muted-foreground truncate" data-testid={`text-xero-id-${invoice.id}`}>
+                          Xero ID: {invoice.xeroInvoiceId}
                         </p>
                       )}
                     </div>
 
-                    <Button
-                      className="w-full gap-2"
-                      onClick={() => handleSendToXero(job.id)}
-                      disabled={job.xeroStatus === 'sent' || sendingJobId === job.id}
-                      data-testid={`button-send-to-xero-${job.id}`}
-                    >
-                      <Send className="h-4 w-4" />
-                      {sendingJobId === job.id ? 'Sending...' : 
-                       job.xeroStatus === 'sent' ? 'Sent to Xero' : 'Send to Xero'}
-                    </Button>
+                    {invoice.jobId && (
+                      <Button
+                        className="w-full gap-2"
+                        onClick={() => handleSendToXero(invoice.jobId!)}
+                        disabled={!!invoice.xeroSyncedAt || sendingJobId === invoice.jobId}
+                        data-testid={`button-send-to-xero-${invoice.id}`}
+                      >
+                        <Send className="h-4 w-4" />
+                        {sendingJobId === invoice.jobId ? 'Sending...' : 
+                         invoice.xeroSyncedAt ? 'Sent to Xero' : 'Send to Xero'}
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ))}

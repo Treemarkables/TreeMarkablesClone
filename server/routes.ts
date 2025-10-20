@@ -5134,6 +5134,36 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Get all invoices
+  app.get('/api/invoices', async (req: Request, res: Response) => {
+    try {
+      const result = await db.select()
+        .from(invoices)
+        .orderBy(desc(invoices.createdAt));
+      
+      // Fetch customer and job data for each invoice
+      const invoicesWithRelations = await Promise.all(
+        result.map(async (invoice) => {
+          const [customerData, jobData] = await Promise.all([
+            invoice.customerId ? db.select().from(customers).where(eq(customers.id, invoice.customerId)).limit(1) : Promise.resolve([]),
+            invoice.jobId ? db.select().from(jobs).where(eq(jobs.id, invoice.jobId)).limit(1) : Promise.resolve([])
+          ]);
+          
+          return {
+            ...invoice,
+            customer: customerData[0] || null,
+            job: jobData[0] || null
+          };
+        })
+      );
+      
+      res.json({ success: true, data: invoicesWithRelations });
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+      res.status(500).json({ success: false, message: 'Error fetching invoices' });
+    }
+  });
+
   // Get invoice by ID
   app.get('/api/invoices/:id', async (req: Request, res: Response) => {
     try {
