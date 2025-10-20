@@ -60,6 +60,7 @@ interface NotificationWithDetails {
   customerId?: string;
   jobId?: string;
   quoteId?: string;
+  proposalId?: string;
   expiresAt?: string | null;
   leadName?: string;
   customerName?: string;
@@ -340,6 +341,24 @@ export function NotificationBell() {
       return;
     }
 
+    // Handle proposal notifications
+    if (notification.type === 'proposal_accepted' || notification.type === 'proposal_sent') {
+      if (notification.proposalId) {
+        setLocation(`/proposals?proposal=${notification.proposalId}`);
+        setIsOpen(false);
+        return;
+      }
+    }
+
+    // Handle job completion and status change notifications
+    if (notification.type === 'job_completed' || notification.type === 'job_status_change') {
+      if (notification.jobId) {
+        setLocation(`/dispatch?job=${notification.jobId}`);
+        setIsOpen(false);
+        return;
+      }
+    }
+
     // Handle diary-specific notifications - navigate to job and open diary tab
     const diaryTypes = ['email_reply', 'sms_reply', 'proposal_sent', 'photo_added', 'note_added'];
     if (diaryTypes.includes(notification.type) && notification.jobId) {
@@ -348,7 +367,13 @@ export function NotificationBell() {
       return;
     }
 
-    // Fallback navigation based on related entities
+    // Fallback navigation based on related entities priority
+    if (notification.proposalId) {
+      setLocation(`/proposals?proposal=${notification.proposalId}`);
+      setIsOpen(false);
+      return;
+    }
+
     if (notification.jobId) {
       setLocation(`/dispatch?job=${notification.jobId}`);
       setIsOpen(false);

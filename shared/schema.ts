@@ -1095,6 +1095,7 @@ export const notifications = pgTable("notifications", {
   jobId: varchar("job_id"), // Reference to job if notification is job-related
   customerId: varchar("customer_id"), // Reference to customer if notification is customer-related
   quoteId: varchar("quote_id"), // Reference to quote if notification is quote-related
+  proposalId: varchar("proposal_id"), // Reference to proposal if notification is proposal-related
   diaryEntryId: varchar("diary_entry_id"), // Reference to diary entry for activity notifications
   // Metadata
   metadata: jsonb("metadata"), // Additional data for the notification

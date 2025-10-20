@@ -3332,18 +3332,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             'note': 'Note Added'
           };
           
+          // Extract proposalId from metadata if available (for proposal_sent notifications)
+          const proposalId = entry.metadata?.proposalId || null;
+          
           const notificationData = {
             title: titleMap[entry.entryType] || 'Job Update',
             message: messageMap[entry.entryType] || entry.content?.substring(0, 100),
             type: notificationType,
             priority: entry.entryType === 'proposal' ? 'high' : 'medium',
             isRead: false,
-            userId: req.user?.id, // Add current user's ID
-            entityType: 'diary_entry',
-            entityId: entry.id,
-            relatedEntityType: 'job',
-            relatedEntityId: jobId,
+            userId: req.user?.id,
             jobId: jobId,
+            customerId: job?.customerId || null,
+            proposalId: proposalId,
             diaryEntryId: entry.id
           };
           
@@ -12477,10 +12478,9 @@ Transcription: ${transcriptText}`;
         type: 'proposal_accepted',
         priority: 'high',
         isRead: false,
-        entityType: 'proposal',
-        entityId: id,
-        relatedEntityType: 'job',
-        relatedEntityId: job.id
+        proposalId: id,
+        jobId: job.id,
+        customerId: proposal.customerId
       };
 
       await storage.createNotification(notificationData);
