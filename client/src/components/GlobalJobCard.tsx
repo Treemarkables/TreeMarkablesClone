@@ -550,8 +550,8 @@ export function GlobalJobCard({
 
   // Reset form when switching to create mode OR populate form when editing an existing job
   useEffect(() => {
-    if (mode === 'create' && !editingJob) {
-      // Reset to blank form when creating new job (don't wait for customers in create mode)
+    if (mode === 'create' && !jobId && !createdJobId) {
+      // Reset to blank form when creating new job (check mode and jobId directly, not editingJob which may have stale cache)
       form.reset({
         title: '',
         description: '',
