@@ -3908,10 +3908,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Check if invoice already exists for this job
       const existingInvoices = await storage.getInvoicesByJob(job.id);
       if (existingInvoices && existingInvoices.length > 0) {
-        return res.status(400).json({ 
+        const existing = existingInvoices[0];
+        return res.status(409).json({ 
           success: false, 
-          message: 'An invoice already exists for this job. Please use the existing invoice instead of creating a duplicate.',
-          data: existingInvoices[0] // Return the existing invoice
+          message: `Invoice already exists for this job (${existing.invoiceNumber}). Please edit the existing invoice instead of creating a duplicate.`,
+          existingInvoice: {
+            id: existing.id,
+            invoiceNumber: existing.invoiceNumber,
+            amount: existing.amount,
+            status: existing.status
+          }
         });
       }
 
@@ -5213,7 +5219,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   app.patch('/api/invoices/:id', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const updateData = req.body;
+      
+      // Validate request body with Zod schema
+      const validationResult = schema.updateInvoiceSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid invoice data', 
+          errors: validationResult.error.errors 
+        });
+      }
+      
+      const updateData = validationResult.data;
       
       const invoice = await storage.getInvoice(id);
       if (!invoice) {

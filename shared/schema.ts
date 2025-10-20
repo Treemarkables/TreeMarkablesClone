@@ -2191,6 +2191,12 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   updatedAt: true,
 });
 
+export const updateInvoiceSchema = insertInvoiceSchema.partial().omit({
+  invoiceNumber: true, // Cannot change invoice number
+  customerId: true,    // Cannot change customer
+  jobId: true,         // Cannot change job
+});
+
 export const insertXeroConnectionSchema = createInsertSchema(xeroConnections).omit({
   id: true,
   createdAt: true,
@@ -2220,6 +2226,7 @@ export const insertCustomerAuthSchema = createInsertSchema(customerAuth).omit({
 // Types for Customer Portal
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type UpdateInvoice = z.infer<typeof updateInvoiceSchema>;
 export type XeroConnection = typeof xeroConnections.$inferSelect;
 export type InsertXeroConnection = z.infer<typeof insertXeroConnectionSchema>;
 export type XeroSettings = typeof xeroSettings.$inferSelect;
