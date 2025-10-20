@@ -2195,7 +2195,7 @@ export const updateInvoiceSchema = insertInvoiceSchema.partial().omit({
   invoiceNumber: true, // Cannot change invoice number
   customerId: true,    // Cannot change customer
   jobId: true,         // Cannot change job
-});
+}).strict(); // Reject unknown fields
 
 export const insertXeroConnectionSchema = createInsertSchema(xeroConnections).omit({
   id: true,
