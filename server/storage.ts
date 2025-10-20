@@ -647,6 +647,7 @@ export interface IStorage {
   getCustomerPhotos(customerId: string, jobId?: string): Promise<Photo[]>;
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   getInvoice(id: string): Promise<Invoice | undefined>;
+  getInvoicesByJob(jobId: string): Promise<Invoice[]>;
   updateInvoice(id: string, updates: Partial<InsertInvoice>): Promise<Invoice>;
   createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest>;
   getServiceRequest(id: string): Promise<ServiceRequest | undefined>;
@@ -3763,7 +3764,20 @@ class DatabaseStorage implements IStorage {
     const [result] = await db.insert(schema.invoices).values(invoice).returning();
     return result;
   }
-  async getInvoice(id: string): Promise<Invoice | undefined> { return undefined; }
+  async getInvoice(id: string): Promise<Invoice | undefined> { 
+    const [invoice] = await db.select()
+      .from(schema.invoices)
+      .where(eq(schema.invoices.id, id))
+      .limit(1);
+    return invoice;
+  }
+  async getInvoicesByJob(jobId: string): Promise<Invoice[]> {
+    const invoices = await db.select()
+      .from(schema.invoices)
+      .where(eq(schema.invoices.jobId, jobId))
+      .orderBy(desc(schema.invoices.createdAt));
+    return invoices;
+  }
   async updateInvoice(id: string, updates: Partial<InsertInvoice>): Promise<Invoice> {
     const [result] = await db.update(schema.invoices)
       .set({ ...updates, updatedAt: new Date() })
