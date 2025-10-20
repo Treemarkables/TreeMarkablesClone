@@ -15,7 +15,7 @@ import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { invoices, customers, jobs } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
