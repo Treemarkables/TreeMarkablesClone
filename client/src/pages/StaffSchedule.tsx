@@ -70,29 +70,46 @@ export default function StaffSchedule() {
       day: '2-digit'
     });
 
+    console.log(`🔍 Staff Schedule - Getting jobs for employee ${employeeId}`);
+    console.log(`  Selected date: ${selectedDateStr}`);
+    console.log(`  Total staff assignments: ${staffAssignments.length}`);
+
     // Filter assignments for this employee and date
     const employeeAssignments = staffAssignments.filter(assignment => {
       if (assignment.employeeId !== employeeId) return false;
       
-      // Check if assignment date matches selected date
-      const assignmentDate = new Date(assignment.startTime);
-      if (isNaN(assignmentDate.getTime())) return false;
+      // IMPORTANT: Database stores timestamps WITHOUT timezone (in NZ local time)
+      // But API returns them with 'Z' suffix, so we need to parse them as NZ local time
+      // Extract just the date portion: "2025-10-20T08:00:00.000Z" -> "2025-10-20"
+      const startTimeStr = assignment.startTime;
+      if (!startTimeStr) return false;
       
-      const assignmentDateStr = assignmentDate.toLocaleDateString('en-NZ', {
-        timeZone: 'Pacific/Auckland',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
+      const assignmentDateStr = startTimeStr.split('T')[0]; // Get "2025-10-20"
       
-      return assignmentDateStr === selectedDateStr;
+      // Format selected date as YYYY-MM-DD without timezone conversion
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const selectedDateISO = `${year}-${month}-${day}`;
+      
+      const matches = assignmentDateStr === selectedDateISO;
+      if (matches) {
+        console.log(`  ✅ Match found: ${assignment.jobId} at ${assignment.startTime}`);
+      }
+      
+      return matches;
     });
 
+    console.log(`  Found ${employeeAssignments.length} assignments for this employee`);
+
     // Get jobs from assignments and sort by start time
-    return employeeAssignments
+    const jobsWithAssignments = employeeAssignments
       .map(assignment => {
         const job = jobMap.get(assignment.jobId);
-        if (!job) return null;
+        if (!job) {
+          console.log(`  ❌ Job not found for assignment: ${assignment.jobId}`);
+          return null;
+        }
         
         // Attach the assignment start time to the job for sorting
         return {
@@ -106,6 +123,9 @@ export default function StaffSchedule() {
         return new Date(a._assignmentStartTime).getTime() - new Date(b._assignmentStartTime).getTime();
       })
       .map(({ _assignmentStartTime, ...job }) => job as Job); // Remove the temporary field
+    
+    console.log(`  Returning ${jobsWithAssignments.length} jobs for employee`);
+    return jobsWithAssignments;
   };
 
   const getStatusColor = (status?: string) => {
