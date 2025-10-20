@@ -121,7 +121,7 @@ async function processSMSReplies() {
           priority: 'medium',
           jobId: matchedJob.id,
           customerId: matchedJob.customerId,
-          actionUrl: `/job-dashboard?job=${matchedJob.id}`,
+          actionUrl: `/dispatch?job=${matchedJob.id}`,
           createdAt: receivedTimestamp
         });
 
