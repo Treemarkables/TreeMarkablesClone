@@ -86,7 +86,13 @@ export default function Invoices() {
     mutationFn: async (jobId: string) => {
       setSendingJobId(jobId);
       const response = await apiRequest('POST', '/api/xero/send-invoice', { jobId });
-      return await response.json();
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw { ...data, statusCode: response.status };
+      }
+      
+      return data;
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
@@ -99,11 +105,33 @@ export default function Invoices() {
     },
     onError: (error: any) => {
       setSendingJobId(null);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send invoice to Xero",
-        variant: "destructive",
-      });
+      
+      // If missing address, offer to edit invoice
+      if (error.missingField === 'address' && error.invoiceId) {
+        const invoiceToEdit = invoices.find(inv => inv.id === error.invoiceId);
+        
+        toast({
+          title: "Missing Address",
+          description: error.message || "Invoice needs a valid address",
+          variant: "destructive",
+          action: invoiceToEdit ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleEditInvoice(invoiceToEdit)}
+              data-testid="button-toast-edit-address"
+            >
+              Fix Address
+            </Button>
+          ) : undefined,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to send invoice to Xero",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -146,13 +174,35 @@ export default function Invoices() {
   const handleSaveEdit = () => {
     if (!editingInvoice) return;
     
+    // Validate address
+    const trimmedAddress = editFormData.address.trim();
+    if (!trimmedAddress || trimmedAddress.length < 5) {
+      toast({
+        title: "Validation Error",
+        description: "Address must be at least 5 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Validate amount if provided
+    const amount = editFormData.amount.trim();
+    if (amount && (isNaN(Number(amount)) || Number(amount) < 0)) {
+      toast({
+        title: "Validation Error",
+        description: "Amount must be a valid positive number",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     updateInvoiceMutation.mutate({
       id: editingInvoice.id,
       data: {
-        address: editFormData.address,
-        jobTitle: editFormData.jobTitle,
-        amount: editFormData.amount,
-        notes: editFormData.notes,
+        address: trimmedAddress,
+        jobTitle: editFormData.jobTitle.trim(),
+        amount: amount || editingInvoice.amount?.toString(),
+        notes: editFormData.notes.trim(),
       },
     });
   };
