@@ -203,8 +203,8 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                     <p><strong>Issue Date:</strong> {format(issueDate, 'dd MMM yyyy')}</p>
                     <p><strong>Due Date:</strong> {format(dueDate, 'dd MMM yyyy')}</p>
                     <div className="mt-0.5">
-                      <Badge className={`${getStatusColor(invoice.status)} text-[7px] sm:text-[10px] px-1 py-0`}>
-                        {invoice.status.toUpperCase()}
+                      <Badge className={`${getStatusColor(invoice.status || 'draft')} text-[7px] sm:text-[10px] px-1 py-0`}>
+                        {(invoice.status || 'draft').toUpperCase()}
                       </Badge>
                       {isOverdue && (
                         <Badge className="ml-0.5 sm:ml-1 bg-red-500 text-white text-[7px] sm:text-[10px] px-1 py-0">
