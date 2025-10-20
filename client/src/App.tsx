@@ -470,10 +470,14 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
 
 function Router() {
   const [location] = useLocation();
+  const { isAuthenticated, isLoading } = useAuth();
   
-  // Redirect root to dispatch
+  // Redirect root to dispatch for authenticated users, login for others
   if (location === '/') {
-    return <Redirect to="/dispatch" />;
+    if (isLoading) {
+      return null; // Wait for auth check
+    }
+    return <Redirect to={isAuthenticated ? "/dispatch" : "/login"} />;
   }
   
   return (
