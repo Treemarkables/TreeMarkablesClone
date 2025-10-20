@@ -459,7 +459,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   });
 
   // Pagination state
-  const [jobsLimit, setJobsLimit] = useState(50); // Start with 50 jobs for dispatch board
+  const [jobsLimit, setJobsLimit] = useState(10000); // Increased limit to show all jobs
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Fetch jobs from backend API with pagination
