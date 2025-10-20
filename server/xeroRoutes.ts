@@ -283,6 +283,19 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         });
       }
       
+      // Check if job has an address
+      const invoices = await storage.getInvoicesByJob(job.id);
+      const invoice = invoices?.[0];
+      
+      if (!invoice?.address && !job.address) {
+        console.error(`❌ Job ${job.jobNumber} and invoice have no address`);
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Cannot send to Xero: Job/Invoice must have an address. Please edit the invoice to add an address.',
+          missingField: 'address'
+        });
+      }
+      
       // Get Xero settings for account code and tax type
       const xeroSettings = await storage.getXeroSettings();
       const accountCode = xeroSettings?.salesAccountCode || '200';

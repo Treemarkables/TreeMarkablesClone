@@ -7,7 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Search, Send, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { FileText, Search, Send, CheckCircle, Clock, AlertCircle, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { Job, Customer, Invoice } from "@shared/schema";
@@ -28,6 +38,13 @@ export default function Invoices() {
   const [activeTab, setActiveTab] = useState<"all" | "pending" | "create">("create");
   const [sendingJobId, setSendingJobId] = useState<string | null>(null);
   const [creatingInvoiceForJob, setCreatingInvoiceForJob] = useState<string | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceWithRelations | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    address: "",
+    jobTitle: "",
+    amount: "",
+    notes: "",
+  });
   const { toast } = useToast();
 
   // Fetch all invoices with customer and job data
@@ -90,8 +107,55 @@ export default function Invoices() {
     },
   });
 
+  const updateInvoiceMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const response = await apiRequest('PATCH', `/api/invoices/${id}`, data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      setEditingInvoice(null);
+      toast({
+        title: "Success",
+        description: "Invoice updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update invoice",
+        variant: "destructive",
+      });
+    },
+  });
+
   const invoices = invoicesResponse?.data || [];
   const jobs = jobsResponse?.data || [];
+
+  const handleEditInvoice = (invoice: InvoiceWithRelations) => {
+    setEditingInvoice(invoice);
+    setEditFormData({
+      address: invoice.address || "",
+      jobTitle: invoice.jobTitle || "",
+      amount: invoice.amount?.toString() || "",
+      notes: invoice.notes || "",
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingInvoice) return;
+    
+    updateInvoiceMutation.mutate({
+      id: editingInvoice.id,
+      data: {
+        address: editFormData.address,
+        jobTitle: editFormData.jobTitle,
+        amount: editFormData.amount,
+        notes: editFormData.notes,
+      },
+    });
+  };
 
   // Get jobs eligible for invoicing - completed or work_order status
   const eligibleJobs = jobs.filter(job => 
@@ -333,18 +397,28 @@ export default function Invoices() {
                       )}
                     </div>
 
-                    {invoice.jobId && (
+                    <div className="flex gap-2">
                       <Button
-                        className="w-full gap-2"
-                        onClick={() => handleSendToXero(invoice.jobId!)}
-                        disabled={!!invoice.xeroSyncedAt || sendingJobId === invoice.jobId}
-                        data-testid={`button-send-to-xero-${invoice.id}`}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditInvoice(invoice)}
+                        data-testid={`button-edit-invoice-${invoice.id}`}
                       >
-                        <Send className="h-4 w-4" />
-                        {sendingJobId === invoice.jobId ? 'Sending...' : 
-                         invoice.xeroSyncedAt ? 'Sent to Xero' : 'Send to Xero'}
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                    )}
+                      {invoice.jobId && (
+                        <Button
+                          className="flex-1 gap-2"
+                          onClick={() => handleSendToXero(invoice.jobId!)}
+                          disabled={!!invoice.xeroSyncedAt || sendingJobId === invoice.jobId}
+                          data-testid={`button-send-to-xero-${invoice.id}`}
+                        >
+                          <Send className="h-4 w-4" />
+                          {sendingJobId === invoice.jobId ? 'Sending...' : 
+                           invoice.xeroSyncedAt ? 'Sent to Xero' : 'Send to Xero'}
+                        </Button>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -352,6 +426,94 @@ export default function Invoices() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Edit Invoice Dialog */}
+      <Dialog open={!!editingInvoice} onOpenChange={(open) => !open && setEditingInvoice(null)}>
+        <DialogContent data-testid="dialog-edit-invoice">
+          <DialogHeader>
+            <DialogTitle>Edit Invoice</DialogTitle>
+            <DialogDescription>
+              Update invoice details. Invoice number, customer, and job cannot be changed.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="invoice-number">Invoice Number</Label>
+              <Input
+                id="invoice-number"
+                value={editingInvoice?.invoiceNumber || ""}
+                disabled
+                className="bg-muted"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-job-title">Job Title</Label>
+              <Input
+                id="edit-job-title"
+                value={editFormData.jobTitle}
+                onChange={(e) => setEditFormData({ ...editFormData, jobTitle: e.target.value })}
+                data-testid="input-edit-job-title"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-address">Address *</Label>
+              <Input
+                id="edit-address"
+                value={editFormData.address}
+                onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                placeholder="Enter service address"
+                data-testid="input-edit-address"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Address is required to send invoices to Xero
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="edit-amount">Amount</Label>
+              <Input
+                id="edit-amount"
+                type="number"
+                step="0.01"
+                value={editFormData.amount}
+                onChange={(e) => setEditFormData({ ...editFormData, amount: e.target.value })}
+                data-testid="input-edit-amount"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-notes">Notes</Label>
+              <Textarea
+                id="edit-notes"
+                value={editFormData.notes}
+                onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                rows={3}
+                data-testid="input-edit-notes"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingInvoice(null)}
+              data-testid="button-cancel-edit"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={updateInvoiceMutation.isPending}
+              data-testid="button-save-edit"
+            >
+              {updateInvoiceMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
