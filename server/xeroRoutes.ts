@@ -169,35 +169,46 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   // Send job invoice to Xero (used by Invoices page)
   app.post('/api/xero/send-invoice', async (req: Request, res: Response) => {
     try {
+      console.log('📤 Xero send-invoice request received:', req.body);
       const { jobId } = req.body;
       
       if (!jobId) {
+        console.error('❌ No job ID provided');
         return res.status(400).json({ 
           success: false, 
           message: 'Job ID is required' 
         });
       }
       
+      console.log(`📤 Processing send-invoice for jobId: ${jobId}`);
+      
       // Get Xero client with valid token
       const client = await getValidXeroClient();
       if (!client) {
+        console.error('❌ Not connected to Xero');
         return res.status(400).json({ 
           success: false, 
           message: 'Not connected to Xero. Please connect first.' 
         });
       }
       
+      console.log('✅ Xero client ready');
+      
       // Get job details
       const job = await storage.getJob(jobId);
       if (!job) {
+        console.error(`❌ Job not found: ${jobId}`);
         return res.status(404).json({ 
           success: false, 
           message: 'Job not found' 
         });
       }
       
+      console.log(`✅ Job found: ${job.jobNumber} - ${job.title}`);
+      
       // Get customer details
       if (!job.customerId) {
+        console.error(`❌ Job ${jobId} has no customer assigned`);
         return res.status(400).json({ 
           success: false, 
           message: 'Job has no customer assigned' 
@@ -206,17 +217,26 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       
       const customer = await storage.getCustomer(job.customerId);
       if (!customer) {
+        console.error(`❌ Customer not found: ${job.customerId}`);
         return res.status(404).json({ 
           success: false, 
           message: 'Customer not found' 
         });
       }
       
-      console.log(`📤 Sending invoice to Xero for job ${job.id} (${job.title})`);
+      console.log(`✅ Customer found: ${customer.name}`);
+      console.log(`📤 Sending invoice to Xero for job ${job.jobNumber} (${job.title})`);
       
       // For Custom Connections, we use the tenant ID from the connection
       const connection = await storage.getActiveXeroConnection();
-      const tenantId = connection!.tenantId;
+      if (!connection) {
+        console.error('❌ No active Xero connection found');
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Not connected to Xero. Please connect first.' 
+        });
+      }
+      const tenantId = connection.tenantId;
       
       // Step 1: Check if contact exists in Xero or create it
       let xeroContactId: string;
