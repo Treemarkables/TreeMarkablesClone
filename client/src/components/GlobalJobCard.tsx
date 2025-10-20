@@ -577,7 +577,8 @@ export function GlobalJobCard({
       });
       replaceLineItems([]); // Clear line items
       setSelectedCustomerName(''); // Clear customer selection
-    } else if (editingJob && editingJob.id) {
+    } else if (editingJob && editingJob.id && !customersLoading) {
+      // Wait for customers to load before populating form to avoid missing customer data
       // Mark that we're loading data to prevent auto-save
       isLoadingDataRef.current = true;
       hasUserChangedRef.current = false;
@@ -631,7 +632,7 @@ export function GlobalJobCard({
         isLoadingDataRef.current = false;
       }, 500);
     }
-  }, [mode, editingJob, editingJobCustomer, form, replaceLineItems]);
+  }, [mode, editingJob, editingJobCustomer, customersLoading, form, replaceLineItems]);
 
   // Keep billing address in sync with job address when "same as job address" is enabled
   useEffect(() => {
