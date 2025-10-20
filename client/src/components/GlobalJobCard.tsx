@@ -208,50 +208,49 @@ export function GlobalJobCard({
     };
   }, [searchQuery]);
 
-  // Fetch customers for the dropdown
+  // Fetch customers for the dropdown (needed upfront)
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],
     enabled: isOpen,
   });
   
-  // Fetch employees for scheduling assignment
+  // Fetch employees for scheduling assignment (needed upfront)
   const { data: employeesData } = useQuery({
     queryKey: ['/api/employees'],
     enabled: isOpen || isSchedulingModalOpen,
   });
 
-  // Fetch default invoice template
+  // Fetch specific job by ID when editing (replaces fetching all 1000 jobs!)
+  const { data: specificJobData } = useQuery({
+    queryKey: ['/api/jobs', jobId || createdJobId],
+    enabled: isOpen && mode === 'edit' && !!(jobId || createdJobId) && !job,
+  });
+
+  // Lazy load templates - only when billing tab is active
   const { data: invoiceTemplateData } = useQuery({
     queryKey: ['/api/templates/default/invoice'],
-    enabled: isOpen,
+    enabled: isOpen && activeTab === 'billing',
   });
 
-  // Fetch default quote template
   const { data: quoteTemplateData } = useQuery({
     queryKey: ['/api/templates/default/quote'],
-    enabled: isOpen,
+    enabled: isOpen && activeTab === 'billing',
   });
 
-  // Fetch all jobs for address lookup
-  const { data: jobsData } = useQuery({
-    queryKey: ['/api/jobs?limit=1000'], // Fetch enough jobs for editing any job
-    enabled: isOpen,
-  });
-
-  // Fetch materials and services catalog for line item integration
+  // Lazy load materials and services - only when billing tab is active
   const { data: materialsData } = useQuery({
     queryKey: ['/api/materials'],
-    enabled: isOpen,
+    enabled: isOpen && activeTab === 'billing',
   });
 
   const { data: servicesData } = useQuery({
     queryKey: ['/api/services'],
-    enabled: isOpen,
+    enabled: isOpen && activeTab === 'billing',
   });
 
   const customers: Customer[] = (customersData as any)?.data || [];
   const employees: any[] = (employeesData as any)?.data || [];
-  const jobs: Job[] = (jobsData as any)?.data || [];
+  const specificJob: Job | null = (specificJobData as any)?.data || null;
   
   // Combine materials and services into a single catalog array
   const materials = (materialsData as any)?.data || [];
@@ -426,7 +425,8 @@ export function GlobalJobCard({
     const effectiveJobId = createdJobId || jobId;
     
     if (effectiveMode === "edit" && (effectiveJobId || job?.id)) {
-      const result = job || jobs.find(j => j.id === effectiveJobId);
+      // Use job prop if provided, otherwise use the specific job fetched by ID
+      const result = job || specificJob;
       console.log('EditingJob useMemo result:', { 
         mode,
         internalMode,
@@ -435,14 +435,14 @@ export function GlobalJobCard({
         effectiveJobId,
         jobId, 
         jobProp: job, 
-        jobsArrayLength: jobs.length,
+        specificJobFetched: specificJob,
         result,
         resultDescription: result?.description 
       });
       return result;
     }
     return null;
-  }, [mode, internalMode, createdJobId, jobId, job, jobs]);
+  }, [mode, internalMode, createdJobId, jobId, job, specificJob]);
 
   // Reset internal state when modal closes
   useEffect(() => {
