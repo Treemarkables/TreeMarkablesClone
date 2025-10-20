@@ -267,34 +267,57 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       try {
         console.log(`🚀 XERO INVOICE: Starting invoice creation for job ${job.id}`);
         
-        // Get proposal for this job to extract line items
-        const proposals = await storage.getProposalsByJob(job.id);
-        const proposal = proposals?.[0]; // Get the first/latest proposal
-        
-        console.log(`📋 Found ${proposals.length} proposal(s) for job ${job.id}`);
-        
         let invoiceLineItems: any[] = [];
         
-        // Fetch sections and line items for the proposal
-        if (proposal) {
-          const sections = await storage.getProposalSectionsByProposal(proposal.id);
-          console.log(`📋 Found ${sections.length} section(s) for proposal ${proposal.id}`);
+        // PRIORITY 1: Check for existing invoice line items
+        const invoices = await storage.getInvoicesByJob(job.id);
+        const invoice = invoices?.[0]; // Get the first/latest invoice
+        
+        if (invoice) {
+          console.log(`💰 Found invoice ${invoice.invoiceNumber} for job ${job.id}, amount: $${invoice.amount}`);
           
-          const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
-          console.log(`📋 Found ${allLineItems.length} total line item(s) for proposal ${proposal.id}`);
+          // Invoice items are stored in the JSONB 'items' column
+          const invoiceItems = (invoice.items as any[]) || [];
+          console.log(`📋 Found ${invoiceItems.length} line item(s) in invoice`);
           
-          for (const item of allLineItems) {
+          for (const item of invoiceItems) {
             invoiceLineItems.push({
               description: item.description || 'Tree Service',
               quantity: Number(item.quantity) || 1,
-              unitAmount: Number(item.unitPrice) || 0,
+              unitAmount: Number(item.rate || item.unitPrice) || 0,
               accountCode: '200', // Sales account - adjust as needed
               taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
             });
           }
         }
         
-        // Fallback to job line items if no proposal line items found
+        // PRIORITY 2: Check for proposal line items if no invoice found
+        if (invoiceLineItems.length === 0) {
+          const proposals = await storage.getProposalsByJob(job.id);
+          const proposal = proposals?.[0]; // Get the first/latest proposal
+          
+          console.log(`📋 Found ${proposals.length} proposal(s) for job ${job.id}`);
+          
+          if (proposal) {
+            const sections = await storage.getProposalSectionsByProposal(proposal.id);
+            console.log(`📋 Found ${sections.length} section(s) for proposal ${proposal.id}`);
+            
+            const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
+            console.log(`📋 Found ${allLineItems.length} total line item(s) for proposal ${proposal.id}`);
+            
+            for (const item of allLineItems) {
+              invoiceLineItems.push({
+                description: item.description || 'Tree Service',
+                quantity: Number(item.quantity) || 1,
+                unitAmount: Number(item.unitPrice) || 0,
+                accountCode: '200', // Sales account - adjust as needed
+                taxType: 'OUTPUT2', // 15% GST for NZ - adjust based on your tax setup
+              });
+            }
+          }
+        }
+        
+        // PRIORITY 3: Fallback to job line items if nothing else found
         if (invoiceLineItems.length === 0) {
           const jobLineItems = job.lineItems || [];
           if (jobLineItems.length === 0) {
