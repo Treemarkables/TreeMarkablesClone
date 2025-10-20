@@ -384,6 +384,16 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           sentToXeroDate: new Date(),
         });
         
+        // Update the invoice status to 'sent' so it disappears from Pending tab
+        if (invoice) {
+          await storage.updateInvoice(invoice.id, {
+            status: 'sent',
+            xeroInvoiceId: xeroInvoice.invoiceID || undefined,
+            xeroSyncedAt: new Date(),
+          });
+          console.log(`✅ Updated invoice ${invoice.invoiceNumber} status to 'sent'`);
+        }
+        
         // Create diary entry for Xero send
         await storage.createJobDiaryEntry({
           jobId,
