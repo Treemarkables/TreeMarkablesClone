@@ -106,25 +106,34 @@ export default function Invoices() {
     onError: (error: any) => {
       setSendingJobId(null);
       
-      // If missing address, offer to edit invoice
-      if (error.missingField === 'address' && error.invoiceId) {
-        const invoiceToEdit = invoices.find(inv => inv.id === error.invoiceId);
-        
-        toast({
-          title: "Missing Address",
-          description: error.message || "Invoice needs a valid address",
-          variant: "destructive",
-          action: invoiceToEdit ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleEditInvoice(invoiceToEdit)}
-              data-testid="button-toast-edit-address"
-            >
-              Fix Address
-            </Button>
-          ) : undefined,
-        });
+      // If missing address, offer to edit invoice or job
+      if (error.missingField === 'address') {
+        if (error.invoiceId) {
+          const invoiceToEdit = invoices.find(inv => inv.id === error.invoiceId);
+          
+          toast({
+            title: "Missing Address",
+            description: error.message || "Invoice needs a valid address",
+            variant: "destructive",
+            action: invoiceToEdit ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleEditInvoice(invoiceToEdit)}
+                data-testid="button-toast-edit-address"
+              >
+                Fix Address
+              </Button>
+            ) : undefined,
+          });
+        } else {
+          // No invoice exists yet - direct user to create invoice first
+          toast({
+            title: "Missing Address",
+            description: "Please create an invoice for this job first, then add an address before sending to Xero.",
+            variant: "destructive",
+          });
+        }
       } else {
         toast({
           title: "Error",
@@ -187,10 +196,10 @@ export default function Invoices() {
     
     // Validate amount if provided
     const amount = editFormData.amount.trim();
-    if (amount && (isNaN(Number(amount)) || Number(amount) < 0)) {
+    if (amount && (isNaN(Number(amount)) || Number(amount) <= 0)) {
       toast({
         title: "Validation Error",
-        description: "Amount must be a valid positive number",
+        description: "Amount must be a valid positive number greater than 0",
         variant: "destructive",
       });
       return;
@@ -201,7 +210,7 @@ export default function Invoices() {
       data: {
         address: trimmedAddress,
         jobTitle: editFormData.jobTitle.trim(),
-        amount: amount || editingInvoice.amount?.toString(),
+        amount: amount ? Number(amount) : Number(editingInvoice.amount),
         notes: editFormData.notes.trim(),
       },
     });
