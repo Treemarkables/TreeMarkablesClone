@@ -491,6 +491,7 @@ export function GlobalJobCard({
   // Form setup
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
+    shouldUnregister: true, // Clear form state on unmount to prevent stale data
     defaultValues: {
       title: "",
       description: "",
@@ -1604,8 +1605,14 @@ export function GlobalJobCard({
   // In create mode, use form.watch since there's no editingJob yet
   const currentStatus = mode === 'edit' ? editingJob?.status : form.watch('status');
 
+  // Compute effective job ID for loading check
+  const effectiveJobId = createdJobId || jobId;
+
   // Loading check - show spinner while fetching specific job data in edit mode
-  if (mode === 'edit' && isLoadingSpecificJob && !job) {
+  // Gate on BOTH isLoadingSpecificJob AND !editingJob to prevent stale data display
+  const jobLoading = mode === 'edit' && !!effectiveJobId && (isLoadingSpecificJob || !editingJob) && !job;
+  
+  if (jobLoading) {
     const loadingContent = (
       <div className="flex items-center justify-center h-full w-full bg-gray-50">
         <div className="text-center">
@@ -2233,7 +2240,7 @@ export function GlobalJobCard({
 
           {/* Main Content Area */}
           <div className="flex-1 flex min-h-0 min-w-0">
-            <Form {...form}>
+            <Form {...form} key={editingJob?.id || internalMode}>
               <form 
                 onSubmit={form.handleSubmit((data) => {
                   console.log('Form submitted:', data);
