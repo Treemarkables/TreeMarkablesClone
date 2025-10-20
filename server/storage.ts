@@ -69,7 +69,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, ilike, and, gte, lte, lt, gt, ne, desc, sql, inArray } from "drizzle-orm";
+import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, sql, inArray } from "drizzle-orm";
 import * as schema from "@shared/schema";
 
 // modify the interface with any CRUD methods
@@ -178,6 +178,7 @@ export interface IStorage {
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
   getAllJobs(options?: { limit?: number; offset?: number; status?: string }): Promise<{ jobs: Job[]; total: number }>;
+  searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
   createJobFromCall(params: {
     callId: string;
     customerName: string;
@@ -1472,6 +1473,48 @@ class DatabaseStorage implements IStorage {
       query.orderBy(desc(schema.jobs.createdAt)).limit(limit).offset(offset),
       countQuery
     ]);
+    
+    const total = Number(totalResult[0]?.count) || 0;
+    
+    return { jobs, total };
+  }
+
+  async searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }> {
+    const limit = options?.limit ?? 100; // Default to 100 results for search
+    const offset = options?.offset ?? 0;
+    const excludeArchived = options?.excludeArchived ?? true;
+    
+    const searchTerm = `%${query.toLowerCase()}%`;
+    
+    // Build WHERE clause conditions
+    const searchConditions = or(
+      sql`LOWER(${schema.jobs.jobNumber}) LIKE ${searchTerm}`,
+      sql`LOWER(${schema.jobs.title}) LIKE ${searchTerm}`,
+      sql`LOWER(${schema.jobs.description}) LIKE ${searchTerm}`,
+      sql`LOWER(${schema.jobs.address}) LIKE ${searchTerm}`,
+      sql`LOWER(${schema.jobs.notes}) LIKE ${searchTerm}`,
+      sql`LOWER(${schema.jobs.specialInstructions}) LIKE ${searchTerm}`
+    );
+    
+    // Add archived filter if needed
+    const whereClause = excludeArchived
+      ? and(searchConditions, sql`${schema.jobs.status} != 'archived'`)
+      : searchConditions;
+    
+    // Execute search query with pagination
+    const jobs = await db
+      .select()
+      .from(schema.jobs)
+      .where(whereClause)
+      .orderBy(desc(schema.jobs.createdAt))
+      .limit(limit)
+      .offset(offset);
+    
+    // Get total count
+    const totalResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.jobs)
+      .where(whereClause);
     
     const total = Number(totalResult[0]?.count) || 0;
     
