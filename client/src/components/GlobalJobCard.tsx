@@ -551,6 +551,10 @@ export function GlobalJobCard({
   // Reset form when switching to create mode OR populate form when editing an existing job
   useEffect(() => {
     if (mode === 'create' && !jobId && !createdJobId) {
+      // CRITICAL: Clear the dirty-state guard BEFORE resetting to ensure reset always happens
+      hasUserChangedRef.current = false;
+      isLoadingDataRef.current = false;
+      
       // Reset to blank form when creating new job (check mode and jobId directly, not editingJob which may have stale cache)
       form.reset({
         title: '',
@@ -635,7 +639,7 @@ export function GlobalJobCard({
         isLoadingDataRef.current = false;
       }, 500);
     }
-  }, [mode, editingJob, editingJobCustomer, customersLoading, form, replaceLineItems]);
+  }, [isOpen, mode, jobId, createdJobId, editingJob?.id, editingJobCustomer, customersLoading, form, replaceLineItems]);
 
   // Keep billing address in sync with job address when "same as job address" is enabled
   useEffect(() => {
@@ -1554,36 +1558,41 @@ export function GlobalJobCard({
 
   // Handle dialog close - save pending changes before closing
   const handleDialogClose = (open: boolean) => {
-    if (!open && mode === 'edit' && editingJob?.id) {
-      // Always save when closing in edit mode (form may have changed)
-      const saveAndClose = async () => {
-        try {
-          const formData = form.getValues();
-          
-          // Map new customer fields to job contact fields for backend compatibility
-          if (formData.isNewCustomer && formData.newCustomerName) {
-            const names = formData.newCustomerName.split(' ');
-            formData.jobContactFirstName = names[0] || '';
-            formData.jobContactLastName = names.slice(1).join(' ') || '';
-            formData.jobContactEmail = formData.newCustomerEmail || '';
-            formData.jobContactPhone = formData.newCustomerPhone || '';
-          }
-          
-          await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
-          hasUserChangedRef.current = false;
-          
-          // Invalidate queries to refresh the list
-          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-        } catch (error) {
-          console.error('Failed to save on close:', error);
-        } finally {
-          onClose();
-        }
-      };
+    if (!open) {
+      // CRITICAL: Clear all guard refs when closing to prevent stale state on next open
+      hasUserChangedRef.current = false;
+      isLoadingDataRef.current = false;
       
-      saveAndClose();
-    } else {
-      onClose();
+      if (mode === 'edit' && editingJob?.id) {
+        // Always save when closing in edit mode (form may have changed)
+        const saveAndClose = async () => {
+          try {
+            const formData = form.getValues();
+            
+            // Map new customer fields to job contact fields for backend compatibility
+            if (formData.isNewCustomer && formData.newCustomerName) {
+              const names = formData.newCustomerName.split(' ');
+              formData.jobContactFirstName = names[0] || '';
+              formData.jobContactLastName = names.slice(1).join(' ') || '';
+              formData.jobContactEmail = formData.newCustomerEmail || '';
+              formData.jobContactPhone = formData.newCustomerPhone || '';
+            }
+            
+            await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
+            
+            // Invalidate queries to refresh the list
+            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+          } catch (error) {
+            console.error('Failed to save on close:', error);
+          } finally {
+            onClose();
+          }
+        };
+        
+        saveAndClose();
+      } else {
+        onClose();
+      }
     }
   };
 
