@@ -2858,6 +2858,48 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Search jobs endpoint - searches across all jobs (not limited to paginated results)
+  app.get('/api/jobs/search', async (req: Request, res: Response) => {
+    try {
+      const { q, limit, offset, excludeArchived } = req.query;
+      
+      if (!q || typeof q !== 'string' || q.trim().length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Search query parameter "q" is required' 
+        });
+      }
+      
+      // Parse pagination params
+      const parsedLimit = limit ? parseInt(limit as string) : 100;
+      const parsedOffset = offset ? parseInt(offset as string) : 0;
+      const shouldExcludeArchived = excludeArchived !== 'false'; // Default to true
+      
+      // Execute server-side search across all jobs
+      const result = await storage.searchJobs(q.trim(), {
+        limit: parsedLimit,
+        offset: parsedOffset,
+        excludeArchived: shouldExcludeArchived
+      });
+      
+      res.json({
+        success: true,
+        data: result.jobs,
+        total: result.total,
+        limit: parsedLimit,
+        offset: parsedOffset,
+        query: q.trim()
+      });
+    } catch (error) {
+      console.error('Error searching jobs:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error searching jobs',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Bulk archive jobs endpoint - MUST be before /api/jobs/:id to avoid route collision
   app.put('/api/jobs/bulk-archive', async (req: Request, res: Response) => {
     try {
