@@ -323,12 +323,24 @@ export function NotificationBell() {
   const notifications: NotificationWithDetails[] = (notificationsData as any)?.data || [];
 
   const handleNotificationClick = (notification: NotificationWithDetails) => {
+    console.log('🔔 Notification clicked:', {
+      id: notification.id,
+      type: notification.type,
+      proposalId: notification.proposalId,
+      jobId: notification.jobId,
+      quoteId: notification.quoteId,
+      leadId: notification.leadId,
+      customerId: notification.customerId,
+      actionUrl: notification.actionUrl
+    });
+
     if (!notification.isRead) {
       markAsReadMutation.mutate(notification.id);
     }
 
     // Navigate to action URL if provided and it's an internal route
     if (notification.actionUrl && notification.actionUrl.startsWith('/')) {
+      console.log('🔀 Navigating via actionUrl:', notification.actionUrl);
       setLocation(notification.actionUrl);
       setIsOpen(false);
       return;
@@ -336,7 +348,9 @@ export function NotificationBell() {
 
     // Check metadata for conversationId (for older notifications or alternative storage)
     if (notification.metadata?.conversationId) {
-      setLocation(`/conversation/${notification.metadata.conversationId}`);
+      const url = `/conversation/${notification.metadata.conversationId}`;
+      console.log('🔀 Navigating via conversationId:', url);
+      setLocation(url);
       setIsOpen(false);
       return;
     }
@@ -344,7 +358,9 @@ export function NotificationBell() {
     // Handle proposal notifications
     if (notification.type === 'proposal_accepted' || notification.type === 'proposal_sent') {
       if (notification.proposalId) {
-        setLocation(`/proposals?proposal=${notification.proposalId}`);
+        const url = `/proposals?proposal=${notification.proposalId}`;
+        console.log('🔀 Navigating to proposal:', url);
+        setLocation(url);
         setIsOpen(false);
         return;
       }
@@ -353,7 +369,9 @@ export function NotificationBell() {
     // Handle job completion and status change notifications
     if (notification.type === 'job_completed' || notification.type === 'job_status_change') {
       if (notification.jobId) {
-        setLocation(`/dispatch?job=${notification.jobId}`);
+        const url = `/dispatch?job=${notification.jobId}`;
+        console.log('🔀 Navigating to job:', url);
+        setLocation(url);
         setIsOpen(false);
         return;
       }
@@ -362,43 +380,56 @@ export function NotificationBell() {
     // Handle diary-specific notifications - navigate to job and open diary tab
     const diaryTypes = ['email_reply', 'sms_reply', 'proposal_sent', 'photo_added', 'note_added'];
     if (diaryTypes.includes(notification.type) && notification.jobId) {
-      setLocation(`/dispatch?job=${notification.jobId}&tab=diary`);
+      const url = `/dispatch?job=${notification.jobId}&tab=diary`;
+      console.log('🔀 Navigating to job diary:', url);
+      setLocation(url);
       setIsOpen(false);
       return;
     }
 
     // Fallback navigation based on related entities priority
     if (notification.proposalId) {
-      setLocation(`/proposals?proposal=${notification.proposalId}`);
+      const url = `/proposals?proposal=${notification.proposalId}`;
+      console.log('🔀 Fallback: Navigating to proposal:', url);
+      setLocation(url);
       setIsOpen(false);
       return;
     }
 
     if (notification.jobId) {
-      setLocation(`/dispatch?job=${notification.jobId}`);
+      const url = `/dispatch?job=${notification.jobId}`;
+      console.log('🔀 Fallback: Navigating to job:', url);
+      setLocation(url);
       setIsOpen(false);
       return;
     }
 
     if (notification.quoteId) {
-      setLocation(`/quotes?quote=${notification.quoteId}`);
+      const url = `/quotes?quote=${notification.quoteId}`;
+      console.log('🔀 Fallback: Navigating to quote:', url);
+      setLocation(url);
       setIsOpen(false);
       return;
     }
 
     if (notification.leadId) {
-      setLocation(`/opportunities?lead=${notification.leadId}`);
+      const url = `/opportunities?lead=${notification.leadId}`;
+      console.log('🔀 Fallback: Navigating to lead:', url);
+      setLocation(url);
       setIsOpen(false);
       return;
     }
 
     if (notification.customerId) {
-      setLocation(`/customers?customer=${notification.customerId}`);
+      const url = `/customers?customer=${notification.customerId}`;
+      console.log('🔀 Fallback: Navigating to customer:', url);
+      setLocation(url);
       setIsOpen(false);
       return;
     }
 
     // If no navigation target, just close
+    console.log('⚠️ No navigation target found for notification');
     setIsOpen(false);
   };
 
