@@ -574,6 +574,7 @@ export function GlobalJobCard({
         sameAsJobAddress: true,
         taxMode: 'tax_exclusive',
         checklist: [],
+        includeDescriptionInQuotesProposals: true, // Default to including description
       });
       replaceLineItems([]); // Clear line items
       setSelectedCustomerName(''); // Clear customer selection
@@ -614,6 +615,7 @@ export function GlobalJobCard({
         taxMode: editingJob.taxMode || 'tax_exclusive',
         // Arrays - DO NOT set lineItems here, let replaceLineItems() handle it
         checklist: editingJob.checklist || [],
+        includeDescriptionInQuotesProposals: editingJob.includeDescriptionInQuotesProposals ?? true,
       });
       
       // Fix: Explicitly sync useFieldArray with line items after form reset
