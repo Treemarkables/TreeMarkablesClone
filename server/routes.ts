@@ -3905,6 +3905,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      // Check if invoice already exists for this job
+      const existingInvoices = await storage.getInvoicesByJob(job.id);
+      if (existingInvoices && existingInvoices.length > 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'An invoice already exists for this job. Please use the existing invoice instead of creating a duplicate.',
+          data: existingInvoices[0] // Return the existing invoice
+        });
+      }
+
       // Get default invoice template
       const defaultTemplate = await storage.getDefaultTemplate('invoice');
 
@@ -5210,9 +5220,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         return res.status(404).json({ success: false, message: 'Invoice not found' });
       }
 
-      // Update invoice (assuming storage has updateInvoice method)
-      const updatedInvoice = { ...invoice, ...updateData, updatedAt: new Date() };
-      await storage.createInvoice(updatedInvoice); // Using createInvoice to update for now
+      // Update invoice using proper updateInvoice method
+      const updatedInvoice = await storage.updateInvoice(id, updateData);
 
       console.log(`📋 Invoice ${invoice.invoiceNumber} updated:`, updateData);
 
