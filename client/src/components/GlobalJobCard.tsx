@@ -221,7 +221,7 @@ export function GlobalJobCard({
   });
 
   // Fetch specific job by ID when editing (replaces fetching all 1000 jobs!)
-  const { data: specificJobData } = useQuery({
+  const { data: specificJobData, isLoading: isLoadingSpecificJob } = useQuery({
     queryKey: ['/api/jobs', jobId || createdJobId],
     enabled: isOpen && mode === 'edit' && !!(jobId || createdJobId) && !job,
   });
@@ -1599,6 +1599,32 @@ export function GlobalJobCard({
   // Get current status from form (always reflects current state)
   // Form is populated from editingJob in edit mode, so this works for both create and edit
   const currentStatus = form.watch('status');
+
+  // Loading check - show spinner while fetching specific job data in edit mode
+  if (mode === 'edit' && isLoadingSpecificJob && !job) {
+    const loadingContent = (
+      <div className="flex items-center justify-center h-full w-full bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading job details...</p>
+        </div>
+      </div>
+    );
+
+    return (
+      <>
+        {renderInline ? (
+          loadingContent
+        ) : (
+          <Dialog open={isOpen} onOpenChange={handleDialogClose}>
+            <DialogContent className="w-full h-full max-w-full flex flex-col p-4 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
+              {loadingContent}
+            </DialogContent>
+          </Dialog>
+        )}
+      </>
+    );
+  }
 
   // Job card content (can be rendered inline or in a dialog)
   const jobCardContent = (
