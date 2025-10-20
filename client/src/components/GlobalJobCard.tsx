@@ -122,6 +122,7 @@ export function GlobalJobCard({
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState("");
   const [selectedCustomerName, setSelectedCustomerName] = useState("");
+  const [hasUserSelectedCustomer, setHasUserSelectedCustomer] = useState(false); // Track if user explicitly selected customer
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
@@ -583,6 +584,7 @@ export function GlobalJobCard({
       replaceLineItems([]); // Clear line items
       setSelectedCustomerName(''); // Clear customer selection
       setCustomerSearchValue(''); // Clear customer search field
+      setHasUserSelectedCustomer(false); // Reset customer selection flag
     } else if (editingJob && editingJob.id && !customersLoading) {
       // Wait for customers to load before populating form to avoid missing customer data
       // Mark that we're loading data to prevent auto-save
@@ -657,14 +659,16 @@ export function GlobalJobCard({
 
   // Auto-populate address from customer in create mode
   useEffect(() => {
-    if (mode === 'create' && selectedCustomer?.address) {
+    // Only auto-populate if user has explicitly selected a customer (tracked by flag)
+    // This prevents auto-populate from using stale customer data from previously viewed jobs
+    if (mode === 'create' && hasUserSelectedCustomer && selectedCustomer?.address) {
       const currentAddress = form.getValues('address');
       // Only populate if address field is empty
       if (!currentAddress || currentAddress.trim() === '') {
         form.setValue('address', selectedCustomer.address);
       }
     }
-  }, [mode, selectedCustomer, form]);
+  }, [mode, hasUserSelectedCustomer, selectedCustomer, form]);
 
   // Auto-save DISABLED - was causing data loss issues with proposals
   // useEffect(() => {
@@ -2271,6 +2275,7 @@ export function GlobalJobCard({
                                                 form.setValue('isNewCustomer', false);
                                                 setSelectedCustomerName(customer.name);
                                                 setCustomerSearchValue("");
+                                                setHasUserSelectedCustomer(true); // Mark that user explicitly selected a customer
                                                 
                                                 // Auto-populate customer details
                                                 const nameParts = customer.name.split(' ');
