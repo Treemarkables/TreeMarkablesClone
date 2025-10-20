@@ -230,12 +230,12 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               </div>
             </div>
 
-            {/* Work Description */}
-            {job?.description && (
+            {/* Description - only show if no line items, otherwise line items table will show descriptions */}
+            {job?.description && (!lineItems || lineItems.length === 0) && (
               <div className="mb-3">
-                <h3 className="text-base font-semibold text-gray-900 mb-2">Work Performed</h3>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Description</h3>
                 <div className="bg-gray-50 rounded-lg p-2">
-                  <p className="text-sm text-gray-700">{job.description}</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{job.description}</p>
                 </div>
               </div>
             )}
@@ -243,7 +243,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             {/* Line Items */}
             {lineItems && lineItems.length > 0 && (
               <div className="mb-3">
-                <h3 className="text-base font-semibold text-gray-900 mb-2">Services & Materials</h3>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Description</h3>
                 <div className="w-full overflow-x-auto">
                   <table className="w-full border-collapse border border-gray-300 text-sm">
                     <thead>
