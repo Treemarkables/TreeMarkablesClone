@@ -8,6 +8,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 ### October 20, 2025
+- **Job Display Limit Increased - FIXED**: Increased job display limits to accommodate full job database (~3,000 jobs). Job Dashboard limit increased from 1,000 to 10,000 jobs, and Dispatch Board limit increased from 50 to 10,000 jobs. This ensures all jobs are visible in both views.
 - **Create New Job Address Pre-Population Bug - FIXED**: Resolved issue where "Create New Job" form pre-filled address field with data from previously viewed job. Root cause was auto-populate effect running with stale customer data. Implemented `hasUserSelectedCustomer` flag that tracks explicit user selections versus residual state. Flag resets to false on form reset and sets to true only when user selects customer from dropdown, preventing unintended address population while preserving intentional auto-fill functionality.
 - **Job Card Loading Race Condition - FIXED**: Resolved issue where job cards opened blank on first click due to async data fetching. Added loading spinner that displays while specific job data loads from `/api/jobs/:id` endpoint (60-150ms). Extracted `isLoadingSpecificJob` from useQuery and added conditional rendering to prevent blank forms. Job details now populate immediately after data loads without requiring modal reopening.
 
