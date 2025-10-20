@@ -209,7 +209,7 @@ export function GlobalJobCard({
   }, [searchQuery]);
 
   // Fetch customers for the dropdown (needed upfront)
-  const { data: customersData } = useQuery({
+  const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ['/api/customers'],
     enabled: isOpen,
   });
