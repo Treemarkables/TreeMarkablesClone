@@ -25,13 +25,44 @@ type InvoiceWithRelations = Invoice & {
 
 export default function Invoices() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "pending" | "create">("create");
   const [sendingJobId, setSendingJobId] = useState<string | null>(null);
+  const [creatingInvoiceForJob, setCreatingInvoiceForJob] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch all invoices with customer and job data
   const { data: invoicesResponse, isLoading } = useQuery<ApiResponse<InvoiceWithRelations>>({
     queryKey: ['/api/invoices'],
+  });
+
+  // Fetch jobs that are ready for invoicing (completed/work_order status without invoices)
+  const { data: jobsResponse, isLoading: isLoadingJobs } = useQuery<ApiResponse<Job>>({
+    queryKey: ['/api/jobs'],
+  });
+
+  const createInvoiceMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      setCreatingInvoiceForJob(jobId);
+      const response = await apiRequest('POST', `/api/jobs/${jobId}/convert-to-invoice`, {});
+      return await response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      setCreatingInvoiceForJob(null);
+      toast({
+        title: "Success",
+        description: data?.message || "Invoice created successfully",
+      });
+    },
+    onError: (error: any) => {
+      setCreatingInvoiceForJob(null);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create invoice",
+        variant: "destructive",
+      });
+    },
   });
 
   const sendToXeroMutation = useMutation({
@@ -60,6 +91,14 @@ export default function Invoices() {
   });
 
   const invoices = invoicesResponse?.data || [];
+  const jobs = jobsResponse?.data || [];
+
+  // Get jobs eligible for invoicing - completed or work_order status
+  const eligibleJobs = jobs.filter(job => 
+    (job.status === 'completed' || job.status === 'work_order') &&
+    job.customerId && // Must have a customer
+    parseFloat(job.totalAmount || '0') > 0 // Must have a total amount
+  );
 
   // Filter invoices based on search and tab
   const filteredInvoices = invoices.filter(invoice => {
@@ -77,16 +116,23 @@ export default function Invoices() {
     return matchesSearch && matchesTab;
   });
 
+  // Filter jobs for the Create tab
+  const filteredJobs = eligibleJobs.filter(job => {
+    const matchesSearch =
+      (job.jobNumber?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
+      (job.title?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
+      (job.address?.toLowerCase() ?? "").includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
+
   const formatCurrency = (amount?: string | null) => {
-    console.log(`💵 formatCurrency input: "${amount}" (type: ${typeof amount})`);
-    if (!amount) {
-      console.log(`  → Returning $0.00 (falsy value)`);
-      return '$0.00';
-    }
+    if (!amount) return '$0.00';
     const num = parseFloat(amount);
-    const result = `$${num.toFixed(2)}`;
-    console.log(`  → Returning ${result}`);
-    return result;
+    return `$${num.toFixed(2)}`;
+  };
+
+  const handleCreateInvoice = (jobId: string) => {
+    createInvoiceMutation.mutate(jobId);
   };
 
   const handleSendToXero = (jobId: string) => {
@@ -136,7 +182,10 @@ export default function Invoices() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
-        <TabsList className="grid w-full grid-cols-2 max-w-full" data-testid="tabs-invoice-filter">
+        <TabsList className="grid w-full grid-cols-3 max-w-full" data-testid="tabs-invoice-filter">
+          <TabsTrigger value="create" data-testid="tab-create-invoices">
+            Create ({eligibleJobs.length})
+          </TabsTrigger>
           <TabsTrigger value="all" data-testid="tab-all-invoices">
             All ({invoices.length})
           </TabsTrigger>
@@ -145,14 +194,79 @@ export default function Invoices() {
           </TabsTrigger>
         </TabsList>
 
+        {/* Create Invoices Tab - Shows jobs ready for invoicing */}
+        <TabsContent value="create" className="mt-6">
+          {filteredJobs.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-lg font-medium" data-testid="text-no-jobs-for-invoicing">No jobs ready for invoicing</p>
+                <p className="text-sm text-muted-foreground" data-testid="text-no-jobs-description">
+                  Jobs with "Work Order" or "Completed" status will appear here
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full max-w-full">
+              {filteredJobs.map((job) => (
+                <Card key={job.id} className="hover-elevate min-w-0" data-testid={`card-job-${job.id}`}>
+                  <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-4">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <CardTitle className="text-base sm:text-lg truncate" data-testid={`text-job-number-${job.id}`}>
+                        Job #{job.jobNumber}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground truncate" data-testid={`text-job-status-${job.id}`}>
+                        {job.status === 'work_order' ? 'Work Order' : 'Completed'}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" data-testid={`badge-status-${job.id}`}>
+                      Ready
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2 min-w-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" data-testid={`text-job-title-${job.id}`}>
+                          {job.title || 'Tree Service'}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate" data-testid={`text-job-address-${job.id}`}>
+                          {job.address || 'No address'}
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <span className="text-sm text-muted-foreground">Amount</span>
+                        <span className="text-lg font-bold" data-testid={`text-job-amount-${job.id}`}>
+                          {formatCurrency(job.totalAmount)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button
+                      className="w-full gap-2"
+                      onClick={() => handleCreateInvoice(job.id)}
+                      disabled={creatingInvoiceForJob === job.id}
+                      data-testid={`button-create-invoice-${job.id}`}
+                    >
+                      <FileText className="h-4 w-4" />
+                      {creatingInvoiceForJob === job.id ? 'Creating...' : 'Create Invoice'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* All Invoices and Pending Tabs */}
         <TabsContent value={activeTab} className="mt-6">
-          {filteredInvoices.length === 0 ? (
+          {activeTab === 'create' ? null : filteredInvoices.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <FileText className="h-12 w-12 text-muted-foreground mb-4" />
                 <p className="text-lg font-medium" data-testid="text-no-invoices">No invoices found</p>
                 <p className="text-sm text-muted-foreground" data-testid="text-no-invoices-description">
-                  {activeTab === "all" && "No invoices created yet"}
+                  {activeTab === "all" && "No invoices created yet. Create invoices from the 'Create' tab."}
                   {activeTab === "pending" && "No pending invoices"}
                 </p>
               </CardContent>
