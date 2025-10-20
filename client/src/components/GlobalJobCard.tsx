@@ -2316,6 +2316,36 @@ export function GlobalJobCard({
                                           </Button>
                                         </div>
                                       </CommandEmpty>
+                                      
+                                      {/* Always show "Create New" option at top when typing */}
+                                      {customerSearchValue.trim() && (
+                                        <CommandGroup heading="Create New">
+                                          <CommandItem
+                                            onSelect={() => {
+                                              // Create new customer with search value as name
+                                              form.setValue('isNewCustomer', true);
+                                              form.setValue('customerId', '');
+                                              form.setValue('newCustomerName', customerSearchValue.trim());
+                                              setSelectedCustomerName(customerSearchValue.trim());
+                                              
+                                              // Set name in job contact fields
+                                              const names = customerSearchValue.trim().split(' ');
+                                              form.setValue('jobContactFirstName', names[0] || '');
+                                              form.setValue('jobContactLastName', names.slice(1).join(' ') || '');
+                                              
+                                              setCustomerSearchOpen(false);
+                                            }}
+                                            className="bg-primary/5 hover:bg-primary/10"
+                                            data-testid="button-create-new-customer-inline"
+                                          >
+                                            <Plus className="mr-2 h-4 w-4 text-primary" />
+                                            <span className="font-medium text-primary">
+                                              Create "{customerSearchValue.trim()}"
+                                            </span>
+                                          </CommandItem>
+                                        </CommandGroup>
+                                      )}
+                                      
                                       <CommandGroup heading="Existing Customers">
                                         {customersData?.data
                                           ?.filter((customer) => {
