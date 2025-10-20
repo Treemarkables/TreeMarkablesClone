@@ -425,6 +425,14 @@ export function GlobalJobCard({
     const effectiveMode = createdJobId ? 'edit' : internalMode;
     const effectiveJobId = createdJobId || jobId;
     
+    console.log('🔍 editingJob useMemo:', {
+      effectiveMode,
+      effectiveJobId,
+      jobPropExists: !!job,
+      specificJobExists: !!specificJob,
+      conditionCheck: effectiveMode === "edit" && (effectiveJobId || job?.id)
+    });
+    
     if (effectiveMode === "edit" && (effectiveJobId || job?.id)) {
       // Use job prop if provided, otherwise use the specific job fetched by ID
       const result = job || specificJob;
@@ -435,13 +443,15 @@ export function GlobalJobCard({
         effectiveMode,
         effectiveJobId,
         jobId, 
-        jobProp: job, 
-        specificJobFetched: specificJob,
-        result,
+        jobProp: !!job, 
+        specificJobExists: !!specificJob,
+        result: !!result,
+        resultId: result?.id,
         resultDescription: result?.description 
       });
       return result;
     }
+    console.log('🔍 editingJob returning null - condition not met');
     return null;
   }, [mode, internalMode, createdJobId, jobId, job, specificJob]);
 
