@@ -952,6 +952,17 @@ export function GlobalJobCard({
     enabled: !!editingJob?.id,
   });
 
+  // Fetch invoice data for this job (always fetch when job exists)
+  const { data: jobInvoiceResponse, refetch: refetchInvoices } = useQuery({
+    queryKey: ["/api/invoices", editingJob?.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/invoices?jobId=${editingJob?.id}`);
+      if (!response.ok) throw new Error('Failed to fetch invoices');
+      return response.json();
+    },
+    enabled: !!editingJob?.id,
+  });
+
   // Fetch all equipment for quick-add dropdown
   const { data: equipmentData } = useQuery({
     queryKey: ["/api/equipment"],
@@ -3945,8 +3956,50 @@ export function GlobalJobCard({
             lineItems: formData?.lineItems || []
           } : undefined}
           invoiceData={emailContext === 'invoice' ? (() => {
-            // Get line items and photos from proposal if available, otherwise from job
-            // Always use job description (not proposal description)
+            // First, check if there's an actual saved invoice for this job
+            const existingInvoice = jobInvoiceResponse?.data?.[0];
+            
+            if (existingInvoice) {
+              console.log('📋 Using existing invoice:', existingInvoice.invoiceNumber);
+              
+              // Convert database format to display format
+              const lineItems = (existingInvoice.items || []).map((item: any) => ({
+                id: item.id,
+                description: item.description,
+                quantity: parseFloat(item.quantity) || 1,
+                unitPrice: parseFloat(item.rate || item.unitPrice) || 0,
+                total: parseFloat(item.amount || item.total) || 0,
+                unit: item.unit || 'ea',
+                category: item.category
+              }));
+              
+              // Calculate amounts from existing invoice
+              const subtotal = typeof existingInvoice.amount === 'string' 
+                ? parseFloat(existingInvoice.amount) 
+                : existingInvoice.amount;
+              const gstAmount = subtotal * 0.15;
+              const totalAmount = subtotal + gstAmount;
+              
+              return {
+                id: existingInvoice.id,
+                jobId: existingInvoice.jobId,
+                invoiceNumber: existingInvoice.invoiceNumber,
+                customerId: existingInvoice.customerId,
+                amount: subtotal,
+                totalAmount,
+                status: existingInvoice.status,
+                issueDate: existingInvoice.issueDate,
+                dueDate: existingInvoice.dueDate,
+                paymentTerms: existingInvoice.paymentTerms,
+                lineItems,
+                description: existingInvoice.description || existingInvoice.notes || editingJob?.description || editingJob?.title || '',
+                photos: [],
+                notes: existingInvoice.notes,
+                createdAt: existingInvoice.createdAt
+              };
+            }
+            
+            // If no existing invoice, construct from proposal if available, otherwise from job
             const proposal = jobProposalResponse?.data?.[0];
             console.log('📋 Creating invoice data from proposal:', proposal?.id);
             console.log('📋 Proposal has sections:', !!proposal?.sections, 'sections count:', proposal?.sections?.length || 0);
@@ -3995,7 +4048,7 @@ export function GlobalJobCard({
               jobId: editingJob?.id,
               invoiceNumber: `INV-${editingJob?.jobNumber || '0000'}`,
               customerId: editingJob?.customerId || '',
-              amount: totalAmount,
+              amount: subtotal,
               totalAmount,
               status: 'draft',
               issueDate: new Date().toISOString(),
