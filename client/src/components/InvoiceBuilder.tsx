@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [showSmsComposer, setShowSmsComposer] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
+  
+  // Immediate lock to prevent concurrent button clicks (doesn't rely on state updates)
+  const isCreatingRef = useRef(false);
   
   // Editable fields
   const [editableAddress, setEditableAddress] = useState('');
@@ -315,14 +318,24 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Create invoice (shared logic)
   const createInvoice = async () => {
-    // Prevent multiple simultaneous creations
-    if (isCreating) {
-      console.log('Invoice creation already in progress, skipping...');
+    // Immediate lock check (doesn't rely on state updates)
+    if (isCreatingRef.current) {
+      console.log('🔒 Invoice creation already in progress (ref lock), skipping...');
       return null;
     }
     
+    // Prevent multiple simultaneous creations
+    if (isCreating) {
+      console.log('🔒 Invoice creation already in progress (state lock), skipping...');
+      return null;
+    }
+    
+    // Set immediate lock
+    isCreatingRef.current = true;
+    
     // Validate
     if (!editableAddress.trim()) {
+      isCreatingRef.current = false;
       toast({
         title: "Address Required",
         description: "Please enter a service address for the invoice.",
@@ -332,6 +345,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     }
 
     if (lineItems.length === 0 || lineItems.every(item => !item.description.trim())) {
+      isCreatingRef.current = false;
       toast({
         title: "Line Items Required",
         description: "Please add at least one line item with a description.",
@@ -396,6 +410,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       return null;
     } finally {
       setIsCreating(false);
+      isCreatingRef.current = false;
     }
   };
 
@@ -403,6 +418,12 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const handleSaveInvoice = async (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
+    
+    // Immediate lock check
+    if (isCreatingRef.current) {
+      console.log('🔒 Save blocked: invoice creation in progress');
+      return;
+    }
     
     // Prevent execution if already creating
     if (isCreating) return;
@@ -424,6 +445,12 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     e?.preventDefault();
     e?.stopPropagation();
     
+    // Immediate lock check
+    if (isCreatingRef.current) {
+      console.log('🔒 Send blocked: invoice creation in progress');
+      return;
+    }
+    
     // Prevent execution if already creating
     if (isCreating) return;
     
@@ -444,6 +471,12 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     e?.preventDefault();
     e?.stopPropagation();
     
+    // Immediate lock check
+    if (isCreatingRef.current) {
+      console.log('🔒 SMS blocked: invoice creation in progress');
+      return;
+    }
+    
     // Prevent execution if already creating
     if (isCreating) return;
     
@@ -462,6 +495,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const handleClose = () => {
     setCreatedInvoice(null);
     setIsCreating(false);
+    isCreatingRef.current = false;
     onClose();
   };
 
