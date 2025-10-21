@@ -8,6 +8,8 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 ### October 21, 2025
+- **Staff Conflict Detection - DISABLED**: Removed scheduling conflict checking and warnings that prevented double-booking staff. System now allows staff to be assigned to multiple overlapping jobs without restrictions. Removed conflict API calls, visual warnings/badges, and validation blocks from scheduling modal.
+- **Scheduling Time Range - RESTRICTED**: Limited job scheduling times to business hours (6 AM to 5 PM) in 30-minute intervals. Previously showed all 24-hour time slots. Updated scheduling modal time selector to display only relevant working hours.
 - **Customer Info Auto-Sync - IMPLEMENTED**: Job cards now automatically sync customer information to customer records. When you update phone, email, address, or name in a job card and save, those changes now update the customer record immediately. Previously, updates only happened if the customer field was empty. Job card is now the "source of truth" for customer contact info. Applies to all job creation and updates (POST/PUT/PATCH).
 - **Time Tracking Error - FIXED**: Fixed runtime error preventing time tracking modal from opening. Issue was a SelectItem with empty string value in the Rate Type dropdown when no labour rates were available. Resolved by disabling the Select dropdown and showing placeholder message instead of rendering empty-value SelectItem.
 - **Lead Source Updates**: Split "Friend and saw you working" into two separate lead sources: "Friend" and "Saw you working". Added "Council" as a new lead source option. Updated across schema, analytics dashboards, and job creation forms.

@@ -4218,9 +4218,10 @@ export function GlobalJobCard({
                     <SelectValue placeholder="Select time" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
-                    {Array.from({ length: 48 }, (_, i) => {
-                      const hours = Math.floor(i / 2);
-                      const minutes = (i % 2) * 30;
+                    {Array.from({ length: 23 }, (_, i) => {
+                      const actualIndex = i + 12;
+                      const hours = Math.floor(actualIndex / 2);
+                      const minutes = (actualIndex % 2) * 30;
                       const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
                       const display = `${hours === 0 ? 12 : hours > 12 ? hours - 12 : hours}:${String(minutes).padStart(2, '0')} ${hours < 12 ? 'AM' : 'PM'}`;
                       return <SelectItem key={time} value={time}>{display}</SelectItem>;
