@@ -48,6 +48,7 @@ import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import VehicleInspection from "@/pages/VehicleInspection";
 import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
+import SignatureCapture from "@/pages/SignatureCapture";
 import JHATemplates from "@/pages/JHATemplates";
 import JHARiskControlTemplates from "@/pages/JHARiskControlTemplates";
 import JHAAssessment from "@/pages/JHAAssessment";
@@ -639,6 +640,13 @@ function Router() {
         <AuthenticatedRoute>
           <SidebarLayout>
             <VehicleInspectionHistory />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/apply-signature">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <SignatureCapture />
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>

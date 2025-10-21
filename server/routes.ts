@@ -15511,6 +15511,35 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Apply signature to all backdated inspections
+  app.post("/api/vehicle-inspections/apply-signature", async (req, res) => {
+    try {
+      const { signature } = req.body;
+      
+      if (!signature || typeof signature !== 'string') {
+        return res.status(400).json({ success: false, message: 'Signature data is required' });
+      }
+
+      // Update all inspections with the signature
+      const result = await db
+        .update(schema.vehicleInspections)
+        .set({ signature })
+        .returning({ id: schema.vehicleInspections.id });
+
+      res.json({ 
+        success: true, 
+        updatedCount: result.length,
+        message: `Successfully applied signature to ${result.length} inspections`
+      });
+    } catch (error) {
+      console.error('Error applying signature:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Failed to apply signature' 
+      });
+    }
+  });
+
   // Vehicle Expiry Checks (Registration & COF)
   app.get("/vehicles/expiring", async (req, res) => {
     try {
