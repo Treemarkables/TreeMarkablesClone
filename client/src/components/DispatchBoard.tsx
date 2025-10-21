@@ -1361,6 +1361,47 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     );
   }
 
+  // Show loading state for full dispatch board
+  if (jobsLoading) {
+    return (
+      <div className="flex flex-col flex-1 min-h-0 p-4">
+        <Card className="flex-1">
+          <CardHeader>
+            <CardTitle>Loading Dispatch Board...</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="animate-pulse space-y-3">
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+                <div className="h-4 bg-muted rounded w-1/2"></div>
+                <div className="h-4 bg-muted rounded w-5/6"></div>
+                <div className="h-4 bg-muted rounded w-2/3"></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error state for full dispatch board
+  if (jobsError) {
+    return (
+      <div className="flex flex-col flex-1 min-h-0 p-4">
+        <Card className="flex-1">
+          <CardHeader>
+            <CardTitle>Dispatch Board</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center text-muted-foreground">
+              Failed to load jobs. Please try again.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <>
     <div className="flex flex-col flex-1 min-h-0">
