@@ -3956,11 +3956,49 @@ export function GlobalJobCard({
             lineItems: formData?.lineItems || []
           } : undefined}
           invoiceData={emailContext === 'invoice' ? (() => {
-            // First, check if there's an actual saved invoice for this job
+            // Priority 1: If there are unsaved line items in the billing tab, use those (user is actively editing)
+            const hasUnsavedLineItems = formData?.lineItems && formData.lineItems.length > 0;
+            
+            if (hasUnsavedLineItems) {
+              console.log('📋 Using unsaved line items from billing tab:', formData.lineItems);
+              
+              // Calculate subtotal from current line items
+              const subtotal = formData.lineItems.reduce((sum: number, item: any) => {
+                const itemTotal = parseFloat(item.total) || (parseFloat(item.quantity) * parseFloat(item.unitPrice));
+                return sum + itemTotal;
+              }, 0);
+              
+              const gstAmount = subtotal * 0.15;
+              const totalAmount = subtotal + gstAmount;
+              
+              // Use existing invoice number if one exists, otherwise generate new one
+              const existingInvoice = jobInvoiceResponse?.data?.[0];
+              const invoiceNumber = existingInvoice?.invoiceNumber || `INV-${editingJob?.jobNumber || '0000'}`;
+              
+              return {
+                id: existingInvoice?.id || editingJob?.id,
+                jobId: editingJob?.id,
+                invoiceNumber,
+                customerId: editingJob?.customerId || '',
+                amount: subtotal,
+                totalAmount,
+                status: existingInvoice?.status || 'draft',
+                issueDate: existingInvoice?.issueDate || new Date().toISOString(),
+                dueDate: existingInvoice?.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                paymentTerms: existingInvoice?.paymentTerms || invoiceTemplate?.paymentTerms || 'Payment due within 30 days',
+                lineItems: formData.lineItems,
+                description: editingJob?.description || editingJob?.title || '',
+                photos: [],
+                notes: existingInvoice?.notes,
+                createdAt: existingInvoice?.createdAt || new Date().toISOString()
+              };
+            }
+            
+            // Priority 2: Check if there's a saved invoice for this job
             const existingInvoice = jobInvoiceResponse?.data?.[0];
             
             if (existingInvoice) {
-              console.log('📋 Using existing invoice:', existingInvoice.invoiceNumber);
+              console.log('📋 Using existing saved invoice:', existingInvoice.invoiceNumber);
               
               // Convert database format to display format
               const lineItems = (existingInvoice.items || []).map((item: any) => ({
