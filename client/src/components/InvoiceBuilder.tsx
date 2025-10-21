@@ -50,6 +50,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [showSmsComposer, setShowSmsComposer] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
   
   // Immediate lock to prevent concurrent button clicks (doesn't rely on state updates)
   const isCreatingRef = useRef(false);
@@ -81,6 +82,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     },
     enabled: isOpen
   });
+
 
   // Initialize fields when modal opens or data loads (only once to prevent overwriting user edits)
   useEffect(() => {
@@ -182,6 +184,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   useEffect(() => {
     if (!isOpen) {
       setCreatedInvoice(null);
+      setExistingInvoiceId(null);
       setIsCreating(false);
       setLineItems([]);
       setHasInitialized(false);
@@ -376,6 +379,26 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       });
 
       const response = await res.json();
+
+      // Handle 409 Conflict - invoice already exists
+      if (res.status === 409 && response.invoiceId) {
+        console.log('📄 Invoice already exists, using existing ID:', response.invoiceId);
+        
+        const existingInvoice = {
+          id: response.invoiceId,
+          invoiceNumber: response.invoiceNumber || 'Unknown'
+        };
+        
+        setCreatedInvoice(existingInvoice);
+        setExistingInvoiceId(response.invoiceId);
+        
+        toast({
+          title: "Invoice Already Exists",
+          description: `Using existing invoice ${response.invoiceNumber || 'for this job'}.`
+        });
+
+        return existingInvoice;
+      }
 
       if (response.success) {
         setCreatedInvoice(response.data);
