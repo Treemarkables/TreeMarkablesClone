@@ -129,12 +129,14 @@ export default function MetricsDashboard() {
       'website': 'Website',
       'phone': 'Phone Call',
       'referral': 'Referral',
-      'friend_saw_working': 'Friend and saw us working',
+      'friend': 'Friend',
+      'saw_working': 'Saw you working',
       'repeat': 'Repeat',
       'google': 'Google Search',
       'facebook': 'Facebook',
       'direct': 'Direct',
       'advertisement': 'Advertisement',
+      'council': 'Council',
       'other': 'Other'
     };
     return sourceMap[source] || source.charAt(0).toUpperCase() + source.slice(1);
