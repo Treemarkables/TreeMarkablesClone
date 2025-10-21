@@ -210,8 +210,8 @@ export default function VehicleInspection() {
     const currentResponse = responses.get(itemId);
     if (currentResponse) {
       const updatedResponse = { ...currentResponse, responseValue: value };
-      // Clear comments and photo if switching from NO to YES/N/A
-      if (value !== 'NO') {
+      // Clear comments and photo only if switching to YES
+      if (value === 'YES') {
         updatedResponse.comments = '';
         updatedResponse.photoUrl = null;
       }
@@ -474,25 +474,29 @@ export default function VehicleInspection() {
                         </Button>
                       </div>
 
-                      {response.responseValue === 'NO' && (
+                      {(response.responseValue === 'NO' || response.responseValue === 'N/A') && (
                         <div className="space-y-3 bg-muted/50 p-3 rounded-md">
-                          {response.requiresComment && (
-                            <div>
-                              <Label htmlFor={`comment-${item.id}`} className="text-xs">
-                                Comment (optional)
-                              </Label>
-                              <Textarea
-                                id={`comment-${item.id}`}
-                                value={response.comments}
-                                onChange={(e) => handleCommentChange(item.id, e.target.value)}
-                                placeholder="Explain the issue..."
-                                className="text-base md:text-sm"
-                                data-testid={`textarea-comment-${item.id}`}
-                              />
-                            </div>
-                          )}
+                          {/* Always show comment field for NO or N/A */}
+                          <div>
+                            <Label htmlFor={`comment-${item.id}`} className="text-xs">
+                              {response.responseValue === 'NO' 
+                                ? 'Comment (optional)' 
+                                : 'Why is this not applicable? (optional)'}
+                            </Label>
+                            <Textarea
+                              id={`comment-${item.id}`}
+                              value={response.comments}
+                              onChange={(e) => handleCommentChange(item.id, e.target.value)}
+                              placeholder={response.responseValue === 'NO' 
+                                ? 'Explain the issue...' 
+                                : 'Explain why this doesn\'t apply...'}
+                              className="text-base md:text-sm"
+                              data-testid={`textarea-comment-${item.id}`}
+                            />
+                          </div>
 
-                          {response.requiresPhoto && (
+                          {/* Only show photo option for NO responses on items that require it */}
+                          {response.responseValue === 'NO' && response.requiresPhoto && (
                             <div>
                               <Label htmlFor={`photo-${item.id}`} className="text-xs">
                                 Photo (optional)
