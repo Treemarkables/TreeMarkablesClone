@@ -327,22 +327,21 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               
               <div>
                 <label className="text-sm font-medium">Rate Type</label>
-                <Select value={newEntry.rate} onValueChange={(value) => setNewEntry(prev => ({ ...prev, rate: value }))} data-testid="select-rate">
+                <Select 
+                  value={newEntry.rate} 
+                  onValueChange={(value) => setNewEntry(prev => ({ ...prev, rate: value }))} 
+                  data-testid="select-rate"
+                  disabled={availableRates.length === 0}
+                >
                   <SelectTrigger className="min-h-11">
-                    <SelectValue placeholder="Select rate" />
+                    <SelectValue placeholder={availableRates.length === 0 ? "No labour rates available" : "Select rate"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableRates.length > 0 ? (
-                      availableRates.map((rate: any) => (
-                        <SelectItem key={rate.itemNumber} value={rate.itemNumber}>
-                          {rate.label}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="" disabled>
-                        No labour rates available
+                    {availableRates.map((rate: any) => (
+                      <SelectItem key={rate.itemNumber} value={rate.itemNumber}>
+                        {rate.label}
                       </SelectItem>
-                    )}
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
