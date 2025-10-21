@@ -104,15 +104,19 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     if (!dataLoaded) return;
 
     // Check if an invoice already exists for this job
+    console.log('🔍 InvoiceBuilder initialization - invoicesResponse:', invoicesResponse);
     const existingInvoices = invoicesResponse?.data || [];
+    console.log('🔍 Existing invoices found:', existingInvoices.length, existingInvoices);
     if (existingInvoices.length > 0) {
       const existingInvoice = existingInvoices[0]; // Use the first (most recent) invoice
-      console.log('📄 Found existing invoice:', existingInvoice.invoiceNumber);
+      console.log('📄 Found existing invoice:', existingInvoice.invoiceNumber, existingInvoice);
       setCreatedInvoice({
         id: existingInvoice.id,
         invoiceNumber: existingInvoice.invoiceNumber
       });
       setExistingInvoiceId(existingInvoice.id);
+    } else {
+      console.log('⚠️ No existing invoices found for this job');
     }
 
     // Set address and email
