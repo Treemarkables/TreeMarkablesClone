@@ -83,14 +83,37 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     enabled: isOpen
   });
 
+  // Fetch existing invoices for this job
+  const { data: invoicesResponse, isLoading: loadingInvoices } = useQuery({
+    queryKey: ['/api/invoices', job.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/invoices?jobId=${job.id}`);
+      if (!response.ok) throw new Error('Failed to fetch invoices');
+      return response.json();
+    },
+    enabled: isOpen && !!job.id
+  });
+
 
   // Initialize fields when modal opens or data loads (only once to prevent overwriting user edits)
   useEffect(() => {
     if (!isOpen || hasInitialized) return;
 
     // Only initialize if we have the data or if data loading is complete
-    const dataLoaded = !loadingProposals && !loadingQuotes;
+    const dataLoaded = !loadingProposals && !loadingQuotes && !loadingInvoices;
     if (!dataLoaded) return;
+
+    // Check if an invoice already exists for this job
+    const existingInvoices = invoicesResponse?.data || [];
+    if (existingInvoices.length > 0) {
+      const existingInvoice = existingInvoices[0]; // Use the first (most recent) invoice
+      console.log('📄 Found existing invoice:', existingInvoice.invoiceNumber);
+      setCreatedInvoice({
+        id: existingInvoice.id,
+        invoiceNumber: existingInvoice.invoiceNumber
+      });
+      setExistingInvoiceId(existingInvoice.id);
+    }
 
     // Set address and email
     setEditableAddress(job.address || customer.address || '');
@@ -178,7 +201,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
     // Mark as initialized to prevent overwriting user edits
     setHasInitialized(true);
-  }, [isOpen, hasInitialized, loadingProposals, loadingQuotes, proposalsResponse, quotesResponse, job, customer]);
+  }, [isOpen, hasInitialized, loadingProposals, loadingQuotes, loadingInvoices, proposalsResponse, quotesResponse, invoicesResponse, job, customer]);
 
   // Reset when modal closes
   useEffect(() => {
@@ -424,7 +447,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         return null;
       }
     } catch (error) {
-      console.error('Error creating invoice:', error);
+      console.error('❌ Error creating invoice:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
       toast({
         title: "Error",
         description: "Failed to create invoice. Please try again.",
