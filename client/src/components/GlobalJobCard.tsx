@@ -2634,33 +2634,36 @@ export function GlobalJobCard({
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <div
-                                    ref={descriptionTextareaRef}
-                                    className="text-base font-medium cursor-pointer border rounded-md p-3 bg-white whitespace-pre-wrap break-words"
-                                    style={{ minHeight: '72px' }}
-                                    onTouchStart={() => {
-                                      const now = Date.now();
-                                      const timeSinceLastTap = now - lastDescriptionTap;
-                                      
-                                      // Double-tap detection: if tapped within 300ms, it's a double-tap
-                                      if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+                                  <>
+                                    <input type="hidden" {...field} />
+                                    <div
+                                      ref={descriptionTextareaRef}
+                                      className="text-base font-medium cursor-pointer border rounded-md p-3 bg-white whitespace-pre-wrap break-words"
+                                      style={{ minHeight: '72px' }}
+                                      onTouchStart={() => {
+                                        const now = Date.now();
+                                        const timeSinceLastTap = now - lastDescriptionTap;
+                                        
+                                        // Double-tap detection: if tapped within 300ms, it's a double-tap
+                                        if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+                                          setDescriptionPopupOpen(true);
+                                          setLastDescriptionTap(0); // Reset to prevent triple-tap
+                                        } else {
+                                          setLastDescriptionTap(now);
+                                        }
+                                      }}
+                                      onDoubleClick={() => {
                                         setDescriptionPopupOpen(true);
-                                        setLastDescriptionTap(0); // Reset to prevent triple-tap
-                                      } else {
-                                        setLastDescriptionTap(now);
-                                      }
-                                    }}
-                                    onDoubleClick={() => {
-                                      setDescriptionPopupOpen(true);
-                                    }}
-                                    data-testid="div-description-display"
-                                  >
-                                    {field.value ? (
-                                      <LinkifyMultiline text={field.value} />
-                                    ) : (
-                                      <span className="text-gray-400">Describe the work that needs to be done</span>
-                                    )}
-                                  </div>
+                                      }}
+                                      data-testid="div-description-display"
+                                    >
+                                      {field.value ? (
+                                        <LinkifyMultiline text={field.value} />
+                                      ) : (
+                                        <span className="text-gray-400">Describe the work that needs to be done</span>
+                                      )}
+                                    </div>
+                                  </>
                                 </FormControl>
                               </FormItem>
                             )}

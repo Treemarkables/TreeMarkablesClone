@@ -2993,6 +2993,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
+      
+      // Convert empty string customerId to null (fixes foreign key constraint error)
+      if (processedBody.customerId === '') {
+        processedBody.customerId = null;
+      }
 
       const validation = insertJobSchema.partial().safeParse(processedBody);
       if (!validation.success) {
@@ -3188,7 +3193,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // PATCH handler for partial job updates (like equipmentChecklist)
   app.patch('/api/jobs/:id', async (req: Request, res: Response) => {
     try {
-      const validation = insertJobSchema.partial().safeParse(req.body);
+      // Convert empty string customerId to null (fixes foreign key constraint error)
+      const processedBody = { ...req.body };
+      if (processedBody.customerId === '') {
+        processedBody.customerId = null;
+      }
+      
+      const validation = insertJobSchema.partial().safeParse(processedBody);
       if (!validation.success) {
         return res.status(400).json({ 
           success: false, 
