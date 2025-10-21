@@ -4650,6 +4650,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             </div>
           </div>
           
+          <!-- Payment Information -->
+          <div style="margin-top: 30px; padding: 20px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;">
+            <h3 style="color: #000; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">Payment Information</h3>
+            <div style="color: #6b7280; font-size: 14px; line-height: 1.6;">
+              <p style="margin: 0 0 6px 0;"><strong style="color: #000;">Bank:</strong> ANZ</p>
+              <p style="margin: 0 0 6px 0;"><strong style="color: #000;">Account Number:</strong> 06 0637 0768850 00</p>
+              <p style="margin: 0;"><strong style="color: #000;">Account Name:</strong> Treemarkables LTD</p>
+            </div>
+          </div>
+          
           <!-- Payment Button -->
           <div style="margin-top: 40px; text-align: center; padding-top: 30px; border-top: 1px solid #e5e7eb;">
             <a href="${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000'}/invoice/${invoiceDetails.id || invoiceData?.id}" 

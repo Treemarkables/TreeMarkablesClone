@@ -1317,6 +1317,16 @@ export function CustomerPortal() {
                 </div>
               </div>
 
+              {/* Payment Information */}
+              <div className="mt-6 p-5 bg-gray-50 border border-gray-200 rounded-lg">
+                <h3 className="text-base font-semibold text-black mb-3">Payment Information</h3>
+                <div className="text-sm text-gray-600 space-y-1.5">
+                  <p><span className="font-medium text-black">Bank:</span> ANZ</p>
+                  <p><span className="font-medium text-black">Account Number:</span> 06 0637 0768850 00</p>
+                  <p><span className="font-medium text-black">Account Name:</span> Treemarkables LTD</p>
+                </div>
+              </div>
+
               {/* Actions */}
               <div className="flex gap-2 pt-6 border-t border-gray-200">
                 <Button variant="outline" className="flex-1" onClick={() => setShowInvoiceDialog(false)}>
