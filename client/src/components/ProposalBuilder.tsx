@@ -45,6 +45,7 @@ interface ProposalBuilderProps {
   customerId?: string;
   mode?: "create" | "edit";
   proposalId?: string;
+  onRequestJobSave?: () => Promise<string>; // Callback to save parent job and return job ID
 }
 
 export function ProposalBuilder({ 
@@ -53,7 +54,8 @@ export function ProposalBuilder({
   jobId, 
   customerId, 
   mode = "create",
-  proposalId 
+  proposalId,
+  onRequestJobSave
 }: ProposalBuilderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1222,9 +1224,40 @@ export function ProposalBuilder({
   // Manual save handler (keeps modal open)
   const handleManualSave = async () => {
     const formData = form.getValues();
+    let effectiveJobId = formData.jobId || jobId;
+    
+    // If no job ID and we have a callback to save the parent job, call it first
+    if (!effectiveJobId && onRequestJobSave) {
+      try {
+        toast({
+          title: "Saving Job",
+          description: "Saving job before creating proposal...",
+        });
+        effectiveJobId = await onRequestJobSave();
+        form.setValue('jobId', effectiveJobId);
+      } catch (error) {
+        console.error('Failed to save parent job:', error);
+        toast({
+          title: "Save Failed",
+          description: "Please save the job before creating a proposal",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
+    if (!effectiveJobId) {
+      toast({
+        title: "Job Required",
+        description: "Please save the job before creating a proposal",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const proposalData = {
       customerId: formData.customerId || customerId,
-      jobId: formData.jobId || jobId,
+      jobId: effectiveJobId,
       quoteId: formData.quoteId,
       proposalNumber: draftProposalId ? undefined : `PROP-${Date.now()}`,
       title: formData.title || 'Untitled Proposal',
@@ -1259,9 +1292,40 @@ export function ProposalBuilder({
   // Submit proposal (saves and closes modal)
   const onSubmit = async (data: any) => {
     try {
+      let effectiveJobId = data.jobId || jobId;
+      
+      // If no job ID and we have a callback to save the parent job, call it first
+      if (!effectiveJobId && onRequestJobSave) {
+        try {
+          toast({
+            title: "Saving Job",
+            description: "Saving job before creating proposal...",
+          });
+          effectiveJobId = await onRequestJobSave();
+          form.setValue('jobId', effectiveJobId);
+        } catch (error) {
+          console.error('Failed to save parent job:', error);
+          toast({
+            title: "Save Failed",
+            description: "Please save the job before creating a proposal",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+      
+      if (!effectiveJobId) {
+        toast({
+          title: "Job Required",
+          description: "Please save the job before creating a proposal",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       const proposalData = {
         customerId: data.customerId || customerId,
-        jobId: data.jobId || jobId,
+        jobId: effectiveJobId,
         quoteId: data.quoteId, // Optional - can be undefined
         proposalNumber: data.proposalNumber || `PROP-${Date.now()}`, // Auto-generate if not provided
         title: data.title,
