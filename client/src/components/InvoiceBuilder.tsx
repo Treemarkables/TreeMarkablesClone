@@ -112,7 +112,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       console.log('📄 Found existing invoice:', existingInvoice.invoiceNumber, existingInvoice);
       setCreatedInvoice({
         id: existingInvoice.id,
-        invoiceNumber: existingInvoice.invoiceNumber
+        invoiceNumber: existingInvoice.invoiceNumber,
+        amount: existingInvoice.amount,
+        dueDate: existingInvoice.dueDate
       });
       setExistingInvoiceId(existingInvoice.id);
     } else {
