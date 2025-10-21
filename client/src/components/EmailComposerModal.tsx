@@ -219,6 +219,14 @@ export function EmailComposerModal({
       const template = getDefaultTemplate();
       const documentData = invoiceData || quoteData || proposalData;
       
+      // Calculate invoice total with GST (invoice.amount is ex-GST)
+      let invoiceTotalWithGST = 0;
+      if (invoiceData?.amount) {
+        const subtotal = typeof invoiceData.amount === 'string' ? parseFloat(invoiceData.amount) : invoiceData.amount;
+        const gst = subtotal * 0.15;
+        invoiceTotalWithGST = subtotal + gst;
+      }
+      
       // Use current domain for links (works in both dev and production)
       const baseUrl = window.location.origin;
       
@@ -226,8 +234,8 @@ export function EmailComposerModal({
         .replace(/{jobNumber}/g, job.jobNumber || "")
         .replace(/{customerAddress}/g, job.address || "")
         .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
-        .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`)
-        .replace(/\$\{invoiceAmount\}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`);
+        .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceTotalWithGST || invoiceData?.totalAmount || invoiceData?.amount)}`)
+        .replace(/\$\{invoiceAmount\}/g, `$${formatAmount(invoiceTotalWithGST || invoiceData?.totalAmount || invoiceData?.amount)}`);
       
       let populatedBody = template.body
         .replace(/{firstName}/g, firstName || "there")
@@ -242,7 +250,7 @@ export function EmailComposerModal({
         .replace(/{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
         .replace(/{proposalNumber}/g, proposalData?.proposalNumber || (job?.jobNumber ? `PROP-${job.jobNumber}` : ""))
         .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
-        .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`)
+        .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceTotalWithGST || invoiceData?.totalAmount || invoiceData?.amount)}`)
         .replace(/{dueDate}/g, invoiceData?.dueDate ? new Date(invoiceData.dueDate).toLocaleDateString() : "")
         .replace(/{contactName}/g, "Treemarkables Team")
         .replace(/{contactPhone}/g, "0272166882");
