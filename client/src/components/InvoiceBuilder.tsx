@@ -395,6 +395,12 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Save invoice only
   const handleSaveInvoice = async () => {
+    // If invoice already created, just close
+    if (createdInvoice) {
+      handleClose();
+      return;
+    }
+    
     const invoice = await createInvoice();
     if (invoice) {
       handleClose();
@@ -403,6 +409,12 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Create and send invoice
   const handleSendInvoice = async () => {
+    // If invoice already created, just open email composer
+    if (createdInvoice) {
+      setShowEmailComposer(true);
+      return;
+    }
+    
     const invoice = await createInvoice();
     if (invoice) {
       setShowEmailComposer(true);
@@ -411,6 +423,12 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Create and send invoice via SMS
   const handleSmsInvoice = async () => {
+    // If invoice already created, just open SMS composer
+    if (createdInvoice) {
+      setShowSmsComposer(true);
+      return;
+    }
+    
     const invoice = await createInvoice();
     if (invoice) {
       setShowSmsComposer(true);
@@ -603,6 +621,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
               {/* Action Buttons */}
               <div className="flex gap-3 justify-end">
                 <Button
+                  type="button"
                   variant="outline"
                   onClick={handleClose}
                   data-testid="button-cancel"
@@ -610,6 +629,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   Cancel
                 </Button>
                 <Button
+                  type="button"
                   onClick={handleSaveInvoice}
                   disabled={isCreating}
                   variant="outline"
@@ -628,6 +648,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   )}
                 </Button>
                 <Button
+                  type="button"
                   onClick={handleSmsInvoice}
                   disabled={isCreating}
                   variant="outline"
@@ -646,6 +667,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   )}
                 </Button>
                 <Button
+                  type="button"
                   onClick={handleSendInvoice}
                   disabled={isCreating}
                   className="bg-blue-600 hover:bg-blue-700"
@@ -685,7 +707,6 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                         rate: item.unitPrice,
                         amount: item.total
                       })),
-                      notes: editableDescription,
                       address: editableAddress,
                       customer,
                       job
