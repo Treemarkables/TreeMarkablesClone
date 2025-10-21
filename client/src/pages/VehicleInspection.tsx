@@ -46,6 +46,7 @@ export default function VehicleInspection() {
   const [currentStep, setCurrentStep] = useState<'vehicle' | 'inspection' | 'signature'>('vehicle');
   const [odometerReading, setOdometerReading] = useState('');
   const [inspectorNotes, setInspectorNotes] = useState('');
+  const [inspectorName, setInspectorName] = useState('');
 
   // Fetch equipment (vehicles)
   const { data: vehiclesData } = useQuery({
@@ -119,6 +120,14 @@ export default function VehicleInspection() {
     }
   }, [checklistItems]);
 
+  // Auto-populate inspector name when reaching signature step
+  useEffect(() => {
+    if (currentStep === 'signature' && !inspectorName && user) {
+      const defaultName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '';
+      setInspectorName(defaultName);
+    }
+  }, [currentStep, inspectorName, user]);
+
   const createInspectionMutation = useMutation({
     mutationFn: async () => {
       const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
@@ -138,7 +147,7 @@ export default function VehicleInspection() {
         templateId: (selectedTemplateId || defaultTemplate?.id) as string,
         templateName: templateToUse?.name || 'Standard Inspection',
         inspectedBy: user?.id || 'unknown',
-        inspectorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'Unknown' : 'Unknown',
+        inspectorName: inspectorName || 'Unknown',
         status: Array.from(responses.values()).some(r => r.responseValue === 'NO') ? 'fail' : 'pass',
         speedometerReading: odometerReading ? parseInt(odometerReading) : null,
         overallNotes: inspectorNotes || null,
@@ -186,6 +195,7 @@ export default function VehicleInspection() {
       setCurrentStep('vehicle');
       setOdometerReading('');
       setInspectorNotes('');
+      setInspectorName('');
       setHasSignature(false);
       
       // Clear signature
@@ -561,6 +571,21 @@ export default function VehicleInspection() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Inspector Name *</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Input
+            value={inspectorName}
+            onChange={(e) => setInspectorName(e.target.value)}
+            placeholder="Enter your full name"
+            className="text-base md:text-sm"
+            data-testid="input-inspector-name"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Additional Notes (optional)</CardTitle>
         </CardHeader>
         <CardContent>
@@ -620,7 +645,7 @@ export default function VehicleInspection() {
         </Button>
         <Button
           onClick={() => createInspectionMutation.mutate()}
-          disabled={!hasSignature || createInspectionMutation.isPending}
+          disabled={!hasSignature || !inspectorName.trim() || createInspectionMutation.isPending}
           className="flex-1"
           data-testid="button-submit"
         >
