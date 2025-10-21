@@ -57,7 +57,7 @@ const globalJobCardSchema = insertJobSchema.extend({
   
   // New customer fields (conditional)
   newCustomerName: z.string().optional(),
-  newCustomerEmail: z.string().email().optional().or(z.literal("")),
+  newCustomerEmail: z.union([z.string().email(), z.literal("")]).optional(),
   newCustomerPhone: z.string().optional(),
   newCustomerAddress: z.string().optional(),
   newCustomerCity: z.string().optional(),
@@ -66,7 +66,7 @@ const globalJobCardSchema = insertJobSchema.extend({
   // Contact information
   jobContactFirstName: z.string().optional(),
   jobContactLastName: z.string().optional(), 
-  jobContactEmail: z.string().email().optional().or(z.literal("")),
+  jobContactEmail: z.union([z.string().email(), z.literal("")]).optional(),
   jobContactPhone: z.string().optional(),
   
   // ServiceM8 Billing Fields
