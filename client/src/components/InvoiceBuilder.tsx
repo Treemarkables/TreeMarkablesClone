@@ -394,7 +394,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   };
 
   // Save invoice only
-  const handleSaveInvoice = async () => {
+  const handleSaveInvoice = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
     // If invoice already created, just close
     if (createdInvoice) {
       handleClose();
@@ -408,7 +411,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   };
 
   // Create and send invoice
-  const handleSendInvoice = async () => {
+  const handleSendInvoice = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
     // If invoice already created, just open email composer
     if (createdInvoice) {
       setShowEmailComposer(true);
@@ -422,7 +428,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   };
 
   // Create and send invoice via SMS
-  const handleSmsInvoice = async () => {
+  const handleSmsInvoice = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
     // If invoice already created, just open SMS composer
     if (createdInvoice) {
       setShowSmsComposer(true);
