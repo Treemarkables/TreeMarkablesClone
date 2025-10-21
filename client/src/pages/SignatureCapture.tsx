@@ -28,22 +28,26 @@ export default function SignatureCapture() {
 
     setIsSaving(true);
     try {
-      const response = await apiRequest('/api/vehicle-inspections/apply-signature', {
+      const data = await apiRequest('/api/vehicle-inspections/apply-signature', {
         method: 'POST',
         body: JSON.stringify({ signature: signatureData })
       });
 
-      const data = await response.json();
-
-      toast({
-        title: "Success",
-        description: `Applied signature to ${data.updatedCount} inspections`,
-      });
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: `Applied signature to ${data.updatedCount} inspections`,
+        });
+        // Clear signature after successful application
+        signatureRef.current?.clear();
+      } else {
+        throw new Error(data.message || 'Failed to apply signature');
+      }
     } catch (error) {
       console.error('Error applying signature:', error);
       toast({
         title: "Error",
-        description: "Failed to apply signature. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to apply signature. Please try again.",
         variant: "destructive"
       });
     } finally {
