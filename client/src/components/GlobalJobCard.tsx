@@ -44,6 +44,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { insertJobSchema, type ChecklistItem, type Job, type Customer } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { formatTime12Hour } from "@shared/dateUtils";
+import { LinkifyMultiline } from "@/lib/linkify";
 
 // Form validation schema extending the base insertJobSchema
 const globalJobCardSchema = insertJobSchema.extend({
@@ -684,19 +685,8 @@ export function GlobalJobCard({
     }
   }, [mode, hasUserSelectedCustomer, selectedCustomer, form]);
   
-  // Auto-resize description textarea to fit content without scrolling
-  useEffect(() => {
-    const textarea = descriptionTextareaRef.current;
-    if (textarea && isOpen) {
-      // Use requestAnimationFrame for smoother rendering
-      requestAnimationFrame(() => {
-        // Reset height to auto to get accurate scrollHeight
-        textarea.style.height = 'auto';
-        // Set height to scrollHeight to show all content
-        textarea.style.height = `${textarea.scrollHeight}px`;
-      });
-    }
-  }, [form.watch('description'), isOpen]); // Recalculate when description changes or modal opens
+  // Description display auto-sizes naturally with div and whitespace-pre-wrap
+  // No manual height calculation needed
 
   // Auto-save DISABLED - was causing data loss issues with proposals
   // useEffect(() => {
@@ -2644,13 +2634,10 @@ export function GlobalJobCard({
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Textarea 
-                                    {...field}
+                                  <div
                                     ref={descriptionTextareaRef}
-                                    readOnly
-                                    className="text-base font-medium cursor-pointer resize-none overflow-hidden" 
-                                    placeholder="Describe the work that needs to be done"
-                                    style={{ minHeight: '72px' }} // Minimum 3 rows equivalent
+                                    className="text-base font-medium cursor-pointer border rounded-md p-3 bg-white whitespace-pre-wrap break-words"
+                                    style={{ minHeight: '72px' }}
                                     onTouchStart={() => {
                                       const now = Date.now();
                                       const timeSinceLastTap = now - lastDescriptionTap;
@@ -2666,7 +2653,14 @@ export function GlobalJobCard({
                                     onDoubleClick={() => {
                                       setDescriptionPopupOpen(true);
                                     }}
-                                  />
+                                    data-testid="div-description-display"
+                                  >
+                                    {field.value ? (
+                                      <LinkifyMultiline text={field.value} />
+                                    ) : (
+                                      <span className="text-gray-400">Describe the work that needs to be done</span>
+                                    )}
+                                  </div>
                                 </FormControl>
                               </FormItem>
                             )}
