@@ -2569,13 +2569,15 @@ export function GlobalJobCard({
                                       <SelectContent>
                                         <SelectItem value="website">Website</SelectItem>
                                         <SelectItem value="referral">Referral</SelectItem>
-                                        <SelectItem value="friend_saw_working">Friend and saw us working</SelectItem>
+                                        <SelectItem value="friend">Friend</SelectItem>
+                                        <SelectItem value="saw_working">Saw you working</SelectItem>
                                         <SelectItem value="repeat">Repeat</SelectItem>
                                         <SelectItem value="google">Google Search</SelectItem>
                                         <SelectItem value="facebook">Facebook</SelectItem>
                                         <SelectItem value="phone">Phone Call</SelectItem>
                                         <SelectItem value="direct">Direct</SelectItem>
                                         <SelectItem value="advertisement">Advertisement</SelectItem>
+                                        <SelectItem value="council">Council</SelectItem>
                                         <SelectItem value="other">Other</SelectItem>
                                       </SelectContent>
                                     </Select>

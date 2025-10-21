@@ -154,7 +154,7 @@ export type InsertLeadSubmission = Omit<LeadSubmission, 'id' | 'createdAt'>;
 export const JobStatus = z.enum(['lead', 'quote', 'scheduled', 'work_order', 'completed', 'unsuccessful']);
 export type JobStatusType = z.infer<typeof JobStatus>;
 
-export const LeadSourceType = z.enum(['phone', 'website', 'referral', 'friend_saw_working', 'repeat', 'google', 'facebook', 'direct', 'advertisement', 'other']);
+export const LeadSourceType = z.enum(['phone', 'website', 'referral', 'friend', 'saw_working', 'repeat', 'google', 'facebook', 'direct', 'advertisement', 'council', 'other']);
 export type LeadSourceTypeType = z.infer<typeof LeadSourceType>;
 
 // Team Management
