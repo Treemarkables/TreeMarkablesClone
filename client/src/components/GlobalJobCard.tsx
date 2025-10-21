@@ -822,8 +822,11 @@ export function GlobalJobCard({
       return response.json();
     },
     onSuccess: (updatedJob) => {
+      // Invalidate all jobs queries to update dispatch board and job lists
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob?.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
       toast({
         title: "Job Updated",
         description: "Job has been updated successfully.",
