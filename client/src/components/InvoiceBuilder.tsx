@@ -117,6 +117,19 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         dueDate: existingInvoice.dueDate
       });
       setExistingInvoiceId(existingInvoice.id);
+      
+      // Populate line items from existing invoice
+      if (existingInvoice.items && Array.isArray(existingInvoice.items)) {
+        const convertedItems = existingInvoice.items.map((item: any, index: number) => ({
+          id: item.id || `item-${index}`,
+          description: item.description || '',
+          quantity: parseFloat(item.quantity || '1'),
+          unitPrice: parseFloat(item.rate || item.unitPrice || '0'),
+          total: parseFloat(item.amount || item.total || '0'),
+          unit: item.unit || 'each'
+        }));
+        setLineItems(convertedItems);
+      }
     } else {
       console.log('⚠️ No existing invoices found for this job');
     }
