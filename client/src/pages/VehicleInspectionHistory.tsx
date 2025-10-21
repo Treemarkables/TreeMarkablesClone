@@ -4,8 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CheckCircle2, XCircle, FileText, User, Calendar, Gauge, Check, X, AlertTriangle } from "lucide-react";
+import { CheckCircle2, XCircle, FileText, User, Calendar, Gauge, Check, X, AlertTriangle, PenTool } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "wouter";
 import type { VehicleInspection, InspectionResponse } from "@shared/schema";
 
 export default function VehicleInspectionHistory() {
@@ -43,11 +44,19 @@ export default function VehicleInspectionHistory() {
 
   return (
     <div className="container mx-auto p-4 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold" data-testid="text-page-title">Vehicle Inspection History</h1>
-        <p className="text-muted-foreground mt-1">
-          View all completed pre-start vehicle inspections
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold" data-testid="text-page-title">Vehicle Inspection History</h1>
+          <p className="text-muted-foreground mt-1">
+            View all completed pre-start vehicle inspections
+          </p>
+        </div>
+        <Link href="/apply-signature">
+          <Button variant="outline" data-testid="button-apply-signature">
+            <PenTool className="h-4 w-4 mr-2" />
+            Apply Your Signature
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-4">
