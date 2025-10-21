@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, FileText, User, Calendar, Gauge } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CheckCircle2, XCircle, FileText, User, Calendar, Gauge, Check, X, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
-import type { VehicleInspection } from "@shared/schema";
+import type { VehicleInspection, InspectionResponse } from "@shared/schema";
 
 export default function VehicleInspectionHistory() {
+  const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
+
   const { data: inspectionsData, isLoading } = useQuery({
     queryKey: ['/api/vehicle-inspections'],
   });
@@ -14,6 +18,18 @@ export default function VehicleInspectionHistory() {
   const inspections = Array.isArray((inspectionsData as any)?.data) 
     ? (inspectionsData as any).data as VehicleInspection[] 
     : [];
+
+  // Fetch responses for selected inspection
+  const { data: responsesData } = useQuery({
+    queryKey: ['/api/vehicle-inspections', selectedInspectionId, 'responses'],
+    enabled: !!selectedInspectionId,
+  });
+
+  const responses = Array.isArray((responsesData as any)?.data)
+    ? (responsesData as any).data as InspectionResponse[]
+    : [];
+
+  const selectedInspection = inspections.find(i => i.id === selectedInspectionId);
 
 
   if (isLoading) {
@@ -111,6 +127,7 @@ export default function VehicleInspectionHistory() {
                   <Button 
                     variant="outline" 
                     size="sm"
+                    onClick={() => setSelectedInspectionId(inspection.id)}
                     data-testid={`button-view-details-${inspection.id}`}
                   >
                     <FileText className="h-4 w-4 mr-2" />
@@ -122,6 +139,177 @@ export default function VehicleInspectionHistory() {
           ))
         )}
       </div>
+
+      {/* Inspection Details Dialog */}
+      <Dialog open={!!selectedInspectionId} onOpenChange={(open) => !open && setSelectedInspectionId(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedInspection?.vehicleName} - Inspection Details
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedInspection && (
+            <div className="space-y-6">
+              {/* Inspection Info */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Status</p>
+                  {selectedInspection.status === 'pass' ? (
+                    <Badge variant="default" className="bg-green-600">
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Passed
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive">
+                      <XCircle className="h-3 w-3 mr-1" />
+                      Failed
+                    </Badge>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Inspector</p>
+                  <p className="font-medium">{selectedInspection.inspectorName}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Date</p>
+                  <p className="font-medium">
+                    {format(new Date(selectedInspection.inspectionDate), 'dd/MM/yyyy h:mm a')}
+                  </p>
+                </div>
+
+                {selectedInspection.speedometerReading && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Odometer</p>
+                    <p className="font-medium">{selectedInspection.speedometerReading.toLocaleString()} km</p>
+                  </div>
+                )}
+
+                {selectedInspection.vehicleRegistration && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Registration</p>
+                    <p className="font-medium">{selectedInspection.vehicleRegistration}</p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Template</p>
+                  <p className="font-medium">{selectedInspection.templateName}</p>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedInspection.overallNotes && (
+                <div>
+                  <h3 className="font-semibold mb-2">Additional Notes</h3>
+                  <div className="bg-muted/50 rounded-md p-3">
+                    <p className="text-sm">{selectedInspection.overallNotes}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Checklist Responses */}
+              <div>
+                <h3 className="font-semibold mb-3">Inspection Checklist</h3>
+                <div className="space-y-4">
+                  {responses.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No checklist responses found
+                    </p>
+                  ) : (
+                    (() => {
+                      // Group by category
+                      const groupedResponses = responses.reduce((acc, response) => {
+                        const category = response.category || 'Other';
+                        if (!acc[category]) acc[category] = [];
+                        acc[category].push(response);
+                        return acc;
+                      }, {} as Record<string, InspectionResponse[]>);
+
+                      return Object.entries(groupedResponses).map(([category, categoryResponses]) => (
+                        <div key={category} className="border rounded-lg p-4">
+                          <h4 className="font-medium mb-3 text-sm text-muted-foreground uppercase tracking-wide">
+                            {category}
+                          </h4>
+                          <div className="space-y-3">
+                            {categoryResponses
+                              .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+                              .map((response) => (
+                                <div key={response.id} className="space-y-2 pb-3 border-b last:border-0">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <p className="text-sm font-medium flex-1">{response.question}</p>
+                                    <div>
+                                      {response.response === 'YES' && (
+                                        <Badge variant="default" className="bg-green-600">
+                                          <Check className="h-3 w-3 mr-1" />
+                                          YES
+                                        </Badge>
+                                      )}
+                                      {response.response === 'NO' && (
+                                        <Badge variant="destructive">
+                                          <X className="h-3 w-3 mr-1" />
+                                          NO
+                                        </Badge>
+                                      )}
+                                      {response.response === 'N/A' && (
+                                        <Badge variant="secondary">
+                                          <AlertTriangle className="h-3 w-3 mr-1" />
+                                          N/A
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {response.comment && (
+                                    <div className="bg-muted/50 rounded-md p-2 ml-4">
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">
+                                        {response.response === 'NO' ? 'Issue Details:' : 'Note:'}
+                                      </p>
+                                      <p className="text-sm">{response.comment}</p>
+                                    </div>
+                                  )}
+
+                                  {response.photos && response.photos.length > 0 && (
+                                    <div className="ml-4 flex flex-wrap gap-2">
+                                      {response.photos.map((photoUrl, idx) => (
+                                        <img
+                                          key={idx}
+                                          src={photoUrl}
+                                          alt={`Photo ${idx + 1}`}
+                                          className="h-24 w-24 object-cover rounded border"
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      ));
+                    })()
+                  )}
+                </div>
+              </div>
+
+              {/* Signature */}
+              {selectedInspection.signature && (
+                <div>
+                  <h3 className="font-semibold mb-2">Inspector Signature</h3>
+                  <div className="border rounded-md p-4 bg-white">
+                    <img 
+                      src={selectedInspection.signature} 
+                      alt="Inspector signature"
+                      className="max-h-32"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
