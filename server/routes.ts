@@ -2460,33 +2460,47 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       const job = await storage.createJob(validation.data);
       
-      // Update customer address if job has an address and customer doesn't have one
-      if (job.customerId && job.address) {
+      // Always sync customer info from job card to customer record
+      if (job.customerId) {
         try {
           const customer = await storage.getCustomer(job.customerId);
-          // Update customer address if they don't have one or it's empty
-          if (customer && (!customer.address || customer.address.trim() === '')) {
-            await storage.updateCustomer(job.customerId, { address: job.address });
-            console.log(`📍 Created job - updated customer ${job.customerId} address to: ${job.address}`);
+          if (customer) {
+            const customerUpdates: Partial<InsertCustomer> = {};
+            
+            // Sync address
+            if (job.address && job.address.trim() !== '') {
+              customerUpdates.address = job.address;
+            }
+            
+            // Sync phone
+            if (job.jobContactPhone && job.jobContactPhone.trim() !== '') {
+              customerUpdates.phone = job.jobContactPhone.trim();
+            }
+            
+            // Sync email
+            if (job.jobContactEmail && job.jobContactEmail.trim() !== '') {
+              customerUpdates.email = job.jobContactEmail.trim().toLowerCase();
+            }
+            
+            // Sync name (from jobContactFirstName + jobContactLastName)
+            if (job.jobContactFirstName || job.jobContactLastName) {
+              const firstName = job.jobContactFirstName?.trim() || '';
+              const lastName = job.jobContactLastName?.trim() || '';
+              const fullName = `${firstName} ${lastName}`.trim();
+              if (fullName) {
+                customerUpdates.name = fullName;
+              }
+            }
+            
+            // Apply updates if any exist
+            if (Object.keys(customerUpdates).length > 0) {
+              await storage.updateCustomer(job.customerId, customerUpdates);
+              console.log(`✅ Created job - synced customer ${job.customerId} info:`, customerUpdates);
+            }
           }
         } catch (error) {
-          console.error('Error updating customer address:', error);
-          // Don't fail job creation if customer address update fails
-        }
-      }
-
-      // Update customer phone if job has a contact phone and customer doesn't have one
-      if (job.customerId && job.jobContactPhone && job.jobContactPhone.trim() !== '') {
-        try {
-          const customer = await storage.getCustomer(job.customerId);
-          // Update customer phone if they don't have one or it's empty
-          if (customer && (!customer.phone || customer.phone.trim() === '')) {
-            await storage.updateCustomer(job.customerId, { phone: job.jobContactPhone.trim() });
-            console.log(`📞 Created job - updated customer ${job.customerId} phone to: ${job.jobContactPhone.trim()}`);
-          }
-        } catch (error) {
-          console.error('Error updating customer phone:', error);
-          // Don't fail job creation if customer phone update fails
+          console.error('Error syncing customer info:', error);
+          // Don't fail job creation if customer sync fails
         }
       }
       
@@ -3083,33 +3097,47 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
-      // Update customer address if job has an address and customer doesn't have one
-      if (job.customerId && job.address) {
+      // Always sync customer info from job card to customer record
+      if (job.customerId) {
         try {
           const customer = await storage.getCustomer(job.customerId);
-          // Update customer address if they don't have one or it's empty
-          if (customer && (!customer.address || customer.address.trim() === '')) {
-            await storage.updateCustomer(job.customerId, { address: job.address });
-            console.log(`📍 Updated job - synced customer ${job.customerId} address to: ${job.address}`);
+          if (customer) {
+            const customerUpdates: Partial<InsertCustomer> = {};
+            
+            // Sync address
+            if (job.address && job.address.trim() !== '') {
+              customerUpdates.address = job.address;
+            }
+            
+            // Sync phone
+            if (job.jobContactPhone && job.jobContactPhone.trim() !== '') {
+              customerUpdates.phone = job.jobContactPhone.trim();
+            }
+            
+            // Sync email
+            if (job.jobContactEmail && job.jobContactEmail.trim() !== '') {
+              customerUpdates.email = job.jobContactEmail.trim().toLowerCase();
+            }
+            
+            // Sync name (from jobContactFirstName + jobContactLastName)
+            if (job.jobContactFirstName || job.jobContactLastName) {
+              const firstName = job.jobContactFirstName?.trim() || '';
+              const lastName = job.jobContactLastName?.trim() || '';
+              const fullName = `${firstName} ${lastName}`.trim();
+              if (fullName) {
+                customerUpdates.name = fullName;
+              }
+            }
+            
+            // Apply updates if any exist
+            if (Object.keys(customerUpdates).length > 0) {
+              await storage.updateCustomer(job.customerId, customerUpdates);
+              console.log(`✅ Updated job - synced customer ${job.customerId} info:`, customerUpdates);
+            }
           }
         } catch (error) {
-          console.error('Error updating customer address:', error);
-          // Don't fail job update if customer address update fails
-        }
-      }
-
-      // Update customer phone if job has a contact phone and customer doesn't have one
-      if (job.customerId && job.jobContactPhone && job.jobContactPhone.trim() !== '') {
-        try {
-          const customer = await storage.getCustomer(job.customerId);
-          // Update customer phone if they don't have one or it's empty
-          if (customer && (!customer.phone || customer.phone.trim() === '')) {
-            await storage.updateCustomer(job.customerId, { phone: job.jobContactPhone.trim() });
-            console.log(`📞 Updated job - synced customer ${job.customerId} phone to: ${job.jobContactPhone.trim()}`);
-          }
-        } catch (error) {
-          console.error('Error updating customer phone:', error);
-          // Don't fail job update if customer phone update fails
+          console.error('Error syncing customer info:', error);
+          // Don't fail job update if customer sync fails
         }
       }
 
@@ -3174,18 +3202,47 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
-      // Update customer address if job has an address and customer doesn't have one
-      if (job.customerId && job.address) {
+      // Always sync customer info from job card to customer record
+      if (job.customerId) {
         try {
           const customer = await storage.getCustomer(job.customerId);
-          // Update customer address if they don't have one or it's empty
-          if (customer && (!customer.address || customer.address.trim() === '')) {
-            await storage.updateCustomer(job.customerId, { address: job.address });
-            console.log(`📍 Patched job - synced customer ${job.customerId} address to: ${job.address}`);
+          if (customer) {
+            const customerUpdates: Partial<InsertCustomer> = {};
+            
+            // Sync address
+            if (job.address && job.address.trim() !== '') {
+              customerUpdates.address = job.address;
+            }
+            
+            // Sync phone
+            if (job.jobContactPhone && job.jobContactPhone.trim() !== '') {
+              customerUpdates.phone = job.jobContactPhone.trim();
+            }
+            
+            // Sync email
+            if (job.jobContactEmail && job.jobContactEmail.trim() !== '') {
+              customerUpdates.email = job.jobContactEmail.trim().toLowerCase();
+            }
+            
+            // Sync name (from jobContactFirstName + jobContactLastName)
+            if (job.jobContactFirstName || job.jobContactLastName) {
+              const firstName = job.jobContactFirstName?.trim() || '';
+              const lastName = job.jobContactLastName?.trim() || '';
+              const fullName = `${firstName} ${lastName}`.trim();
+              if (fullName) {
+                customerUpdates.name = fullName;
+              }
+            }
+            
+            // Apply updates if any exist
+            if (Object.keys(customerUpdates).length > 0) {
+              await storage.updateCustomer(job.customerId, customerUpdates);
+              console.log(`✅ Patched job - synced customer ${job.customerId} info:`, customerUpdates);
+            }
           }
         } catch (error) {
-          console.error('Error updating customer address:', error);
-          // Don't fail job update if customer address update fails
+          console.error('Error syncing customer info:', error);
+          // Don't fail job update if customer sync fails
         }
       }
 
