@@ -481,13 +481,17 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     
     // If invoice already created, just open email composer
     if (createdInvoice) {
+      console.log('📧 Invoice already exists, opening email composer');
       setShowEmailComposer(true);
       return;
     }
     
     const invoice = await createInvoice();
     if (invoice) {
+      console.log('📧 Invoice created successfully, opening email composer');
       setShowEmailComposer(true);
+    } else {
+      console.log('❌ Failed to create invoice, not opening composer');
     }
   };
 
