@@ -2397,6 +2397,27 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
 
+      // Handle new customer creation
+      if (processedBody.isNewCustomer && processedBody.newCustomerName) {
+        try {
+          const newCustomer = await storage.createCustomer({
+            name: processedBody.newCustomerName.trim(),
+            email: processedBody.newCustomerEmail?.trim() || undefined,
+            phone: processedBody.newCustomerPhone?.trim() || undefined,
+            address: processedBody.newCustomerAddress?.trim() || processedBody.address?.trim() || undefined,
+          });
+          
+          processedBody.customerId = newCustomer.id;
+          console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job`);
+        } catch (error) {
+          console.error('Error creating new customer:', error);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to create customer. Please try again.'
+          });
+        }
+      }
+
       // Auto-generate job number if not provided
       if (!processedBody.jobNumber || processedBody.jobNumber.trim() === '') {
         processedBody.jobNumber = await storage.getNextJobNumber();
@@ -2992,6 +3013,27 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
       if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
         processedBody.completedDate = new Date(processedBody.completedDate);
+      }
+      
+      // Handle new customer creation
+      if (processedBody.isNewCustomer && processedBody.newCustomerName) {
+        try {
+          const newCustomer = await storage.createCustomer({
+            name: processedBody.newCustomerName.trim(),
+            email: processedBody.newCustomerEmail?.trim() || undefined,
+            phone: processedBody.newCustomerPhone?.trim() || undefined,
+            address: processedBody.newCustomerAddress?.trim() || processedBody.address?.trim() || undefined,
+          });
+          
+          processedBody.customerId = newCustomer.id;
+          console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job update`);
+        } catch (error) {
+          console.error('Error creating new customer:', error);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to create customer. Please try again.'
+          });
+        }
       }
       
       // Convert empty string customerId to null (fixes foreign key constraint error)
