@@ -7,6 +7,9 @@ This application is a comprehensive business management platform for Treemarkabl
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+### October 21, 2025
+- **Description Textarea Auto-Expansion - FIXED**: Implemented auto-expanding description textarea in GlobalJobCard. The textarea now dynamically adjusts its height to show all content without internal scrolling, improving UX on mobile devices. Uses component-level ref (`descriptionTextareaRef`) and useEffect watching description value, with requestAnimationFrame for smooth height adjustment. Applied overflow-hidden and resize-none to prevent scrolling and manual resizing.
+
 ### October 20, 2025
 - **Staff Schedule Timezone Bug - FIXED**: Resolved issue where staff schedule showed "0 jobs scheduled" despite having valid assignments. Root cause was timezone handling: database stores timestamps WITHOUT timezone (in NZ local time) but API returns them with 'Z' suffix. Fixed date comparison logic to extract just the date portion ("2025-10-20") from both assignment timestamps and selected date, avoiding UTC conversion that shifted dates by 13 hours during NZDT. Updated to query actual staff assignments from `staff_assignments` table via `/api/staff-assignments` endpoint (aligned with dispatch board).
 - **Job Display Limit Increased - FIXED**: Increased job display limits to accommodate full job database (~3,000 jobs). Job Dashboard limit increased from 1,000 to 10,000 jobs, and Dispatch Board limit increased from 50 to 10,000 jobs. This ensures all jobs are visible in both views.
