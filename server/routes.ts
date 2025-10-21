@@ -4599,93 +4599,66 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         invoiceHtml = `
         <div style="max-width: 800px; margin: 30px auto; padding: 40px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
           <!-- Header -->
-          <div style="border-bottom: 3px solid #f97316; padding-bottom: 20px; margin-bottom: 30px;">
-            <h1 style="color: #f97316; margin: 0; font-size: 28px;">INVOICE</h1>
-            <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 18px;">#${invoiceDetails.invoiceNumber || ''}</p>
+          <div style="border-bottom: 3px solid #000; padding-bottom: 20px; margin-bottom: 30px;">
+            <h1 style="color: #000; margin: 0; font-size: 32px; font-weight: 700;">Invoice #${invoiceDetails.invoiceNumber || ''}</h1>
+            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
+              ${customer?.name || 'Customer'} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}
+            </p>
           </div>
           
-          <!-- Business and Customer Details -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
-            <div>
-              <h2 style="color: #111827; margin: 0 0 10px 0; font-size: 20px;">Treemarkables LTD</h2>
-              <p style="color: #6b7280; margin: 0; line-height: 1.6;">
-                26 Huxley Road<br>
-                Gisborne 4010<br>
-                New Zealand<br>
-                Phone: 027 216 6882
-              </p>
-            </div>
-            <div>
-              <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Bill To:</h3>
-              <p style="color: #6b7280; margin: 0; line-height: 1.6;">
-                <strong>${customer?.name || 'Customer'}</strong><br>
-                ${invoiceDetails.address || job?.address || customer?.address || ''}<br>
-                ${customer?.email || ''}<br>
-                ${customer?.phone || ''}
-              </p>
+          <!-- Bill To Section -->
+          <div style="margin-bottom: 30px;">
+            <h2 style="color: #000; margin: 0 0 15px 0; font-size: 18px; font-weight: 600;">Bill To</h2>
+            <div style="background: #ffffff; padding: 0;">
+              <p style="margin: 0 0 8px 0; color: #000; font-weight: 600; font-size: 16px;">${customer?.name || 'Customer'}</p>
+              ${invoiceDetails.address || job?.address || customer?.address ? `<p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">${invoiceDetails.address || job?.address || customer?.address}</p>` : ''}
+              ${customer?.email ? `<p style="margin: 0 0 4px 0; color: #6b7280; font-size: 14px;"><span style="margin-right: 6px;">✉</span>${customer.email}</p>` : ''}
             </div>
           </div>
           
-          <!-- Invoice Details -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
-            <div>
-              <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;">Invoice Date:</p>
-              <p style="color: #111827; margin: 0; font-weight: 600;">${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}</p>
-            </div>
-            <div>
-              <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;">Due Date:</p>
-              <p style="color: #111827; margin: 0; font-weight: 600;">${formatDate(invoiceDetails.dueDate) || formatDate(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))}</p>
-            </div>
-          </div>
-          
-          <!-- Line Items -->
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-            <thead>
-              <tr style="background: #f9fafb;">
-                <th style="padding: 12px; text-align: left; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Description</th>
-                <th style="padding: 12px; text-align: center; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Qty</th>
-                <th style="padding: 12px; text-align: right; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Rate</th>
-                <th style="padding: 12px; text-align: right; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${lineItemsHtml}
-            </tbody>
-          </table>
-          
-          <!-- Totals -->
-          <div style="margin-left: auto; max-width: 300px;">
-            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
-              <span style="color: #6b7280;">Subtotal (ex GST):</span>
-              <span style="color: #111827; font-weight: 600;">${formatCurrency(subtotal)}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
-              <span style="color: #6b7280;">GST (15%):</span>
-              <span style="color: #111827; font-weight: 600;">${formatCurrency(gstAmount)}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 15px 0; background: #f9fafb; margin: 10px -10px 0; padding: 15px 10px; border-radius: 6px;">
-              <span style="color: #111827; font-weight: 700; font-size: 18px;">Total (inc GST):</span>
-              <span style="color: #f97316; font-weight: 700; font-size: 18px;">${formatCurrency(totalAmount)}</span>
+          <!-- Description Section -->
+          <div style="margin-bottom: 30px;">
+            <h2 style="color: #000; margin: 0 0 15px 0; font-size: 18px; font-weight: 600;">Description</h2>
+            <div style="background: #ffffff; padding: 0;">
+              ${lineItems && lineItems.length > 0 ? lineItems.map((item: any) => `
+                <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">
+                  <p style="margin: 0; color: #000; font-size: 14px;">${item.description || ''}</p>
+                </div>
+              `).join('') : invoiceDetails.notes || invoiceData?.description ? `
+                <p style="margin: 0; color: #6b7280; font-size: 14px; white-space: pre-wrap;">${invoiceDetails.notes || invoiceData?.description || ''}</p>
+              ` : ''}
             </div>
           </div>
           
-          ${invoiceDetails.notes || invoiceData?.description ? `
-          <div style="margin-top: 30px; padding: 20px; background: #f9fafb; border-radius: 6px;">
-            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Notes:</h3>
-            <p style="color: #6b7280; margin: 0; white-space: pre-wrap;">${invoiceDetails.notes || invoiceData?.description || ''}</p>
+          <!-- Totals Section -->
+          <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+            <div style="display: flex; justify-content: flex-end;">
+              <div style="width: 100%; max-width: 400px;">
+                <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                  <span style="color: #6b7280; font-size: 14px;">Subtotal (excl GST):</span>
+                  <span style="color: #000; font-size: 14px;">${formatCurrency(subtotal)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                  <span style="color: #6b7280; font-size: 14px;">GST (15%):</span>
+                  <span style="color: #000; font-size: 14px;">${formatCurrency(gstAmount)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 16px 0 8px 0;">
+                  <span style="color: #000; font-size: 20px; font-weight: 700;">Total Amount:</span>
+                  <span style="color: #000; font-size: 20px; font-weight: 700;">${formatCurrency(totalAmount)}</span>
+                </div>
+              </div>
+            </div>
           </div>
-          ` : ''}
           
           <!-- Payment Button -->
-          <div style="margin-top: 30px; text-align: center;">
+          <div style="margin-top: 40px; text-align: center; padding-top: 30px; border-top: 1px solid #e5e7eb;">
             <a href="${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000'}/invoice/${invoiceDetails.id || invoiceData?.id}" 
                style="display: inline-block; background: #f97316; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
               View & Pay Invoice Online
             </a>
-          </div>
-          
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center;">
-            <p style="color: #9ca3af; margin: 0; font-size: 14px;">Thank you for your business!</p>
+            <p style="color: #9ca3af; margin: 20px 0 0 0; font-size: 12px;">
+              Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
+            </p>
           </div>
         </div>
         `;
