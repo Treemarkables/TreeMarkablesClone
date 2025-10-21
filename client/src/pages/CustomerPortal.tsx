@@ -1255,69 +1255,76 @@ export function CustomerPortal() {
       {/* Invoice Detail Dialog */}
       {showInvoiceDialog && selectedInvoice && (
         <Dialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Invoice {selectedInvoice.invoiceNumber}</DialogTitle>
-              <DialogDescription>{selectedInvoice.jobTitle}</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="border-b-[3px] border-black pb-5">
+                <DialogTitle className="text-3xl font-bold text-black">Invoice #{selectedInvoice.invoiceNumber}</DialogTitle>
+                <DialogDescription className="text-sm text-gray-600 mt-2">
+                  {portal?.customer?.name || 'Customer'} - {format(parseISO(selectedInvoice.issueDate), 'dd/MM/yyyy')}
+                </DialogDescription>
+              </div>
+
+              {/* Bill To */}
+              <div>
+                <h2 className="text-lg font-semibold text-black mb-3">Bill To</h2>
                 <div>
-                  <div className="font-medium">Issue Date</div>
-                  <div>{format(parseISO(selectedInvoice.issueDate), 'MMM dd, yyyy')}</div>
-                </div>
-                <div>
-                  <div className="font-medium">Due Date</div>
-                  <div>{format(parseISO(selectedInvoice.dueDate), 'MMM dd, yyyy')}</div>
-                </div>
-                <div>
-                  <div className="font-medium">Status</div>
-                  <Badge className={selectedInvoice.status === 'paid' ? 'bg-green-500' : 'bg-orange-500'}>
-                    {selectedInvoice.status}
-                  </Badge>
-                </div>
-                <div>
-                  <div className="font-medium">Total Amount</div>
-                  <div className="text-lg font-bold">{formatCurrency(selectedInvoice.amount)}</div>
+                  <p className="font-semibold text-black mb-2">{portal?.customer?.name || 'Customer'}</p>
+                  <p className="text-sm text-gray-600 mb-1">{portal?.customer?.address || selectedInvoice.address || ''}</p>
+                  {portal?.customer?.email && (
+                    <p className="text-sm text-gray-600">
+                      <span className="mr-2">✉</span>{portal.customer.email}
+                    </p>
+                  )}
                 </div>
               </div>
-              
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left p-3 text-sm font-medium">Description</th>
-                      <th className="text-center p-3 text-sm font-medium">Qty</th>
-                      <th className="text-right p-3 text-sm font-medium">Rate</th>
-                      <th className="text-right p-3 text-sm font-medium">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedInvoice.items.map((item, index) => (
-                      <tr key={index} className="border-t">
-                        <td className="p-3 text-sm">{item.description}</td>
-                        <td className="p-3 text-sm text-center">{item.quantity}</td>
-                        <td className="p-3 text-sm text-right">{formatCurrency(item.rate)}</td>
-                        <td className="p-3 text-sm text-right font-medium">{formatCurrency(item.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-gray-50">
-                    <tr>
-                      <td colSpan={3} className="p-3 text-sm font-medium text-right">Total:</td>
-                      <td className="p-3 text-sm font-bold text-right">{formatCurrency(selectedInvoice.amount)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+
+              {/* Description */}
+              <div>
+                <h2 className="text-lg font-semibold text-black mb-3">Description</h2>
+                <div>
+                  {selectedInvoice.items && selectedInvoice.items.length > 0 ? (
+                    <div className="space-y-2">
+                      {selectedInvoice.items.map((item, index) => (
+                        <div key={index} className="py-2 border-b border-gray-100 last:border-0">
+                          <p className="text-sm text-black">{item.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{selectedInvoice.notes || selectedInvoice.jobTitle}</p>
+                  )}
+                </div>
               </div>
-              
-              <div className="flex gap-2">
+
+              {/* Totals */}
+              <div className="pt-5 border-t border-gray-200">
+                <div className="flex justify-end">
+                  <div className="w-full max-w-sm space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Subtotal (excl GST):</span>
+                      <span className="text-black">{formatCurrency(selectedInvoice.amount / 1.15)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm border-b border-gray-200 pb-2">
+                      <span className="text-gray-600">GST (15%):</span>
+                      <span className="text-black">{formatCurrency(selectedInvoice.amount - (selectedInvoice.amount / 1.15))}</span>
+                    </div>
+                    <div className="flex justify-between pt-3">
+                      <span className="text-xl font-bold text-black">Total Amount:</span>
+                      <span className="text-xl font-bold text-black">{formatCurrency(selectedInvoice.amount)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-6 border-t border-gray-200">
                 <Button variant="outline" className="flex-1" onClick={() => setShowInvoiceDialog(false)}>
                   <Download className="w-4 h-4 mr-2" />
                   Download PDF
                 </Button>
-                {selectedInvoice.status === 'pending' && (
-                  <Button className="flex-1">
+                {selectedInvoice.status !== 'paid' && (
+                  <Button className="flex-1 bg-orange-500 hover:bg-orange-600">
                     <CreditCard className="w-4 h-4 mr-2" />
                     Pay Now
                   </Button>

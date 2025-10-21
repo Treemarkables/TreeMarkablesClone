@@ -1,10 +1,9 @@
 import { useState, forwardRef } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { format, addDays } from 'date-fns';
-import { FileText, Download, Mail, Copy, Calendar, CreditCard, MapPin, Phone, Mail as MailIcon, MessageSquare } from 'lucide-react';
+import { Download, Mail, Copy, CreditCard, MessageSquare } from 'lucide-react';
 import type { DocumentTemplate, Customer } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
 
@@ -17,6 +16,8 @@ interface InvoiceLineItem {
   unit?: string;
   category?: string;
   taxable?: boolean;
+  rate?: number;
+  amount?: number;
 }
 
 interface Invoice {
@@ -70,46 +71,30 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 }, ref) => {
   const [isLoading, setIsLoading] = useState(false);
 
-  // Calculate totals - use line items if available, otherwise fall back to invoice amount
+  // Calculate totals
   const lineItemSubtotal = lineItems.reduce((sum, item) => {
-    // Check both 'total' and 'amount' fields for backwards compatibility
     const itemTotal = item.total || item.amount;
     const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : itemTotal;
     return sum + (total || 0);
   }, 0);
   const hasLineItems = lineItems.length > 0 && lineItemSubtotal > 0;
   
-  const gstRate = 0.15; // 15% GST for New Zealand
+  const gstRate = 0.15;
   
   let subtotal: number;
   let gstAmount: number;
   let totalAmount: number;
   
   if (hasLineItems) {
-    // Line items contain GST-exclusive amounts (ex-GST)
     subtotal = lineItemSubtotal;
     gstAmount = subtotal * gstRate;
     totalAmount = subtotal + gstAmount;
   } else {
-    // Fall back to invoice amount - treat as GST-exclusive
     const invoiceAmount = typeof invoice.amount === 'string' ? parseFloat(invoice.amount) : invoice.amount;
-    subtotal = invoiceAmount || 0;
+    subtotal = invoiceAmount;
     gstAmount = subtotal * gstRate;
     totalAmount = subtotal + gstAmount;
   }
-
-  // Get status color
-  const getStatusColor = (status: string) => {
-    const colors = {
-      draft: 'bg-gray-100 text-gray-800',
-      sent: 'bg-blue-100 text-blue-800',
-      viewed: 'bg-purple-100 text-purple-800',
-      paid: 'bg-green-100 text-green-800',
-      overdue: 'bg-red-100 text-red-800',
-      cancelled: 'bg-gray-100 text-gray-800'
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
 
   // Format currency as NZD
   const formatCurrency = (amount: number) => {
@@ -122,12 +107,6 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   // Get invoice dates with fallbacks
   const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
   const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : addDays(issueDate, 14);
-  const isOverdue = dueDate < new Date() && invoice.status !== 'paid';
-
-  // Calculate payment status
-  const paidAmount = invoice.paidAmount || 0;
-  const remainingAmount = totalAmount - paidAmount;
-  const isPartiallyPaid = paidAmount > 0 && paidAmount < totalAmount;
 
   return (
     <div ref={ref} className={`w-full max-w-4xl mx-auto bg-white ${className}`}>
@@ -135,7 +114,6 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       {showActions && (
         <div className="flex justify-between items-center mb-6 p-4 bg-gray-50 rounded-lg">
           <div className="flex items-center gap-3">
-            <FileText className="w-5 h-5 text-orange-600" />
             <div>
               <h3 className="font-semibold text-gray-900">Invoice #{invoice.invoiceNumber}</h3>
               <p className="text-sm text-gray-600">Using template: {template.name}</p>
@@ -177,242 +155,80 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       )}
 
       <Card className="shadow-lg">
-        <CardContent className="p-0">
-          {/* Header with Treemarkables Branding */}
-          <div className="bg-gradient-to-r from-orange-500 to-blue-600 p-1 sm:p-3 text-white">
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-1 sm:gap-0">
-              <div className="flex-1 min-w-0">
-                <h1 className="text-xs sm:text-lg font-bold mb-0 sm:mb-1 truncate">{template.companyName || 'Treemarkables LTD'}</h1>
-                <p className="text-orange-100 text-[8px] sm:text-xs">Professional Tree Services</p>
-                <div className="mt-0.5 sm:mt-1.5 space-y-0 text-[8px] sm:text-xs text-orange-100">
-                  <div className="flex items-center gap-0.5 sm:gap-1">
-                    <Phone className="w-2 h-2 sm:w-3 sm:h-3" />
-                    <span className="break-all">{template.companyPhone || '027 216 6882'}</span>
-                  </div>
-                  <div className="flex items-center gap-0.5 sm:gap-1">
-                    <MapPin className="w-2 h-2 sm:w-3 sm:h-3" />
-                    <span className="break-all">{template.companyAddress || '213 Stanley road, Gisborne'}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="text-left sm:text-right flex-shrink-0">
-                <div className="bg-white/20 rounded p-1 sm:p-1.5 backdrop-blur-sm">
-                  <h2 className="text-xs sm:text-base font-bold mb-0 sm:mb-0.5">INVOICE</h2>
-                  <div className="mt-0.5 space-y-0 text-[8px] sm:text-xs">
-                    <p><strong>Number:</strong> {invoice.invoiceNumber}</p>
-                    <p><strong>Issue Date:</strong> {format(issueDate, 'dd MMM yyyy')}</p>
-                    <p><strong>Due Date:</strong> {format(dueDate, 'dd MMM yyyy')}</p>
-                    <div className="mt-0.5">
-                      <Badge className={`${getStatusColor(invoice.status || 'draft')} text-[7px] sm:text-[10px] px-1 py-0`}>
-                        {(invoice.status || 'draft').toUpperCase()}
-                      </Badge>
-                      {isOverdue && (
-                        <Badge className="ml-0.5 sm:ml-1 bg-red-500 text-white text-[7px] sm:text-[10px] px-1 py-0">
-                          OVERDUE
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+        <CardContent className="p-8">
+          {/* Header */}
+          <div className="border-b-[3px] border-black pb-5 mb-8">
+            <h1 className="text-3xl font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
+            <p className="text-sm text-gray-600 mt-2">
+              {customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
+            </p>
+          </div>
+
+          {/* Bill To */}
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-black mb-3">Bill To</h2>
+            <div>
+              <p className="font-semibold text-black mb-2" data-testid="text-customer-name">
+                {customer?.name || 'Customer'}
+              </p>
+              {(jobAddress || customer?.address) && (
+                <p className="text-sm text-gray-600 mb-1">{jobAddress || customer.address}</p>
+              )}
+              {customer?.email && (
+                <p className="text-sm text-gray-600">
+                  <span className="mr-2">✉</span>{customer.email}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Customer Information */}
-          {customer && (
-            <div className="p-3 sm:p-8 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Bill To</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="font-semibold text-gray-900" data-testid="text-customer-name">
-                      {customer.name}
-                    </h4>
-                    {(jobAddress || customer.address) && (
-                      <p className="text-gray-700 mt-2">{jobAddress || customer.address}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    {customer.email && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MailIcon className="w-4 h-4" />
-                        <span>{customer.email}</span>
-                      </div>
-                    )}
-                    {customer.phone && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Phone className="w-4 h-4" />
-                        <span>{customer.phone}</span>
-                      </div>
-                    )}
-                  </div>
+          {/* Description */}
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-black mb-3">Description</h2>
+            <div>
+              {hasLineItems ? (
+                <div className="space-y-2">
+                  {lineItems.map((item, index) => (
+                    <div key={item.id} className="py-2 border-b border-gray-100 last:border-0" data-testid={`row-line-item-${index}`}>
+                      <p className="text-sm text-black">
+                        <LinkifiedText text={item.description} />
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Notes */}
-          {(invoice.notes || description) && (
-            <div className="p-3 sm:p-8 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Description</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-notes">
+              ) : (
+                <p className="text-sm text-gray-600 whitespace-pre-wrap" data-testid="text-invoice-notes">
                   <LinkifiedText text={[invoice.notes, description].filter(Boolean).join('\n\n')} />
                 </p>
-              </div>
+              )}
             </div>
-          )}
-
-          {/* Line Items */}
-          {hasLineItems && (
-            <div className="p-3 sm:p-8 border-b border-gray-200">
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-900">Description</th>
-                      <th className="border border-gray-200 px-4 py-3 text-center font-semibold text-gray-900">Qty</th>
-                      <th className="border border-gray-200 px-4 py-3 text-center font-semibold text-gray-900">Unit</th>
-                      <th className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">Unit Price</th>
-                      <th className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">Total (inc GST)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineItems.map((item, index) => (
-                      <tr key={item.id} className="even:bg-gray-50" data-testid={`row-line-item-${index}`}>
-                        <td className="border border-gray-200 px-4 py-3 text-gray-900">
-                          <span className="font-medium">
-                            <LinkifiedText text={item.description} />
-                          </span>
-                          {item.category && (
-                            <p className="text-sm text-gray-600">
-                              <LinkifiedText text={item.category} />
-                            </p>
-                          )}
-                        </td>
-                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.quantity}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-center text-gray-700">{item.unit || 'each'}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-right text-gray-700">{formatCurrency(item.unitPrice || item.rate)}</td>
-                        <td className="border border-gray-200 px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency((item.total || item.amount) * 1.15)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Photos */}
-          {photos && photos.length > 0 && (
-            <div className="p-3 sm:p-8 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Documentation</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {photos.map((photo: any, index: number) => (
-                  <div key={photo.id || index} className="relative aspect-square">
-                    <img
-                      src={photo.url}
-                      alt={photo.caption || `Photo ${index + 1}`}
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                    {photo.caption && (
-                      <p className="text-xs text-gray-600 mt-1 truncate">{photo.caption}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          </div>
 
           {/* Totals */}
-          <div className="p-3 sm:p-8 border-b border-gray-200">
+          <div className="pt-5 border-t border-gray-200">
             <div className="flex justify-end">
-              <div className="w-full max-w-sm space-y-3">
-                <div className="flex justify-between text-gray-700">
-                  <span>Subtotal (excl GST):</span>
-                  <span data-testid="text-subtotal">{formatCurrency(subtotal)}</span>
+              <div className="w-full max-w-sm space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Subtotal (excl GST):</span>
+                  <span className="text-black" data-testid="text-subtotal">{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>GST (15%):</span>
-                  <span data-testid="text-gst-amount">{formatCurrency(gstAmount)}</span>
+                <div className="flex justify-between text-sm border-b border-gray-200 pb-2">
+                  <span className="text-gray-600">GST (15%):</span>
+                  <span className="text-black" data-testid="text-gst-amount">{formatCurrency(gstAmount)}</span>
                 </div>
-                <Separator />
-                <div className="flex justify-between text-xl font-bold text-gray-900">
-                  <span>Total Amount:</span>
-                  <span data-testid="text-total-amount">{formatCurrency(totalAmount)}</span>
+                <div className="flex justify-between pt-3">
+                  <span className="text-xl font-bold text-black">Total Amount:</span>
+                  <span className="text-xl font-bold text-black" data-testid="text-total-amount">{formatCurrency(totalAmount)}</span>
                 </div>
-                {paidAmount > 0 && (
-                  <>
-                    <div className="flex justify-between text-green-600 font-semibold">
-                      <span>Amount Paid:</span>
-                      <span data-testid="text-paid-amount">{formatCurrency(paidAmount)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between text-xl font-bold text-red-600">
-                      <span>Amount Due:</span>
-                      <span data-testid="text-amount-due">{formatCurrency(remainingAmount)}</span>
-                    </div>
-                  </>
-                )}
               </div>
             </div>
           </div>
 
-          {/* Payment Information */}
-          <div className="p-3 sm:p-8 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-w-md">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Payment Terms:</span>
-                <span className="font-medium">{invoice.paymentTerms || template.paymentTerms || '7 days'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Invoice Total:</span>
-                <span className="font-semibold">{formatCurrency(totalAmount)}</span>
-              </div>
-              {paidAmount > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Amount Paid:</span>
-                  <span className="font-medium text-green-600">{formatCurrency(paidAmount)}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-gray-600">Amount Due:</span>
-                <span className={`font-bold ${remainingAmount === 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(remainingAmount)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Payment Instructions */}
-          <div className="p-3 sm:p-8 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Instructions</h3>
-            <div className="bg-blue-50 rounded-lg p-4 space-y-3">
-              <div>
-                <p className="text-gray-900 font-semibold text-sm mb-2">Bank Transfer Details:</p>
-                <div className="bg-white rounded p-3 space-y-1">
-                  <p className="text-gray-700 text-sm"><strong>Bank:</strong> ANZ</p>
-                  <p className="text-gray-700 text-sm"><strong>Account:</strong> 06 0637 0768850 00</p>
-                </div>
-              </div>
-              <p className="text-gray-700 text-sm">
-                Please pay this invoice within {invoice.paymentTerms || template.paymentTerms || '7 days'} of the issue date.
-                For questions about this invoice, please contact us at {template.companyPhone || '027 216 6882'}.
-              </p>
-              {template.gstNumber && (
-                <p className="text-gray-600 text-sm">
-                  <strong>GST Number:</strong> {template.gstNumber}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="p-3 sm:p-8 pt-6">
-            <div className="text-center text-sm text-gray-600">
-              <p>Thank you for choosing {template.companyName || 'Treemarkables'}!</p>
-              <p className="mt-1">Professional tree services you can trust.</p>
-            </div>
+          {/* Business Footer */}
+          <div className="mt-8 pt-6 border-t border-gray-200 text-center">
+            <p className="text-xs text-gray-500">
+              Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
+            </p>
           </div>
         </CardContent>
       </Card>
