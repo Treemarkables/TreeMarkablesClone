@@ -3070,6 +3070,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       // Preserve equipmentChecklist if not in the update payload or empty
       const updateData = { ...validation.data };
+      
+      // Convert empty string customerId to null (fixes foreign key constraint error)
+      if (updateData.customerId === '') {
+        updateData.customerId = null;
+      }
+      
       if ((!updateData.equipmentChecklist || updateData.equipmentChecklist.length === 0) && oldJob?.equipmentChecklist && oldJob.equipmentChecklist.length > 0) {
         console.log('🔧 Preserving equipmentChecklist:', oldJob.equipmentChecklist);
         updateData.equipmentChecklist = oldJob.equipmentChecklist;
@@ -3208,7 +3214,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      const job = await storage.updateJob(req.params.id, validation.data);
+      // Convert empty string customerId to null in validated data
+      const updateData = { ...validation.data };
+      if (updateData.customerId === '') {
+        updateData.customerId = null;
+      }
+
+      const job = await storage.updateJob(req.params.id, updateData);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
