@@ -1789,7 +1789,7 @@ export function GlobalJobCard({
                     <span className="font-medium">Invoice</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    onClick={async () => {
+                    onClick={() => {
                       if (!selectedCustomer?.id) {
                         toast({
                           title: "Customer Required",
@@ -1797,32 +1797,6 @@ export function GlobalJobCard({
                           variant: "destructive"
                         });
                         return;
-                      }
-                      
-                      // Auto-save job if in create mode
-                      if (mode === 'create') {
-                        const formData = form.getValues();
-                        const isValid = await form.trigger();
-                        if (!isValid) {
-                          toast({
-                            title: "Validation Error",
-                            description: "Please fill in all required fields before creating a proposal.",
-                            variant: "destructive"
-                          });
-                          return;
-                        }
-                        
-                        try {
-                          await createJobMutation.mutateAsync(formData);
-                          // Job created, mode will switch to edit automatically
-                        } catch (error) {
-                          toast({
-                            title: "Save Failed",
-                            description: "Failed to save job. Please try again.",
-                            variant: "destructive"
-                          });
-                          return;
-                        }
                       }
                       
                       // Check if there's an existing proposal and load it
@@ -2007,7 +1981,7 @@ export function GlobalJobCard({
                     Invoice
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    onClick={async () => {
+                    onClick={() => {
                       if (!selectedCustomer?.id) {
                         toast({
                           title: "Customer Required",
@@ -2015,32 +1989,6 @@ export function GlobalJobCard({
                           variant: "destructive"
                         });
                         return;
-                      }
-                      
-                      // Auto-save job if in create mode
-                      if (mode === 'create') {
-                        const formData = form.getValues();
-                        const isValid = await form.trigger();
-                        if (!isValid) {
-                          toast({
-                            title: "Validation Error",
-                            description: "Please fill in all required fields before creating a proposal.",
-                            variant: "destructive"
-                          });
-                          return;
-                        }
-                        
-                        try {
-                          await createJobMutation.mutateAsync(formData);
-                          // Job created, mode will switch to edit automatically
-                        } catch (error) {
-                          toast({
-                            title: "Save Failed",
-                            description: "Failed to save job. Please try again.",
-                            variant: "destructive"
-                          });
-                          return;
-                        }
                       }
                       
                       // Check if there's an existing proposal and load it
