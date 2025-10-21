@@ -315,6 +315,12 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Create invoice (shared logic)
   const createInvoice = async () => {
+    // Prevent multiple simultaneous creations
+    if (isCreating) {
+      console.log('Invoice creation already in progress, skipping...');
+      return null;
+    }
+    
     // Validate
     if (!editableAddress.trim()) {
       toast({
@@ -398,6 +404,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     e?.preventDefault();
     e?.stopPropagation();
     
+    // Prevent execution if already creating
+    if (isCreating) return;
+    
     // If invoice already created, just close
     if (createdInvoice) {
       handleClose();
@@ -415,6 +424,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     e?.preventDefault();
     e?.stopPropagation();
     
+    // Prevent execution if already creating
+    if (isCreating) return;
+    
     // If invoice already created, just open email composer
     if (createdInvoice) {
       setShowEmailComposer(true);
@@ -431,6 +443,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const handleSmsInvoice = async (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
+    
+    // Prevent execution if already creating
+    if (isCreating) return;
     
     // If invoice already created, just open SMS composer
     if (createdInvoice) {
