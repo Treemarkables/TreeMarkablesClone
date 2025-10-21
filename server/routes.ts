@@ -4604,15 +4604,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 18px;">#${invoiceDetails.invoiceNumber || ''}</p>
           </div>
           
-          <!-- Business Details -->
-          <div style="margin-bottom: 30px;">
-            <h2 style="color: #111827; margin: 0 0 10px 0; font-size: 20px;">Treemarkables LTD</h2>
-            <p style="color: #6b7280; margin: 0; line-height: 1.6;">
-              26 Huxley Road<br>
-              Gisborne 4010<br>
-              New Zealand<br>
-              Phone: 027 216 6882
-            </p>
+          <!-- Business and Customer Details -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+            <div>
+              <h2 style="color: #111827; margin: 0 0 10px 0; font-size: 20px;">Treemarkables LTD</h2>
+              <p style="color: #6b7280; margin: 0; line-height: 1.6;">
+                26 Huxley Road<br>
+                Gisborne 4010<br>
+                New Zealand<br>
+                Phone: 027 216 6882
+              </p>
+            </div>
+            <div>
+              <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Bill To:</h3>
+              <p style="color: #6b7280; margin: 0; line-height: 1.6;">
+                <strong>${customer?.name || 'Customer'}</strong><br>
+                ${invoiceDetails.address || job?.address || customer?.address || ''}<br>
+                ${customer?.email || ''}<br>
+                ${customer?.phone || ''}
+              </p>
+            </div>
           </div>
           
           <!-- Invoice Details -->
