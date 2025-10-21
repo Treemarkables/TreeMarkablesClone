@@ -416,6 +416,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Save invoice only
   const handleSaveInvoice = async (e?: React.MouseEvent) => {
+    console.log('🎯 SAVE INVOICE CLICKED');
     e?.preventDefault();
     e?.stopPropagation();
     
@@ -442,6 +443,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Create and send invoice
   const handleSendInvoice = async (e?: React.MouseEvent) => {
+    console.log('🎯 SEND INVOICE CLICKED');
     e?.preventDefault();
     e?.stopPropagation();
     
@@ -468,6 +470,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Create and send invoice via SMS
   const handleSmsInvoice = async (e?: React.MouseEvent) => {
+    console.log('🎯 SMS INVOICE CLICKED');
     e?.preventDefault();
     e?.stopPropagation();
     
