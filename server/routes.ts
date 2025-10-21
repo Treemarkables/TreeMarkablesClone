@@ -3016,7 +3016,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
       
       // Handle new customer creation
+      console.log('🔍 NEW CUSTOMER CHECK:', {
+        isNewCustomer: processedBody.isNewCustomer,
+        newCustomerName: processedBody.newCustomerName,
+        conditionMet: !!(processedBody.isNewCustomer && processedBody.newCustomerName)
+      });
+      
       if (processedBody.isNewCustomer && processedBody.newCustomerName) {
+        console.log('🔥 Creating new customer:', processedBody.newCustomerName);
         try {
           const newCustomer = await storage.createCustomer({
             name: processedBody.newCustomerName.trim(),
@@ -3028,7 +3035,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           processedBody.customerId = newCustomer.id;
           console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job update`);
         } catch (error) {
-          console.error('Error creating new customer:', error);
+          console.error('❌ Error creating new customer:', error);
           return res.status(500).json({
             success: false,
             message: 'Failed to create customer. Please try again.'
