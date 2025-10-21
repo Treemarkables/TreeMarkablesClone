@@ -1551,6 +1551,46 @@ export function GlobalJobCard({
     }
   };
 
+  // Callback for ProposalBuilder to request job save (returns job ID)
+  const handleRequestJobSave = async (): Promise<string> => {
+    const formData = form.getValues();
+    
+    // Check if form has validation errors
+    const isValid = await form.trigger();
+    if (!isValid) {
+      throw new Error('Please fill in all required fields before creating a proposal');
+    }
+    
+    // Map new customer fields to job contact fields for backend compatibility
+    if (formData.isNewCustomer && formData.newCustomerName) {
+      const names = formData.newCustomerName.split(' ');
+      formData.jobContactFirstName = names[0] || '';
+      formData.jobContactLastName = names.slice(1).join(' ') || '';
+      formData.jobContactEmail = formData.newCustomerEmail || '';
+      formData.jobContactPhone = formData.newCustomerPhone || '';
+    }
+    
+    try {
+      let result;
+      if (mode === "create") {
+        result = await createJobMutation.mutateAsync(formData);
+      } else {
+        result = await updateJobMutation.mutateAsync(formData);
+      }
+      
+      // Extract job ID from response
+      const jobId = result?.data?.id || result?.id || editingJob?.id;
+      if (!jobId) {
+        throw new Error('Failed to get job ID after save');
+      }
+      
+      return jobId;
+    } catch (error) {
+      console.error('Failed to save job for proposal:', error);
+      throw error;
+    }
+  };
+
   const handleSaveAndClose = async () => {
     // Prevent double-clicking
     if (isSaving) {
@@ -3991,6 +4031,7 @@ export function GlobalJobCard({
           mode={editingProposalId ? "edit" : "create"}
           proposalId={editingProposalId}
           lineItems={formData?.lineItems || []}
+          onRequestJobSave={handleRequestJobSave}
         />
       )}
 
