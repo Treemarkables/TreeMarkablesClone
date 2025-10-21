@@ -1584,6 +1584,25 @@ export function GlobalJobCard({
         throw new Error('Failed to get job ID after save');
       }
       
+      // If we just created a job with a new customer, refetch the job to get the customerId
+      if (mode === "create" && formData.isNewCustomer) {
+        try {
+          const jobResponse = await fetch(`/api/jobs/${jobId}`);
+          if (jobResponse.ok) {
+            const jobData = await jobResponse.json();
+            const newCustomerId = jobData?.data?.customerId;
+            if (newCustomerId) {
+              // Update the form with the new customerId
+              form.setValue('customerId', newCustomerId);
+              // Invalidate customer queries to refresh the dropdown
+              queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to fetch customer ID after job creation:', error);
+        }
+      }
+      
       return jobId;
     } catch (error) {
       console.error('Failed to save job for proposal:', error);
