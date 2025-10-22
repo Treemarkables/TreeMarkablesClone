@@ -706,7 +706,18 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
-              <span>Create Invoice from {proposalsResponse?.data?.find((p: any) => p.status === 'accepted' || p.status === 'sent') ? 'Proposal' : quotesResponse?.data?.find((q: any) => q.status === 'accepted' || q.status === 'sent') ? 'Quote' : 'Job'}</span>
+              <div className="flex items-center gap-3">
+                {existingInvoiceId && createdInvoice ? (
+                  <>
+                    <span>Edit Invoice</span>
+                    <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-md text-sm font-semibold border border-amber-300">
+                      #{createdInvoice.invoiceNumber}
+                    </span>
+                  </>
+                ) : (
+                  <span>Create New Invoice</span>
+                )}
+              </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -725,6 +736,49 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
             </div>
           ) : (
             <div className="space-y-6">
+              {/* Existing Invoice Warning Banner */}
+              {existingInvoiceId && createdInvoice && (
+                <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <FileText className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-semibold text-amber-800">
+                        Editing Existing Invoice
+                      </h3>
+                      <div className="mt-2 text-sm text-amber-700">
+                        <p>
+                          You are editing invoice <strong>#{createdInvoice.invoiceNumber}</strong>. 
+                          Any changes you make will update this existing invoice.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* New Invoice Info Banner */}
+              {!existingInvoiceId && (
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <Plus className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-semibold text-blue-800">
+                        Creating New Invoice
+                      </h3>
+                      <div className="mt-2 text-sm text-blue-700">
+                        <p>
+                          A new invoice will be created with invoice number <strong>#{job.jobNumber || 'auto-generated'}</strong>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Editable Fields Section */}
               <div className="space-y-4 bg-blue-50 p-6 rounded-lg border border-blue-200">
                 <h3 className="font-semibold text-blue-900 flex items-center gap-2">
