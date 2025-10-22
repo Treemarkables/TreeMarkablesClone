@@ -225,7 +225,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       }];
     }
 
-    setLineItems(extractedItems);
+    // Only set line items if no existing invoice (existing invoice line items were set earlier)
+    if (existingInvoices.length === 0) {
+      setLineItems(extractedItems);
+    }
 
     // Set description from proposal/quote (only if no existing invoice)
     if (!existingInvoices.length) {
