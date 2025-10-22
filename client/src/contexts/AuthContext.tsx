@@ -52,6 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: { employeeId?: string; email?: string; password?: string }) => {
+      // CRITICAL: Cancel any in-flight /api/auth/me requests before login
+      // This prevents stale unauthenticated responses from overwriting the new session
+      await queryClient.cancelQueries({ queryKey: ['/api/auth/me'] });
+      
       const res = await apiRequest('POST', '/api/auth/login', credentials);
       return res.json();
     },
@@ -118,6 +122,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setInitialAuthCheckComplete(true);
     }
 
+    // CRITICAL: Ignore stale responses while a fresh query is in progress
+    // This prevents race conditions where an old unauthenticated response
+    // arrives after a successful login
+    if (isFetching) {
+      return;
+    }
+
     // If server returns not authenticated
     if (meResponse?.success === false) {
       if (currentUser) {
@@ -133,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentUserState(meResponse.data);
       }
     }
-  }, [meResponse, currentUser, initialAuthCheckComplete]);
+  }, [meResponse, currentUser, initialAuthCheckComplete, isFetching]);
 
   const isAuthenticated = !!currentUser;
   const userRole = currentUser?.role as 'admin' | 'crew' | null;
