@@ -649,6 +649,7 @@ export interface IStorage {
   getInvoice(id: string): Promise<Invoice | undefined>;
   getInvoicesByJob(jobId: string): Promise<Invoice[]>;
   updateInvoice(id: string, updates: Partial<InsertInvoice>): Promise<Invoice>;
+  deleteInvoice(id: string): Promise<void>;
   createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest>;
   getServiceRequest(id: string): Promise<ServiceRequest | undefined>;
   getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]>;
@@ -3788,6 +3789,10 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.invoices.id, id))
       .returning();
     return result;
+  }
+  async deleteInvoice(id: string): Promise<void> {
+    await db.delete(schema.invoices)
+      .where(eq(schema.invoices.id, id));
   }
   async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> { throw new Error("Not implemented"); }
   async getServiceRequest(id: string): Promise<ServiceRequest | undefined> { return undefined; }
