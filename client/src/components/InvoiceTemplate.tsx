@@ -157,7 +157,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       )}
 
       <Card className="shadow-lg">
-        <CardContent className="p-8">
+        <CardContent className="p-4">
           {/* Header with Logo */}
           <div className="border-b-[3px] border-black pb-5 mb-8">
             <div className="flex items-start justify-between gap-4">
@@ -166,14 +166,14 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                 <img 
                   src="/treemarkables-logo.webp" 
                   alt="Treemarkables" 
-                  className="h-20 w-auto object-contain"
+                  className="h-10 w-auto object-contain"
                 />
               </div>
               
               {/* Invoice Details */}
               <div className="flex-1 text-right">
-                <h1 className="text-3xl font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
-                <p className="text-sm text-gray-600 mt-2">
+                <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
+                <p className="text-xs text-gray-600 mt-1">
                   {customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
                 </p>
               </div>
@@ -181,40 +181,40 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           </div>
 
           {/* Bill To */}
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-black mb-3">Bill To</h2>
+          <div className="mb-4">
+            <h2 className="text-xs font-semibold text-black mb-2">Bill To</h2>
             <div>
-              <p className="font-semibold text-black mb-2" data-testid="text-customer-name">
+              <p className="font-semibold text-black text-xs mb-1" data-testid="text-customer-name">
                 {customer?.name || 'Customer'}
               </p>
               {(jobAddress || customer?.address) && (
-                <p className="text-sm text-gray-600 mb-1">{jobAddress || customer.address}</p>
+                <p className="text-xs text-gray-600 mb-1">{jobAddress || customer.address}</p>
               )}
               {customer?.email && (
-                <p className="text-sm text-gray-600">
-                  <span className="mr-2">✉</span>{customer.email}
+                <p className="text-xs text-gray-600">
+                  <span className="mr-1">✉</span>{customer.email}
                 </p>
               )}
             </div>
           </div>
 
           {/* Description */}
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-black mb-3">Description</h2>
-            <div className="space-y-4">
+          <div className="mb-4">
+            <h2 className="text-xs font-semibold text-black mb-2">Description</h2>
+            <div className="space-y-2">
               {/* Invoice-level description (if provided) */}
               {(description || invoice.notes) && (
-                <div className="text-sm text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-description">
+                <div className="text-xs text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-description">
                   <LinkifiedText text={[description, invoice.notes].filter(Boolean).join('\n\n')} />
                 </div>
               )}
               
               {/* Line items */}
               {hasLineItems && (
-                <div className="space-y-2 mt-3">
+                <div className="space-y-1 mt-2">
                   {lineItems.map((item, index) => (
-                    <div key={item.id} className="py-2 border-b border-gray-100 last:border-0" data-testid={`row-line-item-${index}`}>
-                      <p className="text-sm text-black">
+                    <div key={item.id} className="py-1 border-b border-gray-100 last:border-0" data-testid={`row-line-item-${index}`}>
+                      <p className="text-xs text-black">
                         <LinkifiedText text={item.description} />
                       </p>
                     </div>
@@ -225,29 +225,29 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           </div>
 
           {/* Totals */}
-          <div className="pt-5 border-t border-gray-200">
+          <div className="pt-3 border-t border-gray-200">
             <div className="flex justify-end">
-              <div className="w-full max-w-sm space-y-2">
-                <div className="flex justify-between text-sm">
+              <div className="w-full max-w-sm space-y-1">
+                <div className="flex justify-between text-xs">
                   <span className="text-gray-600">Subtotal (excl GST):</span>
                   <span className="text-black" data-testid="text-subtotal">{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-sm border-b border-gray-200 pb-2">
+                <div className="flex justify-between text-xs border-b border-gray-200 pb-1">
                   <span className="text-gray-600">GST (15%):</span>
                   <span className="text-black" data-testid="text-gst-amount">{formatCurrency(gstAmount)}</span>
                 </div>
-                <div className="flex justify-between pt-3">
-                  <span className="text-xl font-bold text-black">Total Amount:</span>
-                  <span className="text-xl font-bold text-black" data-testid="text-total-amount">{formatCurrency(totalAmount)}</span>
+                <div className="flex justify-between pt-2">
+                  <span className="text-sm font-bold text-black">Total Amount:</span>
+                  <span className="text-sm font-bold text-black" data-testid="text-total-amount">{formatCurrency(totalAmount)}</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Payment Information */}
-          <div className="mt-6 p-5 bg-gray-50 border border-gray-200 rounded-lg">
-            <h3 className="text-base font-semibold text-black mb-3">Payment Information</h3>
-            <div className="text-sm text-gray-600 space-y-1.5">
+          <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <h3 className="text-xs font-semibold text-black mb-2">Payment Information</h3>
+            <div className="text-xs text-gray-600 space-y-1">
               <p><span className="font-medium text-black">Bank:</span> ANZ</p>
               <p><span className="font-medium text-black">Account Number:</span> 06 0637 0768850 00</p>
               <p><span className="font-medium text-black">Account Name:</span> Treemarkables LTD</p>
@@ -255,7 +255,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           </div>
 
           {/* Business Footer */}
-          <div className="mt-8 pt-6 border-t border-gray-200 text-center">
+          <div className="mt-4 pt-3 border-t border-gray-200 text-center">
             <p className="text-xs text-gray-500">
               Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
             </p>
