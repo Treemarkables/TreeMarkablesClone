@@ -4595,17 +4595,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           </tr>
         `;
         
-        // Get logo URL - use PNG for better email client compatibility
-        // Use REPL_SLUG for production, REPLIT_DEV_DOMAIN for dev
-        const replSlug = process.env.REPL_SLUG;
-        const devDomain = process.env.REPLIT_DEV_DOMAIN;
-        const baseUrl = replSlug 
-          ? `https://${replSlug}.replit.app` 
-          : devDomain 
-            ? `https://${devDomain}` 
-            : 'http://localhost:5000';
-        const logoUrl = `${baseUrl}/treemarkables-logo.png`;
-        console.log('📧 Email logo URL:', logoUrl);
+        // Logo will be embedded as inline attachment (CID) for better email client compatibility
+        const logoUrl = 'cid:treemarkables-logo';
         
         console.log('🎨 Invoice HTML generation context:', {
           hasJob: !!job,
@@ -4694,8 +4685,31 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Prepare email content with any necessary formatting
       const emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
       
-      // Process photo attachments
+      // Process attachments (logo + photos)
       const emailAttachments = [];
+      
+      // Add logo as inline attachment for emails with invoices
+      if (invoiceData || invoiceId) {
+        try {
+          const logoPath = path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
+          if (fs.existsSync(logoPath)) {
+            const logoContent = fs.readFileSync(logoPath);
+            const logoBase64 = logoContent.toString('base64');
+            emailAttachments.push({
+              content: logoBase64,
+              filename: 'treemarkables-logo.png',
+              type: 'image/png',
+              disposition: 'inline',
+              content_id: 'treemarkables-logo'
+            });
+            console.log('📎 Added inline logo attachment for email');
+          }
+        } catch (logoError) {
+          console.error('Error adding logo attachment:', logoError);
+        }
+      }
+      
+      // Process photo attachments
       if (selectedPhotos && selectedPhotos.length > 0) {
         for (const photoUrl of selectedPhotos) {
           try {

@@ -66,7 +66,7 @@ export function SMSComposerModal({
       
       // Generate default SMS message with invoice link if invoice context
       if (invoiceData && customer) {
-        const defaultMessage = `Hi ${customer.name || 'there'}, invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.totalAmount || '0.00'} ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
+        const defaultMessage = `Hi ${customer.name || 'there'}, invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.amount || '0.00'} ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
         form.setValue("message", defaultMessage);
         setCharacterCount(defaultMessage.length);
       }
@@ -225,7 +225,7 @@ export function SMSComposerModal({
                 <div className="flex items-center justify-between text-sm">
                   <span>Invoice {invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')}</span>
                   <span className="font-semibold" style={{color: 'hsl(var(--purple))'}}>
-                    ${invoiceData.totalAmount || '0.00'}
+                    ${invoiceData.amount || '0.00'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
