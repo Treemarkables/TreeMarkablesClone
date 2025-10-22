@@ -185,9 +185,17 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           {/* Description */}
           <div className="mb-8">
             <h2 className="text-lg font-semibold text-black mb-3">Description</h2>
-            <div>
-              {hasLineItems ? (
-                <div className="space-y-2">
+            <div className="space-y-4">
+              {/* Invoice-level description (if provided) */}
+              {(description || invoice.notes) && (
+                <div className="text-sm text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-description">
+                  <LinkifiedText text={[description, invoice.notes].filter(Boolean).join('\n\n')} />
+                </div>
+              )}
+              
+              {/* Line items */}
+              {hasLineItems && (
+                <div className="space-y-2 mt-3">
                   {lineItems.map((item, index) => (
                     <div key={item.id} className="py-2 border-b border-gray-100 last:border-0" data-testid={`row-line-item-${index}`}>
                       <p className="text-sm text-black">
@@ -196,10 +204,6 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-sm text-gray-600 whitespace-pre-wrap" data-testid="text-invoice-notes">
-                  <LinkifiedText text={[invoice.notes, description].filter(Boolean).join('\n\n')} />
-                </p>
               )}
             </div>
           </div>
