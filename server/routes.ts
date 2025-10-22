@@ -5286,9 +5286,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Get all invoices
   app.get('/api/invoices', async (req: Request, res: Response) => {
     try {
-      const result = await db.select()
-        .from(invoices)
-        .orderBy(desc(invoices.createdAt));
+      const { jobId, customerId } = req.query;
+      
+      // Build query with optional filters
+      let query = db.select().from(invoices);
+      
+      if (jobId) {
+        query = query.where(eq(invoices.jobId, jobId as string)) as any;
+      } else if (customerId) {
+        query = query.where(eq(invoices.customerId, customerId as string)) as any;
+      }
+      
+      const result = await query.orderBy(desc(invoices.createdAt));
       
       // Fetch customer and job data for each invoice
       const invoicesWithRelations = await Promise.all(
