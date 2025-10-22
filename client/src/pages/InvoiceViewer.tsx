@@ -53,8 +53,8 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   const customer = invoice.customer;
   const job = invoice.job;
 
-  // Calculate totals from line items
-  const lineItems = invoice.lineItems || invoice.items || [];
+  // Calculate totals from line items (invoices use 'items', jobs use 'lineItems')
+  const lineItems = invoice.items || invoice.lineItems || [];
   const lineItemTotal = lineItems.reduce((sum: number, item: any) => {
     // Check both 'total' and 'amount' fields for backwards compatibility
     const itemTotal = item.total || item.amount;
@@ -230,12 +230,12 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               </div>
             </div>
 
-            {/* Description - only show if no line items, otherwise line items table will show descriptions */}
-            {job?.description && (!lineItems || lineItems.length === 0) && (
+            {/* Description - show job description if available and no detailed line items */}
+            {(job?.description || invoice.notes) && (!lineItems || lineItems.length === 0 || (lineItems.length === 1 && !lineItems[0].description)) && (
               <div className="mb-3">
                 <h3 className="text-base font-semibold text-gray-900 mb-2">Description</h3>
                 <div className="bg-gray-50 rounded-lg p-2">
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{job.description}</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{job?.description || invoice.notes || ''}</p>
                 </div>
               </div>
             )}
@@ -256,15 +256,28 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {lineItems.map((item: any, index: number) => (
-                        <tr key={index}>
-                          <td className="border border-gray-300 px-2 py-1">{item.description}</td>
-                          <td className="border border-gray-300 px-2 py-1 text-center">{item.quantity}</td>
-                          <td className="border border-gray-300 px-2 py-1 text-center">{item.unit || 'each'}</td>
-                          <td className="border border-gray-300 px-2 py-1 text-right">{formatCurrency(item.unitPrice)}</td>
-                          <td className="border border-gray-300 px-2 py-1 text-right">{formatCurrency(item.total * 1.15)}</td>
-                        </tr>
-                      ))}
+                      {lineItems.map((item: any, index: number) => {
+                        // Get unit price - handle both 'rate' (invoice) and 'unitPrice' (job) fields
+                        const unitPrice = item.rate || item.unitPrice || 0;
+                        const unitPriceNum = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
+                        
+                        // Get total - handle both 'total' and 'amount' fields
+                        const total = item.total || item.amount || 0;
+                        const totalNum = typeof total === 'string' ? parseFloat(total) : total;
+                        
+                        // Description fallback to job description or "Tree Service"
+                        const description = item.description || job?.description || invoice.notes || 'Tree Service';
+                        
+                        return (
+                          <tr key={index}>
+                            <td className="border border-gray-300 px-2 py-1">{description}</td>
+                            <td className="border border-gray-300 px-2 py-1 text-center">{item.quantity || 1}</td>
+                            <td className="border border-gray-300 px-2 py-1 text-center">{item.unit || 'each'}</td>
+                            <td className="border border-gray-300 px-2 py-1 text-right">{formatCurrency(unitPriceNum)}</td>
+                            <td className="border border-gray-300 px-2 py-1 text-right">{formatCurrency(totalNum * 1.15)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
