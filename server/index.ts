@@ -47,7 +47,7 @@ app.use(
       pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes
     }),
     cookie: {
-      secure: true, // Always use secure cookies (Replit uses HTTPS even in development)
+      secure: !isDevelopment, // Only require HTTPS in production
       httpOnly: true,
       maxAge: isDevelopment 
         ? 1000 * 60 * 60 * 24 * 30  // 30 days in development for convenience
