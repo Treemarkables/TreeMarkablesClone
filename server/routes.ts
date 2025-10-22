@@ -4660,13 +4660,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             </div>
           </div>
           
-          <!-- Payment Button -->
+          <!-- Business Footer -->
           <div style="margin-top: 40px; text-align: center; padding-top: 30px; border-top: 1px solid #e5e7eb;">
-            <a href="${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000'}/invoice/${invoiceDetails.id || invoiceData?.id}" 
-               style="display: inline-block; background: #f97316; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
-              View & Pay Invoice Online
-            </a>
-            <p style="color: #9ca3af; margin: 20px 0 0 0; font-size: 12px;">
+            <p style="color: #9ca3af; margin: 0; font-size: 12px;">
               Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
             </p>
           </div>
