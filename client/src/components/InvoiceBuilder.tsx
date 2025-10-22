@@ -127,8 +127,15 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       setCreatedInvoice({
         id: existingInvoice.id,
         invoiceNumber: existingInvoice.invoiceNumber,
+        customerId: existingInvoice.customerId,
+        jobId: existingInvoice.jobId,
         amount: existingInvoice.amount,
-        dueDate: existingInvoice.dueDate
+        status: existingInvoice.status,
+        dueDate: existingInvoice.dueDate,
+        issueDate: existingInvoice.issueDate,
+        items: existingInvoice.items || [],
+        notes: existingInvoice.notes || '',
+        address: existingInvoice.address || job.address || customer.address || ''
       });
       setExistingInvoiceId(existingInvoice.id);
       
