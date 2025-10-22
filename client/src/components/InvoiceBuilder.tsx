@@ -540,7 +540,6 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         address: editableAddress,
         items: formattedLineItems,
         amount: subtotal.toString(),
-        description: editableDescription,
         notes: editableNotes
       };
 
