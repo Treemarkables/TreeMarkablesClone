@@ -759,9 +759,21 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                 </div>
 
                 {/* Description */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Invoice Description</Label>
+                  <Textarea
+                    value={editableDescription}
+                    onChange={(e) => setEditableDescription(e.target.value)}
+                    placeholder="Enter a general description for this invoice (optional)"
+                    className="bg-white min-h-[80px]"
+                    data-testid="input-invoice-description"
+                  />
+                </div>
+
+                {/* Line Items */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">Description</Label>
+                    <Label className="text-sm font-medium">Line Items</Label>
                     <div className="flex gap-2">
                       <Button
                         type="button"
@@ -786,14 +798,6 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                       </Button>
                     </div>
                   </div>
-                  
-                  <Textarea
-                    value={editableDescription}
-                    onChange={(e) => setEditableDescription(e.target.value)}
-                    placeholder="Enter invoice description"
-                    className="bg-white min-h-[80px]"
-                    data-testid="input-invoice-description"
-                  />
 
                   <div className="space-y-2">
                     {lineItems.map((item, index) => (
