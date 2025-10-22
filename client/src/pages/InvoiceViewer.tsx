@@ -230,8 +230,8 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               </div>
             </div>
 
-            {/* Description - show job description if available and no detailed line items */}
-            {(job?.description || invoice.notes) && (!lineItems || lineItems.length === 0 || (lineItems.length === 1 && !lineItems[0].description)) && (
+            {/* Description - show job/invoice description if available */}
+            {(job?.description || invoice.notes) && (
               <div className="mb-3">
                 <h3 className="text-base font-semibold text-gray-900 mb-2">Description</h3>
                 <div className="bg-gray-50 rounded-lg p-2">
@@ -240,10 +240,10 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               </div>
             )}
 
-            {/* Line Items */}
-            {lineItems && lineItems.length > 0 && (
+            {/* Line Items - only show detailed table if we have meaningful line items */}
+            {lineItems && lineItems.length > 0 && lineItems.some((item: any) => item.description && item.description !== 'Tree care' && item.description !== 'Tree Service') && (
               <div className="mb-3">
-                <h3 className="text-base font-semibold text-gray-900 mb-2">Description</h3>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Line Items</h3>
                 <div className="w-full overflow-x-auto">
                   <table className="w-full border-collapse border border-gray-300 text-sm">
                     <thead>
