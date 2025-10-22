@@ -161,7 +161,7 @@ export default function ActivityDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${dashboard.financials.totalRevenue.toFixed(2)}
+              ${(dashboard.financials.totalRevenue || 0).toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {dashboard.todaysJobs.total} jobs booked
@@ -176,9 +176,9 @@ export default function ActivityDashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dashboard.financials.profitMargin}%</div>
+            <div className="text-2xl font-bold">{dashboard.financials.profitMargin || 0}%</div>
             <p className="text-xs text-muted-foreground mt-1">
-              ${dashboard.financials.profit.toFixed(2)} profit today
+              ${(dashboard.financials.profit || 0).toFixed(2)} profit today
             </p>
           </CardContent>
         </Card>

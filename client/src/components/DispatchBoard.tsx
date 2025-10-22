@@ -604,7 +604,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         jobAssignments.push({
           id: apiJob.id,
-          jobId: apiJob.jobNumber,
+          jobId: apiJob.id, // Use the actual job ID (UUID), not the job number
           jobNumber: apiJob.jobNumber,
           customerId: apiJob.customerId,
           customerName: customerName,
@@ -662,7 +662,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         jobAssignments.push({
           id: apiJob.id,
-          jobId: apiJob.jobNumber,
+          jobId: apiJob.id, // Use the actual job ID (UUID), not the job number
           jobNumber: apiJob.jobNumber,
           customerId: apiJob.customerId,
           customerName: customerName,
@@ -849,6 +849,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       // Transform Job objects into JobAssignment format
       const searchResults: JobAssignment[] = result.data.map((job: any) => ({
         id: job.id,
+        jobId: job.id, // Add jobId field (same as id for job assignments)
         jobNumber: job.jobNumber,
         customerName: job.customerName || 'Unknown Customer',
         customerPhone: job.customerPhone || '',
