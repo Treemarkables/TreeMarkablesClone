@@ -14932,7 +14932,7 @@ Transcription: ${transcriptText}`;
       const metricsStartDate = settings.metricsStartDate ? new Date(settings.metricsStartDate) : null;
 
       // Get today's jobs
-      const allJobs = await storage.getAllJobs();
+      const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
       
       // Filter jobs for metrics (exclude jobs created before metrics start date)
       const jobsForMetrics = metricsStartDate 
