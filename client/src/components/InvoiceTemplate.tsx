@@ -176,11 +176,6 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                 <p className="text-sm text-gray-600 mt-2">
                   {customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
                 </p>
-                {jobNumber && (
-                  <p className="text-sm text-gray-600 mt-1" data-testid="text-job-number">
-                    Job #{jobNumber}
-                  </p>
-                )}
               </div>
             </div>
           </div>
