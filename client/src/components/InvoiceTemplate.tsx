@@ -156,12 +156,26 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
       <Card className="shadow-lg">
         <CardContent className="p-8">
-          {/* Header */}
+          {/* Header with Logo */}
           <div className="border-b-[3px] border-black pb-5 mb-8">
-            <h1 className="text-3xl font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
-            <p className="text-sm text-gray-600 mt-2">
-              {customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
-            </p>
+            <div className="flex items-start justify-between gap-4">
+              {/* Logo */}
+              <div className="flex-shrink-0">
+                <img 
+                  src="/treemarkables-logo.png" 
+                  alt="Treemarkables" 
+                  className="h-16 w-auto object-contain"
+                />
+              </div>
+              
+              {/* Invoice Details */}
+              <div className="flex-1 text-right">
+                <h1 className="text-3xl font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
+                <p className="text-sm text-gray-600 mt-2">
+                  {customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Bill To */}
