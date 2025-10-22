@@ -1702,8 +1702,8 @@ export function GlobalJobCard({
   const effectiveJobId = createdJobId || jobId;
 
   // Loading check - show spinner while fetching specific job data in edit mode
-  // Only show loading when the query is actively fetching data
-  const jobLoading = mode === 'edit' && !!effectiveJobId && isLoadingSpecificJob;
+  // Show loading when the query is actively fetching data OR when editingJob is null (not loaded yet)
+  const jobLoading = mode === 'edit' && !!effectiveJobId && (isLoadingSpecificJob || !editingJob);
   
   if (jobLoading) {
     const loadingContent = (
