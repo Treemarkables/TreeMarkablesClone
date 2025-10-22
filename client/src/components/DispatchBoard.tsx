@@ -1643,6 +1643,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         isOpen={true}
                         mode={globalJobCardMode}
                         jobId={jobToEdit?.id}
+                        job={jobToEdit as any}
                         onClose={() => {
                           setShowGlobalJobCard(false);
                           setJobToEdit(null);
@@ -1858,6 +1859,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         isOpen={showGlobalJobCard}
         mode={globalJobCardMode}
         jobId={jobToEdit?.id}
+        job={jobToEdit as any}
         onClose={() => {
           setShowGlobalJobCard(false);
           setJobToEdit(null);
