@@ -43,9 +43,7 @@ export default function JHAAssessment() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [signatures, setSignatures] = useState<{ name: string; signature: string }[]>([]);
-  const [showSignaturePad, setShowSignaturePad] = useState(false);
-  const [signerName, setSignerName] = useState("");
+  const [sharedSignature, setSharedSignature] = useState<string>("");
   const [photos, setPhotos] = useState<string[]>([]);
 
   // Fetch hazard templates
@@ -88,7 +86,7 @@ export default function JHAAssessment() {
   const selectedHazards = form.watch("selectedHazards");
 
   const createAssessmentMutation = useMutation({
-    mutationFn: async (data: JHAFormValues & { signatures: { name: string; signature: string }[], photos: string[] }) => {
+    mutationFn: async (data: JHAFormValues & { sharedSignature: string, photos: string[] }) => {
       return apiRequest('POST', '/api/jha/assessments', data);
     },
     onSuccess: () => {
@@ -168,13 +166,6 @@ export default function JHAAssessment() {
     return "Insignificant Risk";
   };
 
-  const handleSignature = (name: string, signatureData: string) => {
-    if (signatures.length < 5) {
-      setSignatures([...signatures, { name, signature: signatureData }]);
-      setSignerName("");
-    }
-  };
-
   const handlePhotoCapture = () => {
     // In a real app, this would open camera
     toast({
@@ -186,7 +177,7 @@ export default function JHAAssessment() {
   const handleSubmit = (data: JHAFormValues) => {
     console.log("🔍 Form submit triggered", { 
       hazardCount: data.selectedHazards.length,
-      signatureCount: signatures.length,
+      hasSignature: !!sharedSignature,
       formData: data 
     });
 
@@ -200,11 +191,11 @@ export default function JHAAssessment() {
       return;
     }
 
-    if (signatures.length === 0) {
-      console.log("❌ Validation failed: No signatures");
+    if (!sharedSignature) {
+      console.log("❌ Validation failed: No signature");
       toast({
         title: "Signature Required",
-        description: "At least one worker signature is required",
+        description: "Worker signatures are required to complete the assessment",
         variant: "destructive"
       });
       return;
@@ -213,7 +204,7 @@ export default function JHAAssessment() {
     console.log("✅ Validation passed, submitting form");
     createAssessmentMutation.mutate({
       ...data,
-      signatures,
+      sharedSignature,
       photos
     });
   };
@@ -601,55 +592,37 @@ export default function JHAAssessment() {
           {/* Signatures */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Signature of worker (s)</CardTitle>
-              <CardDescription>Up to five people can sign here</CardDescription>
+              <CardTitle className="text-lg">Worker Signatures</CardTitle>
+              <CardDescription>All workers can sign in the box below</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {signatures.map((sig, index) => (
-                <div key={index} className="flex items-center gap-2 p-3 border rounded-lg bg-gray-50">
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                  <span className="font-medium">{sig.name}</span>
-                </div>
-              ))}
-
-              {signatures.length < 5 && !showSignaturePad && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => setShowSignaturePad(true)}
-                  data-testid="button-new-signature"
-                >
-                  New
-                </Button>
-              )}
-
-              {showSignaturePad && (
-                <div className="space-y-3 p-4 border rounded-lg">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Worker Name</label>
-                    <Input
-                      value={signerName}
-                      onChange={(e) => setSignerName(e.target.value)}
-                      placeholder="Enter your full name"
-                      data-testid="input-signer-name"
+              {sharedSignature ? (
+                <div className="space-y-3">
+                  <div className="p-3 border rounded-lg bg-gray-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      <span className="font-medium">Signatures collected</span>
+                    </div>
+                    <img 
+                      src={sharedSignature} 
+                      alt="Worker signatures" 
+                      className="w-full border rounded bg-white"
                     />
                   </div>
-                  <SignaturePad
-                    onSave={(signatureData) => {
-                      handleSignature(signerName, signatureData);
-                      setShowSignaturePad(false);
-                    }}
-                    disabled={!signerName.trim()}
-                  />
                   <Button
                     type="button"
-                    variant="ghost"
-                    onClick={() => setShowSignaturePad(false)}
-                    data-testid="button-cancel-signature"
+                    variant="outline"
+                    onClick={() => setSharedSignature("")}
+                    data-testid="button-clear-signature"
                   >
-                    Cancel
+                    Clear & Re-sign
                   </Button>
                 </div>
+              ) : (
+                <SignaturePad
+                  onSave={(signatureData) => setSharedSignature(signatureData)}
+                  disabled={false}
+                />
               )}
             </CardContent>
           </Card>
