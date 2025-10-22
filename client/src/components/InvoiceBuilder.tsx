@@ -95,6 +95,14 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     enabled: isOpen && !!job.id
   });
 
+  // Reset initialization when modal closes so it reloads when reopened
+  useEffect(() => {
+    if (!isOpen) {
+      setInitializedJobId(null);
+      setExistingInvoiceId(null);
+      setCreatedInvoice(null);
+    }
+  }, [isOpen]);
 
   // Initialize fields when modal opens or when job changes
   useEffect(() => {
