@@ -202,10 +202,10 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           <div className="mb-4">
             <h2 className="text-xs font-semibold text-black mb-2">Description</h2>
             <div className="space-y-2">
-              {/* Invoice-level description (if provided) */}
+              {/* Invoice-level description (use description prop OR invoice.notes, not both to avoid duplication) */}
               {(description || invoice.notes) && (
                 <div className="text-xs text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-description">
-                  <LinkifiedText text={[description, invoice.notes].filter(Boolean).join('\n\n')} />
+                  <LinkifiedText text={description || invoice.notes || ''} />
                 </div>
               )}
               
