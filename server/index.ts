@@ -40,6 +40,7 @@ app.use(
     secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
     resave: false,
     saveUninitialized: false,
+    name: 'treemarkables.sid', // Custom cookie name (helps Safari)
     store: new PgSession({
       pool: pool as any, // Use PostgreSQL pool for persistent sessions
       tableName: 'session', // Session table name
@@ -52,7 +53,8 @@ app.use(
       maxAge: isDevelopment 
         ? 1000 * 60 * 60 * 24 * 30  // 30 days in development for convenience
         : 1000 * 60 * 60 * 24 * 7,   // 7 days in production
-      sameSite: 'lax',
+      sameSite: isDevelopment ? 'lax' : 'none', // Safari needs 'none' with secure in production
+      domain: isDevelopment ? undefined : '.treemarkables.co.nz', // Explicit domain in production
     },
   })
 );
