@@ -1694,16 +1694,18 @@ export function GlobalJobCard({
     }
   };
 
-  // Get current status - use editingJob.status directly to avoid showing stale form data during loading
-  // In create mode, use form.watch since there's no editingJob yet
-  const currentStatus = mode === 'edit' ? editingJob?.status : form.watch('status');
-
   // Compute effective job ID for loading check
   const effectiveJobId = createdJobId || jobId;
 
   // Loading check - show spinner while fetching specific job data in edit mode
-  // Only show loading when the query is actively fetching data
-  const jobLoading = mode === 'edit' && !!effectiveJobId && isLoadingSpecificJob;
+  // CRITICAL: This MUST come before accessing editingJob to prevent blank screen
+  // Also check if editingJob is null - handles race condition where query completes but useMemo hasn't re-run
+  const jobLoading = mode === 'edit' && !!effectiveJobId && (isLoadingSpecificJob || (!job && !editingJob));
+  
+  // Get current status - use editingJob.status directly to avoid showing stale form data during loading
+  // In create mode, use form.watch since there's no editingJob yet
+  // IMPORTANT: This line accesses editingJob, so it must come AFTER the loading check above
+  const currentStatus = mode === 'edit' ? editingJob?.status : form.watch('status');
   
   if (jobLoading) {
     const loadingContent = (
