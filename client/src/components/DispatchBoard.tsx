@@ -1786,7 +1786,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           )}
                         </div>
                         <div className="text-[13px] font-bold text-black leading-none flex-shrink-0">
-                          {job.jobId || job.jobNumber || '0000'}
+                          {job.jobNumber || '0000'}
                         </div>
                       </div>
 
