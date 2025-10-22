@@ -949,7 +949,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   <InvoiceTemplate
                     invoice={{
                       id: job.id,
-                      invoiceNumber: `INV-Preview`,
+                      invoiceNumber: createdInvoice?.invoiceNumber || `Preview`,
                       customerId: customer.id,
                       jobId: job.id,
                       amount: subtotal.toString(),
