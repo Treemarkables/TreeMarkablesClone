@@ -51,6 +51,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const [showSmsComposer, setShowSmsComposer] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   
   // Immediate lock to prevent concurrent button clicks (doesn't rely on state updates)
   const isCreatingRef = useRef(false);
@@ -232,6 +233,23 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     setHasInitialized(true);
   }, [isOpen, hasInitialized, loadingProposals, loadingQuotes, loadingInvoices, proposalsResponse, quotesResponse, invoicesResponse, job, customer]);
 
+  // Reset when job changes (switching between different jobs)
+  useEffect(() => {
+    if (isOpen && job?.id && job.id !== currentJobId) {
+      console.log('🔄 Job changed from', currentJobId, 'to', job.id, '- resetting invoice state');
+      setCreatedInvoice(null);
+      setExistingInvoiceId(null);
+      setIsCreating(false);
+      setLineItems([]);
+      setEditableNotes('');
+      setEditableDescription('');
+      setEditableAddress('');
+      setEditableEmail('');
+      setHasInitialized(false);
+      setCurrentJobId(job.id);
+    }
+  }, [isOpen, job?.id, currentJobId]);
+
   // Reset when modal closes
   useEffect(() => {
     if (!isOpen) {
@@ -244,6 +262,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       setEditableAddress('');
       setEditableEmail('');
       setHasInitialized(false);
+      setCurrentJobId(null);
     }
   }, [isOpen]);
 
