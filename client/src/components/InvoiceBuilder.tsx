@@ -690,6 +690,49 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     }
   };
 
+  const handleDeleteInvoice = async () => {
+    if (!existingInvoiceId || !createdInvoice) return;
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to delete Invoice #${createdInvoice.invoiceNumber}? This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      const response = await apiRequest(`/api/invoices/${existingInvoiceId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.success) {
+        toast({
+          title: "Invoice Deleted",
+          description: `Invoice #${createdInvoice.invoiceNumber} has been deleted successfully.`
+        });
+        
+        // Invalidate queries to refresh data
+        queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
+        
+        handleClose();
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to delete invoice.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete invoice. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleClose = () => {
     setCreatedInvoice(null);
     setIsCreating(false);
@@ -933,15 +976,29 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClose}
-                  data-testid="button-cancel"
-                >
-                  Cancel
-                </Button>
+              <div className="flex gap-3 justify-between">
+                {/* Delete button - only show when editing existing invoice */}
+                {existingInvoiceId && createdInvoice && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={handleDeleteInvoice}
+                    data-testid="button-delete-invoice"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Invoice
+                  </Button>
+                )}
+                
+                <div className="flex gap-3 ml-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleClose}
+                    data-testid="button-cancel"
+                  >
+                    Cancel
+                  </Button>
                 <Button
                   type="button"
                   onClick={handleSaveInvoice}
@@ -999,6 +1056,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     </>
                   )}
                 </Button>
+                </div>
               </div>
 
               {/* Preview Section */}
