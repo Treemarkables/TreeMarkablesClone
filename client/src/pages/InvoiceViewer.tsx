@@ -113,7 +113,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   return (
     <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full">
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-4 py-4 sm:py-4 w-full">
         <div className="max-w-4xl mx-auto w-full">
           <div className="flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between">
             <div className="flex items-center gap-3">
@@ -148,9 +148,9 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
       </div>
 
       {/* Invoice Content */}
-      <div className="max-w-4xl mx-auto py-2 sm:py-3 px-2 sm:px-4 w-full">
+      <div className="max-w-4xl mx-auto py-4 sm:py-3 px-4 sm:px-4 w-full">
         <Card className="bg-white shadow-sm w-full">
-          <CardContent className="p-3 sm:p-4">
+          <CardContent className="p-4 sm:p-4">
             {/* Company Header */}
             <div className="text-center mb-3">
               <div className="flex justify-center mb-2">
