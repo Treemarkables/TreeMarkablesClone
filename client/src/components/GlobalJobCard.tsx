@@ -180,6 +180,12 @@ export function GlobalJobCard({
   const [createdJobId, setCreatedJobId] = useState<string | null>(null);
   const [internalMode, setInternalMode] = useState<'create' | 'edit'>(mode);
 
+  // CRITICAL: Sync internalMode with mode prop when it changes
+  // This ensures that when parent component updates mode='edit', we respect it
+  useEffect(() => {
+    setInternalMode(mode);
+  }, [mode]);
+
   // Auto-save state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
