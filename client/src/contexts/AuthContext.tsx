@@ -135,24 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [meResponse, currentUser, initialAuthCheckComplete]);
 
-  // Dev mode: auto-authenticate as admin without login
-  const isDevelopment = import.meta.env.DEV;
-  const isAuthenticated = isDevelopment ? true : !!currentUser;
-  const userRole = isDevelopment && !currentUser ? 'admin' : (currentUser?.role as 'admin' | 'crew' | null);
+  const isAuthenticated = !!currentUser;
+  const userRole = currentUser?.role as 'admin' | 'crew' | null;
   
   const isAdmin = userRole === 'admin';
   const isCrew = userRole === 'crew';
-  
-  // Debug RBAC
-  if (isAuthenticated) {
-    console.log('RBAC Debug:', { 
-      currentUser: currentUser?.firstName + ' ' + currentUser?.lastName, 
-      userRole, 
-      isAdmin, 
-      isCrew, 
-      isAuthenticated 
-    });
-  }
   
   return (
     <AuthContext.Provider
@@ -162,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isCrew,
         isAuthenticated,
-        isLoading: isDevelopment ? false : (!initialAuthCheckComplete || authQueryLoading),
+        isLoading: !initialAuthCheckComplete || authQueryLoading,
         login,
         loginPending: loginMutation.isPending,
         logout,
