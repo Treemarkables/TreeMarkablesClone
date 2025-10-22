@@ -4596,14 +4596,22 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           </tr>
         `;
         
+        // Get logo URL
+        const baseUrl = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000';
+        const logoUrl = `${baseUrl}/treemarkables-logo.webp`;
+        
         invoiceHtml = `
         <div style="max-width: 800px; margin: 30px auto; padding: 40px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-          <!-- Header -->
-          <div style="border-bottom: 3px solid #000; padding-bottom: 20px; margin-bottom: 30px;">
-            <h1 style="color: #000; margin: 0; font-size: 32px; font-weight: 700;">Invoice #${invoiceDetails.invoiceNumber || ''}</h1>
-            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
-              ${customer?.name || 'Customer'} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}
-            </p>
+          <!-- Logo and Header -->
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 3px solid #000; padding-bottom: 20px; margin-bottom: 30px;">
+            <img src="${logoUrl}" alt="Treemarkables" style="height: 80px; width: auto;" />
+            <div style="text-align: right;">
+              <h1 style="color: #000; margin: 0; font-size: 32px; font-weight: 700;">Invoice #${invoiceDetails.invoiceNumber || ''}</h1>
+              <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
+                ${customer?.name || 'Customer'} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}
+              </p>
+              ${job?.jobNumber ? `<p style="color: #6b7280; margin: 5px 0 0 0; font-size: 14px;">Job #${job.jobNumber}</p>` : ''}
+            </div>
           </div>
           
           <!-- Bill To Section -->
@@ -4620,13 +4628,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           <div style="margin-bottom: 30px;">
             <h2 style="color: #000; margin: 0 0 15px 0; font-size: 18px; font-weight: 600;">Description</h2>
             <div style="background: #ffffff; padding: 0;">
-              ${lineItems && lineItems.length > 0 ? lineItems.map((item: any) => `
+              ${job?.description || invoiceDetails.notes || invoiceData?.description ? `
+                <p style="margin: 0; color: #6b7280; font-size: 14px; white-space: pre-wrap;">${job?.description || invoiceDetails.notes || invoiceData?.description || ''}</p>
+              ` : lineItems && lineItems.length > 0 ? lineItems.map((item: any) => `
                 <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">
                   <p style="margin: 0; color: #000; font-size: 14px;">${item.description || ''}</p>
                 </div>
-              `).join('') : invoiceDetails.notes || invoiceData?.description ? `
-                <p style="margin: 0; color: #6b7280; font-size: 14px; white-space: pre-wrap;">${invoiceDetails.notes || invoiceData?.description || ''}</p>
-              ` : ''}
+              `).join('') : ''}
             </div>
           </div>
           
