@@ -226,7 +226,7 @@ export function GlobalJobCard({
   });
 
   // Fetch specific job by ID when editing (replaces fetching all 1000 jobs!)
-  const { data: specificJobData, isLoading: isLoadingSpecificJob } = useQuery({
+  const { data: specificJobData, isLoading: isLoadingSpecificJob, isPending: isPendingSpecificJob } = useQuery({
     queryKey: ['/api/jobs', jobId || createdJobId],
     enabled: isOpen && mode === 'edit' && !!(jobId || createdJobId) && !job,
   });
@@ -1698,8 +1698,8 @@ export function GlobalJobCard({
   const effectiveJobId = createdJobId || jobId;
 
   // Loading check - show spinner while fetching specific job data in edit mode
-  // CRITICAL: Only check isLoadingSpecificJob - don't check editingJob or it creates infinite loop
-  const jobLoading = mode === 'edit' && !!effectiveJobId && !job && isLoadingSpecificJob;
+  // CRITICAL: Check isPending OR if specificJob is null - handles race condition where query resolves before useMemo re-runs
+  const jobLoading = mode === 'edit' && !!effectiveJobId && !job && (isPendingSpecificJob || !specificJob);
   
   // Get current status - use editingJob.status directly to avoid showing stale form data during loading
   // In create mode, use form.watch since there's no editingJob yet
