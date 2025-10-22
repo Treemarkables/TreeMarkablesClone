@@ -4054,9 +4054,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Get default invoice template
       const defaultTemplate = await storage.getDefaultTemplate('invoice');
 
-      // Generate invoice number
-      const today = new Date();
-      const invoiceNumber = `INV-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${Date.now().toString().slice(-6)}`;
+      // Generate invoice number using job number
+      const invoiceNumber = job?.jobNumber ? String(job.jobNumber) : `INV-${Date.now().toString().slice(-6)}`;
 
       // Calculate due date - use custom date if provided, otherwise default to 30 days
       const issueDate = new Date();
@@ -4617,7 +4616,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
                 ${customer?.name || 'Customer'} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}
               </p>
-              ${job?.jobNumber ? `<p style="color: #6b7280; margin: 5px 0 0 0; font-size: 14px;">Job #${job.jobNumber}</p>` : ''}
             </div>
           </div>
           
