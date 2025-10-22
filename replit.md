@@ -1,57 +1,33 @@
 # Tree Removal Service Application
 
 ## Overview
-This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It provides advanced scheduling, job management, customer relationship tools, and operational analytics to streamline operations and enhance business efficiency for tree removal services. Key capabilities include a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation. The system aims to support business growth and improve service delivery.
+This application is a comprehensive business management platform for Treemarkables, a New Zealand-based arborist company. It provides advanced scheduling, job management, customer relationship tools, and operational analytics to streamline operations and enhance business efficiency for tree removal services. The system aims to support business growth and improve service delivery through features like a ServiceM8-style dispatch board, crew and equipment management, invoice and quote generation, photo documentation, safety reporting, route optimization, performance analytics, and intelligent workflow automation.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes
-### October 22, 2025
-- **Invoice Number Changed to Job Number - IMPLEMENTED**: Invoice numbers now use the job number instead of timestamp-based numbers. Invoices for Job #3373 will show "Invoice #3373" instead of "Invoice #INV-2025-10-151306". Changed invoice generation logic in server/routes.ts to use `job.jobNumber` as the invoice number. Removed redundant "Job #" display from both email HTML and InvoiceTemplate.tsx preview. Fixed logo transparency in emails by switching to PNG format and added `white-space: nowrap` to prevent invoice number wrapping. Invoice header now displays: Invoice #3373, customer name - date.
-- **Invoice Email Embedded Display - IMPLEMENTED**: Changed invoice emails to send full invoice HTML directly in email body instead of sending view links. Removed "View & Pay Invoice Online" button from invoice HTML template in server/routes.ts. Updated email template in database to remove {invoiceLink} placeholder and added message "Your invoice is shown below. You can make payment via bank transfer using the payment details provided." Enhanced invoice display with: Treemarkables logo (hosted via REPLIT_DEV_DOMAIN), job number reference (e.g., "Job #3373"), full job description (not just line item text), Bill To section, totals (Subtotal excl GST, GST 15%, Total Amount), payment information (ANZ bank details), and business footer. Customers now receive complete, professional invoice immediately when opening email - no links to click.
-
-### October 21, 2025
-- **Invoice Display Unification - COMPLETED**: Unified all four invoice displays (email body text, email HTML template, customer portal dialog, InvoiceTemplate.tsx preview) to show identical pricing. Fixed critical business address error: changed from incorrectly hardcoded "26 Huxley Road, Gisborne 4010" (a customer's quote address) to correct "213 Stanley Road, Gisborne". All views now share consistent layout and calculations: Header with invoice number → Bill To section (customer name, address, email) → Description section (line items or notes) → Totals section (Subtotal excl GST, GST 15%, Total Amount) → Business footer with address/contact. Standardized GST calculation across all views: invoice.amount treated as ex-GST subtotal, GST = subtotal × 0.15, Total = subtotal + GST. Fixed EmailComposerModal.tsx template population to calculate total with GST instead of showing raw ex-GST amount. Business footer displays "Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz".
-- **Vehicle Pre-Start Inspection Templates - CREATED**: Created comprehensive pre-start inspection checklists for all three company vehicles. Bucket Truck template has 39 items (includes boom/hydraulic/outrigger checks), Big Blue and 4x4 Truck templates each have 35 items. All templates organized by category: Exterior Checks, Fluid Levels, Engine Bay & Underbody, Cabin Checks, Load Area & Equipment, and Final Safety Checks. Safety-critical items (tyres, brakes, seatbelts, steering, lights, fluids, fire extinguisher, first aid kit, emergency equipment) require mandatory comments when marked "No". Templates ready for daily use via mobile inspection workflow.
-- **Proposal Creation Workflow - IMPROVED**: Fixed duplicate job creation bug when creating proposals. Previously, clicking "Create Proposal" auto-saved the job immediately, causing duplicate jobs when users exited without completing the proposal or clicked multiple times. New workflow: (1) "Create Proposal" button opens ProposalBuilder modal without auto-saving, (2) ProposalBuilder automatically saves parent job when saving proposal if job doesn't exist yet, (3) Uses `onRequestJobSave` callback pattern to request job save from parent component, (4) Prevents duplicate jobs while maintaining seamless user experience. No manual job save required before creating proposals.
-- **Staff Conflict Detection - DISABLED**: Removed scheduling conflict checking and warnings that prevented double-booking staff. System now allows staff to be assigned to multiple overlapping jobs without restrictions. Removed conflict API calls, visual warnings/badges, and validation blocks from scheduling modal.
-- **Scheduling Time Range - RESTRICTED**: Limited job scheduling times to business hours (6 AM to 5 PM) in 30-minute intervals. Previously showed all 24-hour time slots. Updated scheduling modal time selector to display only relevant working hours.
-- **Customer Info Auto-Sync - IMPLEMENTED**: Job cards now automatically sync customer information to customer records. When you update phone, email, address, or name in a job card and save, those changes now update the customer record immediately. Previously, updates only happened if the customer field was empty. Job card is now the "source of truth" for customer contact info. Applies to all job creation and updates (POST/PUT/PATCH).
-- **Time Tracking Error - FIXED**: Fixed runtime error preventing time tracking modal from opening. Issue was a SelectItem with empty string value in the Rate Type dropdown when no labour rates were available. Resolved by disabling the Select dropdown and showing placeholder message instead of rendering empty-value SelectItem.
-- **Lead Source Updates**: Split "Friend and saw you working" into two separate lead sources: "Friend" and "Saw you working". Added "Council" as a new lead source option. Updated across schema, analytics dashboards, and job creation forms.
-- **Xero Job Status Workflow - FIXED**: Jobs now automatically transition from "work_order" to "completed" status when successfully sent to Xero. Previously, jobs remained in "work_order" status even after invoicing, requiring manual status updates. Updated `/api/xero/send-invoice` route to set `status: 'completed'` and `completedDate` upon successful Xero invoice creation. Also fixed Job #3360 which was stuck in "work_order" status despite being sent to Xero on October 20th.
-- **Dispatch Board Loading Issue - FIXED**: Resolved issue where dispatch board showed empty job list on first click, requiring exit and re-enter to load. Root cause was missing loading gate in non-compact mode - component rendered before jobs data finished loading. Added loading and error state checks (similar to compact mode) that display skeleton loader until jobsData is available, preventing empty list render and improving error handling.
-- **Description Textarea Auto-Expansion - FIXED**: Implemented auto-expanding description textarea in GlobalJobCard. The textarea now dynamically adjusts its height to show all content without internal scrolling, improving UX on mobile devices. Uses component-level ref (`descriptionTextareaRef`) and useEffect watching description value, with requestAnimationFrame for smooth height adjustment. Applied overflow-hidden and resize-none to prevent scrolling and manual resizing.
-
-### October 20, 2025
-- **Staff Schedule Timezone Bug - FIXED**: Resolved issue where staff schedule showed "0 jobs scheduled" despite having valid assignments. Root cause was timezone handling: database stores timestamps WITHOUT timezone (in NZ local time) but API returns them with 'Z' suffix. Fixed date comparison logic to extract just the date portion ("2025-10-20") from both assignment timestamps and selected date, avoiding UTC conversion that shifted dates by 13 hours during NZDT. Updated to query actual staff assignments from `staff_assignments` table via `/api/staff-assignments` endpoint (aligned with dispatch board).
-- **Job Display Limit Increased - FIXED**: Increased job display limits to accommodate full job database (~3,000 jobs). Job Dashboard limit increased from 1,000 to 10,000 jobs, and Dispatch Board limit increased from 50 to 10,000 jobs. This ensures all jobs are visible in both views.
-- **Create New Job Address Pre-Population Bug - FIXED**: Resolved issue where "Create New Job" form pre-filled address field with data from previously viewed job. Root cause was auto-populate effect running with stale customer data. Implemented `hasUserSelectedCustomer` flag that tracks explicit user selections versus residual state. Flag resets to false on form reset and sets to true only when user selects customer from dropdown, preventing unintended address population while preserving intentional auto-fill functionality.
-- **Job Card Loading Race Condition - FIXED**: Resolved critical bug where job cards showed blank/incorrect data on first click. Root cause was form rendering before async job data loaded, displaying stale values from previous job. Implemented three-part fix: (1) **Loading Gate** - Updated loading check to gate on both `isLoadingSpecificJob` AND `!editingJob` to prevent form rendering until data exists, (2) **Form Key** - Added `key={editingJob?.id || internalMode}` to Form component to force remount and fresh state on each job selection, (3) **shouldUnregister** - Added `shouldUnregister: true` to useForm config to clear all stale values on unmount. Jobs now load correctly on first click without stale data. E2E tested: verified no blank fields or data carryover when switching between jobs.
-
 ## System Architecture
 ### Core Design Principles
-- **UI/UX**: Mobile-first responsive design with a professional orange/blue theme, optimized for mobile viewing without horizontal scrolling. Split-screen layout for dispatch board on larger screens.
-- **Security**: Role-Based Access Control (RBAC) and secure password authentication with bcrypt hashing and server-controlled session management.
-- **Performance**: Optimized for fast loading on mobile through API parallelization, image lazy loading, and thumbnail generation.
-- **Workflow Automation**: Intelligent process automation, event-driven architecture, and a comprehensive job diary system with a complete notification system.
+- **UI/UX**: Mobile-first responsive design with a professional orange/blue theme, optimized for mobile viewing. Features split-screen for larger displays.
+- **Security**: Role-Based Access Control (RBAC), bcrypt for password hashing, and server-controlled session management.
+- **Performance**: Optimized for mobile with API parallelization, image lazy loading, and thumbnail generation.
+- **Workflow Automation**: Intelligent process automation, event-driven architecture, and a comprehensive job diary with a notification system.
 
 ### Frontend
 - **Framework**: React with TypeScript (Vite)
 - **Routing**: Wouter
 - **UI Components**: Shadcn/ui (Radix UI primitives)
 - **Styling**: Tailwind CSS
-- **State Management**: TanStack Query with cross-device auto-sync, background polling, and 5-second cache window.
+- **State Management**: TanStack Query (cross-device auto-sync, background polling, 5-second cache)
 - **Form Handling**: React Hook Form with Zod validation
-- **PWA Support**: Full Progressive Web App features, including mobile-optimized components and safe-area padding for iOS.
+- **PWA Support**: Full Progressive Web App features, including mobile-optimized components.
 
 ### Backend
 - **Runtime**: Node.js with Express
 - **Language**: TypeScript
 - **API**: RESTful API (`/api`, `/api/mobile`)
 - **Authentication**: Session-based (web) and API key with SHA-256 hashing (mobile).
-- **File Storage**: Static file serving for audio recordings, with thumbnail generation for images.
+- **File Storage**: Static file serving, with thumbnail generation for images.
 
 ### Data Layer
 - **ORM**: Drizzle ORM for PostgreSQL
@@ -61,13 +37,13 @@ Preferred communication style: Simple, everyday language.
 - **Transactions**: Support for atomic multi-step operations.
 
 ### Key Features
-- **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board, ServiceM8-style Job Creation with dynamic checklists, duplicate job prevention, man-hours tracking for job estimation accuracy, server-side deep search across all jobs and customer data.
+- **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board and Job Creation with dynamic checklists, duplicate job prevention, man-hours tracking, server-side deep search.
 - **Customer & Sales**: Lead Management (with analytics), Customer Management, Quote Management (including speech-to-quote and Twilio voice auto-quote generation).
-- **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation, Timezone utility for correct scheduling display.
-- **Reporting & Analytics**: Business Analytics (including lead source tracking and job estimation accuracy metrics), Invoice Management, Safety Reporting.
-- **Marketing Automation**: Marketing Planner for Facebook/Instagram ad campaigns, automated review posting, campaign scheduling, and performance analytics dashboard.
-- **Push Notifications**: Firebase Cloud Messaging infrastructure for real-time notifications (job assignments, schedule changes, new leads, invoice payments, quote acceptances), with user preference management.
-- **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories, etc.
+- **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation, Timezone utility.
+- **Reporting & Analytics**: Business Analytics (lead source tracking, job estimation accuracy), Invoice Management, Safety Reporting.
+- **Marketing Automation**: Marketing Planner for social media campaigns, automated review posting, campaign scheduling, performance analytics.
+- **Push Notifications**: Firebase Cloud Messaging for real-time alerts (job assignments, schedule changes, new leads, invoice payments, quote acceptances), with user preference management.
+- **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories.
 
 ## External Dependencies
 - **Database & Validation**: `drizzle-orm`, `drizzle-kit`, `@neondatabase/serverless`, `zod`
