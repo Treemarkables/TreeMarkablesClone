@@ -4596,8 +4596,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         `;
         
         // Get logo URL - use PNG for better email client compatibility
-        const baseUrl = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000';
+        // Use REPL_SLUG for production, REPLIT_DEV_DOMAIN for dev
+        const replSlug = process.env.REPL_SLUG;
+        const devDomain = process.env.REPLIT_DEV_DOMAIN;
+        const baseUrl = replSlug 
+          ? `https://${replSlug}.replit.app` 
+          : devDomain 
+            ? `https://${devDomain}` 
+            : 'http://localhost:5000';
         const logoUrl = `${baseUrl}/treemarkables-logo.png`;
+        console.log('📧 Email logo URL:', logoUrl);
         
         console.log('🎨 Invoice HTML generation context:', {
           hasJob: !!job,
