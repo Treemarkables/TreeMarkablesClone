@@ -59,6 +59,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const [editableAddress, setEditableAddress] = useState('');
   const [editableEmail, setEditableEmail] = useState('');
   const [editableDescription, setEditableDescription] = useState('');
+  const [editableNotes, setEditableNotes] = useState('');
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
 
   // Fetch proposals for this job
@@ -130,6 +131,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         }));
         setLineItems(convertedItems);
       }
+      
+      // Populate notes and description from existing invoice (always set, even if empty)
+      setEditableNotes(existingInvoice.notes ?? '');
+      setEditableDescription(existingInvoice.description ?? '');
     } else {
       console.log('⚠️ No existing invoices found for this job');
     }
@@ -209,13 +214,18 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
     setLineItems(extractedItems);
 
-    // Set description from proposal/quote
-    if (proposal) {
-      setEditableDescription(proposal.introduction || job.description || '');
-    } else if (quote) {
-      setEditableDescription(quote.description || job.description || '');
-    } else {
-      setEditableDescription(job.description || '');
+    // Set description from proposal/quote (only if no existing invoice)
+    if (!existingInvoices.length) {
+      if (proposal) {
+        setEditableDescription(proposal.introduction || job.description || '');
+      } else if (quote) {
+        setEditableDescription(quote.description || job.description || '');
+      } else {
+        setEditableDescription(job.description || '');
+      }
+      
+      // Initialize notes for new invoices (use job notes as default)
+      setEditableNotes(job.notes || '');
     }
 
     // Mark as initialized to prevent overwriting user edits
@@ -229,6 +239,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       setExistingInvoiceId(null);
       setIsCreating(false);
       setLineItems([]);
+      setEditableNotes('');
+      setEditableDescription('');
+      setEditableAddress('');
+      setEditableEmail('');
       setHasInitialized(false);
     }
   }, [isOpen]);
@@ -414,7 +428,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         customData: {
           address: editableAddress,
           dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          notes: job.notes || '',
+          notes: editableNotes,
           description: editableDescription,
           lineItems: formattedLineItems
         }
@@ -480,6 +494,96 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     }
   };
 
+  // Update existing invoice
+  const updateInvoice = async () => {
+    if (!existingInvoiceId) {
+      console.error('❌ No existing invoice ID to update');
+      return null;
+    }
+
+    // Validate
+    if (!editableAddress.trim()) {
+      toast({
+        title: "Address Required",
+        description: "Please enter a service address for the invoice.",
+        variant: "destructive"
+      });
+      return null;
+    }
+
+    if (lineItems.length === 0 || lineItems.every(item => !item.description.trim())) {
+      toast({
+        title: "Line Items Required",
+        description: "Please add at least one line item with a description.",
+        variant: "destructive"
+      });
+      return null;
+    }
+
+    setIsCreating(true);
+    
+    try {
+      console.log('🔄 Updating invoice:', existingInvoiceId);
+      
+      // Format line items for database (using rate/amount instead of unitPrice/total)
+      const formattedLineItems = lineItems.map(item => ({
+        description: item.description,
+        quantity: item.quantity.toString(),
+        rate: item.unitPrice,
+        amount: item.total
+      }));
+
+      // Calculate new amount from line items
+      const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+
+      const updateData = {
+        address: editableAddress,
+        items: formattedLineItems,
+        amount: subtotal.toString(),
+        description: editableDescription,
+        notes: editableNotes
+      };
+
+      console.log('📤 Sending update with data:', updateData);
+
+      const res = await apiRequest('PATCH', `/api/invoices/${existingInvoiceId}`, updateData);
+      const response = await res.json();
+
+      if (response.success) {
+        console.log('✅ Invoice updated successfully');
+        
+        // Invalidate queries to refresh data
+        queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
+        
+        toast({
+          title: "Invoice Updated",
+          description: `Invoice updated successfully with new amount: $${(subtotal * 1.15).toFixed(2)} (inc GST)`
+        });
+
+        return response.data;
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to update invoice.",
+          variant: "destructive"
+        });
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error updating invoice:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update invoice. Please try again.",
+        variant: "destructive"
+      });
+      return null;
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   // Save invoice only
   const handleSaveInvoice = async (e?: React.MouseEvent) => {
     console.log('🎯 SAVE INVOICE CLICKED');
@@ -495,12 +599,17 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     // Prevent execution if already creating
     if (isCreating) return;
     
-    // If invoice already created, just close
-    if (createdInvoice) {
-      handleClose();
+    // If invoice already exists, update it instead of creating new one
+    if (existingInvoiceId) {
+      console.log('📝 Existing invoice detected, updating instead of creating new');
+      const updated = await updateInvoice();
+      if (updated) {
+        handleClose();
+      }
       return;
     }
     
+    // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
       handleClose();
@@ -522,13 +631,20 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     // Prevent execution if already creating
     if (isCreating) return;
     
-    // If invoice already created, just open email composer
-    if (createdInvoice) {
-      console.log('📧 Invoice already exists, opening email composer');
-      setShowEmailComposer(true);
+    // If invoice already exists, update it first then open email composer
+    if (existingInvoiceId) {
+      console.log('📝 Existing invoice detected, updating before sending');
+      const updated = await updateInvoice();
+      if (updated) {
+        console.log('📧 Invoice updated successfully, opening email composer');
+        setShowEmailComposer(true);
+      } else {
+        console.log('❌ Failed to update invoice, not opening composer');
+      }
       return;
     }
     
+    // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
       console.log('📧 Invoice created successfully, opening email composer');
@@ -553,12 +669,17 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     // Prevent execution if already creating
     if (isCreating) return;
     
-    // If invoice already created, just open SMS composer
-    if (createdInvoice) {
-      setShowSmsComposer(true);
+    // If invoice already exists, update it first then open SMS composer
+    if (existingInvoiceId) {
+      console.log('📝 Existing invoice detected, updating before sending SMS');
+      const updated = await updateInvoice();
+      if (updated) {
+        setShowSmsComposer(true);
+      }
       return;
     }
     
+    // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
       setShowSmsComposer(true);
