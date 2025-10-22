@@ -8,6 +8,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 ### October 22, 2025
+- **Invoice Job Number Display - UNIFIED**: Updated both invoice email HTML (server/routes.ts) and invoice preview component (InvoiceTemplate.tsx) to display job number (e.g., "Job #3373") below invoice header alongside customer name and date. Frontend preview now matches email display exactly. Added console logging to track job data loading for debugging. Invoice header now shows: Invoice #[number], customer name - date, Job #[number].
 - **Invoice Email Embedded Display - IMPLEMENTED**: Changed invoice emails to send full invoice HTML directly in email body instead of sending view links. Removed "View & Pay Invoice Online" button from invoice HTML template in server/routes.ts. Updated email template in database to remove {invoiceLink} placeholder and added message "Your invoice is shown below. You can make payment via bank transfer using the payment details provided." Enhanced invoice display with: Treemarkables logo (hosted via REPLIT_DEV_DOMAIN), job number reference (e.g., "Job #3373"), full job description (not just line item text), Bill To section, totals (Subtotal excl GST, GST 15%, Total Amount), payment information (ANZ bank details), and business footer. Customers now receive complete, professional invoice immediately when opening email - no links to click.
 
 ### October 21, 2025

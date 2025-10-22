@@ -46,6 +46,7 @@ interface InvoiceTemplateProps {
   className?: string;
   showActions?: boolean;
   jobAddress?: string;
+  jobNumber?: number;
   onEmail?: () => void;
   onSms?: () => void;
   onDownload?: () => void;
@@ -63,6 +64,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   className = '',
   showActions = false,
   jobAddress,
+  jobNumber,
   onEmail,
   onSms,
   onDownload,
@@ -174,6 +176,11 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                 <p className="text-sm text-gray-600 mt-2">
                   {customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
                 </p>
+                {jobNumber && (
+                  <p className="text-sm text-gray-600 mt-1" data-testid="text-job-number">
+                    Job #{jobNumber}
+                  </p>
+                )}
               </div>
             </div>
           </div>

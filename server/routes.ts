@@ -4600,6 +4600,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         const baseUrl = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000';
         const logoUrl = `${baseUrl}/treemarkables-logo.webp`;
         
+        console.log('🎨 Invoice HTML generation context:', {
+          hasJob: !!job,
+          jobNumber: job?.jobNumber,
+          hasCustomer: !!customer,
+          customerName: customer?.name
+        });
+        
         invoiceHtml = `
         <div style="max-width: 800px; margin: 30px auto; padding: 40px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
           <!-- Logo and Header -->

@@ -972,8 +972,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                       job
                     }}
                     customer={customer}
-                    job={job}
                     jobAddress={editableAddress}
+                    jobNumber={job.jobNumber}
                     template={invoiceTemplate}
                     lineItems={lineItems}
                     description={editableDescription}
