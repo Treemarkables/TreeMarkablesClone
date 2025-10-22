@@ -4596,9 +4596,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           </tr>
         `;
         
-        // Get logo URL
+        // Get logo URL - use PNG for better email client compatibility
         const baseUrl = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000';
-        const logoUrl = `${baseUrl}/treemarkables-logo.webp`;
+        const logoUrl = `${baseUrl}/treemarkables-logo.png`;
         
         console.log('🎨 Invoice HTML generation context:', {
           hasJob: !!job,
@@ -4611,9 +4611,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         <div style="max-width: 800px; margin: 30px auto; padding: 40px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
           <!-- Logo and Header -->
           <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 3px solid #000; padding-bottom: 20px; margin-bottom: 30px;">
-            <img src="${logoUrl}" alt="Treemarkables" style="height: 80px; width: auto;" />
-            <div style="text-align: right;">
-              <h1 style="color: #000; margin: 0; font-size: 32px; font-weight: 700;">Invoice #${invoiceDetails.invoiceNumber || ''}</h1>
+            <img src="${logoUrl}" alt="Treemarkables" style="height: 80px; width: auto; background: transparent;" />
+            <div style="text-align: right; max-width: 350px;">
+              <h1 style="color: #000; margin: 0; font-size: 32px; font-weight: 700; white-space: nowrap;">Invoice #${invoiceDetails.invoiceNumber || ''}</h1>
               <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
                 ${customer?.name || 'Customer'} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}
               </p>
