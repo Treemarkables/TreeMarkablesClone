@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Employee } from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -108,8 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  // Track last successful login to prevent race condition logout
+  const lastLoginTimeRef = useRef<number>(0);
+
   const login = async (credentials: { employeeId?: string; email?: string; password?: string }) => {
-    return loginMutation.mutateAsync(credentials);
+    const result = await loginMutation.mutateAsync(credentials);
+    lastLoginTimeRef.current = Date.now();
+    return result;
   };
 
   const logout = () => {
@@ -132,6 +137,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // If server returns not authenticated
     if (meResponse?.success === false) {
       if (currentUser) {
+        // CRITICAL FIX: Don't clear user state if they just logged in (within last 3 seconds)
+        // This prevents race condition where stale 401 response arrives after successful login
+        const timeSinceLogin = Date.now() - lastLoginTimeRef.current;
+        if (timeSinceLogin < 3000) {
+          console.log('🛡️ Ignoring 401 response - user just logged in', timeSinceLogin + 'ms ago');
+          return;
+        }
+        
         console.warn('⚠️ Authentication mismatch detected - clearing stale user state');
         setCurrentUserState(null);
         queryClient.clear();
