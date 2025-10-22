@@ -49,9 +49,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [showSmsComposer, setShowSmsComposer] = useState(false);
-  const [hasInitialized, setHasInitialized] = useState(false);
+  const [initializedJobId, setInitializedJobId] = useState<string | null>(null);
   const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   
   // Immediate lock to prevent concurrent button clicks (doesn't rely on state updates)
   const isCreatingRef = useRef(false);
@@ -97,13 +96,18 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   });
 
 
-  // Initialize fields when modal opens or data loads (only once to prevent overwriting user edits)
+  // Initialize fields when modal opens or when job changes
   useEffect(() => {
-    if (!isOpen || hasInitialized) return;
+    if (!isOpen) return;
+
+    // Check if we've already initialized this specific job
+    if (initializedJobId === job.id) return;
 
     // Only initialize if we have the data or if data loading is complete
     const dataLoaded = !loadingProposals && !loadingQuotes && !loadingInvoices;
     if (!dataLoaded) return;
+
+    console.log('🔄 Initializing invoice for job:', job.id, '(previous:', initializedJobId, ')');
 
     // Check if an invoice already exists for this job
     console.log('🔍 InvoiceBuilder initialization - invoicesResponse:', invoicesResponse);
@@ -229,26 +233,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       setEditableNotes(job.notes || '');
     }
 
-    // Mark as initialized to prevent overwriting user edits
-    setHasInitialized(true);
-  }, [isOpen, hasInitialized, loadingProposals, loadingQuotes, loadingInvoices, proposalsResponse, quotesResponse, invoicesResponse, job, customer]);
-
-  // Reset when job changes (switching between different jobs)
-  useEffect(() => {
-    if (isOpen && job?.id && job.id !== currentJobId) {
-      console.log('🔄 Job changed from', currentJobId, 'to', job.id, '- resetting invoice state');
-      setCreatedInvoice(null);
-      setExistingInvoiceId(null);
-      setIsCreating(false);
-      setLineItems([]);
-      setEditableNotes('');
-      setEditableDescription('');
-      setEditableAddress('');
-      setEditableEmail('');
-      setHasInitialized(false);
-      setCurrentJobId(job.id);
-    }
-  }, [isOpen, job?.id, currentJobId]);
+    // Mark this job as initialized to prevent overwriting user edits
+    setInitializedJobId(job.id);
+  }, [isOpen, initializedJobId, loadingProposals, loadingQuotes, loadingInvoices, proposalsResponse, quotesResponse, invoicesResponse, job, customer]);
 
   // Reset when modal closes
   useEffect(() => {
@@ -261,8 +248,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       setEditableDescription('');
       setEditableAddress('');
       setEditableEmail('');
-      setHasInitialized(false);
-      setCurrentJobId(null);
+      setInitializedJobId(null);
     }
   }, [isOpen]);
 
