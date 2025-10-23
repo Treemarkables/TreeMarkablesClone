@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import heroImage from "@assets/tree_pruning_hero.jpg";
-import philosophyBg from "@assets/stock_images/large_healthy_green__6cf48e07.jpg";
+import philosophyVideo from "@assets/tree_philosophy_video.mov";
 
 export default function TreeRemoval() {
   // Add Google tag event script for form submission tracking
@@ -120,16 +120,21 @@ export default function TreeRemoval() {
       </div>
 
       {/* Tree Care Philosophy */}
-      <section 
-        className="relative py-8 md:py-16 bg-background"
-        style={{
-          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url(${philosophyBg})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundAttachment: 'fixed'
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="relative py-8 md:py-16 overflow-hidden">
+        {/* Video Background */}
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        >
+          <source src={philosophyVideo} type="video/mp4" />
+        </video>
+        {/* Dark Overlay */}
+        <div className="absolute inset-0 bg-black/60"></div>
+        
+        <div className="relative max-w-6xl mx-auto px-6 z-10">
           {/* Main Philosophy */}
           <div className="text-center mb-16">
             <div className="flex justify-center mb-6">
