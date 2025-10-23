@@ -791,9 +791,9 @@ export default function ConversationDetail() {
             </Button>
             <Button
               onClick={() => {
-                toast({ title: 'Create Job', description: 'Creating job - navigating to full form...' });
+                toast({ title: 'Navigate to Dispatch', description: 'Opening dispatch board to create job...' });
                 setShowCreateJob(false);
-                setLocation('/jobs/new');
+                setLocation('/dispatch');
               }}
               data-testid="button-submit-job"
             >
