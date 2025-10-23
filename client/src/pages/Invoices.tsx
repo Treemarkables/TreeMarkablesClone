@@ -216,9 +216,9 @@ export default function Invoices() {
     });
   };
 
-  // Get jobs eligible for invoicing - completed or work_order status
+  // Get jobs eligible for invoicing - only completed status
   const eligibleJobs = jobs.filter(job => 
-    (job.status === 'completed' || job.status === 'work_order') &&
+    job.status === 'completed' &&
     job.customerId && // Must have a customer
     parseFloat(job.totalAmount || '0') > 0 // Must have a total amount
   );
@@ -325,7 +325,7 @@ export default function Invoices() {
                 <FileText className="h-12 w-12 text-muted-foreground mb-4" />
                 <p className="text-lg font-medium" data-testid="text-no-jobs-for-invoicing">No jobs ready for invoicing</p>
                 <p className="text-sm text-muted-foreground" data-testid="text-no-jobs-description">
-                  Jobs with "Work Order" or "Completed" status will appear here
+                  Only jobs with "Completed" status will appear here
                 </p>
               </CardContent>
             </Card>
@@ -339,7 +339,7 @@ export default function Invoices() {
                         Job #{job.jobNumber}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground truncate" data-testid={`text-job-status-${job.id}`}>
-                        {job.status === 'work_order' ? 'Work Order' : 'Completed'}
+                        Completed
                       </p>
                     </div>
                     <Badge variant="secondary" data-testid={`badge-status-${job.id}`}>
