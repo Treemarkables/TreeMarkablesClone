@@ -2845,7 +2845,7 @@ export const jhaAssessments = pgTable("jha_assessments", {
   location: text("location"),
   gpsCoordinates: text("gps_coordinates"),
   activityDescription: text("activity_description"), // "Activity taking place"
-  ppeRequired: text("ppe_required"),
+  ppeRequired: text("ppe_required").array(),
   teamLeader: text("team_leader"),
   teamLeaderId: varchar("team_leader_id").references(() => employees.id),
   
