@@ -15834,7 +15834,7 @@ Transcription: ${transcriptText}`;
       // Validate the incoming payload
       const jhaPayloadSchema = z.object({
         activityDescription: z.string().min(1),
-        ppeRequired: z.string().optional(),
+        ppeRequired: z.array(z.string()).optional(),
         teamLeader: z.string().optional(),
         location: z.string().optional(),
         comments: z.string().optional(),
@@ -15848,15 +15848,12 @@ Transcription: ${transcriptText}`;
           responsiblePerson: z.string().optional(),
           riskControl: z.string().optional()
         })),
-        signatures: z.array(z.object({
-          name: z.string(),
-          signature: z.string()
-        })),
+        sharedSignature: z.string().optional(),
         photos: z.array(z.string()).optional()
       });
 
       const validated = jhaPayloadSchema.parse(req.body);
-      const { selectedHazards, signatures, photos, ...assessmentData } = validated;
+      const { selectedHazards, sharedSignature, photos, ...assessmentData } = validated;
       
       // Calculate overall risk rating safely
       const overallRiskRating = selectedHazards.length > 0 
@@ -15866,7 +15863,7 @@ Transcription: ${transcriptText}`;
       // Create the assessment
       const assessment = await storage.createJhaAssessment({
         activityDescription: assessmentData.activityDescription,
-        ppeRequired: assessmentData.ppeRequired || null,
+        ppeRequired: assessmentData.ppeRequired || [],
         teamLeader: assessmentData.teamLeader || null,
         location: assessmentData.location || null,
         comments: assessmentData.comments || null,
@@ -15918,17 +15915,15 @@ Transcription: ${transcriptText}`;
         }
       }
 
-      // Create signatures
-      if (signatures && signatures.length > 0) {
-        for (const sig of signatures) {
-          await storage.createJhaSignature({
-            assessmentId: assessment.id,
-            workerName: sig.name,
-            workerId: null,
-            signatureDataUrl: sig.signature,
-            signedAt: new Date()
-          });
-        }
+      // Create signature if provided
+      if (sharedSignature) {
+        await storage.createJhaSignature({
+          assessmentId: assessment.id,
+          workerName: assessmentData.teamLeader || 'Team Leader',
+          workerId: null,
+          signatureDataUrl: sharedSignature,
+          signedAt: new Date()
+        });
       }
 
       res.json({ success: true, data: assessment });
