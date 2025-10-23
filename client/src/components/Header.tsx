@@ -174,9 +174,9 @@ export default function Header() {
         {/* Mobile Navigation */}
         <div 
           data-testid="mobile-menu"
-          className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${
+          className={`md:hidden overflow-y-auto transition-all duration-300 ease-in-out ${
             isMenuOpen 
-              ? 'max-h-96 opacity-100' 
+              ? 'max-h-[calc(100vh-5rem)] opacity-100' 
               : 'max-h-0 opacity-0 pointer-events-none'
           }`}
           aria-hidden={!isMenuOpen}
