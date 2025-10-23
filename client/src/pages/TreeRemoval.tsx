@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import heroImage from "@assets/tree_pruning_hero.jpg";
+import philosophyBg from "@assets/stock_images/large_healthy_green__6cf48e07.jpg";
 
 export default function TreeRemoval() {
   // Add Google tag event script for form submission tracking
@@ -119,22 +120,30 @@ export default function TreeRemoval() {
       </div>
 
       {/* Tree Care Philosophy */}
-      <section className="py-8 md:py-16 bg-background">
+      <section 
+        className="relative py-8 md:py-16 bg-background"
+        style={{
+          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url(${philosophyBg})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed'
+        }}
+      >
         <div className="max-w-6xl mx-auto px-6">
           {/* Main Philosophy */}
           <div className="text-center mb-16">
             <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                <Heart className="h-10 w-10 text-green-600 dark:text-green-400" data-testid="icon-philosophy-heart" />
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
+                <Heart className="h-10 w-10 text-green-600" data-testid="icon-philosophy-heart" />
               </div>
             </div>
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
               Our Tree Care Philosophy
             </h2>
-            <div className="max-w-4xl mx-auto space-y-4 text-lg text-muted-foreground">
+            <div className="max-w-4xl mx-auto space-y-4 text-lg text-white/90">
               <p>
                 At Treemarkables, we believe every tree has value. Our first priority is always 
-                <span className="font-semibold text-foreground"> tree preservation through expert pruning and care</span>.
+                <span className="font-semibold text-white"> tree preservation through expert pruning and care</span>.
               </p>
               <p>
                 We only recommend tree removal when it's absolutely necessary for safety or when 
@@ -144,25 +153,25 @@ export default function TreeRemoval() {
           </div>
 
           {/* Preference for Pruning */}
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-8 mb-12">
+          <div className="bg-white/95 backdrop-blur-sm rounded-lg p-8 mb-12">
             <div className="flex items-start space-x-4">
               <div className="flex-shrink-0">
-                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
-                  <Scissors className="h-6 w-6 text-green-600 dark:text-green-400" data-testid="icon-pruning" />
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                  <Scissors className="h-6 w-6 text-green-600" data-testid="icon-pruning" />
                 </div>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-foreground mb-3">
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">
                   Tree Pruning: Our Preferred Solution
                 </h3>
-                <p className="text-muted-foreground leading-relaxed mb-4">
-                  Professional <a href="/tree-pruning" className="text-primary hover:text-primary/80 underline">tree pruning</a> can solve most tree problems while preserving the tree's health and beauty. 
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  Professional <a href="/tree-pruning" className="text-green-600 hover:text-green-700 underline">tree pruning</a> can solve most tree problems while preserving the tree's health and beauty. 
                   We can address safety concerns, improve tree structure, remove diseased branches, and enhance 
                   your property's appearance without removing the entire tree.
                 </p>
                 <div className="flex items-center space-x-2">
-                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  <span className="text-sm font-medium text-foreground">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="text-sm font-medium text-gray-900">
                     Free assessment to explore pruning alternatives before considering removal
                   </span>
                 </div>
@@ -172,10 +181,10 @@ export default function TreeRemoval() {
 
           {/* When Removal is Necessary */}
           <div className="mb-12">
-            <h3 className="text-2xl font-bold text-foreground text-center mb-8">
+            <h3 className="text-2xl font-bold text-white text-center mb-8">
               When Tree Removal Becomes Necessary
             </h3>
-            <p className="text-center text-muted-foreground mb-8 max-w-3xl mx-auto">
+            <p className="text-center text-white/90 mb-8 max-w-3xl mx-auto">
               While we prefer to save trees whenever possible, there are situations where removal 
               is the only safe and responsible option:
             </p>
@@ -232,17 +241,17 @@ export default function TreeRemoval() {
           </div>
 
           {/* Call to Action */}
-          <div className="text-center bg-muted/30 rounded-lg p-8">
-            <h3 className="text-xl font-semibold text-foreground mb-4">
+          <div className="text-center bg-white/95 backdrop-blur-sm rounded-lg p-8">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">
               Not Sure if Your Tree Needs to Be Removed?
             </h3>
-            <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
+            <p className="text-gray-700 mb-6 max-w-2xl mx-auto">
               Get a free consultation from our qualified arborists. We'll assess your tree's health 
               and explore all possible solutions before recommending removal.
             </p>
             <Button 
               onClick={handleGetQuote}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className="bg-green-600 text-white hover:bg-green-700"
               data-testid="button-consultation"
             >
               Get Free Tree Assessment
