@@ -892,9 +892,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
                 {/* Line Items */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <Label className="text-sm font-medium">Line Items</Label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button
                         type="button"
                         variant="outline"
@@ -904,7 +904,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                         data-testid="button-import-from-quote"
                       >
                         <FileDown className="h-4 w-4 mr-1" />
-                        Import from Quote/Proposal
+                        <span className="hidden sm:inline">Import from Quote/Proposal</span>
+                        <span className="sm:hidden">Import</span>
                       </Button>
                       <Button
                         type="button"
@@ -921,55 +922,60 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
                   <div className="space-y-2">
                     {lineItems.map((item, index) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-2 items-center bg-white p-3 rounded border">
-                        <div className="col-span-5">
-                          <Input
-                            value={item.description}
-                            onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                            placeholder="Description"
-                            className="text-sm"
-                            data-testid={`input-item-description-${index}`}
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                            placeholder="Qty"
-                            className="text-sm"
-                            data-testid={`input-item-quantity-${index}`}
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={item.unitPrice}
-                            onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                            placeholder="Price"
-                            className="text-sm"
-                            data-testid={`input-item-price-${index}`}
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <div className="text-sm font-medium text-gray-700">
-                            ${item.total.toFixed(2)}
+                      <div key={item.id} className="bg-white p-3 rounded border space-y-2">
+                        {/* Mobile: Stack vertically, Desktop: Grid layout */}
+                        <div className="flex flex-col sm:grid sm:grid-cols-12 gap-2 sm:items-center">
+                          <div className="sm:col-span-5">
+                            <Input
+                              value={item.description}
+                              onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                              placeholder="Description"
+                              className="text-sm w-full"
+                              data-testid={`input-item-description-${index}`}
+                            />
                           </div>
-                        </div>
-                        <div className="col-span-1 flex justify-end">
-                          {lineItems.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeLineItem(item.id)}
-                              className="h-8 w-8"
-                              data-testid={`button-remove-item-${index}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
-                          )}
+                          <div className="flex gap-2 sm:contents">
+                            <div className="flex-1 sm:col-span-2">
+                              <Input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                placeholder="Qty"
+                                className="text-sm w-full"
+                                data-testid={`input-item-quantity-${index}`}
+                              />
+                            </div>
+                            <div className="flex-1 sm:col-span-2">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={item.unitPrice}
+                                onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                placeholder="Price"
+                                className="text-sm w-full"
+                                data-testid={`input-item-price-${index}`}
+                              />
+                            </div>
+                            <div className="flex-1 sm:col-span-2 flex items-center">
+                              <div className="text-sm font-medium text-gray-700">
+                                ${item.total.toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="sm:col-span-1 flex justify-end items-center">
+                              {lineItems.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeLineItem(item.id)}
+                                  className="h-8 w-8"
+                                  data-testid={`button-remove-item-${index}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -994,7 +1000,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 justify-between">
+              <div className="flex flex-col sm:flex-row gap-3 justify-between">
                 {/* Delete button - only show when editing existing invoice */}
                 {existingInvoiceId && createdInvoice && (
                   <Button
@@ -1002,18 +1008,20 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     variant="destructive"
                     onClick={handleDeleteInvoice}
                     data-testid="button-delete-invoice"
+                    className="w-full sm:w-auto"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Invoice
                   </Button>
                 )}
                 
-                <div className="flex gap-3 ml-auto">
+                <div className="flex flex-col sm:flex-row gap-3 sm:ml-auto w-full sm:w-auto">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleClose}
                     data-testid="button-cancel"
+                    className="w-full sm:w-auto"
                   >
                     Cancel
                   </Button>
@@ -1023,6 +1031,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   disabled={isCreating}
                   variant="outline"
                   data-testid="button-save-invoice"
+                  className="w-full sm:w-auto"
                 >
                   {isCreating ? (
                     <>
@@ -1042,6 +1051,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   disabled={isCreating}
                   variant="outline"
                   data-testid="button-sms-invoice-builder"
+                  className="w-full sm:w-auto"
                 >
                   {isCreating ? (
                     <>
@@ -1059,7 +1069,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   type="button"
                   onClick={handleSendInvoice}
                   disabled={isCreating}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
                   data-testid="button-send-invoice"
                 >
                   {isCreating ? (
