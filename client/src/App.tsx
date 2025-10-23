@@ -474,12 +474,9 @@ function Router() {
   const [location] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
   
-  // Redirect root to dispatch for authenticated users, login for others
+  // Redirect root to home page for everyone
   if (location === '/') {
-    if (isLoading) {
-      return null; // Wait for auth check
-    }
-    return <Redirect to={isAuthenticated ? "/dispatch" : "/login"} />;
+    return <Redirect to="/home" />;
   }
   
   return (
