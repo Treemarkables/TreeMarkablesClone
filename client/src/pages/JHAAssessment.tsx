@@ -22,7 +22,7 @@ import jhaHeaderImage from "@assets/generated_images/JHA_Risk_Assessment_Header_
 // ThinkSafe-style JHA form schema
 const jhaFormSchema = z.object({
   activityDescription: z.string().min(1, "Activity is required"),
-  ppeRequired: z.string().optional(),
+  ppeRequired: z.array(z.string()).optional(),
   teamLeader: z.string().optional(),
   location: z.string().optional(),
   comments: z.string().optional(),
@@ -38,6 +38,16 @@ const jhaFormSchema = z.object({
 });
 
 type JHAFormValues = z.infer<typeof jhaFormSchema>;
+
+const PPE_OPTIONS = [
+  "Protective eye wear",
+  "Gloves",
+  "Protective helmet",
+  "Protective ear muffs",
+  "Hi vis shirt",
+  "Protective kevlar pants",
+  "Protective steel capped boots"
+];
 
 export default function JHAAssessment() {
   const [, navigate] = useLocation();
@@ -74,7 +84,7 @@ export default function JHAAssessment() {
     resolver: zodResolver(jhaFormSchema),
     defaultValues: {
       activityDescription: "",
-      ppeRequired: "",
+      ppeRequired: [],
       teamLeader: "",
       location: "",
       comments: "",
@@ -284,9 +294,33 @@ export default function JHAAssessment() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>PPE required</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Enter text..." data-testid="input-ppe" />
-                    </FormControl>
+                    <div className="space-y-2">
+                      {PPE_OPTIONS.map((option) => {
+                        const isSelected = field.value?.includes(option) ?? false;
+                        return (
+                          <div 
+                            key={option}
+                            className="flex items-center space-x-3 p-3 border rounded-lg hover-elevate"
+                            data-testid={`checkbox-ppe-${option.toLowerCase().replace(/\s+/g, '-')}`}
+                          >
+                            <Checkbox 
+                              checked={isSelected}
+                              onCheckedChange={(checked) => {
+                                const currentValue = field.value || [];
+                                if (checked) {
+                                  field.onChange([...currentValue, option]);
+                                } else {
+                                  field.onChange(currentValue.filter((v: string) => v !== option));
+                                }
+                              }}
+                            />
+                            <label className="flex-1 text-sm">
+                              {option}
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </FormItem>
                 )}
               />
