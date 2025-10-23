@@ -94,7 +94,7 @@ export default function TreeRemoval() {
       />
       <Header />
       {/* Hero Section */}
-      <section className="relative min-h-screen overflow-hidden">
+      <section className="relative h-[70vh] sm:h-[80vh] md:min-h-screen overflow-hidden">
         {/* Video Background */}
         <video
           autoPlay
@@ -102,15 +102,16 @@ export default function TreeRemoval() {
           muted
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
+          style={{ minHeight: '100%', minWidth: '100%' }}
         >
           <source src={philosophyVideo} type="video/mp4" />
         </video>
         {/* Dark Overlay */}
-        <div className="absolute inset-0 bg-black/40"></div>
+        <div className="absolute inset-0 bg-black/50 sm:bg-black/40"></div>
         
-        <div className="relative max-w-6xl mx-auto px-6 pt-48 z-10">
-          <div className="text-center">
-            <h1 className="text-5xl md:text-7xl font-bold text-white mb-6" data-testid="text-hero-title">
+        <div className="relative h-full flex items-center justify-center max-w-6xl mx-auto px-4 sm:px-6 z-10">
+          <div className="text-center w-full">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-4 sm:mb-6 px-2" data-testid="text-hero-title">
               Gisborne's tree removal experts
             </h1>
           </div>
