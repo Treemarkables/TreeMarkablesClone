@@ -764,7 +764,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1080,7 +1080,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
               {/* Preview Section */}
               <div className="border-t pt-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Preview</h3>
-                <div className="border rounded-lg p-6 bg-white">
+                <div className="border rounded-lg p-0 sm:p-4 bg-white overflow-hidden">
                   <InvoiceTemplate
                     invoice={{
                       id: job.id,

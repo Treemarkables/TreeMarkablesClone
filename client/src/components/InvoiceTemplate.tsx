@@ -111,17 +111,17 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : addDays(issueDate, 14);
 
   return (
-    <div ref={ref} className={`w-full max-w-4xl mx-auto bg-white ${className}`}>
+    <div ref={ref} className={`w-full max-w-full sm:max-w-4xl mx-auto bg-white ${className}`}>
       {/* Action Bar */}
       {showActions && (
-        <div className="flex justify-between items-center mb-6 p-4 bg-gray-50 rounded-lg">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6 p-4 bg-gray-50 rounded-lg">
           <div className="flex items-center gap-3">
             <div>
               <h3 className="font-semibold text-gray-900">Invoice #{invoice.invoiceNumber}</h3>
               <p className="text-sm text-gray-600">Using template: {template.name}</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {onCopy && (
               <Button variant="outline" size="sm" onClick={onCopy} data-testid="button-copy-invoice">
                 <Copy className="w-4 h-4 mr-2" />
@@ -156,11 +156,11 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
         </div>
       )}
 
-      <Card className="shadow-lg">
-        <CardContent className="p-4">
+      <Card className="shadow-lg overflow-hidden">
+        <CardContent className="p-3 sm:p-4">
           {/* Header with Logo */}
           <div className="border-b-[3px] border-black pb-5 mb-8">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
               {/* Logo */}
               <div className="flex-shrink-0">
                 <img 
@@ -171,7 +171,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               </div>
               
               {/* Invoice Details */}
-              <div className="flex-1 text-right">
+              <div className="flex-1 text-left sm:text-right">
                 <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
                 <p className="text-xs text-gray-600 mt-1">
                   {customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
@@ -256,7 +256,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
           {/* Business Footer */}
           <div className="mt-4 pt-3 border-t border-gray-200 text-center">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 break-words">
               Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
             </p>
           </div>
