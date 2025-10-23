@@ -55,6 +55,9 @@ export default function JHAAssessment() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sharedSignature, setSharedSignature] = useState<string>("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [showCustomHazardForm, setShowCustomHazardForm] = useState(false);
+  const [customHazardName, setCustomHazardName] = useState("");
+  const [customControls, setCustomControls] = useState<string[]>([""]);
 
   // Fetch hazard templates
   const { data: templatesData, isLoading: templatesLoading } = useQuery<{ 
