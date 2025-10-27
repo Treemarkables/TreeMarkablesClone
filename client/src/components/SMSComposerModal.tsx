@@ -57,22 +57,31 @@ export function SMSComposerModal({
     },
   });
 
-  // Pre-populate phone number from job contact or customer data
+  // Only auto-generate message for invoice context, NOT the phone number
   useEffect(() => {
-    if (isOpen) {
-      // Try job contact phone, billing contact mobile, then customer phone/mobile
-      const phone = job?.jobContactPhone || job?.billingContactMobile || customer?.phone || customer?.mobile || "";
-      form.setValue("phone", phone);
-      
-      // Generate default SMS message with invoice link if invoice context
-      if (invoiceData && customer) {
-        const defaultMessage = `Hi ${customer.name || 'there'}, invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.amount || '0.00'} ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
-        form.setValue("message", defaultMessage);
-        setCharacterCount(defaultMessage.length);
-      }
+    if (isOpen && invoiceData && customer) {
+      const defaultMessage = `Hi ${customer.name || 'there'}, invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.amount || '0.00'} ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
+      form.setValue("message", defaultMessage);
+      setCharacterCount(defaultMessage.length);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customer, job, invoiceData, isOpen]);
+  }, [customer, invoiceData, isOpen]);
+
+  // Helper function to fill in customer's saved phone number
+  const useCustomerPhone = () => {
+    const phone = job?.jobContactPhone || job?.billingContactMobile || customer?.phone || customer?.mobile || "";
+    if (phone) {
+      form.setValue("phone", phone);
+      toast({
+        description: `Filled in: ${phone}`,
+      });
+    } else {
+      toast({
+        description: "No saved phone number found",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Handle template selection
   const handleTemplateSelect = (templateId: string) => {
@@ -178,14 +187,28 @@ export function SMSComposerModal({
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center gap-2">
-                    <Smartphone className="w-4 h-4" style={{color: 'hsl(var(--purple))'}} />
-                    Phone Number
-                  </FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="flex items-center gap-2">
+                      <Smartphone className="w-4 h-4" style={{color: 'hsl(var(--purple))'}} />
+                      Phone Number
+                    </FormLabel>
+                    {(job?.jobContactPhone || job?.billingContactMobile || customer?.phone || customer?.mobile) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={useCustomerPhone}
+                        className="h-auto py-1 px-2 text-xs"
+                        data-testid="button-use-customer-phone"
+                      >
+                        Use saved number
+                      </Button>
+                    )}
+                  </div>
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="+64 21 123 4567"
+                      placeholder="Enter phone number or use saved number"
                       data-testid="input-phone"
                     />
                   </FormControl>
