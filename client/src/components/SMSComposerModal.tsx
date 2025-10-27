@@ -71,7 +71,8 @@ export function SMSComposerModal({
         setCharacterCount(defaultMessage.length);
       }
     }
-  }, [customer, job, invoiceData, isOpen, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer, job, invoiceData, isOpen]);
 
   // Handle template selection
   const handleTemplateSelect = (templateId: string) => {
