@@ -258,19 +258,13 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
         {/* Header with Logo */}
         <CardHeader className="p-4 sm:p-8 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-white">
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-4">
+            <div>
               <img 
                 src={logoUrl} 
                 alt="Treemarkables Logo" 
                 className="h-16 sm:h-20 w-auto object-contain"
                 data-testid="img-company-logo"
               />
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                  {template.companyName || 'Treemarkables LTD'}
-                </h1>
-                <p className="text-sm text-gray-600">Professional Tree Services</p>
-              </div>
             </div>
             <div className="text-right">
               <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">PROPOSAL</h2>
