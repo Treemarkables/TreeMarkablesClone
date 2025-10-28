@@ -8,7 +8,7 @@ import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import logoUrl from "@assets/treemarkables_logo_transparent_smooth_1760076555496.png";
+import logoUrl from "@assets/treelogo_1761690528797.webp";
 
 interface ProposalViewerProps {}
 
