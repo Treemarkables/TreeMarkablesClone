@@ -1874,7 +1874,7 @@ export function GlobalJobCard({
                     <span className="font-medium">Invoice</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    onClick={() => {
+                    onClick={async () => {
                       if (!selectedCustomer?.id) {
                         toast({
                           title: "Customer Required",
@@ -1882,6 +1882,21 @@ export function GlobalJobCard({
                           variant: "destructive"
                         });
                         return;
+                      }
+                      
+                      // Save job first to ensure address/description changes are persisted
+                      if (mode === "edit" && editingJob?.id) {
+                        try {
+                          const formData = form.getValues();
+                          await updateJobMutation.mutateAsync(formData);
+                        } catch (error) {
+                          toast({
+                            title: "Save Failed",
+                            description: "Please resolve any errors before creating a proposal",
+                            variant: "destructive"
+                          });
+                          return;
+                        }
                       }
                       
                       // Check if there's an existing proposal and load it
@@ -2066,7 +2081,7 @@ export function GlobalJobCard({
                     Invoice
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    onClick={() => {
+                    onClick={async () => {
                       if (!selectedCustomer?.id) {
                         toast({
                           title: "Customer Required",
@@ -2074,6 +2089,21 @@ export function GlobalJobCard({
                           variant: "destructive"
                         });
                         return;
+                      }
+                      
+                      // Save job first to ensure address/description changes are persisted
+                      if (mode === "edit" && editingJob?.id) {
+                        try {
+                          const formData = form.getValues();
+                          await updateJobMutation.mutateAsync(formData);
+                        } catch (error) {
+                          toast({
+                            title: "Save Failed",
+                            description: "Please resolve any errors before creating a proposal",
+                            variant: "destructive"
+                          });
+                          return;
+                        }
                       }
                       
                       // Check if there's an existing proposal and load it
@@ -2201,7 +2231,22 @@ export function GlobalJobCard({
                     Invoice
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    onClick={() => {
+                    onClick={async () => {
+                      // Save job first to ensure address/description changes are persisted
+                      if (mode === "edit" && editingJob?.id) {
+                        try {
+                          const formData = form.getValues();
+                          await updateJobMutation.mutateAsync(formData);
+                        } catch (error) {
+                          toast({
+                            title: "Save Failed",
+                            description: "Please resolve any errors before creating a proposal",
+                            variant: "destructive"
+                          });
+                          return;
+                        }
+                      }
+                      
                       // Check if there's an existing proposal and load it
                       const existingProposal = jobProposalResponse?.data?.[0];
                       if (existingProposal) {
