@@ -61,6 +61,11 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     enabled: !!actualProposalResponse?.data?.jobId,
   });
 
+  // Debug logging
+  console.log('🔍 Proposal data:', actualProposalResponse?.data);
+  console.log('🔍 Job ID from proposal:', actualProposalResponse?.data?.jobId);
+  console.log('🔍 Job response:', jobResponse);
+
   // Fetch default proposal template
   const { data: templateResponse } = useQuery({
     queryKey: ["/api/templates/default/proposal"],
