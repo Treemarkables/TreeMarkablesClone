@@ -3061,6 +3061,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const oldJob = await storage.getJob(req.params.id);
       const oldStatus = oldJob?.status || '';
 
+      // Check if job has accepted proposals - prevent status downgrade from work_order to quote
+      if (oldJob?.status === 'work_order' && validation.data.status && validation.data.status === 'quote') {
+        // Check if there's an accepted proposal for this job
+        const allProposals = await storage.getAllProposals();
+        const acceptedProposal = allProposals.find(p => p.jobId === req.params.id && p.status === 'accepted');
+        
+        if (acceptedProposal) {
+          console.log(`⚠️ Cannot change job status from work_order to quote - proposal ${acceptedProposal.proposalNumber} is accepted`);
+          // Keep the status as work_order
+          validation.data.status = 'work_order';
+        }
+      }
+
       // Debug logging for job update
       console.log('🔍 JOB UPDATE SERVER DEBUG:', {
         jobId: req.params.id,
