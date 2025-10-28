@@ -806,6 +806,9 @@ export function GlobalJobCard({
       if (newJob?.data?.id) {
         setCreatedJobId(newJob.data.id);
         setInternalMode('edit');
+        // Invalidate and refetch the specific job data immediately
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', newJob.data.id] });
+        queryClient.refetchQueries({ queryKey: ['/api/jobs', newJob.data.id] });
         // Call parent callback if provided
         onJobCreated?.(newJob);
         // Note: Not closing modal - staying open in edit mode for the newly created job
@@ -833,6 +836,9 @@ export function GlobalJobCard({
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob?.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+      // Refetch the specific job and customers to ensure UI has latest data
+      queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob?.id] });
+      queryClient.refetchQueries({ queryKey: ['/api/customers'] });
       toast({
         title: "Job Updated",
         description: "Job has been updated successfully.",
