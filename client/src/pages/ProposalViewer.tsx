@@ -55,6 +55,12 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     enabled: !!actualProposalResponse?.data?.customerId,
   });
 
+  // Fetch job data if proposal has jobId
+  const { data: jobResponse } = useQuery({
+    queryKey: ["/api/jobs", actualProposalResponse?.data?.jobId],
+    enabled: !!actualProposalResponse?.data?.jobId,
+  });
+
   // Fetch default proposal template
   const { data: templateResponse } = useQuery({
     queryKey: ["/api/templates/default/proposal"],
@@ -139,6 +145,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   const proposal = actualProposalResponse.data;
   const customer = customerResponse?.data;
+  const job = jobResponse?.data;
   const template = templateResponse?.data || {
     id: 'default',
     name: 'Default Template',
@@ -245,6 +252,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
           template={template}
           proposal={proposal}
           customer={customer}
+          job={job}
           sections={proposal.sections || []}
           showActions={false}
           className="bg-white"
