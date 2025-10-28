@@ -232,9 +232,11 @@ export function GlobalJobCard({
   });
 
   // Fetch specific job by ID when editing (replaces fetching all 1000 jobs!)
+  // Use internal mode to handle newly created jobs that transition from create to edit mode
+  const effectiveModeForQuery = createdJobId ? 'edit' : internalMode;
   const { data: specificJobData, isLoading: isLoadingSpecificJob, isPending: isPendingSpecificJob } = useQuery({
     queryKey: ['/api/jobs', jobId || createdJobId],
-    enabled: isOpen && mode === 'edit' && !!(jobId || createdJobId) && !job,
+    enabled: isOpen && effectiveModeForQuery === 'edit' && !!(jobId || createdJobId) && !job,
   });
 
   // Lazy load templates - only when billing tab is active or invoice modal is open
