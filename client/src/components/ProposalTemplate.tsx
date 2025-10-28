@@ -271,6 +271,11 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               <p className="text-sm text-gray-600" data-testid="text-proposal-number">
                 #{proposal.proposalNumber}
               </p>
+              {job?.jobNumber && (
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Job #{job.jobNumber}
+                </p>
+              )}
               {proposal.createdAt && (
                 <p className="text-xs text-gray-500 mt-1">
                   {format(new Date(proposal.createdAt), 'dd MMM yyyy')}
