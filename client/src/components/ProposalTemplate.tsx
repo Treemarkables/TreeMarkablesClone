@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar, MessageSquare } from 'lucide-react';
 import type { DocumentTemplate, Proposal, Customer } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
+import logoUrl from '@assets/treemarkables_logo_transparent_smooth_1760076555496.png';
 
 interface ProposalLineItem {
   id: string;
@@ -254,6 +255,42 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       )}
 
       <Card className="shadow-lg">
+        {/* Header with Logo */}
+        <CardHeader className="p-4 sm:p-8 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-white">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+              <img 
+                src={logoUrl} 
+                alt="Treemarkables Logo" 
+                className="h-16 sm:h-20 w-auto object-contain"
+                data-testid="img-company-logo"
+              />
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+                  {template.companyName || 'Treemarkables LTD'}
+                </h1>
+                <p className="text-sm text-gray-600">Professional Tree Services</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">PROPOSAL</h2>
+              <p className="text-sm text-gray-600" data-testid="text-proposal-number">
+                #{proposal.proposalNumber}
+              </p>
+              {proposal.createdAt && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {format(new Date(proposal.createdAt), 'dd MMM yyyy')}
+                </p>
+              )}
+              {expiryDate && (
+                <p className={`text-xs mt-1 ${isExpired ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                  {isExpired ? 'Expired:' : 'Valid until:'} {format(expiryDate, 'dd MMM yyyy')}
+                </p>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        
         <CardContent className="p-0">
           {/* Customer Information */}
           {customer && (
