@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar, MessageSquare } from 'lucide-react';
 import type { DocumentTemplate, Proposal, Customer } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
-import logoUrl from '@assets/treemarkables_logo_transparent_smooth_1760076555496.png';
+import logoUrl from '@assets/treelogo_1761690528797.webp';
 
 interface ProposalLineItem {
   id: string;
