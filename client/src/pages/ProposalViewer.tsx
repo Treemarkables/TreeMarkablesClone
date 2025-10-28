@@ -61,11 +61,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     enabled: !!actualProposalResponse?.data?.jobId,
   });
 
-  // Debug logging
-  console.log('🔍 Proposal data:', actualProposalResponse?.data);
-  console.log('🔍 Job ID from proposal:', actualProposalResponse?.data?.jobId);
-  console.log('🔍 Job response:', jobResponse);
-
   // Fetch default proposal template
   const { data: templateResponse } = useQuery({
     queryKey: ["/api/templates/default/proposal"],
@@ -150,7 +145,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   const proposal = actualProposalResponse.data;
   const customer = customerResponse?.data;
-  const job = jobResponse?.data;
+  const job = jobResponse?.data; // Same pattern as customer
   const template = templateResponse?.data || {
     id: 'default',
     name: 'Default Template',
