@@ -492,6 +492,32 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     });
   }, [jobsData, jobsLoading, jobsError]);
 
+  // Check for pending job data from conversations on mount
+  useEffect(() => {
+    const pendingData = localStorage.getItem('pendingJobData');
+    if (pendingData) {
+      try {
+        const parsed = JSON.parse(pendingData);
+        console.log('📋 Found pending job data from conversation:', parsed);
+        
+        // Open the global job card in create mode
+        setShowGlobalJobCard(true);
+        setGlobalJobCardMode('create');
+        
+        // Clear localStorage so it doesn't keep popping up
+        localStorage.removeItem('pendingJobData');
+        
+        toast({
+          title: 'Job Data Loaded',
+          description: 'Contact details from conversation have been loaded. Please complete the remaining fields.'
+        });
+      } catch (error) {
+        console.error('Error parsing pending job data:', error);
+        localStorage.removeItem('pendingJobData');
+      }
+    }
+  }, []); // Run only on mount
+
   // Fetch customers for name lookup
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],

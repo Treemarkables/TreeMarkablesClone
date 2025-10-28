@@ -92,6 +92,7 @@ export default function ConversationDetail() {
     let phone = '';
     let address = '';
     let description = '';
+    let leadSource = '';
 
     // First priority: Extract customer data from joined API response
     if ((conversation as any)?.customerName) {
@@ -112,53 +113,76 @@ export default function ConversationDetail() {
       description = conversation.title;
     }
 
-    // Only extract from messages if customer data isn't already available
-    if (!email || !phone || !address || !name) {
-      messages.forEach(msg => {
-        const content = msg.content || '';
+    // Extract lead source and other data from messages
+    messages.forEach(msg => {
+      const content = msg.content || '';
+      
+      // Extract "How they heard about us" - lead source
+      if (!leadSource) {
+        const hearAboutMatch = content.match(/How they heard about us:\s*([^\n]+)/i);
+        if (hearAboutMatch) {
+          const source = hearAboutMatch[1].trim();
+          // Map common answers to lead source values
+          const sourceMap: Record<string, string> = {
+            'google': 'google',
+            'facebook': 'facebook',
+            'instagram': 'instagram',
+            'friend': 'referral',
+            'referral': 'referral',
+            'word of mouth': 'referral',
+            'advertisement': 'advertisement',
+            'ad': 'advertisement',
+            'website': 'website',
+            'repeat': 'repeat',
+            'other': 'other'
+          };
+          
+          const sourceLower = source.toLowerCase();
+          leadSource = sourceMap[sourceLower] || 'website';
+        }
+      }
+      
+      // Extract email (look for email patterns) - only if not already set
+      if (!email) {
+        const emailMatch = content.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
+        if (emailMatch) {
+          email = emailMatch[0];
+        }
+      }
+
+      // Extract phone (NZ format) - only if not already set
+      if (!phone) {
+        const phonePatterns = [
+          /\+64\s?\d{1,3}\s?\d{3,4}\s?\d{4}/,  // +64 21 123 4567
+          /\b0\d{1,3}[-\s]?\d{3,4}[-\s]?\d{4}\b/,  // 021-123-4567, 021 123 4567
+          /\(\d{2,3}\)\s?\d{3,4}[-\s]?\d{4}/  // (021) 123-4567
+        ];
         
-        // Extract email (look for email patterns) - only if not already set
-        if (!email) {
-          const emailMatch = content.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
-          if (emailMatch) {
-            email = emailMatch[0];
+        for (const pattern of phonePatterns) {
+          const phoneMatch = content.match(pattern);
+          if (phoneMatch) {
+            phone = phoneMatch[0].replace(/\s+/g, ' ').trim();
+            break;
           }
         }
+      }
 
-        // Extract phone (NZ format) - only if not already set
-        if (!phone) {
-          const phonePatterns = [
-            /\+64\s?\d{1,3}\s?\d{3,4}\s?\d{4}/,  // +64 21 123 4567
-            /\b0\d{1,3}[-\s]?\d{3,4}[-\s]?\d{4}\b/,  // 021-123-4567, 021 123 4567
-            /\(\d{2,3}\)\s?\d{3,4}[-\s]?\d{4}/  // (021) 123-4567
-          ];
-          
-          for (const pattern of phonePatterns) {
-            const phoneMatch = content.match(pattern);
-            if (phoneMatch) {
-              phone = phoneMatch[0].replace(/\s+/g, ' ').trim();
-              break;
-            }
+      // Extract address (NZ patterns) - only if not already set
+      if (!address) {
+        const addressPatterns = [
+          /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Place|Pl|Way|Terrace|Tce|Crescent|Cres|Court|Ct|Close|Highway|Hwy)[,\s]+[A-Z][a-z]+/i,
+          /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr)/i
+        ];
+        
+        for (const pattern of addressPatterns) {
+          const addressMatch = content.match(pattern);
+          if (addressMatch) {
+            address = addressMatch[0].trim();
+            break;
           }
         }
-
-        // Extract address (NZ patterns) - only if not already set
-        if (!address) {
-          const addressPatterns = [
-            /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Place|Pl|Way|Terrace|Tce|Crescent|Cres|Court|Ct|Close|Highway|Hwy)[,\s]+[A-Z][a-z]+/i,
-            /\d+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr)/i
-          ];
-          
-          for (const pattern of addressPatterns) {
-            const addressMatch = content.match(pattern);
-            if (addressMatch) {
-              address = addressMatch[0].trim();
-              break;
-            }
-          }
-        }
-      });
-    }
+      }
+    });
 
     // If name is still empty but we have email, extract name from email
     if (!name && email) {
@@ -193,6 +217,7 @@ export default function ConversationDetail() {
       email,
       phone,
       address,
+      leadSource,
       description: description.substring(0, 100)
     });
 
@@ -203,6 +228,7 @@ export default function ConversationDetail() {
       email,
       phone,
       address,
+      leadSource,
       description: description.substring(0, 500) // Limit description length
     };
   };
@@ -791,6 +817,22 @@ export default function ConversationDetail() {
             </Button>
             <Button
               onClick={() => {
+                const extracted = extractContactDetails();
+                
+                // Store job data in localStorage for dispatch board to pick up
+                localStorage.setItem('pendingJobData', JSON.stringify({
+                  customerName: extracted.name,
+                  customerFirstName: extracted.firstName,
+                  customerLastName: extracted.lastName,
+                  customerEmail: extracted.email,
+                  customerPhone: extracted.phone,
+                  address: extracted.address,
+                  description: extracted.description,
+                  leadSource: extracted.leadSource || 'website',
+                  fromConversation: true,
+                  conversationId: conversationId
+                }));
+                
                 toast({ title: 'Navigate to Dispatch', description: 'Opening dispatch board to create job...' });
                 setShowCreateJob(false);
                 setLocation('/dispatch');
