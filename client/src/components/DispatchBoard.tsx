@@ -44,6 +44,7 @@ import { nzTimeToUTC, utcToNZTime } from '@shared/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 import type { JobTemplate } from "@shared/schema";
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 import { CustomerAvatar } from '@/components/CustomerAvatar';
@@ -346,6 +347,7 @@ const jobFilterOptions = [
 
 export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const { toast } = useToast();
+  const [location] = useLocation();
 
   // Fetch employees from staff management system
   const { data: employeesData } = useQuery<{ success: boolean; data: Employee[] }>({
@@ -520,7 +522,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   // Handle URL parameters for opening specific jobs (e.g., from notifications)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    // Parse URL parameters from the wouter location
+    const params = new URLSearchParams(location.split('?')[1] || '');
     const jobId = params.get('job');
     const tab = params.get('tab');
     
@@ -528,32 +531,41 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       jobId, 
       tab, 
       hasJobsData: !!jobsData?.data,
-      jobCount: jobsData?.data?.length || 0
+      jobCount: jobsData?.data?.length || 0,
+      location,
+      currentlyEditing: jobToEdit?.id
     });
     
+    // Only process if we have a jobId parameter and jobs data is loaded
     if (jobId && jobsData?.data) {
-      console.log('🔔 Opening job from URL parameter:', { jobId, tab });
+      console.log('🔔 Processing job from URL parameter:', { jobId, tab });
       
       // Find the job in the loaded data
       const job = jobsData.data.find((j: any) => j.id === jobId);
       
       console.log('🔔 Job search result:', { found: !!job, jobId });
       
+      // Always clear the URL parameter first to prevent re-triggering
+      window.history.replaceState({}, '', '/dispatch');
+      
       if (job) {
+        // Guard: Don't re-open if we're already editing this job
+        if (showGlobalJobCard && jobToEdit?.id === jobId) {
+          console.log('🔔 Job already open, skipping re-open:', jobId);
+          return;
+        }
+        
         // Open the job card
         setShowGlobalJobCard(true);
         setGlobalJobCardMode('edit');
         setJobToEdit(job as JobAssignment);
         
-        // Clear the URL parameter so it doesn't keep opening
-        window.history.replaceState({}, '', '/dispatch');
-        
-        console.log('✅ Job card should now be open');
+        console.log('✅ Job card opened');
       } else {
         console.warn('⚠️ Job not found in loaded data:', jobId);
       }
     }
-  }, [jobsData]); // Re-run when jobs data loads
+  }, [jobsData, location]); // Re-run when jobs data loads OR location changes
 
   // Fetch customers for name lookup
   const { data: customersData } = useQuery({
