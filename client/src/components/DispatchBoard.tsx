@@ -524,20 +524,33 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const jobId = params.get('job');
     const tab = params.get('tab');
     
+    console.log('🔔 DispatchBoard URL check:', { 
+      jobId, 
+      tab, 
+      hasJobsData: !!jobsData?.data,
+      jobCount: jobsData?.data?.length || 0
+    });
+    
     if (jobId && jobsData?.data) {
       console.log('🔔 Opening job from URL parameter:', { jobId, tab });
       
       // Find the job in the loaded data
       const job = jobsData.data.find((j: any) => j.id === jobId);
       
+      console.log('🔔 Job search result:', { found: !!job, jobId });
+      
       if (job) {
         // Open the job card
         setShowGlobalJobCard(true);
         setGlobalJobCardMode('edit');
-        setSelectedJobForEdit(job);
+        setJobToEdit(job as JobAssignment);
         
         // Clear the URL parameter so it doesn't keep opening
         window.history.replaceState({}, '', '/dispatch');
+        
+        console.log('✅ Job card should now be open');
+      } else {
+        console.warn('⚠️ Job not found in loaded data:', jobId);
       }
     }
   }, [jobsData]); // Re-run when jobs data loads
