@@ -43,7 +43,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertJobSchema, type ChecklistItem, type Job, type Customer } from "@shared/schema";
 import { cn } from "@/lib/utils";
-import { formatTime12Hour } from "@shared/dateUtils";
+import { formatTime12Hour, nzTimeToUTC, utcToNZTime } from "@shared/dateUtils";
 import { LinkifyMultiline } from "@/lib/linkify";
 
 // Form validation schema extending the base insertJobSchema
@@ -1435,24 +1435,22 @@ export function GlobalJobCard({
     if (!editingJob?.id) return;
 
     try {
-      // Parse date and time components
-      const [year, month, day] = schedulingData.date.split('-').map(Number);
-      const [hours, minutes] = schedulingData.startTime.split(':').map(Number);
+      // Parse date and time components  
+      const dateStr = schedulingData.date; // Already in YYYY-MM-DD format
+      const timeStr = schedulingData.startTime; // Already in HH:MM format
       
-      // Create ISO string that preserves the local date/time as-is
-      // Format: YYYY-MM-DDTHH:MM:00.000Z
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00.000Z`;
-      const startTimeISO = `${dateStr}T${timeStr}`;
+      // Convert NZ local time to UTC using the proper timezone conversion function
+      const startTimeUTC = nzTimeToUTC(dateStr, timeStr);
+      const startTimeISO = startTimeUTC.toISOString();
       
+      // Calculate end time
       const durationMs = parseInt(schedulingData.duration) * 60000;
-      const endDate = new Date(new Date(startTimeISO).getTime() + durationMs);
-      const endTimeISO = endDate.toISOString();
+      const endTimeUTC = new Date(startTimeUTC.getTime() + durationMs);
+      const endTimeISO = endTimeUTC.toISOString();
 
-      // Calculate end time for calendar display
-      const endDateTime = new Date(new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`).getTime() + durationMs);
-      const endHours = endDateTime.getHours();
-      const endMinutes = endDateTime.getMinutes();
+      // Convert end time back to NZ local time for display
+      const endTimeNZ = utcToNZTime(endTimeUTC);
+      const [endHours, endMinutes] = endTimeNZ.time.split(':').map(Number);
       
       // Create staff assignments - remove duplicates first
       const uniqueEmployeeIds = [...new Set(schedulingData.assignedTo)];
@@ -1464,13 +1462,14 @@ export function GlobalJobCard({
       }));
 
       // First, update the job with scheduledDate, scheduledStartTime, scheduledEndTime, assignedTo, and status
+      // Note: scheduledStartTime and scheduledEndTime are stored as NZ local time strings
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scheduledDate: dateStr,
-          scheduledStartTime: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
-          scheduledEndTime: `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`,
+          scheduledStartTime: timeStr, // NZ local time (HH:MM format)
+          scheduledEndTime: endTimeNZ.time, // NZ local time (HH:MM format)
           assignedTo: uniqueEmployeeIds,
           status: 'scheduled'  // Automatically change status to scheduled
         })
