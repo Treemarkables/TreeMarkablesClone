@@ -110,6 +110,12 @@ export function AddressAutocomplete({
       return address;
     }
     
+    // First, handle addresses with newline characters
+    // Convert "23 Moana Dr\nHawke's Bay\nMahia 4198" -> "23 Moana Dr, Hawke's Bay, Mahia 4198"
+    if (address.includes('\n')) {
+      return address.split('\n').map(line => line.trim()).filter(line => line).join(', ');
+    }
+    
     // Try to intelligently add spaces and commas for readability
     // Pattern: "23 Moana DrHawke's BayMahia 4198" -> "23 Moana Dr, Hawke's Bay, Mahia 4198"
     
