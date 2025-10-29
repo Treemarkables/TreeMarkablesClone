@@ -7819,6 +7819,13 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         });
       }
 
+      // Delete existing staff assignments for this job to prevent duplicates when rescheduling
+      const existingAssignments = await storage.getJobStaffAssignmentsByJob(jobId);
+      for (const existing of existingAssignments) {
+        await storage.deleteJobStaffAssignment(existing.id);
+      }
+      console.log(`🗑️ Deleted ${existingAssignments.length} existing staff assignment(s) for job ${jobId}`);
+
       // Create all staff assignments
       const created = [];
       for (const assignment of staffAssignments) {
