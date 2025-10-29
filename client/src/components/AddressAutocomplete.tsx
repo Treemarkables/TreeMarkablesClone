@@ -110,18 +110,37 @@ export function AddressAutocomplete({
       return address;
     }
     
-    // Try to intelligently add commas for readability
-    // Common pattern: "123 Street NameCitySuburb 1234" -> "123 Street Name, City, Suburb 1234"
+    // Try to intelligently add spaces and commas for readability
+    // Pattern: "23 Moana DrHawke's BayMahia 4198" -> "23 Moana Dr, Hawke's Bay, Mahia 4198"
     
-    // Match pattern: street address, then city/region, then postcode
-    const match = address.match(/^(.+?)([A-Z][a-z]+(?:'s\s+[A-Z][a-z]+)?)\s*([A-Z][a-z]+)\s*(\d{4})$/);
+    // First, add space before capital letters that follow lowercase letters
+    let formatted = address.replace(/([a-z])([A-Z])/g, '$1 $2');
     
-    if (match) {
-      const [, street, region, city, postcode] = match;
-      return `${street.trim()}, ${region.trim()}, ${city.trim()} ${postcode}`;
+    // Now split by postcode pattern (4 digits at end)
+    const postcodeMatch = formatted.match(/^(.+)\s+(\d{4})$/);
+    
+    if (postcodeMatch) {
+      const [, addressPart, postcode] = postcodeMatch;
+      
+      // Split address into parts (street, region, city)
+      // Look for pattern where we have multiple capitalized words
+      const parts = addressPart.split(/\s+(?=[A-Z])/);
+      
+      if (parts.length >= 3) {
+        // Join street parts, region, city with commas
+        const street = parts.slice(0, -2).join(' ');
+        const region = parts[parts.length - 2];
+        const city = parts[parts.length - 1];
+        return `${street}, ${region}, ${city} ${postcode}`;
+      } else if (parts.length === 2) {
+        return `${parts[0]}, ${parts[1]} ${postcode}`;
+      }
+      
+      return `${addressPart}, ${postcode}`;
     }
     
-    return address;
+    // Fallback: just add space before capitals
+    return formatted;
   };
 
   // Parse address using structured data when available, fallback to intelligent parsing
