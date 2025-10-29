@@ -1500,6 +1500,9 @@ export function GlobalJobCard({
           description: `${uniqueEmployeeIds.length} staff member(s) scheduled for ${format(scheduledDate, 'PPP')} at ${format(scheduledDate, 'p')}`,
         });
 
+        // Update form's status to match database
+        form.setValue('status', 'scheduled');
+
         // Refresh job data and staff assignments for dispatch board
         queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
