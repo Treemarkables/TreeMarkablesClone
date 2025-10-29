@@ -233,13 +233,13 @@ export function NotificationBell() {
                 } else if (latestNotification.jobId) {
                   targetUrl = `/dispatch?job=${latestNotification.jobId}`;
                 } else if (latestNotification.proposalId) {
-                  targetUrl = `/proposals?proposal=${latestNotification.proposalId}`;
+                  targetUrl = `/proposal/${latestNotification.proposalId}`;
                 } else if (latestNotification.quoteId) {
-                  targetUrl = `/quotes?quote=${latestNotification.quoteId}`;
+                  targetUrl = `/quote/${latestNotification.quoteId}`;
                 } else if (latestNotification.leadId) {
                   targetUrl = `/opportunities?lead=${latestNotification.leadId}`;
                 } else if (latestNotification.customerId) {
-                  targetUrl = `/customers?customer=${latestNotification.customerId}`;
+                  targetUrl = `/clients?customer=${latestNotification.customerId}`;
                 }
               }
             }
@@ -413,7 +413,7 @@ export function NotificationBell() {
     // Handle proposal notifications
     if (notification.type === 'proposal_accepted' || notification.type === 'proposal_sent') {
       if (notification.proposalId) {
-        const url = `/proposals?proposal=${notification.proposalId}`;
+        const url = `/proposal/${notification.proposalId}`;
         console.log('🔀 Navigating to proposal:', url);
         setLocation(url);
         setIsOpen(false);
@@ -444,7 +444,7 @@ export function NotificationBell() {
 
     // Fallback navigation based on related entities priority
     if (notification.proposalId) {
-      const url = `/proposals?proposal=${notification.proposalId}`;
+      const url = `/proposal/${notification.proposalId}`;
       console.log('🔀 Fallback: Navigating to proposal:', url);
       setLocation(url);
       setIsOpen(false);
@@ -460,7 +460,7 @@ export function NotificationBell() {
     }
 
     if (notification.quoteId) {
-      const url = `/quotes?quote=${notification.quoteId}`;
+      const url = `/quote/${notification.quoteId}`;
       console.log('🔀 Fallback: Navigating to quote:', url);
       setLocation(url);
       setIsOpen(false);
@@ -476,7 +476,7 @@ export function NotificationBell() {
     }
 
     if (notification.customerId) {
-      const url = `/customers?customer=${notification.customerId}`;
+      const url = `/clients?customer=${notification.customerId}`;
       console.log('🔀 Fallback: Navigating to customer:', url);
       setLocation(url);
       setIsOpen(false);
