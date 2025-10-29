@@ -518,6 +518,30 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
   }, []); // Run only on mount
 
+  // Handle URL parameters for opening specific jobs (e.g., from notifications)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jobId = params.get('job');
+    const tab = params.get('tab');
+    
+    if (jobId && jobsData?.data) {
+      console.log('🔔 Opening job from URL parameter:', { jobId, tab });
+      
+      // Find the job in the loaded data
+      const job = jobsData.data.find((j: any) => j.id === jobId);
+      
+      if (job) {
+        // Open the job card
+        setShowGlobalJobCard(true);
+        setGlobalJobCardMode('edit');
+        setSelectedJobForEdit(job);
+        
+        // Clear the URL parameter so it doesn't keep opening
+        window.history.replaceState({}, '', '/dispatch');
+      }
+    }
+  }, [jobsData]); // Re-run when jobs data loads
+
   // Fetch customers for name lookup
   const { data: customersData } = useQuery({
     queryKey: ['/api/customers'],
