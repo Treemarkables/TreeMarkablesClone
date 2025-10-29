@@ -1543,6 +1543,13 @@ export function GlobalJobCard({
     console.log('Form data before save:', formData);
     console.log('Form errors:', form.formState.errors);
     
+    // SAFETY CHECK: Prevent accidentally clearing customerId on existing jobs
+    if (mode === "edit" && editingJob?.customerId && !formData.customerId && !formData.isNewCustomer) {
+      console.warn('⚠️ Prevented clearing customerId - restoring from editingJob');
+      formData.customerId = editingJob.customerId;
+      form.setValue('customerId', editingJob.customerId);
+    }
+    
     // Check if form has validation errors
     const isValid = await form.trigger();
     if (!isValid) {
