@@ -136,6 +136,9 @@ export function GlobalJobCard({
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
   const [editingProposalId, setEditingProposalId] = useState<string | undefined>(undefined);
   
+  // Equipment addition state
+  const [isAddingEquipment, setIsAddingEquipment] = useState(false);
+  
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
   
@@ -3696,52 +3699,53 @@ export function GlobalJobCard({
                           <label className="text-xs md:text-sm font-medium text-gray-700">Add Equipment</label>
                           <Select
                             value=""
+                            disabled={isAddingEquipment}
                             onValueChange={async (equipmentId) => {
-                              if (!editingJob?.id || !equipmentId) return;
+                              if (!editingJob?.id || !equipmentId || isAddingEquipment) return;
                               
-                              const selectedEquip = allEquipment.find((e: any) => e.id === equipmentId);
-                              if (!selectedEquip) return;
-
-                              const currentChecklist = editingJob.equipmentChecklist || [];
+                              setIsAddingEquipment(true);
                               
-                              // Check if already added
-                              if (currentChecklist.some((item: any) => item.equipment === selectedEquip.name)) {
-                                toast({
-                                  title: "Already Added",
-                                  description: `${selectedEquip.name} is already on this job`,
-                                  variant: "destructive"
-                                });
-                                return;
-                              }
-
-                              const newItem = {
-                                id: `equip-${Date.now()}`,
-                                equipment: selectedEquip.name,
-                                checked: false,
-                                checkedAt: undefined,
-                                checkedBy: undefined,
-                              };
-
-                              const updatedChecklist = [...currentChecklist, newItem];
-
                               try {
-                                // Optimistically update local cache first
-                                queryClient.setQueryData(['/api/jobs'], (oldData: any) => {
-                                  if (!oldData?.data) return oldData;
-                                  return {
-                                    ...oldData,
-                                    data: oldData.data.map((j: any) => 
-                                      j.id === editingJob.id 
-                                        ? { ...j, equipmentChecklist: updatedChecklist }
-                                        : j
-                                    )
-                                  };
-                                });
+                                const selectedEquip = allEquipment.find((e: any) => e.id === equipmentId);
+                                if (!selectedEquip) {
+                                  setIsAddingEquipment(false);
+                                  return;
+                                }
 
-                                // Then update server
+                                // Fetch the latest job data from server to avoid stale data
+                                const latestJobResponse = await apiRequest('GET', `/api/jobs/${editingJob.id}`);
+                                const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
+                                const currentChecklist = latestJob?.data?.equipmentChecklist || [];
+                                
+                                // Check if already added
+                                if (currentChecklist.some((item: any) => item.equipment === selectedEquip.name)) {
+                                  toast({
+                                    title: "Already Added",
+                                    description: `${selectedEquip.name} is already on this job`,
+                                    variant: "destructive"
+                                  });
+                                  setIsAddingEquipment(false);
+                                  return;
+                                }
+
+                                const newItem = {
+                                  id: `equip-${Date.now()}`,
+                                  equipment: selectedEquip.name,
+                                  checked: false,
+                                  checkedAt: undefined,
+                                  checkedBy: undefined,
+                                };
+
+                                const updatedChecklist = [...currentChecklist, newItem];
+
+                                // Update server first (no optimistic update)
                                 await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
                                   equipmentChecklist: updatedChecklist,
                                 });
+
+                                // Refresh job data from server
+                                await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
 
                                 toast({
                                   title: "Equipment Added",
@@ -3749,13 +3753,13 @@ export function GlobalJobCard({
                                 });
                               } catch (error) {
                                 console.error('Error adding equipment:', error);
-                                // Revert optimistic update on error
-                                queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
                                 toast({
                                   title: "Error",
                                   description: "Failed to add equipment",
                                   variant: "destructive"
                                 });
+                              } finally {
+                                setIsAddingEquipment(false);
                               }
                             }}
                             data-testid="select-add-equipment"
