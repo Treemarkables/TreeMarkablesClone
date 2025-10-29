@@ -1463,7 +1463,7 @@ export function GlobalJobCard({
         notes: schedulingData.notes
       }));
 
-      // First, update the job with scheduledDate, scheduledStartTime, scheduledEndTime, and assignedTo for calendar display
+      // First, update the job with scheduledDate, scheduledStartTime, scheduledEndTime, assignedTo, and status
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1471,7 +1471,8 @@ export function GlobalJobCard({
           scheduledDate: dateStr,
           scheduledStartTime: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
           scheduledEndTime: `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`,
-          assignedTo: uniqueEmployeeIds
+          assignedTo: uniqueEmployeeIds,
+          status: 'scheduled'  // Automatically change status to scheduled
         })
       });
 
