@@ -200,19 +200,74 @@ export function NotificationBell() {
     if (pushEnabled && summary.unread > lastNotificationCount) {
       const newCount = summary.unread - lastNotificationCount;
       
-      // Show browser notification for new activity
+      // Fetch specific notification by ID to get actionUrl
       if (summary.recent && summary.recent.length > 0) {
-        const latestNotification = summary.recent[0];
+        const latestNotificationSummary = summary.recent[0];
         
-        notificationService.showNotification(
-          latestNotification.title,
-          {
-            body: `${newCount} new notification${newCount > 1 ? 's' : ''}`,
-            tag: 'diary-activity',
-            data: { url: '/dispatch' },
-            requireInteraction: false,
+        // Fetch the specific notification by ID using queryClient with a fetcher
+        queryClient.fetchQuery({
+          queryKey: ['/api/notifications', latestNotificationSummary.id],
+          queryFn: async () => {
+            const response = await fetch(`/api/notifications/${latestNotificationSummary.id}`);
+            if (!response.ok) {
+              throw new Error('Failed to fetch notification');
+            }
+            return response.json();
           }
-        );
+        })
+          .then((data: any) => {
+            const latestNotification: NotificationWithDetails | undefined = data?.data;
+            
+            // Build the URL based on notification details
+            let targetUrl = '/dispatch'; // Default fallback
+            
+            if (latestNotification) {
+              // Use actionUrl if available
+              targetUrl = latestNotification.actionUrl || targetUrl;
+              
+              // If no actionUrl, build one based on the notification type and IDs
+              if (!latestNotification.actionUrl) {
+                const diaryTypes = ['email_reply', 'sms_reply', 'proposal_sent', 'photo_added', 'note_added'];
+                if (diaryTypes.includes(latestNotification.type) && latestNotification.jobId) {
+                  targetUrl = `/dispatch?job=${latestNotification.jobId}&tab=diary`;
+                } else if (latestNotification.jobId) {
+                  targetUrl = `/dispatch?job=${latestNotification.jobId}`;
+                } else if (latestNotification.proposalId) {
+                  targetUrl = `/proposals?proposal=${latestNotification.proposalId}`;
+                } else if (latestNotification.quoteId) {
+                  targetUrl = `/quotes?quote=${latestNotification.quoteId}`;
+                } else if (latestNotification.leadId) {
+                  targetUrl = `/opportunities?lead=${latestNotification.leadId}`;
+                } else if (latestNotification.customerId) {
+                  targetUrl = `/customers?customer=${latestNotification.customerId}`;
+                }
+              }
+            }
+            
+            // Always show notification with title and URL (even if fallback)
+            notificationService.showNotification(
+              latestNotificationSummary.title,
+              {
+                body: `${newCount} new notification${newCount > 1 ? 's' : ''}`,
+                tag: 'diary-activity',
+                data: { url: targetUrl },
+                requireInteraction: false,
+              }
+            );
+          })
+          .catch(err => {
+            console.error('Failed to fetch notification details:', err);
+            // Fallback: still show notification with basic info and default URL
+            notificationService.showNotification(
+              latestNotificationSummary.title,
+              {
+                body: `${newCount} new notification${newCount > 1 ? 's' : ''}`,
+                tag: 'diary-activity',
+                data: { url: '/dispatch' },
+                requireInteraction: false,
+              }
+            );
+          });
       }
     }
 
@@ -220,7 +275,7 @@ export function NotificationBell() {
     if (summary.unread !== lastNotificationCount) {
       setLastNotificationCount(summary.unread);
     }
-  }, [summaryData, pushEnabled, lastNotificationCount]);
+  }, [summaryData, pushEnabled, lastNotificationCount, queryClient]);
 
   // Handle browser notification permission request
   const handleEnablePushNotifications = async () => {
