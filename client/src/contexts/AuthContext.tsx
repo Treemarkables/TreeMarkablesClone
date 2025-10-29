@@ -137,10 +137,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // If server returns not authenticated
     if (meResponse?.success === false) {
       if (currentUser) {
-        // CRITICAL FIX: Don't clear user state if they just logged in (within last 3 seconds)
+        // CRITICAL FIX: Don't clear user state if they just logged in (within last 10 seconds)
         // This prevents race condition where stale 401 response arrives after successful login
         const timeSinceLogin = Date.now() - lastLoginTimeRef.current;
-        if (timeSinceLogin < 3000) {
+        if (timeSinceLogin < 10000) {
           console.log('🛡️ Ignoring 401 response - user just logged in', timeSinceLogin + 'ms ago');
           return;
         }

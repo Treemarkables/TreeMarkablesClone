@@ -92,6 +92,7 @@ import { addDays, subDays } from "date-fns";
 // Protected Route wrapper - redirects unauthenticated users to login and crew users to allowed pages
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isCrew, isAuthenticated, isLoading } = useAuth();
+  const [location] = useLocation();
   
   // Wait for auth check to complete before redirecting
   if (isLoading) {
@@ -108,8 +109,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
   
   // Redirect crew users to dispatch board (they don't have access to admin pages)
+  // Preserve URL parameters when redirecting
   if (isCrew) {
-    return <Redirect to="/dispatch" />;
+    const searchParams = window.location.search;
+    return <Redirect to={`/dispatch${searchParams}`} />;
   }
   
   return <>{children}</>;
