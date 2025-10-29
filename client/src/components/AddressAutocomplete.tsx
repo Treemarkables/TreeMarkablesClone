@@ -103,6 +103,27 @@ export function AddressAutocomplete({
   };
 
 
+  // Format address with proper spacing and commas
+  const formatAddress = (address: string): string => {
+    // If address already has commas, return as-is
+    if (address.includes(',')) {
+      return address;
+    }
+    
+    // Try to intelligently add commas for readability
+    // Common pattern: "123 Street NameCitySuburb 1234" -> "123 Street Name, City, Suburb 1234"
+    
+    // Match pattern: street address, then city/region, then postcode
+    const match = address.match(/^(.+?)([A-Z][a-z]+(?:'s\s+[A-Z][a-z]+)?)\s*([A-Z][a-z]+)\s*(\d{4})$/);
+    
+    if (match) {
+      const [, street, region, city, postcode] = match;
+      return `${street.trim()}, ${region.trim()}, ${city.trim()} ${postcode}`;
+    }
+    
+    return address;
+  };
+
   // Parse address using structured data when available, fallback to intelligent parsing
   const parseAddress = (suggestion: AddySuggestion) => {
     // Use structured data if available (from our enhanced mock data or real API)
@@ -211,7 +232,9 @@ export function AddressAutocomplete({
     const parsedAddress = parseAddress(suggestion);
     
     if (mode === "full") {
-      onChange(suggestion.a);
+      // Format the address with proper commas
+      const formattedAddress = formatAddress(suggestion.a);
+      onChange(formattedAddress);
     } else if (mode === "street") {
       onChange(`${parsedAddress.streetNumber} ${parsedAddress.streetName}`.trim());
     } else if (mode === "city") {
@@ -277,22 +300,20 @@ export function AddressAutocomplete({
       <div className="relative">
         <Input
           ref={inputRef}
-          value={value}
+          value={formatAddress(value)}
           onChange={(e) => handleInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => value.length >= 3 && setShowSuggestions(suggestions.length > 0)}
           placeholder={placeholder}
-          className={className}
+          className={`${className} leading-relaxed`}
           disabled={disabled}
           data-testid={testId}
         />
-        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
-          {isLoading ? (
+        {isLoading && (
+          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : (
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Suggestions dropdown */}
