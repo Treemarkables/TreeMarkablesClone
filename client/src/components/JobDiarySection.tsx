@@ -1158,6 +1158,24 @@ export function JobDiarySection({
                                 Invoice #{docInfo.number}
                               </Button>
                             </div>
+                          ) : entry.type === 'email' && (() => {
+                            // Check if this is a proposal email
+                            const match = entry.title.match(/PROP-\d+|DRAFT-\d+/);
+                            return match ? match[0] : null;
+                          })() ? (
+                            <div 
+                              className="text-sm font-bold text-blue-600 dark:text-blue-400 cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 whitespace-pre-line break-words overflow-hidden transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const match = entry.title.match(/PROP-\d+|DRAFT-\d+/);
+                                if (match) {
+                                  handleOpenProposal(match[0]);
+                                }
+                              }}
+                              data-testid="link-proposal-message"
+                            >
+                              {cleanDiaryContent(entry.content, entry.type)}
+                            </div>
                           ) : (
                             <div className={`${entry.type === 'email' ? 'text-sm font-bold' : 'text-xs'} text-gray-700 dark:text-gray-300 whitespace-pre-line break-words overflow-hidden`}>
                               {cleanDiaryContent(entry.content, entry.type)}
