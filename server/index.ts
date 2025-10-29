@@ -38,8 +38,9 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
-    resave: false,
+    resave: true, // Resave session on each request to prevent expiration during active use
     saveUninitialized: false,
+    rolling: true, // Reset maxAge on every request to keep active sessions alive
     name: 'treemarkables.sid', // Custom cookie name (helps Safari)
     store: new PgSession({
       pool: pool as any, // Use PostgreSQL pool for persistent sessions
@@ -51,8 +52,8 @@ app.use(
       secure: !isDevelopment, // Only require HTTPS in production
       httpOnly: true,
       maxAge: isDevelopment 
-        ? 1000 * 60 * 60 * 24 * 30  // 30 days in development for convenience
-        : 1000 * 60 * 60 * 24 * 7,   // 7 days in production
+        ? 1000 * 60 * 60 * 24 * 90  // 90 days in development for convenience
+        : 1000 * 60 * 60 * 24 * 30,   // 30 days in production
       sameSite: isDevelopment ? 'lax' : 'none', // Safari needs 'none' with secure in production
       domain: isDevelopment ? undefined : '.treemarkables.co.nz', // Explicit domain in production
     },
