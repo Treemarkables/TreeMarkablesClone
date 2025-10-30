@@ -7882,16 +7882,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
           if (clientEmail) {
             const scheduleDate = startTime.toLocaleDateString('en-NZ', { 
+              timeZone: 'Pacific/Auckland',
               weekday: 'long',
               year: 'numeric', 
               month: 'long', 
               day: 'numeric' 
             });
             const startTimeStr = startTime.toLocaleTimeString('en-NZ', { 
+              timeZone: 'Pacific/Auckland',
               hour: '2-digit', 
               minute: '2-digit' 
             });
             const endTimeStr = endTime.toLocaleTimeString('en-NZ', { 
+              timeZone: 'Pacific/Auckland',
               hour: '2-digit', 
               minute: '2-digit' 
             });
@@ -7966,15 +7969,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
         const staffList = employeeNames.join(', ');
         const scheduleDate = startTime.toLocaleDateString('en-NZ', { 
+          timeZone: 'Pacific/Auckland',
           year: 'numeric', 
           month: 'long', 
           day: 'numeric' 
         });
         const startTimeStr = startTime.toLocaleTimeString('en-NZ', { 
+          timeZone: 'Pacific/Auckland',
           hour: '2-digit', 
           minute: '2-digit' 
         });
         const endTimeStr = endTime.toLocaleTimeString('en-NZ', { 
+          timeZone: 'Pacific/Auckland',
           hour: '2-digit', 
           minute: '2-digit' 
         });
