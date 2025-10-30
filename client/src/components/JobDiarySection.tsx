@@ -16,6 +16,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   MessageSquare,
@@ -107,7 +108,7 @@ function EmailActivity({ messageId }: { messageId: string }) {
       {activity.lastEventAt && (
         <div className="flex items-center gap-0.5 text-gray-500">
           <Clock className="h-2.5 w-2.5" />
-          <span>{format(new Date(activity.lastEventAt), 'MMM dd, h:mma')}</span>
+          <span>{formatInTimeZone(new Date(activity.lastEventAt), 'Pacific/Auckland', 'MMM dd, h:mma')}</span>
         </div>
       )}
     </div>
@@ -964,7 +965,7 @@ export function JobDiarySection({
                 const currentIndex = diaryEntries.findIndex((e) => e.id === entry.id);
                 const previousEntry = currentIndex > 0 ? diaryEntries[currentIndex - 1] : null;
                 const showDateSeparator = !previousEntry || 
-                  format(new Date(entry.timestamp), 'yyyy-MM-dd') !== format(new Date(previousEntry.timestamp), 'yyyy-MM-dd') ||
+                  formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'yyyy-MM-dd') !== formatInTimeZone(new Date(previousEntry.timestamp), 'Pacific/Auckland', 'yyyy-MM-dd') ||
                   (previousEntry.type !== 'sms' && previousEntry.type !== 'email');
                 
                 return (
@@ -972,7 +973,7 @@ export function JobDiarySection({
                     {showDateSeparator && (
                       <div className="flex justify-center my-0.5">
                         <span className="text-[7px] text-gray-500 bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded-full">
-                          {format(new Date(entry.timestamp), 'EEEE h:mma').toLowerCase()}
+                          {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'EEEE h:mma').toLowerCase()}
                         </span>
                       </div>
                     )}
@@ -1013,7 +1014,7 @@ export function JobDiarySection({
                         {/* Timestamp for all messages */}
                         <div className={`flex items-center gap-1 mt-0.5 ${isSent ? 'justify-end' : 'justify-start'}`}>
                           <span className="text-[10px] text-gray-400">
-                            {format(new Date(entry.timestamp), 'MMM dd, h:mma').toLowerCase()}
+                            {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'MMM dd, h:mma').toLowerCase()}
                           </span>
                         </div>
                         
@@ -1122,7 +1123,7 @@ export function JobDiarySection({
                       <div className="text-[10px] text-muted-foreground mb-1 flex items-center gap-2 flex-wrap">
                         <span className="flex items-center gap-0.5 whitespace-nowrap">
                           <Clock className="w-2.5 h-2.5 flex-shrink-0" />
-                          {format(new Date(entry.timestamp), 'h:mm a dd/MM/yy')}
+                          {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'h:mm a dd/MM/yy')}
                         </span>
                         <span className="flex items-center gap-0.5 truncate min-w-0">
                           <User className="w-2.5 h-2.5 flex-shrink-0" />
