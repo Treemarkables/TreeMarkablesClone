@@ -1,18 +1,21 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import type { Job, Employee, Customer } from '@shared/schema';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 export default function StaffSchedule() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
+  const { toast } = useToast();
 
   const { data: jobsData } = useQuery<{ success: boolean; data: Job[] }>({
     queryKey: ['/api/jobs'],
@@ -184,6 +187,44 @@ export default function StaffSchedule() {
     setShowJobCard(true);
   };
 
+  // Mutation to remove a staff assignment
+  const removeAssignmentMutation = useMutation({
+    mutationFn: async ({ jobId, employeeId }: { jobId: string; employeeId: string }) => {
+      // Find the assignment ID for this job and employee
+      const assignments = staffAssignments.filter(
+        a => a.jobId === jobId && a.employeeId === employeeId
+      );
+      
+      // Delete all assignments for this employee on this job
+      for (const assignment of assignments) {
+        await apiRequest('DELETE', `/api/staff-assignments/${assignment.id}`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      toast({
+        title: "Success",
+        description: "Job removed from schedule",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove job from schedule",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleRemoveJob = (e: React.MouseEvent, job: Job & { _assignmentStartTime?: string }, employeeId: string) => {
+    e.stopPropagation(); // Prevent job card from opening
+    
+    if (confirm('Remove this job from the schedule?')) {
+      removeAssignmentMutation.mutate({ jobId: job.id, employeeId });
+    }
+  };
+
   const previousDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() - 1);
@@ -293,17 +334,29 @@ export default function StaffSchedule() {
                               </div>
                             )}
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium">
-                              {job._assignmentStartTime 
-                                ? formatInTimeZone(new Date(job._assignmentStartTime), 'Pacific/Auckland', 'h:mm a')
-                                : formatTime12Hour(job.scheduledStartTime)}
-                            </div>
-                            {job.status && (
-                              <div className="text-xs mt-1">
-                                {job.status}
+                          <div className="flex items-center gap-2">
+                            <div className="text-right">
+                              <div className="text-sm font-medium">
+                                {job._assignmentStartTime 
+                                  ? formatInTimeZone(new Date(job._assignmentStartTime), 'Pacific/Auckland', 'h:mm a')
+                                  : formatTime12Hour(job.scheduledStartTime)}
                               </div>
-                            )}
+                              {job.status && (
+                                <div className="text-xs mt-1">
+                                  {job.status}
+                                </div>
+                              )}
+                            </div>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950 flex-shrink-0"
+                              onClick={(e) => handleRemoveJob(e, job, employee.id)}
+                              disabled={removeAssignmentMutation.isPending}
+                              data-testid={`button-remove-job-${job.id}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       </div>
