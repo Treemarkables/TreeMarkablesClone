@@ -79,23 +79,19 @@ export default function StaffSchedule() {
     const employeeAssignments = staffAssignments.filter(assignment => {
       if (assignment.employeeId !== employeeId) return false;
       
-      // IMPORTANT: Database stores timestamps WITHOUT timezone (in NZ local time)
-      // But API returns them with 'Z' suffix, so we need to parse them as NZ local time
-      // Extract just the date portion: "2025-10-20T08:00:00.000Z" -> "2025-10-20"
+      // Database stores times in UTC, we need to convert to NZ timezone for comparison
       const startTimeStr = assignment.startTime;
       if (!startTimeStr) return false;
       
-      const assignmentDateStr = startTimeStr.split('T')[0]; // Get "2025-10-20"
+      // Convert UTC timestamp to NZ date
+      const assignmentDateNZ = formatInTimeZone(new Date(startTimeStr), 'Pacific/Auckland', 'yyyy-MM-dd');
       
-      // Format selected date as YYYY-MM-DD without timezone conversion
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
-      const selectedDateISO = `${year}-${month}-${day}`;
+      // Format selected date as YYYY-MM-DD in NZ timezone
+      const selectedDateNZ = formatInTimeZone(selectedDate, 'Pacific/Auckland', 'yyyy-MM-dd');
       
-      const matches = assignmentDateStr === selectedDateISO;
+      const matches = assignmentDateNZ === selectedDateNZ;
       if (matches) {
-        console.log(`  ✅ Match found: ${assignment.jobId} at ${assignment.startTime}`);
+        console.log(`  ✅ Match found: ${assignment.jobId} at ${startTimeStr} (NZ: ${assignmentDateNZ})`);
       }
       
       return matches;
