@@ -522,50 +522,70 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   // Handle URL parameters for opening specific jobs (e.g., from notifications)
   useEffect(() => {
-    // Parse URL parameters from window.location.search directly for immediate access
-    const params = new URLSearchParams(window.location.search);
-    const jobId = params.get('job');
-    const tab = params.get('tab');
-    
-    console.log('🔔 DispatchBoard URL check:', { 
-      jobId, 
-      tab, 
-      hasJobsData: !!jobsData?.data,
-      jobCount: jobsData?.data?.length || 0,
-      location,
-      windowSearch: window.location.search,
-      currentlyEditing: jobToEdit?.id
-    });
-    
-    // Only process if we have a jobId parameter and jobs data is loaded
-    if (jobId && jobsData?.data) {
-      console.log('🔔 Processing job from URL parameter:', { jobId, tab });
+    const handleUrlChange = () => {
+      // Parse URL parameters from window.location.search directly for immediate access
+      const params = new URLSearchParams(window.location.search);
+      const jobId = params.get('job');
+      const tab = params.get('tab');
       
-      // Find the job in the loaded data
-      const job = jobsData.data.find((j: any) => j.id === jobId);
+      console.log('🔔 DispatchBoard URL check:', { 
+        jobId, 
+        tab, 
+        hasJobsData: !!jobsData?.data,
+        jobCount: jobsData?.data?.length || 0,
+        location,
+        windowSearch: window.location.search,
+        currentlyEditing: jobToEdit?.id
+      });
       
-      console.log('🔔 Job search result:', { found: !!job, jobId });
-      
-      // Always clear the URL parameter first to prevent re-triggering
-      window.history.replaceState({}, '', '/dispatch');
-      
-      if (job) {
-        // Guard: Don't re-open if we're already editing this job
-        if (showGlobalJobCard && jobToEdit?.id === jobId) {
-          console.log('🔔 Job already open, skipping re-open:', jobId);
-          return;
+      // Only process if we have a jobId parameter and jobs data is loaded
+      if (jobId && jobsData?.data) {
+        console.log('🔔 Processing job from URL parameter:', { jobId, tab });
+        
+        // Find the job in the loaded data
+        const job = jobsData.data.find((j: any) => j.id === jobId);
+        
+        console.log('🔔 Job search result:', { found: !!job, jobId });
+        
+        // Always clear the URL parameter first to prevent re-triggering
+        window.history.replaceState({}, '', '/dispatch');
+        
+        if (job) {
+          // Guard: Don't re-open if we're already editing this job
+          if (showGlobalJobCard && jobToEdit?.id === jobId) {
+            console.log('🔔 Job already open, skipping re-open:', jobId);
+            return;
+          }
+          
+          // Open the job card
+          setShowGlobalJobCard(true);
+          setGlobalJobCardMode('edit');
+          setJobToEdit(job as JobAssignment);
+          
+          console.log('✅ Job card opened');
+        } else {
+          console.warn('⚠️ Job not found in loaded data:', jobId);
         }
-        
-        // Open the job card
-        setShowGlobalJobCard(true);
-        setGlobalJobCardMode('edit');
-        setJobToEdit(job as JobAssignment);
-        
-        console.log('✅ Job card opened');
-      } else {
-        console.warn('⚠️ Job not found in loaded data:', jobId);
       }
-    }
+    };
+
+    // Run on mount and when dependencies change
+    handleUrlChange();
+
+    // Listen for notification navigation events
+    const handleNotificationNav = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('🔔 Notification navigation event received:', customEvent.detail);
+      handleUrlChange();
+    };
+
+    window.addEventListener('notification-navigation', handleNotificationNav);
+    window.addEventListener('popstate', handleUrlChange);
+
+    return () => {
+      window.removeEventListener('notification-navigation', handleNotificationNav);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
   }, [jobsData, location]); // Re-run when jobs data loads OR location changes
 
   // Fetch customers for name lookup
