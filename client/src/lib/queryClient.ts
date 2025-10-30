@@ -66,7 +66,6 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: 20000, // Auto-refresh every 20 seconds for desktop/mobile sync
       refetchOnWindowFocus: "always", // Always refresh on tab focus for instant cross-device sync
       staleTime: 5000, // Keep data fresh for 5 seconds to reduce duplicate requests
       retry: false,
