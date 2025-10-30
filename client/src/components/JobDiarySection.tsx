@@ -930,6 +930,36 @@ export function JobDiarySection({
                   messageText = messageText.split(':\n\n')[1].trim();
                 }
                 
+                // Clean up received messages: remove email metadata that appears after message content
+                if (isReceived) {
+                  // Normalize line endings and HTML formatting first
+                  messageText = messageText
+                    .replace(/\r\n/g, '\n')
+                    .replace(/\r/g, '\n')
+                    .replace(/<br\s*\/?>/gi, '\n')  // Convert <br> to newlines
+                    .replace(/<\/p>/gi, '\n')        // Convert </p> to newlines
+                    .replace(/<p>/gi, '')            // Remove <p> tags
+                    .replace(/<[^>]+>/g, '');        // Remove any other HTML tags
+                  
+                  // Remove email metadata blocks that typically appear at the end
+                  // These usually start with "From:" and include Sent:, To:, Subject:, etc.
+                  // Look for the pattern: newline + "From:" followed by email metadata
+                  const fromIndex = messageText.search(/\n+From:\s*.+?[@<]/i);
+                  if (fromIndex !== -1) {
+                    // Truncate everything from "From:" onwards
+                    messageText = messageText.substring(0, fromIndex);
+                  }
+                  
+                  // Also check for "Sent:" as an alternative starting point
+                  const sentIndex = messageText.search(/\n+Sent:\s*.+?\d{4}/i);
+                  if (sentIndex !== -1) {
+                    messageText = messageText.substring(0, sentIndex);
+                  }
+                  
+                  // Final cleanup: trim and remove excessive whitespace
+                  messageText = messageText.trim();
+                }
+                
                 // Check if we need date separator
                 const currentIndex = diaryEntries.findIndex((e) => e.id === entry.id);
                 const previousEntry = currentIndex > 0 ? diaryEntries[currentIndex - 1] : null;
