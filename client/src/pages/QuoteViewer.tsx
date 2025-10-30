@@ -191,12 +191,12 @@ export default function QuoteViewer({}: QuoteViewerProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full">
-        <div className="max-w-4xl mx-auto w-full">
+      {/* Header with safe area padding for mobile notch/Dynamic Island */}
+      <div className="bg-white border-b border-gray-200 w-full" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingLeft: 'max(0.5rem, env(safe-area-inset-left))', paddingRight: 'max(0.5rem, env(safe-area-inset-right))' }}>
+        <div className="max-w-4xl mx-auto w-full px-2 sm:px-4 pb-3 sm:pb-4">
           {/* Logo */}
-          <div className="flex justify-center mb-4">
-            <img src={logoUrl} alt="Treemarkables" className="h-16 sm:h-20 object-contain" />
+          <div className="flex justify-center mb-3 sm:mb-4">
+            <img src={logoUrl} alt="Treemarkables" className="h-12 sm:h-16 object-contain" />
           </div>
           
           <div className="flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between">
@@ -254,9 +254,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
         </div>
       </div>
 
-      {/* Quote Content */}
-      <div className="max-w-4xl mx-auto py-4 sm:py-6 px-2 sm:px-4 w-full">
-        <Card className="bg-white shadow-sm w-full">
+      {/* Quote Content with safe area padding */}
+      <div className="max-w-4xl mx-auto py-4 sm:py-6 w-full" style={{ paddingLeft: 'max(0.5rem, env(safe-area-inset-left))', paddingRight: 'max(0.5rem, env(safe-area-inset-right))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+        <div className="px-2 sm:px-4">
+          <Card className="bg-white shadow-sm w-full">
           <CardContent className="p-4 sm:p-6">
             {/* Company Header */}
             <div className="text-center mb-3">
@@ -417,7 +418,8 @@ export default function QuoteViewer({}: QuoteViewerProps) {
               </p>
             </div>
           </CardContent>
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -171,9 +171,9 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
-      {/* Header */}
-      <div className="sticky top-0 z-50 bg-white border-b border-gray-200 px-2 sm:px-4 py-3 sm:py-4 w-full shadow-sm">
-        <div className="max-w-4xl mx-auto w-full">
+      {/* Header with safe area padding for mobile notch/Dynamic Island */}
+      <div className="sticky top-0 z-50 bg-white border-b border-gray-200 w-full shadow-sm" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingLeft: 'max(0.5rem, env(safe-area-inset-left))', paddingRight: 'max(0.5rem, env(safe-area-inset-right))' }}>
+        <div className="max-w-4xl mx-auto w-full px-2 sm:px-4 pb-3 sm:pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <Button 
@@ -232,38 +232,44 @@ export default function ProposalViewer({}: ProposalViewerProps) {
         </div>
       </div>
 
-      {/* Proposal Content */}
-      <div className="max-w-4xl mx-auto py-4 sm:py-6 px-2 sm:px-4 w-full">
+      {/* Proposal Content with safe area padding */}
+      <div className="max-w-4xl mx-auto py-4 sm:py-6 w-full" style={{ paddingLeft: 'max(0.5rem, env(safe-area-inset-left))', paddingRight: 'max(0.5rem, env(safe-area-inset-right))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
         {/* Status Banner */}
         {isAccepted && (
-          <div className="bg-green-100 border border-green-300 rounded-lg p-4 mb-6">
-            <div className="flex items-center">
-              <Check className="w-5 h-5 text-green-600 mr-2" />
-              <span className="text-green-800 font-medium">Proposal Accepted</span>
-              <span className="text-green-600 ml-2">- We'll be in touch to schedule the work!</span>
+          <div className="bg-green-100 border border-green-300 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 mx-2 sm:mx-4">
+            <div className="flex items-start sm:items-center gap-2">
+              <Check className="w-5 h-5 text-green-600 shrink-0 mt-0.5 sm:mt-0" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span className="text-green-800 font-medium text-sm sm:text-base">Proposal Accepted</span>
+                <span className="text-green-600 text-xs sm:text-base">- We'll be in touch to schedule the work!</span>
+              </div>
             </div>
           </div>
         )}
 
         {isExpired && !isAccepted && (
-          <div className="bg-red-100 border border-red-300 rounded-lg p-4 mb-6">
-            <div className="flex items-center">
-              <Clock className="w-5 h-5 text-red-600 mr-2" />
-              <span className="text-red-800 font-medium">Proposal Expired</span>
-              <span className="text-red-600 ml-2">- Please contact us for an updated proposal</span>
+          <div className="bg-red-100 border border-red-300 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 mx-2 sm:mx-4">
+            <div className="flex items-start sm:items-center gap-2">
+              <Clock className="w-5 h-5 text-red-600 shrink-0 mt-0.5 sm:mt-0" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span className="text-red-800 font-medium text-sm sm:text-base">Proposal Expired</span>
+                <span className="text-red-600 text-xs sm:text-base">- Please contact us for an updated proposal</span>
+              </div>
             </div>
           </div>
         )}
 
-        <ProposalTemplate
-          template={template}
-          proposal={proposal}
-          customer={customer}
-          job={job}
-          sections={proposal.sections || []}
-          showActions={false}
-          className="bg-white"
-        />
+        <div className="px-2 sm:px-4">
+          <ProposalTemplate
+            template={template}
+            proposal={proposal}
+            customer={customer}
+            job={job}
+            sections={proposal.sections || []}
+            showActions={false}
+            className="bg-white"
+          />
+        </div>
       </div>
     </div>
   );
