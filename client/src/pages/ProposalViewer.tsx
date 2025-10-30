@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
-import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import logoUrl from "@assets/treelogo_1761690528797.webp";
@@ -16,6 +15,17 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const { proposalId } = useParams();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+  
+  const handleBackClick = () => {
+    // Check if there's a page to go back to in the history
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      // Fallback to dispatch board if no history
+      setLocation('/dispatch');
+    }
+  };
   
   // First try to fetch proposal directly by ID
   const { data: proposalResponse, isLoading: proposalLoading, error: proposalError } = useQuery({
@@ -131,12 +141,10 @@ export default function ProposalViewer({}: ProposalViewerProps) {
             <p className="text-gray-600 mb-4">
               The proposal you're looking for doesn't exist or may have been removed.
             </p>
-            <Link href="/">
-              <Button variant="outline">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Go Back
-              </Button>
-            </Link>
+            <Button variant="outline" onClick={handleBackClick} data-testid="button-back-not-found">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Go Back
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -168,12 +176,16 @@ export default function ProposalViewer({}: ProposalViewerProps) {
         <div className="max-w-4xl mx-auto w-full">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <Link href="/">
-                <Button variant="outline" size="sm" className="shrink-0">
-                  <ArrowLeft className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Back</span>
-                </Button>
-              </Link>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="shrink-0"
+                onClick={handleBackClick}
+                data-testid="button-back"
+              >
+                <ArrowLeft className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Back</span>
+              </Button>
               <div className="min-w-0 flex-1">
                 <h1 className="text-base sm:text-xl font-semibold text-gray-900 truncate">
                   Proposal #{proposal.proposalNumber || proposal.id}

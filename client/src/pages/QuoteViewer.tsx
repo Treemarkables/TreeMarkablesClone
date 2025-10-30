@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
-import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import logoUrl from "@assets/treemarkables_logo_transparent_smooth_1760076555496.png";
@@ -15,6 +14,17 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   const { quoteId } = useParams();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+  
+  const handleBackClick = () => {
+    // Check if there's a page to go back to in the history
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      // Fallback to dispatch board if no history
+      setLocation('/dispatch');
+    }
+  };
   
   // First try to fetch quote directly by ID
   const { data: quoteResponse, isLoading: quoteLoading, error: quoteError } = useQuery({
@@ -109,12 +119,10 @@ export default function QuoteViewer({}: QuoteViewerProps) {
             <p className="text-gray-600 mb-4">
               The quote you're looking for doesn't exist or may have been removed.
             </p>
-            <Link href="/">
-              <Button variant="outline">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Go Back
-              </Button>
-            </Link>
+            <Button variant="outline" onClick={handleBackClick} data-testid="button-back-not-found">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Go Back
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -193,12 +201,15 @@ export default function QuoteViewer({}: QuoteViewerProps) {
           
           <div className="flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between">
             <div className="flex items-center gap-3">
-              <Link href="/">
-                <Button variant="outline" size="sm">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
-              </Link>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleBackClick}
+                data-testid="button-back"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
               <div>
                 <h1 className="text-lg font-semibold text-gray-900">
                   Quote #{quote.quoteNumber || quote.id}
