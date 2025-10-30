@@ -39,7 +39,7 @@ export function SMSComposerModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [characterCount, setCharacterCount] = useState(0);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
 
   // Fetch SMS templates
   const { data: smsTemplatesData } = useQuery({
@@ -87,8 +87,8 @@ export function SMSComposerModal({
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplate(templateId);
     
-    // If "No Template" is selected (empty string), clear the message
-    if (templateId === "") {
+    // If "No Template" is selected (custom), clear the message
+    if (templateId === "custom") {
       form.setValue("message", "");
       setCharacterCount(0);
       return;
@@ -237,7 +237,7 @@ export function SMSComposerModal({
                     <SelectValue placeholder="Select a template..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Template (Custom Message)</SelectItem>
+                    <SelectItem value="custom">No Template (Custom Message)</SelectItem>
                     {smsTemplates.map((template: any) => (
                       <SelectItem key={template.id} value={template.id}>
                         {template.name}
