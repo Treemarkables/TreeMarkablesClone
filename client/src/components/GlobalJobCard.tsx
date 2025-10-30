@@ -1377,58 +1377,58 @@ export function GlobalJobCard({
     });
   };
 
-  // Staff conflict checking disabled - allow double booking
-  // useEffect(() => {
-  //   const abortController = new AbortController();
-  //   
-  //   const checkConflicts = async () => {
-  //     if (!schedulingData.date || !schedulingData.startTime || !schedulingData.duration || schedulingData.assignedTo.length === 0) {
-  //       setStaffConflicts([]);
-  //       return;
-  //     }
-  //
-  //     try {
-  //       const startTime = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
-  //       const endTime = new Date(startTime.getTime() + parseInt(schedulingData.duration) * 60000);
-  //
-  //       const response = await fetch('/api/staff/check-conflicts', {
-  //         method: 'POST',
-  //         headers: { 'Content-Type': 'application/json' },
-  //         body: JSON.stringify({
-  //           employeeIds: schedulingData.assignedTo,
-  //           startTime: startTime.toISOString(),
-  //           endTime: endTime.toISOString(),
-  //           excludeJobId: editingJob?.id
-  //         }),
-  //         signal: abortController.signal
-  //       });
-  //
-  //       if (abortController.signal.aborted) return;
-  //
-  //       const data = await response.json();
-  //       if (data.success) {
-  //         setStaffConflicts(data.data || []);
-  //       }
-  //     } catch (error) {
-  //       if (error instanceof Error && (error.name === 'AbortError' || error.message === 'Component cleanup')) {
-  //         // Request was cancelled, ignore
-  //         return;
-  //       }
-  //       if (abortController.signal.aborted) {
-  //         // Component is unmounting, ignore
-  //         return;
-  //       }
-  //       console.error('Error checking conflicts:', error);
-  //     }
-  //   };
-  //
-  //   const timeoutId = setTimeout(checkConflicts, 300); // Debounce
-  //   return () => {
-  //     clearTimeout(timeoutId);
-  //     // Note: We don't call abort() here because it causes unhandled promise rejections
-  //     // The signal checks in checkConflicts will handle cleanup properly
-  //   };
-  // }, [schedulingData.date, schedulingData.startTime, schedulingData.duration, schedulingData.assignedTo, editingJob?.id]);
+  // Staff conflict checking - ENABLED to prevent double booking
+  useEffect(() => {
+    const abortController = new AbortController();
+    
+    const checkConflicts = async () => {
+      if (!schedulingData.date || !schedulingData.startTime || !schedulingData.duration || schedulingData.assignedTo.length === 0) {
+        setStaffConflicts([]);
+        return;
+      }
+
+      try {
+        const startTime = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
+        const endTime = new Date(startTime.getTime() + parseInt(schedulingData.duration) * 60000);
+
+        const response = await fetch('/api/staff/check-conflicts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employeeIds: schedulingData.assignedTo,
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            excludeJobId: editingJob?.id
+          }),
+          signal: abortController.signal
+        });
+
+        if (abortController.signal.aborted) return;
+
+        const data = await response.json();
+        if (data.success) {
+          setStaffConflicts(data.data || []);
+        }
+      } catch (error) {
+        if (error instanceof Error && (error.name === 'AbortError' || error.message === 'Component cleanup')) {
+          // Request was cancelled, ignore
+          return;
+        }
+        if (abortController.signal.aborted) {
+          // Component is unmounting, ignore
+          return;
+        }
+        console.error('Error checking conflicts:', error);
+      }
+    };
+
+    const timeoutId = setTimeout(checkConflicts, 300); // Debounce
+    return () => {
+      clearTimeout(timeoutId);
+      // Note: We don't call abort() here because it causes unhandled promise rejections
+      // The signal checks in checkConflicts will handle cleanup properly
+    };
+  }, [schedulingData.date, schedulingData.startTime, schedulingData.duration, schedulingData.assignedTo, editingJob?.id]);
 
   // Save schedule function
   const saveSchedule = async () => {
@@ -4444,9 +4444,11 @@ export function GlobalJobCard({
                 ) : (
                   employees.map((employee: any) => {
                     const isSelected = schedulingData.assignedTo.includes(employee.id);
+                    const employeeConflict = staffConflicts.find(c => c.employeeId === employee.id);
+                    const hasConflict = employeeConflict && employeeConflict.conflicts && employeeConflict.conflicts.length > 0;
                     
                     return (
-                      <div key={employee.id} className="flex items-center space-x-2">
+                      <div key={employee.id} className={`flex items-center space-x-2 ${hasConflict && isSelected ? 'bg-red-50 dark:bg-red-950 p-2 rounded-md border border-red-200 dark:border-red-800' : ''}`}>
                         <input
                           type="checkbox"
                           id={`staff-${employee.id}`}
@@ -4468,12 +4470,32 @@ export function GlobalJobCard({
                           {employee.position && (
                             <span className="text-xs text-muted-foreground ml-1">({employee.position})</span>
                           )}
+                          {hasConflict && isSelected && (
+                            <div className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">
+                              ⚠️ Conflict: Already scheduled for {employeeConflict.conflicts.length} other {employeeConflict.conflicts.length === 1 ? 'job' : 'jobs'} at this time
+                            </div>
+                          )}
                         </label>
                       </div>
                     );
                   })
                 )}
               </div>
+              
+              {/* Overall Conflict Warning */}
+              {staffConflicts.length > 0 && staffConflicts.some(c => c.conflicts && c.conflicts.length > 0 && schedulingData.assignedTo.includes(c.employeeId)) && (
+                <div className="mt-3 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-red-800 dark:text-red-200">Scheduling Conflicts Detected</p>
+                      <p className="text-xs text-red-700 dark:text-red-300 mt-1">
+                        One or more staff members are already scheduled for other jobs during this time. You can still proceed, but conflicts should be resolved.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Client Notification Option */}
