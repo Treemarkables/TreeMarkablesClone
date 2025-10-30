@@ -46,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // CRITICAL: Never cache authentication state
     staleTime: 0,
     gcTime: 0,
+    refetchInterval: false, // Disable auto-polling - only check on mount/focus
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
