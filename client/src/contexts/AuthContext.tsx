@@ -22,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<Employee | null>(null);
   const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(false);
   const [, setLocation] = useLocation();
+  const consecutive401sRef = useRef<number>(0);
 
   const { data: meResponse, isLoading: authQueryLoading, isFetching } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
@@ -42,7 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return await res.json();
     },
-    retry: false,
+    retry: 2, // Retry twice on network errors (not 401s) to tolerate transient issues
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
     // CRITICAL: Never cache authentication state
     staleTime: 0,
     gcTime: 0,
@@ -137,22 +139,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // If server returns not authenticated
     if (meResponse?.success === false) {
+      consecutive401sRef.current += 1;
+      
       if (currentUser) {
         // CRITICAL FIX: Don't clear user state if they just logged in (within last 10 seconds)
         // This prevents race condition where stale 401 response arrives after successful login
         const timeSinceLogin = Date.now() - lastLoginTimeRef.current;
         if (timeSinceLogin < 10000) {
           console.log('🛡️ Ignoring 401 response - user just logged in', timeSinceLogin + 'ms ago');
+          consecutive401sRef.current = 0;
           return;
         }
         
-        console.warn('⚠️ Authentication mismatch detected - clearing stale user state');
-        setCurrentUserState(null);
-        queryClient.clear();
+        // Only log out after multiple consecutive 401s to tolerate transient network issues
+        if (consecutive401sRef.current >= 3) {
+          console.warn('⚠️ Multiple consecutive 401s detected - logging out user');
+          setCurrentUserState(null);
+          consecutive401sRef.current = 0;
+          // Don't clear the entire query cache - just let the user re-login
+          // This prevents data loss if the 401 was a temporary network/cookie issue
+        } else {
+          console.log(`🔄 Transient 401 detected (${consecutive401sRef.current}/3) - not logging out yet`);
+        }
       }
     } 
     // If server returns authenticated user data
     else if (meResponse?.success === true && meResponse.data) {
+      consecutive401sRef.current = 0; // Reset failure counter on successful auth
+      
       if (!currentUser || currentUser.id !== meResponse.data.id) {
         console.log('✅ Setting authenticated user:', meResponse.data.role);
         setCurrentUserState(meResponse.data);
