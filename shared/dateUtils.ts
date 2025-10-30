@@ -8,6 +8,8 @@
  * - When saving, we convert NZ local time → UTC
  */
 
+import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
+
 const NZ_TIMEZONE = 'Pacific/Auckland';
 
 /**
@@ -24,20 +26,12 @@ const NZ_TIMEZONE = 'Pacific/Auckland';
  * // Returns Date object representing 2025-10-16T21:00:00.000Z (UTC)
  */
 export function nzTimeToUTC(dateStr: string, timeStr: string): Date {
-  // Create a date string in ISO format without timezone
+  // Create a date string representing the wall-clock time in NZ
   const localDateTimeStr = `${dateStr}T${timeStr}:00`;
   
-  // Parse as if it's NZ time by using Intl.DateTimeFormat
-  // This gives us the correct UTC timestamp for NZ local time
-  const date = new Date(localDateTimeStr);
-  
-  // Get the timezone offset for NZ at this specific date (handles DST)
-  const nzDate = new Date(date.toLocaleString('en-US', { timeZone: NZ_TIMEZONE }));
-  const localDate = new Date(date.toLocaleString('en-US'));
-  const offset = localDate.getTime() - nzDate.getTime();
-  
-  // Apply the offset to get the correct UTC time
-  return new Date(date.getTime() - offset);
+  // Use date-fns-tz to properly convert NZ time to UTC
+  // This handles DST automatically and avoids double conversion
+  return zonedTimeToUtc(localDateTimeStr, NZ_TIMEZONE);
 }
 
 /**
@@ -53,7 +47,11 @@ export function nzTimeToUTC(dateStr: string, timeStr: string): Date {
  * // Returns { date: '2025-10-17', time: '10:00' }
  */
 export function utcToNZTime(utcDate: Date): { date: string; time: string } {
-  const nzDateStr = utcDate.toLocaleString('en-NZ', {
+  // Convert UTC to NZ zoned time
+  const nzDate = utcToZonedTime(utcDate, NZ_TIMEZONE);
+  
+  // Format as NZ date/time
+  const nzDateStr = nzDate.toLocaleString('en-NZ', {
     timeZone: NZ_TIMEZONE,
     year: 'numeric',
     month: '2-digit',
