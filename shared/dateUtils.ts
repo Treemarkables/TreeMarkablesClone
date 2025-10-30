@@ -8,7 +8,7 @@
  * - When saving, we convert NZ local time → UTC
  */
 
-import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 
 const NZ_TIMEZONE = 'Pacific/Auckland';
 
@@ -31,7 +31,7 @@ export function nzTimeToUTC(dateStr: string, timeStr: string): Date {
   
   // Use date-fns-tz to properly convert NZ time to UTC
   // This handles DST automatically and avoids double conversion
-  return zonedTimeToUtc(localDateTimeStr, NZ_TIMEZONE);
+  return fromZonedTime(localDateTimeStr, NZ_TIMEZONE);
 }
 
 /**
@@ -48,7 +48,7 @@ export function nzTimeToUTC(dateStr: string, timeStr: string): Date {
  */
 export function utcToNZTime(utcDate: Date): { date: string; time: string } {
   // Convert UTC to NZ zoned time
-  const nzDate = utcToZonedTime(utcDate, NZ_TIMEZONE);
+  const nzDate = toZonedTime(utcDate, NZ_TIMEZONE);
   
   // Format as NZ date/time
   const nzDateStr = nzDate.toLocaleString('en-NZ', {
