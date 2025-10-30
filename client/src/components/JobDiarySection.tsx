@@ -970,7 +970,7 @@ export function JobDiarySection({
                 return (
                   <div key={entry.id}>
                     {showDateSeparator && (
-                      <div className="flex justify-center my-1">
+                      <div className="flex justify-center my-0.5">
                         <span className="text-[7px] text-gray-500 bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded-full">
                           {format(new Date(entry.timestamp), 'EEEE h:mma').toLowerCase()}
                         </span>
@@ -994,7 +994,7 @@ export function JobDiarySection({
                           <Trash2 className="w-1.5 h-1.5 text-gray-400 hover:text-red-600" />
                         </Button>
                         
-                        <div className={`rounded-lg px-1.5 py-0.5 ${
+                        <div className={`rounded-lg px-1.5 py-1 ${
                           isSent 
                             ? entry.type === 'email' 
                               ? 'bg-blue-500 text-white rounded-br-sm'
@@ -1003,16 +1003,16 @@ export function JobDiarySection({
                         }`}>
                           {/* Show recipient for sent messages */}
                           {isSent && recipientInfo && (
-                            <div className="text-[9px] opacity-80 mb-0.5 border-b border-white/20 pb-0.5">
+                            <div className="text-[10px] opacity-80 mb-0.5 border-b border-white/20 pb-0.5">
                               To: {recipientInfo}
                             </div>
                           )}
-                          <p className="text-[11px] leading-snug whitespace-pre-wrap break-words">{messageText}</p>
+                          <p className="text-[11px] leading-tight whitespace-pre-wrap break-words">{messageText}</p>
                         </div>
                         
                         {/* Timestamp for all messages */}
                         <div className={`flex items-center gap-1 mt-0.5 ${isSent ? 'justify-end' : 'justify-start'}`}>
-                          <span className="text-[9px] text-gray-400">
+                          <span className="text-[10px] text-gray-400">
                             {format(new Date(entry.timestamp), 'MMM dd, h:mma').toLowerCase()}
                           </span>
                         </div>
@@ -1024,12 +1024,12 @@ export function JobDiarySection({
                         
                         {/* Reply button for received messages */}
                         {!isSent && (
-                          <div className="mt-1 flex items-center gap-1">
+                          <div className="mt-0.5 flex items-center gap-1">
                             {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-6 text-xs"
+                                className="h-6 text-[11px] px-2"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
@@ -1041,7 +1041,7 @@ export function JobDiarySection({
                                 }}
                                 data-testid={`button-reply-email-${entry.id}`}
                               >
-                                <Mail className="w-3 h-3 mr-1" />
+                                <Mail className="w-3 h-3 mr-0.5" />
                                 Reply
                               </Button>
                             )}
@@ -1049,7 +1049,7 @@ export function JobDiarySection({
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-6 text-xs"
+                                className="h-6 text-[11px] px-2"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const replyPhone = entry.metadata?.phoneNumber || '';
@@ -1058,7 +1058,7 @@ export function JobDiarySection({
                                 }}
                                 data-testid={`button-reply-sms-${entry.id}`}
                               >
-                                <MessageSquare className="w-3 h-3 mr-1" />
+                                <MessageSquare className="w-3 h-3 mr-0.5" />
                                 Reply
                               </Button>
                             )}
