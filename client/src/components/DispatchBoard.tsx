@@ -522,8 +522,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   // Handle URL parameters for opening specific jobs (e.g., from notifications)
   useEffect(() => {
-    // Parse URL parameters from the wouter location
-    const params = new URLSearchParams(location.split('?')[1] || '');
+    // Parse URL parameters from window.location.search directly for immediate access
+    const params = new URLSearchParams(window.location.search);
     const jobId = params.get('job');
     const tab = params.get('tab');
     
@@ -533,6 +533,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       hasJobsData: !!jobsData?.data,
       jobCount: jobsData?.data?.length || 0,
       location,
+      windowSearch: window.location.search,
       currentlyEditing: jobToEdit?.id
     });
     
