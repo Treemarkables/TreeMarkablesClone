@@ -3442,8 +3442,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         const job = await storage.getJob(jobId);
         const customer = job?.customerId ? await storage.getCustomer(job.customerId) : null;
         
-        // Define which diary entry types should create notifications
-        const notifiableTypes = ['email', 'sms', 'proposal', 'photo', 'note'];
+        // Define which diary entry types should create notifications (excluding 'note')
+        const notifiableTypes = ['email', 'sms', 'proposal', 'photo'];
         
         if (notifiableTypes.includes(entry.entryType)) {
           // Map diary entry types to notification types
