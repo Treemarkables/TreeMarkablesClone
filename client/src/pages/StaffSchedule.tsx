@@ -108,7 +108,7 @@ export default function StaffSchedule() {
           return null;
         }
         
-        // Attach the assignment start time to the job for sorting
+        // Attach the assignment start time to the job for display (keep it for timezone conversion)
         return {
           ...job,
           _assignmentStartTime: assignment.startTime
@@ -118,8 +118,7 @@ export default function StaffSchedule() {
       .sort((a, b) => {
         // Sort by assignment start time
         return new Date(a._assignmentStartTime).getTime() - new Date(b._assignmentStartTime).getTime();
-      })
-      .map(({ _assignmentStartTime, ...job }) => job as Job); // Remove the temporary field
+      });
     
     console.log(`  Returning ${jobsWithAssignments.length} jobs for employee`);
     return jobsWithAssignments;
@@ -296,7 +295,9 @@ export default function StaffSchedule() {
                           </div>
                           <div className="text-right">
                             <div className="text-sm font-medium">
-                              {formatTime12Hour(job.scheduledStartTime)}
+                              {job._assignmentStartTime 
+                                ? formatInTimeZone(new Date(job._assignmentStartTime), 'Pacific/Auckland', 'h:mm a')
+                                : formatTime12Hour(job.scheduledStartTime)}
                             </div>
                             {job.status && (
                               <div className="text-xs mt-1">
