@@ -2822,14 +2822,48 @@ class DatabaseStorage implements IStorage {
   async deleteNotification(id: string): Promise<void> {
     await db.delete(schema.notifications).where(eq(schema.notifications.id, id));
   }
-  async getNotificationSummary(userId?: string): Promise<NotificationSummary> { 
-    return { 
-      total: 0, 
-      unread: 0, 
-      byType: {}, 
-      byPriority: {},
-      recent: []
-    }; 
+  async getNotificationSummary(userId?: string): Promise<NotificationSummary> {
+    // Get all notifications for the user (or all if no userId)
+    let query = db.select().from(schema.notifications);
+    
+    // Only add where clause if userId is provided
+    if (userId) {
+      query = query.where(eq(schema.notifications.userId, userId)) as any;
+    }
+    
+    const allNotifications = await query.orderBy(desc(schema.notifications.createdAt));
+    
+    // Count unread notifications
+    const unreadCount = allNotifications.filter(n => !n.isRead).length;
+    
+    // Group by type
+    const byType: Record<string, number> = {};
+    allNotifications.forEach(n => {
+      byType[n.type] = (byType[n.type] || 0) + 1;
+    });
+    
+    // Group by priority
+    const byPriority: Record<string, number> = {};
+    allNotifications.forEach(n => {
+      byPriority[n.priority] = (byPriority[n.priority] || 0) + 1;
+    });
+    
+    // Get recent notifications (up to 5)
+    const recent = allNotifications.slice(0, 5).map(n => ({
+      id: n.id,
+      title: n.title,
+      type: n.type,
+      priority: n.priority,
+      createdAt: n.createdAt.toISOString(),
+    }));
+    
+    return {
+      total: allNotifications.length,
+      unread: unreadCount,
+      byType,
+      byPriority,
+      recent,
+    };
   }
   async deleteExpiredNotifications(): Promise<void> { }
 
