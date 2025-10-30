@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -220,7 +221,7 @@ export default function StaffSchedule() {
           <div className="flex items-center gap-2 px-3 py-2 bg-card rounded-md border">
             <CalendarIcon className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium" data-testid="text-current-date">
-              {format(selectedDate, 'EEEE, MMMM d, yyyy')}
+              {formatInTimeZone(selectedDate, 'Pacific/Auckland', 'EEEE, MMMM d, yyyy')}
             </span>
           </div>
 
