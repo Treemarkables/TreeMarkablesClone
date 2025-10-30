@@ -65,7 +65,7 @@ interface Employee {
 
 export default function TimeTracking() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+  const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'daily' | 'job'>('daily');
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -82,7 +82,7 @@ export default function TimeTracking() {
     queryKey: ['/api/time-entries/daily', selectedEmployee, selectedDate],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (selectedEmployee) params.append('employeeId', selectedEmployee);
+      if (selectedEmployee && selectedEmployee !== 'all') params.append('employeeId', selectedEmployee);
       if (selectedDate) params.append('fromDate', selectedDate);
       if (selectedDate) params.append('toDate', selectedDate);
       
@@ -197,7 +197,7 @@ export default function TimeTracking() {
                   <SelectValue placeholder="All staff" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All staff</SelectItem>
+                  <SelectItem value="all">All staff</SelectItem>
                   {employees.map((employee) => (
                     <SelectItem key={employee.id} value={employee.id}>
                       {employee.firstName} {employee.lastName}
