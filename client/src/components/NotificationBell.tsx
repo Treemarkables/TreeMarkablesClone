@@ -410,74 +410,58 @@ export function NotificationBell() {
       return;
     }
 
-    // Handle proposal notifications
-    if (notification.type === 'proposal_accepted' || notification.type === 'proposal_sent') {
-      if (notification.proposalId) {
-        const url = `/proposal/${notification.proposalId}`;
-        console.log('🔀 Navigating to proposal:', url);
+    // PRIORITY: If notification has a jobId, always open the job card modal
+    // This ensures all job-related notifications open the job card, regardless of type
+    if (notification.jobId) {
+      // Check if this is a diary-related notification to open the diary tab
+      const diaryTypes = ['email_reply', 'sms_reply', 'proposal_sent', 'photo_added', 'note_added'];
+      if (diaryTypes.includes(notification.type)) {
+        const url = `/dispatch?job=${notification.jobId}&tab=diary`;
+        console.log('🔀 Navigating to job card with diary tab:', url);
         setLocation(url);
         setIsOpen(false);
         return;
       }
-    }
-
-    // Handle job completion and status change notifications
-    if (notification.type === 'job_completed' || notification.type === 'job_status_change') {
-      if (notification.jobId) {
-        const url = `/dispatch?job=${notification.jobId}`;
-        console.log('🔀 Navigating to job:', url);
-        setLocation(url);
-        setIsOpen(false);
-        return;
-      }
-    }
-
-    // Handle diary-specific notifications - navigate to job and open diary tab
-    const diaryTypes = ['email_reply', 'sms_reply', 'proposal_sent', 'photo_added', 'note_added'];
-    if (diaryTypes.includes(notification.type) && notification.jobId) {
-      const url = `/dispatch?job=${notification.jobId}&tab=diary`;
-      console.log('🔀 Navigating to job diary:', url);
+      
+      // Default: open job card without specific tab
+      const url = `/dispatch?job=${notification.jobId}`;
+      console.log('🔀 Navigating to job card:', url);
       setLocation(url);
       setIsOpen(false);
       return;
     }
 
-    // Fallback navigation based on related entities priority
+    // Handle proposal notifications (only if no jobId)
     if (notification.proposalId) {
       const url = `/proposal/${notification.proposalId}`;
-      console.log('🔀 Fallback: Navigating to proposal:', url);
+      console.log('🔀 Navigating to proposal:', url);
       setLocation(url);
       setIsOpen(false);
       return;
     }
 
-    if (notification.jobId) {
-      const url = `/dispatch?job=${notification.jobId}`;
-      console.log('🔀 Fallback: Navigating to job:', url);
-      setLocation(url);
-      setIsOpen(false);
-      return;
-    }
-
+    // Handle quote notifications (only if no jobId)
     if (notification.quoteId) {
       const url = `/quote/${notification.quoteId}`;
-      console.log('🔀 Fallback: Navigating to quote:', url);
+      console.log('🔀 Navigating to quote:', url);
       setLocation(url);
       setIsOpen(false);
       return;
     }
 
+    // Handle lead notifications
     if (notification.leadId) {
       const url = `/opportunities?lead=${notification.leadId}`;
-      console.log('🔀 Fallback: Navigating to lead:', url);
+      console.log('🔀 Navigating to lead:', url);
       setLocation(url);
       setIsOpen(false);
       return;
     }
 
+    // Handle customer notifications
     if (notification.customerId) {
       const url = `/clients?customer=${notification.customerId}`;
-      console.log('🔀 Fallback: Navigating to customer:', url);
+      console.log('🔀 Navigating to customer:', url);
       setLocation(url);
       setIsOpen(false);
       return;
