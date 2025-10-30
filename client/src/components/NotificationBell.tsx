@@ -397,6 +397,12 @@ export function NotificationBell() {
     if (notification.actionUrl && notification.actionUrl.startsWith('/')) {
       console.log('🔀 Navigating via actionUrl:', notification.actionUrl);
       setLocation(notification.actionUrl);
+      
+      // Dispatch custom event to notify components of URL change
+      window.dispatchEvent(new CustomEvent('notification-navigation', { 
+        detail: { url: notification.actionUrl } 
+      }));
+      
       setIsOpen(false);
       return;
     }
@@ -406,6 +412,12 @@ export function NotificationBell() {
       const url = `/conversation/${notification.metadata.conversationId}`;
       console.log('🔀 Navigating via conversationId:', url);
       setLocation(url);
+      
+      // Dispatch custom event to notify components of URL change
+      window.dispatchEvent(new CustomEvent('notification-navigation', { 
+        detail: { url } 
+      }));
+      
       setIsOpen(false);
       return;
     }
@@ -419,6 +431,12 @@ export function NotificationBell() {
         const url = `/dispatch?job=${notification.jobId}&tab=diary`;
         console.log('🔀 Navigating to job card with diary tab:', url);
         setLocation(url);
+        
+        // Dispatch custom event to notify DispatchBoard
+        window.dispatchEvent(new CustomEvent('notification-navigation', { 
+          detail: { url } 
+        }));
+        
         setIsOpen(false);
         return;
       }
@@ -427,6 +445,12 @@ export function NotificationBell() {
       const url = `/dispatch?job=${notification.jobId}`;
       console.log('🔀 Navigating to job card:', url);
       setLocation(url);
+      
+      // Dispatch custom event to notify DispatchBoard
+      window.dispatchEvent(new CustomEvent('notification-navigation', { 
+        detail: { url } 
+      }));
+      
       setIsOpen(false);
       return;
     }
