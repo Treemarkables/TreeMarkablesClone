@@ -166,8 +166,8 @@ export function SMSComposerModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-t-lg -m-6 mb-4">
+      <DialogContent className="sm:max-w-lg p-0">
+        <DialogHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-t-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
@@ -188,7 +188,7 @@ export function SMSComposerModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSend)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSend)} className="space-y-4 p-6">
             {/* Phone Number Field */}
             <FormField
               control={form.control}
