@@ -86,6 +86,14 @@ export function SMSComposerModal({
   // Handle template selection
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplate(templateId);
+    
+    // If "No Template" is selected (empty string), clear the message
+    if (templateId === "") {
+      form.setValue("message", "");
+      setCharacterCount(0);
+      return;
+    }
+    
     const template = smsTemplates.find((t: any) => t.id === templateId);
     
     if (template) {
@@ -229,6 +237,7 @@ export function SMSComposerModal({
                     <SelectValue placeholder="Select a template..." />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">No Template (Custom Message)</SelectItem>
                     {smsTemplates.map((template: any) => (
                       <SelectItem key={template.id} value={template.id}>
                         {template.name}
