@@ -97,6 +97,16 @@ interface GlobalJobCardProps {
   jobId?: string;
   job?: Job;
   customerId?: string;
+  initialData?: {
+    customerName?: string;
+    customerFirstName?: string;
+    customerLastName?: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    address?: string;
+    description?: string;
+    leadSource?: string;
+  };
   onJobCreated?: (job: any) => void;
   onJobUpdated?: (job: any) => void;
   renderInline?: boolean; // For split-screen panel rendering (desktop)
@@ -109,6 +119,7 @@ export function GlobalJobCard({
   jobId, 
   job, 
   customerId, 
+  initialData,
   onJobCreated, 
   onJobUpdated,
   renderInline = false
@@ -582,8 +593,35 @@ export function GlobalJobCard({
       hasUserChangedRef.current = false;
       isLoadingDataRef.current = false;
       
-      // Reset to blank form when creating new job (check mode and jobId directly, not editingJob which may have stale cache)
-      form.reset({
+      // Use initialData if provided (from conversations), otherwise blank form
+      const resetData = initialData ? {
+        title: '',
+        description: initialData.description || '',
+        status: 'quote',
+        priority: 'medium',
+        customerId: '',
+        leadSource: initialData.leadSource || '',
+        address: initialData.address || '',
+        totalAmount: '0',
+        paidAmount: '0',
+        notes: '',
+        isNewCustomer: true, // Mark as new customer if we have initialData
+        newCustomerName: initialData.customerName || '',
+        newCustomerEmail: initialData.customerEmail || '',
+        newCustomerPhone: initialData.customerPhone || '',
+        jobContactFirstName: initialData.customerFirstName || '',
+        jobContactLastName: initialData.customerLastName || '',
+        jobContactEmail: initialData.customerEmail || '',
+        jobContactPhone: initialData.customerPhone || '',
+        billingContactPhone: '',
+        billingContactMobile: initialData.customerPhone || '',
+        billingAddress: initialData.address || '',
+        invoiceDescription: initialData.description || '',
+        sameAsJobAddress: true,
+        taxMode: 'tax_exclusive',
+        checklist: [],
+        includeDescriptionInQuotesProposals: true,
+      } : {
         title: '',
         description: '',
         status: 'quote',
@@ -605,11 +643,21 @@ export function GlobalJobCard({
         sameAsJobAddress: true,
         taxMode: 'tax_exclusive',
         checklist: [],
-        includeDescriptionInQuotesProposals: true, // Default to including description
-      });
+        includeDescriptionInQuotesProposals: true,
+      };
+      
+      // Reset form with appropriate data
+      form.reset(resetData);
       replaceLineItems([]); // Clear line items
-      setSelectedCustomerName(''); // Clear customer selection
-      setCustomerSearchValue(''); // Clear customer search field
+      
+      // Set customer search value if we have initial data
+      if (initialData?.customerName) {
+        setSelectedCustomerName(initialData.customerName);
+        setCustomerSearchValue(initialData.customerName);
+      } else {
+        setSelectedCustomerName('');
+        setCustomerSearchValue('');
+      }
       setHasUserSelectedCustomer(false); // Reset customer selection flag
     } else if (editingJob && editingJob.id && !customersLoading) {
       // Wait for customers to load before populating form to avoid missing customer data
@@ -667,7 +715,7 @@ export function GlobalJobCard({
         isLoadingDataRef.current = false;
       }, 500);
     }
-  }, [isOpen, mode, jobId, createdJobId, editingJob?.id, editingJobCustomer, customersLoading, form, replaceLineItems]);
+  }, [isOpen, mode, jobId, createdJobId, editingJob?.id, editingJobCustomer, customersLoading, form, replaceLineItems, initialData]);
 
   // Keep billing address in sync with job address when "same as job address" is enabled
   useEffect(() => {
