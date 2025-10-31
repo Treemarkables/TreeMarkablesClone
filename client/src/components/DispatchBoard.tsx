@@ -438,6 +438,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const [globalJobCardMode, setGlobalJobCardMode] = useState<'create' | 'edit'>('create');
   const [jobToEdit, setJobToEdit] = useState<JobAssignment | null>(null);
+  const [initialJobData, setInitialJobData] = useState<any>(null);
   const [newJobFormData, setNewJobFormData] = useState({
     customerName: '',
     customerPhone: '',
@@ -501,6 +502,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       try {
         const parsed = JSON.parse(pendingData);
         console.log('📋 Found pending job data from conversation:', parsed);
+        
+        // Store the initial data to pass to GlobalJobCard
+        setInitialJobData(parsed);
         
         // Open the global job card in create mode
         setShowGlobalJobCard(true);
@@ -1740,9 +1744,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         isOpen={true}
                         mode={globalJobCardMode}
                         jobId={jobToEdit?.jobId || jobToEdit?.id}
+                        initialData={initialJobData}
                         onClose={() => {
                           setShowGlobalJobCard(false);
                           setJobToEdit(null);
+                          setInitialJobData(null);
                         }}
                         renderInline={true}
                       />
@@ -1955,9 +1961,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         isOpen={showGlobalJobCard}
         mode={globalJobCardMode}
         jobId={jobToEdit?.jobId || jobToEdit?.id}
+        initialData={initialJobData}
         onClose={() => {
           setShowGlobalJobCard(false);
           setJobToEdit(null);
+          setInitialJobData(null);
         }}
       />
     </div>
