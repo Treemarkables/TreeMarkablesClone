@@ -1039,7 +1039,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const jobNumberB = parseInt(b.jobNumber || '0', 10);
         return jobNumberB - jobNumberA;
       })
-      .slice(0, 30); // Limit to 30 latest jobs - use deep search to find more
+      .slice(0, 200); // Show up to 200 latest jobs - use deep search for older jobs
     
     return sorted;
   };
