@@ -19,6 +19,7 @@ export default function StaffSchedule() {
 
   const { data: jobsData } = useQuery<{ success: boolean; data: Job[] }>({
     queryKey: ['/api/jobs'],
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
   });
 
   const { data: employeesData } = useQuery<{ success: boolean; data: Employee[] }>({
@@ -31,6 +32,7 @@ export default function StaffSchedule() {
 
   const { data: staffAssignmentsData } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/staff-assignments'],
+    refetchInterval: 5000, // Auto-refresh every 5 seconds to show newly scheduled staff
   });
 
   const jobs = jobsData?.data || [];
