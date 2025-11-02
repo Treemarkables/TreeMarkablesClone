@@ -18,7 +18,7 @@ export default function StaffSchedule() {
   const { toast } = useToast();
 
   const { data: jobsData } = useQuery<{ success: boolean; data: Job[] }>({
-    queryKey: ['/api/jobs'],
+    queryKey: ['/api/jobs?limit=10000'], // Load all jobs
     refetchInterval: 5000, // Auto-refresh every 5 seconds
   });
 
