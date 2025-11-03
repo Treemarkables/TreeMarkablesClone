@@ -876,7 +876,7 @@ export function EmailComposerModal({
                 name="email-to"
                 value={emailData.to}
                 onChange={(e) => setEmailData(prev => ({ ...prev, to: e.target.value }))}
-                className="sm:col-span-11 h-8 text-sm"
+                className="sm:col-span-11 h-8 text-base"
                 placeholder="recipient@email.com"
                 data-testid="input-email-to"
               />
@@ -889,7 +889,7 @@ export function EmailComposerModal({
                 name="email-cc"
                 value={emailData.cc}
                 onChange={(e) => setEmailData(prev => ({ ...prev, cc: e.target.value }))}
-                className="sm:col-span-11 h-8 text-sm"
+                className="sm:col-span-11 h-8 text-base"
                 placeholder="cc@email.com (optional)"
                 data-testid="input-email-cc"
               />
@@ -902,7 +902,7 @@ export function EmailComposerModal({
                 name="email-subject"
                 value={emailData.subject}
                 onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
-                className="sm:col-span-11 h-8 text-sm"
+                className="sm:col-span-11 h-8 text-base"
                 data-testid="input-email-subject"
               />
             </div>
@@ -1038,7 +1038,7 @@ export function EmailComposerModal({
                   setEmailData(prev => ({ ...prev, body: '' }));
                 }
               }}
-              className="w-full h-full resize-none border-0 focus-visible:ring-0 text-sm leading-relaxed pb-48 outline-none overflow-y-auto"
+              className="w-full h-full resize-none border-0 focus-visible:ring-0 text-base leading-relaxed pb-48 outline-none overflow-y-auto"
               data-testid="div-email-body"
               style={{ 
                 whiteSpace: 'pre-wrap',
