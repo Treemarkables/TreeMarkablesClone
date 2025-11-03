@@ -109,8 +109,8 @@ export function EmailComposerModal({
     {
       id: "custom_message",
       name: "Custom Message",
-      subject: "",
-      body: `<p>Hey {firstName},</p><p><br></p><p><br></p><p>Regards,<br>Jules</p>`
+      subject: "Re: {jobDescription} - {address}",
+      body: `<p>Hi {firstName},</p><p><br></p><p>Thanks for your inquiry about {jobDescription} at {address}.</p><p><br></p><p>I wanted to follow up with you regarding your tree service needs. Please let me know if you have any questions or would like to discuss the details further.</p><p><br></p><p>Looking forward to hearing from you.</p><p><br></p><p>Best regards,<br>Jules<br>Treemarkables LTD<br>{contactPhone}</p>`
     },
     ...dbTemplates.map((t: any) => ({
       id: t.id,
@@ -146,6 +146,12 @@ export function EmailComposerModal({
     } else if (templateType === 'proposal') {
       return EMAIL_TEMPLATES.find(t => t.name === 'Proposal') || 
              EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('proposal')) || 
+             EMAIL_TEMPLATES[0];
+    } else if (templateType === 'general') {
+      // For general emails, look for a "General" template or fall back to custom message
+      return EMAIL_TEMPLATES.find(t => t.name === 'General') || 
+             EMAIL_TEMPLATES.find(t => t.name.toLowerCase().includes('general')) ||
+             EMAIL_TEMPLATES.find(t => t.id === 'custom_message') || 
              EMAIL_TEMPLATES[0];
     }
     
