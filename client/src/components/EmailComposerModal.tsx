@@ -683,17 +683,18 @@ export function EmailComposerModal({
             </Button>
           </div>
           <div className="flex flex-col gap-1 mt-1">
-            <div className="flex gap-2 justify-center">
+            <div className="flex gap-1 sm:gap-2 justify-center flex-wrap">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="bg-purple-500 hover:bg-purple-600 text-white border-purple-500 h-7 text-xs px-4"
+                    className="bg-purple-500 hover:bg-purple-600 text-white border-purple-500 h-8 text-xs px-2 sm:px-4"
                     data-testid="button-smart-attachments"
                   >
-                    <FileText className="w-3 h-3 mr-1" />
-                    <span>Smart Attachments</span>
+                    <FileText className="w-3.5 h-3.5 sm:mr-1" />
+                    <span className="hidden sm:inline">Smart Attachments</span>
+                    <span className="sm:hidden ml-1">Attachments</span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[600px] max-h-[400px] overflow-y-auto" align="center">
@@ -827,25 +828,25 @@ export function EmailComposerModal({
                 onClick={handleFileAttachment} 
                 variant="outline" 
                 size="sm"
-                className="bg-blue-500 hover:bg-blue-600 text-white border-blue-500 h-7 text-xs px-4"
+                className="bg-blue-500 hover:bg-blue-600 text-white border-blue-500 h-8 text-xs px-2 sm:px-4"
                 data-testid="button-attach-file"
               >
-                <Paperclip className="w-3 h-3 mr-1" />
-                <span>Attach</span>
+                <Paperclip className="w-3.5 h-3.5 sm:mr-1" />
+                <span className="hidden sm:inline">Attach</span>
               </Button>
               <Button 
                 onClick={handleSendEmail}
                 disabled={sendEmailMutation.isPending}
                 size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-4"
+                className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs px-3 sm:px-4"
                 data-testid="button-send-email"
               >
-                <Send className="w-3 h-3 mr-1" />
+                <Send className="w-3.5 h-3.5 sm:mr-1" />
                 <span>{sendEmailMutation.isPending ? 'Sending...' : 'Send'}</span>
               </Button>
             </div>
             <Select value={emailData.selectedTemplate} onValueChange={handleTemplateSelect}>
-              <SelectTrigger className="w-full text-xs h-7">
+              <SelectTrigger className="w-full text-xs h-8">
                 <SelectValue placeholder="Email Templates" />
               </SelectTrigger>
               <SelectContent>
@@ -861,50 +862,50 @@ export function EmailComposerModal({
 
         <div className="flex-1 flex flex-col gap-2 sm:gap-2 overflow-y-auto p-2 sm:p-3">
           {/* Email Fields */}
-          <div className="space-y-0.5 sm:space-y-1">
-            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-2 sm:items-center">
-              <Label htmlFor="email-to" className="text-[10px] sm:text-xs sm:col-span-1 sm:text-right">To:</Label>
+          <div className="space-y-1 sm:space-y-1.5">
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
+              <Label htmlFor="email-to" className="text-xs sm:col-span-1 sm:text-right font-medium">To:</Label>
               <Input
                 id="email-to"
                 name="email-to"
                 value={emailData.to}
                 onChange={(e) => setEmailData(prev => ({ ...prev, to: e.target.value }))}
-                className="sm:col-span-11 h-6 text-[10px] sm:text-xs"
+                className="sm:col-span-11 h-8 text-sm"
                 placeholder="recipient@email.com"
                 data-testid="input-email-to"
               />
             </div>
             
-            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-2 sm:items-center">
-              <Label htmlFor="email-cc" className="text-[10px] sm:text-xs sm:col-span-1 sm:text-right">CC:</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
+              <Label htmlFor="email-cc" className="text-xs sm:col-span-1 sm:text-right font-medium">CC:</Label>
               <Input
                 id="email-cc"
                 name="email-cc"
                 value={emailData.cc}
                 onChange={(e) => setEmailData(prev => ({ ...prev, cc: e.target.value }))}
-                className="sm:col-span-11 h-6 text-[10px] sm:text-xs"
+                className="sm:col-span-11 h-8 text-sm"
                 placeholder="cc@email.com (optional)"
                 data-testid="input-email-cc"
               />
             </div>
 
-            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-2 sm:items-center">
-              <Label htmlFor="email-subject" className="text-[10px] sm:text-xs sm:col-span-1 sm:text-right">Subject:</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
+              <Label htmlFor="email-subject" className="text-xs sm:col-span-1 sm:text-right font-medium">Subject:</Label>
               <Input
                 id="email-subject"
                 name="email-subject"
                 value={emailData.subject}
                 onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
-                className="sm:col-span-11 h-6 text-[10px] sm:text-xs"
+                className="sm:col-span-11 h-8 text-sm"
                 data-testid="input-email-subject"
               />
             </div>
 
             {/* Attachments */}
             {attachments.length > 0 && (
-              <div className="flex flex-col sm:grid sm:grid-cols-12 gap-0.5 sm:gap-2 sm:items-center">
-                <Label className="text-[10px] sm:text-xs sm:col-span-1 sm:text-right">Attached:</Label>
-                <div className="sm:col-span-11 flex gap-1 flex-wrap">
+              <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-start">
+                <Label className="text-xs sm:col-span-1 sm:text-right font-medium pt-1">Attached:</Label>
+                <div className="sm:col-span-11 flex gap-1.5 flex-wrap">
                   {attachments.map((attachment, index) => {
                     const getAttachmentVariant = (type: string) => {
                       switch (type) {
@@ -942,11 +943,12 @@ export function EmailComposerModal({
           </div>
 
           {/* Formatting Toolbar */}
-          <div className="flex items-center gap-0.5 sm:gap-1 p-1 sm:p-2 border-b border-gray-200 flex-wrap">
+          <div className="flex items-center gap-0.5 sm:gap-1 p-1.5 sm:p-2 border-y border-gray-200 flex-wrap bg-gray-50/50">
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               onClick={() => insertFormatting('bold')}
               data-testid="button-format-bold"
             >
@@ -955,7 +957,8 @@ export function EmailComposerModal({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               onClick={() => insertFormatting('italic')}
               data-testid="button-format-italic"
             >
@@ -964,17 +967,19 @@ export function EmailComposerModal({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               onClick={() => insertFormatting('link')}
               data-testid="button-format-link"
             >
               <Link className="w-4 h-4" />
             </Button>
-            <div className="w-px h-6 bg-gray-300 mx-2" />
+            <div className="w-px h-6 bg-gray-300 mx-1" />
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               onClick={() => {}}
               data-testid="button-format-list"
             >
@@ -983,19 +988,20 @@ export function EmailComposerModal({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               onClick={() => {}}
               data-testid="button-format-numbered-list"
             >
               <ListOrdered className="w-4 h-4" />
             </Button>
-            <div className="w-px h-6 bg-gray-300 mx-2" />
+            <div className="w-px h-6 bg-gray-300 mx-1" />
             <Button
               type="button"
               variant={isListening ? "default" : "ghost"}
-              size="sm"
+              size="icon"
+              className={`h-8 w-8 ${isListening ? "bg-red-500 hover:bg-red-600 text-white" : ""}`}
               onClick={toggleVoiceInput}
-              className={isListening ? "bg-red-500 hover:bg-red-600 text-white" : ""}
               data-testid="button-voice-input"
             >
               {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
