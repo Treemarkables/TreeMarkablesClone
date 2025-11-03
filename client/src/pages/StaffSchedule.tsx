@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { formatInTimeZone } from 'date-fns-tz';
+import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -12,7 +12,15 @@ import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
 export default function StaffSchedule() {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // Initialize with current date in NZ timezone to avoid UTC offset issues
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const now = new Date();
+    // Convert current UTC time to NZ timezone
+    const nzNow = toZonedTime(now, 'Pacific/Auckland');
+    // Create a Date object representing midnight of today in NZ
+    nzNow.setHours(0, 0, 0, 0);
+    return nzNow;
+  });
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
   const { toast } = useToast();
