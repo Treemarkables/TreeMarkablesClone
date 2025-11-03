@@ -109,8 +109,8 @@ export function EmailComposerModal({
     {
       id: "custom_message",
       name: "Custom Message",
-      subject: "Re: {jobDescription} - {address}",
-      body: `<p>Hi {firstName},</p><p><br></p><p>Thanks for your inquiry about {jobDescription} at {address}.</p><p><br></p><p>I wanted to follow up with you regarding your tree service needs. Please let me know if you have any questions or would like to discuss the details further.</p><p><br></p><p>Looking forward to hearing from you.</p><p><br></p><p>Best regards,<br>Jules<br>Treemarkables LTD<br>{contactPhone}</p>`
+      subject: "",
+      body: `<p>Hi {firstName},</p><p><br></p><p><br></p><p>Best regards,<br>Jules</p>`
     },
     ...dbTemplates.map((t: any) => ({
       id: t.id,
@@ -703,9 +703,9 @@ export function EmailComposerModal({
                     <span className="sm:hidden ml-1">Attachments</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[600px] max-h-[400px] overflow-y-auto" align="center">
+                <PopoverContent className="w-[95vw] sm:w-[600px] max-h-[400px] overflow-y-auto" align="center">
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Smart Attachments</h3>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                     {/* Invoice PDF */}
                     {invoiceData && (
                       <div 
