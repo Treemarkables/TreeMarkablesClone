@@ -4230,7 +4230,7 @@ export function GlobalJobCard({
             status: jobProposalResponse.data[0].status,
             lineItems: formData?.lineItems || []
           } : undefined}
-          templateType={emailContext === 'general' ? undefined : emailContext}
+          templateType={emailContext}
         />
       )}
 
