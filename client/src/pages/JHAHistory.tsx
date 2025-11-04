@@ -147,7 +147,7 @@ export default function JHAHistory() {
         <DialogContent className="max-w-3xl max-h-screen">
           <DialogHeader>
             <DialogTitle>
-              JHA #{selectedAssessment?.id}
+              {selectedAssessment?.assessmentNumber || `JHA #${selectedAssessment?.id.substring(0, 8)}`}
               {selectedAssessment?.jobId && ` - Job #${selectedAssessment.jobId}`}
             </DialogTitle>
           </DialogHeader>
@@ -183,10 +183,16 @@ export default function JHAHistory() {
                       </p>
                     )}
                     {selectedAssessment.ppeRequired && (
-                      <p>
-                        <span className="font-medium">PPE Required:</span>{' '}
-                        {selectedAssessment.ppeRequired}
-                      </p>
+                      <div>
+                        <span className="font-medium">PPE Required:</span>
+                        <div className="mt-1 ml-4">
+                          <ul className="space-y-1">
+                            {selectedAssessment.ppeRequired.split(/(?=[A-Z])/).filter(item => item.trim()).map((item, idx) => (
+                              <li key={idx} className="text-sm">• {item.trim()}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
                     )}
                     {selectedAssessment.overallRiskRating && (
                       <p className="flex items-center gap-2">
