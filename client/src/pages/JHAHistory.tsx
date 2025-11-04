@@ -100,7 +100,7 @@ export default function JHAHistory() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <CardTitle className="text-lg">
-                        {assessment.assessmentNumber || `JHA #${assessment.id.substring(0, 8)}`}
+                        JHA #{assessment.assessmentNumber || assessment.id.substring(0, 8)}
                         {assessment.jobId && ` - Job #${assessment.jobId}`}
                       </CardTitle>
                       <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
@@ -147,7 +147,7 @@ export default function JHAHistory() {
         <DialogContent className="max-w-3xl max-h-screen">
           <DialogHeader>
             <DialogTitle>
-              {selectedAssessment?.assessmentNumber || `JHA #${selectedAssessment?.id.substring(0, 8)}`}
+              JHA #{selectedAssessment?.assessmentNumber || selectedAssessment?.id.substring(0, 8)}
               {selectedAssessment?.jobId && ` - Job #${selectedAssessment.jobId}`}
             </DialogTitle>
           </DialogHeader>

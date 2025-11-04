@@ -4803,7 +4803,12 @@ class DatabaseStorage implements IStorage {
   }
 
   async createJhaAssessment(assessment: schema.InsertJhaAssessment): Promise<schema.JhaAssessment> {
-    const assessmentNumber = `JHA-${Date.now()}`;
+    // Get count of existing JHAs to generate sequential number
+    const existingCount = await db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.jhaAssessments);
+    const nextNumber = (existingCount[0]?.count || 0) + 1;
+    const assessmentNumber = `${nextNumber}`;
+    
     const [result] = await db.insert(schema.jhaAssessments)
       .values({ ...assessment, assessmentNumber })
       .returning();
