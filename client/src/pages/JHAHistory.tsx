@@ -182,13 +182,13 @@ export default function JHAHistory() {
                         {selectedAssessment.teamLeader}
                       </p>
                     )}
-                    {selectedAssessment.ppeRequired && (
+                    {selectedAssessment.ppeRequired && selectedAssessment.ppeRequired.length > 0 && (
                       <div>
                         <span className="font-medium">PPE Required:</span>
                         <div className="mt-1 ml-4">
                           <ul className="space-y-1">
-                            {selectedAssessment.ppeRequired.split(/(?=[A-Z])/).filter(item => item.trim()).map((item, idx) => (
-                              <li key={idx} className="text-sm">• {item.trim()}</li>
+                            {selectedAssessment.ppeRequired.map((item, idx) => (
+                              <li key={idx} className="text-sm">• {item}</li>
                             ))}
                           </ul>
                         </div>
