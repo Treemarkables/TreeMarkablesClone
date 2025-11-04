@@ -77,6 +77,7 @@ const upload = multer({
 });
 import fs from "fs";
 import { format } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
 import { businessIntelligenceService } from "./services/businessIntelligence";
@@ -267,14 +268,17 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
     // Log that notification is queued
     console.log(`[Notification Queue] Schedule notification for ${employee.firstName} ${employee.lastName} queued until ${nextSendTime.toISOString()}`);
     
-    // Format notification message
-    const startTime = new Date(assignment.startTime).toLocaleString('en-NZ', {
+    // Format notification message - Convert UTC timestamps to NZ timezone
+    const startTimeNZ = toZonedTime(new Date(assignment.startTime), 'Pacific/Auckland');
+    const endTimeNZ = toZonedTime(new Date(assignment.endTime), 'Pacific/Auckland');
+    
+    const startTime = startTimeNZ.toLocaleString('en-NZ', {
       dateStyle: 'full',
       timeStyle: 'short',
       timeZone: 'Pacific/Auckland'
     });
     
-    const endTime = new Date(assignment.endTime).toLocaleTimeString('en-NZ', {
+    const endTime = endTimeNZ.toLocaleTimeString('en-NZ', {
       timeStyle: 'short',
       timeZone: 'Pacific/Auckland'
     });
@@ -345,13 +349,17 @@ function getNextBusinessHourTime(): Date {
 // Send schedule notification via email/SMS
 async function sendScheduleNotification(employee: any, job: any, assignment: any): Promise<void> {
   try {
-    const startTime = new Date(assignment.startTime).toLocaleString('en-NZ', {
+    // Convert UTC timestamps to NZ timezone
+    const startTimeNZ = toZonedTime(new Date(assignment.startTime), 'Pacific/Auckland');
+    const endTimeNZ = toZonedTime(new Date(assignment.endTime), 'Pacific/Auckland');
+    
+    const startTime = startTimeNZ.toLocaleString('en-NZ', {
       dateStyle: 'full',
       timeStyle: 'short',
       timeZone: 'Pacific/Auckland'
     });
     
-    const endTime = new Date(assignment.endTime).toLocaleTimeString('en-NZ', {
+    const endTime = endTimeNZ.toLocaleTimeString('en-NZ', {
       timeStyle: 'short',
       timeZone: 'Pacific/Auckland'
     });
