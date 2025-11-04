@@ -4922,7 +4922,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               description: `SMS sent to ${customer?.name || phone}\n\nMessage: ${message}`,
               authorName: 'System',
               authorRole: 'system',
-              tags: ['sms', 'communication']
+              tags: ['sms', 'communication'],
+              metadata: { phoneNumber: phone }
             });
             console.log(`✅ SMS diary entry created for job ${jobId}`);
             
@@ -9163,7 +9164,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           entryType: 'sms',
           title: 'SMS Sent',
           description: `SMS sent to ${to}: ${message}`,
-          authorName: 'System'
+          authorName: 'System',
+          metadata: { phoneNumber: to }
         });
         
         res.json({ 

@@ -110,7 +110,8 @@ async function processSMSReplies() {
           authorName: customerName,
           authorRole: 'customer',
           tags: ['sms', 'reply', 'communication'],
-          createdAt: receivedTimestamp
+          createdAt: receivedTimestamp,
+          metadata: { phoneNumber: reply.Originator }
         });
 
         // Create notification for SMS reply
