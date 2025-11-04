@@ -154,10 +154,10 @@ export default function JHAHistory() {
 
           {selectedAssessment && (
             <ScrollArea className="max-h-[70vh]">
-              <div className="space-y-6 pr-4">
+              <div className="space-y-8 pr-4">
                 <div>
-                  <h3 className="font-semibold mb-2">Assessment Details</h3>
-                  <div className="space-y-2 text-sm">
+                  <h3 className="font-semibold mb-4 text-base">Assessment Details</h3>
+                  <div className="space-y-3 text-sm">
                     <p>
                       <span className="font-medium">Date:</span>{' '}
                       {selectedAssessment.completedAt 
@@ -189,7 +189,7 @@ export default function JHAHistory() {
                       </p>
                     )}
                     {selectedAssessment.overallRiskRating && (
-                      <p>
+                      <p className="flex items-center gap-2">
                         <span className="font-medium">Overall Risk Rating:</span>{' '}
                         <Badge variant={getRiskColor(selectedAssessment.overallRiskRating)}>
                           {getRiskLabel(selectedAssessment.overallRiskRating)}
@@ -201,22 +201,22 @@ export default function JHAHistory() {
 
                 {selectedAssessment.steps && selectedAssessment.steps.length > 0 && (
                   <div>
-                    <h3 className="font-semibold mb-3">Hazards & Controls</h3>
+                    <h3 className="font-semibold mb-4 text-base">Hazards & Controls</h3>
                     <div className="space-y-4">
                       {selectedAssessment.steps.map((step) => (
                         <Card key={step.id}>
-                          <CardHeader>
+                          <CardHeader className="pb-3">
                             <div className="flex items-start justify-between gap-4">
                               <CardTitle className="text-base">{step.hazardName}</CardTitle>
                               <Badge variant={getRiskColor(step.riskRating)}>
-                                Risk Level {step.riskRating}
+                                Risk Level
                               </Badge>
                             </div>
                           </CardHeader>
                           {step.controlMeasures && step.controlMeasures.length > 0 && (
-                            <CardContent>
-                              <h4 className="text-sm font-semibold mb-2">Control Measures:</h4>
-                              <ul className="space-y-1">
+                            <CardContent className="pt-0">
+                              <h4 className="text-sm font-semibold mb-3">Control Measures:</h4>
+                              <ul className="space-y-2">
                                 {step.controlMeasures.map((measure, idx) => (
                                   <li key={idx} className="flex items-start gap-2 text-sm">
                                     <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
