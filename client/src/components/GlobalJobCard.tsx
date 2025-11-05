@@ -612,9 +612,9 @@ export function GlobalJobCard({
         jobContactFirstName: initialData.customerFirstName || '',
         jobContactLastName: initialData.customerLastName || '',
         jobContactEmail: initialData.customerEmail || '',
-        jobContactPhone: initialData.customerPhone || '',
+        jobContactPhone: '', // Leave blank - most numbers from conversations are mobile
         billingContactPhone: '',
-        billingContactMobile: initialData.customerPhone || '',
+        billingContactMobile: initialData.customerPhone || '', // Put mobile number here
         billingAddress: initialData.address || '',
         invoiceDescription: initialData.description || '',
         sameAsJobAddress: true,
