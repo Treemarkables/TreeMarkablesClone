@@ -370,11 +370,15 @@ function getNextBusinessHourTime(): Date {
 async function sendScheduleNotification(employee: any, job: any, assignment: any): Promise<void> {
   try {
     // Convert UTC timestamps to NZ timezone
+    console.log(`📅 [SMS DEBUG] Raw assignment.startTime from DB: ${assignment.startTime}`);
     const startTimeUTC = new Date(assignment.startTime);
     const endTimeUTC = new Date(assignment.endTime);
     
+    console.log(`📅 [SMS DEBUG] Parsed startTimeUTC: ${startTimeUTC.toISOString()}`);
     const startTimeNZ = toZonedTime(startTimeUTC, 'Pacific/Auckland');
     const endTimeNZ = toZonedTime(endTimeUTC, 'Pacific/Auckland');
+    
+    console.log(`📅 [SMS DEBUG] Converted startTimeNZ: ${startTimeNZ.toString()}`);
     
     // Format full date/time for email
     const startTimeFull = startTimeNZ.toLocaleString('en-NZ', {
