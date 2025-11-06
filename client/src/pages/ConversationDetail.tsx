@@ -17,7 +17,9 @@ import {
   Activity,
   MessageSquare,
   Trash2,
-  Briefcase
+  Briefcase,
+  Copy,
+  Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -32,6 +34,57 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { formatDistanceToNow } from 'date-fns';
 import { MicrophoneButton } from '@/components/MicrophoneButton';
+
+// Component to render a contact field with copy button
+function ContactField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  return (
+    <div className="flex items-start justify-between gap-2 py-1">
+      <div className="flex-1 min-w-0">
+        <span className="text-xs text-gray-500">{label}:</span>
+        <p className="text-sm font-medium break-words">{value}</p>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 flex-shrink-0"
+        onClick={handleCopy}
+        data-testid={`button-copy-${label.toLowerCase().replace(/\s/g, '-')}`}
+      >
+        {copied ? (
+          <Check className="h-3.5 w-3.5 text-green-600" />
+        ) : (
+          <Copy className="h-3.5 w-3.5" />
+        )}
+      </Button>
+    </div>
+  );
+}
+
+// Parse contact form message
+function parseContactForm(content: string) {
+  const nameMatch = content.match(/Name:\s*([^\n]+)/i);
+  const emailMatch = content.match(/Email:\s*([^\n]+)/i);
+  const phoneMatch = content.match(/Phone:\s*([^\n]+)/i);
+  const hearAboutMatch = content.match(/How they heard about us:\s*([^\n]+)/i);
+  const messageMatch = content.match(/Message:\s*\n?([\s\S]+?)$/i);
+  
+  return {
+    isContactForm: !!(nameMatch || emailMatch || phoneMatch),
+    name: nameMatch?.[1]?.trim(),
+    email: emailMatch?.[1]?.trim(),
+    phone: phoneMatch?.[1]?.trim(),
+    hearAbout: hearAboutMatch?.[1]?.trim(),
+    message: messageMatch?.[1]?.trim()
+  };
+}
 
 export default function ConversationDetail() {
   const [, params] = useRoute('/conversation/:id');
@@ -399,30 +452,49 @@ export default function ConversationDetail() {
               <p className="text-gray-400 text-sm">No messages yet</p>
             </div>
           ) : (
-            messages.map((message: ConversationMessage) => (
-              <div
-                key={message.id}
-                className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
-                data-testid={`message-${message.id}`}
-              >
+            messages.map((message: ConversationMessage) => {
+              const contactForm = parseContactForm(message.content || '');
+              
+              return (
                 <div
-                  className={`max-w-[90%] rounded-lg px-3 py-2 ${
-                    message.direction === 'outbound'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-900'
-                  }`}
+                  key={message.id}
+                  className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+                  data-testid={`message-${message.id}`}
                 >
-                  <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
-                  <p
-                    className={`text-xs mt-1 ${
-                      message.direction === 'outbound' ? 'text-blue-100' : 'text-gray-500'
+                  <div
+                    className={`max-w-[90%] rounded-lg px-3 py-2 ${
+                      message.direction === 'outbound'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-900'
                     }`}
                   >
-                    {formatMessageTime(message.createdAt || new Date())}
-                  </p>
+                    {contactForm.isContactForm ? (
+                      <div className="space-y-1">
+                        {contactForm.name && <ContactField label="Name" value={contactForm.name} />}
+                        {contactForm.email && <ContactField label="Email" value={contactForm.email} />}
+                        {contactForm.phone && <ContactField label="Phone" value={contactForm.phone} />}
+                        {contactForm.hearAbout && <ContactField label="How they heard about us" value={contactForm.hearAbout} />}
+                        {contactForm.message && (
+                          <div className="pt-2 mt-2 border-t border-gray-200">
+                            <span className="text-xs text-gray-500">Message:</span>
+                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed mt-1">{contactForm.message}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
+                    )}
+                    <p
+                      className={`text-xs mt-1 ${
+                        message.direction === 'outbound' ? 'text-blue-100' : 'text-gray-500'
+                      }`}
+                    >
+                      {formatMessageTime(message.createdAt || new Date())}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </ScrollArea>
