@@ -652,7 +652,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // Safari-safe date parsing
         const startDate = new Date(assignment.startTime);
         if (isNaN(startDate.getTime())) return; // Skip invalid dates
-        const dateKey = startDate.toDateString();
+        
+        // Use NZ timezone for grouping to avoid duplicates across different UTC dates
+        const nzTime = utcToNZTime(startDate);
+        const dateKey = nzTime.date; // YYYY-MM-DD in NZ timezone
         const key = `${assignment.jobId}-${dateKey}`;
         
         if (!assignmentsByJobAndDate.has(key)) {
