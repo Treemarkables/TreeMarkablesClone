@@ -269,10 +269,14 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
     console.log(`[Notification Queue] Schedule notification for ${employee.firstName} ${employee.lastName} queued until ${nextSendTime.toISOString()}`);
     
     // Format notification message - Convert UTC timestamps to NZ timezone
-    const startTimeNZ = toZonedTime(new Date(assignment.startTime), 'Pacific/Auckland');
-    const endTimeNZ = toZonedTime(new Date(assignment.endTime), 'Pacific/Auckland');
+    const startTimeUTC = new Date(assignment.startTime);
+    const endTimeUTC = new Date(assignment.endTime);
     
-    const startTime = startTimeNZ.toLocaleString('en-NZ', {
+    const startTimeNZ = toZonedTime(startTimeUTC, 'Pacific/Auckland');
+    const endTimeNZ = toZonedTime(endTimeUTC, 'Pacific/Auckland');
+    
+    // Format full date/time for email
+    const startTimeFull = startTimeNZ.toLocaleString('en-NZ', {
       dateStyle: 'full',
       timeStyle: 'short',
       timeZone: 'Pacific/Auckland'
@@ -280,6 +284,22 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
     
     const endTime = endTimeNZ.toLocaleTimeString('en-NZ', {
       timeStyle: 'short',
+      timeZone: 'Pacific/Auckland'
+    });
+    
+    // Format date and time separately for SMS (cleaner format)
+    const startDate = startTimeNZ.toLocaleDateString('en-NZ', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'Pacific/Auckland'
+    });
+    
+    const startTime = startTimeNZ.toLocaleTimeString('en-NZ', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
       timeZone: 'Pacific/Auckland'
     });
 
@@ -290,7 +310,7 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
       <ul>
         <li><strong>Job:</strong> ${job?.title || 'Tree Service'}</li>
         <li><strong>Location:</strong> ${job?.address || 'Address TBD'}</li>
-        <li><strong>Date & Time:</strong> ${startTime} - ${endTime}</li>
+        <li><strong>Date & Time:</strong> ${startTimeFull} - ${endTime}</li>
         ${assignment.role ? `<li><strong>Role:</strong> ${assignment.role}</li>` : ''}
         ${assignment.notes ? `<li><strong>Notes:</strong> ${assignment.notes}</li>` : ''}
       </ul>
@@ -298,7 +318,7 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
       <p>Thanks,<br>Treemarkables Team</p>
     `;
 
-    const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
+    const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startDate} at ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
     
     // Store in notification queue
     await storage.createNotificationQueueItem({
@@ -350,10 +370,14 @@ function getNextBusinessHourTime(): Date {
 async function sendScheduleNotification(employee: any, job: any, assignment: any): Promise<void> {
   try {
     // Convert UTC timestamps to NZ timezone
-    const startTimeNZ = toZonedTime(new Date(assignment.startTime), 'Pacific/Auckland');
-    const endTimeNZ = toZonedTime(new Date(assignment.endTime), 'Pacific/Auckland');
+    const startTimeUTC = new Date(assignment.startTime);
+    const endTimeUTC = new Date(assignment.endTime);
     
-    const startTime = startTimeNZ.toLocaleString('en-NZ', {
+    const startTimeNZ = toZonedTime(startTimeUTC, 'Pacific/Auckland');
+    const endTimeNZ = toZonedTime(endTimeUTC, 'Pacific/Auckland');
+    
+    // Format full date/time for email
+    const startTimeFull = startTimeNZ.toLocaleString('en-NZ', {
       dateStyle: 'full',
       timeStyle: 'short',
       timeZone: 'Pacific/Auckland'
@@ -361,6 +385,22 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
     
     const endTime = endTimeNZ.toLocaleTimeString('en-NZ', {
       timeStyle: 'short',
+      timeZone: 'Pacific/Auckland'
+    });
+    
+    // Format date and time separately for SMS (cleaner format)
+    const startDate = startTimeNZ.toLocaleDateString('en-NZ', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'Pacific/Auckland'
+    });
+    
+    const startTime = startTimeNZ.toLocaleTimeString('en-NZ', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
       timeZone: 'Pacific/Auckland'
     });
 
@@ -377,20 +417,20 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
           <ul>
             <li><strong>Job:</strong> ${job?.title || 'Tree Service'}</li>
             <li><strong>Location:</strong> ${job?.address || 'Address TBD'}</li>
-            <li><strong>Date & Time:</strong> ${startTime} - ${endTime}</li>
+            <li><strong>Date & Time:</strong> ${startTimeFull} - ${endTime}</li>
             ${assignment.role ? `<li><strong>Role:</strong> ${assignment.role}</li>` : ''}
             ${assignment.notes ? `<li><strong>Notes:</strong> ${assignment.notes}</li>` : ''}
           </ul>
           <p>Please confirm your availability as soon as possible.</p>
           <p>Thanks,<br>Treemarkables Team</p>
         `,
-        text: `Hi ${employee.firstName},\n\nYou've been assigned to: ${job?.title || 'Tree Service'}\nLocation: ${job?.address || 'Address TBD'}\nDate & Time: ${startTime} - ${endTime}\n\nPlease confirm your availability.`
+        text: `Hi ${employee.firstName},\n\nYou've been assigned to: ${job?.title || 'Tree Service'}\nLocation: ${job?.address || 'Address TBD'}\nDate & Time: ${startTimeFull} - ${endTime}\n\nPlease confirm your availability.`
       });
     }
 
     // Send SMS notification if phone number exists
     if (employee.phone) {
-      const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
+      const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startDate} at ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
       await smsService.sendSMS({ to: employee.phone, message: smsMessage });
     }
 
