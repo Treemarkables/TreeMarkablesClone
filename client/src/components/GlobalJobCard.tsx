@@ -1514,12 +1514,12 @@ export function GlobalJobCard({
       }));
 
       // First, update the job with scheduledDate, scheduledStartTime, scheduledEndTime, assignedTo, and status
-      // Note: scheduledStartTime and scheduledEndTime are stored as NZ local time strings
+      // Send scheduledDate as UTC ISO string to avoid timezone interpretation issues
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          scheduledDate: dateStr,
+          scheduledDate: startTimeISO, // Send full UTC ISO string
           scheduledStartTime: timeStr, // NZ local time (HH:MM format)
           scheduledEndTime: endTimeNZ.time, // NZ local time (HH:MM format)
           assignedTo: uniqueEmployeeIds,
