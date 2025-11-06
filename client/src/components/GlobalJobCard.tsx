@@ -1209,19 +1209,23 @@ export function GlobalJobCard({
       if (data.success && data.data && data.data.length > 0) {
         // Pre-populate the form with existing assignment data
         const firstAssignment = data.data[0];
-        const startDate = new Date(firstAssignment.startTime);
-        const endDate = new Date(firstAssignment.endTime);
-        const durationMinutes = (endDate.getTime() - startDate.getTime()) / 60000;
+        const startDateUTC = new Date(firstAssignment.startTime);
+        const endDateUTC = new Date(firstAssignment.endTime);
+        const durationMinutes = (endDateUTC.getTime() - startDateUTC.getTime()) / 60000;
+        
+        // Convert UTC time from database to NZ time for display
+        const startNZ = utcToNZTime(startDateUTC);
         
         // Remove duplicate employee IDs when loading existing assignments
         const uniqueEmployeeIds = [...new Set(data.data.map((a: any) => a.employeeId))];
         
         setSchedulingData({
-          date: startDate.toISOString().split('T')[0],
-          startTime: startDate.toTimeString().slice(0, 5),
+          date: startNZ.date, // NZ date, not UTC!
+          startTime: startNZ.time, // NZ time, not UTC!
           duration: durationMinutes.toString(),
           assignedTo: uniqueEmployeeIds,
-          notes: firstAssignment.notes || ''
+          notes: firstAssignment.notes || '',
+          sendClientNotification: false
         });
       }
     } catch (error) {
