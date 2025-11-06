@@ -38,11 +38,26 @@ interface Customer {
 
 type ViewMode = 'day' | 'week' | '2weeks' | 'month';
 
-export function CalendarGrid() {
-  const [currentDate, setCurrentDate] = useState(new Date());
+interface CalendarGridProps {
+  selectedDate?: Date;
+  onDateChange?: (date: Date) => void;
+}
+
+export function CalendarGrid({ selectedDate: externalDate, onDateChange }: CalendarGridProps = {}) {
+  const [internalDate, setInternalDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
+
+  // Use external date if provided, otherwise use internal state
+  const currentDate = externalDate || internalDate;
+  const setCurrentDate = (date: Date) => {
+    if (onDateChange) {
+      onDateChange(date);
+    } else {
+      setInternalDate(date);
+    }
+  };
 
   // Fetch employees
   const { data: employeesData } = useQuery<{ success: boolean; data: Employee[] }>({
