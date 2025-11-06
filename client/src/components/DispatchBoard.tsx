@@ -1007,9 +1007,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // Filter by selected date - only show jobs scheduled for the selected date
         if (!job.startTime) return false;
         try {
-          const jobDate = parseISO(job.startTime);
-          if (isNaN(jobDate.getTime())) return false; // Skip invalid dates
-          return isSameDay(jobDate, selectedDate);
+          // Parse the UTC date from the database
+          const jobDateUTC = parseISO(job.startTime);
+          if (isNaN(jobDateUTC.getTime())) return false; // Skip invalid dates
+          
+          // Convert UTC date to NZ timezone for comparison
+          const jobDateNZ = utcToNZTime(jobDateUTC);
+          const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+          
+          // Compare just the date parts in NZ timezone
+          return jobDateNZ.date === selectedDateStr;
         } catch {
           return false; // Skip jobs with unparseable dates
         }
