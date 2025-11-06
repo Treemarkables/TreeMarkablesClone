@@ -1004,6 +1004,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return job.status !== 'unsuccessful' && job.status !== 'completed' && job.status !== 'invoiced' && job.status !== 'archived';
       })
       .filter(job => {
+        // Filter by selected date - only show jobs scheduled for the selected date
+        if (!job.startTime) return false;
+        try {
+          const jobDate = parseISO(job.startTime);
+          if (isNaN(jobDate.getTime())) return false; // Skip invalid dates
+          return isSameDay(jobDate, selectedDate);
+        } catch {
+          return false; // Skip jobs with unparseable dates
+        }
+      })
+      .filter(job => {
         // Apply search filter
         if (!searchQuery.trim()) return true;
         
@@ -1034,12 +1045,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     
     const sorted = uniqueJobs
       .sort((a, b) => {
-        // Sort by highest job number first (descending) - newest jobs at top
-        const jobNumberA = parseInt(a.jobNumber || '0', 10);
-        const jobNumberB = parseInt(b.jobNumber || '0', 10);
-        return jobNumberB - jobNumberA;
-      })
-      .slice(0, 200); // Show up to 200 latest jobs - use deep search for older jobs
+        // Sort by start time (earliest first)
+        const timeA = new Date(a.startTime).getTime();
+        const timeB = new Date(b.startTime).getTime();
+        return timeA - timeB;
+      });
     
     return sorted;
   };
@@ -1515,7 +1525,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               {/* Calendar Grid */}
               <div className="w-[70%] h-full" data-testid="calendar-grid-container">
                 <Card className="h-full overflow-hidden">
-                  <CalendarGrid />
+                  <CalendarGrid 
+                    selectedDate={selectedDate}
+                    onDateChange={setSelectedDate}
+                  />
                 </Card>
               </div>
 
