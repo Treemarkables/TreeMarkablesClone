@@ -153,3 +153,91 @@ export function formatTime12Hour(time24: string): string {
   
   return `${hours12}:${minutes} ${period}`;
 }
+
+/**
+ * TIMEZONE-AWARE COMPARISON HELPERS
+ * Use these instead of direct date comparisons to ensure NZ timezone correctness
+ */
+
+/**
+ * Check if two UTC dates represent the same calendar day in NZ timezone
+ * USE THIS instead of date-fns isSameDay() for database dates
+ * 
+ * @param utcDate1 - First date in UTC (from database or ISO string)
+ * @param utcDate2 - Second date in UTC (from database or ISO string) 
+ * @returns true if both dates are the same calendar day in NZ
+ * 
+ * @example
+ * // Database has: 2025-11-06T13:00:00.000Z
+ * // This is Nov 7, 2:00 AM in NZ (UTC+13)
+ * const dbDate = new Date('2025-11-06T13:00:00.000Z');
+ * const selectedDate = new Date('2025-11-07'); // User selected Nov 7
+ * isSameDayNZ(dbDate, selectedDate); // true ✅
+ * // Using regular isSameDay would return false ❌
+ */
+export function isSameDayNZ(utcDate1: Date | string, utcDate2: Date | string): boolean {
+  const date1 = typeof utcDate1 === 'string' ? new Date(utcDate1) : utcDate1;
+  const date2 = typeof utcDate2 === 'string' ? new Date(utcDate2) : utcDate2;
+  
+  // Convert both dates to NZ timezone
+  const nz1 = utcToNZTime(date1);
+  const nz2 = utcToNZTime(date2);
+  
+  // Compare just the date parts
+  return nz1.date === nz2.date;
+}
+
+/**
+ * Parse a UTC date string/Date safely for display
+ * Use this when you need to work with dates from the database
+ * 
+ * @param utcValue - Date string or Date object from database
+ * @returns Date object (guaranteed valid or null)
+ */
+export function parseUTCDate(utcValue: Date | string | null | undefined): Date | null {
+  if (!utcValue) return null;
+  
+  const date = typeof utcValue === 'string' ? new Date(utcValue) : utcValue;
+  
+  // Check if valid
+  if (isNaN(date.getTime())) return null;
+  
+  return date;
+}
+
+/**
+ * Get NZ date string from UTC date for comparison
+ * USE THIS when filtering/comparing dates by calendar day
+ * 
+ * @param utcDate - UTC date from database
+ * @returns Date string in YYYY-MM-DD format (NZ timezone)
+ * 
+ * @example
+ * const dbDate = new Date('2025-11-06T13:00:00.000Z');
+ * getNZDateString(dbDate); // '2025-11-07' (NZ time)
+ */
+export function getNZDateString(utcDate: Date | string): string {
+  const date = typeof utcDate === 'string' ? new Date(utcDate) : utcDate;
+  const nzTime = utcToNZTime(date);
+  return nzTime.date;
+}
+
+/**
+ * Check if a UTC date falls within a date range in NZ timezone
+ * 
+ * @param utcDate - The date to check (from database)
+ * @param startDate - Range start (in NZ timezone as Date or YYYY-MM-DD string)
+ * @param endDate - Range end (in NZ timezone as Date or YYYY-MM-DD string)
+ * @returns true if the date falls within the range in NZ timezone
+ */
+export function isBetweenNZ(
+  utcDate: Date | string,
+  startDate: Date | string,
+  endDate: Date | string
+): boolean {
+  const nzDateStr = getNZDateString(utcDate);
+  const start = typeof startDate === 'string' ? startDate : getNZDateString(startDate);
+  const end = typeof endDate === 'string' ? endDate : getNZDateString(endDate);
+  
+  return nzDateStr >= start && nzDateStr <= end;
+}
