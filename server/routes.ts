@@ -275,33 +275,13 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
     const startTimeNZ = toZonedTime(startTimeUTC, 'Pacific/Auckland');
     const endTimeNZ = toZonedTime(endTimeUTC, 'Pacific/Auckland');
     
-    // Format full date/time for email
-    const startTimeFull = startTimeNZ.toLocaleString('en-NZ', {
-      dateStyle: 'full',
-      timeStyle: 'short',
-      timeZone: 'Pacific/Auckland'
-    });
-    
-    const endTime = endTimeNZ.toLocaleTimeString('en-NZ', {
-      timeStyle: 'short',
-      timeZone: 'Pacific/Auckland'
-    });
+    // Format using format() from date-fns-tz instead of toLocaleString to avoid double timezone conversion
+    const startTimeFull = format(startTimeNZ, 'EEEE, d MMMM yyyy \'at\' h:mm a', { timeZone: 'Pacific/Auckland' });
+    const endTime = format(endTimeNZ, 'h:mm a', { timeZone: 'Pacific/Auckland' });
     
     // Format date and time separately for SMS (cleaner format)
-    const startDate = startTimeNZ.toLocaleDateString('en-NZ', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'Pacific/Auckland'
-    });
-    
-    const startTime = startTimeNZ.toLocaleTimeString('en-NZ', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'Pacific/Auckland'
-    });
+    const startDate = format(startTimeNZ, 'EEEE, d MMMM yyyy', { timeZone: 'Pacific/Auckland' });
+    const startTime = format(startTimeNZ, 'h:mm a', { timeZone: 'Pacific/Auckland' });
 
     const emailHtml = `
       <h2>You've been scheduled for a job</h2>
@@ -380,33 +360,15 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
     
     console.log(`📅 [SMS DEBUG] Converted startTimeNZ: ${startTimeNZ.toString()}`);
     
-    // Format full date/time for email
-    const startTimeFull = startTimeNZ.toLocaleString('en-NZ', {
-      dateStyle: 'full',
-      timeStyle: 'short',
-      timeZone: 'Pacific/Auckland'
-    });
-    
-    const endTime = endTimeNZ.toLocaleTimeString('en-NZ', {
-      timeStyle: 'short',
-      timeZone: 'Pacific/Auckland'
-    });
+    // Format using format() from date-fns-tz instead of toLocaleString to avoid double timezone conversion
+    const startTimeFull = format(startTimeNZ, 'EEEE, d MMMM yyyy \'at\' h:mm a', { timeZone: 'Pacific/Auckland' });
+    const endTime = format(endTimeNZ, 'h:mm a', { timeZone: 'Pacific/Auckland' });
     
     // Format date and time separately for SMS (cleaner format)
-    const startDate = startTimeNZ.toLocaleDateString('en-NZ', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'Pacific/Auckland'
-    });
+    const startDate = format(startTimeNZ, 'EEEE, d MMMM yyyy', { timeZone: 'Pacific/Auckland' });
+    const startTime = format(startTimeNZ, 'h:mm a', { timeZone: 'Pacific/Auckland' });
     
-    const startTime = startTimeNZ.toLocaleTimeString('en-NZ', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'Pacific/Auckland'
-    });
+    console.log(`📅 [SMS DEBUG] Formatted for SMS: ${startDate} at ${startTime}`);
 
     // Send email notification
     if (employee.email) {
