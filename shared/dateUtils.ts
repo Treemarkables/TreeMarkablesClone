@@ -8,7 +8,7 @@
  * - When saving, we convert NZ local time → UTC
  */
 
-import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { fromZonedTime, toZonedTime, format as formatTz } from 'date-fns-tz';
 
 const NZ_TIMEZONE = 'Pacific/Auckland';
 
@@ -47,20 +47,14 @@ export function nzTimeToUTC(dateStr: string, timeStr: string): Date {
  * // Returns { date: '2025-10-17', time: '10:00' }
  */
 export function utcToNZTime(utcDate: Date): { date: string; time: string } {
-  // Convert UTC to NZ zoned time
-  const nzDate = toZonedTime(utcDate, NZ_TIMEZONE);
-  
-  // Format the already-converted NZ date WITHOUT timezone conversion
-  // (nzDate is already in NZ time, don't convert it again!)
-  const year = nzDate.getFullYear();
-  const month = String(nzDate.getMonth() + 1).padStart(2, '0');
-  const day = String(nzDate.getDate()).padStart(2, '0');
-  const hours = String(nzDate.getHours()).padStart(2, '0');
-  const minutes = String(nzDate.getMinutes()).padStart(2, '0');
+  // Use formatTz to format the UTC date directly in NZ timezone
+  // This avoids double conversion issues
+  const dateStr = formatTz(utcDate, 'yyyy-MM-dd', { timeZone: NZ_TIMEZONE });
+  const timeStr = formatTz(utcDate, 'HH:mm', { timeZone: NZ_TIMEZONE });
   
   return {
-    date: `${year}-${month}-${day}`,
-    time: `${hours}:${minutes}`
+    date: dateStr,
+    time: timeStr
   };
 }
 
