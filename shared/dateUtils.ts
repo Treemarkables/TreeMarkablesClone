@@ -50,24 +50,17 @@ export function utcToNZTime(utcDate: Date): { date: string; time: string } {
   // Convert UTC to NZ zoned time
   const nzDate = toZonedTime(utcDate, NZ_TIMEZONE);
   
-  // Format as NZ date/time
-  const nzDateStr = nzDate.toLocaleString('en-NZ', {
-    timeZone: NZ_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  });
-  
-  // Parse the formatted string (format: "DD/MM/YYYY, HH:mm")
-  const [datePart, timePart] = nzDateStr.split(', ');
-  const [day, month, year] = datePart.split('/');
+  // Format the already-converted NZ date WITHOUT timezone conversion
+  // (nzDate is already in NZ time, don't convert it again!)
+  const year = nzDate.getFullYear();
+  const month = String(nzDate.getMonth() + 1).padStart(2, '0');
+  const day = String(nzDate.getDate()).padStart(2, '0');
+  const hours = String(nzDate.getHours()).padStart(2, '0');
+  const minutes = String(nzDate.getMinutes()).padStart(2, '0');
   
   return {
     date: `${year}-${month}-${day}`,
-    time: timePart
+    time: `${hours}:${minutes}`
   };
 }
 
