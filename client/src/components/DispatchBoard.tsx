@@ -1007,21 +1007,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return job.status !== 'unsuccessful' && job.status !== 'completed' && job.status !== 'invoiced' && job.status !== 'archived';
       })
       .filter(job => {
-        // Filter by selected date - only show jobs scheduled for the selected date
+        // Only show upcoming jobs (jobs with valid start time in the future or today)
         if (!job.startTime) return false;
         try {
-          // Parse the UTC date from the database
           const jobDateUTC = parseISO(job.startTime);
-          if (isNaN(jobDateUTC.getTime())) return false; // Skip invalid dates
+          if (isNaN(jobDateUTC.getTime())) return false;
           
-          // Convert UTC date to NZ timezone for comparison
+          // Convert to NZ timezone and check if job is today or in the future
           const jobDateNZ = utcToNZTime(jobDateUTC);
-          const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+          const todayNZ = utcToNZTime(new Date());
           
-          // Compare just the date parts in NZ timezone
-          return jobDateNZ.date === selectedDateStr;
+          // Compare dates - show jobs from today onwards
+          return jobDateNZ.date >= todayNZ.date;
         } catch {
-          return false; // Skip jobs with unparseable dates
+          return false;
         }
       })
       .filter(job => {
@@ -1547,40 +1546,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0" style={{pointerEvents: 'auto'}}>
                   <CardHeader className="flex-shrink-0 border-b pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Jobs</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleCreateJob}
-                    data-testid="create-job-button"
-                    className="h-7"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    New Job
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setSelectedDate(subDays(selectedDate, 1))}
-                    data-testid="prev-day"
-                    className="h-7 w-7"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setSelectedDate(addDays(selectedDate, 1))}
-                    data-testid="next-day"
-                    className="h-7 w-7"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+                <div>
+                  <CardTitle className="text-base">Scheduled Jobs</CardTitle>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    All upcoming jobs
+                  </div>
                 </div>
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {format(selectedDate, 'EEEE, MMMM dd, yyyy')}
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleCreateJob}
+                  data-testid="create-job-button"
+                  className="h-7"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  New Job
+                </Button>
               </div>
               
               {/* Search Input - Desktop */}
