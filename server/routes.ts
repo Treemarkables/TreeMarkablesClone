@@ -9169,7 +9169,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           jobId,
           entryType: 'sms',
           title: 'SMS Sent',
-          description: `SMS sent to ${to}: ${message}`,
+          description: message,
           authorName: 'System',
           metadata: { phoneNumber: to }
         });
