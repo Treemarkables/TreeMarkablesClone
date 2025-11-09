@@ -298,7 +298,7 @@ class NotificationService {
       } else if (type === 'job_scheduled' && scheduledDate) {
         await smsService.sendSMS({
           to: customer.phone,
-          message: `Hi ${customer.name}, your job "${jobTitle}" is scheduled for ${new Date(scheduledDate).toLocaleDateString('en-NZ')}. - Treemarkables`
+          message: `Hi ${customer.name}, your job is scheduled for ${new Date(scheduledDate).toLocaleDateString('en-NZ')}. - Treemarkables`
         });
       } else if (type === 'job_completed') {
         await smsService.sendSMS({
