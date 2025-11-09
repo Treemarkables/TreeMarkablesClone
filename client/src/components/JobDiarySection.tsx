@@ -612,7 +612,7 @@ export function JobDiarySection({
       return apiRequest('POST', '/api/communications/sms', {
         jobId,
         customerId,
-        phoneNumber: data.phoneNumber,
+        to: data.phoneNumber,
         message: data.message
       });
     },
