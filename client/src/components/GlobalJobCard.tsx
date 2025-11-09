@@ -3755,94 +3755,89 @@ export function GlobalJobCard({
                         </div>
                       </div>
 
-                      {/* Quick Add Equipment Dropdown */}
-                      {editingJob && (
+                      {/* Add Equipment with Checkboxes */}
+                      {editingJob && allEquipment.length > 0 && (
                         <div className="space-y-2">
                           <label className="text-xs md:text-sm font-medium text-gray-700">Add Equipment</label>
-                          <Select
-                            value=""
-                            disabled={isAddingEquipment}
-                            onValueChange={async (equipmentId) => {
-                              if (!editingJob?.id || !equipmentId || isAddingEquipment) return;
-                              
-                              setIsAddingEquipment(true);
-                              
-                              try {
-                                const selectedEquip = allEquipment.find((e: any) => e.id === equipmentId);
-                                if (!selectedEquip) {
-                                  setIsAddingEquipment(false);
-                                  return;
-                                }
-
-                                // Fetch the latest job data from server to avoid stale data
-                                const latestJobResponse = await apiRequest('GET', `/api/jobs/${editingJob.id}`);
-                                const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
-                                const currentChecklist = latestJob?.data?.equipmentChecklist || [];
+                          <div className="bg-white border rounded-lg p-3 max-h-96 overflow-y-auto">
+                            <div className="space-y-2">
+                              {allEquipment.map((equip: any) => {
+                                const isAlreadyAdded = editingJob.equipmentChecklist?.some(
+                                  (item: any) => item.equipment === equip.name
+                                );
                                 
-                                // Check if already added
-                                if (currentChecklist.some((item: any) => item.equipment === selectedEquip.name)) {
-                                  toast({
-                                    title: "Already Added",
-                                    description: `${selectedEquip.name} is already on this job`,
-                                    variant: "destructive"
-                                  });
-                                  setIsAddingEquipment(false);
-                                  return;
-                                }
+                                return (
+                                  <div
+                                    key={equip.id}
+                                    className={`flex items-center gap-3 p-2 rounded hover:bg-gray-50 transition-colors ${
+                                      isAlreadyAdded ? 'opacity-50' : ''
+                                    }`}
+                                  >
+                                    <Checkbox
+                                      id={`add-equip-${equip.id}`}
+                                      checked={isAlreadyAdded}
+                                      disabled={isAddingEquipment || isAlreadyAdded}
+                                      onCheckedChange={async (checked) => {
+                                        if (!checked || !editingJob?.id || isAddingEquipment) return;
+                                        
+                                        setIsAddingEquipment(true);
+                                        
+                                        try {
+                                          // Fetch the latest job data from server to avoid stale data
+                                          const latestJobResponse = await apiRequest('GET', `/api/jobs/${editingJob.id}`);
+                                          const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
+                                          const currentChecklist = latestJob?.data?.equipmentChecklist || [];
 
-                                const newItem = {
-                                  id: `equip-${Date.now()}`,
-                                  equipment: selectedEquip.name,
-                                  checked: false,
-                                  checkedAt: undefined,
-                                  checkedBy: undefined,
-                                };
+                                          const newItem = {
+                                            id: `equip-${Date.now()}-${equip.id}`,
+                                            equipment: equip.name,
+                                            checked: false,
+                                            checkedAt: undefined,
+                                            checkedBy: undefined,
+                                          };
 
-                                const updatedChecklist = [...currentChecklist, newItem];
+                                          const updatedChecklist = [...currentChecklist, newItem];
 
-                                // Update server first (no optimistic update)
-                                await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
-                                  equipmentChecklist: updatedChecklist,
-                                });
+                                          // Update server
+                                          await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                            equipmentChecklist: updatedChecklist,
+                                          });
 
-                                // Refresh job data from server
-                                await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
-                                await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                          // Refresh job data
+                                          await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                          await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
 
-                                toast({
-                                  title: "Equipment Added",
-                                  description: `${selectedEquip.name} added to job`,
-                                });
-                              } catch (error) {
-                                console.error('Error adding equipment:', error);
-                                toast({
-                                  title: "Error",
-                                  description: "Failed to add equipment",
-                                  variant: "destructive"
-                                });
-                              } finally {
-                                setIsAddingEquipment(false);
-                              }
-                            }}
-                            data-testid="select-add-equipment"
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select equipment to add..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {allEquipment.length > 0 ? (
-                                allEquipment.map((equip: any) => (
-                                  <SelectItem key={equip.id} value={equip.id}>
-                                    {equip.name}
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="none" disabled>
-                                  No equipment available
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
+                                          toast({
+                                            title: "Equipment Added",
+                                            description: `${equip.name} added to job`,
+                                          });
+                                        } catch (error) {
+                                          console.error('Error adding equipment:', error);
+                                          toast({
+                                            title: "Error",
+                                            description: "Failed to add equipment",
+                                            variant: "destructive"
+                                          });
+                                        } finally {
+                                          setIsAddingEquipment(false);
+                                        }
+                                      }}
+                                      data-testid={`checkbox-add-${equip.id}`}
+                                    />
+                                    <label
+                                      htmlFor={`add-equip-${equip.id}`}
+                                      className="flex-1 text-sm cursor-pointer"
+                                    >
+                                      {equip.name}
+                                    </label>
+                                    {isAlreadyAdded && (
+                                      <span className="text-xs text-green-600">Added</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
                       )}
 
