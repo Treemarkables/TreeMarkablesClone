@@ -537,13 +537,13 @@ export default function Equipment() {
               Add Equipment
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+            <DialogHeader className="pb-4">
               <DialogTitle>Add New Equipment</DialogTitle>
             </DialogHeader>
             
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -777,13 +777,13 @@ export default function Equipment() {
 
         {/* Edit Equipment Dialog */}
         <Dialog open={isEditEquipmentOpen} onOpenChange={setIsEditEquipmentOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+            <DialogHeader className="pb-4">
               <DialogTitle>Edit Equipment</DialogTitle>
             </DialogHeader>
             
             <Form {...editForm}>
-              <form onSubmit={editForm.handleSubmit(onEdit)} className="space-y-4">
+              <form onSubmit={editForm.handleSubmit(onEdit)} className="space-y-4 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={editForm.control}
