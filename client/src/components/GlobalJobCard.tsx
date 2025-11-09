@@ -27,6 +27,7 @@ import { SpeechToQuote } from "./SpeechToQuote";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -149,6 +150,10 @@ export function GlobalJobCard({
   
   // Equipment addition state
   const [isAddingEquipment, setIsAddingEquipment] = useState(false);
+  
+  // Booking cancellation state
+  const [cancelBookingDialogOpen, setCancelBookingDialogOpen] = useState(false);
+  const [bookingToCancel, setBookingToCancel] = useState<string | null>(null);
   
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
@@ -908,6 +913,70 @@ export function GlobalJobCard({
       });
     }
   });
+
+  // Handle booking cancellation
+  const handleCancelBooking = async (employeeId: string) => {
+    if (!editingJob?.id) {
+      toast({
+        title: "Error",
+        description: "No job ID available",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Clone and filter the assignedTo array
+      const updatedAssignedTo = (editingJob.assignedTo || []).filter(id => id !== employeeId);
+      
+      // Get employee name for diary entry
+      const employee = employees.find((e: any) => e.id === employeeId);
+      const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Staff member';
+      
+      // Prepare update payload
+      const updatePayload: any = {
+        id: editingJob.id,
+        assignedTo: updatedAssignedTo
+      };
+      
+      // If removing the last staff member, clear schedule fields
+      if (updatedAssignedTo.length === 0) {
+        updatePayload.scheduledDate = null;
+        updatePayload.scheduledStartTime = null;
+        updatePayload.scheduledEndTime = null;
+      }
+      
+      // Update the job
+      await updateJobMutation.mutateAsync(updatePayload as GlobalJobCardFormData);
+      
+      // Add diary entry for audit trail
+      try {
+        await apiRequest('POST', `/api/jobs/${editingJob.id}/diary`, {
+          eventType: 'booking_cancelled',
+          notes: `Booking cancelled for ${employeeName}`,
+          timestamp: new Date().toISOString()
+        });
+      } catch (diaryError) {
+        console.error('Failed to add diary entry:', diaryError);
+      }
+      
+      toast({
+        title: "Booking Cancelled",
+        description: `${employeeName}'s booking has been removed.`,
+      });
+      
+      // Close dialog and reset state
+      setCancelBookingDialogOpen(false);
+      setBookingToCancel(null);
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      toast({
+        title: "Cancellation Failed",
+        description: "Failed to cancel booking. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   const sendToXeroMutation = useMutation({
     mutationFn: async () => {
@@ -2867,9 +2936,23 @@ export function GlobalJobCard({
                                 const scheduledTime = editingJob.scheduledStartTime ? formatTime12Hour(editingJob.scheduledStartTime) : '';
                                 
                                 return (
-                                  <div key={employeeId} className="flex items-center gap-2">
-                                    <Calendar className="w-4 h-4 text-blue-600" />
-                                    <span className="font-medium">{employeeName} on {scheduledDate} {scheduledTime}</span>
+                                  <div key={employeeId} className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="w-4 h-4 text-blue-600" />
+                                      <span className="font-medium">{employeeName} on {scheduledDate} {scheduledTime}</span>
+                                    </div>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6"
+                                      onClick={() => {
+                                        setBookingToCancel(employeeId);
+                                        setCancelBookingDialogOpen(true);
+                                      }}
+                                      data-testid={`button-cancel-booking-${employeeId}`}
+                                    >
+                                      <X className="h-3.5 w-3.5 text-gray-500 hover:text-red-600" />
+                                    </Button>
                                   </div>
                                 );
                               })}
@@ -4760,6 +4843,41 @@ export function GlobalJobCard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Booking Cancellation Confirmation Dialog */}
+      <AlertDialog open={cancelBookingDialogOpen} onOpenChange={setCancelBookingDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this staff booking? This will remove the staff member from this job.
+              {bookingToCancel && editingJob?.assignedTo && editingJob.assignedTo.length === 1 && (
+                <span className="block mt-2 text-orange-600 font-medium">
+                  This is the last staff member assigned. Cancelling will unschedule this job.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setCancelBookingDialogOpen(false);
+              setBookingToCancel(null);
+            }}>
+              Keep Booking
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (bookingToCancel) {
+                  handleCancelBooking(bookingToCancel);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Cancel Booking
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
