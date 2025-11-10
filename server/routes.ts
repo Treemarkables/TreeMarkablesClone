@@ -77,7 +77,7 @@ const upload = multer({
 });
 import fs from "fs";
 import { format } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
 import { businessIntelligenceService } from "./services/businessIntelligence";
@@ -300,6 +300,20 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
 
     const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startDate} at ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
     
+    // Check for existing pending notifications for this employee and assignment
+    const allPending = await storage.getPendingNotifications(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)); // Check next 7 days
+    const existingNotification = allPending.find(n => 
+      n.recipientId === employee.id && 
+      n.assignmentId === assignment.id && 
+      n.status === 'pending'
+    );
+    
+    // If a pending notification exists, cancel it (we'll create a new one with updated details)
+    if (existingNotification) {
+      console.log(`[Notification Queue] Found existing notification for ${employee.firstName} ${employee.lastName} - cancelling old one`);
+      await storage.markNotificationFailed(existingNotification.id, 'Rescheduled - replaced by new notification');
+    }
+    
     // Store in notification queue
     await storage.createNotificationQueueItem({
       recipientId: employee.id,
@@ -325,25 +339,28 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
   }
 }
 
-// Get next business hour time (next weekday at 7am)
+// Get next business hour time (next weekday at 7am NZ time, returned as UTC)
 function getNextBusinessHourTime(): Date {
-  const now = new Date();
-  const nzTime = new Date(now.toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+  // Get current time in NZ timezone
+  const nowUTC = new Date();
+  const nowNZ = toZonedTime(nowUTC, 'Pacific/Auckland');
   
-  let nextTime = new Date(nzTime);
-  nextTime.setHours(7, 0, 0, 0);
+  // Set to 7 AM NZ time
+  let nextTimeNZ = new Date(nowNZ);
+  nextTimeNZ.setHours(7, 0, 0, 0);
   
   // If it's already past 7am today, move to tomorrow
-  if (nzTime.getHours() >= 7) {
-    nextTime.setDate(nextTime.getDate() + 1);
+  if (nowNZ.getHours() >= 7) {
+    nextTimeNZ.setDate(nextTimeNZ.getDate() + 1);
   }
   
   // Skip weekends
-  while (nextTime.getDay() === 0 || nextTime.getDay() === 6) {
-    nextTime.setDate(nextTime.getDate() + 1);
+  while (nextTimeNZ.getDay() === 0 || nextTimeNZ.getDay() === 6) {
+    nextTimeNZ.setDate(nextTimeNZ.getDate() + 1);
   }
   
-  return nextTime;
+  // Convert back to UTC for storage
+  return fromZonedTime(nextTimeNZ, 'Pacific/Auckland');
 }
 
 // Send schedule notification via email/SMS
