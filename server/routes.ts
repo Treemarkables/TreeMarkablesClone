@@ -16001,9 +16001,122 @@ Transcription: ${transcriptText}`;
       if (!existing) {
         return res.status(404).json({ success: false, message: 'Assessment not found' });
       }
-      const assessment = await storage.updateJhaAssessment(req.params.id, req.body);
-      res.json({ success: true, data: assessment });
+
+      // Reuse the same validation schema as POST
+      const jhaPayloadSchema = z.object({
+        activityDescription: z.string().min(1),
+        ppeRequired: z.array(z.string()).optional(),
+        teamLeader: z.string().optional(),
+        location: z.string().optional(),
+        comments: z.string().optional(),
+        jobId: z.number().nullable().optional(),
+        selectedHazards: z.array(z.object({
+          hazardTemplateId: z.union([z.number(), z.string()]),
+          hazardName: z.string(),
+          initialRisk: z.number().min(1).max(4),
+          selectedControls: z.array(z.union([z.number(), z.string()])),
+          residualRisk: z.number().min(1).max(4).optional(),
+          responsiblePerson: z.string().optional(),
+          riskControl: z.string().optional()
+        })),
+        sharedSignature: z.string().optional(),
+        photos: z.array(z.string()).optional()
+      });
+
+      const validated = jhaPayloadSchema.parse(req.body);
+      const { selectedHazards, sharedSignature, photos, ...assessmentData } = validated;
+      
+      // Recalculate overall risk rating
+      const overallRiskRating = selectedHazards.length > 0 
+        ? Math.max(...selectedHazards.map(h => h.residualRisk || h.initialRisk))
+        : null;
+
+      // Use transaction to ensure atomicity of update + delete + recreate
+      await storage.db.transaction(async (tx) => {
+        // Update the assessment
+        await tx.update(schema.jhaAssessments)
+          .set({
+            activityDescription: assessmentData.activityDescription,
+            ppeRequired: assessmentData.ppeRequired || [],
+            teamLeader: assessmentData.teamLeader || null,
+            location: assessmentData.location || null,
+            comments: assessmentData.comments || null,
+            photos: photos || [],
+            overallRiskRating,
+            jobId: assessmentData.jobId || null,
+            updatedAt: new Date()
+          })
+          .where(eq(schema.jhaAssessments.id, req.params.id));
+
+        // Delete existing steps and controls (clean slate approach)
+        await tx.delete(schema.jhaStepControls)
+          .where(sql`step_id IN (SELECT id FROM jha_steps WHERE assessment_id = ${req.params.id})`);
+        await tx.delete(schema.jhaSteps)
+          .where(eq(schema.jhaSteps.assessmentId, req.params.id));
+
+        // Recreate steps for each selected hazard
+        if (selectedHazards && selectedHazards.length > 0) {
+          for (let i = 0; i < selectedHazards.length; i++) {
+            const hazard = selectedHazards[i];
+            
+            // Create the step
+            const [step] = await tx.insert(schema.jhaSteps)
+              .values({
+                assessmentId: req.params.id,
+                stepNumber: i + 1,
+                stepName: null,
+                hazardName: hazard.hazardName,
+                hazardDescription: null,
+                hazardTemplateId: hazard.hazardTemplateId?.toString() || null,
+                initialRiskRating: hazard.initialRisk,
+                residualRiskRating: hazard.residualRisk || hazard.initialRisk,
+                riskControl: hazard.riskControl || null,
+                responsiblePerson: hazard.responsiblePerson || null,
+                responsiblePersonId: null
+              })
+              .returning();
+
+            // Create control measures for this step
+            if (hazard.selectedControls && hazard.selectedControls.length > 0) {
+              for (const controlId of hazard.selectedControls) {
+                await tx.insert(schema.jhaStepControls)
+                  .values({
+                    stepId: step.id,
+                    controlMeasureTemplateId: controlId.toString(),
+                    description: '', // Will be populated from template
+                    hierarchyLevel: 3,
+                    isImplemented: true,
+                    sortOrder: 0
+                  });
+              }
+            }
+          }
+        }
+
+        // Add new signature if provided (append-only, don't touch existing signatures)
+        if (sharedSignature && sharedSignature.trim()) {
+          await tx.insert(schema.jhaSignatures)
+            .values({
+              assessmentId: req.params.id,
+              workerName: 'Worker', // Could be enhanced to collect actual name
+              workerId: null,
+              signatureDataUrl: sharedSignature,
+              signedAt: new Date()
+            });
+        }
+      });
+
+      // Fetch the updated assessment to return
+      const updatedAssessment = await storage.getJhaAssessment(req.params.id);
+      if (!updatedAssessment) {
+        throw new Error('Assessment not found after update');
+      }
+
+      res.json({ success: true, data: updatedAssessment });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update assessment' });
     }
   });
