@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
+import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,6 +60,47 @@ export default function JHAAssessment() {
   const [customHazardName, setCustomHazardName] = useState("");
   const [customControls, setCustomControls] = useState<string[]>([""]);
 
+  // Get assessment ID from URL query params for editing
+  const searchParams = new URLSearchParams(window.location.search);
+  const assessmentId = searchParams.get('id');
+  const isEditing = !!assessmentId;
+
+  // Fetch existing assessment if editing
+  const { data: existingAssessmentData, isLoading: loadingExisting } = useQuery<{
+    success: boolean;
+    data: {
+      id: string;
+      activityDescription: string | null;
+      ppeRequired: string[] | null;
+      teamLeader: string | null;
+      location: string | null;
+      comments: string | null;
+      photos: string[] | null;
+      steps: Array<{
+        id: string;
+        hazardName: string;
+        hazardTemplateId: string | null;
+        initialRiskRating: number;
+        residualRiskRating: number | null;
+        responsiblePerson: string | null;
+        controlMeasures: Array<{
+          id: string;
+          description: string;
+          controlMeasureTemplateId: string | null;
+        }>;
+      }>;
+      signatures: Array<{
+        id: string;
+        workerName: string;
+        signatureDataUrl: string;
+        signedAt: string;
+      }>;
+    };
+  }>({
+    queryKey: [`/api/jha/assessments/${assessmentId}?includeSteps=true&includeSignatures=true`],
+    enabled: isEditing,
+  });
+
   // Fetch hazard templates
   const { data: templatesData, isLoading: templatesLoading } = useQuery<{ 
     success: boolean; 
@@ -79,6 +121,7 @@ export default function JHAAssessment() {
   });
 
   const hazardTemplates = templatesData?.data || [];
+  const existingAssessment = existingAssessmentData?.data;
   const filteredHazards = hazardTemplates.filter(h => 
     h.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -95,20 +138,50 @@ export default function JHAAssessment() {
     }
   });
 
+  // Load existing assessment data into form when editing
+  useEffect(() => {
+    if (existingAssessment && isEditing) {
+      form.reset({
+        activityDescription: existingAssessment.activityDescription || "",
+        ppeRequired: existingAssessment.ppeRequired || [],
+        teamLeader: existingAssessment.teamLeader || "",
+        location: existingAssessment.location || "",
+        comments: existingAssessment.comments || "",
+        selectedHazards: existingAssessment.steps?.map((step) => ({
+          hazardTemplateId: step.hazardTemplateId || `custom-${step.id}`,
+          hazardName: step.hazardName,
+          initialRisk: step.initialRiskRating,
+          selectedControls: step.controlMeasures.map(cm => 
+            cm.controlMeasureTemplateId || cm.description
+          ),
+          residualRisk: step.residualRiskRating || step.initialRiskRating,
+          responsiblePerson: step.responsiblePerson || "",
+          riskControl: step.controlMeasures[0]?.description || ""
+        })) || []
+      });
+      
+      if (existingAssessment.photos) {
+        setPhotos(existingAssessment.photos);
+      }
+    }
+  }, [existingAssessment, isEditing, form]);
 
   const selectedHazards = form.watch("selectedHazards");
 
   const createAssessmentMutation = useMutation({
     mutationFn: async (data: JHAFormValues & { sharedSignature: string, photos: string[] }) => {
+      if (isEditing && assessmentId) {
+        return apiRequest('PATCH', `/api/jha/assessments/${assessmentId}`, data);
+      }
       return apiRequest('POST', '/api/jha/assessments', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jha/assessments'] });
       toast({
         title: "Success",
-        description: "Job Hazard Analysis completed successfully",
+        description: isEditing ? "JHA updated successfully" : "Job Hazard Analysis completed successfully",
       });
-      navigate("/job-dashboard");
+      navigate("/jha-history");
     },
     onError: (error: Error) => {
       toast({
@@ -252,6 +325,7 @@ export default function JHAAssessment() {
     console.log("🔍 Form submit triggered", { 
       hazardCount: data.selectedHazards.length,
       hasSignature: !!sharedSignature,
+      isEditing,
       formData: data 
     });
 
@@ -265,7 +339,9 @@ export default function JHAAssessment() {
       return;
     }
 
-    if (!sharedSignature) {
+    // When creating new JHA, signature is required
+    // When editing, signature is optional (existing signatures remain valid)
+    if (!isEditing && !sharedSignature) {
       console.log("❌ Validation failed: No signature");
       toast({
         title: "Signature Required",
@@ -278,12 +354,12 @@ export default function JHAAssessment() {
     console.log("✅ Validation passed, submitting form");
     createAssessmentMutation.mutate({
       ...data,
-      sharedSignature,
+      sharedSignature: sharedSignature || "",
       photos
     });
   };
 
-  if (templatesLoading) {
+  if (templatesLoading || (isEditing && loadingExisting)) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -325,9 +401,13 @@ export default function JHAAssessment() {
           {/* Header */}
           <Card>
             <CardHeader className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white">
-              <CardTitle className="text-2xl">Job Hazard Analysis</CardTitle>
+              <CardTitle className="text-2xl">
+                {isEditing ? "Edit Job Hazard Analysis" : "Job Hazard Analysis"}
+              </CardTitle>
               <CardDescription className="text-white/90">
-                Complete this form before starting work
+                {isEditing 
+                  ? "Update assessment details or add additional signatures" 
+                  : "Complete this form before starting work"}
               </CardDescription>
             </CardHeader>
           </Card>
@@ -834,11 +914,45 @@ export default function JHAAssessment() {
             </CardContent>
           </Card>
 
-          {/* Signatures */}
+          {/* Existing Signatures */}
+          {isEditing && existingAssessment?.signatures && existingAssessment.signatures.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Existing Signatures</CardTitle>
+                <CardDescription>Workers who have already signed this JHA</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {existingAssessment.signatures.map((sig) => (
+                  <div key={sig.id} className="p-3 border rounded-lg bg-gray-50">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <span className="font-medium text-sm">{sig.workerName}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(sig.signedAt), "PPp")}
+                      </span>
+                    </div>
+                    <div className="border rounded bg-white dark:bg-gray-900 p-2">
+                      <img src={sig.signatureDataUrl} alt={`Signature by ${sig.workerName}`} className="max-h-20 w-full object-contain" />
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* New Signatures */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Worker Signatures</CardTitle>
-              <CardDescription>All workers can sign in the box below</CardDescription>
+              <CardTitle className="text-lg">
+                {isEditing ? "Add Additional Worker Signature" : "Worker Signatures"}
+              </CardTitle>
+              <CardDescription>
+                {isEditing 
+                  ? "Add signature for workers who joined this job later"
+                  : "All workers can sign in the box below"}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {sharedSignature ? (
@@ -846,7 +960,9 @@ export default function JHAAssessment() {
                   <div className="p-3 border rounded-lg bg-gray-50">
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      <span className="font-medium">Signatures collected</span>
+                      <span className="font-medium">
+                        {isEditing ? "New signature collected" : "Signatures collected"}
+                      </span>
                     </div>
                     <img 
                       src={sharedSignature} 
@@ -892,10 +1008,10 @@ export default function JHAAssessment() {
               {createAssessmentMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Submitting...
+                  {isEditing ? "Updating..." : "Submitting..."}
                 </>
               ) : (
-                "Submit Form"
+                isEditing ? "Update JHA" : "Submit Form"
               )}
             </Button>
           </div>
