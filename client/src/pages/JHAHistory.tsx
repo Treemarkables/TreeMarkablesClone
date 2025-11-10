@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Shield, AlertTriangle, CheckCircle2, FileText } from "lucide-react";
+import { Loader2, Shield, AlertTriangle, CheckCircle2, FileText, Edit, UserPlus } from "lucide-react";
 
 interface JHAAssessment {
   id: number;
@@ -29,6 +30,7 @@ interface JHAAssessment {
 }
 
 export default function JHAHistory() {
+  const [, navigate] = useLocation();
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<{ success: boolean; data: JHAAssessment[] }>({
@@ -146,10 +148,24 @@ export default function JHAHistory() {
       <Dialog open={!!selectedAssessmentId} onOpenChange={(open) => !open && setSelectedAssessmentId(null)}>
         <DialogContent className="max-w-3xl max-h-screen">
           <DialogHeader>
-            <DialogTitle>
-              JHA #{selectedAssessment?.assessmentNumber || selectedAssessment?.id.substring(0, 8)}
-              {selectedAssessment?.jobId && ` - Job #${selectedAssessment.jobId}`}
-            </DialogTitle>
+            <div className="flex items-start justify-between gap-4">
+              <DialogTitle>
+                JHA #{selectedAssessment?.assessmentNumber || selectedAssessment?.id.substring(0, 8)}
+                {selectedAssessment?.jobId && ` - Job #${selectedAssessment.jobId}`}
+              </DialogTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedAssessmentId(null);
+                  navigate(`/jha-assessment?id=${selectedAssessmentId}`);
+                }}
+                data-testid="button-edit-jha"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Edit JHA
+              </Button>
+            </div>
           </DialogHeader>
 
           {selectedAssessment && (
