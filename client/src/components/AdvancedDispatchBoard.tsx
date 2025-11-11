@@ -506,8 +506,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
 
             {/* Jobs Header */}
             <div className="p-3 border-b bg-gray-50">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">Jobs</span>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">
+                  Jobs {dateFilter === 'all' && <span className="text-xs text-gray-500">({allJobs.length})</span>}
+                </span>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs">
                     <SelectValue placeholder="Filter by status" />
@@ -520,6 +522,26 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  variant={dateFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDateFilter('all')}
+                  className="flex-1 h-7 text-xs"
+                  data-testid="button-date-filter-all"
+                >
+                  All Jobs
+                </Button>
+                <Button
+                  variant={dateFilter === 'today' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDateFilter('today')}
+                  className="flex-1 h-7 text-xs"
+                  data-testid="button-date-filter-today"
+                >
+                  Today Only
+                </Button>
               </div>
             </div>
 
