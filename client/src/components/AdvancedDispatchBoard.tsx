@@ -318,6 +318,10 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     const customer = getCustomerName(job.customerId, job);
     const styling = getStatusStyling(job.status);
     
+    // Check if job is scheduled for a different day
+    const isScheduledForDifferentDay = job.scheduledDate && !isSameDay(new Date(job.scheduledDate), currentDate);
+    const scheduledDateText = job.scheduledDate ? format(new Date(job.scheduledDate), 'MMM d') : null;
+    
     // ServiceM8-style letter mapping based on status
     const getStatusLetter = (status: string) => {
       switch (status) {
@@ -348,8 +352,16 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Customer name */}
-          <h4 className="font-semibold text-base text-gray-900 mb-1">{customer}</h4>
+          {/* Customer name and date badge */}
+          <div className="flex items-center gap-2 mb-1">
+            <h4 className="font-semibold text-base text-gray-900">{customer}</h4>
+            {isScheduledForDifferentDay && scheduledDateText && (
+              <Badge variant="outline" className="text-xs flex items-center gap-1 bg-blue-50 text-blue-700 border-blue-200">
+                <Calendar className="w-3 h-3" />
+                {scheduledDateText}
+              </Badge>
+            )}
+          </div>
           
           {/* Address */}
           <p className="text-sm text-gray-600 mb-2 break-words line-clamp-2">{job.address}</p>
