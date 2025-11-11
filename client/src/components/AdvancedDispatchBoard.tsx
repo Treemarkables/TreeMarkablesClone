@@ -54,6 +54,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const [draggedJob, setDraggedJob] = useState<any | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today'>('all');
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -104,13 +105,22 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   // Get all jobs (not just today's)
   const allJobsRaw = (jobsData as any)?.data || [];
   
-  // Filter jobs based on status and search query
+  // Filter jobs based on status, search query, and date
   const allJobs = useMemo(() => {
     let filtered = allJobsRaw;
     
     // Filter by status
     if (statusFilter !== 'all') {
       filtered = filtered.filter((job: any) => job.status === statusFilter);
+    }
+    
+    // Filter by date (for sidebar display)
+    if (dateFilter === 'today') {
+      filtered = filtered.filter((job: any) => {
+        if (!job.scheduledDate) return false;
+        const jobDate = new Date(job.scheduledDate);
+        return isSameDay(jobDate, currentDate);
+      });
     }
     
     // Filter by search query (customer name, job number, address, description)
@@ -143,12 +153,13 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     console.log('🔍 Dispatch Board Debug:', {
       totalJobs: sorted.length,
       statusFilter,
+      dateFilter,
       searchQuery,
       top10Jobs: sorted.slice(0, 10).map((j: any) => ({ jobNumber: j.jobNumber, title: j.title }))
     });
     
     return sorted;
-  }, [allJobsRaw, statusFilter, searchQuery, customersData]);
+  }, [allJobsRaw, statusFilter, dateFilter, searchQuery, customersData, currentDate]);
   
   // Component render debug
   console.log('⚡ AdvancedDispatchBoard RENDER - Raw Jobs:', allJobsRaw?.length, 'Sorted Jobs:', allJobs?.length);
