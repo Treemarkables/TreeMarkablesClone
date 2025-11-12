@@ -9407,6 +9407,26 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
       const conversation = await storage.createConversation(validation.data);
       
+      // Create database notification for new conversation
+      try {
+        await storage.createNotification({
+          title: `New ${conversation.source || 'conversation'} contact`,
+          message: conversation.title || 'New inquiry received',
+          type: 'new_conversation',
+          priority: conversation.priority === 'urgent' ? 'high' : 'medium',
+          actionUrl: `/conversations?id=${conversation.id}`,
+          metadata: {
+            conversationId: conversation.id,
+            source: conversation.source,
+            serviceType: conversation.serviceType
+          }
+        });
+        console.log(`✅ Created notification bell entry for new conversation: ${conversation.id}`);
+      } catch (notifError) {
+        console.error('Error creating database notification:', notifError);
+        // Don't fail the request if notification creation fails
+      }
+      
       // Send push notification to admin users about new lead
       try {
         const employees = await storage.getAllEmployees();
