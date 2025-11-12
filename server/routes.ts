@@ -1343,21 +1343,30 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       // Create conversation from contact form directly (bypass legacy lead saving)
       try {
-        // Create conversation title from message (first 100 chars) or use default
-        const conversationTitle = message.trim().length > 0 
-          ? message.trim().substring(0, 100) + (message.length > 100 ? '...' : '')
-          : `New inquiry from ${name}`;
+        // Check for existing open conversation from this contact
+        let conversation = await notificationHelper.findExistingOpenConversation(email.trim().toLowerCase());
+        let isNewConversation = !conversation;
 
-        const conversation = await storage.createConversation({
-          title: conversationTitle,
-          status: 'open',
-          priority: 'medium',
-          source: 'web_form',
-          tags: ['contact-form', 'website']
-        });
+        if (!conversation) {
+          // Create conversation title from message (first 100 chars) or use default
+          const conversationTitle = message.trim().length > 0 
+            ? message.trim().substring(0, 100) + (message.length > 100 ? '...' : '')
+            : `New inquiry from ${name}`;
 
-        // Create notification bell entry
-        await notificationHelper.createConversationNotification(conversation);
+          conversation = await storage.createConversation({
+            title: conversationTitle,
+            status: 'open',
+            priority: 'medium',
+            source: 'web_form',
+            tags: ['contact-form', 'website']
+          });
+
+          // Create notification bell entry for new conversation only
+          await notificationHelper.createConversationNotification(conversation);
+          console.log(`✅ Created new conversation for contact form submission: ${conversation.id}`);
+        } else {
+          console.log(`✅ Found existing open conversation for ${email}, adding message to: ${conversation.id}`);
+        }
 
         // Create initial message in the conversation with contact details
         const fullMessage = `Contact Form Submission\n\nName: ${name}\nEmail: ${email}\nPhone: ${phone || 'Not provided'}\nHow they heard about us: ${hearAbout || 'Not specified'}\n\nMessage:\n${message.trim()}`;
@@ -1372,7 +1381,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           platform: 'web_form'
         });
 
-        console.log(`✅ Conversation created for contact form submission: ${conversation.id}`);
       } catch (error) {
         console.error('Error creating conversation from contact form:', error);
         // Continue even if conversation creation fails
@@ -10658,10 +10666,9 @@ Transcription: ${transcriptText}`;
       
       // If no job found, create/update conversation (original behavior)
       if (!jobFound) {
-        console.log(`💬 No job reference found - creating conversation`);
-        // Check if conversation exists for this email (use actual email for forwarded)
-        const existingConversations = await storage.getAllConversations({ search: actualFromEmail });
-        let conversation = existingConversations[0];
+        console.log(`💬 No job reference found - checking for existing conversation`);
+        // Check if conversation exists for this email contact
+        let conversation = await notificationHelper.findExistingOpenConversation(actualFromEmail);
         const isNewConversation = !conversation;
         
         if (!conversation) {
@@ -10677,6 +10684,9 @@ Transcription: ${transcriptText}`;
           
           // Create notification bell entry for new email conversation
           await notificationHelper.createConversationNotification(conversation);
+          console.log(`✅ Created new conversation for email from ${actualFromEmail}: ${conversation.id}`);
+        } else {
+          console.log(`✅ Found existing open conversation for ${actualFromEmail}, adding message to: ${conversation.id}`);
         }
         
         // Create message in conversation
@@ -10888,28 +10898,18 @@ Transcription: ${transcriptText}`;
               }
               
               // Find existing conversation for this Facebook sender
-              const allConversations = await storage.getAllConversations({ source: 'social' });
-              let conversation = null;
+              let conversation = await notificationHelper.findExistingOpenConversation(senderId);
+              let isNewConversation = !conversation;
               
-              for (const conv of allConversations) {
-                const messages = await storage.getConversationMessages(conv.id);
-                const hasMessageFromSender = messages.some(
-                  msg => msg.platform === 'facebook_messenger' && msg.fromContact === senderId
-                );
-                if (hasMessageFromSender) {
-                  conversation = conv;
-                  // Update conversation title with real name if it's still generic
-                  if (conversation.title === 'Facebook Messenger Enquiry' && senderName !== 'Facebook Messenger Enquiry') {
-                    await storage.updateConversation(conversation.id, { title: senderName });
-                    conversation.title = senderName;
-                  }
-                  break;
+              if (conversation) {
+                // Update conversation title with real name if it's still generic
+                if (conversation.title === 'Facebook Messenger Enquiry' && senderName !== 'Facebook Messenger Enquiry') {
+                  await storage.updateConversation(conversation.id, { title: senderName });
+                  conversation.title = senderName;
                 }
-              }
-              
-              // Create new conversation if none exists for this sender
-              let isNewConversation = false;
-              if (!conversation) {
+                console.log(`✅ Found existing open conversation for Facebook user ${senderId}, adding message to: ${conversation.id}`);
+              } else {
+                // Create new conversation if none exists for this sender
                 conversation = await storage.createConversation({
                   title: senderName,
                   status: 'open',
@@ -10921,6 +10921,7 @@ Transcription: ${transcriptText}`;
                 
                 // Create notification bell entry for new Facebook conversation
                 await notificationHelper.createConversationNotification(conversation);
+                console.log(`✅ Created new conversation for Facebook user ${senderId}: ${conversation.id}`);
               }
               
               // Save message to conversation
