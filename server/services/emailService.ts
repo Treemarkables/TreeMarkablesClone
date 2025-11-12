@@ -100,7 +100,7 @@ class EmailService {
         ...(params.html && { html: params.html }),
         ...(params.text && { text: params.text }),
         ...(params.cc && { cc: Array.isArray(params.cc) ? params.cc : [params.cc] }),
-        reply_to: replyToAddress, // Always set reply-to for proper reply handling
+        replyTo: replyToAddress, // Node SDK uses camelCase 'replyTo' (not 'reply_to')
         ...(resendAttachments && resendAttachments.length > 0 && { attachments: resendAttachments })
       };
 
