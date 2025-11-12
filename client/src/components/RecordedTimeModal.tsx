@@ -415,17 +415,9 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                           .map((staff: any) => {
                             const isSelected = newEntry.staffIds.includes(staff.id);
                             return (
-                              <div
+                              <label
                                 key={staff.id}
                                 className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
-                                onClick={() => {
-                                  setNewEntry(prev => ({
-                                    ...prev,
-                                    staffIds: isSelected
-                                      ? prev.staffIds.filter(id => id !== staff.id)
-                                      : [...prev.staffIds, staff.id]
-                                  }));
-                                }}
                                 data-testid={`staff-option-${staff.id}`}
                               >
                                 <Checkbox
@@ -449,7 +441,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                                     </div>
                                   )}
                                 </div>
-                              </div>
+                              </label>
                             );
                           })}
                       </div>
