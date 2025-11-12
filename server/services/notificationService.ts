@@ -256,7 +256,8 @@ class NotificationService {
           customer.name,
           jobTitle,
           status,
-          { scheduledDate: scheduledDate || jobData?.scheduledDate }
+          { scheduledDate: scheduledDate || jobData?.scheduledDate },
+          jobData?.jobNumber // Pass job number for job-specific reply-to
         );
       } else if (type === 'job_scheduled' && scheduledDate) {
         const formattedDate = formatNZTime(scheduledDate, 'full');
@@ -270,7 +271,8 @@ class NotificationService {
             <p>Your job "${jobTitle}" has been scheduled for ${formattedDate} (NZ time).</p>
             <p>We'll be in touch with any updates.</p>
             <p>Best regards,<br>Treemarkables Team</p>
-          `
+          `,
+          jobNumber: jobData?.jobNumber // Pass job number for job-specific reply-to
         });
       } else if (type === 'job_completed') {
         await emailService.sendEmail({
@@ -283,7 +285,8 @@ class NotificationService {
             <p>Your job "${jobTitle}" has been completed successfully!</p>
             <p>Thank you for choosing Treemarkables. We hope you're satisfied with our service.</p>
             <p>Best regards,<br>Treemarkables Team</p>
-          `
+          `,
+          jobNumber: jobData?.jobNumber // Pass job number for job-specific reply-to
         });
       }
     }

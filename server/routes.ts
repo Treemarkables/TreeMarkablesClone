@@ -4389,12 +4389,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       console.log('📧 EMAIL TEXT CONTENT:', `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`);
 
       // Send email using EmailService (photos are hosted URLs, no attachments needed)
+      // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
       const emailResult = await emailService.sendEmail({
         to,
         cc,
         subject,
         html: htmlContent,
-        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
+        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`,
+        jobNumber: job?.jobNumber // Reply-to will be job-{number}@jobs.treemarkables.co.nz
       });
 
       if (!emailResult.success) {
@@ -4789,11 +4791,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
       
       // Send email using the emailService
+      // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
       const emailResult = await emailService.sendEmail({
         to: to,
         subject: subject,
         text: emailBody,
         html: emailHtml,
+        jobNumber: job?.jobNumber, // Reply-to will be job-{number}@jobs.treemarkables.co.nz
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 

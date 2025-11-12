@@ -73,23 +73,27 @@ Preferred communication style: Simple, everyday language.
 - **FIX (12 Nov 2025)**: Removed all hardcoded `from:` email addresses throughout codebase (server/index.ts, server/routes.ts) that were overriding the Resend connector configuration. Email service now correctly uses configured `from_email` from Resend integration (`info@updates.treemarkables.co.nz`) instead of hardcoded `info@treemarkables.co.nz`
 - **SendGrid API Removal (12 Nov 2025)**: Disabled SendGrid Activity API endpoint that was causing errors after Resend migration. Endpoint now returns empty activity data instead of calling defunct SendGrid API. Note: Resend doesn't support email open/click tracking via API.
 
-### Job-Specific Email Reply Capture - RESTORED (12 Nov 2025)
-- **RESTORED**: Job-specific email reply-to addresses functionality that existed with SendGrid
+### Job-Specific Email Reply-To with Cloudflare Email Routing (13 Nov 2025)
+- **ACTIVE**: Job-specific email reply-to addresses using free Cloudflare Email Routing
 - All job-related emails now use `job-{jobNumber}@jobs.treemarkables.co.nz` as reply-to address
-- Customer replies automatically appear in job card diaries (NOT in user's personal inbox)
+- Customer replies automatically appear in job card diaries via Gmail IMAP capture
 - **Architecture**:
-  - Extended `EmailParams` interface with optional `jobNumber` field
-  - Added `formatJobReplyAddress()` helper in emailService.ts
-  - Updated all job-related email sending: proposals, invoices, quotes, employee notifications
-  - Webhook endpoint (`/api/webhooks/email`) handles both SendGrid (legacy) and Resend inbound formats
-  - Resend webhook fetches full email content via API (metadata-only in webhook payload)
-  - Job number extracted from TO address pattern: `job-(\d+)@jobs.treemarkables.co.nz`
-  - Automatic diary entry creation with notification for customer replies
-- **DNS Setup Required**: User must configure Resend Inbound Email receiving domain `jobs.treemarkables.co.nz`:
-  1. Add MX records pointing to Resend's inbound servers
-  2. Configure Resend webhook URL: `https://{repl-url}/api/webhooks/email`
-  3. Set `RESEND_WEBHOOK_SECRET` environment variable for signature verification
-  4. Verify domain in Resend dashboard
+  - Extended `EmailParams` interface with optional `jobNumber` field in emailService.ts
+  - Added `formatJobReplyAddress()` helper method to generate job-specific addresses
+  - Updated `emailService.sendEmail()` to use job-specific reply-to when jobNumber provided
+  - Updated `emailService.sendJobStatusEmail()` to accept and pass jobNumber parameter
+  - Updated all job-related email endpoints to pass jobNumber:
+    - Proposal emails: `/api/proposals/:id/send-email` (server/routes.ts line ~4396)
+    - Invoice emails: `/api/emails/send` (server/routes.ts line ~4798)
+    - Job notifications: `notificationService.sendCustomerNotifications()` (server/services/notificationService.ts lines ~257-293)
+  - **Cloudflare Setup**: Free catch-all forwarding configured for `*@jobs.treemarkables.co.nz` → `accounts@treemarkables.nz`
+  - **Gmail IMAP Integration**: Existing gmailReplyService.ts captures forwarded replies from accounts@treemarkables.nz inbox
+  - Job number extracted from customer email matching (via Gmail IMAP) for automatic diary entries
+- **DNS Configuration**: Cloudflare Email Routing configured at treemarkables.co.nz:
+  1. MX records pointing to Cloudflare email servers (automatically configured)
+  2. Catch-all rule: `*@jobs.treemarkables.co.nz` → `accounts@treemarkables.nz`
+  3. Domain verification completed
+  4. Nameservers: luciana.ns.cloudflare.com, quinton.ns.cloudflare.com
 - **Fallback**: Default reply-to remains `info@treemarkables.nz` for non-job emails
 
 ### Gmail Email Reply Capture (12 Nov 2025)
