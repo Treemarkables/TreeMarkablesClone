@@ -400,8 +400,7 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
           <p>Please confirm your availability as soon as possible.</p>
           <p>Thanks,<br>Treemarkables Team</p>
         `,
-        text: `Hi ${employee.firstName},\n\nYou've been assigned to: ${job?.title || 'Tree Service'}\nLocation: ${job?.address || 'Address TBD'}\nDate & Time: ${startTimeFull} - ${endTime}\n\nPlease confirm your availability.`,
-        ...(job?.jobNumber && { jobNumber: job.jobNumber }) // Use job-specific reply-to for automatic capture
+        text: `Hi ${employee.firstName},\n\nYou've been assigned to: ${job?.title || 'Tree Service'}\nLocation: ${job?.address || 'Address TBD'}\nDate & Time: ${startTimeFull} - ${endTime}\n\nPlease confirm your availability.`
       });
     }
 
@@ -4395,8 +4394,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         cc,
         subject,
         html: htmlContent,
-        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`,
-        ...(job?.jobNumber && { jobNumber: job.jobNumber }) // Use job-specific reply-to for automatic capture
+        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
       });
 
       if (!emailResult.success) {
@@ -4796,7 +4794,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         subject: subject,
         text: emailBody,
         html: emailHtml,
-        ...(job?.jobNumber && { jobNumber: job.jobNumber }), // Use job-specific reply-to for automatic capture
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 

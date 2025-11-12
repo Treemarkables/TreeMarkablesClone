@@ -100,10 +100,10 @@ class EmailService {
       }));
 
       // Build email payload for Resend
-      // Priority: explicit replyTo > job-specific > default
-      // Job-specific emails go to job-{jobNumber}@jobs.treemarkables.co.nz for automatic capture
-      const replyToAddress = params.replyTo 
-        || (params.jobNumber ? this.formatJobReplyAddress(params.jobNumber) : this.defaultReplyTo);
+      // Always set reply_to so replies go to the Google Workspace email that can receive them
+      // NOTE: Job-specific addresses (job-{jobNumber}@jobs.treemarkables.co.nz) are NOT used
+      // because they require DNS forwarding setup. Using info@treemarkables.nz for all replies.
+      const replyToAddress = params.replyTo || this.defaultReplyTo;
       
       const emailPayload: any = {
         from: fromEmail,
