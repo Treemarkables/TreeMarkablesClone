@@ -179,3 +179,35 @@ export async function notifySystemAlert(employeeId: string, message: string) {
     },
   });
 }
+
+/**
+ * Create notification bell entry for new conversation
+ * Call this after successfully creating a conversation from real channels (not seed data)
+ */
+export async function createConversationNotification(conversation: { 
+  id: string; 
+  title: string | null; 
+  source: string | null;
+  serviceType?: string | null;
+  priority?: string | null;
+}) {
+  try {
+    await storage.createNotification({
+      title: `New ${conversation.source || 'conversation'} contact`,
+      message: conversation.title || 'New inquiry received',
+      type: 'new_conversation',
+      priority: conversation.priority === 'urgent' ? 'high' : 'medium',
+      actionUrl: `/conversations?id=${conversation.id}`,
+      metadata: {
+        conversationId: conversation.id,
+        source: conversation.source,
+        serviceType: conversation.serviceType
+      }
+    });
+    console.log(`✅ Created notification bell entry for new conversation: ${conversation.id} (${conversation.source})`);
+    return true;
+  } catch (error) {
+    console.error('Error creating conversation notification:', error);
+    return false;
+  }
+}
