@@ -71,8 +71,26 @@ Preferred communication style: Simple, everyday language.
 - All email functionality (invoices, quotes, proposals, notifications) now uses Resend
 - Reason for migration: SendGrid free trial expired and required 3-day identity verification wait
 - **FIX (12 Nov 2025)**: Removed all hardcoded `from:` email addresses throughout codebase (server/index.ts, server/routes.ts) that were overriding the Resend connector configuration. Email service now correctly uses configured `from_email` from Resend integration (`info@updates.treemarkables.co.nz`) instead of hardcoded `info@treemarkables.co.nz`
-- **Email Reply-To Fix (12 Nov 2025)**: Added default `replyTo: 'info@treemarkables.nz'` in emailService.ts so customer replies go to user's Google Workspace email instead of undeliverable Resend sending address (`info@updates.treemarkables.co.nz`). Also removed custom job-based reply-to addresses (`job-{jobNumber}@jobs.treemarkables.co.nz`) from server/routes.ts email endpoints that were causing email bounces since those addresses don't exist.
 - **SendGrid API Removal (12 Nov 2025)**: Disabled SendGrid Activity API endpoint that was causing errors after Resend migration. Endpoint now returns empty activity data instead of calling defunct SendGrid API. Note: Resend doesn't support email open/click tracking via API.
+
+### Job-Specific Email Reply Capture - RESTORED (12 Nov 2025)
+- **RESTORED**: Job-specific email reply-to addresses functionality that existed with SendGrid
+- All job-related emails now use `job-{jobNumber}@jobs.treemarkables.co.nz` as reply-to address
+- Customer replies automatically appear in job card diaries (NOT in user's personal inbox)
+- **Architecture**:
+  - Extended `EmailParams` interface with optional `jobNumber` field
+  - Added `formatJobReplyAddress()` helper in emailService.ts
+  - Updated all job-related email sending: proposals, invoices, quotes, employee notifications
+  - Webhook endpoint (`/api/webhooks/email`) handles both SendGrid (legacy) and Resend inbound formats
+  - Resend webhook fetches full email content via API (metadata-only in webhook payload)
+  - Job number extracted from TO address pattern: `job-(\d+)@jobs.treemarkables.co.nz`
+  - Automatic diary entry creation with notification for customer replies
+- **DNS Setup Required**: User must configure Resend Inbound Email receiving domain `jobs.treemarkables.co.nz`:
+  1. Add MX records pointing to Resend's inbound servers
+  2. Configure Resend webhook URL: `https://{repl-url}/api/webhooks/email`
+  3. Set `RESEND_WEBHOOK_SECRET` environment variable for signature verification
+  4. Verify domain in Resend dashboard
+- **Fallback**: Default reply-to remains `info@treemarkables.nz` for non-job emails
 
 ### Gmail Email Reply Capture (12 Nov 2025)
 - **NEW FEATURE**: Automatic email reply capture via Gmail IMAP integration

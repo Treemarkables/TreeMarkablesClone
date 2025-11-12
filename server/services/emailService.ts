@@ -8,7 +8,8 @@ interface EmailParams {
   text?: string;
   html?: string;
   cc?: string | string[]; // CC email address(es)
-  replyTo?: string; // Email address for customer replies
+  replyTo?: string; // Email address for customer replies (explicit override)
+  jobNumber?: string; // Job number for automatic job-specific reply-to address
   templateId?: string;
   dynamicTemplateData?: Record<string, any>;
   attachments?: Array<{
@@ -43,6 +44,15 @@ class EmailService {
       this.isConfigured = false;
       console.log('📧 Resend not connected - email service in mock mode');
     }
+  }
+
+  /**
+   * Format job-specific reply-to address for automatic email capture
+   * @param jobNumber Job number (e.g., "3447")
+   * @returns Job-specific email address (e.g., "job-3447@jobs.treemarkables.co.nz")
+   */
+  private formatJobReplyAddress(jobNumber: string): string {
+    return `job-${jobNumber}@jobs.treemarkables.co.nz`;
   }
 
   async sendEmail(params: EmailParams): Promise<EmailResult> {
@@ -90,8 +100,10 @@ class EmailService {
       }));
 
       // Build email payload for Resend
-      // Always set reply_to so replies go to the Google Workspace email that can receive them
-      const replyToAddress = params.replyTo || this.defaultReplyTo;
+      // Priority: explicit replyTo > job-specific > default
+      // Job-specific emails go to job-{jobNumber}@jobs.treemarkables.co.nz for automatic capture
+      const replyToAddress = params.replyTo 
+        || (params.jobNumber ? this.formatJobReplyAddress(params.jobNumber) : this.defaultReplyTo);
       
       const emailPayload: any = {
         from: fromEmail,
