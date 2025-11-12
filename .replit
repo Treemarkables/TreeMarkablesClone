@@ -100,7 +100,7 @@ args = "npm run dev"
 waitForPort = 5000
 
 [agent]
-integrations = ["javascript_sendgrid:1.0.0", "javascript_openai:1.0.0", "javascript_database:1.0.0", "twilio:1.0.0", "javascript_object_storage:1.0.0", "google-calendar:1.0.0"]
+integrations = ["javascript_sendgrid:1.0.0", "javascript_openai:1.0.0", "javascript_database:1.0.0", "twilio:1.0.0", "javascript_object_storage:1.0.0", "google-calendar:1.0.0", "resend:1.0.0"]
 
 [objectStorage]
 defaultBucketID = "replit-objstore-bab24a24-4208-4d38-af19-cd2b8f9946d4"
