@@ -3567,10 +3567,9 @@ class DatabaseStorage implements IStorage {
         .where(eq(schema.customers.id, conversation.customerId));
       
       if (customer) {
-        const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
         return {
           ...conversation,
-          customerName: customerName || undefined,
+          customerName: customer.name || undefined,
           customerPhone: customer.phone,
           customerEmail: customer.email,
           customerAddress: customer.address
