@@ -61,9 +61,12 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   const queryClient = useQueryClient();
 
   // Fetch employees and their rates from materials & services
-  const { data: employeesData } = useQuery({
+  const { data: employeesData, refetch: refetchEmployees } = useQuery({
     queryKey: ['/api/employees'],
     enabled: isOpen,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    staleTime: 0,
   });
 
   const { data: materialsServicesData, refetch: refetchMaterials } = useQuery({
@@ -118,8 +121,9 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     if (isOpen && jobId) {
       refetchTimeEntries();
       refetchMaterials();
+      refetchEmployees();
     }
-  }, [isOpen, jobId, refetchTimeEntries, refetchMaterials]);
+  }, [isOpen, jobId, refetchTimeEntries, refetchMaterials, refetchEmployees]);
 
   // Load current job data for additional costs
   const { data: jobData } = useQuery({
