@@ -12,6 +12,7 @@ Preferred communication style: Simple, everyday language.
 - **Security**: Role-Based Access Control (RBAC), bcrypt for password hashing, and server-controlled session management.
 - **Performance**: Optimized for mobile with API parallelization, image lazy loading, and thumbnail generation.
 - **Workflow Automation**: Intelligent process automation, event-driven architecture, and a comprehensive job diary with a notification system.
+- **Timezone Standard**: ALL date/time operations use Pacific/Auckland (NZ time) exclusively via shared/dateUtils.ts utilities (formatNZTime, utcToNZTime, nzTimeToUTC) for customer communications.
 
 ### Frontend
 - **Framework**: React with TypeScript (Vite)
@@ -37,12 +38,13 @@ Preferred communication style: Simple, everyday language.
 - **Transactions**: Support for atomic multi-step operations.
 
 ### Key Features
-- **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board and Job Creation with dynamic checklists, duplicate job prevention, man-hours tracking, server-side deep search.
+- **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board and Job Creation with dynamic checklists, duplicate job prevention, man-hours tracking, server-side deep search, multi-select staff time entry with auto-rate matching.
 - **Customer & Sales**: Lead Management (with analytics), Customer Management, Quote Management (including speech-to-quote and Twilio voice auto-quote generation).
-- **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation, Timezone utility.
+- **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation, NZ timezone utilities.
 - **Reporting & Analytics**: Business Analytics (lead source tracking, job estimation accuracy), Invoice Management, Safety Reporting.
 - **Marketing Automation**: Marketing Planner for social media campaigns, automated review posting, campaign scheduling, performance analytics.
 - **Push Notifications**: Firebase Cloud Messaging for real-time alerts (job assignments, schedule changes, new leads, invoice payments, quote acceptances), with user preference management.
+- **Customer Notifications**: User-controlled job booking notifications via sendClientNotification checkbox - automatic triggers disabled to respect user preference.
 - **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories.
 
 ## External Dependencies
@@ -55,3 +57,11 @@ Preferred communication style: Simple, everyday language.
 - **Telephony**: Twilio
 - **Marketing**: Meta Marketing API (for Facebook/Instagram)
 - **Notifications**: Firebase Cloud Messaging
+- **Timezone**: date-fns-tz (for Pacific/Auckland conversions)
+
+## Recent Changes (Nov 2025)
+### Notification & Timezone Fixes
+- **Critical**: Disabled automatic `job_scheduled` notifications in `automatedTriggers.ts` - customer notifications now ONLY send when user explicitly checks `sendClientNotification` checkbox in GlobalJobCard
+- **Timezone standardization**: Updated all customer-facing date/time formatting in `notificationService.ts`, `emailService.ts`, and `smsService.ts` to use `formatNZTime()` utility from `shared/dateUtils.ts`
+- **Multi-select time tracking**: RecordedTimeModal features popover-based staff selection with auto-rate matching by employee first name
+- All email/SMS notifications to customers now explicitly show Pacific/Auckland timezone with "(NZ time)" label for clarity
