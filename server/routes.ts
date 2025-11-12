@@ -9331,89 +9331,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
-  // Get email activity from SendGrid
+  // Get email activity (Resend doesn't support activity tracking - placeholder endpoint)
   app.get('/api/email-activity/:messageId', async (req: Request, res: Response) => {
     try {
-      const { messageId } = req.params;
-      
-      if (!messageId || messageId.startsWith('mock-')) {
-        // Return mock data for development
-        return res.json({
-          success: true,
-          data: {
-            opens: 0,
-            clicks: 0,
-            events: []
-          }
-        });
-      }
-
-      const apiKey = process.env.SENDGRID_API_KEY;
-      if (!apiKey) {
-        console.log('SendGrid API key not configured');
-        return res.json({
-          success: true,
-          data: { opens: 0, clicks: 0, events: [] }
-        });
-      }
-
-      // Query SendGrid Activity API
-      const response = await fetch(
-        `https://api.sendgrid.com/v3/messages?limit=10&query=msg_id%3D%22${messageId}%22`,
-        {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (!response.ok) {
-        console.error('SendGrid Activity API error:', response.statusText);
-        return res.json({
-          success: true,
-          data: { opens: 0, clicks: 0, events: [] }
-        });
-      }
-
-      const data = await response.json();
-      const messages = data.messages || [];
-      
-      // Extract activity data
-      let opens = 0;
-      let clicks = 0;
-      const events: any[] = [];
-
-      messages.forEach((msg: any) => {
-        if (msg.events) {
-          msg.events.forEach((event: any) => {
-            if (event.event_name === 'open') {
-              opens++;
-              events.push({
-                type: 'open',
-                timestamp: event.processed,
-                ip: event.ip_address
-              });
-            } else if (event.event_name === 'click') {
-              clicks++;
-              events.push({
-                type: 'click',
-                timestamp: event.processed,
-                url: event.url,
-                ip: event.ip_address
-              });
-            }
-          });
-        }
-      });
-
-      res.json({
+      // Resend doesn't provide email open/click tracking via API
+      // Return empty activity data to keep the UI functional
+      return res.json({
         success: true,
         data: {
-          opens,
-          clicks,
-          events,
-          lastEventAt: events.length > 0 ? events[events.length - 1].timestamp : null
+          opens: 0,
+          clicks: 0,
+          events: [],
+          lastEventAt: null
         }
       });
     } catch (error) {
