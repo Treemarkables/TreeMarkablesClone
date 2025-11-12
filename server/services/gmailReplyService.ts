@@ -89,53 +89,63 @@ class GmailReplyService {
 
             const fetch = imap.fetch(results, { bodies: '', markSeen: false });
             const emailsToProcess: ParsedEmailReply[] = [];
+            const parsePromises: Promise<void>[] = [];
 
             fetch.on('message', (msg, seqno) => {
               let emailUid: number | undefined;
 
-              msg.on('body', (stream) => {
-                simpleParser(stream, async (err, parsed) => {
-                  if (err) {
-                    console.error('📧 Error parsing email:', err);
-                    return;
-                  }
-
-                  // Extract sender email
-                  const fromEmail = parsed.from?.value?.[0]?.address?.toLowerCase();
-                  const toEmail = parsed.to?.value?.[0]?.address?.toLowerCase();
-                  console.log(`📧 Processing email from: ${fromEmail}, to: ${toEmail}, subject: ${parsed.subject}`);
-                  
-                  if (!fromEmail) {
-                    console.log(`📧 Skipping - no FROM address`);
-                    return;
-                  }
-
-                  // Skip emails from our own domain (these are outgoing emails)
-                  if (fromEmail.includes('treemarkables.co.nz') || fromEmail.includes('treemarkables.nz')) {
-                    console.log(`📧 Skipping outgoing email from: ${fromEmail}`);
-                    return;
-                  }
-
-                  const emailData: ParsedEmailReply = {
-                    from: fromEmail,
-                    to: toEmail,
-                    subject: parsed.subject || '(no subject)',
-                    date: parsed.date || new Date(),
-                    textBody: parsed.text || '',
-                    htmlBody: parsed.html || undefined,
-                    messageId: parsed.messageId,
-                    inReplyTo: parsed.inReplyTo,
-                    references: parsed.references,
-                    uid: emailUid // Store UID for later marking as seen
-                  };
-
-                  emailsToProcess.push(emailData);
-                });
-              });
-
               msg.once('attributes', (attrs) => {
                 // Store UID but DON'T mark as seen yet - wait until after successful DB insert
                 emailUid = attrs.uid;
+              });
+
+              msg.on('body', (stream) => {
+                // Create a promise for each email parse operation
+                const parsePromise = new Promise<void>((resolveEmail) => {
+                  simpleParser(stream, async (err, parsed) => {
+                    if (err) {
+                      console.error('📧 Error parsing email:', err);
+                      resolveEmail();
+                      return;
+                    }
+
+                    // Extract sender email
+                    const fromEmail = parsed.from?.value?.[0]?.address?.toLowerCase();
+                    const toEmail = parsed.to?.value?.[0]?.address?.toLowerCase();
+                    console.log(`📧 Processing email from: ${fromEmail}, to: ${toEmail}, subject: ${parsed.subject}`);
+                    
+                    if (!fromEmail) {
+                      console.log(`📧 Skipping - no FROM address`);
+                      resolveEmail();
+                      return;
+                    }
+
+                    // Skip emails from our own domain (these are outgoing emails)
+                    if (fromEmail.includes('treemarkables.co.nz') || fromEmail.includes('treemarkables.nz')) {
+                      console.log(`📧 Skipping outgoing email from: ${fromEmail}`);
+                      resolveEmail();
+                      return;
+                    }
+
+                    const emailData: ParsedEmailReply = {
+                      from: fromEmail,
+                      to: toEmail,
+                      subject: parsed.subject || '(no subject)',
+                      date: parsed.date || new Date(),
+                      textBody: parsed.text || '',
+                      htmlBody: parsed.html || undefined,
+                      messageId: parsed.messageId,
+                      inReplyTo: parsed.inReplyTo,
+                      references: parsed.references,
+                      uid: emailUid // Store UID for later marking as seen
+                    };
+
+                    emailsToProcess.push(emailData);
+                    resolveEmail();
+                  });
+                });
+                
+                parsePromises.push(parsePromise);
               });
             });
 
@@ -145,6 +155,11 @@ class GmailReplyService {
             });
 
             fetch.once('end', async () => {
+              // Wait for all emails to finish parsing
+              await Promise.all(parsePromises);
+              
+              console.log(`📧 Finished parsing ${emailsToProcess.length} email(s), processing now...`);
+              
               // Process all collected emails and track successfully processed UIDs
               const successfulUids: number[] = [];
               
@@ -167,7 +182,7 @@ class GmailReplyService {
                 console.log(`📧 Marked ${successfulUids.length} email(s) as read after successful processing`);
               }
 
-              console.log(`📧 Processed ${emailsToProcess.length} email reply(ies)`);
+              console.log(`📧 Successfully processed ${successfulUids.length} of ${emailsToProcess.length} email reply(ies)`);
               imap.end();
               resolve();
             });
@@ -206,15 +221,21 @@ class GmailReplyService {
           
           // Find job by job number
           job = await db.query.jobs.findFirst({
-            where: eq(jobs.jobNumber, jobNumber),
-            with: {
-              customer: true
-            }
+            where: eq(jobs.jobNumber, jobNumber)
           });
           
           if (job) {
-            customer = job.customer;
-            console.log(`📧 ✅ Found job #${job.jobNumber} for customer: ${customer.name}`);
+            // Get customer separately
+            customer = await db.query.customers.findFirst({
+              where: eq(customers.id, job.customerId)
+            });
+            
+            if (customer) {
+              console.log(`📧 ✅ Found job #${job.jobNumber} for customer: ${customer.name}`);
+            } else {
+              console.log(`📧 ⚠️ Found job #${jobNumber} but customer not found`);
+              job = null; // Reset job if customer not found
+            }
           } else {
             console.log(`📧 ⚠️ No job found with number ${jobNumber}`);
           }
