@@ -101,10 +101,16 @@ class GmailReplyService {
 
                   // Extract sender email
                   const fromEmail = parsed.from?.value?.[0]?.address?.toLowerCase();
-                  if (!fromEmail) return;
+                  console.log(`📧 Processing email from: ${fromEmail}, subject: ${parsed.subject}`);
+                  
+                  if (!fromEmail) {
+                    console.log(`📧 Skipping - no FROM address`);
+                    return;
+                  }
 
                   // Skip emails from our own domain (these are outgoing emails)
                   if (fromEmail.includes('treemarkables.co.nz') || fromEmail.includes('treemarkables.nz')) {
+                    console.log(`📧 Skipping outgoing email from: ${fromEmail}`);
                     return;
                   }
 
@@ -185,15 +191,20 @@ class GmailReplyService {
    */
   private async processEmailReply(email: ParsedEmailReply): Promise<boolean> {
     try {
+      console.log(`📧 Looking up customer with email: ${email.from}`);
+      
       // Find customer by email address
       const customer = await db.query.customers.findFirst({
         where: eq(customers.email, email.from)
       });
 
       if (!customer) {
-        console.log(`📧 No customer found for email: ${email.from}`);
+        console.log(`📧 ❌ No customer found for email: ${email.from}`);
         return false;
       }
+      
+      console.log(`📧 ✅ Found customer: ${customer.name} (ID: ${customer.id})`);
+
 
       // Check for duplicate email FIRST - across ALL diary entries, not just this job
       if (email.messageId) {
