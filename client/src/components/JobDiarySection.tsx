@@ -731,7 +731,10 @@ export function JobDiarySection({
     return phone;
   };
 
-  const cleanDiaryContent = (content: string, type: DiaryEntry['type']) => {
+  const cleanDiaryContent = (content: string | null | undefined, type: DiaryEntry['type']) => {
+    // Return empty string if content is null or undefined
+    if (!content) return '';
+    
     // Remove redundant prefixes from diary content
     let cleaned = content;
     
