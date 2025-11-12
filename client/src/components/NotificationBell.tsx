@@ -93,6 +93,7 @@ const priorityColors = {
 const getTypeIcon = (type: string) => {
   const iconMap = {
     new_lead: User,
+    new_conversation: MessageSquare,
     lead_status_change: TrendingUp,
     job_status_change: Wrench,
     quote_sent: FileText,
