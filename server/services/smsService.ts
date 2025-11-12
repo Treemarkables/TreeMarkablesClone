@@ -92,7 +92,7 @@ class SMSService {
     additionalInfo?: string
   ): Promise<boolean> {
     const statusMessages = {
-      scheduled: `Hi ${customerName}, your job has been scheduled. We'll send you details soon. - Treemarkables`,
+      scheduled: `Hi ${customerName}, your tree service has been scheduled. We'll be in touch with the details. - Treemarkables`,
       in_progress: `Hi ${customerName}, our team has started working on your job. We'll update you when complete. - Treemarkables`,
       completed: `Hi ${customerName}, your job is now complete! Thank you for choosing Treemarkables.`,
       cancelled: `Hi ${customerName}, we need to update you about your job. Please call us at 021-555-0123. - Treemarkables`

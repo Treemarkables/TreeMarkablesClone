@@ -298,7 +298,7 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
       <p>Thanks,<br>Treemarkables Team</p>
     `;
 
-    const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startDate} at ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
+    const smsMessage = `${employee.firstName}: You're scheduled for ${job?.title || 'a job'} on ${startDate} at ${startTime} at ${job?.address || 'TBD'}.`;
     
     // Check for existing pending notifications for this employee and assignment
     const allPending = await storage.getPendingNotifications(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)); // Check next 7 days
@@ -413,7 +413,7 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
 
     // Send SMS notification if phone number exists
     if (employee.phone) {
-      const smsMessage = `Treemarkables: You're scheduled for ${job?.title || 'a job'} on ${startDate} at ${startTime} at ${job?.address || 'TBD'}. Reply to confirm.`;
+      const smsMessage = `${employee.firstName}: You're scheduled for ${job?.title || 'a job'} on ${startDate} at ${startTime} at ${job?.address || 'TBD'}.`;
       await smsService.sendSMS({ to: employee.phone, message: smsMessage });
     }
 
