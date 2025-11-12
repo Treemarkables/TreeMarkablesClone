@@ -147,6 +147,9 @@ export default function ConversationDetail() {
     let description = '';
     let leadSource = '';
 
+    // Debug: Log the full conversation object to see what the API returns
+    console.log('🔍 Full conversation object:', conversation);
+
     // First priority: Extract customer data from joined API response
     if ((conversation as any)?.customerName) {
       name = (conversation as any).customerName.trim();
@@ -282,7 +285,7 @@ export default function ConversationDetail() {
       phone,
       address,
       leadSource,
-      description: description.substring(0, 500) // Limit description length
+      description // Return full description without truncation
     };
   };
 
