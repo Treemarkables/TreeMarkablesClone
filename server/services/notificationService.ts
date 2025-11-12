@@ -404,7 +404,7 @@ class NotificationService {
           <p style="margin: 0 0 5px 0; color: #6b7280;"><strong>Service:</strong> ${serviceRequest.serviceType}</p>
           <p style="margin: 0 0 5px 0; color: #6b7280;"><strong>Priority:</strong> ${serviceRequest.urgency}</p>
           <p style="margin: 0 0 5px 0; color: #6b7280;"><strong>Address:</strong> ${serviceRequest.address}</p>
-          ${serviceRequest.preferredDate ? `<p style="margin: 0 0 5px 0; color: #6b7280;"><strong>Preferred Date:</strong> ${new Date(serviceRequest.preferredDate).toLocaleDateString('en-NZ')}</p>` : ''}
+          ${serviceRequest.preferredDate ? `<p style="margin: 0 0 5px 0; color: #6b7280;"><strong>Preferred Date:</strong> ${formatNZTime(serviceRequest.preferredDate, 'date')}</p>` : ''}
         </div>
 
         <div style="text-align: center; margin: 30px 0;">

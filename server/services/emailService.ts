@@ -1,4 +1,5 @@
 import { MailService } from '@sendgrid/mail';
+import { formatNZTime } from '@shared/dateUtils';
 
 interface EmailParams {
   to: string;
@@ -185,12 +186,7 @@ class EmailService {
         ${additionalData?.scheduledDate ? `
         <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 25px;">
           <h3 style="color: #374151; margin: 0 0 15px 0; font-size: 18px;">📅 Schedule Details</h3>
-          <p style="margin: 0; color: #6b7280;">Scheduled for: <strong>${new Date(additionalData.scheduledDate).toLocaleDateString('en-NZ', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })}</strong></p>
+          <p style="margin: 0; color: #6b7280;">Scheduled for: <strong>${formatNZTime(additionalData.scheduledDate, 'full')} (NZ time)</strong></p>
         </div>
         ` : ''}
 
