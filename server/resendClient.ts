@@ -27,6 +27,7 @@ async function getCredentials() {
   if (!connectionSettings || (!connectionSettings.settings.api_key)) {
     throw new Error('Resend not connected');
   }
+  
   return {apiKey: connectionSettings.settings.api_key, fromEmail: connectionSettings.settings.from_email};
 }
 
