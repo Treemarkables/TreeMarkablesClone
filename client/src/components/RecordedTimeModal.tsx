@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Clock, CheckCircle, X, Trash2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Clock, CheckCircle, X, Trash2, Users, Search } from "lucide-react";
 
 interface TimeEntry {
   id: string;
@@ -48,10 +51,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   const [useManualInput, setUseManualInput] = useState(false);
   const [additionalCosts, setAdditionalCosts] = useState('');
   const [newEntry, setNewEntry] = useState({
-    staffId: '',
+    staffIds: [] as string[], // Changed from staffId to staffIds array
     rate: '',
     duration: '1' // Default to 1 hour
   });
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -135,17 +139,27 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   useEffect(() => {
     if (!isOpen) {
       setPendingEntries([]);
-      setNewEntry({ staffId: '', rate: '', duration: '1' });
+      setNewEntry({ staffIds: [], rate: '', duration: '1' });
       setUseManualInput(false);
       setAdditionalCosts('');
+      setStaffSearchQuery('');
     }
   }, [isOpen]);
 
   const addToPendingList = () => {
-    if (!newEntry.staffId || !newEntry.rate) {
+    if (!newEntry.staffIds || newEntry.staffIds.length === 0) {
       toast({
         title: "Validation Error",
-        description: "Please select staff member and rate",
+        description: "Please select at least one staff member",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!newEntry.rate) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a rate",
         variant: "destructive"
       });
       return;
@@ -160,25 +174,40 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       return;
     }
 
-    const staff = employees.find((e: any) => e.id === newEntry.staffId);
-    const rateItem = availableRates.find((r: any) => r.itemNumber === newEntry.rate);
+    // Warn if adding many entries at once
+    if (newEntry.staffIds.length > 25) {
+      toast({
+        title: "Large Selection",
+        description: `You're adding ${newEntry.staffIds.length} entries at once. This may take a moment.`,
+      });
+    }
+
+    // Create one pending entry for each selected staff member
+    const newTimeEntries: TimeEntry[] = newEntry.staffIds.map(staffId => {
+      const staff = employees.find((e: any) => e.id === staffId);
+      return {
+        id: `pending-${Date.now()}-${Math.random()}-${staffId}`,
+        date: new Date().toLocaleDateString('en-GB'),
+        staffId: staffId,
+        staffName: `${staff?.firstName || ''} ${staff?.lastName || ''}`.trim(),
+        rate: newEntry.rate,
+        start: '',
+        duration: parseFloat(newEntry.duration),
+        billed: true
+      };
+    });
     
-    const newTimeEntry: TimeEntry = {
-      id: `pending-${Date.now()}-${Math.random()}`,
-      date: new Date().toLocaleDateString('en-GB'),
-      staffId: newEntry.staffId,
-      staffName: `${staff?.firstName || ''} ${staff?.lastName || ''}`.trim(),
-      rate: newEntry.rate,
-      start: '',
-      duration: parseFloat(newEntry.duration),
-      billed: true
-    };
+    setPendingEntries(prev => [...prev, ...newTimeEntries]);
     
-    setPendingEntries(prev => [...prev, newTimeEntry]);
+    toast({
+      title: "Success",
+      description: `Added ${newTimeEntries.length} time ${newTimeEntries.length === 1 ? 'entry' : 'entries'} to pending list`,
+    });
     
     // Reset form but keep it open for adding more entries
-    setNewEntry({ staffId: '', rate: '', duration: '1' });
+    setNewEntry({ staffIds: [], rate: '', duration: '1' });
     setUseManualInput(false);
+    setStaffSearchQuery('');
   };
 
   const removePendingEntry = (id: string) => {
@@ -311,18 +340,122 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
             <div className="grid grid-cols-1 gap-3">
               <div>
                 <label className="text-sm font-medium">Staff</label>
-                <Select value={newEntry.staffId} onValueChange={(value) => setNewEntry(prev => ({ ...prev, staffId: value }))} data-testid="select-staff">
-                  <SelectTrigger className="min-h-11">
-                    <SelectValue placeholder="Select staff" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((staff: any) => (
-                      <SelectItem key={staff.id} value={staff.id}>
-                        {staff.firstName} {staff.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full min-h-11 justify-between"
+                      data-testid="button-select-staff"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        {newEntry.staffIds.length === 0 ? (
+                          <span className="text-gray-500">Select staff members</span>
+                        ) : (
+                          <span>
+                            {newEntry.staffIds.length} staff selected
+                          </span>
+                        )}
+                      </div>
+                      {newEntry.staffIds.length > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {newEntry.staffIds.length}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-0" align="start">
+                    <div className="p-2 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          placeholder="Search staff..."
+                          value={staffSearchQuery}
+                          onChange={(e) => setStaffSearchQuery(e.target.value)}
+                          className="pl-8 h-9"
+                          data-testid="input-staff-search"
+                        />
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 h-8 text-xs"
+                          onClick={() => {
+                            const filteredIds = employees
+                              .filter((e: any) => {
+                                const fullName = `${e.firstName} ${e.lastName}`.toLowerCase();
+                                return fullName.includes(staffSearchQuery.toLowerCase());
+                              })
+                              .map((e: any) => e.id);
+                            setNewEntry(prev => ({ ...prev, staffIds: filteredIds }));
+                          }}
+                          data-testid="button-select-all-staff"
+                        >
+                          Select All
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 h-8 text-xs"
+                          onClick={() => setNewEntry(prev => ({ ...prev, staffIds: [] }))}
+                          data-testid="button-clear-staff"
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                    <ScrollArea className="h-[300px]">
+                      <div className="p-2 space-y-1">
+                        {employees
+                          .filter((staff: any) => {
+                            const fullName = `${staff.firstName} ${staff.lastName}`.toLowerCase();
+                            return fullName.includes(staffSearchQuery.toLowerCase());
+                          })
+                          .map((staff: any) => {
+                            const isSelected = newEntry.staffIds.includes(staff.id);
+                            return (
+                              <div
+                                key={staff.id}
+                                className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
+                                onClick={() => {
+                                  setNewEntry(prev => ({
+                                    ...prev,
+                                    staffIds: isSelected
+                                      ? prev.staffIds.filter(id => id !== staff.id)
+                                      : [...prev.staffIds, staff.id]
+                                  }));
+                                }}
+                                data-testid={`staff-option-${staff.id}`}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    setNewEntry(prev => ({
+                                      ...prev,
+                                      staffIds: checked
+                                        ? [...prev.staffIds, staff.id]
+                                        : prev.staffIds.filter(id => id !== staff.id)
+                                    }));
+                                  }}
+                                />
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium">
+                                    {staff.firstName} {staff.lastName}
+                                  </div>
+                                  {staff.position && (
+                                    <div className="text-xs text-gray-500">
+                                      {staff.position}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
               </div>
               
               <div>
