@@ -40,6 +40,7 @@ Preferred communication style: Simple, everyday language.
 ### Key Features
 - **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board and Job Creation with dynamic checklists, duplicate job prevention, man-hours tracking, server-side deep search, multi-select staff time entry with auto-rate matching.
 - **Customer & Sales**: Lead Management (with analytics), Customer Management, Quote Management (including speech-to-quote and Twilio voice auto-quote generation).
+- **Communication Tracking**: Gmail email reply capture (IMAP polling every 5 minutes), SMS reply capture (polling every 60 seconds), automatic job diary entries for all customer communications.
 - **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation, NZ timezone utilities.
 - **Reporting & Analytics**: Business Analytics (lead source tracking, job estimation accuracy), Invoice Management, Safety Reporting.
 - **Marketing Automation**: Marketing Planner for social media campaigns, automated review posting, campaign scheduling, performance analytics.
@@ -49,7 +50,8 @@ Preferred communication style: Simple, everyday language.
 
 ## External Dependencies
 - **Database & Validation**: `drizzle-orm`, `drizzle-kit`, `@neondatabase/serverless`, `zod`
-- **Email**: Resend (via Replit connector integration)
+- **Email**: Resend (via Replit connector integration for sending), Gmail IMAP (for receiving/reply capture)
+- **Email Parsing**: `imap`, `mailparser` (for Gmail IMAP email parsing)
 - **SMS**: SMS Everyone NZ
 - **AI/ML**: OpenAI (Whisper API for transcription & GPT-5 for extraction)
 - **Accounting**: Xero (`xero-node` SDK)
@@ -71,6 +73,23 @@ Preferred communication style: Simple, everyday language.
 - **FIX (12 Nov 2025)**: Removed all hardcoded `from:` email addresses throughout codebase (server/index.ts, server/routes.ts) that were overriding the Resend connector configuration. Email service now correctly uses configured `from_email` from Resend integration (`info@updates.treemarkables.co.nz`) instead of hardcoded `info@treemarkables.co.nz`
 - **Email Reply-To Fix (12 Nov 2025)**: Added default `replyTo: 'info@treemarkables.nz'` in emailService.ts so customer replies go to user's Google Workspace email instead of undeliverable Resend sending address (`info@updates.treemarkables.co.nz`). Also removed custom job-based reply-to addresses (`job-{jobNumber}@jobs.treemarkables.co.nz`) from server/routes.ts email endpoints that were causing email bounces since those addresses don't exist.
 - **SendGrid API Removal (12 Nov 2025)**: Disabled SendGrid Activity API endpoint that was causing errors after Resend migration. Endpoint now returns empty activity data instead of calling defunct SendGrid API. Note: Resend doesn't support email open/click tracking via API.
+
+### Gmail Email Reply Capture (12 Nov 2025)
+- **NEW FEATURE**: Automatic email reply capture via Gmail IMAP integration
+- Created `server/services/gmailReplyService.ts` to fetch incoming customer email replies from Gmail inbox
+- Created `server/services/emailReplyPoller.ts` for background polling (checks every 5 minutes)
+- Email replies automatically matched to jobs by customer email address, added to job diary
+- **Architecture**:
+  - Uses Gmail App Password authentication with IMAP protocol (`imap`, `mailparser` packages)
+  - Emails marked as "read" ONLY after successful database insert to prevent data loss
+  - Duplicate prevention via Message-ID tracking in job diary metadata (JSONB query)
+  - Filters out emails from treemarkables.co.nz/nz domains (outgoing emails)
+  - Cleans email body text by removing quoted replies and signatures
+  - Stores raw and cleaned body text for debugging
+- **Polling Strategy**: 5-minute interval (vs 1-minute SMS polling) to avoid Gmail IMAP throttling
+- **Job Matching**: Finds customer by email address → selects most recent job → creates diary entry
+- Gmail credentials: `GMAIL_USER=accounts@treemarkables.nz`, `GMAIL_APP_PASSWORD` (secret)
+- Known limitation: Matches to newest job only - multi-job customers may need subject-based job number parsing (future enhancement)
 
 ### Notification & Timezone Fixes
 - **Critical**: Disabled automatic `job_scheduled` notifications in `automatedTriggers.ts` - customer notifications now ONLY send when user explicitly checks `sendClientNotification` checkbox in GlobalJobCard
