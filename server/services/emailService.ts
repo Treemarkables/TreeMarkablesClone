@@ -100,10 +100,15 @@ class EmailService {
       }));
 
       // Build email payload for Resend
-      // Always set reply_to so replies go to the Google Workspace email that can receive them
-      // NOTE: Job-specific addresses (job-{jobNumber}@jobs.treemarkables.co.nz) are NOT used
-      // because they require DNS forwarding setup. Using info@treemarkables.nz for all replies.
-      const replyToAddress = params.replyTo || this.defaultReplyTo;
+      // Use job-specific reply-to addresses when jobNumber is provided (Cloudflare Email Routing active)
+      // Cloudflare forwards job-{number}@jobs.treemarkables.co.nz → accounts@treemarkables.nz → Gmail IMAP
+      let replyToAddress = params.replyTo; // Explicit override if provided
+      if (!replyToAddress && params.jobNumber) {
+        replyToAddress = this.formatJobReplyAddress(params.jobNumber); // e.g., job-3447@jobs.treemarkables.co.nz
+      }
+      if (!replyToAddress) {
+        replyToAddress = this.defaultReplyTo; // Fallback to info@treemarkables.nz
+      }
       
       const emailPayload: any = {
         from: fromEmail,
@@ -141,7 +146,8 @@ class EmailService {
     customerName: string,
     jobTitle: string,
     status: string,
-    additionalData?: Record<string, any>
+    additionalData?: Record<string, any>,
+    jobNumber?: string // Job number for job-specific reply-to address
   ): Promise<EmailResult> {
     const statusTemplates = {
       scheduled: {
@@ -177,7 +183,8 @@ class EmailService {
       from: this.fromEmail,
       subject: template.subject,
       text: template.text,
-      html: template.html
+      html: template.html,
+      jobNumber // Pass jobNumber for job-specific reply-to
     });
   }
 
