@@ -400,7 +400,8 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
           <p>Please confirm your availability as soon as possible.</p>
           <p>Thanks,<br>Treemarkables Team</p>
         `,
-        text: `Hi ${employee.firstName},\n\nYou've been assigned to: ${job?.title || 'Tree Service'}\nLocation: ${job?.address || 'Address TBD'}\nDate & Time: ${startTimeFull} - ${endTime}\n\nPlease confirm your availability.`
+        text: `Hi ${employee.firstName},\n\nYou've been assigned to: ${job?.title || 'Tree Service'}\nLocation: ${job?.address || 'Address TBD'}\nDate & Time: ${startTimeFull} - ${endTime}\n\nPlease confirm your availability.`,
+        ...(job?.jobNumber && { jobNumber: job.jobNumber }) // Use job-specific reply-to for automatic capture
       });
     }
 
@@ -4394,7 +4395,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         cc,
         subject,
         html: htmlContent,
-        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
+        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`,
+        ...(job?.jobNumber && { jobNumber: job.jobNumber }) // Use job-specific reply-to for automatic capture
       });
 
       if (!emailResult.success) {
@@ -4794,6 +4796,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         subject: subject,
         text: emailBody,
         html: emailHtml,
+        ...(job?.jobNumber && { jobNumber: job.jobNumber }), // Use job-specific reply-to for automatic capture
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
@@ -10395,12 +10398,79 @@ Transcription: ${transcriptText}`;
   // Configure multer for SendGrid Inbound Parse webhook (multipart/form-data)
   const emailWebhookUpload = multer({ storage: multer.memoryStorage() });
   
-  // Email webhook - Receives incoming emails from SendGrid Inbound Parse or similar
-  app.post('/api/webhooks/email', emailWebhookUpload.none(), async (req: Request, res: Response) => {
+  // Email webhook - Receives incoming emails from SendGrid Inbound Parse AND Resend Inbound
+  app.post('/api/webhooks/email', async (req: Request, res: Response) => {
     try {
+      // Check if this is a Resend webhook (JSON payload with type field)
+      // Resend sends application/json, SendGrid sends multipart/form-data
+      const isResendWebhook = req.is('application/json') && req.body && req.body.type === 'email.received';
+      
+      if (isResendWebhook) {
+        console.log(`📧 Resend webhook received: ${req.body.type}`);
+        
+        // Verify Resend webhook signature (Svix) if secret is configured
+        const signature = req.headers['svix-signature'] as string;
+        const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+        
+        if (webhookSecret) {
+          if (!signature) {
+            console.error(`🔐 Missing webhook signature - rejecting unauthenticated request`);
+            return res.status(401).json({ 
+              success: false, 
+              message: 'Missing webhook signature' 
+            });
+          }
+          
+          // TODO: Implement Svix signature verification using svix SDK
+          // For now, require the signature header to be present
+          console.log(`🔐 Webhook signature present (verification pending Svix SDK integration)`);
+        } else {
+          console.warn(`⚠️ RESEND_WEBHOOK_SECRET not set - webhook signatures not verified (security risk)`);
+        }
+        
+        // Extract email metadata from Resend webhook
+        const { email_id, from, to, subject } = req.body.data;
+        console.log(`📧 Resend email received - ID: ${email_id}, From: ${from}, To: ${to?.join(', ')}, Subject: ${subject}`);
+        
+        // Fetch full email content from Resend API
+        try {
+          const { client } = await getUncachableResendClient();
+          const emailData = await client.emails.get(email_id);
+          
+          console.log(`📩 Retrieved email content from Resend API`);
+          
+          // Normalize Resend data to match SendGrid format
+          const normalizedData = {
+            from: from,
+            to: Array.isArray(to) ? to.join(', ') : to,
+            subject: subject,
+            text: emailData.text || '',
+            html: emailData.html || '',
+            headers: emailData.headers || {}
+          };
+          
+          // Continue with existing email processing logic
+          req.body = normalizedData;
+        } catch (apiError) {
+          console.error(`❌ Failed to fetch email content from Resend:`, apiError);
+          return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to retrieve email content' 
+          });
+        }
+      } else {
+        // SendGrid multipart/form-data webhook - apply multer middleware
+        await new Promise<void>((resolve, reject) => {
+          emailWebhookUpload.none()(req, res, (err: any) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      }
+      
       const { from, to, subject, text, html, headers } = req.body;
       
-      console.log(`📧 Incoming email from: ${from}, to: ${to}, subject: ${subject}`);
+      console.log(`📧 Processing email from: ${from}, to: ${to}, subject: ${subject}`);
       
       // Check if this is a forwarded email to forward@jobs.treemarkables.co.nz
       const isForwardingAddress = to?.includes('forward@jobs.treemarkables.co.nz');
