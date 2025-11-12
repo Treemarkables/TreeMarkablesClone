@@ -2,7 +2,7 @@ import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import { db } from '../db';
 import { jobs, jobDiaryEntries, customers } from '../../shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 interface ParsedEmailReply {
   from: string;
@@ -13,6 +13,7 @@ interface ParsedEmailReply {
   messageId?: string;
   inReplyTo?: string;
   references?: string[];
+  uid?: number; // IMAP UID for marking as seen after successful processing
 }
 
 class GmailReplyService {
@@ -89,6 +90,8 @@ class GmailReplyService {
             const emailsToProcess: ParsedEmailReply[] = [];
 
             fetch.on('message', (msg, seqno) => {
+              let emailUid: number | undefined;
+
               msg.on('body', (stream) => {
                 simpleParser(stream, async (err, parsed) => {
                   if (err) {
@@ -113,7 +116,8 @@ class GmailReplyService {
                     htmlBody: parsed.html || undefined,
                     messageId: parsed.messageId,
                     inReplyTo: parsed.inReplyTo,
-                    references: parsed.references
+                    references: parsed.references,
+                    uid: emailUid // Store UID for later marking as seen
                   };
 
                   emailsToProcess.push(emailData);
@@ -121,11 +125,8 @@ class GmailReplyService {
               });
 
               msg.once('attributes', (attrs) => {
-                // Mark as seen after processing
-                const { uid } = attrs;
-                imap.addFlags(uid, ['\\Seen'], (err) => {
-                  if (err) console.error('📧 Error marking email as read:', err);
-                });
+                // Store UID but DON'T mark as seen yet - wait until after successful DB insert
+                emailUid = attrs.uid;
               });
             });
 
@@ -135,9 +136,26 @@ class GmailReplyService {
             });
 
             fetch.once('end', async () => {
-              // Process all collected emails
+              // Process all collected emails and track successfully processed UIDs
+              const successfulUids: number[] = [];
+              
               for (const email of emailsToProcess) {
-                await this.processEmailReply(email);
+                const success = await this.processEmailReply(email);
+                if (success && email.uid) {
+                  successfulUids.push(email.uid);
+                }
+              }
+
+              // ONLY mark as seen after successful processing
+              if (successfulUids.length > 0) {
+                for (const uid of successfulUids) {
+                  imap.addFlags(uid, ['\\Seen'], (err) => {
+                    if (err) {
+                      console.error(`📧 Error marking email UID ${uid} as read:`, err);
+                    }
+                  });
+                }
+                console.log(`📧 Marked ${successfulUids.length} email(s) as read after successful processing`);
               }
 
               console.log(`📧 Processed ${emailsToProcess.length} email reply(ies)`);
@@ -163,8 +181,9 @@ class GmailReplyService {
 
   /**
    * Process a single email reply and match it to a job
+   * Returns true if successfully processed, false otherwise
    */
-  private async processEmailReply(email: ParsedEmailReply): Promise<void> {
+  private async processEmailReply(email: ParsedEmailReply): Promise<boolean> {
     try {
       // Find customer by email address
       const customer = await db.query.customers.findFirst({
@@ -173,7 +192,23 @@ class GmailReplyService {
 
       if (!customer) {
         console.log(`📧 No customer found for email: ${email.from}`);
-        return;
+        return false;
+      }
+
+      // Check for duplicate email FIRST - across ALL diary entries, not just this job
+      if (email.messageId) {
+        const duplicateCheck = await db
+          .select()
+          .from(jobDiaryEntries)
+          .where(
+            sql`${jobDiaryEntries.metadata}->>'messageId' = ${email.messageId}`
+          )
+          .limit(1);
+
+        if (duplicateCheck.length > 0) {
+          console.log(`📧 Email already logged (messageId: ${email.messageId}) - skipping`);
+          return true; // Return true because it was already successfully logged
+        }
       }
 
       // Find the most recent job for this customer
@@ -185,27 +220,10 @@ class GmailReplyService {
 
       if (!customerJobs || customerJobs.length === 0) {
         console.log(`📧 No jobs found for customer: ${customer.name}`);
-        return;
+        return false;
       }
 
       const job = customerJobs[0];
-
-      // Check if this email reply already exists in the diary
-      const existingEntry = await db.query.jobDiaryEntries.findFirst({
-        where: and(
-          eq(jobDiaryEntries.jobId, job.id),
-          eq(jobDiaryEntries.entryType, 'email')
-        )
-      });
-
-      // Check metadata to see if we've already logged this specific email
-      if (existingEntry && email.messageId) {
-        const metadata = existingEntry.metadata as any;
-        if (metadata?.messageId === email.messageId) {
-          console.log(`📧 Email already logged: ${email.messageId}`);
-          return;
-        }
-      }
 
       // Clean up email body text (remove quoted replies)
       const cleanedBody = this.cleanEmailBody(email.textBody);
@@ -225,13 +243,16 @@ class GmailReplyService {
           messageId: email.messageId,
           inReplyTo: email.inReplyTo,
           receivedAt: email.date.toISOString(),
-          direction: 'incoming'
+          direction: 'incoming',
+          rawBody: email.textBody // Store raw body for debugging
         }
       });
 
       console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
+      return true; // Successfully processed
     } catch (error) {
       console.error('📧 Error processing email reply:', error);
+      return false; // Failed to process
     }
   }
 

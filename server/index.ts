@@ -383,6 +383,10 @@ function startNotificationQueueWorker() {
     const { startSMSReplyPolling } = await import('./services/smsReplyPoller');
     startSMSReplyPolling();
 
+    // Start email reply polling (polls every 5 minutes)
+    const { startEmailReplyPolling } = await import('./services/emailReplyPoller');
+    startEmailReplyPolling();
+
     // Start marketing campaign scheduler (checks every 5 minutes)
     const { marketingScheduler } = await import('./services/marketingScheduler');
     marketingScheduler.start();

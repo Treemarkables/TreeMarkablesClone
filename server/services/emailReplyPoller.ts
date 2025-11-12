@@ -1,6 +1,6 @@
 import { gmailReplyService } from './gmailReplyService';
 
-const POLLING_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes
+const POLLING_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes (reduced from 3 to avoid Gmail IMAP throttling)
 let pollingIntervalId: NodeJS.Timeout | null = null;
 let isPolling = false;
 
@@ -27,7 +27,7 @@ export function startEmailReplyPolling() {
     return;
   }
 
-  console.log(`📧 Starting email reply polling (every ${POLLING_INTERVAL_MS / 1000 / 60} minutes)...`);
+  console.log(`📧 Starting email reply polling (every ${Math.floor(POLLING_INTERVAL_MS / 1000 / 60)} minutes)...`);
 
   // Run immediately on startup
   processEmailReplies();
