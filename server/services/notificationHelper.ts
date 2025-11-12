@@ -181,6 +181,110 @@ export async function notifySystemAlert(employeeId: string, message: string) {
 }
 
 /**
+ * Normalize contact info for consistent comparison
+ * Handles NZ phone numbers in both local (021...) and international (+64 21...) formats
+ */
+function normalizeContact(contact: string | null | undefined): string {
+  if (!contact) {
+    return '';
+  }
+  
+  const trimmed = contact.trim();
+  
+  // Check if it looks like an email (contains @)
+  if (trimmed.includes('@')) {
+    return trimmed.toLowerCase();
+  }
+  
+  // Otherwise treat as phone number
+  // Strip all non-digits to get just the numbers
+  const digitsOnly = trimmed.replace(/\D/g, '');
+  
+  // Canonicalize NZ numbers to international format without +
+  // Local format: 021234567 → 6421234567
+  // International: +6421234567 → 6421234567
+  if (digitsOnly.startsWith('0')) {
+    // NZ local format - replace leading 0 with 64
+    return '64' + digitsOnly.substring(1);
+  } else if (digitsOnly.startsWith('64')) {
+    // Already in international format
+    return digitsOnly;
+  } else {
+    // Other formats (Facebook IDs, etc.) - return as is
+    return digitsOnly;
+  }
+}
+
+/**
+ * Find existing open conversation for a customer contact (email or phone)
+ * Returns the most recent open conversation, or null if none exists
+ */
+export async function findExistingOpenConversation(contact: string): Promise<any | null> {
+  try {
+    if (!contact) {
+      return null;
+    }
+    
+    const normalizedContact = normalizeContact(contact);
+    if (!normalizedContact) {
+      return null;
+    }
+    
+    // Get all open conversations (filter at DB level for efficiency)
+    const allConversations = await storage.getAllConversations({ status: 'open' });
+    
+    // Filter for conversations that have messages from this contact
+    const matchingConversations = [];
+    
+    for (const conv of allConversations) {
+      // Check if customer email or phone matches
+      const normalizedCustomerEmail = normalizeContact(conv.customerEmail);
+      const normalizedCustomerPhone = normalizeContact(conv.customerPhone);
+      
+      if (normalizedCustomerEmail === normalizedContact || 
+          normalizedCustomerPhone === normalizedContact) {
+        matchingConversations.push(conv);
+        continue;
+      }
+      
+      // Also check senderContact from first message
+      const normalizedSenderContact = normalizeContact(conv.senderContact);
+      if (normalizedSenderContact === normalizedContact) {
+        matchingConversations.push(conv);
+        continue;
+      }
+      
+      // Check all messages for this contact (N+1 query - could be optimized with storage method)
+      const messages = await storage.getConversationMessages(conv.id);
+      const hasMatchingMessage = messages.some(msg => {
+        const normalizedMsgContact = normalizeContact(msg.fromContact);
+        return normalizedMsgContact === normalizedContact;
+      });
+      
+      if (hasMatchingMessage) {
+        matchingConversations.push(conv);
+      }
+    }
+    
+    // Return the most recent matching conversation
+    if (matchingConversations.length > 0) {
+      const sorted = matchingConversations.sort((a, b) => 
+        new Date(b.lastMessageAt || b.createdAt || 0).getTime() - 
+        new Date(a.lastMessageAt || a.createdAt || 0).getTime()
+      );
+      console.log(`✅ Found existing open conversation for ${contact}: ${sorted[0].id}`);
+      return sorted[0];
+    }
+    
+    console.log(`ℹ️ No existing open conversation found for ${contact}`);
+    return null;
+  } catch (error) {
+    console.error('Error finding existing conversation:', error);
+    return null;
+  }
+}
+
+/**
  * Create notification bell entry for new conversation
  * Call this after successfully creating a conversation from real channels (not seed data)
  */
