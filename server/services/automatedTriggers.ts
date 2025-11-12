@@ -17,15 +17,21 @@ export class AutomatedTriggers {
 
       console.log(`🔄 Job status changed: ${job.title} (${oldStatus} → ${newStatus})`);
 
-      // Trigger notification for job status change
-      await notificationService.processNotificationTrigger({
-        event: 'job_status_change',
-        data: {
-          job,
-          oldStatus,
-          newStatus
-        }
-      });
+      // SKIP automatic customer notifications for 'scheduled' status
+      // Customer scheduling notifications are controlled explicitly via the UI checkbox
+      if (newStatus !== 'scheduled') {
+        // Trigger notification for job status change
+        await notificationService.processNotificationTrigger({
+          event: 'job_status_change',
+          data: {
+            job,
+            oldStatus,
+            newStatus
+          }
+        });
+      } else {
+        console.log(`📋 Skipping automatic customer notification for 'scheduled' status - controlled by user checkbox`);
+      }
 
       // Trigger workflow automation for job status changes
       await workflowAutomationService.processWorkflowTrigger('job_status_changed', {

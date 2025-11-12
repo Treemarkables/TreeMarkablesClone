@@ -7960,12 +7960,13 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             // Send SMS if client has phone number
             const clientPhone = job.jobContactPhone || job.billingContactPhone;
             if (clientPhone) {
-              const smsMessage = `Hi ${clientName}, your job is scheduled for ${scheduleDate} at ${startTimeStr}. - Treemarkables`;
+              const formattedDateTime = formatNZTime(startTime, 'full');
+              const smsMessage = `Hi ${clientName}, your job is scheduled for ${formattedDateTime} (NZ time). - Treemarkables`;
               await smsService.sendSMS({
                 to: clientPhone,
                 message: smsMessage
               });
-              console.log(`✅ Client notification SMS sent to ${clientPhone}`);
+              console.log(`✅ Client notification SMS sent to ${clientPhone}: "${smsMessage}"`);
             }
 
             // Create diary entry for email notification
