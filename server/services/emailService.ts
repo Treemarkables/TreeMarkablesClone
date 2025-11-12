@@ -1,9 +1,9 @@
-import { MailService } from '@sendgrid/mail';
+import { getUncachableResendClient } from '../resendClient';
 import { formatNZTime } from '@shared/dateUtils';
 
 interface EmailParams {
   to: string;
-  from: string;
+  from?: string;
   subject: string;
   text?: string;
   html?: string;
@@ -15,7 +15,7 @@ interface EmailParams {
     content: string;
     filename: string;
     type: string;
-    disposition: string;
+    disposition?: string; // Optional for backward compatibility
   }>;
 }
 
@@ -25,33 +25,46 @@ interface EmailResult {
 }
 
 class EmailService {
-  private mailService: MailService;
   private isConfigured: boolean = false;
-  private fromEmail: string = 'info@treemarkables.co.nz';
+  private defaultFromEmail: string = 'info@treemarkables.co.nz';
 
   constructor() {
-    this.mailService = new MailService();
-    this.configure();
+    this.checkConfiguration();
   }
 
-  private configure(): void {
-    const apiKey = process.env.SENDGRID_API_KEY;
-    if (apiKey) {
-      this.mailService.setApiKey(apiKey);
+  private async checkConfiguration(): Promise<void> {
+    try {
+      // Try to get Resend client to verify configuration
+      await getUncachableResendClient();
       this.isConfigured = true;
-      console.log('📧 SendGrid email service configured successfully');
-    } else {
-      console.log('📧 SendGrid API key not found - email service in mock mode');
+      console.log('📧 Resend email service configured successfully');
+    } catch (error) {
+      this.isConfigured = false;
+      console.log('📧 Resend not connected - email service in mock mode');
     }
   }
 
   async sendEmail(params: EmailParams): Promise<EmailResult> {
     try {
-      if (!this.isConfigured) {
+      // Get fresh Resend client for each send (uncacheable)
+      let resendClient;
+      let configuredFromEmail;
+      
+      try {
+        const { client, fromEmail } = await getUncachableResendClient();
+        resendClient = client;
+        configuredFromEmail = fromEmail;
+        this.isConfigured = true;
+      } catch (error) {
+        // Fall back to mock mode if Resend not configured
+        this.isConfigured = false;
+      }
+
+      if (!this.isConfigured || !resendClient) {
         // Mock mode - log the email instead of sending
         console.log('\n=== EMAIL NOTIFICATION (Mock Mode) ===');
         console.log(`To: ${params.to}`);
-        console.log(`From: ${params.from}`);
+        console.log(`From: ${params.from || this.defaultFromEmail}`);
         if (params.replyTo) console.log(`Reply-To: ${params.replyTo}`);
         console.log(`Subject: ${params.subject}`);
         if (params.text) console.log(`Text: ${params.text}`);
@@ -65,31 +78,43 @@ class EmailService {
         return { success: true, messageId: `mock-${Date.now()}` };
       }
 
-      const fromEmail = params.from || this.fromEmail;
+      // Use provided from email, or fall back to configured from email, or default
+      const fromEmail = params.from || configuredFromEmail || this.defaultFromEmail;
       
-      const response = await this.mailService.send({
-        to: params.to,
-        from: fromEmail,
-        subject: params.subject,
-        text: params.text,
-        html: params.html,
-        ...(params.cc && { cc: params.cc }), // CC recipients
-        ...(params.replyTo && { replyTo: params.replyTo }), // Customer replies route to job email
-        ...(params.templateId && { templateId: params.templateId }),
-        ...(params.dynamicTemplateData && { dynamicTemplateData: params.dynamicTemplateData }),
-        ...(params.attachments && { attachments: params.attachments }),
-      });
+      // Map attachments to Resend format
+      const resendAttachments = params.attachments?.map(att => ({
+        filename: att.filename,
+        content: att.content, // Keep as base64
+        contentType: att.type
+      }));
 
-      // Extract message ID from SendGrid response headers
-      const messageId = response[0]?.headers?.['x-message-id'] || undefined;
+      // Build email payload for Resend
+      const emailPayload: any = {
+        from: fromEmail,
+        to: params.to,
+        subject: params.subject,
+        ...(params.html && { html: params.html }),
+        ...(params.text && { text: params.text }),
+        ...(params.cc && { cc: Array.isArray(params.cc) ? params.cc : [params.cc] }),
+        ...(params.replyTo && { reply_to: params.replyTo }),
+        ...(resendAttachments && resendAttachments.length > 0 && { attachments: resendAttachments })
+      };
+
+      const response = await resendClient.emails.send(emailPayload);
+
+      // Extract message ID from Resend response
+      const messageId = response.data?.id || undefined;
       
       console.log(`📧 Email sent successfully to ${params.to}${messageId ? ` (Message ID: ${messageId})` : ''}`);
       return { success: true, messageId };
     } catch (error: any) {
-      console.error('📧 SendGrid email error:', error);
+      console.error('📧 Resend email error:', error);
       // Log detailed error information
-      if (error.response && error.response.body && error.response.body.errors) {
-        console.error('📧 SendGrid error details:', JSON.stringify(error.response.body.errors, null, 2));
+      if (error.message) {
+        console.error('📧 Error message:', error.message);
+      }
+      if (error.response) {
+        console.error('📧 Error response:', JSON.stringify(error.response, null, 2));
       }
       return { success: false };
     }
