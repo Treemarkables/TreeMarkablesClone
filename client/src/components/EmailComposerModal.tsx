@@ -477,7 +477,10 @@ export function EmailComposerModal({
   };
 
   const handleSendEmail = () => {
+    console.log('📧 handleSendEmail called');
+    
     if (!emailData.to.trim()) {
+      console.log('❌ Email validation failed: no recipient');
       toast({
         title: "Email Required",
         description: "Please enter a recipient email address",
@@ -487,6 +490,7 @@ export function EmailComposerModal({
     }
 
     if (!emailData.subject.trim()) {
+      console.log('❌ Email validation failed: no subject');
       toast({
         title: "Subject Required", 
         description: "Please enter an email subject",
@@ -516,6 +520,14 @@ export function EmailComposerModal({
       proposalId: proposalData?.id,
       invoiceData: invoiceData // Pass full invoice data so backend can create invoice if needed
     };
+
+    console.log('📧 Sending email with payload:', {
+      to: emailPayload.to,
+      subject: emailPayload.subject,
+      attachmentCount: emailPayload.attachments.length,
+      photoCount: emailPayload.selectedPhotos.length,
+      invoiceData: !!emailPayload.invoiceData
+    });
 
     sendEmailMutation.mutate(emailPayload);
   };
