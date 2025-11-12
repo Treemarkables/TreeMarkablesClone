@@ -1356,6 +1356,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           tags: ['contact-form', 'website']
         });
 
+        // Create notification bell entry
+        await notificationHelper.createConversationNotification(conversation);
+
         // Create initial message in the conversation with contact details
         const fullMessage = `Contact Form Submission\n\nName: ${name}\nEmail: ${email}\nPhone: ${phone || 'Not provided'}\nHow they heard about us: ${hearAbout || 'Not specified'}\n\nMessage:\n${message.trim()}`;
 
@@ -9407,25 +9410,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
       const conversation = await storage.createConversation(validation.data);
       
-      // Create database notification for new conversation
-      try {
-        await storage.createNotification({
-          title: `New ${conversation.source || 'conversation'} contact`,
-          message: conversation.title || 'New inquiry received',
-          type: 'new_conversation',
-          priority: conversation.priority === 'urgent' ? 'high' : 'medium',
-          actionUrl: `/conversations?id=${conversation.id}`,
-          metadata: {
-            conversationId: conversation.id,
-            source: conversation.source,
-            serviceType: conversation.serviceType
-          }
-        });
-        console.log(`✅ Created notification bell entry for new conversation: ${conversation.id}`);
-      } catch (notifError) {
-        console.error('Error creating database notification:', notifError);
-        // Don't fail the request if notification creation fails
-      }
+      // Create notification bell entry for new conversation
+      await notificationHelper.createConversationNotification(conversation);
       
       // Send push notification to admin users about new lead
       try {
@@ -10688,6 +10674,9 @@ Transcription: ${transcriptText}`;
             lastMessageBy: 'customer',
             lastMessageAt: new Date()
           });
+          
+          // Create notification bell entry for new email conversation
+          await notificationHelper.createConversationNotification(conversation);
         }
         
         // Create message in conversation
@@ -10929,6 +10918,9 @@ Transcription: ${transcriptText}`;
                   lastMessageBy: 'customer'
                 });
                 isNewConversation = true;
+                
+                // Create notification bell entry for new Facebook conversation
+                await notificationHelper.createConversationNotification(conversation);
               }
               
               // Save message to conversation
@@ -11029,6 +11021,9 @@ Transcription: ${transcriptText}`;
         lastMessageBy: 'customer'
       });
 
+      // Create notification bell entry
+      await notificationHelper.createConversationNotification(conversation);
+
       // Create the first message in the conversation
       await storage.createConversationMessage({
         conversationId: conversation.id,
@@ -11073,6 +11068,9 @@ Transcription: ${transcriptText}`;
         lastMessageBy: 'customer',
         lastMessageAt: new Date()
       });
+      
+      // Create notification bell entry
+      await notificationHelper.createConversationNotification(conversation);
       
       // Create message
       await storage.createConversationMessage({
