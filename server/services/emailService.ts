@@ -27,6 +27,7 @@ interface EmailResult {
 class EmailService {
   private isConfigured: boolean = false;
   private defaultFromEmail: string = 'info@treemarkables.co.nz';
+  private defaultReplyTo: string = 'info@treemarkables.nz'; // Google Workspace email that can receive replies
 
   constructor() {
     this.checkConfiguration();
@@ -89,6 +90,9 @@ class EmailService {
       }));
 
       // Build email payload for Resend
+      // Always set reply_to so replies go to the Google Workspace email that can receive them
+      const replyToAddress = params.replyTo || this.defaultReplyTo;
+      
       const emailPayload: any = {
         from: fromEmail,
         to: params.to,
@@ -96,7 +100,7 @@ class EmailService {
         ...(params.html && { html: params.html }),
         ...(params.text && { text: params.text }),
         ...(params.cc && { cc: Array.isArray(params.cc) ? params.cc : [params.cc] }),
-        ...(params.replyTo && { reply_to: params.replyTo }),
+        reply_to: replyToAddress, // Always set reply-to for proper reply handling
         ...(resendAttachments && resendAttachments.length > 0 && { attachments: resendAttachments })
       };
 
