@@ -4157,10 +4157,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Create the invoice
       const invoice = await storage.createInvoice(invoiceData);
 
-      // Update job to store invoice reference
+      // Update job to store invoice reference AND sync total amount for revenue metrics
       await storage.updateJob(id, { 
         invoiceId: invoice.id,
-        invoiceBlocked: false
+        invoiceBlocked: false,
+        totalAmount: amount.toString() // Sync invoice amount to job for revenue tracking
       });
 
       // Create diary entry for invoice creation with invoice-specific metadata
@@ -4518,6 +4519,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           });
           invoice = newInvoice;
           console.log('✅ Invoice created with ID:', invoice.id);
+          
+          // Sync invoice amount to job's totalAmount for revenue tracking
+          if (jobId && invoiceData.totalAmount) {
+            await storage.updateJob(jobId, {
+              totalAmount: invoiceData.totalAmount.toString()
+            });
+            console.log('💰 Synced invoice amount to job total_amount:', invoiceData.totalAmount);
+          }
         } catch (error: any) {
           // If duplicate invoice number, this invoice was already created - fetch it by number
           if (error.code === '23505' && error.constraint === 'invoices_invoice_number_unique') {
@@ -16434,6 +16443,51 @@ Transcription: ${transcriptText}`;
     } catch (error) {
       console.error('Error refreshing campaign stats:', error);
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to refresh stats' });
+    }
+  });
+
+  // ========================================
+  // DATA SYNC & MAINTENANCE
+  // ========================================
+
+  // One-time sync: Update all jobs' totalAmount from their invoices
+  app.post("/api/admin/sync-invoice-amounts", async (req, res) => {
+    try {
+      console.log('🔄 Starting invoice-to-job amount sync...');
+      
+      // Get all invoices directly from database
+      const allInvoices = await db.select().from(invoices);
+      let syncedCount = 0;
+      let skippedCount = 0;
+      
+      for (const invoice of allInvoices) {
+        if (invoice.jobId && invoice.amount) {
+          try {
+            await storage.updateJob(invoice.jobId, {
+              totalAmount: invoice.amount.toString()
+            });
+            syncedCount++;
+            console.log(`✅ Synced invoice ${invoice.invoiceNumber} ($${invoice.amount}) to job ${invoice.jobId}`);
+          } catch (error) {
+            console.warn(`⚠️ Failed to sync invoice ${invoice.invoiceNumber}:`, error);
+            skippedCount++;
+          }
+        } else {
+          skippedCount++;
+        }
+      }
+      
+      console.log(`✅ Sync complete: ${syncedCount} jobs updated, ${skippedCount} skipped`);
+      res.json({ 
+        success: true, 
+        message: `Synced ${syncedCount} invoice amounts to jobs`,
+        synced: syncedCount,
+        skipped: skippedCount,
+        total: allInvoices.length
+      });
+    } catch (error) {
+      console.error('❌ Error syncing invoice amounts:', error);
+      res.status(500).json({ success: false, message: 'Failed to sync invoice amounts' });
     }
   });
 
