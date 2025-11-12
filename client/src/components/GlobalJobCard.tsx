@@ -4614,13 +4614,13 @@ export function GlobalJobCard({
               
               {/* Overall Conflict Warning */}
               {staffConflicts.length > 0 && staffConflicts.some(c => c.conflicts && c.conflicts.length > 0 && schedulingData.assignedTo.includes(c.employeeId)) && (
-                <div className="mt-3 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
+                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-700 rounded-md">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-red-800 dark:text-red-200">Scheduling Conflicts Detected</p>
-                      <p className="text-xs text-red-700 dark:text-red-300 mt-1">
-                        One or more staff members are already scheduled for other jobs during this time. You can still proceed, but conflicts should be resolved.
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">⚠️ Warning: Double Booking</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        One or more staff members are scheduled for other jobs at this time. You can still schedule them - this is just a warning.
                       </p>
                     </div>
                   </div>
