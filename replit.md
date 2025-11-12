@@ -69,7 +69,7 @@ Preferred communication style: Simple, everyday language.
 - All email functionality (invoices, quotes, proposals, notifications) now uses Resend
 - Reason for migration: SendGrid free trial expired and required 3-day identity verification wait
 - **FIX (12 Nov 2025)**: Removed all hardcoded `from:` email addresses throughout codebase (server/index.ts, server/routes.ts) that were overriding the Resend connector configuration. Email service now correctly uses configured `from_email` from Resend integration (`info@updates.treemarkables.co.nz`) instead of hardcoded `info@treemarkables.co.nz`
-- **Email Reply-To Fix (12 Nov 2025)**: Added default `replyTo: 'info@treemarkables.nz'` in emailService.ts so customer replies go to user's Google Workspace email instead of undeliverable Resend sending address (`info@updates.treemarkables.co.nz`).
+- **Email Reply-To Fix (12 Nov 2025)**: Added default `replyTo: 'info@treemarkables.nz'` in emailService.ts so customer replies go to user's Google Workspace email instead of undeliverable Resend sending address (`info@updates.treemarkables.co.nz`). Also removed custom job-based reply-to addresses (`job-{jobNumber}@jobs.treemarkables.co.nz`) from server/routes.ts email endpoints that were causing email bounces since those addresses don't exist.
 - **SendGrid API Removal (12 Nov 2025)**: Disabled SendGrid Activity API endpoint that was causing errors after Resend migration. Endpoint now returns empty activity data instead of calling defunct SendGrid API. Note: Resend doesn't support email open/click tracking via API.
 
 ### Notification & Timezone Fixes

@@ -4301,15 +4301,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      // Get job details for replyTo
+      // Get job details
       let job;
-      let replyToEmail;
       if (proposal.jobId) {
         job = await storage.getJob(proposal.jobId);
-        if (job?.jobNumber) {
-          replyToEmail = `job-${job.jobNumber}@jobs.treemarkables.co.nz`;
-        }
       }
+      // Reply-To is handled by emailService default (info@treemarkables.nz)
 
       // Get customer details
       let customer;
@@ -4395,7 +4392,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const emailResult = await emailService.sendEmail({
         to,
         cc,
-        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
@@ -4564,11 +4560,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         quote = await storage.getQuote(quoteId);
       }
 
-      // Create replyTo email address using job number
-      let replyToEmail;
-      if (job?.jobNumber) {
-        replyToEmail = `job-${job.jobNumber}@jobs.treemarkables.co.nz`;
-      }
+      // Reply-To is handled by emailService default (info@treemarkables.nz)
 
       // Generate invoice HTML if invoice data is available
       let invoiceHtml = '';
@@ -4802,7 +4794,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         subject: subject,
         text: emailBody,
         html: emailHtml,
-        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
@@ -9237,22 +9228,14 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         });
       }
 
-      // Get job for replyTo email
-      let replyToEmail;
-      if (jobId) {
-        const job = await storage.getJob(jobId);
-        if (job?.jobNumber) {
-          replyToEmail = `job-${job.jobNumber}@jobs.treemarkables.co.nz`;
-        }
-      }
+      // Reply-To is handled by emailService default (info@treemarkables.nz)
 
-      console.log('📧 Sending email via diary:', { to, subject, replyTo: replyToEmail });
+      console.log('📧 Sending email via diary:', { to, subject });
       
       // Send email using the service
       const emailResult = await emailService.sendEmail({
         to,
         from: 'noreply@treemarkables.co.nz',
-        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         text: message,
         html: `<p>${message.replace(/\n/g, '<br>')}</p>`
