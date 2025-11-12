@@ -52,8 +52,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   const [additionalCosts, setAdditionalCosts] = useState('');
   const [newEntry, setNewEntry] = useState({
     staffIds: [] as string[], // Changed from staffId to staffIds array
-    rate: '',
-    duration: '1' // Default to 1 hour
+    duration: '1' // Default to 1 hour - rate is auto-matched per staff member
   });
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
   
@@ -143,7 +142,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   useEffect(() => {
     if (!isOpen) {
       setPendingEntries([]);
-      setNewEntry({ staffIds: [], rate: '', duration: '1' });
+      setNewEntry({ staffIds: [], duration: '1' });
       setUseManualInput(false);
       setAdditionalCosts('');
       setStaffSearchQuery('');
@@ -155,15 +154,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       toast({
         title: "Validation Error",
         description: "Please select at least one staff member",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!newEntry.rate) {
-      toast({
-        title: "Validation Error",
-        description: "Please select a rate",
         variant: "destructive"
       });
       return;
@@ -186,15 +176,29 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       });
     }
 
-    // Create one pending entry for each selected staff member
+    // Track staff without rates
+    const staffWithoutRates: string[] = [];
+
+    // Create one pending entry for each selected staff member with auto-matched rate
     const newTimeEntries: TimeEntry[] = newEntry.staffIds.map(staffId => {
       const staff = employees.find((e: any) => e.id === staffId);
+      const staffFirstName = staff?.firstName || '';
+      
+      // Find matching labour rate by staff first name (case-insensitive)
+      const matchingRate = availableRates.find((r: any) => 
+        r.name.toLowerCase().trim() === staffFirstName.toLowerCase().trim()
+      );
+      
+      if (!matchingRate) {
+        staffWithoutRates.push(`${staff?.firstName} ${staff?.lastName}`);
+      }
+      
       return {
         id: `pending-${Date.now()}-${Math.random()}-${staffId}`,
         date: new Date().toLocaleDateString('en-GB'),
         staffId: staffId,
         staffName: `${staff?.firstName || ''} ${staff?.lastName || ''}`.trim(),
-        rate: newEntry.rate,
+        rate: matchingRate?.itemNumber || '',
         start: '',
         duration: parseFloat(newEntry.duration),
         billed: true
@@ -203,13 +207,22 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     
     setPendingEntries(prev => [...prev, ...newTimeEntries]);
     
-    toast({
-      title: "Success",
-      description: `Added ${newTimeEntries.length} time ${newTimeEntries.length === 1 ? 'entry' : 'entries'} to pending list`,
-    });
+    // Show warning if some staff don't have matching rates
+    if (staffWithoutRates.length > 0) {
+      toast({
+        title: "Warning",
+        description: `${staffWithoutRates.join(', ')} ${staffWithoutRates.length === 1 ? 'does' : 'do'} not have a matching labour rate set up. Please add a rate in Settings.`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: `Added ${newTimeEntries.length} time ${newTimeEntries.length === 1 ? 'entry' : 'entries'} with auto-matched rates`,
+      });
+    }
     
     // Reset form but keep it open for adding more entries
-    setNewEntry({ staffIds: [], rate: '', duration: '1' });
+    setNewEntry({ staffIds: [], duration: '1' });
     setUseManualInput(false);
     setStaffSearchQuery('');
   };
@@ -454,25 +467,10 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                 </Popover>
               </div>
               
-              <div>
-                <label className="text-sm font-medium">Rate Type</label>
-                <Select 
-                  value={newEntry.rate} 
-                  onValueChange={(value) => setNewEntry(prev => ({ ...prev, rate: value }))} 
-                  data-testid="select-rate"
-                  disabled={availableRates.length === 0}
-                >
-                  <SelectTrigger className="min-h-11">
-                    <SelectValue placeholder={availableRates.length === 0 ? "No labour rates available" : "Select rate"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableRates.map((rate: any) => (
-                      <SelectItem key={rate.itemNumber} value={rate.itemNumber}>
-                        {rate.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="bg-blue-100 border border-blue-200 rounded p-2">
+                <p className="text-xs text-blue-800">
+                  <strong>Auto-Rate Matching:</strong> Each staff member will be automatically assigned their personal hourly rate from Settings.
+                </p>
               </div>
               
               <div>
