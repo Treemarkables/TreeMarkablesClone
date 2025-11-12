@@ -2,6 +2,7 @@ import { emailService } from './emailService';
 import { smsService } from './smsService';
 import { storage } from '../storage';
 import { insertNotificationSchema, type Customer, type Job } from '@shared/schema';
+import { formatNZTime } from '@shared/dateUtils';
 
 interface NotificationTrigger {
   event: 'job_status_change' | 'quote_sent' | 'quote_accepted' | 'service_request_created' | 'job_scheduled' | 'job_completed';
@@ -258,6 +259,7 @@ class NotificationService {
           { scheduledDate: scheduledDate || jobData?.scheduledDate }
         );
       } else if (type === 'job_scheduled' && scheduledDate) {
+        const formattedDate = formatNZTime(scheduledDate, 'full');
         await emailService.sendEmail({
           to: customer.email,
           from: 'noreply@treemarkables.co.nz',
@@ -265,7 +267,7 @@ class NotificationService {
           html: `
             <h2>Job Scheduled</h2>
             <p>Hi ${customer.name},</p>
-            <p>Your job "${jobTitle}" has been scheduled for ${new Date(scheduledDate).toLocaleDateString('en-NZ')}.</p>
+            <p>Your job "${jobTitle}" has been scheduled for ${formattedDate} (NZ time).</p>
             <p>We'll be in touch with any updates.</p>
             <p>Best regards,<br>Treemarkables Team</p>
           `
@@ -296,9 +298,10 @@ class NotificationService {
           status
         );
       } else if (type === 'job_scheduled' && scheduledDate) {
+        const formattedDate = formatNZTime(scheduledDate, 'date');
         await smsService.sendSMS({
           to: customer.phone,
-          message: `Hi ${customer.name}, your job is scheduled for ${new Date(scheduledDate).toLocaleDateString('en-NZ')}. - Treemarkables`
+          message: `Hi ${customer.name}, your job is scheduled for ${formattedDate} (NZ time). - Treemarkables`
         });
       } else if (type === 'job_completed') {
         await smsService.sendSMS({

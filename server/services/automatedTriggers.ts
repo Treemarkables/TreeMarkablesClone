@@ -56,13 +56,19 @@ export class AutomatedTriggers {
         return;
       }
 
-      await notificationService.processNotificationTrigger({
-        event: 'job_scheduled',
-        data: {
-          job,
-          scheduledDate: job.scheduledDate
-        }
-      });
+      // DISABLED: Customer scheduling notifications are now controlled explicitly
+      // via the sendClientNotification checkbox in the UI (see routes.ts line 7908)
+      // This prevents automatic notifications from being sent when user hasn't opted in
+      
+      // await notificationService.processNotificationTrigger({
+      //   event: 'job_scheduled',
+      //   data: {
+      //     job,
+      //     scheduledDate: job.scheduledDate
+      //   }
+      // });
+      
+      console.log(`📋 Job scheduled: ${job.title} - notifications controlled by user checkbox`);
     } catch (error) {
       console.error('Error in job scheduled trigger:', error);
     }
