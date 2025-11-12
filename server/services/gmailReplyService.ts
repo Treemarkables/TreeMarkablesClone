@@ -296,8 +296,8 @@ class GmailReplyService {
       await db.insert(jobDiaryEntries).values({
         jobId: job.id,
         entryType: 'email',
-        title: `Email reply received: ${email.subject}`,
-        description: `Email received from ${customer.name} (${email.from})\n\nSubject: ${email.subject}\n\n${cleanedBody}`,
+        title: `Email reply: ${email.subject}`,
+        description: cleanedBody,
         content: email.htmlBody || email.textBody,
         authorName: customer.name,
         authorRole: 'customer',
@@ -308,6 +308,7 @@ class GmailReplyService {
           inReplyTo: email.inReplyTo,
           receivedAt: email.date.toISOString(),
           direction: 'incoming',
+          subject: email.subject,
           rawBody: email.textBody // Store raw body for debugging
         }
       });
