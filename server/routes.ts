@@ -4861,11 +4861,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-    } catch (error) {
-      console.error('Error sending email:', error);
+    } catch (error: any) {
+      console.error('❌ Error sending invoice email:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        response: error.response?.body || error.response
+      });
       res.status(500).json({ 
         success: false, 
-        message: 'Error sending email' 
+        message: error.message || 'Error sending email'
       });
     }
   });
