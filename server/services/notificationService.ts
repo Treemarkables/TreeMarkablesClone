@@ -298,10 +298,10 @@ class NotificationService {
           status
         );
       } else if (type === 'job_scheduled' && scheduledDate) {
-        const formattedDate = formatNZTime(scheduledDate, 'date');
+        const formattedDateTime = formatNZTime(scheduledDate, 'full');
         await smsService.sendSMS({
           to: customer.phone,
-          message: `Hi ${customer.name}, your job is scheduled for ${formattedDate} (NZ time). - Treemarkables`
+          message: `Hi ${customer.name}, your job is scheduled for ${formattedDateTime}. - Treemarkables`
         });
       } else if (type === 'job_completed') {
         await smsService.sendSMS({
