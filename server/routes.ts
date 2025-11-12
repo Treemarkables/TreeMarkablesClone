@@ -272,13 +272,13 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
     const startTimeUTC = new Date(assignment.startTime);
     const endTimeUTC = new Date(assignment.endTime);
     
-    // Format directly from UTC with timeZone option (no double conversion)
-    const startTimeFull = format(startTimeUTC, 'EEEE, d MMMM yyyy \'at\' h:mm a', { timeZone: 'Pacific/Auckland' });
-    const endTime = format(endTimeUTC, 'h:mm a', { timeZone: 'Pacific/Auckland' });
+    // Use formatNZTime utility for proper timezone conversion
+    const startTimeFull = formatNZTime(startTimeUTC, 'full');
+    const endTime = formatNZTime(endTimeUTC, 'time');
     
     // Format date and time separately for SMS (cleaner format)
-    const startDate = format(startTimeUTC, 'EEEE, d MMMM yyyy', { timeZone: 'Pacific/Auckland' });
-    const startTime = format(startTimeUTC, 'h:mm a', { timeZone: 'Pacific/Auckland' });
+    const startDate = formatNZTime(startTimeUTC, 'date');
+    const startTime = formatNZTime(startTimeUTC, 'time');
 
     const emailHtml = `
       <h2>You've been scheduled for a job</h2>
@@ -370,15 +370,15 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
     
     console.log(`📅 [SMS DEBUG] Parsed startTimeUTC: ${startTimeUTC.toISOString()}`);
     
-    // Format directly from UTC with timeZone option (no double conversion)
-    const startTimeFull = format(startTimeUTC, 'EEEE, d MMMM yyyy \'at\' h:mm a', { timeZone: 'Pacific/Auckland' });
-    const endTime = format(endTimeUTC, 'h:mm a', { timeZone: 'Pacific/Auckland' });
+    // Use formatNZTime utility for proper timezone conversion
+    const startTimeFull = formatNZTime(startTimeUTC, 'full');
+    const endTime = formatNZTime(endTimeUTC, 'time');
     
     // Format date and time separately for SMS (cleaner format)
-    const startDate = format(startTimeUTC, 'EEEE, d MMMM yyyy', { timeZone: 'Pacific/Auckland' });
-    const startTime = format(startTimeUTC, 'h:mm a', { timeZone: 'Pacific/Auckland' });
+    const startDate = formatNZTime(startTimeUTC, 'date');
+    const startTime = formatNZTime(startTimeUTC, 'time');
     
-    console.log(`📅 [SMS DEBUG] Formatted for SMS: ${startDate} at ${startTime}`);
+    console.log(`📅 [SMS DEBUG] Formatted for SMS: "${startDate} at ${startTime}"`);
 
     // Send email notification
     if (employee.email) {
