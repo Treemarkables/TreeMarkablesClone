@@ -272,16 +272,13 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
     const startTimeUTC = new Date(assignment.startTime);
     const endTimeUTC = new Date(assignment.endTime);
     
-    const startTimeNZ = toZonedTime(startTimeUTC, 'Pacific/Auckland');
-    const endTimeNZ = toZonedTime(endTimeUTC, 'Pacific/Auckland');
-    
-    // Format using format() from date-fns-tz instead of toLocaleString to avoid double timezone conversion
-    const startTimeFull = format(startTimeNZ, 'EEEE, d MMMM yyyy \'at\' h:mm a', { timeZone: 'Pacific/Auckland' });
-    const endTime = format(endTimeNZ, 'h:mm a', { timeZone: 'Pacific/Auckland' });
+    // Format directly from UTC with timeZone option (no double conversion)
+    const startTimeFull = format(startTimeUTC, 'EEEE, d MMMM yyyy \'at\' h:mm a', { timeZone: 'Pacific/Auckland' });
+    const endTime = format(endTimeUTC, 'h:mm a', { timeZone: 'Pacific/Auckland' });
     
     // Format date and time separately for SMS (cleaner format)
-    const startDate = format(startTimeNZ, 'EEEE, d MMMM yyyy', { timeZone: 'Pacific/Auckland' });
-    const startTime = format(startTimeNZ, 'h:mm a', { timeZone: 'Pacific/Auckland' });
+    const startDate = format(startTimeUTC, 'EEEE, d MMMM yyyy', { timeZone: 'Pacific/Auckland' });
+    const startTime = format(startTimeUTC, 'h:mm a', { timeZone: 'Pacific/Auckland' });
 
     const emailHtml = `
       <h2>You've been scheduled for a job</h2>
@@ -372,18 +369,14 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
     const endTimeUTC = new Date(assignment.endTime);
     
     console.log(`📅 [SMS DEBUG] Parsed startTimeUTC: ${startTimeUTC.toISOString()}`);
-    const startTimeNZ = toZonedTime(startTimeUTC, 'Pacific/Auckland');
-    const endTimeNZ = toZonedTime(endTimeUTC, 'Pacific/Auckland');
     
-    console.log(`📅 [SMS DEBUG] Converted startTimeNZ: ${startTimeNZ.toString()}`);
-    
-    // Format using format() from date-fns-tz instead of toLocaleString to avoid double timezone conversion
-    const startTimeFull = format(startTimeNZ, 'EEEE, d MMMM yyyy \'at\' h:mm a', { timeZone: 'Pacific/Auckland' });
-    const endTime = format(endTimeNZ, 'h:mm a', { timeZone: 'Pacific/Auckland' });
+    // Format directly from UTC with timeZone option (no double conversion)
+    const startTimeFull = format(startTimeUTC, 'EEEE, d MMMM yyyy \'at\' h:mm a', { timeZone: 'Pacific/Auckland' });
+    const endTime = format(endTimeUTC, 'h:mm a', { timeZone: 'Pacific/Auckland' });
     
     // Format date and time separately for SMS (cleaner format)
-    const startDate = format(startTimeNZ, 'EEEE, d MMMM yyyy', { timeZone: 'Pacific/Auckland' });
-    const startTime = format(startTimeNZ, 'h:mm a', { timeZone: 'Pacific/Auckland' });
+    const startDate = format(startTimeUTC, 'EEEE, d MMMM yyyy', { timeZone: 'Pacific/Auckland' });
+    const startTime = format(startTimeUTC, 'h:mm a', { timeZone: 'Pacific/Auckland' });
     
     console.log(`📅 [SMS DEBUG] Formatted for SMS: ${startDate} at ${startTime}`);
 
