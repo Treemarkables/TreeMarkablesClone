@@ -301,7 +301,7 @@ export async function createConversationNotification(conversation: {
       message: conversation.title || 'New inquiry received',
       type: 'new_conversation',
       priority: conversation.priority === 'urgent' ? 'high' : 'medium',
-      actionUrl: `/conversations?id=${conversation.id}`,
+      actionUrl: `/conversation/${conversation.id}`,
       metadata: {
         conversationId: conversation.id,
         source: conversation.source,
