@@ -385,7 +385,6 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
     if (employee.email) {
       await emailService.sendEmail({
         to: employee.email,
-        from: 'info@treemarkables.co.nz',
         subject: `Job Scheduled: ${job?.title || 'Tree Service'}`,
         html: `
           <h2>You've been scheduled for a job</h2>
@@ -4396,8 +4395,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const emailResult = await emailService.sendEmail({
         to,
         cc,
-        from: 'Treemarkables <info@treemarkables.co.nz>', // Display name with verified sender address
-        replyTo: replyToEmail || 'info@treemarkables.co.nz', // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
+        replyTo: replyToEmail, // Customer replies go to job-{jobNumber}@jobs.treemarkables.co.nz
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`
@@ -4801,7 +4799,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Send email using the emailService
       const emailResult = await emailService.sendEmail({
         to: to,
-        from: 'info@treemarkables.co.nz',
         subject: subject,
         text: emailBody,
         html: emailHtml,
@@ -7965,7 +7962,6 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
             await emailService.sendEmail({
               to: clientEmail,
-              from: 'info@treemarkables.co.nz',
               subject: emailSubject,
               html: emailBody,
               text: `Booking Confirmation\n\nDear ${clientName},\n\nYour tree service has been scheduled!\n\nDate: ${scheduleDate}\nTime: ${startTimeStr} - ${endTimeStr}\nAddress: ${job.address || 'As discussed'}\n\n${job.description ? `Service Details:\n${job.description}\n\n` : ''}Our team will arrive at your property at the scheduled time.\n\nBest regards,\nTreemarkables Team`
@@ -11155,7 +11151,6 @@ Transcription: ${transcriptText}`;
         try {
           const emailResult = await emailService.sendEmail({
             to: recipientContact,
-            from: process.env.SENDGRID_FROM_EMAIL || 'info@treemarkables.co.nz',
             subject: lastInboundMessage.subject ? `Re: ${lastInboundMessage.subject}` : 'Response to your enquiry',
             text: content,
             html: content.replace(/\n/g, '<br>')

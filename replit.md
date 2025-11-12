@@ -68,6 +68,7 @@ Preferred communication style: Simple, everyday language.
 - Updated `server/services/emailService.ts` to use Resend API while maintaining backward compatibility
 - All email functionality (invoices, quotes, proposals, notifications) now uses Resend
 - Reason for migration: SendGrid free trial expired and required 3-day identity verification wait
+- **FIX (12 Nov 2025)**: Removed all hardcoded `from:` email addresses throughout codebase (server/index.ts, server/routes.ts) that were overriding the Resend connector configuration. Email service now correctly uses configured `from_email` from Resend integration (`info@updates.treemarkables.co.nz`) instead of hardcoded `info@treemarkables.co.nz`
 
 ### Notification & Timezone Fixes
 - **Critical**: Disabled automatic `job_scheduled` notifications in `automatedTriggers.ts` - customer notifications now ONLY send when user explicitly checks `sendClientNotification` checkbox in GlobalJobCard
