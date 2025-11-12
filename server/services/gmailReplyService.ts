@@ -6,6 +6,7 @@ import { eq, and, sql } from 'drizzle-orm';
 
 interface ParsedEmailReply {
   from: string;
+  to?: string; // TO address - used to extract job number from job-XXXX@jobs.treemarkables.co.nz
   subject: string;
   date: Date;
   textBody: string;
@@ -101,7 +102,8 @@ class GmailReplyService {
 
                   // Extract sender email
                   const fromEmail = parsed.from?.value?.[0]?.address?.toLowerCase();
-                  console.log(`📧 Processing email from: ${fromEmail}, subject: ${parsed.subject}`);
+                  const toEmail = parsed.to?.value?.[0]?.address?.toLowerCase();
+                  console.log(`📧 Processing email from: ${fromEmail}, to: ${toEmail}, subject: ${parsed.subject}`);
                   
                   if (!fromEmail) {
                     console.log(`📧 Skipping - no FROM address`);
@@ -116,6 +118,7 @@ class GmailReplyService {
 
                   const emailData: ParsedEmailReply = {
                     from: fromEmail,
+                    to: toEmail,
                     subject: parsed.subject || '(no subject)',
                     date: parsed.date || new Date(),
                     textBody: parsed.text || '',
@@ -191,20 +194,63 @@ class GmailReplyService {
    */
   private async processEmailReply(email: ParsedEmailReply): Promise<boolean> {
     try {
-      console.log(`📧 Looking up customer with email: ${email.from}`);
+      // STEP 1: Try to extract job number from TO address (job-XXXX@jobs.treemarkables.co.nz)
+      let job = null;
+      let customer = null;
       
-      // Find customer by email address
-      const customer = await db.query.customers.findFirst({
-        where: eq(customers.email, email.from)
-      });
-
-      if (!customer) {
-        console.log(`📧 ❌ No customer found for email: ${email.from}`);
-        return false;
+      if (email.to) {
+        const jobNumberMatch = email.to.match(/job-(\d+)@/i);
+        if (jobNumberMatch) {
+          const jobNumber = jobNumberMatch[1];
+          console.log(`📧 ✅ Extracted job number ${jobNumber} from TO address: ${email.to}`);
+          
+          // Find job by job number
+          job = await db.query.jobs.findFirst({
+            where: eq(jobs.jobNumber, jobNumber),
+            with: {
+              customer: true
+            }
+          });
+          
+          if (job) {
+            customer = job.customer;
+            console.log(`📧 ✅ Found job #${job.jobNumber} for customer: ${customer.name}`);
+          } else {
+            console.log(`📧 ⚠️ No job found with number ${jobNumber}`);
+          }
+        }
       }
       
-      console.log(`📧 ✅ Found customer: ${customer.name} (ID: ${customer.id})`);
+      // STEP 2: If no job found by TO address, fall back to finding customer by FROM email
+      if (!job) {
+        console.log(`📧 Looking up customer with email: ${email.from}`);
+        
+        // Find customer by email address
+        customer = await db.query.customers.findFirst({
+          where: eq(customers.email, email.from)
+        });
 
+        if (!customer) {
+          console.log(`📧 ❌ No customer found for email: ${email.from}`);
+          return false;
+        }
+        
+        console.log(`📧 ✅ Found customer: ${customer.name} (ID: ${customer.id})`);
+
+        // Find the most recent job for this customer
+        const customerJobs = await db.query.jobs.findMany({
+          where: eq(jobs.customerId, customer.id),
+          orderBy: (jobs, { desc }) => [desc(jobs.createdAt)],
+          limit: 1
+        });
+
+        if (!customerJobs || customerJobs.length === 0) {
+          console.log(`📧 No jobs found for customer: ${customer.name}`);
+          return false;
+        }
+
+        job = customerJobs[0];
+      }
 
       // Check for duplicate email FIRST - across ALL diary entries, not just this job
       if (email.messageId) {
@@ -221,20 +267,6 @@ class GmailReplyService {
           return true; // Return true because it was already successfully logged
         }
       }
-
-      // Find the most recent job for this customer
-      const customerJobs = await db.query.jobs.findMany({
-        where: eq(jobs.customerId, customer.id),
-        orderBy: (jobs, { desc }) => [desc(jobs.createdAt)],
-        limit: 1
-      });
-
-      if (!customerJobs || customerJobs.length === 0) {
-        console.log(`📧 No jobs found for customer: ${customer.name}`);
-        return false;
-      }
-
-      const job = customerJobs[0];
 
       // Clean up email body text (remove quoted replies)
       const cleanedBody = this.cleanEmailBody(email.textBody);
