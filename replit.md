@@ -49,7 +49,7 @@ Preferred communication style: Simple, everyday language.
 
 ## External Dependencies
 - **Database & Validation**: `drizzle-orm`, `drizzle-kit`, `@neondatabase/serverless`, `zod`
-- **Email**: SendGrid
+- **Email**: Resend (via Replit connector integration)
 - **SMS**: SMS Everyone NZ
 - **AI/ML**: OpenAI (Whisper API for transcription & GPT-5 for extraction)
 - **Accounting**: Xero (`xero-node` SDK)
@@ -60,6 +60,15 @@ Preferred communication style: Simple, everyday language.
 - **Timezone**: date-fns-tz (for Pacific/Auckland conversions)
 
 ## Recent Changes (Nov 2025)
+### Email Service Migration (12 Nov 2025)
+- **BREAKING**: Migrated from SendGrid to Resend for transactional emails
+- Removed SendGrid package (`@sendgrid/mail`) from dependencies
+- Implemented Resend via Replit connector integration with automatic API key management
+- Created `server/resendClient.ts` for uncacheable Resend client generation (follows Replit connector best practices)
+- Updated `server/services/emailService.ts` to use Resend API while maintaining backward compatibility
+- All email functionality (invoices, quotes, proposals, notifications) now uses Resend
+- Reason for migration: SendGrid free trial expired and required 3-day identity verification wait
+
 ### Notification & Timezone Fixes
 - **Critical**: Disabled automatic `job_scheduled` notifications in `automatedTriggers.ts` - customer notifications now ONLY send when user explicitly checks `sendClientNotification` checkbox in GlobalJobCard
 - **Timezone standardization**: Updated all customer-facing date/time formatting in `notificationService.ts`, `emailService.ts`, and `smsService.ts` to use `formatNZTime()` utility from `shared/dateUtils.ts`
