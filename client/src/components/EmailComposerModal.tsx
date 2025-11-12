@@ -384,9 +384,23 @@ export function EmailComposerModal({
 
   const sendEmailMutation = useMutation({
     mutationFn: async (emailPayload: any) => {
-      return await apiRequest('POST', '/api/emails/send', emailPayload);
+      console.log('📧 Mutation: Starting email send request');
+      try {
+        const result = await apiRequest('POST', '/api/emails/send', emailPayload);
+        console.log('📧 Mutation: Email sent successfully', result);
+        return result;
+      } catch (error: any) {
+        console.error('📧 Mutation: Email send failed', error);
+        console.error('📧 Mutation: Error details:', {
+          message: error.message,
+          status: error.status,
+          response: error.response
+        });
+        throw error;
+      }
     },
     onSuccess: () => {
+      console.log('📧 Mutation: onSuccess callback triggered');
       toast({
         title: "Email Sent",
         description: "Invoice email has been sent successfully",
@@ -400,6 +414,7 @@ export function EmailComposerModal({
       onClose();
     },
     onError: (error: any) => {
+      console.error('📧 Mutation: onError callback triggered', error);
       toast({
         title: "Email Error",
         description: error.message || "Failed to send email",
