@@ -7848,20 +7848,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         });
       }
 
-      // Check for conflicts before creating assignments
+      // Conflict checking disabled - staff can be double-booked
       const employeeIds = staffAssignments.map((a: any) => a.employeeId);
-      const startTime = new Date(staffAssignments[0].startTime);
-      const endTime = new Date(staffAssignments[0].endTime);
-
-      const conflicts = await storage.checkStaffConflicts(employeeIds, startTime, endTime, jobId);
-
-      if (conflicts.length > 0) {
-        return res.status(409).json({
-          success: false,
-          message: 'Staff scheduling conflicts detected',
-          conflicts
-        });
-      }
 
       // Delete existing staff assignments for this job to prevent duplicates when rescheduling
       const existingAssignments = await storage.getJobStaffAssignmentsByJob(jobId);
