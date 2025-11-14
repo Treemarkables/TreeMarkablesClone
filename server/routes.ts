@@ -120,6 +120,55 @@ const imageUpload = multer({
   }
 });
 
+/**
+ * Serialize job timestamp fields to ISO UTC strings with 'Z' suffix
+ * This ensures JavaScript Date parsing treats them as UTC, not local time
+ * 
+ * CRITICAL: scheduledDate is stored as 'timestamp without time zone' in Postgres
+ * and serializes as "2025-11-13 19:00:00" (no Z). When JavaScript parses this,
+ * it treats it as LOCAL time, not UTC, causing timezone bugs.
+ * 
+ * This helper ensures all timestamp fields are converted to proper ISO UTC format.
+ */
+function serializeJobTimestamps(job: any): any {
+  if (!job) return job;
+  
+  const serialized = { ...job };
+  
+  // Convert timestamp fields to ISO UTC strings
+  const timestampFields = ['scheduledDate', 'completedDate', 'createdAt', 'updatedAt', 'startTime', 'endTime'];
+  
+  for (const field of timestampFields) {
+    if (serialized[field]) {
+      // If it's already a Date object, use toISOString
+      if (serialized[field] instanceof Date) {
+        serialized[field] = serialized[field].toISOString();
+      }
+      // If it's a string that needs normalization
+      else if (typeof serialized[field] === 'string') {
+        const value = serialized[field];
+        
+        // Skip if already in ISO UTC format (ends with Z or has timezone offset)
+        if (value.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(value)) {
+          continue;
+        }
+        
+        // Convert Postgres naive timestamp "YYYY-MM-DD HH:MM:SS" to ISO UTC
+        // Replace space with 'T' and append 'Z' to mark as UTC
+        const isoString = value.replace(' ', 'T') + 'Z';
+        const date = new Date(isoString);
+        
+        // Only update if we got a valid date
+        if (!isNaN(date.getTime())) {
+          serialized[field] = date.toISOString();
+        }
+      }
+    }
+  }
+  
+  return serialized;
+}
+
 // Safe audio file extensions and MIME types for call recordings
 const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.webm'];
 const ALLOWED_AUDIO_MIME_TYPES = [
@@ -2890,7 +2939,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Handle customer-specific queries (return all jobs for that customer, no pagination)
       if (customerId && typeof customerId === 'string') {
         const jobs = await storage.getJobsByCustomer(customerId);
-        return res.json({ success: true, data: jobs, total: jobs.length, limit: jobs.length, offset: 0 });
+        // Serialize timestamps to ISO UTC format
+        const serializedJobs = jobs.map(serializeJobTimestamps);
+        return res.json({ success: true, data: serializedJobs, total: jobs.length, limit: jobs.length, offset: 0 });
       }
       
       // Handle status-specific queries with pagination
@@ -2900,9 +2951,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           offset: parsedOffset, 
           status 
         });
+        // Serialize timestamps to ISO UTC format
+        const serializedJobs = result.jobs.map(serializeJobTimestamps);
         return res.json({ 
           success: true, 
-          data: result.jobs, 
+          data: serializedJobs, 
           total: result.total,
           limit: parsedLimit,
           offset: parsedOffset
@@ -2915,9 +2968,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         offset: parsedOffset 
       });
       
+      // Serialize timestamps to ISO UTC format
+      const serializedJobs = result.jobs.map(serializeJobTimestamps);
+      
       res.json({ 
         success: true, 
-        data: result.jobs, 
+        data: serializedJobs, 
         total: result.total,
         limit: parsedLimit,
         offset: parsedOffset
@@ -2952,9 +3008,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         excludeArchived: shouldExcludeArchived
       });
       
+      // Serialize timestamps to ISO UTC format
+      const serializedJobs = result.jobs.map(serializeJobTimestamps);
+      
       res.json({
         success: true,
-        data: result.jobs,
+        data: serializedJobs,
         total: result.total,
         limit: parsedLimit,
         offset: parsedOffset,
