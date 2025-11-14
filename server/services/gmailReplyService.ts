@@ -314,6 +314,63 @@ class GmailReplyService {
       });
 
       console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
+      
+      // Create or update conversation to trigger notification bell
+      try {
+        // Import notification helper
+        const notificationHelper = await import('./notificationHelper.js');
+        const { storage } = await import('../storage.js');
+        
+        // Check for existing open conversation from this email
+        let conversation = await notificationHelper.findExistingOpenConversation(email.from.trim().toLowerCase());
+        let isNewConversation = !conversation;
+        
+        if (!conversation) {
+          // Create new conversation from email reply
+          const conversationTitle = cleanedBody.length > 0 
+            ? cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '')
+            : `Re: ${email.subject}`;
+          
+          conversation = await storage.createConversation({
+            title: conversationTitle,
+            status: 'open',
+            priority: 'medium',
+            source: 'email',
+            tags: ['email-reply', 'customer'],
+            customerId: customer.id
+          });
+          
+          // Create notification bell entry for new conversation
+          await notificationHelper.createConversationNotification(conversation);
+          console.log(`📧 ✅ Created new conversation for email reply: ${conversation.id}`);
+        } else {
+          console.log(`📧 ✅ Found existing open conversation for ${email.from}, adding message to: ${conversation.id}`);
+        }
+        
+        // Create conversation message
+        await storage.createConversationMessage({
+          conversationId: conversation.id,
+          type: 'message',
+          content: cleanedBody,
+          direction: 'inbound',
+          fromName: customer.name,
+          fromContact: email.from.trim().toLowerCase(),
+          platform: 'email',
+          metadata: {
+            subject: email.subject,
+            messageId: email.messageId,
+            inReplyTo: email.inReplyTo,
+            jobNumber: job.jobNumber,
+            jobId: job.id
+          }
+        });
+        
+        console.log(`📧 ✅ Added email to conversation messages`);
+      } catch (convError) {
+        console.error('📧 Error creating conversation from email reply:', convError);
+        // Continue even if conversation creation fails - the job diary entry was still created
+      }
+      
       return true; // Successfully processed
     } catch (error) {
       console.error('📧 Error processing email reply:', error);
