@@ -147,14 +147,29 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
 
   // Get jobs for a specific employee and time slot
   const getJobsForSlot = (employeeId: string, date: Date, hour: number) => {
-    return allJobs.filter(job => {
+    const filtered = allJobs.filter(job => {
       // Exclude archived jobs from calendar
       if (job.status === 'archived') return false;
       
       // Check if job is scheduled for this date (primary filter)
       // Use NZ timezone-aware comparison to handle UTC->NZ conversion correctly
       if (!job.scheduledDate) return false;
-      if (!isSameDayNZ(job.scheduledDate, date)) return false;
+      
+      const sameDayResult = isSameDayNZ(job.scheduledDate, date);
+      
+      // Debug logging - show ALL Nov 14 matches and first 10 checks
+      const checkingNov14 = format(date, 'yyyy-MM-dd') === '2025-11-14';
+      if (checkingNov14 && (sameDayResult || allJobs.indexOf(job) < 10)) {
+        console.log(`🗓️ [${sameDayResult ? 'MATCH' : 'NO MATCH'}] Job #${job.jobNumber}:`, {
+          scheduledDate: job.scheduledDate,
+          checkingDate: format(date, 'yyyy-MM-dd'),
+          isSameDay: sameDayResult,
+          assignedTo: job.assignedTo,
+          status: job.status
+        });
+      }
+      
+      if (!sameDayResult) return false;
 
       // If job has employee assignment, check if this employee is assigned
       // Otherwise, show job in the first employee row only (unassigned jobs)
