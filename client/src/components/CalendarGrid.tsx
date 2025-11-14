@@ -4,7 +4,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { format, addDays, subDays, startOfDay, addWeeks, subWeeks, addMonths, subMonths, isSameDay, parseISO, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { format, addDays, subDays, startOfDay, addWeeks, subWeeks, addMonths, subMonths, parseISO, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { utcToNZTime, isSameDayNZ, getNZDateString } from '@shared/dateUtils';
 import { useQuery } from '@tanstack/react-query';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 
@@ -151,9 +152,9 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
       if (job.status === 'archived') return false;
       
       // Check if job is scheduled for this date (primary filter)
+      // Use NZ timezone-aware comparison to handle UTC->NZ conversion correctly
       if (!job.scheduledDate) return false;
-      const jobDate = parseISO(job.scheduledDate);
-      if (!isSameDay(jobDate, date)) return false;
+      if (!isSameDayNZ(job.scheduledDate, date)) return false;
 
       // If job has employee assignment, check if this employee is assigned
       // Otherwise, show job in the first employee row only (unassigned jobs)
@@ -390,11 +391,12 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
               ) : (
                 dateRange.map(date => {
                   // Get all jobs for this employee on this date
+                  // Use NZ timezone-aware comparison to handle UTC->NZ conversion correctly
                   const dayJobs = allJobs.filter(job => 
                     job.status !== 'archived' &&
                     job.assignedTo?.includes(employee.id) &&
                     job.scheduledDate &&
-                    isSameDay(parseISO(job.scheduledDate), date)
+                    isSameDayNZ(job.scheduledDate, date)
                   );
                   
                   return (
