@@ -211,6 +211,8 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
         return hour === 7;
       }
     });
+    
+    return filtered;
   };
 
   // Get status color
