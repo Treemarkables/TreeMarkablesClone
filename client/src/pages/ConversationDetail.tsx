@@ -414,24 +414,24 @@ export default function ConversationDetail() {
   }
 
   return (
-    <div className="flex flex-col absolute top-0 left-0 right-0 bottom-20 bg-white w-full overflow-x-hidden">
+    <div className="flex flex-col absolute top-0 left-0 right-0 bottom-20 bg-white dark:bg-gray-950 w-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 sm:px-4 py-4 border-b bg-white flex-shrink-0 w-full">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="flex items-start justify-between px-3 sm:px-4 py-3 sm:py-4 border-b bg-white dark:bg-gray-950 flex-shrink-0 w-full gap-2">
+        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden">
           <Button 
             variant="ghost" 
             size="icon"
-            className="flex-shrink-0"
+            className="flex-shrink-0 mt-1"
             onClick={() => setLocation('/opportunities')}
             data-testid="button-back"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-lg sm:text-xl text-gray-900 break-words leading-tight" data-testid="text-conversation-title">
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <h1 className="font-bold text-base sm:text-lg text-gray-900 dark:text-gray-100 break-words leading-snug" data-testid="text-conversation-title">
               {conversation.title}
             </h1>
-            <p className="text-xs sm:text-sm text-gray-500 capitalize">
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 capitalize mt-0.5">
               {conversation.source}
             </p>
           </div>
@@ -439,7 +439,7 @@ export default function ConversationDetail() {
         <Button 
           variant="ghost" 
           size="icon"
-          className="flex-shrink-0"
+          className="flex-shrink-0 mt-1"
           onClick={() => setShowManageMenu(true)}
           data-testid="button-more"
         >
@@ -448,11 +448,11 @@ export default function ConversationDetail() {
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 px-2 py-1">
-        <div className="space-y-3">
+      <ScrollArea className="flex-1 px-2 sm:px-3 py-2">
+        <div className="space-y-2 sm:space-y-3">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center py-12">
-              <p className="text-gray-400 text-sm">No messages yet</p>
+              <p className="text-gray-400 dark:text-gray-500 text-sm">No messages yet</p>
             </div>
           ) : (
             messages.map((message: ConversationMessage) => {
@@ -461,14 +461,14 @@ export default function ConversationDetail() {
               return (
                 <div
                   key={message.id}
-                  className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex w-full ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
                   data-testid={`message-${message.id}`}
                 >
                   <div
-                    className={`max-w-[90%] rounded-lg px-3 py-2 ${
+                    className={`max-w-[85%] sm:max-w-[75%] rounded-lg px-3 py-2 ${
                       message.direction === 'outbound'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-900'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
                     }`}
                   >
                     {contactForm.isContactForm ? (
@@ -503,26 +503,26 @@ export default function ConversationDetail() {
       </ScrollArea>
 
       {/* Message Input */}
-      <div className="border-t bg-white px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 mb-4">
-        <div className="flex items-end gap-2">
+      <div className="border-t bg-white dark:bg-gray-950 px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 mb-4 w-full">
+        <div className="flex items-end gap-1.5 sm:gap-2 w-full">
           <Textarea
             placeholder="Type a message..."
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
-            className="min-h-[40px] sm:min-h-[44px] max-h-[100px] sm:max-h-[120px] resize-none text-sm sm:text-base"
+            className="flex-1 min-w-0 min-h-[40px] sm:min-h-[44px] max-h-[100px] sm:max-h-[120px] resize-none text-sm sm:text-base"
             data-testid="textarea-message-input"
           />
           <MicrophoneButton
             onTranscript={(transcript) => {
               setReplyContent(prev => prev ? `${prev} ${transcript}` : transcript);
             }}
-            className="flex-shrink-0 h-10 w-10 sm:h-11 sm:w-11"
+            className="flex-shrink-0 h-9 w-9 sm:h-11 sm:w-11"
           />
           <Button
             size="icon"
             onClick={handleSendReply}
             disabled={!replyContent.trim() || replyMutation.isPending}
-            className="flex-shrink-0 h-10 w-10 sm:h-11 sm:w-11 bg-blue-600 hover:bg-blue-700"
+            className="flex-shrink-0 h-9 w-9 sm:h-11 sm:w-11 bg-blue-600 hover:bg-blue-700"
             data-testid="button-send"
           >
             {replyMutation.isPending ? (
