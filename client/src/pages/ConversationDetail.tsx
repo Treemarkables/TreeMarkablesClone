@@ -428,10 +428,10 @@ export default function ConversationDetail() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-lg sm:text-xl text-gray-900 truncate" data-testid="text-conversation-title">
+            <h1 className="font-bold text-lg sm:text-xl text-gray-900 break-words leading-tight" data-testid="text-conversation-title">
               {conversation.title}
             </h1>
-            <p className="text-xs sm:text-sm text-gray-500 truncate capitalize">
+            <p className="text-xs sm:text-sm text-gray-500 capitalize">
               {conversation.source}
             </p>
           </div>
