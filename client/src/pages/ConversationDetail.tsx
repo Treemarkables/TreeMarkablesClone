@@ -417,7 +417,7 @@ export default function ConversationDetail() {
     <div className="flex flex-col absolute top-0 left-0 right-0 bottom-20 bg-white dark:bg-gray-950 w-full overflow-hidden">
       {/* Header */}
       <div className="flex items-start justify-between px-3 sm:px-4 py-3 sm:py-4 border-b bg-white dark:bg-gray-950 flex-shrink-0 w-full gap-3">
-        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden pr-4">
+        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden pr-6">
           <Button 
             variant="ghost" 
             size="icon"
@@ -427,8 +427,8 @@ export default function ConversationDetail() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1 min-w-0 overflow-hidden pr-3">
-            <h1 className="font-bold text-base sm:text-lg text-gray-900 dark:text-gray-100 break-words leading-snug pr-3" data-testid="text-conversation-title">
+          <div className="flex-1 min-w-0 overflow-hidden pr-4">
+            <h1 className="font-bold text-base sm:text-lg text-gray-900 dark:text-gray-100 break-words leading-snug pr-4" data-testid="text-conversation-title">
               {conversation.title}
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 capitalize mt-0.5">
@@ -449,7 +449,7 @@ export default function ConversationDetail() {
 
       {/* Messages */}
       <ScrollArea className="flex-1 px-3 sm:px-4 py-2">
-        <div className="space-y-2 sm:space-y-3 pr-4">
+        <div className="space-y-2 sm:space-y-3 pr-6">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-gray-400 dark:text-gray-500 text-sm">No messages yet</p>
@@ -465,7 +465,7 @@ export default function ConversationDetail() {
                   data-testid={`message-${message.id}`}
                 >
                   <div
-                    className={`max-w-[78%] sm:max-w-[75%] rounded-lg px-3 py-2 ${
+                    className={`max-w-[72%] sm:max-w-[75%] rounded-lg px-3 py-2 ${
                       message.direction === 'outbound'
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
