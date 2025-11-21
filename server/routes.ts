@@ -4855,6 +4855,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Generate and attach invoice PDF if invoice data is available
       if ((invoiceData || invoiceId) && (invoice || invoiceData)) {
         try {
+          console.log('📄 Starting PDF generation for invoice...');
           const invoiceDetails = invoice || invoiceData;
           const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
             const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -4988,17 +4989,23 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             doc.end();
           });
           
+          console.log(`📄 PDF buffer generated, size: ${pdfBuffer.length} bytes`);
           const pdfBase64 = pdfBuffer.toString('base64');
+          console.log(`📄 PDF converted to base64, length: ${pdfBase64.length} characters`);
+          
           emailAttachments.push({
             content: pdfBase64,
             filename: `Invoice-${invoiceDetails.invoiceNumber || 'unknown'}.pdf`,
             type: 'application/pdf',
             disposition: 'attachment'
           });
-          console.log('📄 Generated and attached invoice PDF');
+          console.log(`📄 ✅ Generated and attached invoice PDF: Invoice-${invoiceDetails.invoiceNumber || 'unknown'}.pdf`);
         } catch (pdfError) {
-          console.error('Error generating invoice PDF:', pdfError);
+          console.error('❌ Error generating invoice PDF:', pdfError);
+          console.error('❌ PDF error stack:', pdfError.stack);
         }
+      } else {
+        console.log('📄 Skipping PDF generation - no invoice data available');
       }
       
       // Add logo as inline attachment for emails with invoices
