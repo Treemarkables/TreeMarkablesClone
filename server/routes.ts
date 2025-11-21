@@ -4860,9 +4860,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             const doc = new PDFDocument({ size: 'A4', margin: 40 });
             const chunks: Buffer[] = [];
             
-            doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-            doc.on('end', () => resolve(Buffer.concat(chunks)));
-            doc.on('error', reject);
+            doc.on('data', (chunk: Buffer) => {
+              chunks.push(Buffer.from(chunk));
+            });
+            doc.on('end', () => {
+              const finalBuffer = Buffer.concat(chunks);
+              resolve(finalBuffer);
+            });
+            doc.on('error', (err) => {
+              console.error('PDF generation error:', err);
+              reject(err);
+            });
             
             // Header with company info
             doc.fontSize(24).font('Helvetica-Bold').text('TAX INVOICE', { align: 'left' });
