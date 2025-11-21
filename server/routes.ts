@@ -4715,77 +4715,131 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
         
         invoiceHtml = `
-        <div style="max-width: 800px; margin: 30px auto; padding: 40px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-          <!-- Logo and Header -->
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 3px solid #000; padding-bottom: 20px; margin-bottom: 30px;">
-            <img src="${logoUrl}" alt="Treemarkables" style="height: 80px; width: auto; background: transparent;" />
-            <div style="text-align: right; max-width: 350px;">
-              <h1 style="color: #000; margin: 0; font-size: 32px; font-weight: 700; white-space: nowrap;">Invoice #${invoiceDetails.invoiceNumber || ''}</h1>
-              <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">
-                ${customer?.name || 'Customer'} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}
-              </p>
+        <div style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
+          <!-- Header with Logo and Company Info -->
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #000;">
+            <div>
+              <img src="${logoUrl}" alt="Treemarkables" style="height: 70px; width: auto;" />
+            </div>
+            <div style="text-align: right; font-size: 13px;">
+              <div style="font-weight: bold; margin-bottom: 8px;">Treemarkables LTD</div>
+              <div>GST Number: 33 047 160 882</div>
+              <div>213 Stanley Road</div>
+              <div>Gisborne 4010</div>
+              <div style="margin-top: 8px;">Phone: 027 216 6882</div>
+              <div>Email: info@treemarkables.nz</div>
             </div>
           </div>
-          
-          <!-- Bill To Section -->
-          <div style="margin-bottom: 30px;">
-            <h2 style="color: #000; margin: 0 0 15px 0; font-size: 18px; font-weight: 600;">Bill To</h2>
-            <div style="background: #ffffff; padding: 0;">
-              <p style="margin: 0 0 8px 0; color: #000; font-weight: 600; font-size: 16px;">${customer?.name || 'Customer'}</p>
-              ${invoiceDetails.address || job?.address || customer?.address ? `<p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">${invoiceDetails.address || job?.address || customer?.address}</p>` : ''}
-              ${customer?.email ? `<p style="margin: 0 0 4px 0; color: #6b7280; font-size: 14px;"><span style="margin-right: 6px;">✉</span>${customer.email}</p>` : ''}
+
+          <!-- Invoice Type and Details -->
+          <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+            <div>
+              <div style="font-size: 24px; font-weight: bold; margin-bottom: 12px;">TAX INVOICE</div>
+              <div style="margin-bottom: 4px;"><strong>Invoice No.:</strong> ${invoiceDetails.invoiceNumber || ''}</div>
+              <div style="margin-bottom: 4px;"><strong>Cust Order No.:</strong> ${job?.jobNumber ? 'Job #' + job.jobNumber : 'N/A'}</div>
+              <div><strong>Date:</strong> ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: bold; margin-bottom: 8px;">Bill To:</div>
+              <div>${customer?.name || 'Customer'}</div>
+              ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
+              ${customer?.email ? `<div>${customer.email}</div>` : ''}
             </div>
           </div>
-          
-          <!-- Description Section -->
-          <div style="margin-bottom: 30px;">
-            <h2 style="color: #000; margin: 0 0 15px 0; font-size: 18px; font-weight: 600;">Description</h2>
-            <div style="background: #ffffff; padding: 0;">
-              ${job?.description || invoiceDetails.notes || invoiceData?.description ? `
-                <p style="margin: 0; color: #6b7280; font-size: 14px; white-space: pre-wrap;">${job?.description || invoiceDetails.notes || invoiceData?.description || ''}</p>
-              ` : lineItems && lineItems.length > 0 ? lineItems.map((item: any) => `
-                <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">
-                  <p style="margin: 0; color: #000; font-size: 14px;">${item.description || ''}</p>
-                </div>
-              `).join('') : ''}
-            </div>
+
+          <!-- Work Carried Out At -->
+          ${invoiceDetails.address || job?.address ? `
+          <div style="margin-bottom: 20px; padding: 12px; background: #f5f5f5;">
+            <strong>WORK CARRIED OUT AT</strong> ${invoiceDetails.address || job?.address}
           </div>
-          
+          ` : ''}
+
+          <!-- Line Items Table -->
+          <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 2px solid #000;">
+                <th style="text-align: left; padding: 12px 8px; font-weight: bold;">QTY</th>
+                <th style="text-align: left; padding: 12px 8px; font-weight: bold;">DESCRIPTION</th>
+                <th style="text-align: right; padding: 12px 8px; font-weight: bold;">PRICE</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${lineItems && lineItems.length > 0 ? lineItems.map((item: any) => {
+                const itemTotal = item.total || item.amount;
+                const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
+                return `
+                <tr style="border-bottom: 1px solid #ddd;">
+                  <td style="padding: 12px 8px; text-align: left;">${item.quantity || 1}</td>
+                  <td style="padding: 12px 8px; text-align: left;">${item.description || ''}</td>
+                  <td style="padding: 12px 8px; text-align: right;">${formatCurrency(total)}</td>
+                </tr>
+                `;
+              }).join('') : `
+                <tr style="border-bottom: 1px solid #ddd;">
+                  <td style="padding: 12px 8px;">1</td>
+                  <td style="padding: 12px 8px;">${invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service'}</td>
+                  <td style="padding: 12px 8px; text-align: right;">${formatCurrency(subtotal)}</td>
+                </tr>
+              `}
+            </tbody>
+          </table>
+
           <!-- Totals Section -->
-          <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-            <div style="display: flex; justify-content: flex-end;">
-              <div style="width: 100%; max-width: 400px;">
-                <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-                  <span style="color: #6b7280; font-size: 14px;">Subtotal (excl GST):</span>
-                  <span style="color: #000; font-size: 14px;">${formatCurrency(subtotal)}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-                  <span style="color: #6b7280; font-size: 14px;">GST (15%):</span>
-                  <span style="color: #000; font-size: 14px;">${formatCurrency(gstAmount)}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 16px 0 8px 0;">
-                  <span style="color: #000; font-size: 20px; font-weight: 700;">Total Amount:</span>
-                  <span style="color: #000; font-size: 20px; font-weight: 700;">${formatCurrency(totalAmount)}</span>
-                </div>
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 30px;">
+            <div style="width: 300px;">
+              <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
+                <span>SUBTOTAL</span>
+                <span>${formatCurrency(subtotal)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
+                <span>GST</span>
+                <span>${formatCurrency(gstAmount)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 2px solid #000; font-weight: bold; font-size: 16px;">
+                <span>TOTAL</span>
+                <span>${formatCurrency(totalAmount)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
+                <span>PAID</span>
+                <span>$0.00</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold;">
+                <span>BALANCE DUE</span>
+                <span>${formatCurrency(totalAmount)}</span>
               </div>
             </div>
           </div>
-          
-          <!-- Payment Information -->
-          <div style="margin-top: 30px; padding: 20px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;">
-            <h3 style="color: #000; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">Payment Information</h3>
-            <div style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-              <p style="margin: 0 0 6px 0;"><strong style="color: #000;">Bank:</strong> ANZ</p>
-              <p style="margin: 0 0 6px 0;"><strong style="color: #000;">Account Number:</strong> 06 0637 0768850 00</p>
-              <p style="margin: 0;"><strong style="color: #000;">Account Name:</strong> Treemarkables LTD</p>
+
+          <!-- Work Completed -->
+          <div style="margin-bottom: 20px;">
+            <strong>WORK COMPLETED</strong>
+          </div>
+
+          <!-- Payment and Terms -->
+          <div style="margin-bottom: 20px;">
+            <div style="font-weight: bold; margin-bottom: 8px;">How to Pay</div>
+            <div style="margin-bottom: 6px;">We accept payment by: Cash and bank transfer</div>
+          </div>
+
+          <!-- Bank Details -->
+          <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+            <div>
+              <div style="font-weight: bold; margin-bottom: 4px;">Bank Details</div>
+              <div>Account Name: Treemarkables</div>
+              <div>Account Number:</div>
+              <div>06 0637 0768850 00</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: bold; margin-bottom: 4px;">Cheque</div>
+              <div>Harora st.</div>
+              <div>Gisborne</div>
+              <div>4010</div>
             </div>
           </div>
-          
-          <!-- Business Footer -->
-          <div style="margin-top: 40px; text-align: center; padding-top: 30px; border-top: 1px solid #e5e7eb;">
-            <p style="color: #9ca3af; margin: 0; font-size: 12px;">
-              Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
-            </p>
+
+          <!-- Footer -->
+          <div style="text-align: center; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
+            Our terms are strictly COD or 14 days
           </div>
         </div>
         `;
