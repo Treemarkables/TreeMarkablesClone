@@ -89,6 +89,7 @@ import { manHoursService } from "./manHoursService";
 import { PhotoStorageService } from "./photoStorage";
 import { googleCalendarService } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
+import PDFDocument from "pdfkit";
 
 // Configure multer for file uploads
 // CSV file upload configuration
@@ -4848,8 +4849,149 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Prepare email content with any necessary formatting
       const emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
       
-      // Process attachments (logo + photos)
+      // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
+      
+      // Generate and attach invoice PDF if invoice data is available
+      if ((invoiceData || invoiceId) && (invoice || invoiceData)) {
+        try {
+          const invoiceDetails = invoice || invoiceData;
+          const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+            const doc = new PDFDocument({ size: 'A4', margin: 40 });
+            const chunks: Buffer[] = [];
+            
+            doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', reject);
+            
+            // Header with company info
+            doc.fontSize(24).font('Helvetica-Bold').text('TAX INVOICE', { align: 'left' });
+            doc.fontSize(10).font('Helvetica').text(`Invoice #: ${invoiceDetails.invoiceNumber || ''}`, { align: 'left' });
+            doc.text(`Date: ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}`, { align: 'left' });
+            doc.text(`Job #: ${job?.jobNumber ? 'Job #' + job.jobNumber : 'N/A'}`, { align: 'left' });
+            
+            doc.moveDown(0.3);
+            
+            // Company details
+            doc.fontSize(11).font('Helvetica-Bold').text('Treemarkables LTD', { align: 'right' });
+            doc.fontSize(9).font('Helvetica');
+            doc.text('GST Number: 33 047 160 882', { align: 'right' });
+            doc.text('213 Stanley Road, Gisborne 4010', { align: 'right' });
+            doc.text('Phone: 027 216 6882', { align: 'right' });
+            doc.text('Email: info@treemarkables.nz', { align: 'right' });
+            
+            doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke();
+            doc.moveDown(0.5);
+            
+            // Bill To section
+            doc.fontSize(10).font('Helvetica-Bold').text('Bill To:', { align: 'left' });
+            doc.fontSize(9).font('Helvetica');
+            doc.text(customer?.name || 'Customer', { align: 'left' });
+            if (customer?.phone) doc.text(customer.phone, { align: 'left' });
+            if (customer?.email) doc.text(customer.email, { align: 'left' });
+            
+            doc.moveDown(0.3);
+            
+            // Work location
+            if (invoiceDetails.address || job?.address) {
+              doc.fontSize(9).font('Helvetica-Bold').text('WORK CARRIED OUT AT', { align: 'left' });
+              doc.fontSize(9).font('Helvetica').text(invoiceDetails.address || job?.address || '', { align: 'left' });
+            }
+            
+            doc.moveDown(0.3);
+            
+            // Line items table
+            const lineItems = invoiceDetails.items || invoiceData?.lineItems || [];
+            const tableTop = doc.y;
+            const col1 = 50, col2 = 80, col3 = 450;
+            
+            doc.fontSize(9).font('Helvetica-Bold');
+            doc.text('QTY', col1, tableTop);
+            doc.text('DESCRIPTION', col2, tableTop);
+            doc.text('PRICE', col3, tableTop, { align: 'right' });
+            
+            doc.moveTo(40, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+            
+            let currentY = tableTop + 20;
+            doc.font('Helvetica');
+            
+            if (lineItems && lineItems.length > 0) {
+              lineItems.forEach((item: any) => {
+                const itemTotal = item.total || item.amount;
+                const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
+                doc.fontSize(8).text(item.quantity || 1, col1, currentY);
+                doc.fontSize(8).text(item.description || '', col2, currentY, { width: 350 });
+                doc.fontSize(8).text(formatCurrency(total), col3, currentY, { align: 'right' });
+                currentY += 20;
+              });
+            } else {
+              const gstRate = 0.15;
+              const amount = typeof invoiceDetails.amount === 'string' ? parseFloat(invoiceDetails.amount) : (invoiceDetails.amount || 0);
+              const subtotal = amount;
+              doc.fontSize(8).text('1', col1, currentY);
+              doc.fontSize(8).text(invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service', col2, currentY, { width: 350 });
+              doc.fontSize(8).text(formatCurrency(subtotal), col3, currentY, { align: 'right' });
+              currentY += 20;
+            }
+            
+            doc.moveTo(40, currentY).lineTo(550, currentY).stroke();
+            currentY += 10;
+            
+            // Totals
+            const gstRate = 0.15;
+            let subtotal = 0;
+            if (lineItems && lineItems.length > 0) {
+              subtotal = lineItems.reduce((sum: number, item: any) => {
+                const itemTotal = item.total || item.amount;
+                const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
+                return sum + total;
+              }, 0);
+            } else {
+              const amount = typeof invoiceDetails.amount === 'string' ? parseFloat(invoiceDetails.amount) : (invoiceDetails.amount || 0);
+              subtotal = amount;
+            }
+            const gstAmount = subtotal * gstRate;
+            const totalAmount = subtotal + gstAmount;
+            
+            doc.fontSize(9).font('Helvetica');
+            doc.text('SUBTOTAL', col2, currentY);
+            doc.text(formatCurrency(subtotal), col3, currentY, { align: 'right' });
+            currentY += 15;
+            
+            doc.text('GST', col2, currentY);
+            doc.text(formatCurrency(gstAmount), col3, currentY, { align: 'right' });
+            currentY += 15;
+            
+            doc.moveTo(400, currentY).lineTo(550, currentY).stroke();
+            doc.font('Helvetica-Bold').fontSize(11);
+            doc.text('TOTAL', col2, currentY + 5);
+            doc.text(formatCurrency(totalAmount), col3, currentY + 5, { align: 'right' });
+            
+            doc.moveDown(2);
+            doc.fontSize(8).font('Helvetica').text('Our terms are strictly COD or 14 days', { align: 'center' });
+            
+            // Bank details
+            currentY = doc.y + 20;
+            doc.fontSize(9).font('Helvetica-Bold').text('Bank Details', col1, currentY);
+            doc.fontSize(8).font('Helvetica');
+            doc.text('Account Name: Treemarkables', col1, currentY + 15);
+            doc.text('Account Number: 06 0637 0768850 00', col1, currentY + 30);
+            
+            doc.end();
+          });
+          
+          const pdfBase64 = pdfBuffer.toString('base64');
+          emailAttachments.push({
+            content: pdfBase64,
+            filename: `Invoice-${invoiceDetails.invoiceNumber || 'unknown'}.pdf`,
+            type: 'application/pdf',
+            disposition: 'attachment'
+          });
+          console.log('📄 Generated and attached invoice PDF');
+        } catch (pdfError) {
+          console.error('Error generating invoice PDF:', pdfError);
+        }
+      }
       
       // Add logo as inline attachment for emails with invoices
       if (invoiceData || invoiceId) {
