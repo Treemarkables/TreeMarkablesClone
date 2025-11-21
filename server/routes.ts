@@ -4852,8 +4852,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
       
+      console.log('📎 About to process attachments. Invoice check:', {
+        hasInvoiceData: !!invoiceData,
+        hasInvoiceId: !!invoiceId,
+        hasInvoice: !!invoice,
+        willGeneratePDF: !!(invoice || invoiceData)
+      });
+      
       // Generate and attach invoice PDF if invoice data is available
-      if ((invoiceData || invoiceId) && (invoice || invoiceData)) {
+      // Match the condition for HTML generation (line 4645)
+      if (invoice || invoiceData) {
         try {
           console.log('📄 Starting PDF generation for invoice...');
           const invoiceDetails = invoice || invoiceData;
