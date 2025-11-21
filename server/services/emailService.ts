@@ -93,10 +93,10 @@ class EmailService {
       const fromEmail = params.from || configuredFromEmail || this.defaultFromEmail;
       
       // Map attachments to Resend format
+      // Resend only accepts 'filename' and 'content' (base64 string or Buffer)
       const resendAttachments = params.attachments?.map(att => ({
         filename: att.filename,
-        content: att.content, // Keep as base64
-        contentType: att.type
+        content: att.content // Base64 string or Buffer - Resend handles both
       }));
 
       // Build email payload for Resend
@@ -120,6 +120,14 @@ class EmailService {
         replyTo: replyToAddress, // Node SDK uses camelCase 'replyTo' (not 'reply_to')
         ...(resendAttachments && resendAttachments.length > 0 && { attachments: resendAttachments })
       };
+
+      // Log attachment info before sending
+      if (resendAttachments && resendAttachments.length > 0) {
+        console.log(`📎 Sending email with ${resendAttachments.length} attachment(s):`);
+        resendAttachments.forEach((att, idx) => {
+          console.log(`  ${idx + 1}. ${att.filename} (${att.content.length} chars)`);
+        });
+      }
 
       const response = await resendClient.emails.send(emailPayload);
 
