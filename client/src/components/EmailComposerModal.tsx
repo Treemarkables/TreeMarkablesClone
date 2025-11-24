@@ -543,6 +543,8 @@ export function EmailComposerModal({
       photoCount: emailPayload.selectedPhotos.length,
       invoiceData: !!emailPayload.invoiceData
     });
+    
+    console.log('📧 FULL INVOICE DATA BEING SENT:', JSON.stringify(invoiceData, null, 2));
 
     sendEmailMutation.mutate(emailPayload);
   };
