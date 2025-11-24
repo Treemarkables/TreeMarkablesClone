@@ -4538,17 +4538,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
-    console.log('='.repeat(80));
-    console.log('>>> EMAIL SEND ENDPOINT HIT <<<');
-    console.log('='.repeat(80));
+    console.log('\n' + '🔵'.repeat(50));
+    console.log('🔵 EMAIL ENDPOINT HIT - COMPREHENSIVE DIAGNOSTIC MODE 🔵');
+    console.log('🔵'.repeat(50) + '\n');
     try {
       const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId, quoteId, invoiceData } = req.body;
-      console.log('REQUEST BODY:', JSON.stringify({ to, subject, hasInvoiceData: !!invoiceData, invoiceId }, null, 2));
-      
-      console.log(`🚨 INSIDE TRY BLOCK - Processing email to ${to} with ${selectedPhotos.length} selected photos`);
-      console.log('🚨 Selected photos:', selectedPhotos);
-      console.log('🚨 Invoice data received:', invoiceData ? 'YES' : 'NO', invoiceData ? `(ID: ${invoiceData.id})` : '');
-      console.log('🚨 Invoice ID received:', invoiceId || 'NONE');
+      console.log('📥 REQUEST BODY BREAKDOWN:');
+      console.log('   - to:', to);
+      console.log('   - subject:', subject);
+      console.log('   - invoiceId:', invoiceId);
+      console.log('   - invoiceData:', invoiceData ? JSON.stringify(invoiceData, null, 2) : 'NONE');
+      console.log('   - selectedPhotos count:', selectedPhotos.length);
       
       // Validate required fields
       if (!to || !subject || !body) {
@@ -4570,7 +4570,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // If invoice data is provided but no invoiceId, create or find the invoice
       let emailBody = body; // Create mutable copy of body
       const effectiveInvoiceId = invoiceId || invoiceData?.id;
-      console.log('📋 Effective Invoice ID:', effectiveInvoiceId || 'NONE');
+      console.log('\n📋 INVOICE LOADING LOGIC:');
+      console.log('   - effectiveInvoiceId:', effectiveInvoiceId || 'NONE');
+      console.log('   - invoiceData exists:', !!invoiceData);
+      console.log('   - Will create new invoice:', !!(invoiceData && !effectiveInvoiceId));
+      console.log('   - Will fetch existing invoice:', !!effectiveInvoiceId);
       
       if (invoiceData && !effectiveInvoiceId) {
         console.log('📋 Creating invoice from invoice data before sending email');
@@ -4630,7 +4634,12 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           }
         }
       } else if (effectiveInvoiceId) {
+        console.log('   📋 Fetching existing invoice with ID:', effectiveInvoiceId);
         invoice = await storage.getInvoice(effectiveInvoiceId);
+        console.log('   ✅ Invoice fetched:', invoice ? `Invoice #${invoice.invoiceNumber}` : 'NOT FOUND');
+        if (invoice) {
+          console.log('   ✅ Invoice has line items:', invoice.items?.length || 0);
+        }
       }
       
       if (quoteId) {
@@ -4641,11 +4650,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       // Generate invoice HTML if invoice data is available
       let invoiceHtml = '';
-      console.log('🎨 Checking invoice HTML generation:', {
-        hasInvoice: !!invoice,
-        hasInvoiceData: !!invoiceData,
-        willGenerate: !!(invoice || invoiceData)
-      });
+      console.log('\n🎨 HTML GENERATION CHECK:');
+      console.log('   - invoice exists:', !!invoice);
+      console.log('   - invoiceData exists:', !!invoiceData);
+      console.log('   - Will generate HTML:', !!(invoice || invoiceData));
       if (invoice || invoiceData) {
         const invoiceDetails = invoice || invoiceData;
         const lineItems = invoiceDetails.items || invoiceData?.lineItems || [];
@@ -4859,19 +4867,24 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
       
-      console.log('📎 About to process attachments. Invoice check:', {
-        hasInvoiceData: !!invoiceData,
-        hasInvoiceId: !!invoiceId,
-        hasInvoice: !!invoice,
-        willGeneratePDF: !!(invoice || invoiceData)
-      });
+      console.log('\n📎 ATTACHMENT PROCESSING:');
+      console.log('   - hasInvoiceData:', !!invoiceData);
+      console.log('   - hasInvoiceId:', !!invoiceId);
+      console.log('   - hasInvoice:', !!invoice);
+      console.log('   - Will generate PDF:', !!(invoice || invoiceData));
       
       // Generate and attach invoice PDF if invoice data is available
       // Match the condition for HTML generation (line 4645)
       if (invoice || invoiceData) {
+        console.log('\n📄 ENTERED PDF GENERATION BLOCK');
         try {
           console.log('📄 Starting PDF generation for invoice...');
           const invoiceDetails = invoice || invoiceData;
+          console.log('📄 Invoice details to use:', invoiceDetails ? {
+            invoiceNumber: invoiceDetails.invoiceNumber,
+            amount: invoiceDetails.amount,
+            itemsCount: invoiceDetails.items?.length || 0
+          } : 'NONE');
           const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
             const doc = new PDFDocument({ size: 'A4', margin: 40 });
             const chunks: Buffer[] = [];
