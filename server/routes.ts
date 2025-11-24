@@ -4901,118 +4901,135 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               reject(err);
             });
             
-            // Header with company info
-            doc.fontSize(24).font('Helvetica-Bold').text('TAX INVOICE', { align: 'left' });
-            doc.fontSize(10).font('Helvetica').text(`Invoice #: ${invoiceDetails.invoiceNumber || ''}`, { align: 'left' });
-            doc.text(`Date: ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}`, { align: 'left' });
-            doc.text(`Job #: ${job?.jobNumber ? 'Job #' + job.jobNumber : 'N/A'}`, { align: 'left' });
+            // Add logo
+            try {
+              doc.image('client/public/treemarkables-logo.png', 40, 40, { width: 120 });
+            } catch (err) {
+              console.error('Failed to load logo:', err);
+            }
             
-            doc.moveDown(0.3);
+            // Invoice header on the right
+            doc.fontSize(12).font('Helvetica-Bold').text(
+              `Invoice #${invoiceDetails.invoiceNumber}`, 
+              350, 
+              45, 
+              { align: 'right', width: 205 }
+            );
+            doc.fontSize(9).font('Helvetica').text(
+              `${customer?.name || 'Customer'} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}`,
+              350,
+              doc.y,
+              { align: 'right', width: 205 }
+            );
             
-            // Company details
-            doc.fontSize(11).font('Helvetica-Bold').text('Treemarkables LTD', { align: 'right' });
-            doc.fontSize(9).font('Helvetica');
-            doc.text('GST Number: 33 047 160 882', { align: 'right' });
-            doc.text('213 Stanley Road, Gisborne 4010', { align: 'right' });
-            doc.text('Phone: 027 216 6882', { align: 'right' });
-            doc.text('Email: info@treemarkables.nz', { align: 'right' });
-            
-            doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke();
-            doc.moveDown(0.5);
+            // Black border separator
+            doc.moveTo(40, 85).lineTo(555, 85).lineWidth(2).stroke();
+            doc.moveDown(1.5);
             
             // Bill To section
-            doc.fontSize(10).font('Helvetica-Bold').text('Bill To:', { align: 'left' });
-            doc.fontSize(9).font('Helvetica');
-            doc.text(customer?.name || 'Customer', { align: 'left' });
-            if (customer?.phone) doc.text(customer.phone, { align: 'left' });
-            if (customer?.email) doc.text(customer.email, { align: 'left' });
-            
+            doc.y = 100;
+            doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
             doc.moveDown(0.3);
-            
-            // Work location
+            doc.fontSize(9).font('Helvetica-Bold').text(customer?.name || 'Customer', 40, doc.y);
+            doc.moveDown(0.2);
             if (invoiceDetails.address || job?.address) {
-              doc.fontSize(9).font('Helvetica-Bold').text('WORK CARRIED OUT AT', { align: 'left' });
-              doc.fontSize(9).font('Helvetica').text(invoiceDetails.address || job?.address || '', { align: 'left' });
+              doc.fontSize(8).font('Helvetica').fillColor('#666666')
+                .text(invoiceDetails.address || job?.address || '', 40, doc.y);
+              doc.moveDown(0.2);
             }
+            if (customer?.email) {
+              doc.fontSize(8).fillColor('#666666').text(`✉ ${customer.email}`, 40, doc.y);
+              doc.moveDown(0.2);
+            }
+            doc.fillColor('#000000');
             
+            doc.moveDown(0.5);
+            
+            // Description section
+            doc.fontSize(9).font('Helvetica-Bold').text('Description', 40, doc.y);
             doc.moveDown(0.3);
             
-            // Line items table
             const lineItems = invoiceDetails.items || invoiceData?.lineItems || [];
-            const tableTop = doc.y;
-            const col1 = 50, col2 = 80, col3 = 450;
+            const hasLineItems = lineItems.length > 0;
             
-            doc.fontSize(9).font('Helvetica-Bold');
-            doc.text('QTY', col1, tableTop);
-            doc.text('DESCRIPTION', col2, tableTop);
-            doc.text('PRICE', col3, tableTop, { align: 'right' });
-            
-            doc.moveTo(40, tableTop + 15).lineTo(550, tableTop + 15).stroke();
-            
-            let currentY = tableTop + 20;
-            doc.font('Helvetica');
-            
-            if (lineItems && lineItems.length > 0) {
-              lineItems.forEach((item: any) => {
-                const itemTotal = item.total || item.amount;
-                const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
-                doc.fontSize(8).text(item.quantity || 1, col1, currentY);
-                doc.fontSize(8).text(item.description || '', col2, currentY, { width: 350 });
-                doc.fontSize(8).text(formatCurrency(total), col3, currentY, { align: 'right' });
-                currentY += 20;
-              });
-            } else {
-              const gstRate = 0.15;
-              const amount = typeof invoiceDetails.amount === 'string' ? parseFloat(invoiceDetails.amount) : (invoiceDetails.amount || 0);
-              const subtotal = amount;
-              doc.fontSize(8).text('1', col1, currentY);
-              doc.fontSize(8).text(invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service', col2, currentY, { width: 350 });
-              doc.fontSize(8).text(formatCurrency(subtotal), col3, currentY, { align: 'right' });
-              currentY += 20;
+            if (invoiceDetails.notes) {
+              doc.fontSize(8).font('Helvetica').fillColor('#333333')
+                .text(invoiceDetails.notes, 40, doc.y, { width: 515 });
+              doc.fillColor('#000000');
+              doc.moveDown(0.3);
             }
             
-            doc.moveTo(40, currentY).lineTo(550, currentY).stroke();
-            currentY += 10;
-            
-            // Totals
-            const gstRate = 0.15;
+            // Line items as description entries
             let subtotal = 0;
-            if (lineItems && lineItems.length > 0) {
-              subtotal = lineItems.reduce((sum: number, item: any) => {
-                const itemTotal = item.total || item.amount;
-                const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
-                return sum + total;
-              }, 0);
+            if (hasLineItems) {
+              lineItems.forEach((item: any) => {
+                const itemTotal = item.total || item.amount || 0;
+                const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : itemTotal;
+                subtotal += total;
+                
+                doc.fontSize(8).font('Helvetica').fillColor('#000000')
+                  .text(item.description || '', 40, doc.y, { width: 515 });
+                doc.moveDown(0.2);
+              });
             } else {
               const amount = typeof invoiceDetails.amount === 'string' ? parseFloat(invoiceDetails.amount) : (invoiceDetails.amount || 0);
               subtotal = amount;
             }
+            
+            doc.moveDown(0.5);
+            
+            // Totals section (right-aligned)
+            const gstRate = 0.15;
             const gstAmount = subtotal * gstRate;
             const totalAmount = subtotal + gstAmount;
             
-            doc.fontSize(9).font('Helvetica');
-            doc.text('SUBTOTAL', col2, currentY);
-            doc.text(formatCurrency(subtotal), col3, currentY, { align: 'right' });
-            currentY += 15;
+            doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+            doc.moveDown(0.5);
             
-            doc.text('GST', col2, currentY);
-            doc.text(formatCurrency(gstAmount), col3, currentY, { align: 'right' });
-            currentY += 15;
+            const totalsX = 380;
+            const valuesX = 470;
             
-            doc.moveTo(400, currentY).lineTo(550, currentY).stroke();
-            doc.font('Helvetica-Bold').fontSize(11);
-            doc.text('TOTAL', col2, currentY + 5);
-            doc.text(formatCurrency(totalAmount), col3, currentY + 5, { align: 'right' });
+            doc.fontSize(8).font('Helvetica').fillColor('#666666');
+            doc.text('Subtotal (excl GST):', totalsX, doc.y, { width: 135, align: 'left' });
+            doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+            doc.moveDown(0.3);
             
-            doc.moveDown(2);
-            doc.fontSize(8).font('Helvetica').text('Our terms are strictly COD or 14 days', { align: 'center' });
+            doc.fillColor('#666666');
+            doc.text('GST (15%):', totalsX, doc.y, { width: 135, align: 'left' });
+            doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+            doc.moveDown(0.5);
             
-            // Bank details
-            currentY = doc.y + 20;
-            doc.fontSize(9).font('Helvetica-Bold').text('Bank Details', col1, currentY);
+            doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
+            doc.text('Total Amount:', totalsX, doc.y, { width: 135, align: 'left' });
+            doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+            
+            doc.moveDown(1);
+            
+            // Payment Information box with gray background
+            const boxY = doc.y;
+            doc.rect(40, boxY, 515, 60).fillAndStroke('#F3F4F6', '#E5E7EB');
+            
+            doc.fillColor('#000000');
+            doc.fontSize(9).font('Helvetica-Bold').text('Payment Information', 50, boxY + 10);
             doc.fontSize(8).font('Helvetica');
-            doc.text('Account Name: Treemarkables', col1, currentY + 15);
-            doc.text('Account Number: 06 0637 0768850 00', col1, currentY + 30);
+            doc.fillColor('#4B5563').text('Bank: ANZ', 50, boxY + 25);
+            doc.text('Account Number: 06 0637 0768850 00', 50, boxY + 37);
+            doc.text('Account Name: Treemarkables LTD', 50, boxY + 49);
+            
+            doc.fillColor('#000000');
+            doc.y = boxY + 70;
+            doc.moveDown(0.5);
+            
+            // Footer
+            doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+            doc.moveDown(0.3);
+            doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
+              .text(
+                'Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz',
+                40,
+                doc.y,
+                { align: 'center', width: 515 }
+              );
             
             doc.end();
           });
