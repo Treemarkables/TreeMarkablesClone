@@ -5789,7 +5789,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       
       // Add logo
       try {
-        doc.image('client/public/treemarkables-logo.webp', 40, 40, { width: 120 });
+        doc.image('client/public/treemarkables-logo.png', 40, 40, { width: 120 });
       } catch (err) {
         console.error('Failed to load logo:', err);
       }
@@ -5799,13 +5799,13 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         `Invoice #${invoice.invoiceNumber}`, 
         350, 
         45, 
-        { align: 'right' }
+        { align: 'right', width: 205 }
       );
       doc.fontSize(9).font('Helvetica').text(
         `${customer?.name || 'Customer'} - ${formatDate(invoice.issueDate) || formatDate(new Date())}`,
         350,
         doc.y,
-        { align: 'right' }
+        { align: 'right', width: 205 }
       );
       
       // Black border separator
@@ -5877,17 +5877,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       
       doc.fontSize(8).font('Helvetica').fillColor('#666666');
       doc.text('Subtotal (excl GST):', totalsX, doc.y, { width: 135, align: 'left' });
-      doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right' });
+      doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 75 });
       doc.moveDown(0.3);
       
       doc.fillColor('#666666');
       doc.text('GST (15%):', totalsX, doc.y, { width: 135, align: 'left' });
-      doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right' });
+      doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 75 });
       doc.moveDown(0.5);
       
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Total Amount:', totalsX, doc.y, { width: 135, align: 'left' });
-      doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right' });
+      doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 75 });
       
       doc.moveDown(1);
       
