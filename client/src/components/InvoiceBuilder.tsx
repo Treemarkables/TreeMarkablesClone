@@ -1045,6 +1045,20 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     </>
                   )}
                 </Button>
+                {createdInvoice?.id && (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      window.open(`/api/invoices/${createdInvoice.id}/pdf`, '_blank');
+                    }}
+                    variant="outline"
+                    data-testid="button-download-pdf"
+                    className="w-full sm:w-auto"
+                  >
+                    <FileDown className="h-4 w-4 mr-2" />
+                    Download PDF
+                  </Button>
+                )}
                 <Button
                   type="button"
                   onClick={handleSmsInvoice}
