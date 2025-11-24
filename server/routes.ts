@@ -4538,13 +4538,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
+    console.log('🚨🚨🚨 ENDPOINT CALLED - BEGINNING OF /api/emails/send 🚨🚨🚨');
     try {
       const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId, quoteId, invoiceData } = req.body;
       
-      console.log(`📧 Processing email to ${to} with ${selectedPhotos.length} selected photos`);
-      console.log('Selected photos:', selectedPhotos);
-      console.log('📋 Invoice data received:', invoiceData ? 'YES' : 'NO', invoiceData ? `(ID: ${invoiceData.id})` : '');
-      console.log('📋 Invoice ID received:', invoiceId || 'NONE');
+      console.log(`🚨 INSIDE TRY BLOCK - Processing email to ${to} with ${selectedPhotos.length} selected photos`);
+      console.log('🚨 Selected photos:', selectedPhotos);
+      console.log('🚨 Invoice data received:', invoiceData ? 'YES' : 'NO', invoiceData ? `(ID: ${invoiceData.id})` : '');
+      console.log('🚨 Invoice ID received:', invoiceId || 'NONE');
       
       // Validate required fields
       if (!to || !subject || !body) {
