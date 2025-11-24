@@ -1136,12 +1136,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           job={job}
           customer={customer}
           customEmail={editableEmail}
-          invoiceData={{
-            id: createdInvoice.id,
-            invoiceNumber: createdInvoice.invoiceNumber,
-            amount: createdInvoice.amount,
-            dueDate: createdInvoice.dueDate
-          }}
+          invoiceData={createdInvoice}
           templateType="invoice"
         />
       )}
