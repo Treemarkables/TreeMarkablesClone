@@ -66,14 +66,16 @@ class EmailService {
         resendClient = client;
         configuredFromEmail = fromEmail;
         this.isConfigured = true;
+        console.log(`✅ Resend client initialized for email send`);
       } catch (error) {
         // Fall back to mock mode if Resend not configured
+        console.error(`❌ Failed to initialize Resend client for email send:`, error instanceof Error ? error.message : error);
         this.isConfigured = false;
       }
 
       if (!this.isConfigured || !resendClient) {
         // Mock mode - log the email instead of sending
-        console.log('\n=== EMAIL NOTIFICATION (Mock Mode) ===');
+        console.log('\n❌ === EMAIL GOING TO MOCK MODE (Resend not configured) ===');
         console.log(`To: ${params.to}`);
         console.log(`From: ${params.from || this.defaultFromEmail}`);
         if (params.replyTo) console.log(`Reply-To: ${params.replyTo}`);
@@ -85,7 +87,7 @@ class EmailService {
           console.log('Template Data:', JSON.stringify(params.dynamicTemplateData, null, 2));
         }
         console.log('Time:', new Date().toLocaleString());
-        console.log('================================\n');
+        console.log('⚠️  Email will NOT be sent - Resend client unavailable\n');
         return { success: true, messageId: `mock-${Date.now()}` };
       }
 
