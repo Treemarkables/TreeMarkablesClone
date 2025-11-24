@@ -1,3 +1,4 @@
+// Force recompile 2025-11-24
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
