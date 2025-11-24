@@ -131,10 +131,19 @@ class EmailService {
         });
       }
 
+      console.log('📧 Full Resend API payload:', JSON.stringify(emailPayload, null, 2));
+      
       const response = await resendClient.emails.send(emailPayload);
+
+      console.log('📧 Resend API response:', JSON.stringify(response, null, 2));
 
       // Extract message ID from Resend response
       const messageId = response.data?.id || undefined;
+      
+      if (response.error) {
+        console.error('📧 Resend API error in response:', response.error);
+        return { success: false };
+      }
       
       console.log(`📧 Email sent successfully to ${params.to}${messageId ? ` (Message ID: ${messageId})` : ''}`);
       return { success: true, messageId };
@@ -146,6 +155,9 @@ class EmailService {
       }
       if (error.response) {
         console.error('📧 Error response:', JSON.stringify(error.response, null, 2));
+      }
+      if (error.data) {
+        console.error('📧 Error data:', JSON.stringify(error.data, null, 2));
       }
       return { success: false };
     }
