@@ -5736,6 +5736,196 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Download invoice PDF
+  app.get('/api/invoices/:id/pdf', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      // Get invoice with relations
+      const result = await db.select()
+        .from(invoices)
+        .where(eq(invoices.id, id))
+        .limit(1);
+      
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+      
+      const invoice = result[0];
+      
+      // Fetch related customer and job data
+      const [customerData, jobData] = await Promise.all([
+        invoice.customerId ? db.select().from(customers).where(eq(customers.id, invoice.customerId)).limit(1) : Promise.resolve([]),
+        invoice.jobId ? db.select().from(jobs).where(eq(jobs.id, invoice.jobId)).limit(1) : Promise.resolve([])
+      ]);
+      
+      const customer = customerData[0] || null;
+      const job = jobData[0] || null;
+      
+      // Generate PDF
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      const chunks: Buffer[] = [];
+      
+      doc.on('data', (chunk: Buffer) => {
+        chunks.push(Buffer.from(chunk));
+      });
+      
+      const pdfPromise = new Promise<Buffer>((resolve, reject) => {
+        doc.on('end', () => {
+          resolve(Buffer.concat(chunks));
+        });
+        doc.on('error', reject);
+      });
+      
+      // Format helpers
+      const formatDate = (date: any) => {
+        if (!date) return '';
+        return new Date(date).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      };
+      
+      const formatCurrency = (num: number) => {
+        return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(num);
+      };
+      
+      // Header
+      doc.fontSize(24).font('Helvetica-Bold').text('TAX INVOICE', { align: 'left' });
+      doc.fontSize(10).font('Helvetica').text(`Invoice #: ${invoice.invoiceNumber || ''}`, { align: 'left' });
+      doc.text(`Date: ${formatDate(invoice.issueDate) || formatDate(new Date())}`, { align: 'left' });
+      doc.text(`Job #: ${job?.jobNumber ? 'Job #' + job.jobNumber : 'N/A'}`, { align: 'left' });
+      
+      doc.moveDown(0.3);
+      
+      // Company details
+      doc.fontSize(11).font('Helvetica-Bold').text('Treemarkables LTD', { align: 'right' });
+      doc.fontSize(9).font('Helvetica');
+      doc.text('GST Number: 33 047 160 882', { align: 'right' });
+      doc.text('213 Stanley Road, Gisborne 4010', { align: 'right' });
+      doc.text('Phone: 027 216 6882', { align: 'right' });
+      doc.text('Email: info@treemarkables.nz', { align: 'right' });
+      
+      doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke();
+      doc.moveDown(0.5);
+      
+      // Bill To section
+      doc.fontSize(10).font('Helvetica-Bold').text('Bill To:', { align: 'left' });
+      doc.fontSize(9).font('Helvetica');
+      doc.text(customer?.name || 'Customer', { align: 'left' });
+      if (customer?.phone) doc.text(customer.phone, { align: 'left' });
+      if (customer?.email) doc.text(customer.email, { align: 'left' });
+      
+      doc.moveDown(0.3);
+      
+      // Work location
+      if (invoice.address || job?.address) {
+        doc.fontSize(9).font('Helvetica-Bold').text('WORK CARRIED OUT AT', { align: 'left' });
+        doc.fontSize(9).font('Helvetica').text(invoice.address || job?.address || '', { align: 'left' });
+      }
+      
+      doc.moveDown(0.5);
+      
+      // Line items table
+      const lineItems = invoice.items || [];
+      const tableTop = doc.y;
+      const col1 = 50, col2 = 350, col3 = 410, col4 = 470;
+      
+      // Table header
+      doc.fontSize(9).font('Helvetica-Bold');
+      doc.text('Description', col1, tableTop);
+      doc.text('Qty', col2, tableTop);
+      doc.text('Rate', col3, tableTop);
+      doc.text('Amount', col4, tableTop);
+      
+      doc.moveTo(40, doc.y + 5).lineTo(550, doc.y + 5).stroke();
+      doc.moveDown(0.5);
+      
+      // Table rows
+      let subtotal = 0;
+      doc.fontSize(9).font('Helvetica');
+      
+      if (lineItems.length > 0) {
+        lineItems.forEach((item: any) => {
+          const itemTotal = item.total || item.amount || 0;
+          const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : itemTotal;
+          subtotal += total;
+          
+          const y = doc.y;
+          doc.text(item.description || '', col1, y, { width: 290 });
+          doc.text(String(item.quantity || 1), col2, y);
+          doc.text(formatCurrency(typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0)), col3, y);
+          doc.text(formatCurrency(total), col4, y);
+          doc.moveDown(0.5);
+        });
+      } else {
+        // Fallback if no line items
+        const amount = typeof invoice.amount === 'string' ? parseFloat(invoice.amount) : (invoice.amount || 0);
+        subtotal = amount;
+        const y = doc.y;
+        doc.text(invoice.notes || invoice.jobTitle || 'Tree Service', col1, y, { width: 290 });
+        doc.text('1', col2, y);
+        doc.text(formatCurrency(amount), col3, y);
+        doc.text(formatCurrency(amount), col4, y);
+        doc.moveDown(0.5);
+      }
+      
+      // Totals
+      doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke();
+      doc.moveDown(0.5);
+      
+      const gstRate = 0.15;
+      const gstAmount = subtotal * gstRate;
+      const totalAmount = subtotal + gstAmount;
+      
+      doc.fontSize(9).font('Helvetica');
+      doc.text('Subtotal (Ex GST):', col3, doc.y);
+      doc.text(formatCurrency(subtotal), col4, doc.y - doc.currentLineHeight());
+      doc.moveDown(0.3);
+      
+      doc.text('GST (15%):', col3, doc.y);
+      doc.text(formatCurrency(gstAmount), col4, doc.y - doc.currentLineHeight());
+      doc.moveDown(0.3);
+      
+      doc.fontSize(11).font('Helvetica-Bold');
+      doc.text('TOTAL:', col3, doc.y);
+      doc.text(formatCurrency(totalAmount), col4, doc.y - doc.currentLineHeight());
+      
+      doc.moveDown(1);
+      
+      // Due date
+      if (invoice.dueDate) {
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('red');
+        doc.text(`Due Date: ${formatDate(invoice.dueDate)}`, { align: 'center' });
+        doc.fillColor('black');
+      }
+      
+      doc.moveDown(1);
+      
+      // Payment details
+      doc.fontSize(10).font('Helvetica-Bold').text('Payment Details:', { align: 'left' });
+      doc.fontSize(9).font('Helvetica');
+      doc.text('Bank: ANZ', { align: 'left' });
+      doc.text('Account Name: Treemarkables LTD', { align: 'left' });
+      doc.text('Account Number: 06-0657-0488783-00', { align: 'left' });
+      doc.text(`Reference: ${invoice.invoiceNumber}`, { align: 'left' });
+      
+      doc.moveDown(1);
+      
+      // Footer
+      doc.fontSize(9).text('Our terms are strictly COD or 14 days', { align: 'center' });
+      
+      doc.end();
+      
+      const pdfBuffer = await pdfPromise;
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
+      res.send(pdfBuffer);
+      
+    } catch (error) {
+      console.error('Error generating invoice PDF:', error);
+      res.status(500).json({ success: false, message: 'Error generating invoice PDF' });
+    }
+  });
+
   // Update invoice status (for payment recording, etc.)
   app.patch('/api/invoices/:id', async (req: Request, res: Response) => {
     try {
