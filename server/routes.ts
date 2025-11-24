@@ -5088,6 +5088,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       // Send email using the emailService
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
+      console.log('🚀🚀🚀 ABOUT TO SEND EMAIL - Attachment count:', emailAttachments.length);
+      console.log('🚀🚀🚀 Email attachments:', emailAttachments.map(a => ({ filename: a.filename, type: a.type })));
       const emailResult = await emailService.sendEmail({
         to: to,
         subject: subject,
