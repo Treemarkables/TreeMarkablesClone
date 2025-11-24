@@ -98,7 +98,7 @@ class EmailService {
       // Resend only accepts 'filename' and 'content' (base64 string or Buffer)
       const resendAttachments = params.attachments?.map(att => ({
         filename: att.filename,
-        content: att.content // Base64 string or Buffer - Resend handles both
+        content: Buffer.from(att.content, 'base64') // Convert base64 string to Buffer for Resend
       }));
 
       // Build email payload for Resend
