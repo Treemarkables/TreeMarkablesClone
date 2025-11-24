@@ -4547,8 +4547,24 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       console.log('   - to:', to);
       console.log('   - subject:', subject);
       console.log('   - invoiceId:', invoiceId);
+      console.log('   - invoiceData type:', typeof invoiceData);
       console.log('   - invoiceData:', invoiceData ? JSON.stringify(invoiceData, null, 2) : 'NONE');
       console.log('   - selectedPhotos count:', selectedPhotos.length);
+      
+      // DEFENSIVE FIX: Validate invoiceData is a proper object with required properties
+      // The frontend may sometimes serialize it incorrectly as a boolean
+      let validatedInvoiceData = invoiceData;
+      if (invoiceData && typeof invoiceData !== 'object') {
+        console.warn('⚠️ invoiceData is not an object (type:', typeof invoiceData, ') - clearing it');
+        validatedInvoiceData = null;
+      } else if (invoiceData && (!invoiceData.invoiceNumber || !invoiceData.id)) {
+        console.warn('⚠️ invoiceData missing required properties (invoiceNumber or id) - checking...');
+        // If invoiceData has an id but is missing other fields, we'll fetch from DB later
+        if (!invoiceData.id && !invoiceData.invoiceNumber) {
+          console.warn('⚠️ invoiceData has no id or invoiceNumber - clearing it');
+          validatedInvoiceData = null;
+        }
+      }
       
       // Validate required fields
       if (!to || !subject || !body) {
@@ -4569,54 +4585,54 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       // If invoice data is provided but no invoiceId, create or find the invoice
       let emailBody = body; // Create mutable copy of body
-      const effectiveInvoiceId = invoiceId || invoiceData?.id;
+      const effectiveInvoiceId = invoiceId || validatedInvoiceData?.id;
       console.log('\n📋 INVOICE LOADING LOGIC:');
       console.log('   - effectiveInvoiceId:', effectiveInvoiceId || 'NONE');
-      console.log('   - invoiceData exists:', !!invoiceData);
-      console.log('   - Will create new invoice:', !!(invoiceData && !effectiveInvoiceId));
+      console.log('   - validatedInvoiceData exists:', !!validatedInvoiceData);
+      console.log('   - Will create new invoice:', !!(validatedInvoiceData && !effectiveInvoiceId));
       console.log('   - Will fetch existing invoice:', !!effectiveInvoiceId);
       
-      if (invoiceData && !effectiveInvoiceId) {
+      if (validatedInvoiceData && !effectiveInvoiceId) {
         console.log('📋 Creating invoice from invoice data before sending email');
-        console.log('📋 Invoice line items:', invoiceData.lineItems?.length || 0, 'items');
+        console.log('📋 Invoice line items:', validatedInvoiceData.lineItems?.length || 0, 'items');
         try {
           const newInvoice = await storage.createInvoice({
-            jobId: invoiceData.jobId || jobId,
-            customerId: invoiceData.customerId || customerId,
-            invoiceNumber: invoiceData.invoiceNumber,
-            amount: invoiceData.totalAmount,
-            dueDate: invoiceData.dueDate ? new Date(invoiceData.dueDate) : undefined,
-            issueDate: invoiceData.issueDate ? new Date(invoiceData.issueDate) : undefined,
+            jobId: validatedInvoiceData.jobId || jobId,
+            customerId: validatedInvoiceData.customerId || customerId,
+            invoiceNumber: validatedInvoiceData.invoiceNumber,
+            amount: validatedInvoiceData.totalAmount,
+            dueDate: validatedInvoiceData.dueDate ? new Date(validatedInvoiceData.dueDate) : undefined,
+            issueDate: validatedInvoiceData.issueDate ? new Date(validatedInvoiceData.issueDate) : undefined,
             status: 'sent', // Mark as sent since we're sending it now
-            items: invoiceData.lineItems || [],
-            notes: invoiceData.description,
+            items: validatedInvoiceData.lineItems || [],
+            notes: validatedInvoiceData.description,
             jobTitle: job?.title || job?.description || 'Service'
           });
           invoice = newInvoice;
           console.log('✅ Invoice created with ID:', invoice.id);
           
           // Sync invoice amount to job's totalAmount for revenue tracking
-          if (jobId && invoiceData.totalAmount) {
+          if (jobId && validatedInvoiceData.totalAmount) {
             await storage.updateJob(jobId, {
-              totalAmount: invoiceData.totalAmount.toString()
+              totalAmount: validatedInvoiceData.totalAmount.toString()
             });
-            console.log('💰 Synced invoice amount to job total_amount:', invoiceData.totalAmount);
+            console.log('💰 Synced invoice amount to job total_amount:', validatedInvoiceData.totalAmount);
           }
         } catch (error: any) {
           // If duplicate invoice number, this invoice was already created - fetch it by number
           if (error.code === '23505' && error.constraint === 'invoices_invoice_number_unique') {
-            console.log('📋 Invoice already exists with number:', invoiceData.invoiceNumber, '- fetching existing invoice');
+            console.log('📋 Invoice already exists with number:', validatedInvoiceData.invoiceNumber, '- fetching existing invoice');
             // Query the database directly to find the invoice by invoice number
             const result = await db.select()
               .from(invoices)
-              .where(eq(invoices.invoiceNumber, invoiceData.invoiceNumber))
+              .where(eq(invoices.invoiceNumber, validatedInvoiceData.invoiceNumber))
               .limit(1);
             
             if (result.length > 0) {
               invoice = result[0];
               console.log('✅ Found existing invoice with ID:', invoice.id);
             } else {
-              console.warn('⚠️ Could not find existing invoice with number:', invoiceData.invoiceNumber);
+              console.warn('⚠️ Could not find existing invoice with number:', validatedInvoiceData.invoiceNumber);
               invoice = null;
             }
           } else {
@@ -4627,7 +4643,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         // Replace temporary invoice ID in email body with real invoice ID
         // The frontend uses the job ID as a placeholder, so we replace any invoice links
         if (invoice) {
-          const tempInvoiceId = invoiceData.jobId || jobId;
+          const tempInvoiceId = validatedInvoiceData.jobId || jobId;
           if (tempInvoiceId && emailBody.includes(`/invoice/${tempInvoiceId}`)) {
             emailBody = emailBody.replace(new RegExp(`/invoice/${tempInvoiceId}`, 'g'), `/invoice/${invoice.id}`);
             console.log('✅ Updated invoice link in email body from', tempInvoiceId, 'to', invoice.id);
@@ -4652,11 +4668,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       let invoiceHtml = '';
       console.log('\n🎨 HTML GENERATION CHECK:');
       console.log('   - invoice exists:', !!invoice);
-      console.log('   - invoiceData exists:', !!invoiceData);
-      console.log('   - Will generate HTML:', !!(invoice || invoiceData));
-      if (invoice || invoiceData) {
-        const invoiceDetails = invoice || invoiceData;
-        const lineItems = invoiceDetails.items || invoiceData?.lineItems || [];
+      console.log('   - validatedInvoiceData exists:', !!validatedInvoiceData);
+      console.log('   - Will generate HTML:', !!(invoice || validatedInvoiceData));
+      if (invoice || validatedInvoiceData) {
+        const invoiceDetails = invoice || validatedInvoiceData;
+        const lineItems = invoiceDetails.items || validatedInvoiceData?.lineItems || [];
         console.log('🎨 Invoice details for HTML:', {
           invoiceNumber: invoiceDetails.invoiceNumber,
           amount: invoiceDetails.amount,
@@ -4862,24 +4878,24 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
       
       console.log('✅ EMAIL HTML PREPARED - About to process attachments');
-      console.log('🔍 Invoice check:', { hasInvoice: !!invoice, hasInvoiceData: !!invoiceData });
+      console.log('🔍 Invoice check:', { hasInvoice: !!invoice, hasValidatedInvoiceData: !!validatedInvoiceData });
       
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
       
       console.log('\n📎 ATTACHMENT PROCESSING:');
-      console.log('   - hasInvoiceData:', !!invoiceData);
+      console.log('   - hasValidatedInvoiceData:', !!validatedInvoiceData);
       console.log('   - hasInvoiceId:', !!invoiceId);
       console.log('   - hasInvoice:', !!invoice);
-      console.log('   - Will generate PDF:', !!(invoice || invoiceData));
+      console.log('   - Will generate PDF:', !!(invoice || validatedInvoiceData));
       
       // Generate and attach invoice PDF if invoice data is available
       // Match the condition for HTML generation (line 4645)
-      if (invoice || invoiceData) {
+      if (invoice || validatedInvoiceData) {
         console.log('\n📄 ENTERED PDF GENERATION BLOCK');
         try {
           console.log('📄 Starting PDF generation for invoice...');
-          const invoiceDetails = invoice || invoiceData;
+          const invoiceDetails = invoice || validatedInvoiceData;
           console.log('📄 Invoice details to use:', invoiceDetails ? {
             invoiceNumber: invoiceDetails.invoiceNumber,
             amount: invoiceDetails.amount,
@@ -4949,7 +4965,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             doc.fontSize(9).font('Helvetica-Bold').text('Description', 40, doc.y);
             doc.moveDown(0.3);
             
-            const lineItems = invoiceDetails.items || invoiceData?.lineItems || [];
+            const lineItems = invoiceDetails.items || validatedInvoiceData?.lineItems || [];
             const hasLineItems = lineItems.length > 0;
             
             if (invoiceDetails.notes) {
@@ -5054,7 +5070,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
       
       // Add logo as inline attachment for emails with invoices
-      if (invoiceData || invoiceId) {
+      if (validatedInvoiceData || invoiceId || invoice) {
         try {
           const logoPath = path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
           if (fs.existsSync(logoPath)) {

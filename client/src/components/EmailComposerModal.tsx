@@ -528,9 +528,9 @@ export function EmailComposerModal({
       selectedPhotos: selectedPhotos,
       jobId: job?.id,
       customerId: customer?.id,
-      // Only pass invoiceId if it exists in database (not temporary job ID)
-      // If invoiceData exists but no real invoiceId, backend will create it
-      invoiceId: undefined, // Let backend create invoice from invoiceData
+      // Pass invoiceId if the invoice already exists in database
+      // This allows server to fetch invoice directly even if invoiceData is malformed
+      invoiceId: invoiceData?.id || undefined,
       quoteId: quoteData?.id,
       proposalId: proposalData?.id,
       invoiceData: invoiceData // Pass full invoice data so backend can create invoice if needed
@@ -541,7 +541,8 @@ export function EmailComposerModal({
       subject: emailPayload.subject,
       attachmentCount: emailPayload.attachments.length,
       photoCount: emailPayload.selectedPhotos.length,
-      invoiceData: !!emailPayload.invoiceData
+      invoiceId: emailPayload.invoiceId,
+      hasInvoiceData: !!emailPayload.invoiceData
     });
     
     console.log('📧 FULL INVOICE DATA BEING SENT:', JSON.stringify(invoiceData, null, 2));
