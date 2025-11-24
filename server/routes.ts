@@ -4849,6 +4849,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Prepare email content with any necessary formatting
       const emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
       
+      console.log('✅ EMAIL HTML PREPARED - About to process attachments');
+      console.log('🔍 Invoice check:', { hasInvoice: !!invoice, hasInvoiceData: !!invoiceData });
+      
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
       
