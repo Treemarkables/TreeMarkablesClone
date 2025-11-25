@@ -214,17 +214,20 @@ class NotificationService {
     const customer = await this.getCustomerContactInfo(job.customerId);
     if (!customer) return;
 
+    // Use job title, job number, or fallback
+    const jobIdentifier = job.title || (job.jobNumber ? `Job #${job.jobNumber}` : 'Tree Service');
+
     // Send completion notification
     await this.sendCustomerNotifications(customer, {
       type: 'job_completed',
-      jobTitle: job.title,
+      jobTitle: jobIdentifier,
       jobData: job,
       notificationType: 'jobNotifications'
     });
 
     // Create follow-up notification for team (request review/feedback)
     await this.createInternalNotification({
-      title: `Job Completed: ${job.title}`,
+      title: `Job Completed: ${jobIdentifier}`,
       message: `Job completed for ${customer.name}. Consider following up for feedback.`,
       type: 'job_completed',
       priority: 'low',
