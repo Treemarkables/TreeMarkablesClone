@@ -51,6 +51,7 @@ import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
 import SignatureCapture from "@/pages/SignatureCapture";
 import JHATemplates from "@/pages/JHATemplates";
 import JHARiskControlTemplates from "@/pages/JHARiskControlTemplates";
+import SmsTemplates from "@/pages/SmsTemplates";
 import JHAAssessment from "@/pages/JHAAssessment";
 import JHAHistory from "@/pages/JHAHistory";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
@@ -778,6 +779,11 @@ function Router() {
       <Route path="/settings/templates">
         <SidebarLayout>
           <CommunicationTemplates />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/sms-templates">
+        <SidebarLayout>
+          <SmsTemplates />
         </SidebarLayout>
       </Route>
       <Route path="/settings/vehicle-inspections">
