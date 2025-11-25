@@ -194,44 +194,38 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Take Photo */}
-              <div>
+              {/* Take Photo - on mobile opens camera, on desktop opens file picker */}
+              <div className="relative">
                 <input
                   id="camera-input"
                   type="file"
                   accept="image/*,video/*"
                   {...(isMobile ? { capture: "environment" } : {})}
                   onChange={handleFileSelect}
-                  className="hidden"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                   data-testid="input-camera"
                 />
-                <label 
-                  htmlFor="camera-input"
-                  className="cursor-pointer block w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
-                >
+                <div className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors pointer-events-none">
                   <Camera className="w-8 h-8" />
-                  <span className="text-base font-medium">Take Photo</span>
-                </label>
+                  <span className="text-base font-medium">{isMobile ? "Take Photo" : "Select Photo"}</span>
+                </div>
               </div>
 
-              {/* Choose from Library */}
-              <div>
+              {/* Choose from Library - allows multiple selection */}
+              <div className="relative">
                 <input
                   id="library-input"
                   type="file"
                   accept="image/*,video/*"
                   multiple
                   onChange={handleFileSelect}
-                  className="hidden"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                   data-testid="input-library"
                 />
-                <label 
-                  htmlFor="library-input"
-                  className="cursor-pointer block w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
-                >
+                <div className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors pointer-events-none">
                   <Upload className="w-8 h-8" />
-                  <span className="text-base font-medium">Choose from Library</span>
-                </label>
+                  <span className="text-base font-medium">Choose Multiple Photos</span>
+                </div>
               </div>
             </div>
           )}
