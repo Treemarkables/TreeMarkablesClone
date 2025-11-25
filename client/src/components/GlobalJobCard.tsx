@@ -80,12 +80,15 @@ const globalJobCardSchema = insertJobSchema.extend({
   
 }).refine((data) => {
   if (data.isNewCustomer) {
-    return !!data.newCustomerName;
+    // For new customers, accept either newCustomerName OR job contact names
+    const hasNewCustomerName = !!data.newCustomerName;
+    const hasJobContactName = !!(data.jobContactFirstName || data.jobContactLastName);
+    return hasNewCustomerName || hasJobContactName;
   } else {
     return !!data.customerId;
   }
 }, {
-  message: "Customer name is required when creating new customer",
+  message: "Customer name or job contact name is required",
   path: ["newCustomerName"]
 });
 
@@ -1624,6 +1627,12 @@ export function GlobalJobCard({
       form.setValue('customerId', editingJob.customerId);
     }
     
+    // Auto-set newCustomerName from job contact names if not provided (for jobs from conversations)
+    if (formData.isNewCustomer && !formData.newCustomerName && (formData.jobContactFirstName || formData.jobContactLastName)) {
+      formData.newCustomerName = `${formData.jobContactFirstName || ''} ${formData.jobContactLastName || ''}`.trim();
+      form.setValue('newCustomerName', formData.newCustomerName);
+    }
+    
     // Check if form has validation errors
     const isValid = await form.trigger();
     if (!isValid) {
@@ -1639,8 +1648,8 @@ export function GlobalJobCard({
     // Map new customer fields to job contact fields for backend compatibility
     if (formData.isNewCustomer && formData.newCustomerName) {
       const names = formData.newCustomerName.split(' ');
-      formData.jobContactFirstName = names[0] || '';
-      formData.jobContactLastName = names.slice(1).join(' ') || '';
+      formData.jobContactFirstName = formData.jobContactFirstName || names[0] || '';
+      formData.jobContactLastName = formData.jobContactLastName || names.slice(1).join(' ') || '';
       formData.jobContactEmail = formData.newCustomerEmail || '';
       formData.jobContactPhone = formData.newCustomerPhone || '';
     }
