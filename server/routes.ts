@@ -4934,6 +4934,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             const lineItems = invoiceDetails.items || validatedInvoiceData?.lineItems || [];
             const hasLineItems = lineItems.length > 0;
             
+            // Include job description if available
+            if (job?.description) {
+              doc.fontSize(8).font('Helvetica').fillColor('#333333')
+                .text(job.description, 40, doc.y, { width: 515 });
+              doc.fillColor('#000000');
+              doc.moveDown(0.3);
+            }
+            
             if (invoiceDetails.notes) {
               doc.fontSize(8).font('Helvetica').fillColor('#333333')
                 .text(invoiceDetails.notes, 40, doc.y, { width: 515 });
@@ -5826,6 +5834,14 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       
       const lineItems = invoice.items || [];
       const hasLineItems = lineItems.length > 0;
+      
+      // Include job description if available
+      if (job?.description) {
+        doc.fontSize(8).font('Helvetica').fillColor('#333333')
+          .text(job.description, 40, doc.y, { width: 515 });
+        doc.fillColor('#000000');
+        doc.moveDown(0.3);
+      }
       
       if (invoice.notes) {
         doc.fontSize(8).font('Helvetica').fillColor('#333333')
