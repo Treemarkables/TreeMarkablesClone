@@ -21,6 +21,7 @@ import {
   CheckSquare,
   Sliders,
   Mail,
+  MessageSquare,
   ClipboardCheck,
   AlertTriangle,
   ShieldCheck
@@ -88,11 +89,19 @@ const settingsOptions = [
   },
   {
     id: "templates",
-    title: "Communication Templates",
-    description: "Email and SMS templates for customer messages",
+    title: "Email Templates",
+    description: "Email templates for customer messages",
     icon: Mail,
     color: "bg-pink-100 text-pink-600",
     path: "/settings/templates"
+  },
+  {
+    id: "sms-templates",
+    title: "SMS Templates",
+    description: "Create and manage SMS message templates",
+    icon: MessageSquare,
+    color: "bg-violet-100 text-violet-600",
+    path: "/settings/sms-templates"
   },
   {
     id: "preferences",
