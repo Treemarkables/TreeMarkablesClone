@@ -566,6 +566,25 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // TEMP DEBUG: Verify fresh code is running
+  app.get('/api/test-fresh-code', (req: Request, res: Response) => {
+    console.log('🟢 FRESH CODE TEST ENDPOINT HIT - Version 2025-11-25-002');
+    res.json({ 
+      version: '2025-11-25-002',
+      timestamp: new Date().toISOString(),
+      message: 'Fresh code is running!'
+    });
+  });
+  
+  app.post('/api/test-echo', (req: Request, res: Response) => {
+    console.log('🟢 ECHO ENDPOINT - RAW BODY:', JSON.stringify(req.body, null, 2));
+    res.json({ 
+      received: req.body,
+      receivedInvoiceData: req.body?.invoiceData,
+      invoiceDataType: typeof req.body?.invoiceData
+    });
+  });
+  
   // ========================================
   // XERO INTEGRATION ROUTES
   // ========================================
@@ -4538,18 +4557,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
-    console.log('\n' + '🔵'.repeat(50));
-    console.log('🔵 EMAIL ENDPOINT HIT - COMPREHENSIVE DIAGNOSTIC MODE 🔵');
-    console.log('🔵'.repeat(50) + '\n');
     try {
       const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId, quoteId, invoiceData } = req.body;
-      console.log('📥 REQUEST BODY BREAKDOWN:');
-      console.log('   - to:', to);
-      console.log('   - subject:', subject);
-      console.log('   - invoiceId:', invoiceId);
-      console.log('   - invoiceData type:', typeof invoiceData);
-      console.log('   - invoiceData:', invoiceData ? JSON.stringify(invoiceData, null, 2) : 'NONE');
-      console.log('   - selectedPhotos count:', selectedPhotos.length);
       
       // DEFENSIVE FIX: Validate invoiceData is a proper object with required properties
       // The frontend may sometimes serialize it incorrectly as a boolean
@@ -4586,15 +4595,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // If invoice data is provided but no invoiceId, create or find the invoice
       let emailBody = body; // Create mutable copy of body
       const effectiveInvoiceId = invoiceId || validatedInvoiceData?.id;
-      console.log('\n📋 INVOICE LOADING LOGIC:');
-      console.log('   - effectiveInvoiceId:', effectiveInvoiceId || 'NONE');
-      console.log('   - validatedInvoiceData exists:', !!validatedInvoiceData);
-      console.log('   - Will create new invoice:', !!(validatedInvoiceData && !effectiveInvoiceId));
-      console.log('   - Will fetch existing invoice:', !!effectiveInvoiceId);
       
       if (validatedInvoiceData && !effectiveInvoiceId) {
-        console.log('📋 Creating invoice from invoice data before sending email');
-        console.log('📋 Invoice line items:', validatedInvoiceData.lineItems?.length || 0, 'items');
         try {
           const newInvoice = await storage.createInvoice({
             jobId: validatedInvoiceData.jobId || jobId,
@@ -4650,12 +4652,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           }
         }
       } else if (effectiveInvoiceId) {
-        console.log('   📋 Fetching existing invoice with ID:', effectiveInvoiceId);
         invoice = await storage.getInvoice(effectiveInvoiceId);
-        console.log('   ✅ Invoice fetched:', invoice ? `Invoice #${invoice.invoiceNumber}` : 'NOT FOUND');
-        if (invoice) {
-          console.log('   ✅ Invoice has line items:', invoice.items?.length || 0);
-        }
       }
       
       if (quoteId) {
@@ -4666,18 +4663,20 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       // Generate invoice HTML if invoice data is available
       let invoiceHtml = '';
-      console.log('\n🎨 HTML GENERATION CHECK:');
-      console.log('   - invoice exists:', !!invoice);
-      console.log('   - validatedInvoiceData exists:', !!validatedInvoiceData);
-      console.log('   - Will generate HTML:', !!(invoice || validatedInvoiceData));
+      
+      // Helper functions - defined outside blocks so accessible to both HTML and PDF generation
+      const formatCurrency = (num: number) => {
+        return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(num);
+      };
+      
+      const formatDate = (date: any) => {
+        if (!date) return '';
+        return new Date(date).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      };
+      
       if (invoice || validatedInvoiceData) {
         const invoiceDetails = invoice || validatedInvoiceData;
         const lineItems = invoiceDetails.items || validatedInvoiceData?.lineItems || [];
-        console.log('🎨 Invoice details for HTML:', {
-          invoiceNumber: invoiceDetails.invoiceNumber,
-          amount: invoiceDetails.amount,
-          lineItemsCount: lineItems?.length || 0
-        });
         
         // Calculate totals
         const gstRate = 0.15;
@@ -4703,15 +4702,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           totalAmount = subtotal + gstAmount;
         }
         
-        const formatCurrency = (num: number) => {
-          return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(num);
-        };
-        
-        const formatDate = (date: any) => {
-          if (!date) return '';
-          return new Date(date).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        };
-        
         // Generate line items HTML
         const lineItemsHtml = lineItems && lineItems.length > 0 ? lineItems.map((item: any) => {
           const itemTotal = item.total || item.amount;
@@ -4735,13 +4725,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         
         // Logo will be embedded as inline attachment (CID) for better email client compatibility
         const logoUrl = 'cid:treemarkables-logo';
-        
-        console.log('🎨 Invoice HTML generation context:', {
-          hasJob: !!job,
-          jobNumber: job?.jobNumber,
-          hasCustomer: !!customer,
-          customerName: customer?.name
-        });
         
         invoiceHtml = `
         <div style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
@@ -4877,30 +4860,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Prepare email content with any necessary formatting
       const emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
       
-      console.log('✅ EMAIL HTML PREPARED - About to process attachments');
-      console.log('🔍 Invoice check:', { hasInvoice: !!invoice, hasValidatedInvoiceData: !!validatedInvoiceData });
-      
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
       
-      console.log('\n📎 ATTACHMENT PROCESSING:');
-      console.log('   - hasValidatedInvoiceData:', !!validatedInvoiceData);
-      console.log('   - hasInvoiceId:', !!invoiceId);
-      console.log('   - hasInvoice:', !!invoice);
-      console.log('   - Will generate PDF:', !!(invoice || validatedInvoiceData));
-      
       // Generate and attach invoice PDF if invoice data is available
-      // Match the condition for HTML generation (line 4645)
       if (invoice || validatedInvoiceData) {
-        console.log('\n📄 ENTERED PDF GENERATION BLOCK');
         try {
-          console.log('📄 Starting PDF generation for invoice...');
           const invoiceDetails = invoice || validatedInvoiceData;
-          console.log('📄 Invoice details to use:', invoiceDetails ? {
-            invoiceNumber: invoiceDetails.invoiceNumber,
-            amount: invoiceDetails.amount,
-            itemsCount: invoiceDetails.items?.length || 0
-          } : 'NONE');
           const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
             const doc = new PDFDocument({ size: 'A4', margin: 40 });
             const chunks: Buffer[] = [];
@@ -5050,9 +5016,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             doc.end();
           });
           
-          console.log(`📄 PDF buffer generated, size: ${pdfBuffer.length} bytes`);
           const pdfBase64 = pdfBuffer.toString('base64');
-          console.log(`📄 PDF converted to base64, length: ${pdfBase64.length} characters`);
           
           emailAttachments.push({
             content: pdfBase64,
@@ -5060,13 +5024,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             type: 'application/pdf',
             disposition: 'attachment'
           });
-          console.log(`📄 ✅ Generated and attached invoice PDF: Invoice-${invoiceDetails.invoiceNumber || 'unknown'}.pdf`);
+          console.log(`📄 Generated invoice PDF: Invoice-${invoiceDetails.invoiceNumber}.pdf`);
         } catch (pdfError) {
-          console.error('❌ Error generating invoice PDF:', pdfError);
-          console.error('❌ PDF error stack:', pdfError.stack);
+          console.error('Error generating invoice PDF:', pdfError);
         }
-      } else {
-        console.log('📄 Skipping PDF generation - no invoice data available');
       }
       
       // Add logo as inline attachment for emails with invoices
@@ -5083,7 +5044,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               disposition: 'inline',
               content_id: 'treemarkables-logo'
             });
-            console.log('📎 Added inline logo attachment for email');
           }
         } catch (logoError) {
           console.error('Error adding logo attachment:', logoError);
@@ -5121,8 +5081,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
                 type: mimeType,
                 disposition: 'attachment'
               });
-              
-              console.log(`📎 Added photo attachment: ${fileName}`);
             } else {
               console.warn(`⚠️ Photo file not found: ${filePath}`);
             }
@@ -5134,8 +5092,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       
       // Send email using the emailService
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
-      console.log('🚀🚀🚀 ABOUT TO SEND EMAIL - Attachment count:', emailAttachments.length);
-      console.log('🚀🚀🚀 Email attachments:', emailAttachments.map(a => ({ filename: a.filename, type: a.type })));
       const emailResult = await emailService.sendEmail({
         to: to,
         subject: subject,
