@@ -131,7 +131,15 @@ class EmailService {
         });
       }
 
-      console.log('📧 Full Resend API payload:', JSON.stringify(emailPayload, null, 2));
+      // Log payload WITHOUT attachment content (binary data floods logs)
+      const payloadForLogging = {
+        ...emailPayload,
+        attachments: emailPayload.attachments?.map((a: any) => ({
+          filename: a.filename,
+          contentLength: a.content?.length || 0
+        }))
+      };
+      console.log('📧 Resend API payload:', JSON.stringify(payloadForLogging, null, 2));
       
       const response = await resendClient.emails.send(emailPayload);
 

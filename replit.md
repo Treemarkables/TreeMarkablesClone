@@ -113,6 +113,14 @@ Preferred communication style: Simple, everyday language.
 - Gmail credentials: `GMAIL_USER=accounts@treemarkables.nz`, `GMAIL_APP_PASSWORD` (secret)
 - Known limitation: Matches to newest job only - multi-job customers may need subject-based job number parsing (future enhancement)
 
+### Invoice PDF Attachment Fix (25 Nov 2025)
+- **FIX**: Invoice email PDF attachments now correctly generate and attach 112KB PDFs
+- **Root cause**: `formatDate` function was defined inside HTML generation scope, inaccessible to PDF generation code in separate scope
+- **Solution**: Moved `formatDate` and `formatCurrency` helper functions outside both HTML and PDF blocks for shared access
+- **Files modified**: `server/routes.ts` (lines ~4830-5130 in `/api/emails/send` endpoint)
+- **Log cleanup**: Removed binary attachment content logging in `emailService.ts` to prevent log flooding with PNG bytes
+- **Verified**: Emails now consistently attach 2 files (Invoice PDF + Company Logo PNG)
+
 ### Notification & Timezone Fixes
 - **Critical**: Disabled automatic `job_scheduled` notifications in `automatedTriggers.ts` - customer notifications now ONLY send when user explicitly checks `sendClientNotification` checkbox in GlobalJobCard
 - **Timezone standardization**: Updated all customer-facing date/time formatting in `notificationService.ts`, `emailService.ts`, and `smsService.ts` to use `formatNZTime()` utility from `shared/dateUtils.ts`
