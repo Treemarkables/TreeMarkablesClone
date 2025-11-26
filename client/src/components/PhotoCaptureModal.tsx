@@ -195,37 +195,43 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
           ) : (
             <div className="space-y-3">
               {/* Take Photo - on mobile opens camera, on desktop opens file picker */}
-              <div className="relative">
+              <div>
                 <input
                   id="camera-input"
                   type="file"
-                  accept="image/*,video/*"
+                  accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
                   {...(isMobile ? { capture: "environment" } : {})}
                   onChange={handleFileSelect}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  className="sr-only"
                   data-testid="input-camera"
                 />
-                <div className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors pointer-events-none">
+                <label
+                  htmlFor="camera-input"
+                  className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+                >
                   <Camera className="w-8 h-8" />
-                  <span className="text-base font-medium">{isMobile ? "Take Photo" : "Select Photo"}</span>
-                </div>
+                  <span className="text-base font-medium">{isMobile ? "Take Photo" : "Select File"}</span>
+                </label>
               </div>
 
               {/* Choose from Library - allows multiple selection */}
-              <div className="relative">
+              <div>
                 <input
                   id="library-input"
                   type="file"
-                  accept="image/*,video/*"
+                  accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
                   multiple
                   onChange={handleFileSelect}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  className="sr-only"
                   data-testid="input-library"
                 />
-                <div className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors pointer-events-none">
+                <label
+                  htmlFor="library-input"
+                  className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+                >
                   <Upload className="w-8 h-8" />
-                  <span className="text-base font-medium">Choose Multiple Photos</span>
-                </div>
+                  <span className="text-base font-medium">Choose Multiple Files</span>
+                </label>
               </div>
             </div>
           )}
