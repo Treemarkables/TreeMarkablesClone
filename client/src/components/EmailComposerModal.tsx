@@ -860,16 +860,14 @@ export function EmailComposerModal({
                 </PopoverContent>
               </Popover>
               
-              <Button 
-                onClick={handleFileAttachment} 
-                variant="outline" 
-                size="sm"
-                className="bg-blue-500 hover:bg-blue-600 text-white border-blue-500 h-8 text-xs px-2 sm:px-4"
+              <label 
+                htmlFor="email-file-attachment"
+                className="inline-flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white border-blue-500 h-8 text-xs px-2 sm:px-4 rounded-md cursor-pointer transition-colors"
                 data-testid="button-attach-file"
               >
                 <Paperclip className="w-3.5 h-3.5 sm:mr-1" />
                 <span className="hidden sm:inline">Attach</span>
-              </Button>
+              </label>
               <Button 
                 onClick={handleSendEmail}
                 disabled={sendEmailMutation.isPending}
@@ -967,14 +965,15 @@ export function EmailComposerModal({
               </div>
             )}
 
-            {/* Hidden file input */}
+            {/* Hidden file input - using sr-only for accessibility */}
             <input
+              id="email-file-attachment"
               ref={fileInputRef}
               type="file"
               multiple
               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt,.zip"
               onChange={handleFileSelect}
-              style={{ display: 'none' }}
+              className="sr-only"
             />
           </div>
 
