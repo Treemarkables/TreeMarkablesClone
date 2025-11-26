@@ -2112,19 +2112,9 @@ class DatabaseStorage implements IStorage {
     const allCustomers = await this.getAllCustomers();
     const allLeads = await this.getLeads();
     
-    // Filter by date if provided
-    let filteredJobs = allJobs;
+    // Filter leads by date if provided (for lead-related metrics)
     let filteredLeads = allLeads;
-    
     if (fromDate || toDate) {
-      filteredJobs = allJobs.filter(job => {
-        if (!job.createdAt) return false;
-        const jobDate = new Date(job.createdAt);
-        if (fromDate && jobDate < fromDate) return false;
-        if (toDate && jobDate > toDate) return false;
-        return true;
-      });
-      
       filteredLeads = allLeads.filter(lead => {
         if (!lead.createdAt) return false;
         const leadDate = new Date(lead.createdAt);
@@ -2134,25 +2124,57 @@ class DatabaseStorage implements IStorage {
       });
     }
     
-    // Include completed jobs in revenue calculation (invoiced jobs remain as 'completed')
-    const completedJobs = filteredJobs.filter(job => job.status === 'completed');
-    const totalRevenue = completedJobs.reduce((sum, job) => sum + (parseFloat(job.totalAmount?.toString() || '0')), 0);
+    // For revenue/job value metrics, filter completed jobs by completion date (consistent with Financial Performance)
+    const completedJobs = allJobs.filter(job => job.status === 'completed');
+    let filteredCompletedJobs = completedJobs;
+    if (fromDate || toDate) {
+      filteredCompletedJobs = completedJobs.filter(job => {
+        if (!job.completedDate) return false;
+        const completedDate = new Date(job.completedDate);
+        if (fromDate && completedDate < fromDate) return false;
+        if (toDate && completedDate > toDate) return false;
+        return true;
+      });
+    }
+    
+    // Calculate revenue from line items (consistent with Financial Performance calculation)
+    let totalRevenue = 0;
+    let jobsWithRevenue = 0;
+    for (const job of filteredCompletedJobs) {
+      const jobRevenue = (job.lineItems || []).reduce((sum: number, item: any) => {
+        return sum + (item.total || 0);
+      }, 0);
+      totalRevenue += jobRevenue;
+      if (jobRevenue > 0) {
+        jobsWithRevenue++;
+      }
+    }
+    
     const leadsCount = filteredLeads.length;
     
     // For customer count and retention, we use all customers (not filtered by date)
     // because retention is calculated based on total customer base
     const customersCount = allCustomers.length;
     
-    // Exclude archived jobs from total count
-    const activeJobs = filteredJobs.filter(job => job.status !== 'archived');
+    // Exclude archived jobs from total count (filter by creation date for job count)
+    let filteredJobsForCount = allJobs;
+    if (fromDate || toDate) {
+      filteredJobsForCount = allJobs.filter(job => {
+        if (!job.createdAt) return false;
+        const jobDate = new Date(job.createdAt);
+        if (fromDate && jobDate < fromDate) return false;
+        if (toDate && jobDate > toDate) return false;
+        return true;
+      });
+    }
+    const activeJobs = filteredJobsForCount.filter(job => job.status !== 'archived');
     
     // Conversion rate: (completed jobs / total leads) * 100
-    const conversionRate = leadsCount > 0 ? (completedJobs.length / leadsCount) * 100 : 0;
+    const conversionRate = leadsCount > 0 ? (filteredCompletedJobs.length / leadsCount) * 100 : 0;
     
-    // Average quote value (from proposals or line items)
-    const jobsWithRevenue = completedJobs.filter(job => parseFloat(job.totalAmount?.toString() || '0') > 0);
-    const averageQuoteValue = jobsWithRevenue.length > 0 
-      ? totalRevenue / jobsWithRevenue.length 
+    // Average quote value - using line items total (consistent with Financial Performance)
+    const averageQuoteValue = jobsWithRevenue > 0 
+      ? totalRevenue / jobsWithRevenue 
       : 0;
     
     // Calculate customer retention (repeat customers) - exclude archived jobs
