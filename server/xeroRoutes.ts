@@ -242,18 +242,37 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       let xeroContactId: string;
       
       try {
-        // Search for existing contact by name
-        const contactsResponse = await client.accountingApi.getContacts(
-          tenantId,
-          undefined, // IDs
-          `Name="${customer.name}"` // where filter
-        );
+        // Search for existing contact by name - escape special characters
+        const escapedName = customer.name.replace(/"/g, '\\"');
+        console.log(`🔍 Searching for Xero contact: "${escapedName}"`);
+        
+        let contactsResponse;
+        try {
+          contactsResponse = await client.accountingApi.getContacts(
+            tenantId,
+            undefined, // IDs
+            `Name="${escapedName}"` // where filter
+          );
+        } catch (searchError: any) {
+          // If search fails, try without the where filter and search manually
+          console.log(`⚠️ Xero contact search failed, trying fallback approach...`);
+          const allContactsResponse = await client.accountingApi.getContacts(tenantId);
+          const matchingContact = allContactsResponse.body.contacts?.find(
+            c => c.name?.toLowerCase() === customer.name.toLowerCase()
+          );
+          contactsResponse = { 
+            body: { 
+              contacts: matchingContact ? [matchingContact] : [] 
+            } 
+          };
+        }
         
         if (contactsResponse.body.contacts && contactsResponse.body.contacts.length > 0) {
           xeroContactId = contactsResponse.body.contacts[0].contactID!;
           console.log(`✅ Found existing Xero contact: ${xeroContactId}`);
         } else {
           // Create new contact
+          console.log(`📝 Creating new Xero contact for: ${customer.name}`);
           const newContact = {
             name: customer.name,
             emailAddress: customer.email || undefined,
@@ -272,14 +291,23 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
             { contacts: [newContact] }
           );
           
+          if (!createResponse.body.contacts?.[0]?.contactID) {
+            console.error('❌ Xero contact creation returned no ID:', createResponse.body);
+            throw new Error('Xero returned empty contact response');
+          }
+          
           xeroContactId = createResponse.body.contacts![0].contactID!;
           console.log(`✅ Created new Xero contact: ${xeroContactId}`);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error managing Xero contact:', error);
+        const errorMessage = error?.response?.body?.Message || error?.message || 'Unknown error';
+        const errorDetails = error?.response?.body?.Elements?.[0]?.ValidationErrors || [];
+        console.error('Xero error details:', errorMessage, errorDetails);
         return res.status(500).json({ 
           success: false, 
-          message: 'Failed to create/find contact in Xero' 
+          message: `Failed to create/find contact in Xero: ${errorMessage}`,
+          details: errorDetails
         });
       }
       
