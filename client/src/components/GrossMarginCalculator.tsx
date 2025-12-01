@@ -337,8 +337,8 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     // ONLY save cost-related fields, don't touch revenue/line items
     const dataToSave: any = {
       materialsCosts: materialsCosts.toString(),
-      grossMargin: grossMarginPercent.toFixed(1),
-      grossMarginCalculated: true,
+      grossMargin: null,
+      grossMarginCalculated: false,
       assignedStaffIds: selectedStaffIds,
       staffAssignments: staffAssignments.filter(assignment => selectedStaffIds.includes(assignment.staffId))
     };
