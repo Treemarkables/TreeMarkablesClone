@@ -278,19 +278,7 @@ class NotificationService {
           jobNumber: jobData?.jobNumber // Pass job number for job-specific reply-to
         });
       } else if (type === 'job_completed') {
-        await emailService.sendEmail({
-          to: customer.email,
-          from: 'noreply@treemarkables.co.nz',
-          subject: `Job Completed - ${jobTitle}`,
-          html: `
-            <h2>Job Completed</h2>
-            <p>Hi ${customer.name},</p>
-            <p>Your job "${jobTitle}" has been completed successfully!</p>
-            <p>Thank you for choosing Treemarkables. We hope you're satisfied with our service.</p>
-            <p>Best regards,<br>Treemarkables Team</p>
-          `,
-          jobNumber: jobData?.jobNumber // Pass job number for job-specific reply-to
-        });
+        // Email notification for job completion disabled per user request
       }
     }
 
@@ -310,10 +298,7 @@ class NotificationService {
           message: `Hi ${customer.name}, your job is scheduled for ${formattedDateTime}. - Treemarkables`
         });
       } else if (type === 'job_completed') {
-        await smsService.sendSMS({
-          to: customer.phone,
-          message: `Hi ${customer.name}, your job "${jobTitle}" has been completed successfully! Thank you for choosing Treemarkables.`
-        });
+        // SMS notification for job completion disabled per user request
       }
     }
   }
