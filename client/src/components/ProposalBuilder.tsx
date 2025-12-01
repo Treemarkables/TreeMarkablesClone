@@ -920,12 +920,11 @@ export function ProposalBuilder({
   const initializeEmailForm = () => {
     const previewData = getPreviewData();
     const customerEmail = previewData.customer?.email || '';
-    const proposalNumber = previewData.proposal.proposalNumber || 'N/A';
     
     setEmailForm({
       to: customerEmail,
       cc: '',
-      subject: `Tree Service Proposal ${proposalNumber}`,
+      subject: `Tree Service Proposal`,
       message: `Thank you for your inquiry, we are pleased to provide you with the following estimate.`
     });
   };
