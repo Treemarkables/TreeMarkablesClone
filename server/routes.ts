@@ -8388,10 +8388,11 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       if (sendNotifications) {
         for (const assignment of created) {
           const employee = await storage.getEmployee(assignment.employeeId);
-          if (employee && employee.email) {
-            // Queue notification - will be sent during business hours
-            await queueScheduleNotification(employee, job, assignment);
-          }
+          
+          // Email/SMS notifications to staff disabled per user request
+          // if (employee && employee.email) {
+          //   await queueScheduleNotification(employee, job, assignment);
+          // }
           
           // Send push notification immediately
           if (employee && job) {
