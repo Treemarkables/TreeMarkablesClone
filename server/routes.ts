@@ -3335,6 +3335,37 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         lineItemsCount: job.lineItems ? job.lineItems.length : 0
       });
 
+      // Sync job description to linked proposals when description changes
+      if (validation.data.description && validation.data.description !== oldJob?.description) {
+        try {
+          const linkedProposals = await storage.getProposalsByJob(req.params.id);
+          console.log(`📝 Syncing job description to ${linkedProposals.length} linked proposal(s)`);
+          
+          for (const proposal of linkedProposals) {
+            // Get proposal sections
+            const sections = await storage.getProposalSections(proposal.id);
+            
+            // Find the service_description section or first text section
+            const descriptionSection = sections.find(s => 
+              s.sectionType === 'service_description' || 
+              s.sectionType === 'text' ||
+              s.sectionType === 'intro'
+            );
+            
+            if (descriptionSection) {
+              // Update the section content with the new job description
+              await storage.updateProposalSection(descriptionSection.id, {
+                content: validation.data.description
+              });
+              console.log(`✅ Updated proposal ${proposal.proposalNumber} description section`);
+            }
+          }
+        } catch (error) {
+          console.error('Error syncing job description to proposals:', error);
+          // Don't fail job update if proposal sync fails
+        }
+      }
+
       // Trigger automated notifications if status changed
       if (validation.data.status && validation.data.status !== oldStatus) {
         console.log(`🔔 Job status change detected: ${job.title} (${oldStatus} → ${validation.data.status})`);
@@ -3390,6 +3421,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      // Get old job for description comparison
+      const oldJob = await storage.getJob(req.params.id);
+
       // Convert empty string customerId to null in validated data
       const updateData = { ...validation.data };
       if (updateData.customerId === '') {
@@ -3442,6 +3476,32 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         } catch (error) {
           console.error('Error syncing customer info:', error);
           // Don't fail job update if customer sync fails
+        }
+      }
+
+      // Sync job description to linked proposals when description changes
+      if (validation.data.description && validation.data.description !== oldJob?.description) {
+        try {
+          const linkedProposals = await storage.getProposalsByJob(req.params.id);
+          console.log(`📝 Syncing job description to ${linkedProposals.length} linked proposal(s) via PATCH`);
+          
+          for (const proposal of linkedProposals) {
+            const sections = await storage.getProposalSections(proposal.id);
+            const descriptionSection = sections.find(s => 
+              s.sectionType === 'service_description' || 
+              s.sectionType === 'text' ||
+              s.sectionType === 'intro'
+            );
+            
+            if (descriptionSection) {
+              await storage.updateProposalSection(descriptionSection.id, {
+                content: validation.data.description
+              });
+              console.log(`✅ Updated proposal ${proposal.proposalNumber} description section`);
+            }
+          }
+        } catch (error) {
+          console.error('Error syncing job description to proposals:', error);
         }
       }
 
