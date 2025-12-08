@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import DOMPurify from "dompurify";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -285,7 +286,12 @@ export function EmailComposerModal({
       
       // Only update if content has actually changed AND user is not currently typing
       if (currentContent !== newContent && document.activeElement !== emailBodyRef.current) {
-        emailBodyRef.current.innerHTML = newContent;
+        // Sanitize HTML to prevent XSS attacks from malicious templates or user data
+        emailBodyRef.current.innerHTML = DOMPurify.sanitize(newContent, {
+          ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'a', 'ul', 'ol', 'li', 'span', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+          ALLOWED_ATTR: ['href', 'style', 'class'],
+          ALLOW_DATA_ATTR: false
+        });
       }
     }
   }, [emailData.body]);
@@ -1063,7 +1069,7 @@ export function EmailComposerModal({
               onBlur={(e) => {
                 // Restore placeholder if empty
                 if (!e.currentTarget.textContent?.trim()) {
-                  e.currentTarget.innerHTML = '<p style="color: #9ca3af;">Compose your email...</p>';
+                  e.currentTarget.innerHTML = DOMPurify.sanitize('<p style="color: #9ca3af;">Compose your email...</p>');
                   setEmailData(prev => ({ ...prev, body: '' }));
                 }
               }}
