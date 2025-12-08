@@ -17,7 +17,7 @@ const mockApiKeys = [
   {
     id: "1",
     name: "Production API Key",
-    key: "sk_prod_1234567890abcdef",
+    key: "tmk_prod_1234567890abcdef",
     permissions: ["read", "write"],
     lastUsed: "2024-09-23",
     status: "active"
@@ -25,7 +25,7 @@ const mockApiKeys = [
   {
     id: "2", 
     name: "Analytics Integration",
-    key: "sk_test_abcdef1234567890",
+    key: "tmk_test_abcdef1234567890",
     permissions: ["read"],
     lastUsed: "2024-09-20",
     status: "active"
@@ -33,7 +33,7 @@ const mockApiKeys = [
   {
     id: "3",
     name: "Mobile App Key", 
-    key: "sk_test_9876543210fedcba",
+    key: "tmk_test_9876543210fedcba",
     permissions: ["read", "write"],
     lastUsed: "Never",
     status: "inactive"
