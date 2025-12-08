@@ -2828,7 +2828,33 @@ class DatabaseStorage implements IStorage {
       query = query.limit(limit) as any;
     }
     const notifications = await query.orderBy(desc(schema.notifications.createdAt));
-    return notifications as NotificationWithDetails[];
+    
+    // Filter out notifications for completed jobs
+    const filteredNotifications = await this.filterCompletedJobNotifications(notifications);
+    return filteredNotifications as NotificationWithDetails[];
+  }
+  
+  // Helper method to filter out notifications for completed jobs
+  private async filterCompletedJobNotifications(notifications: any[]): Promise<any[]> {
+    if (notifications.length === 0) return notifications;
+    
+    // Get unique job IDs from notifications
+    const jobIds = [...new Set(notifications.filter(n => n.jobId).map(n => n.jobId))];
+    
+    if (jobIds.length === 0) return notifications;
+    
+    // Fetch jobs to check their status
+    const jobs = await db.select({ id: schema.jobs.id, status: schema.jobs.status })
+      .from(schema.jobs)
+      .where(inArray(schema.jobs.id, jobIds as string[]));
+    
+    // Create a set of completed job IDs
+    const completedJobIds = new Set(
+      jobs.filter(j => j.status === 'completed').map(j => j.id)
+    );
+    
+    // Filter out notifications for completed jobs
+    return notifications.filter(n => !n.jobId || !completedJobIds.has(n.jobId));
   }
   async getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]> {
     const conditions = [eq(schema.notifications.isRead, false)];
@@ -2839,7 +2865,10 @@ class DatabaseStorage implements IStorage {
       .from(schema.notifications)
       .where(and(...conditions))
       .orderBy(desc(schema.notifications.createdAt));
-    return notifications as NotificationWithDetails[];
+    
+    // Filter out notifications for completed jobs
+    const filteredNotifications = await this.filterCompletedJobNotifications(notifications);
+    return filteredNotifications as NotificationWithDetails[];
   }
   async markNotificationAsRead(id: string): Promise<Notification> {
     const [updatedNotification] = await db.update(schema.notifications)
@@ -2870,25 +2899,28 @@ class DatabaseStorage implements IStorage {
       query = query.where(eq(schema.notifications.userId, userId)) as any;
     }
     
-    const allNotifications = await query.orderBy(desc(schema.notifications.createdAt));
+    const rawNotifications = await query.orderBy(desc(schema.notifications.createdAt));
+    
+    // Filter out notifications for completed jobs
+    const allNotifications = await this.filterCompletedJobNotifications(rawNotifications);
     
     // Count unread notifications
-    const unreadCount = allNotifications.filter(n => !n.isRead).length;
+    const unreadCount = allNotifications.filter((n: any) => !n.isRead).length;
     
     // Group by type
     const byType: Record<string, number> = {};
-    allNotifications.forEach(n => {
+    allNotifications.forEach((n: any) => {
       byType[n.type] = (byType[n.type] || 0) + 1;
     });
     
     // Group by priority
     const byPriority: Record<string, number> = {};
-    allNotifications.forEach(n => {
+    allNotifications.forEach((n: any) => {
       byPriority[n.priority] = (byPriority[n.priority] || 0) + 1;
     });
     
     // Get recent notifications (up to 5)
-    const recent = allNotifications.slice(0, 5).map(n => ({
+    const recent = allNotifications.slice(0, 5).map((n: any) => ({
       id: n.id,
       title: n.title,
       type: n.type,
