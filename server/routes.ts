@@ -3191,13 +3191,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Xero Invoice Resend Workflow: Clear Xero sync fields when job leaves 'completed' status
       // This allows the job to be resent to Xero when it's marked completed again (after voiding in Xero)
       if (oldJob?.status === 'completed' && validation.data.status && validation.data.status !== 'completed') {
-        if (oldJob.xeroInvoiceId) {
-          console.log(`🔄 Clearing Xero sync fields for job ${req.params.id} - status changing from completed to ${validation.data.status}`);
-          // Add Xero reset fields to the update data (will be merged below)
-          (validation.data as any).xeroInvoiceId = null;
-          (validation.data as any).xeroStatus = null;
-          (validation.data as any).sentToXeroDate = null;
-        }
+        console.log(`🔄 Clearing Xero sync fields for job ${req.params.id} - status changing from completed to ${validation.data.status}`);
+        // Always clear Xero fields when leaving 'completed' status
+        (validation.data as any).xeroInvoiceId = null;
+        (validation.data as any).xeroStatus = null;
+        (validation.data as any).sentToXeroDate = null;
       }
 
       // Debug logging for job update
