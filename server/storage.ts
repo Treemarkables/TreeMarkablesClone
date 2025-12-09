@@ -648,6 +648,7 @@ export interface IStorage {
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   getInvoice(id: string): Promise<Invoice | undefined>;
   getInvoicesByJob(jobId: string): Promise<Invoice[]>;
+  getAllInvoices(): Promise<Invoice[]>;
   updateInvoice(id: string, updates: Partial<InsertInvoice>): Promise<Invoice>;
   deleteInvoice(id: string): Promise<void>;
   createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest>;
@@ -2113,6 +2114,7 @@ class DatabaseStorage implements IStorage {
     const allLeads = await this.getLeads();
     const allQuotes = await this.getAllQuotes();
     const allProposals = await this.getAllProposals();
+    const allInvoices = await this.getAllInvoices();
     
     // Filter leads by date if provided
     let filteredLeads = allLeads;
@@ -2180,9 +2182,19 @@ class DatabaseStorage implements IStorage {
     
     const averageQuoteValue = quotesWithValue > 0 ? totalQuoteValue / quotesWithValue : 0;
     
-    // Calculate total revenue from completed jobs
+    // Calculate total revenue from invoices sent (not cancelled)
+    let filteredInvoices = allInvoices.filter(inv => inv.status !== 'cancelled');
+    if (fromDate || toDate) {
+      filteredInvoices = filteredInvoices.filter(inv => {
+        if (!inv.issueDate) return false;
+        const invoiceDate = new Date(inv.issueDate);
+        if (fromDate && invoiceDate < fromDate) return false;
+        if (toDate && invoiceDate > toDate) return false;
+        return true;
+      });
+    }
+    const totalRevenue = filteredInvoices.reduce((sum, inv) => sum + (parseFloat(inv.amount?.toString() || '0')), 0);
     const completedJobs = filteredJobs.filter(job => job.status === 'completed');
-    const totalRevenue = completedJobs.reduce((sum, job) => sum + (parseFloat(job.totalAmount?.toString() || '0')), 0);
     const leadsCount = filteredLeads.length;
     
     // For customer count and retention, we use all customers (not filtered by date)
@@ -2212,6 +2224,7 @@ class DatabaseStorage implements IStorage {
       totalCustomers: customersCount,
       totalJobs: activeJobs.length,
       totalRevenue,
+      invoicesCount: filteredInvoices.length,
       conversionRate: Math.round(conversionRate * 100) / 100,
       averageQuoteValue: Math.round(averageQuoteValue * 100) / 100,
       customerRetention,
@@ -3884,6 +3897,12 @@ class DatabaseStorage implements IStorage {
     const invoices = await db.select()
       .from(schema.invoices)
       .where(eq(schema.invoices.jobId, jobId))
+      .orderBy(desc(schema.invoices.createdAt));
+    return invoices;
+  }
+  async getAllInvoices(): Promise<Invoice[]> {
+    const invoices = await db.select()
+      .from(schema.invoices)
       .orderBy(desc(schema.invoices.createdAt));
     return invoices;
   }
