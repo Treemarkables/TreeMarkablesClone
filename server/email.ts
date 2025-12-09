@@ -29,10 +29,6 @@ export async function sendContactEmail(formData: ContactFormData, leadSource?: L
   try {
     // Clean up phone number by removing dashes
     const cleanPhone = formData.phone ? removeDashesFromPhone(formData.phone) : undefined;
-    // Debug environment variables
-    console.log('Environment check:');
-    console.log('GMAIL_USER:', process.env.GMAIL_USER ? '***SET***' : 'NOT SET');
-    console.log('GMAIL_APP_PASSWORD:', process.env.GMAIL_APP_PASSWORD ? '***SET***' : 'NOT SET');
     
     // If Gmail credentials are not set, log the form submission for now
     if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
