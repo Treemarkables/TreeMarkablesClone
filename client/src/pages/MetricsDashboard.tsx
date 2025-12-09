@@ -41,6 +41,7 @@ interface DashboardStats {
   totalCustomers: number;
   totalJobs: number;
   totalRevenue: number;
+  completedJobsCount: number;
   conversionRate: number;
   averageQuoteValue: number;
   missedCalls: number;
@@ -473,7 +474,7 @@ export default function MetricsDashboard() {
             <MetricCard
               title="Total Revenue"
               value={formatCurrency(dashboardStats?.totalRevenue || 0)}
-              subtitle={`${dashboardStats?.totalJobs || 0} jobs completed`}
+              subtitle={`${dashboardStats?.completedJobsCount || 0} jobs completed`}
               icon={DollarSign}
               testId="card-total-revenue"
               colorful={true}
