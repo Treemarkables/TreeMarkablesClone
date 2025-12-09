@@ -18,9 +18,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Dev mode auto-login - automatically log in as admin when running locally
+const DEV_AUTO_LOGIN = import.meta.env.DEV; // Only true in development mode
+const DEV_ADMIN_ID = 'admin-test-001';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<Employee | null>(null);
   const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(false);
+  const [devAutoLoginAttempted, setDevAutoLoginAttempted] = useState(false);
   const [, setLocation] = useLocation();
   const consecutive401sRef = useRef<number>(0);
 
@@ -123,6 +128,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     logoutMutation.mutate();
   };
+
+  // Dev mode auto-login: automatically log in as admin when not authenticated
+  useEffect(() => {
+    if (DEV_AUTO_LOGIN && !devAutoLoginAttempted && initialAuthCheckComplete && !currentUser && !loginMutation.isPending) {
+      console.log('🔧 Dev mode: Auto-logging in as admin...');
+      setDevAutoLoginAttempted(true);
+      login({ employeeId: DEV_ADMIN_ID }).catch((err) => {
+        console.error('Dev auto-login failed:', err);
+      });
+    }
+  }, [DEV_AUTO_LOGIN, devAutoLoginAttempted, initialAuthCheckComplete, currentUser, loginMutation.isPending]);
 
   useEffect(() => {
     // Mark initial check as complete once we have a response
