@@ -54,7 +54,11 @@ export default function Invoices() {
 
   // Fetch ALL completed jobs that are ready for invoicing (fetch with very high limit to get all completed jobs)
   const { data: jobsResponse, isLoading: isLoadingJobs } = useQuery<ApiResponse<Job>>({
-    queryKey: ['/api/jobs?status=completed&limit=1000'],
+    queryKey: ['/api/jobs', 'completed', 1000],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/jobs?status=completed&limit=1000');
+      return await response.json();
+    },
   });
 
   const createInvoiceMutation = useMutation({
@@ -65,7 +69,7 @@ export default function Invoices() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs?status=completed&limit=1000'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
       setCreatingInvoiceForJob(null);
       toast({
         title: "Success",
@@ -96,7 +100,7 @@ export default function Invoices() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs?status=completed&limit=1000'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
       setSendingJobId(null);
       toast({
         title: "Success",
@@ -151,7 +155,7 @@ export default function Invoices() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs?status=completed&limit=1000'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
       setEditingInvoice(null);
       toast({
         title: "Success",
