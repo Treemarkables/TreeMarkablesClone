@@ -59,6 +59,7 @@ export default function Invoices() {
       const response = await apiRequest('GET', '/api/jobs?status=completed&limit=1000');
       return await response.json();
     },
+    staleTime: 0,
   });
 
   const createInvoiceMutation = useMutation({
@@ -70,6 +71,7 @@ export default function Invoices() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
+      queryClient.refetchQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
       setCreatingInvoiceForJob(null);
       toast({
         title: "Success",
@@ -101,6 +103,7 @@ export default function Invoices() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
+      queryClient.refetchQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
       setSendingJobId(null);
       toast({
         title: "Success",
@@ -156,6 +159,7 @@ export default function Invoices() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
+      queryClient.refetchQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
       setEditingInvoice(null);
       toast({
         title: "Success",
