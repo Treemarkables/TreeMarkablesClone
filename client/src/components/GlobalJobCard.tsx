@@ -900,6 +900,8 @@ export function GlobalJobCard({
           return typeof key === 'string' && key.startsWith('/api/jobs');
         }
       });
+      // Explicitly invalidate the Invoices completed jobs query (required for status changes)
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', 'completed', 1000] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
