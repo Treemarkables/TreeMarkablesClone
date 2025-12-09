@@ -253,7 +253,8 @@ class NotificationService {
 
     // Send email notification
     if (customer.email && customer.communicationPreferences?.emailEnabled !== false) {
-      if (type === 'job_status_update') {
+      if (type === 'job_status_update' && status !== 'completed') {
+        // Skip email for 'completed' status - disabled per user request
         await emailService.sendJobStatusEmail(
           customer.email,
           customer.name,
@@ -284,7 +285,8 @@ class NotificationService {
 
     // Send SMS notification
     if (customer.phone && customer.communicationPreferences?.smsEnabled !== false) {
-      if (type === 'job_status_update') {
+      if (type === 'job_status_update' && status !== 'completed') {
+        // Skip SMS for 'completed' status - disabled per user request
         await smsService.sendJobStatusSMS(
           customer.phone,
           customer.name,
