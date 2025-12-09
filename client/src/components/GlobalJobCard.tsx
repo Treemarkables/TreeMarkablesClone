@@ -894,9 +894,12 @@ export function GlobalJobCard({
     },
     onSuccess: (updatedJob) => {
       // Invalidate all jobs queries to update dispatch board and job lists
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob?.id] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs?status=completed&limit=1000'] }); // Invalidate completed jobs for Invoices page
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/jobs');
+        }
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
