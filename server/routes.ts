@@ -3196,6 +3196,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         (validation.data as any).xeroInvoiceId = null;
         (validation.data as any).xeroStatus = null;
         (validation.data as any).sentToXeroDate = null;
+        
+        // Also clear linked invoice's Xero fields and delete the invoice so job can be re-invoiced
+        try {
+          const linkedInvoices = await storage.getInvoicesByJob(req.params.id);
+          for (const invoice of linkedInvoices) {
+            console.log(`🗑️ Deleting invoice ${invoice.invoiceNumber} for job ${req.params.id} to allow re-invoicing`);
+            await storage.deleteInvoice(invoice.id);
+          }
+        } catch (error) {
+          console.error('Error clearing linked invoices:', error);
+          // Don't fail job update if invoice clearing fails
+        }
       }
 
       // Debug logging for job update
