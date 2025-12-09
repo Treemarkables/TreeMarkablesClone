@@ -1640,6 +1640,26 @@ export function GlobalJobCard({
       console.log('Form data after safety fix:', formData);
     }
     
+    // TRANSFORM LEGACY LINE ITEMS: Convert old format to new schema format before validation
+    const lineItems = formData.lineItems || [];
+    if (lineItems.length > 0) {
+      const transformedItems = lineItems.map((item: any, index: number) => ({
+        id: item.id || `legacy-${index}-${Date.now()}`,
+        itemCode: item.itemCode || '',
+        description: item.description || '',
+        quantity: typeof item.quantity === 'string' ? parseFloat(item.quantity) || 1 : (item.quantity || 1),
+        unitPrice: item.unitPrice ?? item.rate ?? 0,
+        total: item.total ?? item.amount ?? 0,
+        unitCost: item.unitCost ?? 0,
+        totalCost: item.totalCost ?? 0,
+        taxRate: item.taxRate ?? 15,
+        priceIncludesTax: item.priceIncludesTax ?? false
+      }));
+      form.setValue('lineItems', transformedItems);
+      formData = form.getValues();
+      console.log('Form data after lineItems transformation:', formData.lineItems);
+    }
+    
     // Auto-set newCustomerName from job contact names if not provided (for jobs from conversations)
     if (formData.isNewCustomer && !formData.newCustomerName && (formData.jobContactFirstName || formData.jobContactLastName)) {
       formData.newCustomerName = `${formData.jobContactFirstName || ''} ${formData.jobContactLastName || ''}`.trim();
