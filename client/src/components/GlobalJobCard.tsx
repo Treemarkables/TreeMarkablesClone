@@ -898,6 +898,8 @@ export function GlobalJobCard({
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob?.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
       // Refetch the specific job and customers to ensure UI has latest data
       queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob?.id] });
       queryClient.refetchQueries({ queryKey: ['/api/customers'] });
