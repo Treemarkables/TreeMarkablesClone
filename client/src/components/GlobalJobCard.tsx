@@ -685,6 +685,7 @@ export function GlobalJobCard({
         status: (editingJob.status as any) || 'work_order',
         priority: editingJob.priority || 'medium',
         customerId: editingJob.customerId || '',
+        isNewCustomer: false, // Existing jobs always have a customer already
         leadSource: editingJob.leadSource || '',
         address: editingJob.address || '',
         totalAmount: editingJob.totalAmount || '0',
