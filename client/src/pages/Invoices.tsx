@@ -65,7 +65,7 @@ export default function Invoices() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs?status=completed&limit=1000'] });
       setCreatingInvoiceForJob(null);
       toast({
         title: "Success",
@@ -96,7 +96,7 @@ export default function Invoices() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs?status=completed&limit=1000'] });
       setSendingJobId(null);
       toast({
         title: "Success",
@@ -151,7 +151,7 @@ export default function Invoices() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs?status=completed&limit=1000'] });
       setEditingInvoice(null);
       toast({
         title: "Success",
