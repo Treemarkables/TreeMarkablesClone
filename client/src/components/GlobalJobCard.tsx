@@ -1617,15 +1617,27 @@ export function GlobalJobCard({
       return;
     }
     
-    const formData = form.getValues();
+    let formData = form.getValues();
     console.log('Form data before save:', formData);
     console.log('Form errors:', form.formState.errors);
+    console.log('editingJob customerId:', editingJob?.customerId);
+    console.log('mode:', mode, 'isNewCustomer:', formData.isNewCustomer);
     
-    // SAFETY CHECK: Prevent accidentally clearing customerId on existing jobs
-    if (mode === "edit" && editingJob?.customerId && !formData.customerId && !formData.isNewCustomer) {
-      console.warn('⚠️ Prevented clearing customerId - restoring from editingJob');
-      formData.customerId = editingJob.customerId;
-      form.setValue('customerId', editingJob.customerId);
+    // SAFETY CHECK: For edit mode, always ensure customerId is set from the editingJob
+    // This fixes validation errors when the form doesn't properly load the customerId
+    if (mode === "edit" && editingJob?.customerId) {
+      if (!formData.customerId) {
+        console.warn('⚠️ customerId was empty - restoring from editingJob');
+        form.setValue('customerId', editingJob.customerId);
+      }
+      // Also ensure isNewCustomer is false for existing jobs
+      if (formData.isNewCustomer !== false) {
+        console.warn('⚠️ isNewCustomer was not false - setting to false for existing job');
+        form.setValue('isNewCustomer', false);
+      }
+      // Re-fetch form values after setting
+      formData = form.getValues();
+      console.log('Form data after safety fix:', formData);
     }
     
     // Auto-set newCustomerName from job contact names if not provided (for jobs from conversations)
@@ -1637,7 +1649,12 @@ export function GlobalJobCard({
     // Check if form has validation errors
     const isValid = await form.trigger();
     if (!isValid) {
-      console.error('Form validation failed:', form.formState.errors);
+      const errors = form.formState.errors;
+      console.error('Form validation failed:', errors);
+      // Log specific field errors for debugging
+      Object.keys(errors).forEach(key => {
+        console.error(`Field "${key}" error:`, (errors as any)[key]?.message);
+      });
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
