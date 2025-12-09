@@ -52,13 +52,9 @@ export default function Invoices() {
     queryKey: ['/api/invoices'],
   });
 
-  // Fetch ALL completed jobs that are ready for invoicing (fetch with high limit to get all completed jobs)
+  // Fetch ALL completed jobs that are ready for invoicing (fetch with very high limit to get all completed jobs)
   const { data: jobsResponse, isLoading: isLoadingJobs } = useQuery<ApiResponse<Job>>({
-    queryKey: ['/api/jobs', 'completed'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/jobs?status=completed&limit=1000');
-      return response.json();
-    },
+    queryKey: ['/api/jobs?status=completed&limit=1000'],
   });
 
   const createInvoiceMutation = useMutation({
