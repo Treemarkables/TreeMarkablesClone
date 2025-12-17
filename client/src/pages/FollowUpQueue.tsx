@@ -54,8 +54,42 @@ interface FollowUpQuote {
     id: string;
     jobNumber: string;
     title: string;
+    address?: string;
+    description?: string;
+    status?: string;
   } | null;
 }
+
+// Get job status color (matching DispatchBoard)
+const getJobStatusColor = (status?: string) => {
+  switch (status?.toLowerCase()) {
+    case 'completed': return '#22c55e'; // green-500
+    case 'unsuccessful': return '#ef4444'; // red-500
+    case 'invoiced': return '#a855f7'; // purple-500
+    case 'archived': return '#6b7280'; // gray-500
+    case 'work_order': return '#3b82f6'; // blue-500
+    case 'work order': return '#3b82f6'; // blue-500
+    case 'scheduled': return '#3b82f6'; // blue-500
+    case 'quote': return '#f97316'; // orange-500
+    case 'lead': return '#06b6d4'; // cyan-500
+    default: return '#f97316'; // orange-500 for proposals
+  }
+};
+
+// Get status initials
+const getStatusInitials = (status?: string) => {
+  switch (status?.toLowerCase()) {
+    case 'quote': return 'Q';
+    case 'lead': return 'L';
+    case 'scheduled': return 'S';
+    case 'work_order':
+    case 'work order': return 'WO';
+    case 'completed': return 'C';
+    case 'invoiced': return 'I';
+    case 'archived': return 'A';
+    default: return 'Q';
+  }
+};
 
 const followUpStatusOptions = [
   { value: 'pending', label: 'Pending', color: 'bg-gray-100 text-gray-800' },
@@ -253,125 +287,126 @@ export default function FollowUpQueue() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
+          <div className="space-y-0">
             {filteredQuotes.map((quote) => (
-              <Card 
-                key={quote.id} 
-                className="hover-elevate cursor-pointer"
+              <div
+                key={quote.id}
+                className="p-4 border-b hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                 onClick={() => openJobCard(quote)}
                 data-testid={`card-quote-${quote.id}`}
               >
-                <CardContent className="p-4">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className="font-semibold text-lg">#{quote.quoteNumber}</span>
-                        {getUrgencyBadge(quote.daysSinceSent, quote.followUpCount)}
-                        {getStatusBadge(quote.followUpStatus)}
-                        {quote.followUpCount && quote.followUpCount > 0 && (
-                          <Badge variant="outline">
-                            <PhoneCall className="h-3 w-3 mr-1" />
-                            {quote.followUpCount} attempts
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                        {quote.customer && (
-                          <span className="flex items-center gap-1">
-                            <User className="h-4 w-4" />
-                            {quote.customer.name}
-                          </span>
-                        )}
-                        {quote.customer?.phone && (
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-4 w-4" />
-                            {quote.customer.phone}
-                          </span>
-                        )}
-                        {quote.job && (
-                          <span className="flex items-center gap-1">
-                            <FileText className="h-4 w-4" />
-                            Job #{quote.job.jobNumber}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mt-2">
-                        <span className="flex items-center gap-1 font-medium">
-                          <DollarSign className="h-4 w-4" />
-                          {formatCurrency(quote.amount)}
-                        </span>
-                        {quote.daysSinceSent !== null && (
-                          <span className="flex items-center gap-1 text-muted-foreground">
-                            <Clock className="h-4 w-4" />
-                            Sent {quote.daysSinceSent} days ago
-                          </span>
-                        )}
-                        {quote.nextFollowUpDate && (
-                          <span className="flex items-center gap-1 text-blue-600">
-                            <Calendar className="h-4 w-4" />
-                            Next: {format(new Date(quote.nextFollowUpDate), 'dd MMM')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 items-center">
-                      {quote.customer?.phone && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.location.href = `tel:${quote.customer?.phone}`;
-                          }}
-                          data-testid={`button-call-${quote.id}`}
-                        >
-                          <Phone className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {quote.customer?.phone && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.location.href = `sms:${quote.customer?.phone}`;
-                          }}
-                          data-testid={`button-sms-${quote.id}`}
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {quote.customer?.email && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.location.href = `mailto:${quote.customer?.email}`;
-                          }}
-                          data-testid={`button-email-${quote.id}`}
-                        >
-                          <Mail className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openFollowUpDialog(quote);
-                        }}
-                        data-testid={`button-log-followup-${quote.id}`}
-                      >
-                        Log Follow-up
-                      </Button>
+                <div className="flex items-start gap-3">
+                  {/* Status Avatar Circle */}
+                  <div className="relative flex-shrink-0">
+                    <div 
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                      style={{ backgroundColor: getJobStatusColor(quote.job?.status) }}
+                    >
+                      {getStatusInitials(quote.job?.status)}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                  
+                  {/* Job Content */}
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <div className="flex items-start justify-between mb-1 gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-bold text-gray-900 dark:text-gray-100 text-base truncate">
+                          {quote.customer?.name || 'Unknown Customer'}
+                        </h3>
+                      </div>
+                      <div className="text-sm font-bold text-gray-700 dark:text-gray-300 flex-shrink-0">
+                        #{quote.job?.jobNumber || quote.quoteNumber}
+                      </div>
+                    </div>
+                    
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-semibold truncate">
+                      {quote.job?.address || 'No address specified'}
+                    </div>
+                    
+                    <div className="text-xs text-gray-500 dark:text-gray-500 mb-2 line-clamp-2 break-words">
+                      {quote.job?.description || quote.job?.title || '\u00A0'}
+                    </div>
+                    
+                    {/* Follow-up Info Row */}
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {getUrgencyBadge(quote.daysSinceSent, quote.followUpCount)}
+                      <span className="text-muted-foreground">
+                        {formatCurrency(quote.amount)}
+                      </span>
+                      {quote.daysSinceSent !== null && (
+                        <span className="flex items-center gap-1 text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          {quote.daysSinceSent}d ago
+                        </span>
+                      )}
+                      {quote.followUpCount && quote.followUpCount > 0 && (
+                        <Badge variant="outline" className="text-xs py-0">
+                          <PhoneCall className="h-3 w-3 mr-1" />
+                          {quote.followUpCount}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex gap-1 items-center flex-shrink-0">
+                    {quote.customer?.phone && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = `tel:${quote.customer?.phone}`;
+                        }}
+                        data-testid={`button-call-${quote.id}`}
+                      >
+                        <Phone className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {quote.customer?.phone && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = `sms:${quote.customer?.phone}`;
+                        }}
+                        data-testid={`button-sms-${quote.id}`}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {quote.customer?.email && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = `mailto:${quote.customer?.email}`;
+                        }}
+                        data-testid={`button-email-${quote.id}`}
+                      >
+                        <Mail className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openFollowUpDialog(quote);
+                      }}
+                      data-testid={`button-log-followup-${quote.id}`}
+                    >
+                      Log Follow-up
+                    </Button>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         )}
