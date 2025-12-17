@@ -64,6 +64,7 @@ import InvoiceViewer from "@/pages/InvoiceViewer";
 import PublicReview from "@/pages/PublicReview";
 import ActivityDashboard from "@/pages/ActivityDashboard";
 import TimeTracking from "@/pages/TimeTracking";
+import FollowUpQueue from "@/pages/FollowUpQueue";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
@@ -542,6 +543,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Opportunities />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/follow-up-queue">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <FollowUpQueue />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

@@ -23,7 +23,8 @@ import {
   ClipboardCheck,
   History as HistoryIconLucide,
   Megaphone,
-  Clock
+  Clock,
+  PhoneCall
 } from "lucide-react";
 import {
   Sidebar,
@@ -321,6 +322,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-opportunities">
                       <MessageSquare className="h-4 w-4" />
                       <span>Conversations</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/follow-up-queue"}>
+                    <Link href="/follow-up-queue" onClick={handleLinkClick} data-testid="link-follow-up-queue">
+                      <PhoneCall className="h-4 w-4" />
+                      <span>Follow-up Queue</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
