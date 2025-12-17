@@ -2371,6 +2371,49 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Get quotes needing follow-up (MUST be before /:id route)
+  app.get('/api/quotes/follow-up-queue', async (req: Request, res: Response) => {
+    try {
+      const allQuotes = await storage.getQuotes();
+      
+      // Filter for quotes needing follow-up: sent or viewed status
+      const followUpQuotes = allQuotes.filter(q => 
+        q.status === 'sent' || q.status === 'viewed'
+      );
+
+      // Enrich with customer data and calculate days since sent
+      const enrichedQuotes = await Promise.all(followUpQuotes.map(async (quote) => {
+        const customer = quote.customerId ? await storage.getCustomer(quote.customerId) : null;
+        const job = quote.jobId ? await storage.getJob(quote.jobId) : null;
+        const daysSinceSent = quote.sentDate 
+          ? Math.floor((Date.now() - new Date(quote.sentDate).getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+        
+        return {
+          ...quote,
+          customer,
+          job,
+          daysSinceSent,
+        };
+      }));
+
+      // Sort by next follow-up date (soonest first), then by days since sent (oldest first)
+      enrichedQuotes.sort((a, b) => {
+        if (a.nextFollowUpDate && b.nextFollowUpDate) {
+          return new Date(a.nextFollowUpDate).getTime() - new Date(b.nextFollowUpDate).getTime();
+        }
+        if (a.nextFollowUpDate) return -1;
+        if (b.nextFollowUpDate) return 1;
+        return (b.daysSinceSent || 0) - (a.daysSinceSent || 0);
+      });
+
+      res.json({ success: true, data: enrichedQuotes });
+    } catch (error) {
+      console.error('Error fetching follow-up queue:', error);
+      res.status(500).json({ success: false, message: 'Error fetching follow-up queue' });
+    }
+  });
+
   app.get('/api/quotes/:id', async (req: Request, res: Response) => {
     try {
       const quote = await storage.getQuote(req.params.id);
