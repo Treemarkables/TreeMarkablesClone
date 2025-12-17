@@ -11,7 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import GlobalJobCard from "@/components/GlobalJobCard";
+import { GlobalJobCard } from "@/components/GlobalJobCard";
 import {
   Search,
   Phone,
