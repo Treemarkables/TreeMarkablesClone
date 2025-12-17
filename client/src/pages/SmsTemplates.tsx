@@ -93,12 +93,9 @@ export default function SmsTemplates() {
 
   const createMutation = useMutation({
     mutationFn: async (data: TemplateFormData) => {
-      return apiRequest('/api/sms-templates', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...data,
-          createdBy: 'admin',
-        }),
+      return apiRequest('POST', '/api/sms-templates', {
+        ...data,
+        createdBy: 'admin',
       });
     },
     onSuccess: () => {
@@ -113,10 +110,7 @@ export default function SmsTemplates() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<TemplateFormData> }) => {
-      return apiRequest(`/api/sms-templates/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      });
+      return apiRequest('PUT', `/api/sms-templates/${id}`, data);
     },
     onSuccess: () => {
       toast({ title: 'Template updated successfully' });
@@ -130,9 +124,7 @@ export default function SmsTemplates() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/sms-templates/${id}`, {
-        method: 'DELETE',
-      });
+      return apiRequest('DELETE', `/api/sms-templates/${id}`);
     },
     onSuccess: () => {
       toast({ title: 'Template deleted successfully' });
