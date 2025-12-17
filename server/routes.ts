@@ -2374,7 +2374,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Get quotes needing follow-up (MUST be before /:id route)
   app.get('/api/quotes/follow-up-queue', async (req: Request, res: Response) => {
     try {
-      const allQuotes = await storage.getQuotes();
+      const allQuotes = await storage.getAllQuotes();
       
       // Filter for quotes needing follow-up: sent or viewed status
       const followUpQuotes = allQuotes.filter(q => 
@@ -2526,97 +2526,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error accepting quote:', error);
       res.status(500).json({ success: false, message: 'Error accepting quote' });
-    }
-  });
-
-  // ========================================
-  // QUOTE FOLLOW-UP QUEUE API ROUTES
-  // ========================================
-
-  // Get quotes needing follow-up (sent/viewed but not accepted/rejected)
-  app.get('/api/quotes/follow-up-queue', async (req: Request, res: Response) => {
-    try {
-      const allQuotes = await storage.getQuotes();
-      
-      // Filter for quotes needing follow-up: sent or viewed status
-      const followUpQuotes = allQuotes.filter(q => 
-        q.status === 'sent' || q.status === 'viewed'
-      );
-
-      // Enrich with customer data and calculate days since sent
-      const enrichedQuotes = await Promise.all(followUpQuotes.map(async (quote) => {
-        const customer = quote.customerId ? await storage.getCustomer(quote.customerId) : null;
-        const job = quote.jobId ? await storage.getJob(quote.jobId) : null;
-        const daysSinceSent = quote.sentDate 
-          ? Math.floor((Date.now() - new Date(quote.sentDate).getTime()) / (1000 * 60 * 60 * 24))
-          : null;
-        
-        return {
-          ...quote,
-          customer,
-          job,
-          daysSinceSent,
-        };
-      }));
-
-      // Sort by next follow-up date (soonest first), then by days since sent (oldest first)
-      enrichedQuotes.sort((a, b) => {
-        if (a.nextFollowUpDate && b.nextFollowUpDate) {
-          return new Date(a.nextFollowUpDate).getTime() - new Date(b.nextFollowUpDate).getTime();
-        }
-        if (a.nextFollowUpDate) return -1;
-        if (b.nextFollowUpDate) return 1;
-        return (b.daysSinceSent || 0) - (a.daysSinceSent || 0);
-      });
-
-      res.json({ success: true, data: enrichedQuotes });
-    } catch (error) {
-      console.error('Error fetching follow-up queue:', error);
-      res.status(500).json({ success: false, message: 'Error fetching follow-up queue' });
-    }
-  });
-
-  // Log a follow-up attempt and update follow-up status
-  app.post('/api/quotes/:id/follow-up', async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const { followUpStatus, nextFollowUpDate, notes, contactMethod } = req.body;
-
-      const quote = await storage.getQuote(id);
-      if (!quote) {
-        return res.status(404).json({ success: false, message: 'Quote not found' });
-      }
-
-      const currentCount = quote.followUpCount || 0;
-      const existingNotes = quote.followUpNotes || '';
-      const timestamp = new Date().toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' });
-      const newNote = notes ? `[${timestamp}] ${contactMethod || 'Contact'}: ${notes}` : '';
-      const updatedNotes = existingNotes ? `${existingNotes}\n${newNote}` : newNote;
-
-      const updatedQuote = await storage.updateQuote(id, {
-        followUpStatus: followUpStatus || 'contacted',
-        followUpCount: currentCount + 1,
-        lastFollowUpDate: new Date(),
-        nextFollowUpDate: nextFollowUpDate ? new Date(nextFollowUpDate) : null,
-        followUpNotes: updatedNotes.trim() || null,
-      });
-
-      // Create diary entry for the job if linked
-      if (quote.jobId) {
-        await storage.createJobDiaryEntry({
-          jobId: quote.jobId,
-          entryType: 'follow_up',
-          content: `Follow-up (${contactMethod || 'Contact'}): ${notes || 'No notes'}`,
-          createdBy: 'system',
-        });
-      }
-
-      console.log(`📞 Follow-up logged for quote ${quote.quoteNumber} (attempt #${currentCount + 1})`);
-
-      res.json({ success: true, data: updatedQuote });
-    } catch (error) {
-      console.error('Error logging follow-up:', error);
-      res.status(500).json({ success: false, message: 'Error logging follow-up' });
     }
   });
 
