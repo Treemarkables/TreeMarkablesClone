@@ -290,9 +290,6 @@ export default function SmsTemplates() {
                   <div className="flex-1 min-w-0">
                     <CardTitle className="text-base truncate">{template.name}</CardTitle>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <Badge variant="secondary" className="text-xs">
-                        {getCategoryLabel(template.category)}
-                      </Badge>
                       {template.isDefault && (
                         <Badge variant="default" className="text-xs">
                           Default
@@ -311,11 +308,6 @@ export default function SmsTemplates() {
                 <p className="text-sm text-muted-foreground line-clamp-3 min-h-[3.75rem]">
                   {template.message}
                 </p>
-                {template.description && (
-                  <p className="text-xs text-muted-foreground italic truncate">
-                    {template.description}
-                  </p>
-                )}
                 <div className="flex items-center justify-between pt-2 border-t">
                   <span className="text-xs text-muted-foreground">
                     {template.message.length} chars
@@ -388,45 +380,14 @@ export default function SmsTemplates() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Template Name *</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Job Scheduled Notification"
-                  value={formData.name}
-                  onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  data-testid="input-template-name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={value => setFormData(prev => ({ ...prev, category: value }))}
-                >
-                  <SelectTrigger id="category" data-testid="select-category">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SMS_CATEGORIES.map(cat => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="name">Template Name *</Label>
               <Input
-                id="description"
-                placeholder="Brief description of when to use this template"
-                value={formData.description}
-                onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                data-testid="input-description"
+                id="name"
+                placeholder="e.g., Job Scheduled Notification"
+                value={formData.name}
+                onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                data-testid="input-template-name"
               />
             </div>
 
