@@ -314,6 +314,12 @@ export const quotes = pgTable("quotes", {
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  // Follow-up tracking
+  followUpStatus: text("follow_up_status").default("pending"), // pending, contacted, no_answer, callback_scheduled, not_interested, converted
+  followUpCount: integer("follow_up_count").default(0),
+  lastFollowUpDate: timestamp("last_follow_up_date"),
+  nextFollowUpDate: timestamp("next_follow_up_date"),
+  followUpNotes: text("follow_up_notes"),
 });
 
 // Job Management
