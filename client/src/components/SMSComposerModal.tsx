@@ -105,14 +105,20 @@ export function SMSComposerModal({
         : customer?.name || "";
       const firstName = job?.jobContactFirstName || customer?.name?.split(' ')[0] || "";
       
-      // Replace placeholders with actual values
-      message = message.replace(/\{customer_name\}/g, contactName);
-      message = message.replace(/\{customer_first_name\}/g, firstName);
+      // Replace placeholders with actual values (support both snake_case and camelCase formats)
+      message = message.replace(/\{customer_name\}/gi, contactName);
+      message = message.replace(/\{customerName\}/g, contactName);
+      message = message.replace(/\{customer_first_name\}/gi, firstName);
+      message = message.replace(/\{firstName\}/g, firstName);
+      message = message.replace(/\{name\}/gi, contactName);
       
       if (job) {
-        message = message.replace(/\{job_number\}/g, job.jobNumber || "");
-        message = message.replace(/\{job_address\}/g, job.address || "");
-        message = message.replace(/\{job_date\}/g, job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : "");
+        message = message.replace(/\{job_number\}/gi, job.jobNumber || "");
+        message = message.replace(/\{jobNumber\}/g, job.jobNumber || "");
+        message = message.replace(/\{job_address\}/gi, job.address || "");
+        message = message.replace(/\{address\}/g, job.address || "");
+        message = message.replace(/\{job_date\}/gi, job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : "");
+        message = message.replace(/\{scheduledDate\}/g, job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : "");
       }
       
       form.setValue("message", message);
