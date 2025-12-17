@@ -86,7 +86,7 @@ export default function FollowUpQueue() {
   const [nextFollowUpDate, setNextFollowUpDate] = useState("");
 
   const { data: quotesData, isLoading, refetch } = useQuery<{ success: boolean; data: FollowUpQuote[] }>({
-    queryKey: ['/api/quotes/follow-up/queue'],
+    queryKey: ['/api/quotes/follow-up-queue'],
   });
 
   const logFollowUpMutation = useMutation({
@@ -95,7 +95,7 @@ export default function FollowUpQueue() {
     },
     onSuccess: () => {
       toast({ title: "Follow-up logged", description: "The follow-up has been recorded successfully." });
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes/follow-up/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes/follow-up-queue'] });
       closeFollowUpDialog();
     },
     onError: (error: any) => {
