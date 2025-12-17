@@ -2397,12 +2397,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         };
       }));
 
+      // Filter out proposals where job status has changed (no longer needs follow-up)
+      const activeFollowUps = enrichedProposals.filter(p => {
+        if (!p.job) return true; // Keep if no job linked
+        const jobStatus = p.job.status?.toLowerCase();
+        // Remove if job is scheduled, work order, unsuccessful, completed, or cancelled
+        const completedStatuses = ['scheduled', 'work_order', 'work order', 'unsuccessful', 'completed', 'cancelled', 'invoiced'];
+        return !completedStatuses.includes(jobStatus);
+      });
+
       // Sort by days since sent (oldest first - need follow-up most urgently)
-      enrichedProposals.sort((a, b) => {
+      activeFollowUps.sort((a, b) => {
         return (b.daysSinceSent || 0) - (a.daysSinceSent || 0);
       });
 
-      res.json({ success: true, data: enrichedProposals });
+      res.json({ success: true, data: activeFollowUps });
     } catch (error) {
       console.error('Error fetching follow-up queue:', error);
       res.status(500).json({ success: false, message: 'Error fetching follow-up queue' });

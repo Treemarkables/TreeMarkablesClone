@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import GlobalJobCard from "@/components/GlobalJobCard";
 import {
   Search,
   Phone,
@@ -84,6 +85,8 @@ export default function FollowUpQueue() {
   const [followUpNotes, setFollowUpNotes] = useState("");
   const [followUpStatus, setFollowUpStatus] = useState("contacted");
   const [nextFollowUpDate, setNextFollowUpDate] = useState("");
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [jobCardOpen, setJobCardOpen] = useState(false);
 
   const { data: quotesData, isLoading, refetch } = useQuery<{ success: boolean; data: FollowUpQuote[] }>({
     queryKey: ['/api/quotes/follow-up-queue'],
@@ -130,6 +133,22 @@ export default function FollowUpQueue() {
     setFollowUpDialogOpen(false);
     setSelectedQuote(null);
     setFollowUpNotes("");
+  };
+
+  const openJobCard = (quote: FollowUpQuote) => {
+    if (quote.job?.id) {
+      setSelectedJobId(quote.job.id);
+      setJobCardOpen(true);
+    } else {
+      toast({ title: "No job linked", description: "This proposal is not linked to a job.", variant: "destructive" });
+    }
+  };
+
+  const closeJobCard = () => {
+    setJobCardOpen(false);
+    setSelectedJobId(null);
+    // Refresh the queue when job card closes (in case status changed)
+    refetch();
   };
 
   const handleLogFollowUp = () => {
@@ -239,7 +258,7 @@ export default function FollowUpQueue() {
               <Card 
                 key={quote.id} 
                 className="hover-elevate cursor-pointer"
-                onClick={() => openFollowUpDialog(quote)}
+                onClick={() => openJobCard(quote)}
                 data-testid={`card-quote-${quote.id}`}
               >
                 <CardContent className="p-4">
@@ -443,6 +462,16 @@ export default function FollowUpQueue() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Job Card Modal */}
+      {jobCardOpen && selectedJobId && (
+        <GlobalJobCard
+          mode="edit"
+          jobId={selectedJobId}
+          isOpen={jobCardOpen}
+          onClose={closeJobCard}
+        />
+      )}
     </div>
   );
 }
