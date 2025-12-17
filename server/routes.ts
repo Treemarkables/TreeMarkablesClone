@@ -2401,8 +2401,8 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const activeFollowUps = enrichedProposals.filter(p => {
         if (!p.job) return true; // Keep if no job linked
         const jobStatus = p.job.status?.toLowerCase();
-        // Remove if job is scheduled, work order, unsuccessful, completed, or cancelled
-        const completedStatuses = ['scheduled', 'work_order', 'work order', 'unsuccessful', 'completed', 'cancelled', 'invoiced'];
+        // Remove if job is scheduled, work order, unsuccessful, completed, cancelled, or archived
+        const completedStatuses = ['scheduled', 'work_order', 'work order', 'unsuccessful', 'completed', 'cancelled', 'invoiced', 'archived'];
         return !completedStatuses.includes(jobStatus);
       });
 
