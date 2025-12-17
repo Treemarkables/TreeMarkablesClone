@@ -2371,43 +2371,38 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Get quotes needing follow-up (MUST be before /:id route)
+  // Get proposals needing follow-up (MUST be before /:id route)
   app.get('/api/quotes/follow-up-queue', async (req: Request, res: Response) => {
     try {
-      const allQuotes = await storage.getAllQuotes();
+      const allProposals = await storage.getAllProposals();
       
-      // Filter for quotes needing follow-up: sent or viewed status
-      const followUpQuotes = allQuotes.filter(q => 
-        q.status === 'sent' || q.status === 'viewed'
+      // Filter for proposals needing follow-up: sent status (not accepted/rejected/draft)
+      const followUpProposals = allProposals.filter(p => 
+        p.status === 'sent'
       );
 
-      // Enrich with customer data and calculate days since sent
-      const enrichedQuotes = await Promise.all(followUpQuotes.map(async (quote) => {
-        const customer = quote.customerId ? await storage.getCustomer(quote.customerId) : null;
-        const job = quote.jobId ? await storage.getJob(quote.jobId) : null;
-        const daysSinceSent = quote.sentDate 
-          ? Math.floor((Date.now() - new Date(quote.sentDate).getTime()) / (1000 * 60 * 60 * 24))
+      // Enrich with customer and job data, calculate days since sent
+      const enrichedProposals = await Promise.all(followUpProposals.map(async (proposal) => {
+        const job = proposal.jobId ? await storage.getJob(proposal.jobId) : null;
+        const customer = job?.customerId ? await storage.getCustomer(job.customerId) : null;
+        const daysSinceSent = proposal.sentDate 
+          ? Math.floor((Date.now() - new Date(proposal.sentDate).getTime()) / (1000 * 60 * 60 * 24))
           : null;
         
         return {
-          ...quote,
+          ...proposal,
           customer,
           job,
           daysSinceSent,
         };
       }));
 
-      // Sort by next follow-up date (soonest first), then by days since sent (oldest first)
-      enrichedQuotes.sort((a, b) => {
-        if (a.nextFollowUpDate && b.nextFollowUpDate) {
-          return new Date(a.nextFollowUpDate).getTime() - new Date(b.nextFollowUpDate).getTime();
-        }
-        if (a.nextFollowUpDate) return -1;
-        if (b.nextFollowUpDate) return 1;
+      // Sort by days since sent (oldest first - need follow-up most urgently)
+      enrichedProposals.sort((a, b) => {
         return (b.daysSinceSent || 0) - (a.daysSinceSent || 0);
       });
 
-      res.json({ success: true, data: enrichedQuotes });
+      res.json({ success: true, data: enrichedProposals });
     } catch (error) {
       console.error('Error fetching follow-up queue:', error);
       res.status(500).json({ success: false, message: 'Error fetching follow-up queue' });
