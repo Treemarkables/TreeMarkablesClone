@@ -2491,7 +2491,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // ========================================
 
   // Get quotes needing follow-up (sent/viewed but not accepted/rejected)
-  app.get('/api/quotes/follow-up/queue', async (req: Request, res: Response) => {
+  app.get('/api/quotes/follow-up-queue', async (req: Request, res: Response) => {
     try {
       const allQuotes = await storage.getQuotes();
       
