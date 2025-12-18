@@ -5229,11 +5229,11 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               const originalSize = fileBuffer.length;
               photoIndex++;
               
-              // Compress image using sharp - resize to max 800px and use JPEG quality 50
+              // Compress image using sharp - resize to max 300px for email thumbnails
               try {
                 const compressedBuffer = await sharp(fileBuffer)
-                  .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-                  .jpeg({ quality: 50, progressive: true })
+                  .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
+                  .jpeg({ quality: 60, progressive: true })
                   .toBuffer();
                 
                 const compressedSize = compressedBuffer.length;
