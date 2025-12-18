@@ -5187,39 +5187,54 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
       
-      // Process photo attachments
+      // Process photo attachments (supports both object storage and local files)
       if (selectedPhotos && selectedPhotos.length > 0) {
+        const photoStorage = new PhotoStorageService();
+        
         for (const photoUrl of selectedPhotos) {
           try {
-            // Convert relative URL to absolute file path
             const fileName = path.basename(photoUrl);
-            const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
+            let fileBuffer: Buffer | null = null;
+            let mimeType = 'application/octet-stream';
             
-            // Check if file exists
-            if (fs.existsSync(filePath)) {
-              // Read file and convert to base64
-              const fileContent = fs.readFileSync(filePath);
-              const base64Content = fileContent.toString('base64');
-              
-              // Determine file type
-              const fileExtension = path.extname(fileName).toLowerCase();
-              const mimeTypes: { [key: string]: string } = {
-                '.jpg': 'image/jpeg',
-                '.jpeg': 'image/jpeg',
-                '.png': 'image/png',
-                '.gif': 'image/gif',
-                '.webp': 'image/webp'
-              };
-              const mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
-              
+            // Check if this is an object storage URL
+            if (photoUrl.startsWith('/objects/photos/')) {
+              console.log(`📸 Fetching photo from object storage: ${photoUrl}`);
+              const result = await photoStorage.downloadPhotoBuffer(photoUrl);
+              if (result && result.exists) {
+                fileBuffer = result.buffer;
+                mimeType = result.contentType;
+                console.log(`✅ Retrieved photo from object storage: ${fileName} (${(fileBuffer.length / 1024).toFixed(0)}KB)`);
+              } else {
+                console.warn(`⚠️ Photo not found in object storage: ${photoUrl}`);
+              }
+            } else {
+              // Try local file path for backwards compatibility
+              const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
+              if (fs.existsSync(filePath)) {
+                fileBuffer = fs.readFileSync(filePath);
+                const fileExtension = path.extname(fileName).toLowerCase();
+                const mimeTypes: { [key: string]: string } = {
+                  '.jpg': 'image/jpeg',
+                  '.jpeg': 'image/jpeg',
+                  '.png': 'image/png',
+                  '.gif': 'image/gif',
+                  '.webp': 'image/webp'
+                };
+                mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
+              } else {
+                console.warn(`⚠️ Photo file not found: ${filePath}`);
+              }
+            }
+            
+            if (fileBuffer) {
+              const base64Content = fileBuffer.toString('base64');
               emailAttachments.push({
                 content: base64Content,
                 filename: fileName,
                 type: mimeType,
                 disposition: 'attachment'
               });
-            } else {
-              console.warn(`⚠️ Photo file not found: ${filePath}`);
             }
           } catch (photoError) {
             console.error(`Error processing photo ${photoUrl}:`, photoError);
