@@ -751,7 +751,7 @@ export interface IStorage {
   deleteDocumentTemplate(id: string): Promise<void>;
   getAllDocumentTemplates(): Promise<DocumentTemplate[]>;
   getDocumentTemplatesByType(type: string): Promise<DocumentTemplate[]>;
-  getDefaultTemplate(type: string): Promise<DocumentTemplate | undefined>;
+  getDefaultDocumentTemplate(type: string): Promise<DocumentTemplate | undefined>;
   
   // Template Sections Management
   createTemplateSection(section: InsertTemplateSection): Promise<TemplateSection>;
@@ -4164,7 +4164,7 @@ class DatabaseStorage implements IStorage {
       .orderBy(schema.documentTemplates.name);
   }
 
-  async getDefaultTemplate(type: string): Promise<DocumentTemplate | undefined> {
+  async getDefaultDocumentTemplate(type: string): Promise<DocumentTemplate | undefined> {
     const [template] = await db.select().from(schema.documentTemplates)
       .where(and(
         eq(schema.documentTemplates.type, type),

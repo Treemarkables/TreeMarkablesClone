@@ -4309,7 +4309,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
 
       // Get default invoice template
-      const defaultTemplate = await storage.getDefaultTemplate('invoice');
+      const defaultTemplate = await storage.getDefaultDocumentTemplate('invoice');
 
       // Generate invoice number using job number
       const invoiceNumber = job?.jobNumber ? String(job.jobNumber) : `INV-${Date.now().toString().slice(-6)}`;
@@ -4442,7 +4442,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
 
       // Get default quote template
-      const defaultTemplate = await storage.getDefaultTemplate('quote');
+      const defaultTemplate = await storage.getDefaultDocumentTemplate('quote');
 
       // Generate quote number
       const today = new Date();
@@ -4995,7 +4995,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
       
       // Prepare email content with any necessary formatting
-      const emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
+      let emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
       
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
@@ -9274,7 +9274,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Get default template for type
   app.get('/api/templates/default/:type', async (req: Request, res: Response) => {
     try {
-      const template = await storage.getDefaultTemplate(req.params.type);
+      const template = await storage.getDefaultDocumentTemplate(req.params.type);
       if (!template) {
         return res.status(404).json({ success: false, message: 'No default template found for this type' });
       }
@@ -12889,7 +12889,7 @@ Transcription: ${transcriptText}`;
         storage.getProposalLineItemsByProposal(proposal.id),
         proposal.customerId ? storage.getCustomer(proposal.customerId) : Promise.resolve(null),
         proposal.jobId ? storage.getJob(proposal.jobId) : Promise.resolve(null),
-        storage.getDefaultTemplate('proposal')
+        storage.getDefaultDocumentTemplate('proposal')
       ]);
       
       // Fetch choices for all line items in parallel
@@ -14502,7 +14502,7 @@ Transcription: ${transcriptText}`;
           imported,
           updated,
           skipped,
-          errors: errorMessages.length,
+          errorCount: errorMessages.length,
           totalProcessed: jobs.length,
           batchId: `import-${Date.now()}`,
           importedJobIds,
