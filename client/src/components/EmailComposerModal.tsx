@@ -772,9 +772,14 @@ export function EmailComposerModal({
                     <span className="sm:hidden ml-1">Attachments</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[95vw] sm:w-[600px] max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y" align="center" style={{ WebkitOverflowScrolling: 'touch' }}>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">Smart Attachments</h3>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-3">
+                <PopoverContent className="w-[95vw] sm:w-[600px] p-0" align="center" onOpenAutoFocus={(e) => e.preventDefault()}>
+                  <div 
+                    className="max-h-[50vh] overflow-y-auto p-4"
+                    style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                    onTouchMove={(e) => e.stopPropagation()}
+                  >
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Smart Attachments</h3>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-3">
                     {/* Invoice PDF */}
                     {invoiceData && (
                       <div 
@@ -933,6 +938,7 @@ export function EmailComposerModal({
                         No attachments available for this job
                       </div>
                     )}
+                    </div>
                   </div>
                 </PopoverContent>
               </Popover>
