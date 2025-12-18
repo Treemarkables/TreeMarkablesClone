@@ -5195,15 +5195,15 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
       
-      // Process photo attachments (supports both object storage and local files)
+      // Process photo attachments with compression (supports both object storage and local files)
       if (selectedPhotos && selectedPhotos.length > 0) {
         const photoStorage = new PhotoStorageService();
+        let photoIndex = 0;
         
         for (const photoUrl of selectedPhotos) {
           try {
             const fileName = path.basename(photoUrl);
             let fileBuffer: Buffer | null = null;
-            let mimeType = 'application/octet-stream';
             
             // Check if this is an object storage URL
             if (photoUrl.startsWith('/objects/photos/')) {
@@ -5211,7 +5211,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               const result = await photoStorage.downloadPhotoBuffer(photoUrl);
               if (result && result.exists) {
                 fileBuffer = result.buffer;
-                mimeType = result.contentType;
                 console.log(`✅ Retrieved photo from object storage: ${fileName} (${(fileBuffer.length / 1024).toFixed(0)}KB)`);
               } else {
                 console.warn(`⚠️ Photo not found in object storage: ${photoUrl}`);
@@ -5221,27 +5220,44 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
               if (fs.existsSync(filePath)) {
                 fileBuffer = fs.readFileSync(filePath);
-                const fileExtension = path.extname(fileName).toLowerCase();
-                const mimeTypes: { [key: string]: string } = {
-                  '.jpg': 'image/jpeg',
-                  '.jpeg': 'image/jpeg',
-                  '.png': 'image/png',
-                  '.gif': 'image/gif',
-                  '.webp': 'image/webp'
-                };
-                mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
               } else {
                 console.warn(`⚠️ Photo file not found: ${filePath}`);
               }
             }
             
             if (fileBuffer) {
-              const base64Content = fileBuffer.toString('base64');
-              emailAttachments.push({
-                content: base64Content,
-                filename: fileName,
-                contentType: mimeType
-              });
+              const originalSize = fileBuffer.length;
+              photoIndex++;
+              
+              // Compress image using sharp - resize to max 800px and use JPEG quality 50
+              try {
+                const compressedBuffer = await sharp(fileBuffer)
+                  .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+                  .jpeg({ quality: 50, progressive: true })
+                  .toBuffer();
+                
+                const compressedSize = compressedBuffer.length;
+                const reductionPercent = ((originalSize - compressedSize) / originalSize * 100).toFixed(0);
+                console.log(`📦 Compressed photo ${photoIndex}: ${(originalSize / 1024).toFixed(0)}KB → ${(compressedSize / 1024).toFixed(0)}KB (${reductionPercent}% reduction)`);
+                
+                const base64Content = compressedBuffer.toString('base64');
+                const compressedFileName = `photo_${photoIndex}.jpg`;
+                
+                emailAttachments.push({
+                  content: base64Content,
+                  filename: compressedFileName,
+                  contentType: 'image/jpeg'
+                });
+              } catch (compressError) {
+                console.error(`Error compressing photo ${fileName}, using original:`, compressError);
+                // Fall back to original if compression fails
+                const base64Content = fileBuffer.toString('base64');
+                emailAttachments.push({
+                  content: base64Content,
+                  filename: fileName,
+                  contentType: 'image/jpeg'
+                });
+              }
             }
           } catch (photoError) {
             console.error(`Error processing photo ${photoUrl}:`, photoError);
