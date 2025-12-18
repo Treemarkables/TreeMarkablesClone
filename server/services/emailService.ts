@@ -95,12 +95,16 @@ class EmailService {
       const fromEmail = params.from || configuredFromEmail || this.defaultFromEmail;
       
       // Map attachments to Resend format
-      // Resend accepts 'filename', 'content', and optionally 'contentType'
-      // Adding contentType ensures proper MIME handling for file attachments
+      // Resend accepts 'filename', 'content', 'contentType', and 'headers'
+      // Adding Content-Disposition header forces files to be downloadable attachments
+      // (not displayed inline in the email body)
       const resendAttachments = params.attachments?.map(att => ({
         filename: att.filename,
         content: Buffer.from(att.content, 'base64'), // Convert base64 string to Buffer for Resend
-        contentType: att.type // Pass MIME type (e.g., 'image/jpeg', 'application/pdf')
+        content_type: att.type, // Pass MIME type (e.g., 'image/jpeg', 'application/pdf')
+        headers: {
+          'Content-Disposition': `attachment; filename="${att.filename}"`
+        }
       }));
 
       // Build email payload for Resend
