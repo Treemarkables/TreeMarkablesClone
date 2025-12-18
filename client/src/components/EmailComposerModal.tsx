@@ -331,11 +331,16 @@ export function EmailComposerModal({
 
   // Handle photo selection for email attachments
   const togglePhotoSelection = (photoUrl: string) => {
-    setSelectedPhotos(prev => 
-      prev.includes(photoUrl) 
+    console.log('📷 togglePhotoSelection called with:', photoUrl);
+    console.log('📷 Current selectedPhotos before toggle:', selectedPhotos);
+    setSelectedPhotos(prev => {
+      const isCurrentlySelected = prev.includes(photoUrl);
+      const newSelection = isCurrentlySelected 
         ? prev.filter(url => url !== photoUrl)
-        : [...prev, photoUrl]
-    );
+        : [...prev, photoUrl];
+      console.log('📷 Photo', isCurrentlySelected ? 'DESELECTED' : 'SELECTED', '- New selection:', newSelection);
+      return newSelection;
+    });
   };
 
   const handleDocumentPreview = (type: 'invoice' | 'quote' | 'proposal', data: any) => {
@@ -580,10 +585,12 @@ export function EmailComposerModal({
       subject: emailPayload.subject,
       attachmentCount: emailPayload.attachments.length,
       photoCount: emailPayload.selectedPhotos.length,
+      selectedPhotoUrls: emailPayload.selectedPhotos,
       invoiceId: emailPayload.invoiceId,
       hasInvoiceData: !!emailPayload.invoiceData
     });
     
+    console.log('📧 SELECTED PHOTOS ARRAY:', JSON.stringify(selectedPhotos, null, 2));
     console.log('📧 FULL INVOICE DATA BEING SENT:', JSON.stringify(invoiceData, null, 2));
 
     sendEmailMutation.mutate(emailPayload);

@@ -4689,6 +4689,13 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     try {
       const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId, quoteId, invoiceData } = req.body;
       
+      // DEBUG: Log received photo selection data
+      console.log('📧 Email send request received:');
+      console.log('   - To:', to);
+      console.log('   - Subject:', subject);
+      console.log('   - Selected photos count:', selectedPhotos?.length || 0);
+      console.log('   - Selected photos URLs:', JSON.stringify(selectedPhotos));
+      
       // DEFENSIVE FIX: Validate invoiceData is a proper object with required properties
       // The frontend may sometimes serialize it incorrectly as a boolean
       let validatedInvoiceData = invoiceData;
