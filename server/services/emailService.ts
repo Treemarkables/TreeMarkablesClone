@@ -95,10 +95,12 @@ class EmailService {
       const fromEmail = params.from || configuredFromEmail || this.defaultFromEmail;
       
       // Map attachments to Resend format
-      // Resend only accepts 'filename' and 'content' (base64 string or Buffer)
+      // Resend accepts 'filename', 'content', and optionally 'contentType'
+      // Adding contentType ensures proper MIME handling for file attachments
       const resendAttachments = params.attachments?.map(att => ({
         filename: att.filename,
-        content: Buffer.from(att.content, 'base64') // Convert base64 string to Buffer for Resend
+        content: Buffer.from(att.content, 'base64'), // Convert base64 string to Buffer for Resend
+        contentType: att.type // Pass MIME type (e.g., 'image/jpeg', 'application/pdf')
       }));
 
       // Build email payload for Resend
@@ -125,9 +127,10 @@ class EmailService {
 
       // Log attachment info before sending
       if (resendAttachments && resendAttachments.length > 0) {
-        console.log(`📎 Sending email with ${resendAttachments.length} attachment(s):`);
+        console.log(`📎 Sending email with ${resendAttachments.length} file attachment(s):`);
         resendAttachments.forEach((att, idx) => {
-          console.log(`  ${idx + 1}. ${att.filename} (${att.content.length} chars)`);
+          const sizeKB = Math.round(att.content.length / 1024);
+          console.log(`  ${idx + 1}. ${att.filename} (${sizeKB}KB, type: ${att.contentType || 'unknown'})`);
         });
       }
 
