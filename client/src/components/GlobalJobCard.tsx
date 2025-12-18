@@ -2496,8 +2496,8 @@ export function GlobalJobCard({
                 className="flex flex-col h-full w-full min-w-0" 
                 data-form="job-form"
               >
-                <div className="flex flex-col md:flex-row h-full w-full min-w-0">
-                  <div className={`flex-1 ${sidebarTab === 'diary' ? 'md:flex-1' : 'md:flex-[3]'} bg-white ${sidebarTab !== 'diary' ? 'md:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'md:rounded-lg' : 'md:rounded-l-lg'} min-w-0`}>
+                <div className={`flex flex-col ${renderInline ? 'flex-row' : 'md:flex-row'} h-full w-full min-w-0`}>
+                  <div className={`flex-1 ${sidebarTab === 'diary' ? (renderInline ? 'flex-1' : 'md:flex-1') : (renderInline ? 'flex-[3]' : 'md:flex-[3]')} bg-white ${sidebarTab !== 'diary' ? (renderInline ? 'border-r border-gray-300' : 'md:border-r border-gray-300') : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? (renderInline ? 'rounded-lg' : 'md:rounded-lg') : (renderInline ? 'rounded-l-lg' : 'md:rounded-l-lg')} min-w-0`}>
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
                       {/* ServiceM8-Style Customer Search or Create */}
@@ -4124,7 +4124,7 @@ export function GlobalJobCard({
                   </div>
 
                   {sidebarTab !== 'diary' && editingJob && (
-                    <div className="hidden md:block md:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
+                    <div className={`${renderInline ? 'block flex-[2]' : 'hidden md:block md:flex-[2]'} bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0`}>
                       <JobDiarySection 
                         jobId={editingJob.id}
                         onQuoteClick={(quoteNumber) => {
