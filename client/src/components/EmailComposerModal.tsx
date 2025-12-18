@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import DOMPurify from "dompurify";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -131,6 +131,39 @@ export function EmailComposerModal({
     queryKey: ['/api/jobs', job?.id, 'photos'],
     enabled: !!job?.id && isOpen,
   });
+
+  // Fetch diary entries to get diary photos
+  const { data: diaryEntries } = useQuery<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      entryType: string;
+      photos: string[] | null;
+      photoUrl: string | null;
+      createdAt: string;
+    }>;
+  }>({
+    queryKey: ['/api/jobs', job?.id, 'diary'],
+    enabled: !!job?.id && isOpen,
+  });
+
+  // Extract all unique photo URLs from diary entries
+  const diaryPhotos = useMemo(() => {
+    if (!diaryEntries?.data) return [];
+    const photos: string[] = [];
+    diaryEntries.data.forEach(entry => {
+      if (entry.entryType === 'photo') {
+        if (entry.photos && Array.isArray(entry.photos)) {
+          photos.push(...entry.photos);
+        }
+        if (entry.photoUrl) {
+          photos.push(entry.photoUrl);
+        }
+      }
+    });
+    // Return unique photos only
+    return [...new Set(photos)];
+  }, [diaryEntries]);
 
   // Get appropriate template based on context
   const getDefaultTemplate = () => {
@@ -856,8 +889,34 @@ export function EmailComposerModal({
                       </div>
                     ))}
 
+                    {/* Diary Photos */}
+                    {diaryPhotos.map((photoUrl: string, index: number) => (
+                      <div
+                        key={`diary-${index}`}
+                        className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                          selectedPhotos.includes(photoUrl) 
+                            ? 'border-blue-500 bg-blue-50' 
+                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                        }`}
+                        onClick={() => togglePhotoSelection(photoUrl)}
+                        data-testid={`photo-diary-${index}`}
+                      >
+                        {selectedPhotos.includes(photoUrl) && (
+                          <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                            <Check className="w-3 h-3 text-white" />
+                          </div>
+                        )}
+                        <img 
+                          src={photoUrl} 
+                          alt={`Diary photo ${index + 1}`}
+                          className="w-full h-16 object-cover rounded mb-1"
+                        />
+                        <div className="text-xs text-center text-orange-600">Diary {index + 1}</div>
+                      </div>
+                    ))}
+
                     {/* Show message when no photos available */}
-                    {(!jobPhotos?.beforePhotos?.length && !jobPhotos?.afterPhotos?.length && !invoiceData && !quoteData && !proposalData) && (
+                    {(!jobPhotos?.beforePhotos?.length && !jobPhotos?.afterPhotos?.length && diaryPhotos.length === 0 && !invoiceData && !quoteData && !proposalData) && (
                       <div className="col-span-full text-center py-4 text-sm text-gray-500">
                         No attachments available for this job
                       </div>
