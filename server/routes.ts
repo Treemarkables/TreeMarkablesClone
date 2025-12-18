@@ -58,6 +58,7 @@ import path from "path";
 import bcrypt from "bcrypt";
 import OpenAI from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
+import archiver from "archiver";
 import heicConvert from "heic-convert";
 import sharp from "sharp";
 
@@ -5197,7 +5198,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       // Process photo attachments - ZIP photos to force download (prevents inline display)
       if (selectedPhotos && selectedPhotos.length > 0) {
         const photoStorage = new PhotoStorageService();
-        const archiver = require('archiver');
         
         try {
           // Collect all photo buffers first
