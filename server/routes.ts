@@ -5195,74 +5195,55 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
       
-      // Process photo attachments with compression (supports both object storage and local files)
+      // Embed photos as linked images in email HTML (thumbnails that link to full-size)
+      let photoGalleryHtml = '';
+      let embeddedPhotoCount = 0;
       if (selectedPhotos && selectedPhotos.length > 0) {
-        const photoStorage = new PhotoStorageService();
-        let photoIndex = 0;
+        // Get the app's public base URL for photo links
+        const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+          : process.env.REPL_SLUG && process.env.REPL_OWNER
+            ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+            : 'https://treemarkables.replit.app'; // Fallback to production URL
         
+        console.log(`📸 Embedding ${selectedPhotos.length} photo(s) with base URL: ${baseUrl}`);
+        
+        // Build photo gallery HTML with thumbnails linking to full-size
+        const photoLinks: string[] = [];
         for (const photoUrl of selectedPhotos) {
-          try {
+          if (photoUrl.startsWith('/objects/photos/')) {
             const fileName = path.basename(photoUrl);
-            let fileBuffer: Buffer | null = null;
+            // Generate thumbnail filename (thumb_xxx.webp)
+            const thumbnailFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png)$/i, '.webp')}`;
+            const thumbnailUrl = `${baseUrl}/objects/photos/${thumbnailFileName}`;
+            const fullSizeUrl = `${baseUrl}${photoUrl}`;
             
-            // Check if this is an object storage URL
-            if (photoUrl.startsWith('/objects/photos/')) {
-              console.log(`📸 Fetching photo from object storage: ${photoUrl}`);
-              const result = await photoStorage.downloadPhotoBuffer(photoUrl);
-              if (result && result.exists) {
-                fileBuffer = result.buffer;
-                console.log(`✅ Retrieved photo from object storage: ${fileName} (${(fileBuffer.length / 1024).toFixed(0)}KB)`);
-              } else {
-                console.warn(`⚠️ Photo not found in object storage: ${photoUrl}`);
-              }
-            } else {
-              // Try local file path for backwards compatibility
-              const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
-              if (fs.existsSync(filePath)) {
-                fileBuffer = fs.readFileSync(filePath);
-              } else {
-                console.warn(`⚠️ Photo file not found: ${filePath}`);
-              }
-            }
-            
-            if (fileBuffer) {
-              const originalSize = fileBuffer.length;
-              photoIndex++;
-              
-              // Compress image using sharp - resize to max 300px for email thumbnails
-              try {
-                const compressedBuffer = await sharp(fileBuffer)
-                  .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
-                  .jpeg({ quality: 60, progressive: true })
-                  .toBuffer();
-                
-                const compressedSize = compressedBuffer.length;
-                const reductionPercent = ((originalSize - compressedSize) / originalSize * 100).toFixed(0);
-                console.log(`📦 Compressed photo ${photoIndex}: ${(originalSize / 1024).toFixed(0)}KB → ${(compressedSize / 1024).toFixed(0)}KB (${reductionPercent}% reduction)`);
-                
-                const base64Content = compressedBuffer.toString('base64');
-                const compressedFileName = `photo_${photoIndex}.jpg`;
-                
-                emailAttachments.push({
-                  content: base64Content,
-                  filename: compressedFileName,
-                  contentType: 'image/jpeg'
-                });
-              } catch (compressError) {
-                console.error(`Error compressing photo ${fileName}, using original:`, compressError);
-                // Fall back to original if compression fails
-                const base64Content = fileBuffer.toString('base64');
-                emailAttachments.push({
-                  content: base64Content,
-                  filename: fileName,
-                  contentType: 'image/jpeg'
-                });
-              }
-            }
-          } catch (photoError) {
-            console.error(`Error processing photo ${photoUrl}:`, photoError);
+            photoLinks.push(`
+              <a href="${fullSizeUrl}" target="_blank" style="display: inline-block; margin: 5px;">
+                <img src="${thumbnailUrl}" alt="Photo" style="max-width: 150px; max-height: 150px; border-radius: 8px; border: 1px solid #ddd;" />
+              </a>
+            `);
+            embeddedPhotoCount++;
+            console.log(`📷 Embedded photo: thumbnail=${thumbnailFileName}, fullSize=${fileName}`);
           }
         }
+        
+        if (photoLinks.length > 0) {
+          photoGalleryHtml = `
+            <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 8px;">
+              <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">Photos:</p>
+              <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                ${photoLinks.join('')}
+              </div>
+              <p style="margin: 10px 0 0 0; font-size: 12px; color: #666;">Click on a photo to view full size</p>
+            </div>
+          `;
+        }
+      }
+      
+      // Append photo gallery to email HTML if we have photos
+      if (photoGalleryHtml) {
+        emailHtml = emailHtml + photoGalleryHtml;
       }
       
       // Send email using the emailService
@@ -5279,7 +5260,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       if (emailResult.success) {
         // Log email activity (you could store this in database for audit trail)
         console.log(`📧 Invoice email sent to ${to} for job ${job?.jobNumber || jobId}${
-          emailAttachments.length > 0 ? ` with ${emailAttachments.length} photo attachment(s)` : ''
+          embeddedPhotoCount > 0 ? ` with ${embeddedPhotoCount} embedded photo(s)` : ''
         }${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
 
         // Create job diary entry for the email
@@ -5288,7 +5269,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
             // Custom email endpoint NEVER creates "Quote Sent" or "Proposal Sent" entries
             // Those are only created by dedicated /api/proposals/:id/send-email endpoint
             const diaryDescription = `Email sent to ${to}${cc ? ` (CC: ${cc})` : ''}${
-              emailAttachments.length > 0 ? `\n\nAttachments: ${emailAttachments.length} photo(s)` : ''
+              embeddedPhotoCount > 0 ? `\n\nPhotos: ${embeddedPhotoCount} photo(s) embedded` : ''
             }\n\nMessage:\n${emailBody}`;
             
             await storage.createJobDiaryEntry({
@@ -5318,7 +5299,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         res.json({ 
           success: true, 
           message: `Email sent successfully${
-            emailAttachments.length > 0 ? ` with ${emailAttachments.length} photo attachment(s)` : ''
+            embeddedPhotoCount > 0 ? ` with ${embeddedPhotoCount} photo(s)` : ''
           }` 
         });
       } else {
