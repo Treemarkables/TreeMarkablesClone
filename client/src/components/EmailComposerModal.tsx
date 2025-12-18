@@ -772,9 +772,9 @@ export function EmailComposerModal({
                     <span className="sm:hidden ml-1">Attachments</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[95vw] sm:w-[600px] max-h-[400px] overflow-y-auto" align="center">
+                <PopoverContent className="w-[95vw] sm:w-[600px] max-h-[70vh] overflow-y-auto" align="center">
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Smart Attachments</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-3">
                     {/* Invoice PDF */}
                     {invoiceData && (
                       <div 
@@ -842,50 +842,58 @@ export function EmailComposerModal({
                     {jobPhotos?.beforePhotos?.map((photoUrl: string, index: number) => (
                       <div
                         key={`before-${index}`}
-                        className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                        className={`relative rounded-lg cursor-pointer transition-all overflow-hidden ${
                           selectedPhotos.includes(photoUrl) 
-                            ? 'border-blue-500 bg-blue-50' 
-                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                            ? 'ring-2 ring-blue-500 ring-offset-2' 
+                            : 'ring-1 ring-gray-200 hover:ring-gray-300'
                         }`}
                         onClick={() => togglePhotoSelection(photoUrl)}
                         data-testid={`photo-before-${index}`}
                       >
                         {selectedPhotos.includes(photoUrl) && (
-                          <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                            <Check className="w-3 h-3 text-white" />
+                          <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center z-10 shadow-md">
+                            <Check className="w-4 h-4 text-white" />
                           </div>
                         )}
-                        <img 
-                          src={photoUrl} 
-                          alt={`Before photo ${index + 1}`}
-                          className="w-full h-16 object-cover rounded mb-1"
-                        />
-                        <div className="text-xs text-center text-gray-600">Before {index + 1}</div>
+                        <div className="aspect-square">
+                          <img 
+                            src={photoUrl} 
+                            alt={`Before photo ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                          <div className="text-xs text-center text-white font-medium">Before {index + 1}</div>
+                        </div>
                       </div>
                     ))}
 
                     {jobPhotos?.afterPhotos?.map((photoUrl: string, index: number) => (
                       <div
                         key={`after-${index}`}
-                        className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                        className={`relative rounded-lg cursor-pointer transition-all overflow-hidden ${
                           selectedPhotos.includes(photoUrl) 
-                            ? 'border-blue-500 bg-blue-50' 
-                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                            ? 'ring-2 ring-blue-500 ring-offset-2' 
+                            : 'ring-1 ring-gray-200 hover:ring-gray-300'
                         }`}
                         onClick={() => togglePhotoSelection(photoUrl)}
                         data-testid={`photo-after-${index}`}
                       >
                         {selectedPhotos.includes(photoUrl) && (
-                          <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                            <Check className="w-3 h-3 text-white" />
+                          <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center z-10 shadow-md">
+                            <Check className="w-4 h-4 text-white" />
                           </div>
                         )}
-                        <img 
-                          src={photoUrl} 
-                          alt={`After photo ${index + 1}`}
-                          className="w-full h-16 object-cover rounded mb-1"
-                        />
-                        <div className="text-xs text-center text-gray-600">After {index + 1}</div>
+                        <div className="aspect-square">
+                          <img 
+                            src={photoUrl} 
+                            alt={`After photo ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                          <div className="text-xs text-center text-white font-medium">After {index + 1}</div>
+                        </div>
                       </div>
                     ))}
 
@@ -893,25 +901,29 @@ export function EmailComposerModal({
                     {diaryPhotos.map((photoUrl: string, index: number) => (
                       <div
                         key={`diary-${index}`}
-                        className={`relative p-2 border rounded-lg cursor-pointer transition-colors ${
+                        className={`relative rounded-lg cursor-pointer transition-all overflow-hidden ${
                           selectedPhotos.includes(photoUrl) 
-                            ? 'border-blue-500 bg-blue-50' 
-                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                            ? 'ring-2 ring-blue-500 ring-offset-2' 
+                            : 'ring-1 ring-gray-200 hover:ring-gray-300'
                         }`}
                         onClick={() => togglePhotoSelection(photoUrl)}
                         data-testid={`photo-diary-${index}`}
                       >
                         {selectedPhotos.includes(photoUrl) && (
-                          <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                            <Check className="w-3 h-3 text-white" />
+                          <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center z-10 shadow-md">
+                            <Check className="w-4 h-4 text-white" />
                           </div>
                         )}
-                        <img 
-                          src={photoUrl} 
-                          alt={`Diary photo ${index + 1}`}
-                          className="w-full h-16 object-cover rounded mb-1"
-                        />
-                        <div className="text-xs text-center text-orange-600">Diary {index + 1}</div>
+                        <div className="aspect-square">
+                          <img 
+                            src={photoUrl} 
+                            alt={`Diary photo ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-orange-600/70 to-transparent p-2">
+                          <div className="text-xs text-center text-white font-medium">Diary {index + 1}</div>
+                        </div>
                       </div>
                     ))}
 
