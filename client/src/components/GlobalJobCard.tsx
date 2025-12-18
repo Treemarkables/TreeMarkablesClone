@@ -1957,7 +1957,8 @@ export function GlobalJobCard({
                 </div>
               )}
               
-              {/* Actions Menu - Mobile only */}
+              {/* Actions Menu - Mobile only (hidden in inline/split-screen mode) */}
+              {!renderInline && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
@@ -2103,8 +2104,9 @@ export function GlobalJobCard({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              )}
               
-              {/* Close button - Mobile only */}
+              {/* Close button - Mobile only (hidden in inline mode) */}
               <Button 
                 variant="ghost" 
                 size="icon" 
