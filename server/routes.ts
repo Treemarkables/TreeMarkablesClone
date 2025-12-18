@@ -5194,58 +5194,85 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
       
-      // Process photo attachments (supports both object storage and local files)
+      // Process photo attachments - ZIP photos to force download (prevents inline display)
       if (selectedPhotos && selectedPhotos.length > 0) {
         const photoStorage = new PhotoStorageService();
+        const archiver = require('archiver');
         
-        for (const photoUrl of selectedPhotos) {
-          try {
-            const fileName = path.basename(photoUrl);
-            let fileBuffer: Buffer | null = null;
-            let mimeType = 'application/octet-stream';
-            
-            // Check if this is an object storage URL
-            if (photoUrl.startsWith('/objects/photos/')) {
-              console.log(`📸 Fetching photo from object storage: ${photoUrl}`);
-              const result = await photoStorage.downloadPhotoBuffer(photoUrl);
-              if (result && result.exists) {
-                fileBuffer = result.buffer;
-                mimeType = result.contentType;
-                console.log(`✅ Retrieved photo from object storage: ${fileName} (${(fileBuffer.length / 1024).toFixed(0)}KB)`);
+        try {
+          // Collect all photo buffers first
+          const photoBuffers: Array<{ name: string; buffer: Buffer }> = [];
+          
+          for (const photoUrl of selectedPhotos) {
+            try {
+              const fileName = path.basename(photoUrl);
+              let fileBuffer: Buffer | null = null;
+              
+              // Check if this is an object storage URL
+              if (photoUrl.startsWith('/objects/photos/')) {
+                console.log(`📸 Fetching photo from object storage: ${photoUrl}`);
+                const result = await photoStorage.downloadPhotoBuffer(photoUrl);
+                if (result && result.exists) {
+                  fileBuffer = result.buffer;
+                  console.log(`✅ Retrieved photo from object storage: ${fileName} (${(fileBuffer.length / 1024).toFixed(0)}KB)`);
+                } else {
+                  console.warn(`⚠️ Photo not found in object storage: ${photoUrl}`);
+                }
               } else {
-                console.warn(`⚠️ Photo not found in object storage: ${photoUrl}`);
+                // Try local file path for backwards compatibility
+                const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
+                if (fs.existsSync(filePath)) {
+                  fileBuffer = fs.readFileSync(filePath);
+                } else {
+                  console.warn(`⚠️ Photo file not found: ${filePath}`);
+                }
               }
-            } else {
-              // Try local file path for backwards compatibility
-              const filePath = path.join(__dirname, '..', 'uploads', 'photos', fileName);
-              if (fs.existsSync(filePath)) {
-                fileBuffer = fs.readFileSync(filePath);
-                const fileExtension = path.extname(fileName).toLowerCase();
-                const mimeTypes: { [key: string]: string } = {
-                  '.jpg': 'image/jpeg',
-                  '.jpeg': 'image/jpeg',
-                  '.png': 'image/png',
-                  '.gif': 'image/gif',
-                  '.webp': 'image/webp'
-                };
-                mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
-              } else {
-                console.warn(`⚠️ Photo file not found: ${filePath}`);
+              
+              if (fileBuffer) {
+                // Use a cleaner filename (photo_1.jpg, photo_2.jpg, etc.)
+                const ext = path.extname(fileName) || '.jpg';
+                const cleanName = `photo_${photoBuffers.length + 1}${ext}`;
+                photoBuffers.push({ name: cleanName, buffer: fileBuffer });
               }
+            } catch (photoError) {
+              console.error(`Error processing photo ${photoUrl}:`, photoError);
             }
-            
-            if (fileBuffer) {
-              const base64Content = fileBuffer.toString('base64');
-              emailAttachments.push({
-                content: base64Content,
-                filename: fileName,
-                type: mimeType,
-                disposition: 'attachment'
-              });
-            }
-          } catch (photoError) {
-            console.error(`Error processing photo ${photoUrl}:`, photoError);
           }
+          
+          // Create ZIP file if we have photos
+          if (photoBuffers.length > 0) {
+            console.log(`📦 Creating ZIP archive with ${photoBuffers.length} photo(s)...`);
+            
+            const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
+              const chunks: Buffer[] = [];
+              const archive = archiver('zip', { zlib: { level: 5 } });
+              
+              archive.on('data', (chunk: Buffer) => chunks.push(chunk));
+              archive.on('end', () => resolve(Buffer.concat(chunks)));
+              archive.on('error', (err: Error) => reject(err));
+              
+              // Add each photo to the archive
+              for (const photo of photoBuffers) {
+                archive.append(photo.buffer, { name: photo.name });
+              }
+              
+              archive.finalize();
+            });
+            
+            const zipBase64 = zipBuffer.toString('base64');
+            const zipFilename = job?.jobNumber ? `Job_${job.jobNumber}_Photos.zip` : 'Photos.zip';
+            
+            emailAttachments.push({
+              content: zipBase64,
+              filename: zipFilename,
+              type: 'application/zip',
+              disposition: 'attachment'
+            });
+            
+            console.log(`✅ ZIP archive created: ${zipFilename} (${(zipBuffer.length / 1024).toFixed(0)}KB with ${photoBuffers.length} photos)`);
+          }
+        } catch (zipError) {
+          console.error('Error creating photo ZIP archive:', zipError);
         }
       }
       
