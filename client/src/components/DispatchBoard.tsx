@@ -1007,7 +1007,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return job.status !== 'unsuccessful' && job.status !== 'completed' && job.status !== 'invoiced' && job.status !== 'archived';
       })
       .filter(job => {
-        // Only show upcoming jobs (jobs with valid start time in the future or today)
+        // Always include jobs with 'scheduled' or 'work_order' status - these are active jobs that need dispatching
+        if (job.status === 'scheduled' || job.status === 'work_order') {
+          return true;
+        }
+        
+        // For other jobs, only show upcoming jobs (jobs with valid start time in the future or today)
         if (!job.startTime) return false;
         try {
           const jobDateUTC = parseISO(job.startTime);
