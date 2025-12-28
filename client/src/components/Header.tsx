@@ -114,7 +114,7 @@ export default function Header() {
                   <ChevronDown className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 p-2">
+              <DropdownMenuContent className="w-56 pt-4 pb-2 px-2">
                 {serviceLinks.map((link) => (
                   <DropdownMenuItem key={link.href} asChild>
                     <Link 
