@@ -161,11 +161,12 @@ export default function Header() {
               onClick={toggleMenu}
               data-testid="button-mobile-menu"
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+              type="button"
             >
-              <div className="relative w-5 h-5">
-                <span className={`absolute top-0 left-0 w-5 h-0.5 bg-current transition-all duration-200 ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
-                <span className={`absolute top-2 left-0 w-5 h-0.5 bg-current transition-all duration-200 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
-                <span className={`absolute top-4 left-0 w-5 h-0.5 bg-current transition-all duration-200 ${isMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
+              <div className="relative w-5 h-5 pointer-events-none">
+                <span className={`absolute top-0 left-0 w-5 h-0.5 bg-current transition-all duration-200 pointer-events-none ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
+                <span className={`absolute top-2 left-0 w-5 h-0.5 bg-current transition-all duration-200 pointer-events-none ${isMenuOpen ? 'opacity-0' : ''}`}></span>
+                <span className={`absolute top-4 left-0 w-5 h-0.5 bg-current transition-all duration-200 pointer-events-none ${isMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
               </div>
             </Button>
           </div>
