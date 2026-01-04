@@ -251,69 +251,137 @@ class GmailReplyService {
           where: eq(customers.email, email.from)
         });
 
-        if (!customer) {
-          console.log(`📧 ❌ No customer found for email: ${email.from}`);
-          return false;
+        if (customer) {
+          console.log(`📧 ✅ Found customer: ${customer.name} (ID: ${customer.id})`);
+
+          // Find the most recent job for this customer
+          const customerJobs = await db.query.jobs.findMany({
+            where: eq(jobs.customerId, customer.id),
+            orderBy: (jobs, { desc }) => [desc(jobs.createdAt)],
+            limit: 1
+          });
+
+          if (customerJobs && customerJobs.length > 0) {
+            job = customerJobs[0];
+          }
         }
-        
-        console.log(`📧 ✅ Found customer: ${customer.name} (ID: ${customer.id})`);
-
-        // Find the most recent job for this customer
-        const customerJobs = await db.query.jobs.findMany({
-          where: eq(jobs.customerId, customer.id),
-          orderBy: (jobs, { desc }) => [desc(jobs.createdAt)],
-          limit: 1
-        });
-
-        if (!customerJobs || customerJobs.length === 0) {
-          console.log(`📧 No jobs found for customer: ${customer.name}`);
-          return false;
-        }
-
-        job = customerJobs[0];
       }
-
-      // Check for duplicate email FIRST - across ALL diary entries, not just this job
-      if (email.messageId) {
-        const duplicateCheck = await db
-          .select()
-          .from(jobDiaryEntries)
-          .where(
-            sql`${jobDiaryEntries.metadata}->>'messageId' = ${email.messageId}`
-          )
-          .limit(1);
-
-        if (duplicateCheck.length > 0) {
-          console.log(`📧 Email already logged (messageId: ${email.messageId}) - skipping`);
-          return true; // Return true because it was already successfully logged
+      
+      // STEP 3: If no customer/job found, still try to add to existing conversation
+      // This handles replies from leads who haven't been converted to customers yet
+      if (!customer && !job) {
+        console.log(`📧 No customer found for email: ${email.from} - checking for existing conversation`);
+        
+        try {
+          const notificationHelper = await import('./notificationHelper.js');
+          const { storage } = await import('../storage.js');
+          
+          // Check for existing open conversation from this email
+          let conversation = await notificationHelper.findExistingOpenConversation(email.from.trim().toLowerCase());
+          
+          // Clean up email body text (remove quoted replies)
+          const cleanedBody = this.cleanEmailBody(email.textBody);
+          
+          // Extract sender name from email if available
+          const senderName = email.from.split('@')[0].replace(/[._]/g, ' ');
+          
+          if (conversation) {
+            console.log(`📧 ✅ Found existing conversation for ${email.from}: ${conversation.id}`);
+          } else {
+            // Create new conversation for this lead
+            console.log(`📧 Creating new conversation for lead: ${email.from}`);
+            const conversationTitle = cleanedBody.length > 0 
+              ? cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '')
+              : `Re: ${email.subject}`;
+            
+            conversation = await storage.createConversation({
+              title: conversationTitle,
+              status: 'open',
+              priority: 'medium',
+              source: 'email',
+              tags: ['email-reply', 'lead']
+            });
+            
+            // Create notification bell entry for new conversation
+            await notificationHelper.createConversationNotification(conversation);
+            console.log(`📧 ✅ Created new conversation for email from lead: ${conversation.id}`);
+          }
+          
+          // Create conversation message
+          await storage.createConversationMessage({
+            conversationId: conversation.id,
+            type: 'message',
+            content: cleanedBody,
+            direction: 'inbound',
+            fromName: senderName,
+            fromContact: email.from.trim().toLowerCase(),
+            platform: 'email',
+            subject: email.subject,
+            metadata: {
+              subject: email.subject,
+              messageId: email.messageId,
+              inReplyTo: email.inReplyTo
+            }
+          });
+          
+          // Update conversation's lastMessageAt
+          await storage.updateConversation(conversation.id, {
+            lastMessageAt: email.date,
+            lastMessageBy: 'customer'
+          });
+          
+          console.log(`📧 ✅ Added email reply to conversation: ${conversation.id}`);
+          return true;
+        } catch (convError) {
+          console.error('📧 Error creating conversation from lead email:', convError);
+          return false;
         }
       }
 
       // Clean up email body text (remove quoted replies)
       const cleanedBody = this.cleanEmailBody(email.textBody);
 
-      // Create job diary entry for the email reply
-      await db.insert(jobDiaryEntries).values({
-        jobId: job.id,
-        entryType: 'email',
-        title: `Email reply: ${email.subject}`,
-        description: cleanedBody,
-        content: email.htmlBody || email.textBody,
-        authorName: customer.name,
-        authorRole: 'customer',
-        tags: ['communication', 'email', 'customer-reply'],
-        metadata: {
-          emailAddress: email.from,
-          messageId: email.messageId,
-          inReplyTo: email.inReplyTo,
-          receivedAt: email.date.toISOString(),
-          direction: 'incoming',
-          subject: email.subject,
-          rawBody: email.textBody // Store raw body for debugging
-        }
-      });
+      // Only create job diary entry if we have both job and customer
+      if (job && customer) {
+        // Check for duplicate email FIRST - across ALL diary entries, not just this job
+        if (email.messageId) {
+          const duplicateCheck = await db
+            .select()
+            .from(jobDiaryEntries)
+            .where(
+              sql`${jobDiaryEntries.metadata}->>'messageId' = ${email.messageId}`
+            )
+            .limit(1);
 
-      console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
+          if (duplicateCheck.length > 0) {
+            console.log(`📧 Email already logged (messageId: ${email.messageId}) - skipping`);
+            return true; // Return true because it was already successfully logged
+          }
+        }
+
+        // Create job diary entry for the email reply
+        await db.insert(jobDiaryEntries).values({
+          jobId: job.id,
+          entryType: 'email',
+          title: `Email reply: ${email.subject}`,
+          description: cleanedBody,
+          content: email.htmlBody || email.textBody,
+          authorName: customer.name,
+          authorRole: 'customer',
+          tags: ['communication', 'email', 'customer-reply'],
+          metadata: {
+            emailAddress: email.from,
+            messageId: email.messageId,
+            inReplyTo: email.inReplyTo,
+            receivedAt: email.date.toISOString(),
+            direction: 'incoming',
+            subject: email.subject,
+            rawBody: email.textBody // Store raw body for debugging
+          }
+        });
+
+        console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
+      }
       
       // Create or update conversation to trigger notification bell
       try {
@@ -324,6 +392,9 @@ class GmailReplyService {
         // Check for existing open conversation from this email
         let conversation = await notificationHelper.findExistingOpenConversation(email.from.trim().toLowerCase());
         let isNewConversation = !conversation;
+        
+        // Extract sender name from email or use customer name if available
+        const senderName = customer?.name || email.from.split('@')[0].replace(/[._]/g, ' ');
         
         if (!conversation) {
           // Create new conversation from email reply
@@ -336,8 +407,8 @@ class GmailReplyService {
             status: 'open',
             priority: 'medium',
             source: 'email',
-            tags: ['email-reply', 'customer'],
-            customerId: customer.id
+            tags: ['email-reply', customer ? 'customer' : 'lead'],
+            customerId: customer?.id || null
           });
           
           // Create notification bell entry for new conversation
@@ -347,22 +418,34 @@ class GmailReplyService {
           console.log(`📧 ✅ Found existing open conversation for ${email.from}, adding message to: ${conversation.id}`);
         }
         
-        // Create conversation message
+        // Create conversation message with optional job info
+        const messageMetadata: Record<string, any> = {
+          subject: email.subject,
+          messageId: email.messageId,
+          inReplyTo: email.inReplyTo
+        };
+        
+        if (job) {
+          messageMetadata.jobNumber = job.jobNumber;
+          messageMetadata.jobId = job.id;
+        }
+        
         await storage.createConversationMessage({
           conversationId: conversation.id,
           type: 'message',
           content: cleanedBody,
           direction: 'inbound',
-          fromName: customer.name,
+          fromName: senderName,
           fromContact: email.from.trim().toLowerCase(),
           platform: 'email',
-          metadata: {
-            subject: email.subject,
-            messageId: email.messageId,
-            inReplyTo: email.inReplyTo,
-            jobNumber: job.jobNumber,
-            jobId: job.id
-          }
+          subject: email.subject,
+          metadata: messageMetadata
+        });
+        
+        // Update conversation's lastMessageAt
+        await storage.updateConversation(conversation.id, {
+          lastMessageAt: email.date,
+          lastMessageBy: 'customer'
         });
         
         console.log(`📧 ✅ Added email to conversation messages`);
