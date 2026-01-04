@@ -204,11 +204,35 @@ class GmailReplyService {
   }
 
   /**
+   * Check if email recipient is an allowed address for conversation processing
+   * Only process emails sent to quotes@ or job- aliases
+   */
+  private isAllowedRecipient(toAddress: string | undefined): boolean {
+    if (!toAddress) return false;
+    
+    const lowerTo = toAddress.toLowerCase();
+    
+    // Allow emails sent to quotes@
+    if (lowerTo.includes('quotes@treemarkables')) return true;
+    
+    // Allow emails sent to job-XXXX aliases
+    if (lowerTo.match(/job-\d+@/i)) return true;
+    
+    return false;
+  }
+
+  /**
    * Process a single email reply and match it to a job
    * Returns true if successfully processed, false otherwise
    */
   private async processEmailReply(email: ParsedEmailReply): Promise<boolean> {
     try {
+      // FILTER: Only process emails sent to allowed recipients (quotes@ or job- aliases)
+      if (!this.isAllowedRecipient(email.to)) {
+        console.log(`📧 Skipping - not sent to quotes@ or job alias: ${email.to}`);
+        return false;
+      }
+
       // STEP 1: Try to extract job number from TO address (job-XXXX@jobs.treemarkables.co.nz)
       let job = null;
       let customer = null;
