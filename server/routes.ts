@@ -11852,6 +11852,31 @@ Transcription: ${transcriptText}`;
             deliveryStatus: 'failed'
           });
         }
+      } else if (messagePlatform === 'sms' || messagePlatform === 'SMS') {
+        // Send SMS message
+        try {
+          const success = await smsService.sendSMS({
+            to: recipientContact,
+            message: content
+          });
+          
+          if (success) {
+            await storage.updateConversationMessage(message.id, {
+              deliveryStatus: 'delivered'
+            });
+            console.log(`📱 SMS sent to ${recipientContact}`);
+          } else {
+            await storage.updateConversationMessage(message.id, {
+              deliveryStatus: 'failed'
+            });
+            console.warn(`⚠️ Failed to send SMS to ${recipientContact}`);
+          }
+        } catch (smsError) {
+          console.error('Error sending SMS:', smsError);
+          await storage.updateConversationMessage(message.id, {
+            deliveryStatus: 'failed'
+          });
+        }
       }
       
       // Update conversation
