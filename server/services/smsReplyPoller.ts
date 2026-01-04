@@ -1,7 +1,7 @@
 import { retrieveSMSReplies } from './smsEveryoneClient';
 import { db } from '../db';
-import { jobs, jobDiaryEntries, customers, notifications } from '@shared/schema';
-import { eq, or, sql } from 'drizzle-orm';
+import { jobs, jobDiaryEntries, customers, notifications, conversations, conversationMessages } from '@shared/schema';
+import { eq, or, sql, desc } from 'drizzle-orm';
 
 const POLLING_INTERVAL_MS = 60 * 1000; // 1 minute (60 seconds)
 let pollingIntervalId: NodeJS.Timeout | null = null;
@@ -135,6 +135,51 @@ async function processSMSReplies() {
           .where(eq(jobs.id, matchedJob.id));
 
         console.log(`📱 ✅ Stored SMS reply as diary entry and notification in job #${matchedJob.jobNumber}`);
+
+        // Also add SMS reply to conversations if there's an active conversation with this phone
+        try {
+          // Find conversation by phone number (check participantContact field)
+          const phoneToMatch = senderPhone.slice(-9); // Last 9 digits for matching
+          const matchingConversations = await db
+            .select()
+            .from(conversations)
+            .where(
+              sql`REGEXP_REPLACE(${conversations.participantContact}, '[^0-9]', '', 'g') LIKE '%' || ${phoneToMatch} || '%'`
+            )
+            .orderBy(desc(conversations.lastMessageAt))
+            .limit(1);
+
+          if (matchingConversations.length > 0) {
+            const conversation = matchingConversations[0];
+            
+            // Add the SMS reply as a conversation message
+            await db.insert(conversationMessages).values({
+              conversationId: conversation.id,
+              type: 'message',
+              content: reply.MessageText,
+              direction: 'inbound',
+              fromName: customerName,
+              fromContact: reply.Originator,
+              platform: 'sms',
+              isRead: false,
+              createdAt: receivedTimestamp
+            });
+
+            // Update conversation's lastMessageAt
+            await db
+              .update(conversations)
+              .set({
+                lastMessageAt: receivedTimestamp,
+                lastMessageBy: 'customer',
+                updatedAt: receivedTimestamp
+              })
+              .where(eq(conversations.id, conversation.id));
+
+            console.log(`📱 ✅ Also added SMS reply to conversation ${conversation.id}`);
+          }
+        } catch (convError) {
+          console.error('📱 Error adding SMS reply to conversation:', convError);
+        }
       } catch (error) {
         console.error(`📱 Error processing SMS reply from ${reply.Originator}:`, error);
       }
