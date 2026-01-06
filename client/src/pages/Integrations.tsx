@@ -8,6 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Settings,
   Mail,
@@ -25,7 +35,9 @@ import {
   Key,
   Link,
   Unlink,
-  Download
+  Download,
+  Loader2,
+  Users
 } from "lucide-react";
 
 interface Integration {
@@ -139,6 +151,13 @@ export default function Integrations() {
   const [location] = useLocation();
   const { toast } = useToast();
   
+  // Mailchimp configuration state
+  const [showMailchimpDialog, setShowMailchimpDialog] = useState(false);
+  const [mailchimpApiKey, setMailchimpApiKey] = useState('');
+  const [mailchimpAudienceId, setMailchimpAudienceId] = useState('');
+  const [mailchimpAudiences, setMailchimpAudiences] = useState<{ id: string; name: string; memberCount: number }[]>([]);
+  const [isSyncingMailchimp, setIsSyncingMailchimp] = useState(false);
+  
   // Check for Xero connection success/error from URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -177,6 +196,11 @@ export default function Integrations() {
   // Get Gmail status
   const { data: gmailStatus } = useQuery({
     queryKey: ['/api/gmail/status'],
+  });
+  
+  // Get business settings for Mailchimp status
+  const { data: businessSettings } = useQuery({
+    queryKey: ['/api/business-settings'],
   });
   
   // Connect to Xero mutation (Custom Connection)
@@ -256,6 +280,14 @@ export default function Integrations() {
         calendarEmail: googleCalendarStatus.calendarEmail,
       };
     }
+    if (integration.id === 'mailchimp' && businessSettings?.data?.mailchimpEnabled && businessSettings?.data?.mailchimpApiKey) {
+      return {
+        ...integration,
+        status: 'connected' as const,
+        isEnabled: true,
+        audienceId: businessSettings.data.mailchimpAudienceId,
+      };
+    }
     return integration;
   });
 
@@ -285,19 +317,130 @@ export default function Integrations() {
 
   const handleConnect = (integrationId: string) => {
     if (integrationId === 'xero') {
-      // Connect using Custom Connection client credentials
       connectMutation.mutate();
+    } else if (integrationId === 'mailchimp') {
+      setShowMailchimpDialog(true);
     } else {
-      // TODO: Implement other integrations
       console.log('Connecting to:', integrationId);
+    }
+  };
+  
+  const handleFetchMailchimpAudiences = async () => {
+    if (!mailchimpApiKey) {
+      toast({
+        title: "API Key Required",
+        description: "Please enter your Mailchimp API key first",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const response = await apiRequest('POST', '/api/mailchimp/audiences', { apiKey: mailchimpApiKey });
+      setMailchimpAudiences(response.data);
+      toast({
+        title: "Audiences Loaded",
+        description: `Found ${response.data.length} audience(s)`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to Load Audiences",
+        description: error.message || "Check your API key",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const handleSaveMailchimp = async () => {
+    if (!mailchimpApiKey || !mailchimpAudienceId) {
+      toast({
+        title: "Missing Configuration",
+        description: "Please provide both API key and select an audience",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const testResult = await apiRequest('POST', '/api/mailchimp/test', {
+        apiKey: mailchimpApiKey,
+        audienceId: mailchimpAudienceId,
+      });
+      
+      await apiRequest('PUT', '/api/business-settings', {
+        mailchimpEnabled: true,
+        mailchimpApiKey: mailchimpApiKey,
+        mailchimpAudienceId: mailchimpAudienceId,
+        mailchimpAutoSync: true,
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['/api/business-settings'] });
+      setShowMailchimpDialog(false);
+      
+      toast({
+        title: "Mailchimp Connected",
+        description: `Connected to audience: ${testResult.audienceName}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Connection Failed",
+        description: error.message || "Failed to connect to Mailchimp",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const handleSyncMailchimp = async () => {
+    setIsSyncingMailchimp(true);
+    try {
+      const result = await apiRequest('POST', '/api/mailchimp/sync', {});
+      toast({
+        title: "Sync Complete",
+        description: result.message,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync customers",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingMailchimp(false);
+    }
+  };
+  
+  const handleDisconnectMailchimp = async () => {
+    try {
+      await apiRequest('PUT', '/api/business-settings', {
+        mailchimpEnabled: false,
+        mailchimpApiKey: '',
+        mailchimpAudienceId: '',
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['/api/business-settings'] });
+      setMailchimpApiKey('');
+      setMailchimpAudienceId('');
+      setMailchimpAudiences([]);
+      
+      toast({
+        title: "Disconnected",
+        description: "Mailchimp has been disconnected",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Mailchimp",
+        variant: "destructive",
+      });
     }
   };
 
   const handleDisconnect = (integrationId: string) => {
     if (integrationId === 'xero') {
       disconnectMutation.mutate();
+    } else if (integrationId === 'mailchimp') {
+      handleDisconnectMailchimp();
     } else {
-      // TODO: Implement other disconnections
       console.log('Disconnecting from:', integrationId);
     }
   };
@@ -469,26 +612,55 @@ export default function Integrations() {
                   {/* Actions */}
                   <div className="flex items-center gap-2 pt-2">
                     {integration.status === 'connected' ? (
-                      <>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="flex-1"
-                          data-testid={`button-configure-${integration.id}`}
-                        >
-                          <Settings className="h-4 w-4 mr-1" />
-                          Configure
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleDisconnect(integration.id)}
-                          data-testid={`button-disconnect-${integration.id}`}
-                        >
-                          <Unlink className="h-4 w-4 mr-1" />
-                          Disconnect
-                        </Button>
-                      </>
+                      integration.id === 'mailchimp' ? (
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            onClick={handleSyncMailchimp}
+                            disabled={isSyncingMailchimp}
+                            data-testid="button-sync-mailchimp"
+                          >
+                            {isSyncingMailchimp ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <Users className="h-4 w-4 mr-1" />
+                            )}
+                            {isSyncingMailchimp ? 'Syncing...' : 'Sync Customers'}
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDisconnect(integration.id)}
+                            data-testid={`button-disconnect-${integration.id}`}
+                          >
+                            <Unlink className="h-4 w-4 mr-1" />
+                            Disconnect
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            data-testid={`button-configure-${integration.id}`}
+                          >
+                            <Settings className="h-4 w-4 mr-1" />
+                            Configure
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDisconnect(integration.id)}
+                            data-testid={`button-disconnect-${integration.id}`}
+                          >
+                            <Unlink className="h-4 w-4 mr-1" />
+                            Disconnect
+                          </Button>
+                        </>
+                      )
                     ) : integration.status === 'error' ? (
                       <>
                         <Button 
@@ -561,6 +733,96 @@ export default function Integrations() {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Mailchimp Configuration Dialog */}
+      <Dialog open={showMailchimpDialog} onOpenChange={setShowMailchimpDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-orange-600" />
+              Connect Mailchimp
+            </DialogTitle>
+            <DialogDescription>
+              Enter your Mailchimp API key and select an audience to sync your customers.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="mailchimp-api-key">API Key</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="mailchimp-api-key"
+                  type="password"
+                  placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us1"
+                  value={mailchimpApiKey}
+                  onChange={(e) => setMailchimpApiKey(e.target.value)}
+                  data-testid="input-mailchimp-api-key"
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleFetchMailchimpAudiences}
+                  disabled={!mailchimpApiKey}
+                  data-testid="button-fetch-audiences"
+                >
+                  Load
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Find your API key in Mailchimp under Account → Extras → API keys
+              </p>
+            </div>
+            
+            {mailchimpAudiences.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="mailchimp-audience">Select Audience</Label>
+                <div className="space-y-2">
+                  {mailchimpAudiences.map((audience) => (
+                    <div
+                      key={audience.id}
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                        mailchimpAudienceId === audience.id 
+                          ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' 
+                          : 'border-gray-200 hover:border-gray-300 dark:border-gray-700'
+                      }`}
+                      onClick={() => setMailchimpAudienceId(audience.id)}
+                      data-testid={`audience-${audience.id}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{audience.name}</p>
+                          <p className="text-xs text-gray-500">{audience.memberCount} members</p>
+                        </div>
+                        {mailchimpAudienceId === audience.id && (
+                          <CheckCircle className="h-5 w-5 text-orange-600" />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowMailchimpDialog(false)}
+              data-testid="button-cancel-mailchimp"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveMailchimp}
+              disabled={!mailchimpApiKey || !mailchimpAudienceId}
+              data-testid="button-save-mailchimp"
+            >
+              Connect
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
