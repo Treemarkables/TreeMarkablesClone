@@ -989,6 +989,12 @@ export const businessSettings = pgTable("business_settings", {
   paymentGatewayEnabled: boolean("payment_gateway_enabled").default(false),
   paymentProvider: text("payment_provider").default("stripe"), // stripe, paypal, square
   
+  // Mailchimp Integration
+  mailchimpEnabled: boolean("mailchimp_enabled").default(false),
+  mailchimpApiKey: text("mailchimp_api_key").default(""),
+  mailchimpAudienceId: text("mailchimp_audience_id").default(""),
+  mailchimpAutoSync: boolean("mailchimp_auto_sync").default(true), // Auto-sync new customers
+  
   // Performance & Optimization
   cacheDuration: integer("cache_duration").default(300), // seconds
   imageQuality: integer("image_quality").default(80), // 1-100
