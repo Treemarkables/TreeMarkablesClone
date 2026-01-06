@@ -1644,6 +1644,11 @@ export function GlobalJobCard({
         console.warn('⚠️ isNewCustomer was not false - setting to false for existing job');
         form.setValue('isNewCustomer', false);
       }
+      // CRITICAL: Preserve original description if form description is empty
+      if (!formData.description && editingJob.description) {
+        console.warn('⚠️ description was empty - restoring from editingJob');
+        form.setValue('description', editingJob.description);
+      }
       // Re-fetch form values after setting
       formData = form.getValues();
       console.log('Form data after safety fix:', formData);
@@ -1788,6 +1793,11 @@ export function GlobalJobCard({
     
     const formData = form.getValues();
     
+    // CRITICAL: Preserve original description if form description is empty (edit mode)
+    if (mode === 'edit' && !formData.description && editingJob?.description) {
+      formData.description = editingJob.description;
+    }
+    
     // Map new customer fields to job contact fields for backend compatibility
     if (formData.isNewCustomer && formData.newCustomerName) {
       const names = formData.newCustomerName.split(' ');
@@ -1824,6 +1834,12 @@ export function GlobalJobCard({
         const saveAndClose = async () => {
           try {
             const formData = form.getValues();
+            
+            // CRITICAL: Preserve original description if form description is empty
+            // This prevents accidental deletion when form hasn't fully loaded or field was unregistered
+            if (!formData.description && editingJob.description) {
+              formData.description = editingJob.description;
+            }
             
             // Map new customer fields to job contact fields for backend compatibility
             if (formData.isNewCustomer && formData.newCustomerName) {
