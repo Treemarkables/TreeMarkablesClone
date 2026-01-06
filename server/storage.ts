@@ -71,6 +71,7 @@ import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, sql, inArray } from "drizzle-orm";
 import * as schema from "@shared/schema";
+import * as mailchimpService from "./services/mailchimpService";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -906,7 +907,34 @@ class DatabaseStorage implements IStorage {
       normalizedPhone: this.normalizePhone(customer.phone)
     };
     const [newCustomer] = await db.insert(schema.customers).values(customerData).returning();
+    
+    // Auto-sync to Mailchimp if enabled
+    this.syncCustomerToMailchimpBackground(newCustomer).catch(err => {
+      console.error('Mailchimp auto-sync failed for new customer:', err);
+    });
+    
     return newCustomer;
+  }
+  
+  private async syncCustomerToMailchimpBackground(customer: Customer): Promise<void> {
+    try {
+      // Get business settings to check if Mailchimp is enabled
+      const settings = await this.getBusinessSettings();
+      
+      if (settings?.mailchimpEnabled && settings.mailchimpApiKey && settings.mailchimpAudienceId && settings.mailchimpAutoSync) {
+        // Only sync if customer has an email
+        if (customer.email) {
+          await mailchimpService.syncCustomerToMailchimp(customer, {
+            apiKey: settings.mailchimpApiKey,
+            audienceId: settings.mailchimpAudienceId
+          });
+          console.log(`Auto-synced customer ${customer.id} to Mailchimp`);
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing customer to Mailchimp:', error);
+      // Don't throw - this is a background operation
+    }
   }
 
   async getCustomer(id: string): Promise<Customer | undefined> {
