@@ -9753,6 +9753,156 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   });
 
   // ========================================
+  // MAILCHIMP INTEGRATION ENDPOINTS
+  // ========================================
+
+  // Test Mailchimp connection
+  app.post('/api/mailchimp/test', async (req: Request, res: Response) => {
+    try {
+      const { apiKey, audienceId } = req.body;
+      
+      if (!apiKey || !audienceId) {
+        return res.status(400).json({
+          success: false,
+          message: 'API key and Audience ID are required'
+        });
+      }
+
+      const { testMailchimpConnection } = await import('./services/mailchimpService');
+      const result = await testMailchimpConnection({ apiKey, audienceId });
+      
+      if (result.success) {
+        res.json({
+          success: true,
+          message: `Connected to audience: ${result.audienceName}`,
+          audienceName: result.audienceName
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: result.error
+        });
+      }
+    } catch (error) {
+      console.error('Error testing Mailchimp connection:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error testing connection'
+      });
+    }
+  });
+
+  // Get Mailchimp audiences
+  app.post('/api/mailchimp/audiences', async (req: Request, res: Response) => {
+    try {
+      const { apiKey } = req.body;
+      
+      if (!apiKey) {
+        return res.status(400).json({
+          success: false,
+          message: 'API key is required'
+        });
+      }
+
+      const { getMailchimpAudiences } = await import('./services/mailchimpService');
+      const audiences = await getMailchimpAudiences(apiKey);
+      
+      res.json({
+        success: true,
+        data: audiences
+      });
+    } catch (error) {
+      console.error('Error fetching Mailchimp audiences:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error fetching audiences'
+      });
+    }
+  });
+
+  // Sync all customers to Mailchimp
+  app.post('/api/mailchimp/sync', async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.getBusinessSettings();
+      
+      if (!settings.mailchimpEnabled || !settings.mailchimpApiKey || !settings.mailchimpAudienceId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Mailchimp is not configured. Please add your API key and Audience ID in settings.'
+        });
+      }
+
+      const customers = await storage.getAllCustomers();
+      const { syncAllCustomersToMailchimp } = await import('./services/mailchimpService');
+      
+      const result = await syncAllCustomersToMailchimp(customers, {
+        apiKey: settings.mailchimpApiKey,
+        audienceId: settings.mailchimpAudienceId
+      });
+      
+      res.json({
+        success: result.success,
+        synced: result.synced,
+        failed: result.failed,
+        errors: result.errors.slice(0, 10), // Limit errors returned
+        message: `Synced ${result.synced} customers${result.failed > 0 ? `, ${result.failed} failed` : ''}`
+      });
+    } catch (error) {
+      console.error('Error syncing customers to Mailchimp:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error syncing customers'
+      });
+    }
+  });
+
+  // Sync single customer to Mailchimp
+  app.post('/api/mailchimp/sync/:customerId', async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.getBusinessSettings();
+      
+      if (!settings.mailchimpEnabled || !settings.mailchimpApiKey || !settings.mailchimpAudienceId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Mailchimp is not configured'
+        });
+      }
+
+      const customer = await storage.getCustomer(req.params.customerId);
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Customer not found'
+        });
+      }
+
+      const { syncCustomerToMailchimp } = await import('./services/mailchimpService');
+      const result = await syncCustomerToMailchimp(customer, {
+        apiKey: settings.mailchimpApiKey,
+        audienceId: settings.mailchimpAudienceId
+      });
+      
+      if (result.success) {
+        res.json({
+          success: true,
+          message: 'Customer synced to Mailchimp'
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: result.error
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing customer to Mailchimp:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error syncing customer'
+      });
+    }
+  });
+
+  // ========================================
   // COMMUNICATIONS API ENDPOINTS
   // ========================================
 
