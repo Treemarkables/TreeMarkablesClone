@@ -126,3 +126,15 @@ Preferred communication style: Simple, everyday language.
 - **Timezone standardization**: Updated all customer-facing date/time formatting in `notificationService.ts`, `emailService.ts`, and `smsService.ts` to use `formatNZTime()` utility from `shared/dateUtils.ts`
 - **Multi-select time tracking**: RecordedTimeModal features popover-based staff selection with auto-rate matching by employee first name
 - All email/SMS notifications to customers now explicitly show Pacific/Auckland timezone with "(NZ time)" label for clarity
+
+### Mailchimp Integration (6 Jan 2026)
+- **NEW FEATURE**: Mailchimp integration for customer email marketing synchronization
+- **Architecture**:
+  - Created `server/services/mailchimpService.ts` with functions for syncing customers, testing connections, fetching audiences
+  - Added API routes: `/api/mailchimp/test`, `/api/mailchimp/audiences`, `/api/mailchimp/sync`
+  - Added Mailchimp configuration fields to business settings schema (mailchimpEnabled, mailchimpApiKey, mailchimpAudienceId, mailchimpAutoSync)
+  - Updated Integrations page with Mailchimp connect/disconnect dialog and manual sync button
+- **Auto-sync Feature**: New customers are automatically synced to Mailchimp when created (if mailchimpAutoSync enabled in business settings)
+- **Customer Data Synced**: Email, first name, last name, phone, address (via Mailchimp merge fields)
+- **API Usage**: Uses Mailchimp Marketing API v3 with PUT (upsert) method for member management
+- **Configuration**: API key and Audience ID stored in business_settings table, managed via Integrations page
