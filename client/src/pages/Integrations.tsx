@@ -774,7 +774,7 @@ export default function Integrations() {
               </p>
             </div>
             
-            {mailchimpAudiences.length > 0 && (
+            {mailchimpAudiences && mailchimpAudiences.length > 0 && (
               <div className="space-y-2">
                 <Label htmlFor="mailchimp-audience">Select Audience</Label>
                 <div className="space-y-2">
