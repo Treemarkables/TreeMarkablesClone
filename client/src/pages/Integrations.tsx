@@ -337,7 +337,8 @@ export default function Integrations() {
     
     try {
       const response = await apiRequest('POST', '/api/mailchimp/audiences', { apiKey: mailchimpApiKey });
-      const audiences = response?.data || [];
+      const result = await response.json();
+      const audiences = result?.data || [];
       setMailchimpAudiences(audiences);
       toast({
         title: "Audiences Loaded",
@@ -363,10 +364,11 @@ export default function Integrations() {
     }
     
     try {
-      const testResult = await apiRequest('POST', '/api/mailchimp/test', {
+      const testResponse = await apiRequest('POST', '/api/mailchimp/test', {
         apiKey: mailchimpApiKey,
         audienceId: mailchimpAudienceId,
       });
+      const testResult = await testResponse.json();
       
       await apiRequest('PUT', '/api/business-settings', {
         mailchimpEnabled: true,
@@ -394,10 +396,11 @@ export default function Integrations() {
   const handleSyncMailchimp = async () => {
     setIsSyncingMailchimp(true);
     try {
-      const result = await apiRequest('POST', '/api/mailchimp/sync', {});
+      const response = await apiRequest('POST', '/api/mailchimp/sync', {});
+      const result = await response.json();
       toast({
         title: "Sync Complete",
-        description: result.message,
+        description: result.message || `Synced customers to Mailchimp`,
       });
     } catch (error: any) {
       toast({
