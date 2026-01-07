@@ -337,10 +337,11 @@ export default function Integrations() {
     
     try {
       const response = await apiRequest('POST', '/api/mailchimp/audiences', { apiKey: mailchimpApiKey });
-      setMailchimpAudiences(response.data);
+      const audiences = response?.data || [];
+      setMailchimpAudiences(audiences);
       toast({
         title: "Audiences Loaded",
-        description: `Found ${response.data.length} audience(s)`,
+        description: `Found ${audiences.length} audience(s)`,
       });
     } catch (error: any) {
       toast({
