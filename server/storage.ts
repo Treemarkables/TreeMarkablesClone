@@ -3608,30 +3608,39 @@ class DatabaseStorage implements IStorage {
   }
 
   async getBusinessSettings(): Promise<BusinessSettings> {
-    // Return default business settings for now
-    return {
+    // Try to get existing business settings from database
+    const [existing] = await db.select().from(schema.businessSettings).limit(1);
+    if (existing) {
+      return existing;
+    }
+    
+    // Create default settings if none exist
+    const [created] = await db.insert(schema.businessSettings).values({
       id: 'default',
-      businessName: 'Tree Services Co.',
-      businessEmail: 'info@treeservices.com',
-      businessPhone: '555-123-4567',
-      businessAddress: '123 Main Street',
-      workingHours: { start: '08:00', end: '17:00' },
-      timezone: 'Pacific/Auckland',
-      currency: 'NZD',
-      taxRate: 15,
-      invoicePrefix: 'INV-',
-      quotePrefix: 'QTE-',
-      jobPrefix: 'JOB-',
-      autoInvoiceOnComplete: false,
-      requireQuoteApproval: true,
-      defaultPaymentTerms: 30,
-      defaultWarrantyPeriod: 90,
-      enableNotifications: true,
-      enableEmailReminders: true,
-      enableSmsReminders: false
-    };
+      businessName: 'Treemarkables',
+      businessEmail: 'info@treemarkables.nz',
+      businessPhone: '06 868 9988',
+      businessAddress: 'Gisborne, New Zealand',
+    }).returning();
+    
+    return created;
   }
-  async updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings> { throw new Error("Not implemented"); }
+  
+  async updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings> {
+    // Ensure we have a settings record first
+    const existing = await this.getBusinessSettings();
+    
+    // Update the settings
+    const [updated] = await db.update(schema.businessSettings)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.businessSettings.id, existing.id))
+      .returning();
+    
+    return updated;
+  }
   async resetBusinessSettings(): Promise<BusinessSettings> { throw new Error("Not implemented"); }
 
   async createCommunication(communication: InsertCommunication): Promise<Communication> { throw new Error("Not implemented"); }
