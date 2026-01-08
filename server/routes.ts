@@ -17485,18 +17485,36 @@ Transcription: ${transcriptText}`;
   // Hero Internet webhook for completed calls
   app.post("/api/hero/webhook/call-complete", async (req, res) => {
     try {
-      console.log('📞 Received Hero Internet call webhook:', JSON.stringify(req.body, null, 2));
+      console.log('📞 Received Hero Internet call webhook');
+      console.log('📞 Headers:', JSON.stringify(req.headers, null, 2));
+      console.log('📞 Query:', JSON.stringify(req.query, null, 2));
+      console.log('📞 Body:', JSON.stringify(req.body, null, 2));
       
       const { processCallWebhook, validateWebhookToken } = await import('./services/heroInternetService.js');
       
-      // Validate the webhook secret token
+      // Validate the webhook secret token - accept from header OR query parameter
       const authHeader = req.headers['authorization'] as string | undefined;
-      if (!validateWebhookToken(authHeader)) {
+      const queryToken = req.query.token as string | undefined;
+      
+      // Check if token provided via Authorization header (Bearer token) or query param (?token=xxx)
+      const isValidHeader = authHeader && validateWebhookToken(authHeader);
+      const isValidQuery = queryToken && queryToken === process.env.HERO_WEBHOOK_SECRET;
+      
+      // If HERO_WEBHOOK_SECRET is not set, allow unauthenticated (for testing only)
+      const secretConfigured = !!process.env.HERO_WEBHOOK_SECRET;
+      
+      if (secretConfigured && !isValidHeader && !isValidQuery) {
+        console.log('📞 Webhook auth failed - token mismatch');
         return res.status(401).json({ success: false, message: 'Unauthorized - invalid or missing token' });
+      }
+      
+      if (!secretConfigured) {
+        console.log('📞 Warning: HERO_WEBHOOK_SECRET not configured - accepting webhook without auth');
       }
       
       const callRecord = await processCallWebhook(req.body);
       
+      console.log('📞 Call record created:', callRecord.id);
       res.json({ success: true, callRecordId: callRecord.id });
     } catch (error) {
       console.error('Error processing Hero Internet webhook:', error);
