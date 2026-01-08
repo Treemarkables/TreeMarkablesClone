@@ -1238,6 +1238,43 @@ export function JobDiarySection({
                               />
                             </div>
                           )}
+                          
+                          {/* Audio player for call recordings */}
+                          {entry.type === 'call' && entry.metadata?.recordingUrl && (
+                            <div className="mt-2 space-y-2">
+                              <audio 
+                                controls 
+                                className="w-full h-8" 
+                                src={entry.metadata.recordingUrl}
+                                preload="metadata"
+                              />
+                              {entry.metadata?.transcription && (
+                                <details className="text-xs">
+                                  <summary className="cursor-pointer text-blue-600 dark:text-blue-400 hover:underline">
+                                    View transcription
+                                  </summary>
+                                  <div className="mt-1 p-2 bg-gray-50 dark:bg-gray-900 rounded text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                                    {entry.metadata.transcription}
+                                  </div>
+                                </details>
+                              )}
+                              {entry.metadata?.sentiment && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-muted-foreground">Sentiment:</span>
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`text-[10px] ${
+                                      entry.metadata.sentiment === 'positive' ? 'border-green-500 text-green-600' : 
+                                      entry.metadata.sentiment === 'negative' ? 'border-red-500 text-red-600' : 
+                                      'border-gray-500 text-gray-600'
+                                    }`}
+                                  >
+                                    {entry.metadata.sentiment}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </>
                       )}
                       

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2 } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1262,17 +1262,67 @@ export function GlobalJobCard({
     setIsEmailComposerOpen(true);
   };
 
-  // Handle call click
-  const handleCallClick = () => {
-    const phone = selectedCustomer?.phone;
-    if (phone) {
-      window.location.href = `tel:${phone}`;
-    } else {
+  // Handle call click - with Hero Internet click-to-call integration
+  const [isCallingViaHero, setIsCallingViaHero] = useState(false);
+  
+  const initiateHeroCallMutation = useMutation({
+    mutationFn: async (destinationNumber: string) => {
+      const response = await apiRequest('POST', '/api/hero/call', {
+        toNumber: destinationNumber,
+        jobId: editingJob?.id,
+        customerId: selectedCustomer?.id
+      });
+      return response;
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Call Initiated",
+        description: "Your phone will ring shortly. Answer to connect with the customer.",
+      });
+      setIsCallingViaHero(false);
+    },
+    onError: (error: any) => {
+      console.error('Hero Internet call failed:', error);
+      toast({
+        title: "Call Failed",
+        description: error.message || "Could not initiate call via Hero Internet. Using regular phone.",
+        variant: "destructive"
+      });
+      setIsCallingViaHero(false);
+      // Fall back to tel: link
+      const phone = selectedCustomer?.phone || form.getValues('jobContactPhone');
+      if (phone) {
+        window.location.href = `tel:${phone}`;
+      }
+    }
+  });
+  
+  const handleCallClick = async () => {
+    const phone = selectedCustomer?.phone || form.getValues('jobContactPhone');
+    if (!phone) {
       toast({
         title: "No Phone Number",
         description: "No phone number available for this customer",
         variant: "destructive"
       });
+      return;
+    }
+    
+    // Try Hero Internet click-to-call first (for recorded calls)
+    // If Hero is not configured, fall back to regular tel: link
+    setIsCallingViaHero(true);
+    try {
+      await initiateHeroCallMutation.mutateAsync(phone);
+    } catch (error) {
+      // Error handling is done in onError callback
+    }
+  };
+  
+  // Fallback to direct phone call (useful when Hero is not configured)
+  const handleDirectCall = () => {
+    const phone = selectedCustomer?.phone || form.getValues('jobContactPhone');
+    if (phone) {
+      window.location.href = `tel:${phone}`;
     }
   };
 
@@ -2189,11 +2239,16 @@ export function GlobalJobCard({
                 variant="ghost" 
                 size="sm" 
                 className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col [&_svg]:!w-full [&_svg]:!h-auto" 
-                onClick={handleCallClick} 
+                onClick={handleCallClick}
+                disabled={isCallingViaHero}
                 data-testid="button-call"
               >
-                <MdPhone className="w-full h-auto max-w-[40px] max-h-[40px] text-green-500" />
-                <span className="text-[10px] mt-1 whitespace-nowrap">Call</span>
+                {isCallingViaHero ? (
+                  <Loader2 className="w-full h-auto max-w-[40px] max-h-[40px] text-green-500 animate-spin" />
+                ) : (
+                  <MdPhone className="w-full h-auto max-w-[40px] max-h-[40px] text-green-500" />
+                )}
+                <span className="text-[10px] mt-1 whitespace-nowrap">{isCallingViaHero ? 'Calling...' : 'Call'}</span>
               </Button>
               <Button 
                 variant="ghost" 
