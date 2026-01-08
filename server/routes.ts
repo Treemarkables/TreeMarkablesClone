@@ -17487,7 +17487,14 @@ Transcription: ${transcriptText}`;
     try {
       console.log('📞 Received Hero Internet call webhook:', JSON.stringify(req.body, null, 2));
       
-      const { processCallWebhook } = await import('./services/heroInternetService.js');
+      const { processCallWebhook, validateWebhookToken } = await import('./services/heroInternetService.js');
+      
+      // Validate the webhook secret token
+      const authHeader = req.headers['authorization'] as string | undefined;
+      if (!validateWebhookToken(authHeader)) {
+        return res.status(401).json({ success: false, message: 'Unauthorized - invalid or missing token' });
+      }
+      
       const callRecord = await processCallWebhook(req.body);
       
       res.json({ success: true, callRecordId: callRecord.id });

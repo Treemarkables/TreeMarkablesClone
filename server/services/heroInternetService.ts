@@ -2,6 +2,28 @@ import { storage } from '../storage';
 import type { InsertCallRecord, CallRecord } from '@shared/schema';
 import { z } from 'zod';
 
+export function validateWebhookToken(authHeader: string | undefined): boolean {
+  const expectedToken = process.env.HERO_WEBHOOK_SECRET;
+  if (!expectedToken) {
+    console.error('❌ HERO_WEBHOOK_SECRET not configured - webhook rejected for security');
+    return false;
+  }
+  
+  if (!authHeader) {
+    console.error('❌ Missing Authorization header in webhook request');
+    return false;
+  }
+  
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const isValid = token === expectedToken;
+  
+  if (!isValid) {
+    console.error('❌ Invalid webhook token');
+  }
+  
+  return isValid;
+}
+
 // Zod schema for webhook payload validation
 const heroWebhookSchema = z.object({
   call_id: z.string().optional(),
