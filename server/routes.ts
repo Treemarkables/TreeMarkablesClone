@@ -17487,31 +17487,27 @@ Transcription: ${transcriptText}`;
     try {
       console.log('📞 Received Hero Internet call webhook');
       console.log('📞 Headers:', JSON.stringify(req.headers, null, 2));
-      console.log('📞 Query:', JSON.stringify(req.query, null, 2));
       console.log('📞 Body:', JSON.stringify(req.body, null, 2));
       
-      const { processCallWebhook, validateWebhookToken } = await import('./services/heroInternetService.js');
+      const { processCallWebhook } = await import('./services/heroInternetService.js');
       
-      // Validate the webhook secret token - accept from header OR query parameter
+      // Validate the webhook secret token
+      // Hero sends: Authorization: secret-token (the literal value from their webhook config)
       const authHeader = req.headers['authorization'] as string | undefined;
-      const queryToken = req.query.token as string | undefined;
+      const expectedSecret = process.env.HERO_WEBHOOK_SECRET;
       
-      // Check if token provided via Authorization header (Bearer token) or query param (?token=xxx)
-      const isValidHeader = authHeader && validateWebhookToken(authHeader);
-      const isValidQuery = queryToken && queryToken === process.env.HERO_WEBHOOK_SECRET;
-      
-      // If HERO_WEBHOOK_SECRET is not set, allow unauthenticated (for testing only)
-      const secretConfigured = !!process.env.HERO_WEBHOOK_SECRET;
-      
-      if (secretConfigured && !isValidHeader && !isValidQuery) {
-        console.log('📞 Webhook auth failed - token mismatch');
-        return res.status(401).json({ success: false, message: 'Unauthorized - invalid or missing token' });
+      if (!expectedSecret) {
+        console.error('📞 HERO_WEBHOOK_SECRET not configured - rejecting webhook');
+        return res.status(500).json({ success: false, message: 'Webhook secret not configured on server' });
       }
       
-      if (!secretConfigured) {
-        console.log('📞 Warning: HERO_WEBHOOK_SECRET not configured - accepting webhook without auth');
+      // Hero sends the secret directly as Authorization header value
+      if (authHeader !== expectedSecret) {
+        console.log('📞 Webhook auth failed - received:', authHeader, 'expected:', expectedSecret);
+        return res.status(401).json({ success: false, message: 'Unauthorized - invalid token' });
       }
       
+      console.log('📞 Webhook auth successful');
       const callRecord = await processCallWebhook(req.body);
       
       console.log('📞 Call record created:', callRecord.id);
