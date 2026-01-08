@@ -3125,5 +3125,73 @@ export type InsertFcmToken = z.infer<typeof insertFcmTokenSchema>;
 export type NotificationPreferences = typeof notificationPreferences.$inferSelect;
 export type InsertNotificationPreferences = z.infer<typeof insertNotificationPreferencesSchema>;
 
+// ========================================
+// CALL RECORDS - Hero Internet Integration
+// ========================================
+
+export const callRecords = pgTable("call_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Call details
+  direction: text("direction").notNull(), // 'inbound' or 'outbound'
+  status: text("status").notNull().default('completed'), // 'ringing', 'in_progress', 'completed', 'missed', 'failed'
+  fromNumber: text("from_number").notNull(),
+  toNumber: text("to_number").notNull(),
+  duration: integer("duration"), // Duration in seconds
+  
+  // Recording and transcription
+  recordingUrl: text("recording_url"),
+  transcription: text("transcription"),
+  transcriptionSummary: text("transcription_summary"), // AI-generated summary
+  sentiment: text("sentiment"), // 'positive', 'neutral', 'negative' from Hero AI
+  
+  // Linking to entities
+  jobId: varchar("job_id").references(() => jobs.id),
+  customerId: varchar("customer_id").references(() => customers.id),
+  leadId: varchar("lead_id").references(() => leads.id),
+  employeeId: varchar("employee_id").references(() => employees.id), // Staff member who made/received call
+  jobDiaryEntryId: varchar("job_diary_entry_id").references(() => jobDiaryEntries.id),
+  
+  // Hero Internet specific
+  heroCallId: text("hero_call_id"), // Hero's unique call ID
+  heroExtension: text("hero_extension"), // Which Hero extension handled the call
+  
+  // Contact info (cached for quick display)
+  callerName: text("caller_name"),
+  callerEmail: text("caller_email"),
+  
+  // Metadata
+  notes: text("notes"), // Manual notes added by staff
+  tags: text("tags").array(), // Tags like 'follow-up', 'urgent', 'complaint'
+  isArchived: boolean("is_archived").default(false),
+  
+  // Timestamps
+  callStartedAt: timestamp("call_started_at"),
+  callEndedAt: timestamp("call_ended_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  jobIdIdx: index("call_records_job_id_idx").on(table.jobId),
+  customerIdIdx: index("call_records_customer_id_idx").on(table.customerId),
+  leadIdIdx: index("call_records_lead_id_idx").on(table.leadId),
+  fromNumberIdx: index("call_records_from_number_idx").on(table.fromNumber),
+  toNumberIdx: index("call_records_to_number_idx").on(table.toNumber),
+  createdAtIdx: index("call_records_created_at_idx").on(table.createdAt),
+}));
+
+// Call records schemas
+export const insertCallRecordSchema = createInsertSchema(callRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateCallRecordSchema = insertCallRecordSchema.partial();
+
+// Call record types
+export type CallRecord = typeof callRecords.$inferSelect;
+export type InsertCallRecord = z.infer<typeof insertCallRecordSchema>;
+export type UpdateCallRecord = z.infer<typeof updateCallRecordSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';

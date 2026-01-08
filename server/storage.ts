@@ -866,6 +866,21 @@ export interface IStorage {
   createNotificationPreferences(prefs: schema.InsertNotificationPreferences): Promise<schema.NotificationPreferences>;
   getNotificationPreferences(employeeId: string): Promise<schema.NotificationPreferences | undefined>;
   updateNotificationPreferences(employeeId: string, updates: Partial<schema.InsertNotificationPreferences>): Promise<schema.NotificationPreferences>;
+
+  // Call Records - Hero Internet Integration
+  createCallRecord(record: schema.InsertCallRecord): Promise<schema.CallRecord>;
+  getCallRecord(id: string): Promise<schema.CallRecord | null>;
+  updateCallRecord(id: string, updates: Partial<schema.InsertCallRecord>): Promise<schema.CallRecord>;
+  getCallRecords(filters?: {
+    jobId?: string;
+    customerId?: string;
+    leadId?: string;
+    direction?: string;
+    limit?: number;
+  }): Promise<schema.CallRecord[]>;
+  getCallRecordsByJob(jobId: string): Promise<schema.CallRecord[]>;
+  getCallRecordsByCustomer(customerId: string): Promise<schema.CallRecord[]>;
+  deleteCallRecord(id: string): Promise<boolean>;
 }
 
 // Database Storage Implementation
@@ -5182,6 +5197,89 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.notificationPreferences.employeeId, employeeId))
       .returning();
     return result;
+  }
+
+  // ========================================
+  // CALL RECORDS - HERO INTERNET INTEGRATION
+  // ========================================
+
+  async createCallRecord(record: schema.InsertCallRecord): Promise<schema.CallRecord> {
+    const [result] = await db.insert(schema.callRecords)
+      .values(record)
+      .returning();
+    return result;
+  }
+
+  async getCallRecord(id: string): Promise<schema.CallRecord | null> {
+    const [result] = await db.select()
+      .from(schema.callRecords)
+      .where(eq(schema.callRecords.id, id));
+    return result || null;
+  }
+
+  async updateCallRecord(id: string, updates: Partial<schema.InsertCallRecord>): Promise<schema.CallRecord> {
+    const [result] = await db.update(schema.callRecords)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.callRecords.id, id))
+      .returning();
+    return result;
+  }
+
+  async getCallRecords(filters?: {
+    jobId?: string;
+    customerId?: string;
+    leadId?: string;
+    direction?: string;
+    limit?: number;
+  }): Promise<schema.CallRecord[]> {
+    const conditions = [];
+    
+    if (filters?.jobId) {
+      conditions.push(eq(schema.callRecords.jobId, filters.jobId));
+    }
+    if (filters?.customerId) {
+      conditions.push(eq(schema.callRecords.customerId, filters.customerId));
+    }
+    if (filters?.leadId) {
+      conditions.push(eq(schema.callRecords.leadId, filters.leadId));
+    }
+    if (filters?.direction) {
+      conditions.push(eq(schema.callRecords.direction, filters.direction));
+    }
+    
+    let query = db.select()
+      .from(schema.callRecords)
+      .orderBy(desc(schema.callRecords.createdAt));
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+    
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as typeof query;
+    }
+    
+    return await query;
+  }
+
+  async getCallRecordsByJob(jobId: string): Promise<schema.CallRecord[]> {
+    return await db.select()
+      .from(schema.callRecords)
+      .where(eq(schema.callRecords.jobId, jobId))
+      .orderBy(desc(schema.callRecords.createdAt));
+  }
+
+  async getCallRecordsByCustomer(customerId: string): Promise<schema.CallRecord[]> {
+    return await db.select()
+      .from(schema.callRecords)
+      .where(eq(schema.callRecords.customerId, customerId))
+      .orderBy(desc(schema.callRecords.createdAt));
+  }
+
+  async deleteCallRecord(id: string): Promise<boolean> {
+    const result = await db.delete(schema.callRecords)
+      .where(eq(schema.callRecords.id, id));
+    return true;
   }
 }
 
