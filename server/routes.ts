@@ -17478,6 +17478,141 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // ========================================
+  // HERO INTERNET - CALL RECORDING INTEGRATION
+  // ========================================
+
+  // Hero Internet webhook for completed calls
+  app.post("/api/hero/webhook/call-complete", async (req, res) => {
+    try {
+      console.log('📞 Received Hero Internet call webhook:', JSON.stringify(req.body, null, 2));
+      
+      const { processCallWebhook } = await import('./services/heroInternetService.js');
+      const callRecord = await processCallWebhook(req.body);
+      
+      res.json({ success: true, callRecordId: callRecord.id });
+    } catch (error) {
+      console.error('Error processing Hero Internet webhook:', error);
+      res.status(500).json({ success: false, message: 'Failed to process call webhook' });
+    }
+  });
+
+  // Test Hero Internet connection
+  app.get("/api/hero/status", async (req, res) => {
+    try {
+      const { testHeroConnection } = await import('./services/heroInternetService.js');
+      const result = await testHeroConnection();
+      res.json(result);
+    } catch (error) {
+      res.json({ success: false, message: 'Hero Internet not configured' });
+    }
+  });
+
+  // Initiate click-to-call via Hero Internet
+  app.post("/api/hero/call", async (req, res) => {
+    try {
+      const { fromNumber, toNumber, jobId, customerId } = req.body;
+      
+      if (!toNumber) {
+        return res.status(400).json({ success: false, message: 'Destination phone number is required' });
+      }
+      
+      const { initiateCall } = await import('./services/heroInternetService.js');
+      
+      // Use configured Hero number if fromNumber not provided
+      const heroFromNumber = fromNumber || process.env.HERO_PHONE_NUMBER;
+      if (!heroFromNumber) {
+        return res.status(400).json({ success: false, message: 'Hero phone number not configured' });
+      }
+      
+      const result = await initiateCall(heroFromNumber, toNumber);
+      
+      // Create a pending call record
+      const callRecord = await storage.createCallRecord({
+        direction: 'outbound',
+        status: 'ringing',
+        fromNumber: heroFromNumber,
+        toNumber,
+        jobId: jobId || undefined,
+        customerId: customerId || undefined,
+      });
+      
+      res.json({ 
+        success: result.success, 
+        message: result.message,
+        callRecordId: callRecord.id 
+      });
+    } catch (error) {
+      console.error('Error initiating call:', error);
+      res.status(500).json({ success: false, message: 'Failed to initiate call' });
+    }
+  });
+
+  // Get all call records
+  app.get("/api/calls", async (req, res) => {
+    try {
+      const { jobId, customerId, leadId, direction, limit } = req.query;
+      
+      const calls = await storage.getCallRecords({
+        jobId: jobId as string | undefined,
+        customerId: customerId as string | undefined,
+        leadId: leadId as string | undefined,
+        direction: direction as string | undefined,
+        limit: limit ? parseInt(limit as string) : 100,
+      });
+      
+      res.json({ success: true, data: calls });
+    } catch (error) {
+      console.error('Error fetching call records:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch call records' });
+    }
+  });
+
+  // Get single call record
+  app.get("/api/calls/:id", async (req, res) => {
+    try {
+      const call = await storage.getCallRecord(req.params.id);
+      if (!call) {
+        return res.status(404).json({ success: false, message: 'Call record not found' });
+      }
+      res.json({ success: true, data: call });
+    } catch (error) {
+      console.error('Error fetching call record:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch call record' });
+    }
+  });
+
+  // Update call record (link to job/customer)
+  app.patch("/api/calls/:id", async (req, res) => {
+    try {
+      const updates = req.body;
+      const call = await storage.updateCallRecord(req.params.id, updates);
+      
+      // If linking to a job, create a diary entry
+      if (updates.jobId && !call.jobDiaryEntryId) {
+        const { linkCallToJob } = await import('./services/heroInternetService.js');
+        const updatedCall = await linkCallToJob(req.params.id, updates.jobId);
+        return res.json({ success: true, data: updatedCall });
+      }
+      
+      res.json({ success: true, data: call });
+    } catch (error) {
+      console.error('Error updating call record:', error);
+      res.status(500).json({ success: false, message: 'Failed to update call record' });
+    }
+  });
+
+  // Get calls for a specific job
+  app.get("/api/jobs/:id/calls", async (req, res) => {
+    try {
+      const calls = await storage.getCallRecordsByJob(req.params.id);
+      res.json({ success: true, data: calls });
+    } catch (error) {
+      console.error('Error fetching job calls:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch job calls' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
