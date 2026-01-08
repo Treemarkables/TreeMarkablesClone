@@ -138,3 +138,29 @@ Preferred communication style: Simple, everyday language.
 - **Customer Data Synced**: Email, first name, last name, phone, address (via Mailchimp merge fields)
 - **API Usage**: Uses Mailchimp Marketing API v3 with PUT (upsert) method for member management
 - **Configuration**: API key and Audience ID stored in business_settings table, managed via Integrations page
+
+### Hero Internet Call Recording Integration (8 Jan 2026)
+- **NEW FEATURE**: VoIP call recording with AI transcription via Hero Internet NZ
+- **Why Hero Internet**: NZ-based provider with built-in AI transcription ($4-10/month vs Twilio's higher costs), includes sentiment analysis and call summaries
+- **Database Schema**: Created `call_records` table in `shared/schema.ts` with fields for:
+  - Call metadata: fromNumber, toNumber, direction (inbound/outbound), duration, callStartedAt, callEndedAt
+  - Recording: recordingUrl, transcription, transcriptionSummary, sentiment
+  - Linking: customerId, jobId, leadId, employeeId, jobDiaryEntryId
+- **Backend Service**: `server/services/heroInternetService.ts`
+  - `processIncomingWebhook()`: Processes Hero Internet call-complete webhooks
+  - `initiateCall()`: Click-to-call API for outbound calls
+  - `linkCallToJob()`: Manual linking of calls to jobs
+  - Auto-matching: Matches calls to customers/jobs by phone number with normalized NZ format (+64, 64, 0 prefixes)
+  - Creates job diary entries with embedded audio player data
+- **API Endpoints** (server/routes.ts):
+  - `GET /api/calls`: List call records with search/filter
+  - `GET /api/calls/:id`: Get single call record
+  - `PATCH /api/calls/:id`: Link call to job/customer
+  - `POST /api/hero/call`: Click-to-call endpoint
+  - `POST /api/hero/webhook/call-complete`: Webhook for completed calls (Zod validated)
+- **Frontend Features**:
+  - GlobalJobCard: Click-to-call buttons with Hero API integration and tel: fallback
+  - CommunicationsManagement (Calls tab): Call log with search, direction filter, audio playback, job linking
+  - JobDiarySection: Embedded audio player for call diary entries with transcription and sentiment badges
+- **Required Secrets**: `HERO_PHONE_NUMBER`, `HERO_PASSWORD`
+- **Webhook Setup**: Configure Hero Internet to send call-complete webhooks to `/api/hero/webhook/call-complete`
