@@ -25,18 +25,28 @@ export function validateWebhookToken(authHeader: string | undefined): boolean {
 }
 
 // Zod schema for webhook payload validation
+// Hero Internet sends: caller, callee, call_start, call_end, duration, state, id
 const heroWebhookSchema = z.object({
-  call_id: z.string().optional(),
-  direction: z.enum(['inbound', 'outbound']).optional().default('inbound'),
-  from: z.string().min(1, 'From number is required'),
-  to: z.string().min(1, 'To number is required'),
-  duration: z.number().optional(),
-  recording_url: z.string().url().optional().nullable(),
+  // Hero Internet field names
+  id: z.string().optional(),
+  state: z.string().optional(), // ringing|answered|ended|missed|busy|invalid|rejected|blocked|noanswer|aianalysis
+  caller: z.string().optional(),
+  callee: z.string().optional(),
+  call_start: z.string().optional(),
+  call_end: z.string().optional(),
+  duration: z.union([z.number(), z.string()]).optional(),
+  recording_url: z.string().optional().nullable(),
   transcription: z.string().optional().nullable(),
+  transcription_summary: z.string().optional().nullable(),
+  sentiment: z.string().optional().nullable(),
+  // Legacy field names (for compatibility)
+  call_id: z.string().optional(),
+  direction: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
   summary: z.string().optional().nullable(),
-  sentiment: z.enum(['positive', 'neutral', 'negative']).optional().nullable(),
   extension: z.string().optional(),
-  status: z.string().optional().default('completed'),
+  status: z.string().optional(),
   started_at: z.string().optional(),
   ended_at: z.string().optional(),
 }).passthrough();
@@ -84,15 +94,24 @@ export async function initiateCall(fromNumber: string, toNumber: string): Promis
 }
 
 export interface HeroWebhookPayload {
+  // Hero Internet field names
+  id?: string;
+  state?: string;
+  caller?: string;
+  callee?: string;
+  call_start?: string;
+  call_end?: string;
+  duration?: number | string;
+  recording_url?: string;
+  transcription?: string;
+  transcription_summary?: string;
+  sentiment?: string;
+  // Legacy field names (for compatibility)
   call_id?: string;
   direction?: string;
   from?: string;
   to?: string;
-  duration?: number;
-  recording_url?: string;
-  transcription?: string;
   summary?: string;
-  sentiment?: string;
   extension?: string;
   status?: string;
   started_at?: string;
@@ -110,9 +129,17 @@ export async function processCallWebhook(payload: HeroWebhookPayload): Promise<C
   }
   
   const validatedPayload = validationResult.data;
-  const direction = validatedPayload.direction === 'inbound' ? 'inbound' : 'outbound';
-  const fromNumber = normalizePhoneNumber(validatedPayload.from || '');
-  const toNumber = normalizePhoneNumber(validatedPayload.to || '');
+  
+  // Handle both Hero's field names (caller/callee) and legacy names (from/to)
+  const fromNumber = normalizePhoneNumber(validatedPayload.caller || validatedPayload.from || '');
+  const toNumber = normalizePhoneNumber(validatedPayload.callee || validatedPayload.to || '');
+  
+  // Determine direction based on which number matches our Hero line
+  const heroLineNumber = process.env.HERO_PHONE_NUMBER || '';
+  const normalizedHeroLine = normalizePhoneNumber(heroLineNumber);
+  const direction = (toNumber === normalizedHeroLine || validatedPayload.direction === 'inbound') ? 'inbound' : 'outbound';
+  
+  console.log(`📞 Call: ${fromNumber} → ${toNumber}, Direction: ${direction}`);
   
   const customerMatch = await findCustomerByPhone(direction === 'inbound' ? fromNumber : toNumber);
   const leadMatch = customerMatch ? null : await findLeadByPhone(direction === 'inbound' ? fromNumber : toNumber);
@@ -123,25 +150,50 @@ export async function processCallWebhook(payload: HeroWebhookPayload): Promise<C
     jobId = recentJob?.id;
   }
   
+  // Map Hero's state to our status field
+  const stateToStatus: Record<string, string> = {
+    'answered': 'completed',
+    'ended': 'completed',
+    'ringing': 'ringing',
+    'missed': 'missed',
+    'busy': 'busy',
+    'noanswer': 'no-answer',
+    'rejected': 'rejected',
+    'blocked': 'blocked',
+    'invalid': 'failed',
+    'notavailable': 'failed',
+    'aianalysis': 'processing'
+  };
+  const status = stateToStatus[validatedPayload.state || ''] || validatedPayload.status || 'completed';
+  
+  // Handle duration - can be number or string
+  const duration = typeof validatedPayload.duration === 'string' 
+    ? parseInt(validatedPayload.duration, 10) || undefined
+    : validatedPayload.duration;
+  
+  // Handle timestamps - Hero sends call_start/call_end, legacy uses started_at/ended_at
+  const startedAt = validatedPayload.call_start || validatedPayload.started_at;
+  const endedAt = validatedPayload.call_end || validatedPayload.ended_at;
+  
   const callRecord: InsertCallRecord = {
     direction,
-    status: validatedPayload.status || 'completed',
-    fromNumber: validatedPayload.from,
-    toNumber: validatedPayload.to,
-    duration: validatedPayload.duration,
+    status,
+    fromNumber,
+    toNumber,
+    duration,
     recordingUrl: validatedPayload.recording_url || undefined,
     transcription: validatedPayload.transcription || undefined,
-    transcriptionSummary: validatedPayload.summary || undefined,
+    transcriptionSummary: validatedPayload.transcription_summary || validatedPayload.summary || undefined,
     sentiment: validatedPayload.sentiment || undefined,
-    heroCallId: validatedPayload.call_id,
+    heroCallId: validatedPayload.id || validatedPayload.call_id,
     heroExtension: validatedPayload.extension,
     customerId: customerMatch?.id,
     leadId: leadMatch?.id,
     jobId,
     callerName: customerMatch?.name || leadMatch?.name,
     callerEmail: customerMatch?.email || leadMatch?.email,
-    callStartedAt: validatedPayload.started_at ? new Date(validatedPayload.started_at) : undefined,
-    callEndedAt: validatedPayload.ended_at ? new Date(validatedPayload.ended_at) : undefined,
+    callStartedAt: startedAt ? new Date(startedAt) : undefined,
+    callEndedAt: endedAt ? new Date(endedAt) : undefined,
   };
   
   const savedRecord = await storage.createCallRecord(callRecord);
