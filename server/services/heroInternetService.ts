@@ -227,6 +227,7 @@ async function createJobDiaryEntryForCall(callRecord: CallRecord, jobId: string)
       metadata: {
         callRecordId: callRecord.id,
         recordingUrl: callRecord.recordingUrl,
+        transcription: callRecord.transcription,
         duration: callRecord.duration,
         sentiment: callRecord.sentiment,
         fromNumber: callRecord.fromNumber,
