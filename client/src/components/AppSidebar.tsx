@@ -366,6 +366,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/communications"}>
+                    <Link href="/communications" onClick={handleLinkClick} data-testid="link-call-log">
+                      <PhoneCall className="h-4 w-4" />
+                      <span>Call Log</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/metrics"}>
                     <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics">
                       <BarChart3 className="h-4 w-4" />
