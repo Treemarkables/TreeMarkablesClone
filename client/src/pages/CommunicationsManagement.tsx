@@ -19,7 +19,7 @@ import {
 import type { CallRecord } from '@shared/schema';
 
 export default function CommunicationsManagement() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('calls');
   const [callSearchQuery, setCallSearchQuery] = useState('');
   const [callDirectionFilter, setCallDirectionFilter] = useState<string>('all');
   const [playingCallId, setPlayingCallId] = useState<string | null>(null);
