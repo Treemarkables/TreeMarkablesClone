@@ -25,25 +25,33 @@ export function validateWebhookToken(authHeader: string | undefined): boolean {
 }
 
 // Zod schema for webhook payload validation
-// Hero Internet sends: caller, callee, call_start, call_end, duration, state, id
+// Hero Internet API documentation field names:
+// state, id, originid, from, to, type, start_time, duration, voiceuri, aiuri, transcript, callsummary
 const heroWebhookSchema = z.object({
-  // Hero Internet field names
+  // Hero Internet actual field names (from API docs)
   id: z.string().optional(),
-  state: z.string().optional(), // ringing|answered|ended|missed|busy|invalid|rejected|blocked|noanswer|aianalysis
+  originid: z.string().optional(), // Originating call identifier
+  state: z.string().optional(), // ringing|answered|ended|missed|busy|invalid|rejected|notavailable|blocked|noanswer|aianalysis
+  from: z.string().optional(), // Calling number
+  to: z.string().optional(), // Called number
+  type: z.string().optional(), // "dialed" (outbound) | "received" (inbound)
+  start_time: z.string().optional(), // YYYY-MM-DD HH:MM:SS (UTC) - url-encoded
+  duration: z.union([z.number(), z.string()]).optional(), // Call duration in seconds
+  voiceuri: z.string().optional().nullable(), // URL-encoded link to recording (when recording enabled)
+  aiuri: z.string().optional().nullable(), // URL-encoded link to AI analysis (for state 'aianalysis')
+  transcript: z.string().optional().nullable(), // Call transcript text (for state 'aianalysis')
+  callsummary: z.any().optional().nullable(), // Call summary object/array (for state 'aianalysis')
+  // Legacy/alternative field names (for backward compatibility)
   caller: z.string().optional(),
   callee: z.string().optional(),
   call_start: z.string().optional(),
   call_end: z.string().optional(),
-  duration: z.union([z.number(), z.string()]).optional(),
   recording_url: z.string().optional().nullable(),
   transcription: z.string().optional().nullable(),
   transcription_summary: z.string().optional().nullable(),
   sentiment: z.string().optional().nullable(),
-  // Legacy field names (for compatibility)
   call_id: z.string().optional(),
   direction: z.string().optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
   summary: z.string().optional().nullable(),
   extension: z.string().optional(),
   status: z.string().optional(),
@@ -94,23 +102,30 @@ export async function initiateCall(fromNumber: string, toNumber: string): Promis
 }
 
 export interface HeroWebhookPayload {
-  // Hero Internet field names
+  // Hero Internet actual field names (from API docs)
   id?: string;
-  state?: string;
+  originid?: string; // Originating call identifier
+  state?: string; // ringing|answered|ended|missed|busy|invalid|rejected|notavailable|blocked|noanswer|aianalysis
+  from?: string; // Calling number
+  to?: string; // Called number
+  type?: string; // "dialed" (outbound) | "received" (inbound)
+  start_time?: string; // YYYY-MM-DD HH:MM:SS (UTC)
+  duration?: number | string;
+  voiceuri?: string; // URL to recording
+  aiuri?: string; // URL to AI analysis
+  transcript?: string; // Transcription text
+  callsummary?: any; // AI call summary object
+  // Legacy/alternative field names (for backward compatibility)
   caller?: string;
   callee?: string;
   call_start?: string;
   call_end?: string;
-  duration?: number | string;
   recording_url?: string;
   transcription?: string;
   transcription_summary?: string;
   sentiment?: string;
-  // Legacy field names (for compatibility)
   call_id?: string;
   direction?: string;
-  from?: string;
-  to?: string;
   summary?: string;
   extension?: string;
   status?: string;
@@ -130,16 +145,27 @@ export async function processCallWebhook(payload: HeroWebhookPayload): Promise<C
   
   const validatedPayload = validationResult.data;
   
-  // Handle both Hero's field names (caller/callee) and legacy names (from/to)
-  const fromNumber = normalizePhoneNumber(validatedPayload.caller || validatedPayload.from || '');
-  const toNumber = normalizePhoneNumber(validatedPayload.callee || validatedPayload.to || '');
+  // Handle Hero's actual field names (from/to) with fallback to legacy names (caller/callee)
+  const fromNumber = normalizePhoneNumber(validatedPayload.from || validatedPayload.caller || '');
+  const toNumber = normalizePhoneNumber(validatedPayload.to || validatedPayload.callee || '');
   
-  // Determine direction based on which number matches our Hero line
+  // Determine direction based on Hero's 'type' field ("dialed" = outbound, "received" = inbound)
+  // Fallback: check if 'to' matches our Hero line, or use legacy 'direction' field
   const heroLineNumber = process.env.HERO_PHONE_NUMBER || '';
   const normalizedHeroLine = normalizePhoneNumber(heroLineNumber);
-  const direction = (toNumber === normalizedHeroLine || validatedPayload.direction === 'inbound') ? 'inbound' : 'outbound';
+  let direction: 'inbound' | 'outbound';
   
-  console.log(`📞 Call: ${fromNumber} → ${toNumber}, Direction: ${direction}`);
+  if (validatedPayload.type === 'received') {
+    direction = 'inbound';
+  } else if (validatedPayload.type === 'dialed') {
+    direction = 'outbound';
+  } else if (toNumber === normalizedHeroLine || validatedPayload.direction === 'inbound') {
+    direction = 'inbound';
+  } else {
+    direction = 'outbound';
+  }
+  
+  console.log(`📞 Call: ${fromNumber} → ${toNumber}, Direction: ${direction}, Type: ${validatedPayload.type || 'not specified'}`);
   
   const customerMatch = await findCustomerByPhone(direction === 'inbound' ? fromNumber : toNumber);
   const leadMatch = customerMatch ? null : await findLeadByPhone(direction === 'inbound' ? fromNumber : toNumber);
@@ -171,9 +197,42 @@ export async function processCallWebhook(payload: HeroWebhookPayload): Promise<C
     ? parseInt(validatedPayload.duration, 10) || undefined
     : validatedPayload.duration;
   
-  // Handle timestamps - Hero sends call_start/call_end, legacy uses started_at/ended_at
-  const startedAt = validatedPayload.call_start || validatedPayload.started_at;
+  // Handle timestamps - Hero sends start_time (URL-encoded), fallback to legacy fields
+  // Hero format: "YYYY-MM-DD HH:MM:SS (UTC)" - may be URL-encoded
+  let startedAt = validatedPayload.start_time || validatedPayload.call_start || validatedPayload.started_at;
+  if (startedAt) {
+    // URL-decode if necessary
+    startedAt = decodeURIComponent(startedAt);
+  }
   const endedAt = validatedPayload.call_end || validatedPayload.ended_at;
+  
+  // Handle recording URL - Hero sends voiceuri (URL-encoded), fallback to recording_url
+  let recordingUrl = validatedPayload.voiceuri || validatedPayload.recording_url;
+  if (recordingUrl) {
+    // URL-decode if necessary
+    recordingUrl = decodeURIComponent(recordingUrl);
+  }
+  
+  // Handle transcription - Hero sends transcript, fallback to transcription
+  const transcription = validatedPayload.transcript || validatedPayload.transcription;
+  
+  // Handle AI summary - Hero sends callsummary object, extract summary field
+  let transcriptionSummary = validatedPayload.transcription_summary || validatedPayload.summary;
+  let sentiment = validatedPayload.sentiment;
+  
+  // Parse callsummary if present (from AI analysis webhook)
+  if (validatedPayload.callsummary && typeof validatedPayload.callsummary === 'object') {
+    const summary = validatedPayload.callsummary;
+    if (summary.summary) transcriptionSummary = summary.summary;
+    if (summary.full_summary && !transcriptionSummary) transcriptionSummary = summary.full_summary;
+    if (summary.sentiment_score !== undefined) {
+      // Convert sentiment score (0-10?) to a string label
+      const score = typeof summary.sentiment_score === 'number' ? summary.sentiment_score : parseFloat(summary.sentiment_score);
+      if (score >= 7) sentiment = 'positive';
+      else if (score >= 4) sentiment = 'neutral';
+      else sentiment = 'negative';
+    }
+  }
   
   const callRecord: InsertCallRecord = {
     direction,
@@ -181,11 +240,11 @@ export async function processCallWebhook(payload: HeroWebhookPayload): Promise<C
     fromNumber,
     toNumber,
     duration,
-    recordingUrl: validatedPayload.recording_url || undefined,
-    transcription: validatedPayload.transcription || undefined,
-    transcriptionSummary: validatedPayload.transcription_summary || validatedPayload.summary || undefined,
-    sentiment: validatedPayload.sentiment || undefined,
-    heroCallId: validatedPayload.id || validatedPayload.call_id,
+    recordingUrl: recordingUrl || undefined,
+    transcription: transcription || undefined,
+    transcriptionSummary: transcriptionSummary || undefined,
+    sentiment: sentiment || undefined,
+    heroCallId: validatedPayload.id || validatedPayload.call_id || validatedPayload.originid,
     heroExtension: validatedPayload.extension,
     customerId: customerMatch?.id,
     leadId: leadMatch?.id,
