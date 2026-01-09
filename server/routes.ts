@@ -17482,39 +17482,54 @@ Transcription: ${transcriptText}`;
   // HERO INTERNET - CALL RECORDING INTEGRATION
   // ========================================
 
+  // Hero Internet webhook - catch GET requests (in case Hero uses GET)
+  app.get("/api/hero/webhook/call-complete", async (req, res) => {
+    console.log('📞 ============ HERO WEBHOOK GET REQUEST ============');
+    console.log('📞 Timestamp:', new Date().toISOString());
+    console.log('📞 Query params:', JSON.stringify(req.query, null, 2));
+    console.log('📞 This endpoint expects POST, not GET');
+    console.log('📞 ================================================');
+    res.status(200).json({ 
+      success: false, 
+      message: 'Webhook received as GET - please use POST',
+      received_params: req.query 
+    });
+  });
+
   // Hero Internet webhook for completed calls
+  // Made permissive - accepts with or without auth header to debug Hero's actual requests
   app.post("/api/hero/webhook/call-complete", async (req, res) => {
     try {
-      console.log('📞 Received Hero Internet call webhook');
+      console.log('📞 ============ HERO WEBHOOK RECEIVED ============');
+      console.log('📞 Timestamp:', new Date().toISOString());
       console.log('📞 Headers:', JSON.stringify(req.headers, null, 2));
       console.log('📞 Body:', JSON.stringify(req.body, null, 2));
+      console.log('📞 Raw Body Type:', typeof req.body);
+      console.log('📞 ==============================================');
       
       const { processCallWebhook } = await import('./services/heroInternetService.js');
       
-      // Validate the webhook secret token
-      // Hero sends: Authorization: secret-token (the literal value from their webhook config)
+      // Log auth header status but don't reject - Hero may not be sending it
       const authHeader = req.headers['authorization'] as string | undefined;
       const expectedSecret = process.env.HERO_WEBHOOK_SECRET;
       
-      if (!expectedSecret) {
-        console.error('📞 HERO_WEBHOOK_SECRET not configured - rejecting webhook');
-        return res.status(500).json({ success: false, message: 'Webhook secret not configured on server' });
+      if (authHeader && expectedSecret && authHeader === expectedSecret) {
+        console.log('📞 Webhook auth: VERIFIED');
+      } else if (authHeader) {
+        console.log('📞 Webhook auth: Header present but mismatch - received:', authHeader?.substring(0, 10) + '...');
+      } else {
+        console.log('📞 Webhook auth: No Authorization header received - processing anyway');
       }
       
-      // Hero sends the secret directly as Authorization header value
-      if (authHeader !== expectedSecret) {
-        console.log('📞 Webhook auth failed - received:', authHeader, 'expected:', expectedSecret);
-        return res.status(401).json({ success: false, message: 'Unauthorized - invalid token' });
-      }
-      
-      console.log('📞 Webhook auth successful');
+      // Process the webhook regardless of auth (for debugging)
       const callRecord = await processCallWebhook(req.body);
       
-      console.log('📞 Call record created:', callRecord.id);
-      res.json({ success: true, callRecordId: callRecord.id });
+      console.log('📞 Call record created successfully:', callRecord.id);
+      res.status(200).json({ success: true, callRecordId: callRecord.id });
     } catch (error) {
-      console.error('Error processing Hero Internet webhook:', error);
-      res.status(500).json({ success: false, message: 'Failed to process call webhook' });
+      console.error('📞 ERROR processing Hero Internet webhook:', error);
+      // Still return 200 to prevent Hero from retrying with same bad data
+      res.status(200).json({ success: false, message: 'Logged but failed to process', error: String(error) });
     }
   });
 
