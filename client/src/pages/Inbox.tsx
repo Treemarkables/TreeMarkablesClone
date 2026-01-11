@@ -18,7 +18,8 @@ import {
   Video,
   MoreVertical,
   Briefcase,
-  UserPlus
+  UserPlus,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { formatDistanceToNow } from 'date-fns';
 import { LeadFormDialog } from "@/components/LeadFormDialog";
 
@@ -46,6 +49,8 @@ export default function Inbox() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showCreateJobDialog, setShowCreateJobDialog] = useState(false);
   const [showCreateOpportunityDialog, setShowCreateOpportunityDialog] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -144,6 +149,54 @@ export default function Inbox() {
     }
   });
 
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      return apiRequest('DELETE', '/api/conversations/bulk', { ids });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+      toast({ 
+        title: 'Conversations deleted',
+        description: data.message || `Successfully deleted ${data.deletedCount} conversations`
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to delete conversations', 
+        description: 'Please try again.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Selection helpers
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredConversations.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredConversations.map(c => c.id)));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size > 0) {
+      bulkDeleteMutation.mutate(Array.from(selectedIds));
+    }
+  };
+
   // Filter conversations based on status
   const filteredConversations = useMemo(() => {
     return conversations.filter(conv => {
@@ -223,7 +276,7 @@ export default function Inbox() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex-1 max-w-md">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -260,6 +313,73 @@ export default function Inbox() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Bulk Actions Bar */}
+        {filteredConversations.length > 0 && (
+          <div className="flex items-center gap-4 mt-4 pt-4 border-t">
+            <div className="flex items-center gap-2">
+              <Checkbox 
+                id="select-all"
+                checked={selectedIds.size === filteredConversations.length && filteredConversations.length > 0}
+                onCheckedChange={toggleSelectAll}
+                data-testid="checkbox-select-all"
+              />
+              <label htmlFor="select-all" className="text-sm text-muted-foreground cursor-pointer">
+                Select all ({filteredConversations.length})
+              </label>
+            </div>
+            
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{selectedIds.size} selected</span>
+                <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      data-testid="button-bulk-delete"
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete Selected
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete {selectedIds.size} conversations?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. All selected conversations and their messages will be permanently deleted.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleBulkDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        disabled={bulkDeleteMutation.isPending}
+                      >
+                        {bulkDeleteMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            Deleting...
+                          </>
+                        ) : (
+                          'Delete'
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear selection
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Conversations List */}
@@ -279,10 +399,17 @@ export default function Inbox() {
                 key={conversation.id}
                 className={`p-4 hover-elevate active-elevate-2 ${
                   (conversation.unreadCount || 0) > 0 ? 'bg-accent/50' : ''
-                }`}
+                } ${selectedIds.has(conversation.id) ? 'bg-primary/10' : ''}`}
                 data-testid={`conversation-item-${conversation.id}`}
               >
                 <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={selectedIds.has(conversation.id)}
+                    onCheckedChange={() => toggleSelectOne(conversation.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-1"
+                    data-testid={`checkbox-conversation-${conversation.id}`}
+                  />
                   <Avatar className="h-10 w-10 cursor-pointer" onClick={() => setLocation(`/conversation/${conversation.id}`)}>
                     <AvatarFallback>
                       {conversation.title?.charAt(0).toUpperCase() || 'C'}
