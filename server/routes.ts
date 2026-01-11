@@ -10252,6 +10252,36 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Bulk delete conversations (must be before :id route to avoid matching "bulk" as an id)
+  app.delete('/api/conversations/bulk', async (req: Request, res: Response) => {
+    try {
+      const { ids } = req.body;
+      
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ success: false, message: 'No conversation IDs provided' });
+      }
+      
+      let deletedCount = 0;
+      for (const id of ids) {
+        try {
+          await storage.deleteConversation(id);
+          deletedCount++;
+        } catch (err) {
+          console.error(`Failed to delete conversation ${id}:`, err);
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        message: `Successfully deleted ${deletedCount} of ${ids.length} conversations`,
+        deletedCount 
+      });
+    } catch (error) {
+      console.error('Error bulk deleting conversations:', error);
+      res.status(500).json({ success: false, message: 'Error deleting conversations' });
+    }
+  });
+
   // Delete conversation
   app.delete('/api/conversations/:id', async (req: Request, res: Response) => {
     try {
