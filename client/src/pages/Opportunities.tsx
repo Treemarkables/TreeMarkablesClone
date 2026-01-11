@@ -17,7 +17,8 @@ import {
   Loader2,
   MoreVertical,
   Briefcase,
-  UserPlus
+  UserPlus,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -29,6 +30,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { LeadFormDialog } from "@/components/LeadFormDialog";
 
 // Form schema extending insertLeadSchema with required validation
@@ -47,6 +50,10 @@ export default function Opportunities() {
   const [showCreateJobDialog, setShowCreateJobDialog] = useState(false);
   const [showCreateOpportunityDialog, setShowCreateOpportunityDialog] = useState(false);
   const [, setLocation] = useLocation();
+  
+  // Bulk delete state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -273,6 +280,54 @@ export default function Opportunities() {
     }
   });
 
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      return apiRequest('DELETE', '/api/conversations/bulk', { ids });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+      toast({ 
+        title: 'Conversations deleted',
+        description: `Successfully deleted ${selectedIds.size} conversation(s)`
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to delete conversations', 
+        description: 'Please try again.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Toggle selection functions
+  const toggleSelectOne = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === conversations.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(conversations.map((c: Conversation) => c.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size > 0) {
+      bulkDeleteMutation.mutate(Array.from(selectedIds));
+    }
+  };
+
   // Helper functions
   const getInitials = (title: string) => {
     const words = title.split(' ');
@@ -373,6 +428,73 @@ export default function Opportunities() {
         </Button>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {conversations.length > 0 && (
+        <div className="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/30">
+          <div className="flex items-center gap-2">
+            <Checkbox 
+              id="select-all"
+              checked={selectedIds.size === conversations.length && conversations.length > 0}
+              onCheckedChange={toggleSelectAll}
+              data-testid="checkbox-select-all"
+            />
+            <label htmlFor="select-all" className="text-xs sm:text-sm text-muted-foreground cursor-pointer">
+              Select all ({conversations.length})
+            </label>
+          </div>
+          
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs sm:text-sm font-medium">{selectedIds.size} selected</span>
+              <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    data-testid="button-bulk-delete"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete {selectedIds.size} conversations?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. All selected conversations and their messages will be permanently deleted.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={handleBulkDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      disabled={bulkDeleteMutation.isPending}
+                    >
+                      {bulkDeleteMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        'Delete'
+                      )}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Conversation List */}
       <ScrollArea className="flex-1">
         {isLoading ? (
@@ -392,9 +514,18 @@ export default function Opportunities() {
               return (
               <div
                 key={conversation.id}
-                className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2"
+                className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2 ${selectedIds.has(conversation.id) ? 'bg-primary/10' : ''}`}
                 data-testid={`conversation-item-${conversation.id}`}
               >
+                {/* Selection Checkbox */}
+                <Checkbox
+                  checked={selectedIds.has(conversation.id)}
+                  onCheckedChange={() => toggleSelectOne(conversation.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-shrink-0"
+                  data-testid={`checkbox-conversation-${conversation.id}`}
+                />
+                
                 {/* Avatar with Badge */}
                 <div className="relative flex-shrink-0">
                   <Avatar className="h-11 w-11 sm:h-12 sm:w-12 bg-gray-200">
