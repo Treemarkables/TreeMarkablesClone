@@ -868,7 +868,7 @@ export function JobDiarySection({
       </div>
 
       {/* Timeline */}
-      <ScrollArea className="flex-1 p-2">
+      <ScrollArea className="flex-1 p-2 pr-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-4">
             <div className="text-xs text-muted-foreground">Loading...</div>
