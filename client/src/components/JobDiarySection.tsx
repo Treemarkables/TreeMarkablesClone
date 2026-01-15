@@ -981,12 +981,12 @@ export function JobDiarySection({
                       </div>
                     )}
                     
-                    <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} mb-0.5 group`}>
+                    <div className="flex justify-start mb-0.5 group">
                       <div className="relative max-w-[90%]">
                         <Button
                           size="icon"
                           variant="ghost"
-                          className={`absolute top-0 ${isSent ? '-left-4' : '-right-4'} h-3 w-3 opacity-0 md:group-hover:opacity-100 md:opacity-0 opacity-100 transition-opacity`}
+                          className="absolute top-0 -right-4 h-3 w-3 opacity-0 md:group-hover:opacity-100 md:opacity-0 opacity-100 transition-opacity"
                           onClick={(e) => {
                             e.stopPropagation();
                             if (confirm('Delete this message?')) {
@@ -998,12 +998,12 @@ export function JobDiarySection({
                           <Trash2 className="w-1.5 h-1.5 text-gray-400 hover:text-red-600" />
                         </Button>
                         
-                        <div className={`rounded-lg px-1.5 py-1 ${
+                        <div className={`rounded-lg px-1.5 py-1 rounded-bl-sm ${
                           isSent 
                             ? entry.type === 'email' 
-                              ? 'bg-blue-500 text-white rounded-br-sm'
-                              : 'bg-green-500 text-white rounded-br-sm'
-                            : 'bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100 rounded-bl-sm'
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-green-500 text-white'
+                            : 'bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100'
                         }`}>
                           {/* Show recipient for sent messages */}
                           {isSent && recipientInfo && (
@@ -1015,7 +1015,7 @@ export function JobDiarySection({
                         </div>
                         
                         {/* Timestamp for all messages */}
-                        <div className={`flex items-center gap-1 mt-0.5 ${isSent ? 'justify-end' : 'justify-start'}`}>
+                        <div className="flex items-center gap-1 mt-0.5 justify-start">
                           <span className="text-[10px] text-gray-400">
                             {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'MMM dd, h:mma').toLowerCase()}
                           </span>
