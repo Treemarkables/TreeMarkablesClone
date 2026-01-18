@@ -1298,7 +1298,10 @@ export function GlobalJobCard({
   });
   
   const handleCallClick = async () => {
+    console.log('📞 Call button clicked');
     const phone = selectedCustomer?.phone || form.getValues('jobContactPhone');
+    console.log('📞 Phone number:', phone, 'Customer:', selectedCustomer?.name);
+    
     if (!phone) {
       toast({
         title: "No Phone Number",
@@ -1311,9 +1314,11 @@ export function GlobalJobCard({
     // Try Hero Internet click-to-call first (for recorded calls)
     // If Hero is not configured, fall back to regular tel: link
     setIsCallingViaHero(true);
+    console.log('📞 Initiating Hero Internet call to:', phone);
     try {
       await initiateHeroCallMutation.mutateAsync(phone);
     } catch (error) {
+      console.error('📞 Call mutation error:', error);
       // Error handling is done in onError callback
     }
   };
