@@ -57,6 +57,9 @@ interface RevenueStats {
   averageJobValue: number;
   totalCosts: number;
   grossMargin: number;
+  jobsWithProfitTracking: number;
+  marginRevenue: number;
+  marginCosts: number;
   monthlyTrend: { month: string; revenue: number; jobs: number }[];
 }
 
@@ -558,13 +561,13 @@ export default function MetricsDashboard() {
               value={revenueStats?.grossMargin !== undefined 
                 ? `${revenueStats.grossMargin.toFixed(1)}%` 
                 : "0%"}
-              subtitle={revenueStats?.totalRevenue && revenueStats?.totalCosts 
-                ? `${formatCurrency(revenueStats.totalRevenue - revenueStats.totalCosts)} profit`
-                : "All completed jobs"}
+              subtitle={revenueStats?.jobsWithProfitTracking > 0
+                ? `${formatCurrency(revenueStats.marginRevenue - revenueStats.marginCosts)} profit (${revenueStats.jobsWithProfitTracking} jobs tracked)`
+                : "No jobs with cost tracking"}
               icon={TrendingUp}
               testId="card-gross-margin"
               colorful={true}
-              valueColor="text-green-600"
+              valueColor={revenueStats?.grossMargin !== undefined && revenueStats.grossMargin >= 0 ? "text-green-600" : "text-red-600"}
             />
           </div>
         </div>

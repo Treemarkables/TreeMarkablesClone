@@ -2294,10 +2294,15 @@ class DatabaseStorage implements IStorage {
       });
     }
     
-    // Calculate totals
+    // Calculate totals for ALL jobs (for revenue/job count)
     let totalRevenue = 0;
     let totalCosts = 0;
     let jobsWithRevenue = 0;
+    
+    // Separate totals for jobs WITH profit tracking (for margin calculation)
+    let marginRevenue = 0;
+    let marginCosts = 0;
+    let jobsWithProfitTracking = 0;
     
     for (const job of filteredJobs) {
       // Calculate revenue from line items
@@ -2321,11 +2326,22 @@ class DatabaseStorage implements IStorage {
       const materialsCost = parseFloat(job.materialsCosts?.toString() || '0');
       const otherCost = parseFloat(job.otherCosts?.toString() || '0');
       
-      totalCosts += itemCosts + calculatedLabor + additionalLabor + materialsCost + otherCost;
+      const jobCosts = itemCosts + calculatedLabor + additionalLabor + materialsCost + otherCost;
+      totalCosts += jobCosts;
+      
+      // Only include in margin calculation if job has BOTH revenue AND some cost data filled in
+      // This excludes jobs without profit tracking from skewing the margin
+      const hasCostData = itemCosts > 0 || calculatedLabor > 0 || additionalLabor > 0 || materialsCost > 0 || otherCost > 0;
+      if (jobRevenue > 0 && hasCostData) {
+        marginRevenue += jobRevenue;
+        marginCosts += jobCosts;
+        jobsWithProfitTracking++;
+      }
     }
     
-    const grossMargin = totalRevenue > 0 
-      ? ((totalRevenue - totalCosts) / totalRevenue) * 100 
+    // Calculate gross margin only from jobs with complete profit tracking
+    const grossMargin = marginRevenue > 0 
+      ? ((marginRevenue - marginCosts) / marginRevenue) * 100 
       : 0;
     
     return {
@@ -2334,6 +2350,9 @@ class DatabaseStorage implements IStorage {
       averageJobValue: jobsWithRevenue > 0 ? totalRevenue / jobsWithRevenue : 0,
       totalCosts,
       grossMargin,
+      jobsWithProfitTracking,
+      marginRevenue,
+      marginCosts,
       monthlyTrend: []
     };
   }
