@@ -23,6 +23,12 @@ interface TimeEntry {
   billed: boolean;
 }
 
+interface ExpenseItem {
+  id: string;
+  description: string;
+  amount: number;
+}
+
 interface RecordedTimeModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -49,10 +55,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   const [rounding, setRounding] = useState("none");
   const [travelTime, setTravelTime] = useState("included");
   const [useManualInput, setUseManualInput] = useState(false);
-  const [additionalCosts, setAdditionalCosts] = useState('');
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [newExpense, setNewExpense] = useState({ description: '', amount: '' });
   const [newEntry, setNewEntry] = useState({
-    staffIds: [] as string[], // Changed from staffId to staffIds array
-    duration: '1' // Default to 1 hour - rate is auto-matched per staff member
+    staffIds: [] as string[],
+    duration: '1'
   });
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
   
@@ -130,13 +137,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     enabled: isOpen && !!jobId,
   });
 
-  // Initialize additional costs from job data
-  useEffect(() => {
-    if (isOpen && jobData) {
-      const currentCosts = (jobData as any)?.laborCosts || '';
-      setAdditionalCosts(currentCosts);
-    }
-  }, [isOpen, jobData]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -144,7 +144,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       setPendingEntries([]);
       setNewEntry({ staffIds: [], duration: '1' });
       setUseManualInput(false);
-      setAdditionalCosts('');
+      setExpenses([]);
+      setNewExpense({ description: '', amount: '' });
       setStaffSearchQuery('');
     }
   }, [isOpen]);
@@ -255,10 +256,10 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
 
   const saveAllEntries = async () => {
     try {
-      if (pendingEntries.length === 0) {
+      if (pendingEntries.length === 0 && expenses.length === 0) {
         toast({
           title: "No entries",
-          description: "Please add time entries before saving",
+          description: "Please add time entries or expenses before saving",
           variant: "destructive"
         });
         return;
@@ -301,11 +302,15 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
         };
       });
       
+      // Calculate total additional costs from expense items
+      const totalAdditionalCosts = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+      
       await apiRequest('POST', `/api/time-entries/${jobId}`, {
         entries: formattedEntries,
         rounding,
         travelTime,
-        additionalCosts: additionalCosts ? parseFloat(additionalCosts) : 0
+        additionalCosts: totalAdditionalCosts,
+        expenseItems: expenses // Send individual expense items for tracking
       });
       
       // Invalidate related queries
@@ -611,27 +616,98 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
             </div>
           )}
 
-          {/* Additional Costs */}
+          {/* Additional Costs / Expenses */}
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4 space-y-3">
             <h4 className="font-medium text-amber-900 text-sm sm:text-base">Additional Costs</h4>
-            <div>
-              <label className="text-sm font-medium">Other Job Costs ($)</label>
+            
+            {/* Add Expense Form */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                type="text"
+                value={newExpense.description}
+                onChange={(e) => setNewExpense(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Description (e.g., Dump fees, Fuel)"
+                className="min-h-11 flex-1"
+                data-testid="input-expense-description"
+              />
               <Input
                 type="number"
                 step="0.01"
                 min="0"
-                value={additionalCosts}
-                onChange={(e) => setAdditionalCosts(e.target.value)}
-                placeholder="Enter additional costs (materials, equipment, etc.)"
-                className="min-h-11"
-                data-testid="input-additional-costs"
+                value={newExpense.amount}
+                onChange={(e) => setNewExpense(prev => ({ ...prev, amount: e.target.value }))}
+                placeholder="Amount ($)"
+                className="min-h-11 w-full sm:w-32"
+                data-testid="input-expense-amount"
               />
-              <p className="text-xs text-gray-600 mt-1">Track costs beyond staff time (materials, equipment rentals, permits, etc.)</p>
+              <Button
+                onClick={() => {
+                  if (!newExpense.description.trim() || !newExpense.amount) {
+                    toast({
+                      title: "Missing info",
+                      description: "Please enter description and amount",
+                      variant: "destructive"
+                    });
+                    return;
+                  }
+                  const amount = parseFloat(newExpense.amount);
+                  if (isNaN(amount) || amount <= 0) {
+                    toast({
+                      title: "Invalid amount",
+                      description: "Please enter a valid amount",
+                      variant: "destructive"
+                    });
+                    return;
+                  }
+                  setExpenses(prev => [...prev, {
+                    id: `expense-${Date.now()}`,
+                    description: newExpense.description.trim(),
+                    amount
+                  }]);
+                  setNewExpense({ description: '', amount: '' });
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white min-h-11"
+                data-testid="button-add-expense"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add
+              </Button>
             </div>
+            
+            {/* Expense List */}
+            {expenses.length > 0 && (
+              <div className="space-y-2 mt-3">
+                <div className="text-sm font-medium text-amber-800">Added Expenses ({expenses.length})</div>
+                {expenses.map((expense) => (
+                  <div key={expense.id} className="flex items-center justify-between bg-white rounded-md p-2 border border-amber-200">
+                    <span className="text-sm">{expense.description}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">${expense.amount.toFixed(2)}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setExpenses(prev => prev.filter(e => e.id !== expense.id))}
+                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        data-testid={`button-delete-expense-${expense.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-end pt-2 border-t border-amber-200">
+                  <span className="text-sm font-medium text-amber-900">
+                    Total: ${expenses.reduce((sum, exp) => sum + exp.amount, 0).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            <p className="text-xs text-gray-600">Track costs beyond staff time (materials, equipment rentals, permits, dump fees, etc.)</p>
           </div>
 
           {/* Save Button */}
-          {pendingEntries.length > 0 && (
+          {(pendingEntries.length > 0 || expenses.length > 0) && (
             <div className="sticky bottom-0 bg-white border-t pt-4 flex justify-end gap-2">
               <Button
                 onClick={saveAllEntries}
