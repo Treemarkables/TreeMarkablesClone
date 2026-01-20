@@ -1626,9 +1626,8 @@ export function ProposalBuilder({
                                   {materialsDropdownSectionId === section.id && (
                                     <div 
                                       data-materials-dropdown
-                                      className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg"
+                                      className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-y-auto"
                                     >
-                                      <ScrollArea className="max-h-60">
                                         {materials.length === 0 ? (
                                           <div className="p-3 text-sm text-muted-foreground text-center">
                                             No materials found. Add items in Settings &gt; Materials.
@@ -1684,7 +1683,6 @@ export function ProposalBuilder({
                                             )}
                                           </>
                                         )}
-                                      </ScrollArea>
                                     </div>
                                   )}
                                 </div>
