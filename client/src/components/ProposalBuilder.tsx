@@ -22,6 +22,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { insertProposalSchema } from "@shared/schema";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
@@ -83,6 +85,13 @@ export function ProposalBuilder({
     queryKey: ['/api/proposals', proposalId],
     enabled: !!proposalId && mode === 'edit' && isOpen,
   });
+
+  // Fetch materials/services for line item selection
+  const { data: materialsData } = useQuery({
+    queryKey: ['/api/materials'],
+    enabled: isOpen,
+  });
+  const materials = (materialsData as any)?.data || [];
   
   // Form state
   const form = useForm({
@@ -129,6 +138,8 @@ export function ProposalBuilder({
   const [currentPhotoSectionId, setCurrentPhotoSectionId] = useState<string>('');
   const [selectedDiaryPhotos, setSelectedDiaryPhotos] = useState<string[]>([]);
   const [enlargedPhotoUrl, setEnlargedPhotoUrl] = useState<string | null>(null);
+  const [materialsDropdownSectionId, setMaterialsDropdownSectionId] = useState<string | null>(null);
+  const [materialSearchQuery, setMaterialSearchQuery] = useState('');
   const [draftProposalId, setDraftProposalId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -1586,15 +1597,93 @@ export function ProposalBuilder({
                                 <CardTitle className="text-sm">Add Line Item</CardTitle>
                               </CardHeader>
                               <CardContent className="space-y-2 p-3 pt-0 w-full max-w-full min-w-0">
-                                {/* Basic Details */}
-                                <div>
-                                  <Input
-                                    placeholder="Description"
-                                    value={currentLineItem.description || ""}
-                                    onChange={(e) => setCurrentLineItem(prev => ({ ...prev, description: e.target.value }))}
-                                    className="min-h-[44px] text-base"
-                                    data-testid={`input-line-item-description-${section.id}`}
-                                  />
+                                {/* Basic Details - Searchable Material Dropdown */}
+                                <div className="relative">
+                                  <Popover 
+                                    open={materialsDropdownSectionId === section.id} 
+                                    onOpenChange={(open) => {
+                                      setMaterialsDropdownSectionId(open ? section.id : null);
+                                      if (!open) setMaterialSearchQuery('');
+                                    }}
+                                  >
+                                    <PopoverTrigger asChild>
+                                      <div className="relative">
+                                        <Input
+                                          placeholder="Type to search materials or enter description..."
+                                          value={currentLineItem.description || ""}
+                                          onChange={(e) => {
+                                            setCurrentLineItem(prev => ({ ...prev, description: e.target.value }));
+                                            setMaterialSearchQuery(e.target.value);
+                                            if (e.target.value.length > 0) {
+                                              setMaterialsDropdownSectionId(section.id);
+                                            }
+                                          }}
+                                          onFocus={() => setMaterialsDropdownSectionId(section.id)}
+                                          className="min-h-[44px] text-base pr-8"
+                                          data-testid={`input-line-item-description-${section.id}`}
+                                        />
+                                        <Package className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                      </div>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
+                                      <ScrollArea className="max-h-60">
+                                        {materials.length === 0 ? (
+                                          <div className="p-3 text-sm text-muted-foreground text-center">
+                                            No materials found. Add items in Settings &gt; Materials.
+                                          </div>
+                                        ) : (
+                                          <>
+                                            <div className="p-2 border-b bg-muted/30">
+                                              <span className="text-xs font-medium text-muted-foreground">Select from Materials & Services</span>
+                                            </div>
+                                            {materials
+                                              .filter((m: any) => 
+                                                !materialSearchQuery || 
+                                                m.name?.toLowerCase().includes(materialSearchQuery.toLowerCase()) ||
+                                                m.itemNumber?.toString().includes(materialSearchQuery)
+                                              )
+                                              .slice(0, 15)
+                                              .map((material: any) => (
+                                                <div
+                                                  key={material.id}
+                                                  className="flex items-center justify-between p-2 hover:bg-accent cursor-pointer border-b last:border-b-0"
+                                                  onClick={() => {
+                                                    const price = typeof material.price === 'string' ? parseFloat(material.price) : material.price || 0;
+                                                    setCurrentLineItem(prev => ({
+                                                      ...prev,
+                                                      description: material.name || `Item #${material.itemNumber}`,
+                                                      unitPrice: price,
+                                                      quantity: prev.quantity || 1,
+                                                      priceIncludesTax: material.priceIncludesTaxes || false
+                                                    }));
+                                                    setMaterialsDropdownSectionId(null);
+                                                    setMaterialSearchQuery('');
+                                                  }}
+                                                  data-testid={`material-option-${material.id}`}
+                                                >
+                                                  <div className="flex flex-col">
+                                                    <span className="text-sm font-medium">{material.name}</span>
+                                                    <span className="text-xs text-muted-foreground">#{material.itemNumber} · {material.category || 'Uncategorized'}</span>
+                                                  </div>
+                                                  <Badge variant="secondary" className="ml-2">
+                                                    ${typeof material.price === 'string' ? parseFloat(material.price).toFixed(2) : (material.price || 0).toFixed(2)}
+                                                  </Badge>
+                                                </div>
+                                              ))}
+                                            {materials.filter((m: any) => 
+                                              !materialSearchQuery || 
+                                              m.name?.toLowerCase().includes(materialSearchQuery.toLowerCase()) ||
+                                              m.itemNumber?.toString().includes(materialSearchQuery)
+                                            ).length === 0 && (
+                                              <div className="p-3 text-sm text-muted-foreground text-center">
+                                                No matching materials. You can still type a custom description.
+                                              </div>
+                                            )}
+                                          </>
+                                        )}
+                                      </ScrollArea>
+                                    </PopoverContent>
+                                  </Popover>
                                 </div>
 
                                 {/* Pricing Type Selection */}
