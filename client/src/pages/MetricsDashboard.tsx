@@ -215,8 +215,13 @@ export default function MetricsDashboard() {
   });
 
   const { data: manHoursMetrics, isLoading: manHoursLoading } = useQuery<ManHoursMetrics>({
-    queryKey: ['/api/man-hours-metrics'],
-    queryFn: () => fetch('/api/man-hours-metrics').then(res => res.json()).then(res => res.data)
+    queryKey: ['/api/man-hours-metrics', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('from', dateRange.from);
+      if (dateRange?.to) params.append('to', dateRange.to);
+      return fetch(`/api/man-hours-metrics?${params}`).then(res => res.json()).then(res => res.data);
+    }
   });
 
   // Export handler
