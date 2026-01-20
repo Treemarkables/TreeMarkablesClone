@@ -2459,29 +2459,27 @@ class DatabaseStorage implements IStorage {
 
   async getLeadSourceAnalysis(fromDate?: Date, toDate?: Date): Promise<any[]> {
     try {
-      // Build query conditions for jobs
-      const conditions = [];
-      
-      if (fromDate) {
-        conditions.push(sql`${schema.jobs.createdAt} >= ${fromDate}`);
-      }
-      if (toDate) {
-        conditions.push(sql`${schema.jobs.createdAt} <= ${toDate}`);
-      }
-
-      // Get all jobs with lead source data (exclude archived)
+      // Get ALL jobs (we'll filter by completedDate for revenue calculations)
       const jobs = await db
         .select()
-        .from(schema.jobs)
-        .where(conditions.length > 0 ? and(...conditions) : undefined);
+        .from(schema.jobs);
 
-      // Get all invoices (non-cancelled) to calculate revenue
+      // Build invoice date conditions - filter invoices by issue date for revenue
+      const invoiceConditions = [sql`${schema.invoices.status} != 'cancelled'`];
+      if (fromDate) {
+        invoiceConditions.push(sql`${schema.invoices.issueDate} >= ${fromDate}`);
+      }
+      if (toDate) {
+        invoiceConditions.push(sql`${schema.invoices.issueDate} <= ${toDate}`);
+      }
+
+      // Get invoices within the date range to calculate revenue
       const allInvoices = await db
         .select()
         .from(schema.invoices)
-        .where(sql`${schema.invoices.status} != 'cancelled'`);
+        .where(and(...invoiceConditions));
       
-      // Create a map of job IDs to invoice amounts
+      // Create a map of job IDs to invoice amounts (only invoices in date range)
       const jobInvoiceMap = new Map<string, number>();
       for (const invoice of allInvoices) {
         if (invoice.jobId) {
@@ -2491,7 +2489,7 @@ class DatabaseStorage implements IStorage {
         }
       }
 
-      // Get all proposals for conversion rate calculation
+      // Get proposals for conversion rate calculation
       const proposalConditions = [];
       if (fromDate) {
         proposalConditions.push(sql`${schema.proposals.createdAt} >= ${fromDate}`);
@@ -2530,7 +2528,7 @@ class DatabaseStorage implements IStorage {
         });
       });
 
-      // Process jobs (exclude archived)
+      // Process jobs - filter by invoice date range for revenue metrics
       jobs.forEach(job => {
         // Skip archived jobs
         if (job.status === 'archived') return;
@@ -2546,32 +2544,40 @@ class DatabaseStorage implements IStorage {
           jobIds: new Set()
         };
 
-        existing.count++;
-        existing.jobIds.add(job.id);
-
-        // Count quoted jobs (jobs with quotes/proposals)
-        if (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'completed') {
-          existing.quotedCount++;
-        }
-
-        // Get revenue from invoice amount (not job.totalAmount) for completed jobs
+        // Get revenue from invoice amount (only invoices within date range are in the map)
         const invoiceRevenue = jobInvoiceMap.get(job.id) || 0;
         
-        // Count won jobs (completed jobs with invoice revenue)
-        if (job.status === 'completed' && invoiceRevenue > 0) {
-          existing.wonCount++;
-          existing.totalRevenue += invoiceRevenue;
-
-          // Calculate costs and profit
-          const laborCosts = parseFloat(job.laborCosts || '0') || 0;
-          const calculatedLabor = parseFloat(job.calculatedLaborCost?.toString() || '0');
-          const materialsCosts = parseFloat(job.materialsCosts || '0') || 0;
-          const otherCosts = parseFloat(job.otherCosts || '0') || 0;
-          const costOfGoods = parseFloat(job.costOfGoods || '0') || 0;
-          const totalCosts = laborCosts + calculatedLabor + materialsCosts + otherCosts + costOfGoods;
+        // Only count jobs that have invoices in the selected date range
+        // This ensures metrics reflect work invoiced in the period
+        if (invoiceRevenue > 0) {
+          // Job has an invoice in the date range - count it
+          existing.quotedCount++;
+          existing.jobIds.add(job.id);
           
-          existing.totalCosts += totalCosts;
-          existing.totalProfit += (invoiceRevenue - totalCosts);
+          // Count as won if completed
+          if (job.status === 'completed') {
+            existing.wonCount++;
+            existing.totalRevenue += invoiceRevenue;
+
+            // Calculate costs and profit
+            const laborCosts = parseFloat(job.laborCosts || '0') || 0;
+            const calculatedLabor = parseFloat(job.calculatedLaborCost?.toString() || '0');
+            const materialsCosts = parseFloat(job.materialsCosts || '0') || 0;
+            const otherCosts = parseFloat(job.otherCosts || '0') || 0;
+            const costOfGoods = parseFloat(job.costOfGoods || '0') || 0;
+            const totalCosts = laborCosts + calculatedLabor + materialsCosts + otherCosts + costOfGoods;
+            
+            existing.totalCosts += totalCosts;
+            existing.totalProfit += (invoiceRevenue - totalCosts);
+          }
+        } else if (!fromDate && !toDate) {
+          // No date filter - count all non-archived jobs
+          existing.jobIds.add(job.id);
+          
+          // Count quoted jobs (jobs with quotes/proposals)
+          if (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'completed') {
+            existing.quotedCount++;
+          }
         }
 
         sourceMap.set(source, existing);
@@ -2588,7 +2594,7 @@ class DatabaseStorage implements IStorage {
 
       // Calculate metrics for each source
       const result = Array.from(sourceMap.entries()).map(([source, data]) => {
-        const count = data.count;
+        const count = data.jobIds.size; // Count of unique jobs with invoices in period
         const quotedCount = data.quotedCount;
         const wonCount = data.wonCount;
         const totalRevenue = data.totalRevenue;
