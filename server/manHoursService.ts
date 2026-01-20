@@ -135,7 +135,7 @@ export class ManHoursService {
   /**
    * Get overall estimation accuracy metrics across all completed jobs
    */
-  async getOverallEstimationMetrics(): Promise<{
+  async getOverallEstimationMetrics(fromDate?: Date, toDate?: Date): Promise<{
     totalJobs: number;
     jobsWithEstimates: number;
     averageAccuracy: number;
@@ -152,10 +152,21 @@ export class ManHoursService {
   }> {
     try {
       // Get all completed jobs with man-hours data
-      const jobs = await db
+      let jobs = await db
         .select()
         .from(schema.jobs)
         .where(eq(schema.jobs.status, 'completed'));
+
+      // Filter by date range if provided (using completedDate)
+      if (fromDate || toDate) {
+        jobs = jobs.filter(job => {
+          if (!job.completedDate) return false;
+          const completedDate = new Date(job.completedDate);
+          if (fromDate && completedDate < fromDate) return false;
+          if (toDate && completedDate > toDate) return false;
+          return true;
+        });
+      }
 
       // Filter jobs that have both estimated and actual man-hours
       const jobsWithData = jobs.filter(job => 

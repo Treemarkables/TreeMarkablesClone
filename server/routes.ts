@@ -6745,7 +6745,26 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Get man-hours estimation accuracy metrics
   app.get('/api/man-hours-metrics', async (req: Request, res: Response) => {
     try {
-      const metrics = await manHoursService.getOverallEstimationMetrics();
+      const { from, to } = req.query;
+      
+      let fromDate: Date | undefined;
+      let toDate: Date | undefined;
+      
+      if (from && typeof from === 'string') {
+        fromDate = new Date(from);
+        if (isNaN(fromDate.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid from date format' });
+        }
+      }
+      
+      if (to && typeof to === 'string') {
+        toDate = new Date(to);
+        if (isNaN(toDate.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid to date format' });
+        }
+      }
+      
+      const metrics = await manHoursService.getOverallEstimationMetrics(fromDate, toDate);
       res.json({ success: true, data: metrics });
     } catch (error) {
       console.error('Error fetching man-hours metrics:', error);
