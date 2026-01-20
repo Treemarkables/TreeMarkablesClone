@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Clock, CheckCircle, X, Trash2, Users, Search } from "lucide-react";
 
@@ -427,7 +426,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         </Button>
                       </div>
                     </div>
-                    <ScrollArea className="h-[300px]">
+                    <div className="h-[300px] overflow-y-auto">
                       <div className="p-2 space-y-1">
                         {employees
                           .filter((staff: any) => {
@@ -467,7 +466,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                             );
                           })}
                       </div>
-                    </ScrollArea>
+                    </div>
                   </PopoverContent>
                 </Popover>
               </div>
