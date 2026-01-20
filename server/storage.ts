@@ -2459,7 +2459,7 @@ class DatabaseStorage implements IStorage {
 
   async getLeadSourceAnalysis(fromDate?: Date, toDate?: Date): Promise<any[]> {
     try {
-      // Build query conditions
+      // Build query conditions for jobs
       const conditions = [];
       
       if (fromDate) {
@@ -2474,6 +2474,22 @@ class DatabaseStorage implements IStorage {
         .select()
         .from(schema.jobs)
         .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+      // Get all invoices (non-cancelled) to calculate revenue
+      const allInvoices = await db
+        .select()
+        .from(schema.invoices)
+        .where(sql`${schema.invoices.status} != 'cancelled'`);
+      
+      // Create a map of job IDs to invoice amounts
+      const jobInvoiceMap = new Map<string, number>();
+      for (const invoice of allInvoices) {
+        if (invoice.jobId) {
+          const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
+          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
+          jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
+        }
+      }
 
       // Get all proposals for conversion rate calculation
       const proposalConditions = [];
@@ -2538,20 +2554,24 @@ class DatabaseStorage implements IStorage {
           existing.quotedCount++;
         }
 
-        // Count won jobs (completed jobs with revenue - invoiced jobs remain as 'completed')
-        if (job.status === 'completed' && job.totalAmount && parseFloat(job.totalAmount) > 0) {
+        // Get revenue from invoice amount (not job.totalAmount) for completed jobs
+        const invoiceRevenue = jobInvoiceMap.get(job.id) || 0;
+        
+        // Count won jobs (completed jobs with invoice revenue)
+        if (job.status === 'completed' && invoiceRevenue > 0) {
           existing.wonCount++;
-          const revenue = parseFloat(job.totalAmount) || 0;
-          existing.totalRevenue += revenue;
+          existing.totalRevenue += invoiceRevenue;
 
           // Calculate costs and profit
           const laborCosts = parseFloat(job.laborCosts || '0') || 0;
+          const calculatedLabor = parseFloat(job.calculatedLaborCost?.toString() || '0');
           const materialsCosts = parseFloat(job.materialsCosts || '0') || 0;
+          const otherCosts = parseFloat(job.otherCosts || '0') || 0;
           const costOfGoods = parseFloat(job.costOfGoods || '0') || 0;
-          const totalCosts = laborCosts + materialsCosts + costOfGoods;
+          const totalCosts = laborCosts + calculatedLabor + materialsCosts + otherCosts + costOfGoods;
           
           existing.totalCosts += totalCosts;
-          existing.totalProfit += (revenue - totalCosts);
+          existing.totalProfit += (invoiceRevenue - totalCosts);
         }
 
         sourceMap.set(source, existing);
