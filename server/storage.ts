@@ -2278,8 +2278,9 @@ class DatabaseStorage implements IStorage {
   }
 
   async getRevenueStats(fromDate?: Date, toDate?: Date): Promise<any> {
-    // Get all completed jobs (invoiced jobs remain as 'completed')
-    const { jobs: allJobs } = await this.getAllJobs({ limit: 999999 }); // Get all jobs for accurate stats
+    // Get all completed jobs and invoices
+    const { jobs: allJobs } = await this.getAllJobs({ limit: 999999 });
+    const allInvoices = await this.getAllInvoices();
     const completedJobs = allJobs.filter(job => job.status === 'completed');
     
     // Filter by date range if provided
@@ -2294,6 +2295,16 @@ class DatabaseStorage implements IStorage {
       });
     }
     
+    // Create a map of job IDs to invoice amounts (non-cancelled invoices only)
+    const jobInvoiceMap = new Map<string, number>();
+    for (const invoice of allInvoices) {
+      if (invoice.status !== 'cancelled' && invoice.jobId) {
+        const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
+        const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
+        jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
+      }
+    }
+    
     // Calculate totals for ALL jobs (for revenue/job count)
     let totalRevenue = 0;
     let totalCosts = 0;
@@ -2305,13 +2316,11 @@ class DatabaseStorage implements IStorage {
     let jobsWithProfitTracking = 0;
     
     for (const job of filteredJobs) {
-      // Calculate revenue from line items
-      const jobRevenue = (job.lineItems || []).reduce((sum: number, item: any) => {
-        return sum + (item.total || 0);
-      }, 0);
+      // Get revenue from invoice amount (instead of line items)
+      const jobRevenue = jobInvoiceMap.get(job.id) || 0;
       totalRevenue += jobRevenue;
       
-      // Count jobs that have revenue
+      // Count jobs that have revenue (invoiced)
       if (jobRevenue > 0) {
         jobsWithRevenue++;
       }
@@ -2329,8 +2338,7 @@ class DatabaseStorage implements IStorage {
       const jobCosts = itemCosts + calculatedLabor + additionalLabor + materialsCost + otherCost;
       totalCosts += jobCosts;
       
-      // Only include in margin calculation if job has BOTH revenue AND some cost data filled in
-      // This excludes jobs without profit tracking from skewing the margin
+      // Only include in margin calculation if job has BOTH invoice revenue AND some cost data
       const hasCostData = itemCosts > 0 || calculatedLabor > 0 || additionalLabor > 0 || materialsCost > 0 || otherCost > 0;
       if (jobRevenue > 0 && hasCostData) {
         marginRevenue += jobRevenue;
