@@ -188,8 +188,8 @@ export default function MetricsDashboard() {
     queryKey: ['/api/revenue-stats', dateRange?.from, dateRange?.to],
     queryFn: () => {
       const params = new URLSearchParams();
-      if (dateRange?.from) params.append('fromDate', dateRange.from);
-      if (dateRange?.to) params.append('toDate', dateRange.to);
+      if (dateRange?.from) params.append('from', dateRange.from);
+      if (dateRange?.to) params.append('to', dateRange.to);
       return fetch(`/api/revenue-stats?${params}`).then(res => res.json()).then(res => res.data);
     }
   });
