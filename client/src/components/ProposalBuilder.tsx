@@ -1599,33 +1599,35 @@ export function ProposalBuilder({
                               <CardContent className="space-y-2 p-3 pt-0 w-full max-w-full min-w-0">
                                 {/* Basic Details - Searchable Material Dropdown */}
                                 <div className="relative">
-                                  <Popover 
-                                    open={materialsDropdownSectionId === section.id} 
-                                    onOpenChange={(open) => {
-                                      setMaterialsDropdownSectionId(open ? section.id : null);
-                                      if (!open) setMaterialSearchQuery('');
-                                    }}
-                                  >
-                                    <PopoverTrigger asChild>
-                                      <div className="relative">
-                                        <Input
-                                          placeholder="Type to search materials or enter description..."
-                                          value={currentLineItem.description || ""}
-                                          onChange={(e) => {
-                                            setCurrentLineItem(prev => ({ ...prev, description: e.target.value }));
-                                            setMaterialSearchQuery(e.target.value);
-                                            if (e.target.value.length > 0) {
-                                              setMaterialsDropdownSectionId(section.id);
-                                            }
-                                          }}
-                                          onFocus={() => setMaterialsDropdownSectionId(section.id)}
-                                          className="min-h-[44px] text-base pr-8"
-                                          data-testid={`input-line-item-description-${section.id}`}
-                                        />
-                                        <Package className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                      </div>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
+                                  <div className="relative">
+                                    <Input
+                                      placeholder="Type to search materials or enter description..."
+                                      value={currentLineItem.description || ""}
+                                      onChange={(e) => {
+                                        setCurrentLineItem(prev => ({ ...prev, description: e.target.value }));
+                                        setMaterialSearchQuery(e.target.value);
+                                        setMaterialsDropdownSectionId(section.id);
+                                      }}
+                                      onFocus={() => setMaterialsDropdownSectionId(section.id)}
+                                      onBlur={(e) => {
+                                        // Delay closing to allow click on dropdown items
+                                        setTimeout(() => {
+                                          if (!e.relatedTarget?.closest('[data-materials-dropdown]')) {
+                                            setMaterialsDropdownSectionId(null);
+                                            setMaterialSearchQuery('');
+                                          }
+                                        }, 150);
+                                      }}
+                                      className="min-h-[44px] text-base pr-8"
+                                      data-testid={`input-line-item-description-${section.id}`}
+                                    />
+                                    <Package className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                  {materialsDropdownSectionId === section.id && (
+                                    <div 
+                                      data-materials-dropdown
+                                      className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg"
+                                    >
                                       <ScrollArea className="max-h-60">
                                         {materials.length === 0 ? (
                                           <div className="p-3 text-sm text-muted-foreground text-center">
@@ -1647,7 +1649,8 @@ export function ProposalBuilder({
                                                 <div
                                                   key={material.id}
                                                   className="flex items-center justify-between p-2 hover:bg-accent cursor-pointer border-b last:border-b-0"
-                                                  onClick={() => {
+                                                  onMouseDown={(e) => {
+                                                    e.preventDefault(); // Prevent blur before click completes
                                                     const price = typeof material.price === 'string' ? parseFloat(material.price) : material.price || 0;
                                                     setCurrentLineItem(prev => ({
                                                       ...prev,
@@ -1682,8 +1685,8 @@ export function ProposalBuilder({
                                           </>
                                         )}
                                       </ScrollArea>
-                                    </PopoverContent>
-                                  </Popover>
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* Pricing Type Selection */}
