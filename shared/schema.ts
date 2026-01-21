@@ -1207,7 +1207,8 @@ export const employees = pgTable("employees", {
   skillLevel: text("skill_level").notNull().default("beginner"), // beginner, intermediate, expert
   certifications: text("certifications").array().default([]), // ISA, CTSP, etc.
   skills: text("skills").array().default([]), // chainsaw, bucket_truck, climbing, etc.
-  hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
+  hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }), // Internal cost rate
+  chargeOutRate: decimal("charge_out_rate", { precision: 10, scale: 2 }), // Rate billed to customers
   availableHours: text("available_hours"), // JSON: {"mon": "8-17", "tue": "8-17", ...}
   emergencyContact: text("emergency_contact"),
   emergencyContactPhone: text("emergency_contact_phone"),
