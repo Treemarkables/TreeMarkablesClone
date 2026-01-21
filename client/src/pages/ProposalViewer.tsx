@@ -81,11 +81,12 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   useEffect(() => {
     const actualId = actualProposalResponse?.data?.id;
     if (actualId && !viewedRef.current) {
-      viewedRef.current = true;
       fetch(`/api/proposals/${actualId}/viewed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-      }).catch(err => console.error('Failed to mark proposal as viewed:', err));
+      })
+        .then(() => { viewedRef.current = true; })
+        .catch(err => console.error('Failed to mark proposal as viewed:', err));
     }
   }, [actualProposalResponse?.data?.id]);
 
