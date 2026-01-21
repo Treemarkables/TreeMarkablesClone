@@ -222,33 +222,6 @@ export default function MetricsDashboard() {
     recalculateFromRevenue(calcRevenueTarget, calcAvgJobValue, calcConversionRate);
   }, []);
 
-  // Pre-populate calculator with real analytics data when available (only once)
-  useEffect(() => {
-    // Only pre-populate once when analytics data first becomes available
-    if (hasPrePopulated.current) return;
-    
-    const hasAvgJob = revenueStats?.averageJobValue && revenueStats.averageJobValue > 0;
-    const hasConvRate = dashboardStats?.conversionRate && dashboardStats.conversionRate > 0;
-    
-    // Only proceed if we have at least one real data point
-    if (!hasAvgJob && !hasConvRate) return;
-    
-    const avgJob = hasAvgJob ? Math.round(revenueStats.averageJobValue) : calcAvgJobValue;
-    const convRate = hasConvRate ? Math.round(dashboardStats.conversionRate) : calcConversionRate;
-    const revenueTarget = calcRevenueTarget; // Use current revenue target
-    
-    if (hasAvgJob) {
-      setCalcAvgJobValue(avgJob);
-    }
-    if (hasConvRate) {
-      setCalcConversionRate(convRate);
-    }
-    
-    // Recalculate with the updated values
-    recalculateFromRevenue(revenueTarget, avgJob, convRate);
-    hasPrePopulated.current = true;
-  }, [revenueStats?.averageJobValue, dashboardStats?.conversionRate, recalculateFromRevenue]);
-
   // Helper to get date range based on preset
   const getDateRange = () => {
     if (dateRangePreset === "custom" && startDate && endDate) {
@@ -326,6 +299,33 @@ export default function MetricsDashboard() {
       return fetch(`/api/man-hours-metrics?${params}`).then(res => res.json()).then(res => res.data);
     }
   });
+
+  // Pre-populate calculator with real analytics data when available (only once)
+  useEffect(() => {
+    // Only pre-populate once when analytics data first becomes available
+    if (hasPrePopulated.current) return;
+    
+    const hasAvgJob = revenueStats?.averageJobValue && revenueStats.averageJobValue > 0;
+    const hasConvRate = dashboardStats?.conversionRate && dashboardStats.conversionRate > 0;
+    
+    // Only proceed if we have at least one real data point
+    if (!hasAvgJob && !hasConvRate) return;
+    
+    const avgJob = hasAvgJob ? Math.round(revenueStats.averageJobValue) : calcAvgJobValue;
+    const convRate = hasConvRate ? Math.round(dashboardStats.conversionRate) : calcConversionRate;
+    const revenueTarget = calcRevenueTarget;
+    
+    if (hasAvgJob) {
+      setCalcAvgJobValue(avgJob);
+    }
+    if (hasConvRate) {
+      setCalcConversionRate(convRate);
+    }
+    
+    // Recalculate with the updated values
+    recalculateFromRevenue(revenueTarget, avgJob, convRate);
+    hasPrePopulated.current = true;
+  }, [revenueStats?.averageJobValue, dashboardStats?.conversionRate, recalculateFromRevenue, calcAvgJobValue, calcConversionRate, calcRevenueTarget]);
 
   // Export handler
   const handleExportData = async (type: 'analytics' | 'lead-sources') => {
