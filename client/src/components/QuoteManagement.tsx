@@ -621,10 +621,6 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                         quoteId={quote.id}
                         customerId={quote.customerId || undefined}
                         onProposalCreated={(proposal) => {
-                          toast({
-                            title: "Success",
-                            description: `Proposal ${proposal.proposalNumber} created successfully`,
-                          });
                         }}
                       />
                       {quote.status === 'accepted' && (

@@ -34,10 +34,6 @@ export default function SignatureCapture() {
       });
 
       if (data.success) {
-        toast({
-          title: "Success",
-          description: `Applied signature to ${data.updatedCount} inspections`,
-        });
         // Clear signature after successful application
         signatureRef.current?.clear();
       } else {

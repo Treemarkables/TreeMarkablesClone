@@ -152,10 +152,6 @@ export function ExpenseManager({
       setIsAddDialogOpen(false);
       setEditingExpense(null);
       form.reset();
-      toast({
-        title: "Success",
-        description: "Expense added successfully"
-      });
     },
     onError: (error: any) => {
       toast({
@@ -175,10 +171,6 @@ export function ExpenseManager({
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'expenses'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Success",
-        description: "Expense removed successfully"
-      });
     },
     onError: (error: any) => {
       toast({

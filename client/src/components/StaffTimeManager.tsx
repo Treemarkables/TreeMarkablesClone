@@ -128,10 +128,6 @@ export function StaffTimeManager({
       setIsAddDialogOpen(false);
       setEditingEntry(null);
       form.reset();
-      toast({
-        title: "Success",
-        description: "Staff time entry added successfully"
-      });
     },
     onError: (error: any) => {
       toast({
@@ -151,10 +147,6 @@ export function StaffTimeManager({
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'staff-time'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Success",
-        description: "Staff time entry removed successfully"
-      });
     },
     onError: (error: any) => {
       toast({

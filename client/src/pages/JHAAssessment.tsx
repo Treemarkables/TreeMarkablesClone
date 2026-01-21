@@ -177,10 +177,6 @@ export default function JHAAssessment() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jha/assessments'] });
-      toast({
-        title: "Success",
-        description: isEditing ? "JHA updated successfully" : "Job Hazard Analysis completed successfully",
-      });
       navigate("/jha-history");
     },
     onError: (error: Error) => {
@@ -272,11 +268,6 @@ export default function JHAAssessment() {
     setCustomHazardName("");
     setCustomControls([""]);
     setShowCustomHazardForm(false);
-
-    toast({
-      title: "Success",
-      description: "Custom hazard added",
-    });
   };
 
   const toggleControl = (hazardId: number | string, controlId: number | string) => {

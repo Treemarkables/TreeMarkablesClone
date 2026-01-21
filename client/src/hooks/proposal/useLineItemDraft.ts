@@ -57,7 +57,6 @@ export function useLineItemDraft() {
     }));
 
     setCurrentChoice({ label: "", description: "", price: 0, isDefault: false });
-    toast({ title: "Success", description: "Choice option added" });
     return true;
   }, [currentChoice, toast]);
 

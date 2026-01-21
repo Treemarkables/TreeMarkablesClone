@@ -214,11 +214,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
         description: `${staffWithoutRates.join(', ')} ${staffWithoutRates.length === 1 ? 'does' : 'do'} not have a matching labour rate set up. Please add a rate in Settings.`,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Success",
-        description: `Added ${newTimeEntries.length} time ${newTimeEntries.length === 1 ? 'entry' : 'entries'} with auto-matched rates`,
-      });
     }
     
     // Reset form but keep it open for adding more entries
@@ -239,10 +234,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
       refetchTimeEntries();
-      toast({
-        title: "Success",
-        description: "Time entry deleted successfully"
-      });
     },
     onError: () => {
       toast({
@@ -317,11 +308,6 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       await queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
       
       await refetchTimeEntries();
-      
-      toast({
-        title: "Success",
-        description: `${pendingEntries.length} time ${pendingEntries.length === 1 ? 'entry' : 'entries'} saved successfully`
-      });
       
       onClose();
     } catch (error) {

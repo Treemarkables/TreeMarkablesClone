@@ -306,10 +306,6 @@ export function ProposalBuilder({
     };
     setSections(prev => [...prev, newSection]);
     setActiveSectionId(newSection.id);
-    toast({
-      title: "Success",
-      description: "New section added",
-    });
   };
 
   const removeSection = (sectionId: string) => {
@@ -326,10 +322,6 @@ export function ProposalBuilder({
     if (activeSectionId === sectionId) {
       setActiveSectionId(newSections[0]?.id || "");
     }
-    toast({
-      title: "Success",
-      description: "Section removed",
-    });
   };
 
   const updateSectionTitle = (sectionId: string, title: string) => {
@@ -375,11 +367,6 @@ export function ProposalBuilder({
       description: "",
       price: 0,
       isDefault: false,
-    });
-
-    toast({
-      title: "Success",
-      description: "Choice option added",
     });
   };
 
@@ -499,11 +486,6 @@ export function ProposalBuilder({
       fixedPrice: undefined,
       priceIncludesTax: false,
     });
-
-    toast({
-      title: "Success",
-      description: "Line item added successfully",
-    });
   };
 
   const removeLineItem = (sectionId: string, itemId: string) => {
@@ -512,10 +494,6 @@ export function ProposalBuilder({
         ? { ...section, lineItems: section.lineItems.filter(item => item.id !== itemId) }
         : section
     ));
-    toast({
-      title: "Success",
-      description: "Line item removed",
-    });
   };
 
   const toggleLineItemSelection = (sectionId: string, itemId: string) => {
@@ -547,11 +525,6 @@ export function ProposalBuilder({
           }
         : section
     ));
-    
-    toast({
-      title: "Success",
-      description: "Choice selection updated",
-    });
   };
 
   // Calculate totals across all sections
@@ -671,11 +644,6 @@ export function ProposalBuilder({
         : section
     ));
 
-    toast({
-      title: "Success",
-      description: `Added ${selectedDiaryPhotos.length} photo(s) from diary`,
-    });
-
     setShowDiaryPhotoDialog(false);
     setSelectedDiaryPhotos([]);
   };
@@ -710,10 +678,6 @@ export function ProposalBuilder({
     },
     onSuccess: (response: any) => {
       console.log('Proposal created successfully:', response);
-      toast({
-        title: "Success",
-        description: `Proposal created successfully! Proposal Number: ${response?.proposalNumber || 'N/A'}`,
-      });
       queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
       
       // Also invalidate the job diary timeline if this proposal is associated with a job
@@ -768,10 +732,6 @@ export function ProposalBuilder({
       })) || [];
     },
     onSuccess: (data) => {
-      toast({
-        title: "Success",
-        description: "Photos uploaded successfully",
-      });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'photos'] });
     },
     onError: (error: any) => {

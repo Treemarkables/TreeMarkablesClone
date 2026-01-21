@@ -96,10 +96,6 @@ export function WorkflowAutomation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workflows'] });
-      toast({
-        title: "Success",
-        description: "Workflow updated successfully",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -117,10 +113,6 @@ export function WorkflowAutomation() {
       return response.json();
     },
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Workflow trigger tested successfully",
-      });
       setShowTestDialog(false);
     },
     onError: (error: any) => {

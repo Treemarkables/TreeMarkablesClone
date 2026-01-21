@@ -590,7 +590,6 @@ export function JobDiarySection({
       });
     },
     onSuccess: async () => {
-      toast({ title: "Success", description: "Note added successfully" });
       noteForm.reset();
       setActiveComposer(null);
       await queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
@@ -617,7 +616,6 @@ export function JobDiarySection({
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "SMS sent successfully" });
       smsForm.reset();
       setActiveComposer(null);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
@@ -644,7 +642,6 @@ export function JobDiarySection({
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Email sent successfully" });
       emailForm.reset();
       setActiveComposer(null);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
@@ -666,7 +663,6 @@ export function JobDiarySection({
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Note updated successfully" });
       setEditingEntryId(null);
       setEditingContent("");
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
@@ -686,7 +682,6 @@ export function JobDiarySection({
       return apiRequest('DELETE', `/api/diary/${entryId}`);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Entry deleted successfully" });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
     },

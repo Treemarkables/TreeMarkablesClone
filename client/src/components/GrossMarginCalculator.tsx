@@ -175,10 +175,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Success",
-        description: "Gross margin updated successfully"
-      });
     },
     onError: (error: any) => {
       toast({
@@ -198,10 +194,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Success",
-        description: "Line item deleted successfully"
-      });
     },
     onError: (error: any) => {
       toast({
