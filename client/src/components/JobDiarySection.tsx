@@ -143,6 +143,7 @@ interface DiaryEntry {
     proposalNumber?: string;
     eventType?: string;
     status?: string;
+    viewedDate?: string;
   };
 }
 
@@ -468,6 +469,7 @@ export function JobDiarySection({
             metadata: {
               proposalNumber: proposal.proposalNumber,
               status: proposal.status,
+              viewedDate: proposal.viewedDate,
               isDeletable: false // Proposals from proposals table cannot be deleted via diary endpoint
             }
           });
@@ -1343,6 +1345,12 @@ export function JobDiarySection({
                             {entry.type === 'proposal' && (
                               <Badge variant="outline" className="text-xs whitespace-nowrap">
                                 {entry.metadata?.status || 'draft'}
+                              </Badge>
+                            )}
+                            {entry.type === 'proposal' && entry.metadata?.viewedDate && (
+                              <Badge variant="secondary" className="text-xs whitespace-nowrap bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                                <Eye className="w-3 h-3 mr-1" />
+                                Viewed
                               </Badge>
                             )}
                             <Button 
