@@ -2225,7 +2225,25 @@ class DatabaseStorage implements IStorage {
     
     const averageQuoteValue = quotesWithValue > 0 ? totalQuoteValue / quotesWithValue : 0;
     
-    // Calculate total revenue from invoices sent (not cancelled)
+    // Calculate total revenue from COMPLETED JOBS (by completion date or scheduled date)
+    let completedJobsForRevenue = allJobs.filter(job => job.status === 'completed');
+    if (fromDate || toDate) {
+      completedJobsForRevenue = completedJobsForRevenue.filter(job => {
+        // Use completedDate if available, otherwise fall back to scheduledDate, then createdAt
+        const jobDate = job.completedDate ? new Date(job.completedDate) :
+                        job.scheduledDate ? new Date(job.scheduledDate) :
+                        job.createdAt ? new Date(job.createdAt) : null;
+        if (!jobDate) return false;
+        if (fromDate && jobDate < fromDate) return false;
+        if (toDate && jobDate > toDate) return false;
+        return true;
+      });
+    }
+    // Revenue is sum of totalAmount from completed jobs in the period
+    const totalRevenue = completedJobsForRevenue.reduce((sum, job) => sum + (parseFloat(job.totalAmount?.toString() || '0')), 0);
+    const completedJobs = filteredJobs.filter(job => job.status === 'completed');
+    
+    // Still track invoices for the count display
     let filteredInvoices = allInvoices.filter(inv => inv.status !== 'cancelled');
     if (fromDate || toDate) {
       filteredInvoices = filteredInvoices.filter(inv => {
@@ -2236,8 +2254,6 @@ class DatabaseStorage implements IStorage {
         return true;
       });
     }
-    const totalRevenue = filteredInvoices.reduce((sum, inv) => sum + (parseFloat(inv.amount?.toString() || '0')), 0);
-    const completedJobs = filteredJobs.filter(job => job.status === 'completed');
     const leadsCount = filteredLeads.length;
     
     // For customer count and retention, we use all customers (not filtered by date)

@@ -586,7 +586,7 @@ export default function MetricsDashboard() {
             <MetricCard
               title="Total Revenue"
               value={formatCurrency(dashboardStats?.totalRevenue || 0)}
-              subtitle={`${dashboardStats?.invoicesCount || 0} invoices sent`}
+              subtitle="From completed jobs"
               icon={DollarSign}
               testId="card-total-revenue"
               colorful={true}
