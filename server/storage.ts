@@ -2226,6 +2226,7 @@ class DatabaseStorage implements IStorage {
     const averageQuoteValue = quotesWithValue > 0 ? totalQuoteValue / quotesWithValue : 0;
     
     // Calculate total revenue from COMPLETED JOBS (by completion date or scheduled date)
+    // Use invoice amounts linked to completed jobs, since job.totalAmount is often not populated
     let completedJobsForRevenue = allJobs.filter(job => job.status === 'completed');
     if (fromDate || toDate) {
       completedJobsForRevenue = completedJobsForRevenue.filter(job => {
@@ -2239,8 +2240,22 @@ class DatabaseStorage implements IStorage {
         return true;
       });
     }
-    // Revenue is sum of totalAmount from completed jobs in the period
-    const totalRevenue = completedJobsForRevenue.reduce((sum, job) => sum + (parseFloat(job.totalAmount?.toString() || '0')), 0);
+    
+    // Build a set of completed job IDs for the period
+    const completedJobIds = new Set(completedJobsForRevenue.map(job => job.id));
+    
+    // Sum invoice amounts for these completed jobs (prefer invoice amount over job.totalAmount)
+    let totalRevenue = 0;
+    for (const job of completedJobsForRevenue) {
+      // Find invoice for this job
+      const jobInvoice = allInvoices.find(inv => inv.jobId === job.id && inv.status !== 'cancelled');
+      if (jobInvoice && parseFloat(jobInvoice.amount?.toString() || '0') > 0) {
+        totalRevenue += parseFloat(jobInvoice.amount?.toString() || '0');
+      } else {
+        // Fall back to job.totalAmount if no invoice
+        totalRevenue += parseFloat(job.totalAmount?.toString() || '0');
+      }
+    }
     const completedJobs = filteredJobs.filter(job => job.status === 'completed');
     
     // Still track invoices for the count display
