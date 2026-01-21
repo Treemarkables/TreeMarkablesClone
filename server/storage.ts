@@ -2293,16 +2293,18 @@ class DatabaseStorage implements IStorage {
       ? Math.round((repeatCustomers / customersCount) * 100) 
       : 0;
     
-    // Calculate returning customer % for jobs in the selected timeframe
+    // Calculate returning customer % for COMPLETED jobs in the selected timeframe
     // A "returning customer" is one who had a job BEFORE the start of this period
     let returningCustomerJobCount = 0;
-    const jobsInPeriod = activeJobs.filter(job => job.customerId); // Jobs with customers in the filtered period
+    // Only use completed jobs with customers, filtered by completion date
+    const completedJobsInPeriod = completedJobsForRevenue.filter(job => job.customerId);
     
-    if (fromDate && jobsInPeriod.length > 0) {
+    if (fromDate && completedJobsInPeriod.length > 0) {
       // Get all jobs that occurred BEFORE the start of the date range
       const jobsBeforePeriod = allJobs.filter(job => {
         if (!job.customerId || job.status === 'archived') return false;
-        const jobDate = job.scheduledDate ? new Date(job.scheduledDate) : 
+        const jobDate = job.completedDate ? new Date(job.completedDate) :
+                        job.scheduledDate ? new Date(job.scheduledDate) : 
                         job.createdAt ? new Date(job.createdAt) : null;
         return jobDate && jobDate < fromDate;
       });
@@ -2313,14 +2315,14 @@ class DatabaseStorage implements IStorage {
         if (job.customerId) customersWithPriorJobs.add(job.customerId);
       });
       
-      // Count how many jobs in current period are from returning customers
-      returningCustomerJobCount = jobsInPeriod.filter(job => 
+      // Count how many completed jobs in current period are from returning customers
+      returningCustomerJobCount = completedJobsInPeriod.filter(job => 
         customersWithPriorJobs.has(job.customerId!)
       ).length;
     }
     
-    const returningCustomerPercentage = jobsInPeriod.length > 0
-      ? Math.round((returningCustomerJobCount / jobsInPeriod.length) * 100)
+    const returningCustomerPercentage = completedJobsInPeriod.length > 0
+      ? Math.round((returningCustomerJobCount / completedJobsInPeriod.length) * 100)
       : 0;
     
     return {
