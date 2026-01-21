@@ -47,6 +47,7 @@ interface DashboardStats {
   averageQuoteValue: number;
   missedCalls: number;
   customerRetention?: number;
+  returningCustomerPercentage?: number;
   firstTimeFix?: number;
   recentCalls: any[];
   recentLeads: any[];
@@ -648,10 +649,20 @@ export default function MetricsDashboard() {
               title="Customer Retention"
               value={dashboardStats?.customerRetention 
                 ? `${dashboardStats.customerRetention}%` 
-                : "85%"}
-              subtitle="Repeat customers"
+                : "0%"}
+              subtitle="Repeat customers (all-time)"
               icon={Users}
               testId="card-customer-retention"
+            />
+
+            <MetricCard
+              title="Returning Customers"
+              value={dashboardStats?.returningCustomerPercentage !== undefined 
+                ? `${dashboardStats.returningCustomerPercentage}%` 
+                : "0%"}
+              subtitle="Jobs from repeat customers"
+              icon={Users}
+              testId="card-returning-customers"
             />
 
             <MetricCard
