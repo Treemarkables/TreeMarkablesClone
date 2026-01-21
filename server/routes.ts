@@ -13494,6 +13494,53 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Mark proposal as viewed by client (public endpoint - no auth required)
+  app.post('/api/proposals/:id/viewed', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      const proposal = await storage.getProposal(id);
+      if (!proposal) {
+        return res.status(404).json({ success: false, message: 'Proposal not found' });
+      }
+
+      // Only update if not already viewed
+      if (!proposal.viewedDate) {
+        const updatedProposal = await storage.updateProposal(id, {
+          viewedDate: new Date(),
+          status: proposal.status === 'sent' ? 'viewed' : proposal.status,
+        });
+
+        // Create diary entry for the view
+        if (proposal.jobId) {
+          const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
+          await storage.createJobDiaryEntry({
+            jobId: proposal.jobId,
+            entryType: 'note',
+            title: 'Proposal Viewed',
+            description: `Proposal "${proposal.title}" was viewed by ${customer?.name || customer?.firstName || 'the customer'}`,
+            authorName: 'System',
+            authorRole: 'system',
+            metadata: {
+              proposalId: id,
+              action: 'proposal_viewed',
+              viewedAt: new Date().toISOString(),
+            }
+          });
+        }
+
+        console.log(`👁️ Proposal ${id} marked as viewed`);
+        return res.json({ success: true, data: updatedProposal, firstView: true });
+      }
+
+      // Already viewed - just return success
+      return res.json({ success: true, data: proposal, firstView: false });
+    } catch (error: any) {
+      console.error('Error marking proposal as viewed:', error);
+      res.status(500).json({ success: false, message: 'Error marking proposal as viewed' });
+    }
+  });
+
   // Accept proposal - converts to work order and creates notification
   app.post('/api/proposals/:id/accept', async (req: Request, res: Response) => {
     try {
