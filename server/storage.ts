@@ -2262,6 +2262,36 @@ class DatabaseStorage implements IStorage {
       ? Math.round((repeatCustomers / customersCount) * 100) 
       : 0;
     
+    // Calculate returning customer % for jobs in the selected timeframe
+    // A "returning customer" is one who had a job BEFORE the start of this period
+    let returningCustomerJobCount = 0;
+    const jobsInPeriod = activeJobs.filter(job => job.customerId); // Jobs with customers in the filtered period
+    
+    if (fromDate && jobsInPeriod.length > 0) {
+      // Get all jobs that occurred BEFORE the start of the date range
+      const jobsBeforePeriod = allJobs.filter(job => {
+        if (!job.customerId || job.status === 'archived') return false;
+        const jobDate = job.scheduledDate ? new Date(job.scheduledDate) : 
+                        job.createdAt ? new Date(job.createdAt) : null;
+        return jobDate && jobDate < fromDate;
+      });
+      
+      // Build a set of customer IDs who had jobs before this period
+      const customersWithPriorJobs = new Set<string>();
+      jobsBeforePeriod.forEach(job => {
+        if (job.customerId) customersWithPriorJobs.add(job.customerId);
+      });
+      
+      // Count how many jobs in current period are from returning customers
+      returningCustomerJobCount = jobsInPeriod.filter(job => 
+        customersWithPriorJobs.has(job.customerId!)
+      ).length;
+    }
+    
+    const returningCustomerPercentage = jobsInPeriod.length > 0
+      ? Math.round((returningCustomerJobCount / jobsInPeriod.length) * 100)
+      : 0;
+    
     return {
       totalLeads: leadsCount,
       totalCustomers: customersCount,
@@ -2271,6 +2301,7 @@ class DatabaseStorage implements IStorage {
       conversionRate: Math.round(conversionRate * 100) / 100,
       averageQuoteValue: Math.round(averageQuoteValue * 100) / 100,
       customerRetention,
+      returningCustomerPercentage,
       missedCalls: 0,
       recentCalls: [],
       recentLeads: filteredLeads.slice(0, 5)
