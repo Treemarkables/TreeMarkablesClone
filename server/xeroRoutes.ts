@@ -447,12 +447,13 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           console.log(`✅ Updated invoice ${invoice.invoiceNumber} status to 'sent'`);
         }
         
-        // Create diary entry for Xero send
+        // Create diary entry for Xero send - use invoice amount (not job.totalAmount which is often $0)
+        const invoiceTotal = invoice?.amount ? parseFloat(invoice.amount.toString()).toFixed(2) : (job.totalAmount || '0.00');
         await storage.createJobDiaryEntry({
           jobId,
           entryType: 'note',
           title: 'Invoice Sent to Xero',
-          description: `Invoice #${xeroInvoice.invoiceNumber || xeroInvoice.invoiceID} sent to Xero successfully. Total: $${job.totalAmount || '0.00'}`,
+          description: `Invoice #${xeroInvoice.invoiceNumber || xeroInvoice.invoiceID} sent to Xero successfully. Total: $${invoiceTotal}`,
           authorName: 'System',
           authorRole: 'system',
           metadata: {
