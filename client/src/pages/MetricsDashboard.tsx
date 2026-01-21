@@ -813,6 +813,9 @@ export default function MetricsDashboard() {
                   At a <span className="font-semibold text-orange-600">{calcConversionRate}%</span> conversion rate, 
                   you need to send <span className="font-semibold text-teal-600">{calcQuotesNeeded} quotes</span>.
                 </p>
+                <p className="text-sm mt-2 text-muted-foreground">
+                  That's <span className="font-semibold text-teal-600">{calcPeriod === "weekly" ? calcQuotesNeeded : Math.ceil(calcQuotesNeeded / 4.33)} quotes/week</span> or <span className="font-semibold text-teal-600">{calcPeriod === "weekly" ? (calcQuotesNeeded / 5).toFixed(1) : (calcQuotesNeeded / 4.33 / 5).toFixed(1)} quotes/day</span> (5-day week)
+                </p>
               </div>
             </CardContent>
           </Card>
