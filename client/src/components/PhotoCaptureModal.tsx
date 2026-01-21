@@ -76,12 +76,6 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
       return results;
     },
     onSuccess: (data) => {
-      const count = data.length;
-      toast({
-        title: "Success",
-        description: `${count} photo${count > 1 ? 's' : ''} uploaded successfully`,
-      });
-      
       // Invalidate ALL diary queries for this job (including all filter types)
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });

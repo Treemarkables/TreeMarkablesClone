@@ -57,10 +57,6 @@ export default function JHARiskControlTemplates() {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/risk-control-templates"] });
       setShowDialog(false);
       resetForm();
-      toast({
-        title: "Success",
-        description: "Risk control template created successfully",
-      });
     },
     onError: (error: Error) => {
       toast({
@@ -78,10 +74,6 @@ export default function JHARiskControlTemplates() {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/risk-control-templates"] });
       setShowDialog(false);
       resetForm();
-      toast({
-        title: "Success",
-        description: "Risk control template updated successfully",
-      });
     },
     onError: (error: Error) => {
       toast({
@@ -97,10 +89,6 @@ export default function JHARiskControlTemplates() {
       apiRequest("DELETE", `/api/jha/risk-control-templates/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/risk-control-templates"] });
-      toast({
-        title: "Success",
-        description: "Risk control template deleted successfully",
-      });
     },
     onError: (error: Error) => {
       toast({

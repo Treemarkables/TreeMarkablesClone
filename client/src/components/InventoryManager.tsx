@@ -124,7 +124,6 @@ export function InventoryManager({ compact = false }: InventoryManagerProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/equipment'] });
       setShowAddEquipmentDialog(false);
-      toast({ title: "Success", description: "Equipment added successfully" });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message || "Failed to add equipment", variant: "destructive" });
@@ -140,7 +139,6 @@ export function InventoryManager({ compact = false }: InventoryManagerProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/equipment'] });
       queryClient.invalidateQueries({ queryKey: ['/api/equipment/checkouts'] });
       setShowCheckoutDialog(false);
-      toast({ title: "Success", description: "Equipment checked out successfully" });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message || "Failed to checkout equipment", variant: "destructive" });
@@ -565,7 +563,6 @@ export function InventoryManager({ compact = false }: InventoryManagerProps) {
               <Button 
                 onClick={() => {
                   // TODO: Implement form submission
-                  toast({ title: "Success", description: "Equipment added successfully" });
                   setShowAddEquipmentDialog(false);
                 }}
                 data-testid="button-save-equipment"
@@ -612,7 +609,6 @@ export function InventoryManager({ compact = false }: InventoryManagerProps) {
                 <Button 
                   onClick={() => {
                     // TODO: Implement checkout submission
-                    toast({ title: "Success", description: "Equipment checked out successfully" });
                     setShowCheckoutDialog(false);
                   }}
                   data-testid="button-confirm-checkout"

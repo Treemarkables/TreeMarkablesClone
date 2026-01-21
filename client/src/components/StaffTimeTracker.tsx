@@ -109,10 +109,6 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
         rate: '',
         date: new Date().toISOString().split('T')[0]
       });
-      toast({
-        title: "Success",
-        description: "Staff time entry added successfully"
-      });
     },
     onError: (error: any) => {
       toast({
@@ -139,10 +135,6 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
       queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
       queryClient.invalidateQueries({ queryKey: ['job', jobId] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      toast({
-        title: "Success",
-        description: "Staff time entry removed successfully"
-      });
     },
     onError: (error: any) => {
       toast({

@@ -13,10 +13,6 @@ export function useProposalMutations(jobId?: string, onSuccess?: () => void) {
       return response;
     },
     onSuccess: (response: any) => {
-      toast({
-        title: "Success",
-        description: `Proposal created successfully! Proposal Number: ${response?.proposalNumber || 'N/A'}`,
-      });
       queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
       if (jobId) {
         queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
@@ -58,7 +54,6 @@ export function useProposalMutations(jobId?: string, onSuccess?: () => void) {
       })) || [];
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Photos uploaded successfully" });
       if (jobId) {
         queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'photos'] });
       }

@@ -185,10 +185,6 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
       // Force refetch
       await queryClient.refetchQueries({ queryKey: ['/api/jobs'] });
       setShowNewEntryDialog(false);
-      toast({
-        title: "Success",
-        description: "Diary entry created successfully"
-      });
     },
     onError: (error: any) => {
       toast({
@@ -206,10 +202,6 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['job-diary', jobId] });
-      toast({
-        title: "Success",
-        description: "Diary entry deleted successfully"
-      });
     },
     onError: (error: any) => {
       toast({
@@ -228,10 +220,6 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['job-diary', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Success",
-        description: "Photo deleted successfully"
-      });
     },
     onError: (error: any) => {
       toast({

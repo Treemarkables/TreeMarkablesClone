@@ -308,10 +308,6 @@ export default function Pipeline() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/pipeline-leads'] });
-      toast({
-        title: "Success",
-        description: "New opportunity created successfully"
-      });
       setShowNewOpportunityDialog(false);
       setNewOpportunityData({
         customerName: '',
@@ -375,10 +371,6 @@ export default function Pipeline() {
       queryClient.invalidateQueries({ queryKey: ['/api/pipeline-leads'] });
     },
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Opportunity moved successfully"
-      });
     }
   });
   

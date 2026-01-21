@@ -213,10 +213,6 @@ export default function StaffSchedule() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Success",
-        description: "Job removed from schedule",
-      });
     },
     onError: (error: Error) => {
       toast({

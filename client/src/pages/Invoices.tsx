@@ -66,10 +66,6 @@ export default function Invoices() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       setSendingJobId(null);
-      toast({
-        title: "Success",
-        description: data?.message || "Invoice sent to Xero successfully",
-      });
     },
     onError: (error: any) => {
       setSendingJobId(null);
@@ -120,10 +116,6 @@ export default function Invoices() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       setEditingInvoice(null);
-      toast({
-        title: "Success",
-        description: "Invoice updated successfully",
-      });
     },
     onError: (error: any) => {
       toast({

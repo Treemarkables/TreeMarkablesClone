@@ -106,10 +106,6 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       setEditingCustomerId(null);
       setEditingCustomerName("");
-      toast({
-        title: "Success",
-        description: "Customer name updated successfully"
-      });
     },
     onError: (error) => {
       toast({

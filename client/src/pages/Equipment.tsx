@@ -201,10 +201,6 @@ export default function Equipment() {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
       setIsAddEquipmentOpen(false);
       form.reset();
-      toast({
-        title: "Success",
-        description: "Equipment added successfully",
-      });
     },
     onError: () => {
       toast({
@@ -224,10 +220,6 @@ export default function Equipment() {
       setIsEditEquipmentOpen(false);
       setSelectedEquipment(null);
       editForm.reset();
-      toast({
-        title: "Success",
-        description: "Equipment updated successfully",
-      });
     },
     onError: () => {
       toast({
@@ -247,10 +239,6 @@ export default function Equipment() {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment/checkouts"] });
       setIsCheckoutOpen(false);
       setSelectedEquipment(null);
-      toast({
-        title: "Success",
-        description: "Equipment checked out successfully",
-      });
     },
     onError: () => {
       toast({
@@ -272,10 +260,6 @@ export default function Equipment() {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment/checkouts"] });
       setIsCheckinOpen(false);
       setSelectedCheckout(null);
-      toast({
-        title: "Success",
-        description: "Equipment checked in successfully",
-      });
     },
     onError: () => {
       toast({
@@ -297,10 +281,6 @@ export default function Equipment() {
       setSelectedEquipment(null);
       setPartsInput("");
       maintenanceForm.reset();
-      toast({
-        title: "Success",
-        description: "Maintenance record added successfully",
-      });
     },
     onError: (error: any) => {
       console.error('Maintenance error:', error);
@@ -318,10 +298,6 @@ export default function Equipment() {
       apiRequest("DELETE", `/api/equipment/${equipmentId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
-      toast({
-        title: "Success",
-        description: "Equipment deleted successfully",
-      });
     },
     onError: () => {
       toast({

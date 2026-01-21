@@ -356,11 +356,6 @@ export function GlobalJobCard({
   const removeLineItem = (index: number) => {
     // Use useFieldArray helper to properly update the field array
     removeLineItemField(index);
-    
-    toast({
-      title: "Success",
-      description: "Line item removed"
-    });
   };
 
   const selectFromCatalog = (catalogItem: any) => {

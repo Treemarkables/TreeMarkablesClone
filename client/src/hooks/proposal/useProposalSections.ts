@@ -19,8 +19,7 @@ export function useProposalSections(initialSections: ProposalSection[] = []) {
     };
     setSections(prev => [...prev, newSection]);
     setActiveSectionId(newSection.id);
-    toast({ title: "Success", description: "New section added" });
-  }, [sections.length, toast]);
+  }, [sections.length]);
 
   const removeSection = useCallback((sectionId: string) => {
     if (sections.length <= 1) {
@@ -36,8 +35,7 @@ export function useProposalSections(initialSections: ProposalSection[] = []) {
     if (activeSectionId === sectionId) {
       setActiveSectionId(newSections[0]?.id || "");
     }
-    toast({ title: "Success", description: "Section removed" });
-  }, [sections, activeSectionId, toast]);
+  }, [sections, activeSectionId]);
 
   const updateSection = useCallback((sectionId: string, updates: Partial<ProposalSection>) => {
     setSections(prev => prev.map(section => 
