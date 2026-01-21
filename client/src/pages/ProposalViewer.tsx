@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +16,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const viewedRef = useRef(false);
   
   const handleBackClick = () => {
     // Check if there's a page to go back to in the history
@@ -75,6 +76,18 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const { data: templateResponse } = useQuery({
     queryKey: ["/api/templates/default/proposal"],
   });
+
+  // Mark proposal as viewed when loaded (only once per session)
+  useEffect(() => {
+    const actualId = actualProposalResponse?.data?.id;
+    if (actualId && !viewedRef.current) {
+      viewedRef.current = true;
+      fetch(`/api/proposals/${actualId}/viewed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).catch(err => console.error('Failed to mark proposal as viewed:', err));
+    }
+  }, [actualProposalResponse?.data?.id]);
 
   // Accept proposal mutation
   const acceptProposalMutation = useMutation({
