@@ -2154,6 +2154,24 @@ export const invoices = pgTable("invoices", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Invoice Line Items - proper line items with labor type support
+export const invoiceLineItems = pgTable("invoice_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").references(() => invoices.id, { onDelete: 'cascade' }).notNull(),
+  description: text("description").notNull(),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+  unit: text("unit").default("each"), // each, hours, m2, linear_m, etc.
+  category: text("category"), // labor_fixed, labor_chargeout, materials, equipment, disposal, etc.
+  laborType: text("labor_type", { enum: ['fixed', 'chargeout'] }), // For labor items: fixed price or charge-out rate
+  employeeId: varchar("employee_id").references(() => employees.id), // Link to employee for labor items
+  notes: text("notes"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Xero OAuth2 Integration
 export const xeroConnections = pgTable("xero_connections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2246,6 +2264,20 @@ export const insertCustomerAuthSchema = createInsertSchema(customerAuth).omit({
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type UpdateInvoice = z.infer<typeof updateInvoiceSchema>;
+
+// Invoice Line Item Schema Exports
+export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateInvoiceLineItemSchema = insertInvoiceLineItemSchema.partial();
+
+export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
+export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;
+export type UpdateInvoiceLineItem = z.infer<typeof updateInvoiceLineItemSchema>;
+
 export type XeroConnection = typeof xeroConnections.$inferSelect;
 export type InsertXeroConnection = z.infer<typeof insertXeroConnectionSchema>;
 export type XeroSettings = typeof xeroSettings.$inferSelect;

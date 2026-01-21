@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign, MessageSquare, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
@@ -27,6 +28,7 @@ interface InvoiceLineItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  category?: string; // labor_fixed, labor_chargeout, materials, equipment, disposal, other
 }
 
 interface CreatedInvoice {
@@ -294,13 +296,14 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   };
 
   // Add new line item
-  const addLineItem = () => {
+  const addLineItem = (category?: string) => {
     setLineItems([...lineItems, {
       id: Math.random().toString(),
       description: '',
       quantity: 1,
       unitPrice: 0,
-      total: 0
+      total: 0,
+      category: category || 'other'
     }]);
   };
 
@@ -443,7 +446,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         description: item.description,
         quantity: item.quantity,
         rate: item.unitPrice,
-        amount: item.total
+        amount: item.total,
+        category: item.category || 'other'
       }));
 
       const res = await apiRequest('POST', `/api/jobs/${job.id}/convert-to-invoice`, {
@@ -911,7 +915,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={addLineItem}
+                        onClick={() => addLineItem()}
                         data-testid="button-add-line-item"
                       >
                         <Plus className="h-4 w-4 mr-1" />
@@ -920,12 +924,58 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     </div>
                   </div>
 
+                  {/* Category Legend */}
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Labour (Fixed)</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span>Labour (Charge-out)</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span>Materials</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span>Equipment</span>
+                  </div>
+
                   <div className="space-y-2">
                     {lineItems.map((item, index) => (
-                      <div key={item.id} className="bg-white p-3 rounded border space-y-2">
+                      <div key={item.id} className={`bg-white p-3 rounded border space-y-2 border-l-4 ${
+                        item.category === 'labor_fixed' ? 'border-l-blue-500' :
+                        item.category === 'labor_chargeout' ? 'border-l-green-500' :
+                        item.category === 'materials' ? 'border-l-orange-500' :
+                        item.category === 'equipment' ? 'border-l-purple-500' :
+                        'border-l-gray-300'
+                      }`}>
+                        {/* Category row */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <Select
+                            value={item.category || 'other'}
+                            onValueChange={(value) => updateLineItem(item.id, 'category', value)}
+                          >
+                            <SelectTrigger className="w-40 h-8 text-xs">
+                              <SelectValue placeholder="Category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="labor_fixed">Labour (Fixed Price)</SelectItem>
+                              <SelectItem value="labor_chargeout">Labour (Charge-out)</SelectItem>
+                              <SelectItem value="materials">Materials</SelectItem>
+                              <SelectItem value="equipment">Equipment</SelectItem>
+                              <SelectItem value="disposal">Disposal</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <div className="flex-1" />
+                          {lineItems.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeLineItem(item.id)}
+                              className="h-8 w-8"
+                              data-testid={`button-remove-item-${index}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          )}
+                        </div>
                         {/* Mobile: Stack vertically, Desktop: Grid layout */}
                         <div className="flex flex-col sm:grid sm:grid-cols-12 gap-2 sm:items-center">
-                          <div className="sm:col-span-5">
+                          <div className="sm:col-span-6">
                             <Input
                               value={item.description}
                               onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
@@ -940,7 +990,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                                 type="number"
                                 value={item.quantity}
                                 onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                placeholder="Qty"
+                                placeholder={item.category?.startsWith('labor') ? 'Hours' : 'Qty'}
                                 className="text-sm w-full"
                                 data-testid={`input-item-quantity-${index}`}
                               />
@@ -951,29 +1001,15 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                                 step="0.01"
                                 value={item.unitPrice}
                                 onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                placeholder="Price"
+                                placeholder={item.category?.startsWith('labor') ? 'Rate/hr' : 'Price'}
                                 className="text-sm w-full"
                                 data-testid={`input-item-price-${index}`}
                               />
                             </div>
-                            <div className="flex-1 sm:col-span-2 flex items-center">
+                            <div className="flex-1 sm:col-span-2 flex items-center justify-end">
                               <div className="text-sm font-medium text-gray-700">
                                 ${item.total.toFixed(2)}
                               </div>
-                            </div>
-                            <div className="sm:col-span-1 flex justify-end items-center">
-                              {lineItems.length > 1 && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeLineItem(item.id)}
-                                  className="h-8 w-8"
-                                  data-testid={`button-remove-item-${index}`}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-600" />
-                                </Button>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -1119,7 +1155,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                         description: item.description,
                         quantity: item.quantity,
                         rate: item.unitPrice,
-                        amount: item.total
+                        amount: item.total,
+                        category: item.category || 'other'
                       })),
                       address: editableAddress,
                       customer,

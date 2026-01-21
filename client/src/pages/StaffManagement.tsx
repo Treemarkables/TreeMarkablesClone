@@ -95,6 +95,7 @@ const staffFormSchema = z.object({
   status: z.enum(['active', 'inactive', 'on_leave']).default('active'),
   skillLevel: z.enum(['beginner', 'intermediate', 'advanced', 'expert']).default('beginner'),
   hourlyRate: z.string().optional(),
+  chargeOutRate: z.string().optional(),
   emergencyContact: z.string().optional(),
   emergencyContactPhone: z.string().optional(),
   notes: z.string().optional(),
@@ -116,6 +117,7 @@ interface StaffMember {
   status: 'active' | 'inactive' | 'on_leave';
   skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
   hourlyRate?: string;
+  chargeOutRate?: string;
   certifications: string[];
   skills: string[];
   emergencyContact?: string;
@@ -150,6 +152,7 @@ function StaffFormDialog({
       status: "active",
       skillLevel: "beginner",
       hourlyRate: "",
+      chargeOutRate: "",
       emergencyContact: "",
       emergencyContactPhone: "",
       notes: "",
@@ -173,6 +176,7 @@ function StaffFormDialog({
           status: staff.status,
           skillLevel: staff.skillLevel,
           hourlyRate: staff.hourlyRate || "",
+          chargeOutRate: staff.chargeOutRate || "",
           emergencyContact: staff.emergencyContact || "",
           emergencyContactPhone: staff.emergencyContactPhone || "",
           notes: staff.notes || "",
@@ -191,6 +195,7 @@ function StaffFormDialog({
           status: "active",
           skillLevel: "beginner",
           hourlyRate: "",
+          chargeOutRate: "",
           emergencyContact: "",
           emergencyContactPhone: "",
           notes: "",
@@ -409,9 +414,22 @@ function StaffFormDialog({
                 name="hourlyRate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Hourly Rate (NZD)</FormLabel>
+                    <FormLabel>Cost Rate (NZD/hr)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} data-testid="input-hourly-rate" />
+                      <Input type="number" step="0.01" placeholder="Internal cost rate" {...field} data-testid="input-hourly-rate" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="chargeOutRate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Charge-out Rate (NZD/hr)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" placeholder="Customer billing rate" {...field} data-testid="input-charge-out-rate" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -764,10 +782,15 @@ function StaffCard({ staff, onEdit, onDelete, onSetPassword, isAdmin }: {
               <span>{staff.phone}</span>
             </div>
           )}
-          {staff.hourlyRate && (
-            <div className="flex items-center gap-2">
+          {(staff.hourlyRate || staff.chargeOutRate) && (
+            <div className="flex items-center gap-2 flex-wrap">
               <DollarSign className="w-4 h-4 text-muted-foreground" />
-              <span>NZD ${staff.hourlyRate}/hour</span>
+              {staff.hourlyRate && (
+                <span className="text-sm">Cost: ${staff.hourlyRate}/hr</span>
+              )}
+              {staff.chargeOutRate && (
+                <span className="text-sm text-primary">Charge: ${staff.chargeOutRate}/hr</span>
+              )}
             </div>
           )}
           <div className="flex items-center gap-2">
