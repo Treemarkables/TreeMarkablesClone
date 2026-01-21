@@ -2503,6 +2503,14 @@ class DatabaseStorage implements IStorage {
         .from(schema.proposals)
         .where(proposalConditions.length > 0 ? and(...proposalConditions) : undefined);
 
+      // Create a map of job IDs that have proposals in the date range
+      const jobsWithProposals = new Set<string>();
+      proposals.forEach(proposal => {
+        if (proposal.jobId) {
+          jobsWithProposals.add(proposal.jobId);
+        }
+      });
+
       // Group jobs by lead source
       const sourceMap = new Map<string, {
         count: number;
@@ -2512,6 +2520,7 @@ class DatabaseStorage implements IStorage {
         totalCosts: number;
         totalProfit: number;
         jobIds: Set<string>;
+        quotedJobIds: Set<string>;
       }>();
 
       // Initialize all possible lead sources
@@ -2524,11 +2533,12 @@ class DatabaseStorage implements IStorage {
           totalRevenue: 0,
           totalCosts: 0,
           totalProfit: 0,
-          jobIds: new Set()
+          jobIds: new Set(),
+          quotedJobIds: new Set()
         });
       });
 
-      // Process jobs - filter by invoice date range for revenue metrics
+      // Process jobs - count quotes and invoices separately
       jobs.forEach(job => {
         // Skip archived jobs
         if (job.status === 'archived') return;
@@ -2541,20 +2551,29 @@ class DatabaseStorage implements IStorage {
           totalRevenue: 0,
           totalCosts: 0,
           totalProfit: 0,
-          jobIds: new Set()
+          jobIds: new Set(),
+          quotedJobIds: new Set()
         };
 
         // Get revenue from invoice amount (only invoices within date range are in the map)
         const invoiceRevenue = jobInvoiceMap.get(job.id) || 0;
+        const hasProposalInPeriod = jobsWithProposals.has(job.id);
         
-        // Only count jobs that have invoices in the selected date range
-        // This ensures metrics reflect work invoiced in the period
+        // Count jobs with proposals sent in the date range as "quoted"
+        if (hasProposalInPeriod) {
+          existing.quotedJobIds.add(job.id);
+        }
+        
+        // Count jobs with invoices in the date range as "won" with revenue
         if (invoiceRevenue > 0) {
-          // Job has an invoice in the date range - count it
-          existing.quotedCount++;
           existing.jobIds.add(job.id);
           
-          // Count as won if completed
+          // Also count as quoted if not already counted via proposal
+          if (!hasProposalInPeriod) {
+            existing.quotedJobIds.add(job.id);
+          }
+          
+          // Count as won if completed with invoice revenue
           if (job.status === 'completed') {
             existing.wonCount++;
             existing.totalRevenue += invoiceRevenue;
@@ -2576,7 +2595,7 @@ class DatabaseStorage implements IStorage {
           
           // Count quoted jobs (jobs with quotes/proposals)
           if (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'completed') {
-            existing.quotedCount++;
+            existing.quotedJobIds.add(job.id);
           }
         }
 
@@ -2595,7 +2614,7 @@ class DatabaseStorage implements IStorage {
       // Calculate metrics for each source
       const result = Array.from(sourceMap.entries()).map(([source, data]) => {
         const count = data.jobIds.size; // Count of unique jobs with invoices in period
-        const quotedCount = data.quotedCount;
+        const quotedCount = data.quotedJobIds.size; // Count of unique jobs with proposals in period
         const wonCount = data.wonCount;
         const totalRevenue = data.totalRevenue;
         const totalProfit = data.totalProfit;
