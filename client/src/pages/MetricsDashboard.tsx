@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -17,7 +17,8 @@ import {
   ChevronUp,
   BarChart3,
   Send,
-  Calendar
+  Calendar,
+  Calculator
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -117,6 +118,15 @@ export default function MetricsDashboard() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   
+  // Revenue Calculator state
+  const [calcPeriod, setCalcPeriod] = useState<"weekly" | "monthly">("monthly");
+  const [calcRevenueTarget, setCalcRevenueTarget] = useState<number>(20000);
+  const [calcAvgJobValue, setCalcAvgJobValue] = useState<number>(1500);
+  const [calcConversionRate, setCalcConversionRate] = useState<number>(50);
+  const [calcJobsNeeded, setCalcJobsNeeded] = useState<number>(0);
+  const [calcQuotesNeeded, setCalcQuotesNeeded] = useState<number>(0);
+  const hasPrePopulated = useRef(false);
+  
   const { toast } = useToast();
 
   // Format currency helper
@@ -145,6 +155,99 @@ export default function MetricsDashboard() {
     };
     return sourceMap[source] || source.charAt(0).toUpperCase() + source.slice(1);
   };
+
+  // Revenue Calculator: Calculate jobs and quotes needed from revenue target
+  const recalculateFromRevenue = useCallback((revenue: number, avgJob: number, convRate: number) => {
+    const newJobsNeeded = avgJob > 0 ? Math.ceil(revenue / avgJob) : 0;
+    const newQuotesNeeded = convRate > 0 ? Math.ceil(newJobsNeeded / (convRate / 100)) : 0;
+    setCalcJobsNeeded(newJobsNeeded);
+    setCalcQuotesNeeded(newQuotesNeeded);
+  }, []);
+
+  // Handler functions for each field change
+  const handleRevenueChange = (value: number) => {
+    setCalcRevenueTarget(value);
+    recalculateFromRevenue(value, calcAvgJobValue, calcConversionRate);
+  };
+
+  const handleAvgJobChange = (value: number) => {
+    setCalcAvgJobValue(value);
+    recalculateFromRevenue(calcRevenueTarget, value, calcConversionRate);
+  };
+
+  const handleConversionChange = (value: number) => {
+    setCalcConversionRate(value);
+    const jobsNeeded = calcAvgJobValue > 0 ? Math.ceil(calcRevenueTarget / calcAvgJobValue) : 0;
+    setCalcJobsNeeded(jobsNeeded);
+    const quotesNeeded = value > 0 ? Math.ceil(jobsNeeded / (value / 100)) : 0;
+    setCalcQuotesNeeded(quotesNeeded);
+  };
+
+  const handleJobsChange = (value: number) => {
+    setCalcJobsNeeded(value);
+    const newRevenue = value * calcAvgJobValue;
+    setCalcRevenueTarget(newRevenue);
+    const quotesNeeded = calcConversionRate > 0 ? Math.ceil(value / (calcConversionRate / 100)) : 0;
+    setCalcQuotesNeeded(quotesNeeded);
+  };
+
+  const handleQuotesChange = (value: number) => {
+    setCalcQuotesNeeded(value);
+    const jobsNeeded = Math.ceil(value * (calcConversionRate / 100));
+    setCalcJobsNeeded(jobsNeeded);
+    const newRevenue = jobsNeeded * calcAvgJobValue;
+    setCalcRevenueTarget(newRevenue);
+  };
+
+  // Handle period change - scale values appropriately
+  const handlePeriodChange = (newPeriod: "weekly" | "monthly") => {
+    if (newPeriod === calcPeriod) return;
+    
+    if (newPeriod === "weekly" && calcPeriod === "monthly") {
+      // Converting from monthly to weekly - divide by ~4.33
+      const weeklyRevenue = Math.round(calcRevenueTarget / 4.33);
+      setCalcRevenueTarget(weeklyRevenue);
+      recalculateFromRevenue(weeklyRevenue, calcAvgJobValue, calcConversionRate);
+    } else if (newPeriod === "monthly" && calcPeriod === "weekly") {
+      // Converting from weekly to monthly - multiply by ~4.33
+      const monthlyRevenue = Math.round(calcRevenueTarget * 4.33);
+      setCalcRevenueTarget(monthlyRevenue);
+      recalculateFromRevenue(monthlyRevenue, calcAvgJobValue, calcConversionRate);
+    }
+    setCalcPeriod(newPeriod);
+  };
+
+  // Initialize calculator on first render
+  useEffect(() => {
+    recalculateFromRevenue(calcRevenueTarget, calcAvgJobValue, calcConversionRate);
+  }, []);
+
+  // Pre-populate calculator with real analytics data when available (only once)
+  useEffect(() => {
+    // Only pre-populate once when analytics data first becomes available
+    if (hasPrePopulated.current) return;
+    
+    const hasAvgJob = revenueStats?.averageJobValue && revenueStats.averageJobValue > 0;
+    const hasConvRate = dashboardStats?.conversionRate && dashboardStats.conversionRate > 0;
+    
+    // Only proceed if we have at least one real data point
+    if (!hasAvgJob && !hasConvRate) return;
+    
+    const avgJob = hasAvgJob ? Math.round(revenueStats.averageJobValue) : calcAvgJobValue;
+    const convRate = hasConvRate ? Math.round(dashboardStats.conversionRate) : calcConversionRate;
+    const revenueTarget = calcRevenueTarget; // Use current revenue target
+    
+    if (hasAvgJob) {
+      setCalcAvgJobValue(avgJob);
+    }
+    if (hasConvRate) {
+      setCalcConversionRate(convRate);
+    }
+    
+    // Recalculate with the updated values
+    recalculateFromRevenue(revenueTarget, avgJob, convRate);
+    hasPrePopulated.current = true;
+  }, [revenueStats?.averageJobValue, dashboardStats?.conversionRate, recalculateFromRevenue]);
 
   // Helper to get date range based on preset
   const getDateRange = () => {
@@ -575,6 +678,144 @@ export default function MetricsDashboard() {
               valueColor={revenueStats?.grossMargin !== undefined && revenueStats.grossMargin >= 0 ? "text-green-600" : "text-red-600"}
             />
           </div>
+        </div>
+
+        {/* Revenue Goal Calculator Section */}
+        <div className="mb-6">
+          <Card className="border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                  <Calculator className="h-5 w-5 text-orange-600" />
+                  Revenue Goal Calculator
+                </CardTitle>
+                <div className="flex gap-1">
+                  <Button
+                    variant={calcPeriod === "weekly" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePeriodChange("weekly")}
+                    data-testid="button-calc-weekly"
+                  >
+                    Weekly
+                  </Button>
+                  <Button
+                    variant={calcPeriod === "monthly" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePeriodChange("monthly")}
+                    data-testid="button-calc-monthly"
+                  >
+                    Monthly
+                  </Button>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Change any value to see how it affects your targets
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* Revenue Target */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4 text-green-600" />
+                    Revenue Target
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                    <Input
+                      type="number"
+                      value={calcRevenueTarget}
+                      onChange={(e) => handleRevenueChange(parseFloat(e.target.value) || 0)}
+                      className="pl-7 text-lg font-semibold"
+                      data-testid="input-calc-revenue"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">per {calcPeriod === "weekly" ? "week" : "month"}</p>
+                </div>
+
+                {/* Average Job Value */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    Avg Job Value
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                    <Input
+                      type="number"
+                      value={calcAvgJobValue}
+                      onChange={(e) => handleAvgJobChange(parseFloat(e.target.value) || 0)}
+                      className="pl-7 text-lg font-semibold"
+                      data-testid="input-calc-avg-job"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">average per job</p>
+                </div>
+
+                {/* Jobs Needed */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4 text-purple-600" />
+                    Jobs Needed
+                  </label>
+                  <Input
+                    type="number"
+                    value={calcJobsNeeded}
+                    onChange={(e) => handleJobsChange(parseInt(e.target.value) || 0)}
+                    className="text-lg font-semibold"
+                    data-testid="input-calc-jobs"
+                  />
+                  <p className="text-xs text-muted-foreground">jobs to complete</p>
+                </div>
+
+                {/* Conversion Rate */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4 text-orange-600" />
+                    Conversion Rate
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      value={calcConversionRate}
+                      onChange={(e) => handleConversionChange(parseFloat(e.target.value) || 0)}
+                      className="pr-7 text-lg font-semibold"
+                      data-testid="input-calc-conversion"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">quotes to jobs</p>
+                </div>
+
+                {/* Quotes Needed */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    <Send className="h-4 w-4 text-teal-600" />
+                    Quotes Needed
+                  </label>
+                  <Input
+                    type="number"
+                    value={calcQuotesNeeded}
+                    onChange={(e) => handleQuotesChange(parseInt(e.target.value) || 0)}
+                    className="text-lg font-semibold"
+                    data-testid="input-calc-quotes"
+                  />
+                  <p className="text-xs text-muted-foreground">quotes to send</p>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="mt-4 p-3 bg-white/60 rounded-lg border border-orange-200">
+                <p className="text-sm">
+                  <span className="font-medium">Summary:</span> To earn <span className="font-semibold text-green-600">{formatCurrency(calcRevenueTarget)}</span> per {calcPeriod === "weekly" ? "week" : "month"}, 
+                  with an average job value of <span className="font-semibold text-blue-600">{formatCurrency(calcAvgJobValue)}</span>, 
+                  you need to complete <span className="font-semibold text-purple-600">{calcJobsNeeded} jobs</span>. 
+                  At a <span className="font-semibold text-orange-600">{calcConversionRate}%</span> conversion rate, 
+                  you need to send <span className="font-semibold text-teal-600">{calcQuotesNeeded} quotes</span>.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Job Estimation Accuracy Section */}
