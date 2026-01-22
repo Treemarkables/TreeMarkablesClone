@@ -735,7 +735,7 @@ export default function MetricsDashboard() {
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                     <Input
                       type="number"
-                      value={calcRevenueTarget}
+                      value={calcRevenueTarget || ""}
                       onChange={(e) => handleRevenueChange(parseFloat(e.target.value) || 0)}
                       className="pl-7 text-lg font-semibold"
                       data-testid="input-calc-revenue"
@@ -754,7 +754,7 @@ export default function MetricsDashboard() {
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                     <Input
                       type="number"
-                      value={calcAvgJobValue}
+                      value={calcAvgJobValue || ""}
                       onChange={(e) => handleAvgJobChange(parseFloat(e.target.value) || 0)}
                       className="pl-7 text-lg font-semibold"
                       data-testid="input-calc-avg-job"
@@ -771,7 +771,7 @@ export default function MetricsDashboard() {
                   </label>
                   <Input
                     type="number"
-                    value={calcJobsNeeded}
+                    value={calcJobsNeeded || ""}
                     onChange={(e) => handleJobsChange(parseInt(e.target.value) || 0)}
                     className="text-lg font-semibold"
                     data-testid="input-calc-jobs"
@@ -788,7 +788,7 @@ export default function MetricsDashboard() {
                   <div className="relative">
                     <Input
                       type="number"
-                      value={calcConversionRate}
+                      value={calcConversionRate || ""}
                       onChange={(e) => handleConversionChange(parseFloat(e.target.value) || 0)}
                       className="pr-7 text-lg font-semibold"
                       data-testid="input-calc-conversion"
