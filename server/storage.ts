@@ -2419,6 +2419,7 @@ class DatabaseStorage implements IStorage {
     return {
       totalRevenue,
       jobsCompleted: filteredJobs.length,
+      jobsWithInvoices: jobsWithRevenue,
       averageJobValue: jobsWithRevenue > 0 ? totalRevenue / jobsWithRevenue : 0,
       totalCosts,
       grossMargin,

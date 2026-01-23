@@ -56,6 +56,7 @@ interface DashboardStats {
 interface RevenueStats {
   totalRevenue: number;
   jobsCompleted: number;
+  jobsWithInvoices: number;
   averageJobValue: number;
   totalCosts: number;
   grossMargin: number;
@@ -681,7 +682,7 @@ export default function MetricsDashboard() {
                 ? `${revenueStats.grossMargin.toFixed(1)}%` 
                 : "0%"}
               subtitle={revenueStats?.jobsWithProfitTracking > 0
-                ? `${formatCurrency(revenueStats.marginRevenue - revenueStats.marginCosts)} profit (${revenueStats.jobsWithProfitTracking} jobs tracked)`
+                ? `${formatCurrency(revenueStats.marginRevenue - revenueStats.marginCosts)} profit (${revenueStats.jobsWithProfitTracking} of ${revenueStats.jobsWithInvoices || 0} jobs tracked)`
                 : "No jobs with cost tracking"}
               icon={TrendingUp}
               testId="card-gross-margin"
