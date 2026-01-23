@@ -2432,7 +2432,8 @@ class DatabaseStorage implements IStorage {
 
   async getQuoteAnalytics(fromDate?: Date, toDate?: Date): Promise<any> {
     // Get all jobs to calculate acceptance based on job status
-    const allJobs = await this.getAllJobs();
+    const jobsResult = await this.getAllJobs({ limit: 10000 });
+    const allJobs = jobsResult.jobs;
     
     // Filter by date if provided (using job creation date)
     let filteredJobs = allJobs.filter(j => !j.archived);
