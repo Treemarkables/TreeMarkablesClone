@@ -131,6 +131,7 @@ export default function MetricsDashboard() {
   
   // Revenue breakdown modal state
   const [revenueBreakdownOpen, setRevenueBreakdownOpen] = useState(false);
+  const [quoteBreakdownOpen, setQuoteBreakdownOpen] = useState(false);
   
   const { toast } = useToast();
 
@@ -680,15 +681,20 @@ export default function MetricsDashboard() {
               testId="card-response-time"
             />
 
-            <MetricCard
-              title="Quote Acceptance"
-              value={quoteAnalytics?.totalQuotes ? 
-                `${((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(1)}%`
-                : "0%"}
-              subtitle={`${quoteAnalytics?.acceptedQuotes || 0} of ${quoteAnalytics?.totalQuotes || 0} jobs accepted`}
-              icon={CheckCircle}
-              testId="card-quote-acceptance"
-            />
+            <div 
+              onClick={() => setQuoteBreakdownOpen(true)}
+              className="cursor-pointer"
+            >
+              <MetricCard
+                title="Quote Acceptance"
+                value={quoteAnalytics?.totalQuotes ? 
+                  `${((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(1)}%`
+                  : "0%"}
+                subtitle="Click to see breakdown"
+                icon={CheckCircle}
+                testId="card-quote-acceptance"
+              />
+            </div>
 
             <MetricCard
               title="Customer Retention"
@@ -1321,6 +1327,109 @@ export default function MetricsDashboard() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Quote Acceptance Breakdown Modal */}
+      <Dialog open={quoteBreakdownOpen} onOpenChange={setQuoteBreakdownOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-primary" />
+              Quote Acceptance Breakdown
+            </DialogTitle>
+            <DialogDescription>
+              Breakdown of job statuses used to calculate your quote acceptance rate
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Summary cards */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-green-700 dark:text-green-400">
+                  {quoteAnalytics?.acceptedQuotes || 0}
+                </div>
+                <div className="text-xs text-green-600 dark:text-green-500">Accepted</div>
+              </div>
+              <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-red-700 dark:text-red-400">
+                  {quoteAnalytics?.rejectedQuotes || 0}
+                </div>
+                <div className="text-xs text-red-600 dark:text-red-500">Rejected</div>
+              </div>
+              <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">
+                  {quoteAnalytics?.pendingQuotes || 0}
+                </div>
+                <div className="text-xs text-yellow-600 dark:text-yellow-500">Pending</div>
+              </div>
+            </div>
+
+            {/* Acceptance rate */}
+            <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 flex justify-between items-center">
+              <span className="font-medium">Quote Acceptance Rate</span>
+              <span className="text-2xl font-bold text-primary">
+                {quoteAnalytics?.totalQuotes ? 
+                  `${((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(1)}%`
+                  : "0%"}
+              </span>
+            </div>
+
+            {/* Status breakdown table */}
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left py-2 px-4 font-medium">Job Status</th>
+                    <th className="text-right py-2 px-4 font-medium">Category</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t">
+                    <td className="py-2 px-4">completed</td>
+                    <td className="py-2 px-4 text-right"><span className="text-green-600 font-medium">ACCEPTED</span></td>
+                  </tr>
+                  <tr className="border-t">
+                    <td className="py-2 px-4">scheduled</td>
+                    <td className="py-2 px-4 text-right"><span className="text-green-600 font-medium">ACCEPTED</span></td>
+                  </tr>
+                  <tr className="border-t">
+                    <td className="py-2 px-4">in_progress</td>
+                    <td className="py-2 px-4 text-right"><span className="text-green-600 font-medium">ACCEPTED</span></td>
+                  </tr>
+                  <tr className="border-t">
+                    <td className="py-2 px-4">invoiced</td>
+                    <td className="py-2 px-4 text-right"><span className="text-green-600 font-medium">ACCEPTED</span></td>
+                  </tr>
+                  <tr className="border-t">
+                    <td className="py-2 px-4">work_order</td>
+                    <td className="py-2 px-4 text-right"><span className="text-green-600 font-medium">ACCEPTED</span></td>
+                  </tr>
+                  <tr className="border-t">
+                    <td className="py-2 px-4">unsuccessful</td>
+                    <td className="py-2 px-4 text-right"><span className="text-red-600 font-medium">REJECTED</span></td>
+                  </tr>
+                  <tr className="border-t">
+                    <td className="py-2 px-4">quote</td>
+                    <td className="py-2 px-4 text-right"><span className="text-yellow-600 font-medium">PENDING</span></td>
+                  </tr>
+                  <tr className="border-t bg-muted/30">
+                    <td className="py-2 px-4 text-muted-foreground">archived</td>
+                    <td className="py-2 px-4 text-right"><span className="text-muted-foreground">EXCLUDED</span></td>
+                  </tr>
+                  <tr className="border-t bg-muted/30">
+                    <td className="py-2 px-4 text-muted-foreground">lead</td>
+                    <td className="py-2 px-4 text-right"><span className="text-muted-foreground">EXCLUDED</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="text-sm text-muted-foreground text-center">
+              Total: {quoteAnalytics?.totalQuotes || 0} quoted jobs ({quoteAnalytics?.acceptedQuotes || 0} accepted + {quoteAnalytics?.rejectedQuotes || 0} rejected + {quoteAnalytics?.pendingQuotes || 0} pending)
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
