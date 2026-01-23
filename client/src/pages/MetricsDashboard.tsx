@@ -320,6 +320,27 @@ export default function MetricsDashboard() {
     }
   });
 
+  // Xero Profit & Loss query
+  const { data: xeroPL, isLoading: xeroPLLoading, error: xeroPLError } = useQuery<{
+    revenue: number;
+    expenses: number;
+    netProfit: number;
+    grossMargin: string | number;
+    sections: { name: string; amount: number; type: 'revenue' | 'expense' }[];
+  }>({
+    queryKey: ['/api/xero/profit-loss', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('fromDate', dateRange.from);
+      if (dateRange?.to) params.append('toDate', dateRange.to);
+      return fetch(`/api/xero/profit-loss?${params}`).then(res => res.json()).then(res => {
+        if (!res.success) throw new Error(res.message);
+        return res.data;
+      });
+    },
+    retry: false
+  });
+
   // Pre-populate calculator with real analytics data when available (only once)
   useEffect(() => {
     // Only pre-populate once when analytics data first becomes available
@@ -852,6 +873,78 @@ export default function MetricsDashboard() {
                   That's <span className="font-semibold text-teal-600">{calcPeriod === "weekly" ? calcQuotesNeeded : Math.ceil(calcQuotesNeeded / 4.33)} quotes/week</span> or <span className="font-semibold text-teal-600">{calcPeriod === "weekly" ? (calcQuotesNeeded / 5).toFixed(1) : (calcQuotesNeeded / 4.33 / 5).toFixed(1)} quotes/day</span> (5-day week)
                 </p>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Xero Profit & Loss Section */}
+        <div className="mb-6">
+          <Card className="border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
+                  Xero Profit & Loss
+                </CardTitle>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Real-time financial data from your Xero account
+              </p>
+            </CardHeader>
+            <CardContent>
+              {xeroPLLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : xeroPLError ? (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                  <p className="text-yellow-800 font-medium">Xero connection required</p>
+                  <p className="text-sm text-yellow-600 mt-1">
+                    Connect to Xero in Settings → Integrations to see your P&L data
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-white/60 rounded-lg p-4 border border-green-200">
+                    <p className="text-sm text-muted-foreground mb-1">Revenue</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {formatCurrency(xeroPL?.revenue || 0)}
+                    </p>
+                  </div>
+                  <div className="bg-white/60 rounded-lg p-4 border border-red-200">
+                    <p className="text-sm text-muted-foreground mb-1">Expenses</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {formatCurrency(xeroPL?.expenses || 0)}
+                    </p>
+                  </div>
+                  <div className={`bg-white/60 rounded-lg p-4 border ${(xeroPL?.netProfit || 0) >= 0 ? 'border-green-300' : 'border-red-300'}`}>
+                    <p className="text-sm text-muted-foreground mb-1">Net Profit</p>
+                    <p className={`text-2xl font-bold ${(xeroPL?.netProfit || 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {formatCurrency(xeroPL?.netProfit || 0)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {xeroPL?.grossMargin || 0}% margin
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Expense Breakdown */}
+              {xeroPL && xeroPL.sections && xeroPL.sections.length > 0 && (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-sm font-medium mb-2">Breakdown by Category</p>
+                  <div className="space-y-2">
+                    {xeroPL.sections.map((section, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">{section.name}</span>
+                        <span className={section.type === 'revenue' ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                          {section.type === 'revenue' ? '+' : '-'}{formatCurrency(section.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
