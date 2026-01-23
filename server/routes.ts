@@ -6717,6 +6717,85 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Revenue breakdown - list of jobs that make up the revenue
+  app.get('/api/revenue-breakdown', async (req: Request, res: Response) => {
+    try {
+      const { from, to } = req.query;
+      
+      let fromDate: Date | undefined;
+      let toDate: Date | undefined;
+      
+      if (from && typeof from === 'string') {
+        fromDate = new Date(from);
+        if (isNaN(fromDate.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid from date format' });
+        }
+      }
+      
+      if (to && typeof to === 'string') {
+        toDate = new Date(to);
+        if (isNaN(toDate.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid to date format' });
+        }
+        toDate.setHours(23, 59, 59, 999);
+      }
+      
+      // Get completed jobs with invoices in the date range
+      const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
+      const allInvoices = await storage.getAllInvoices();
+      const allCustomers = await storage.getAllCustomers();
+      
+      // Create customer map
+      const customerMap = new Map(allCustomers.map(c => [c.id, c]));
+      
+      // Create invoice amount map
+      const jobInvoiceMap = new Map<string, number>();
+      for (const invoice of allInvoices) {
+        if (invoice.status !== 'cancelled' && invoice.jobId) {
+          const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
+          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
+          jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
+        }
+      }
+      
+      // Filter completed jobs by date range
+      let filteredJobs = allJobs.filter(job => job.status === 'completed');
+      if (fromDate || toDate) {
+        filteredJobs = filteredJobs.filter(job => {
+          if (!job.completedDate) return false;
+          const completedDate = new Date(job.completedDate);
+          if (fromDate && completedDate < fromDate) return false;
+          if (toDate && completedDate > toDate) return false;
+          return true;
+        });
+      }
+      
+      // Build breakdown with invoice amounts
+      const breakdown = filteredJobs
+        .map(job => {
+          const invoiceAmount = jobInvoiceMap.get(job.id) || 0;
+          const customer = customerMap.get(job.customerId || '');
+          return {
+            jobNumber: job.jobNumber,
+            jobId: job.id,
+            customerName: customer?.name || 'Unknown',
+            title: job.title || '',
+            completedDate: job.completedDate,
+            invoiceAmount
+          };
+        })
+        .filter(j => j.invoiceAmount > 0)
+        .sort((a, b) => new Date(b.completedDate || 0).getTime() - new Date(a.completedDate || 0).getTime());
+      
+      const total = breakdown.reduce((sum, j) => sum + j.invoiceAmount, 0);
+      
+      res.json({ success: true, data: { breakdown, total } });
+    } catch (error) {
+      console.error('Error fetching revenue breakdown:', error);
+      res.status(500).json({ success: false, message: 'Error fetching revenue breakdown' });
+    }
+  });
+
   app.get('/api/quote-analytics', async (req: Request, res: Response) => {
     try {
       const { fromDate, toDate } = req.query;

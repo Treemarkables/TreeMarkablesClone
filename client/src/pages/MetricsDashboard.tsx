@@ -129,6 +129,9 @@ export default function MetricsDashboard() {
   const [calcQuotesNeeded, setCalcQuotesNeeded] = useState<number>(0);
   const hasPrePopulated = useRef(false);
   
+  // Revenue breakdown modal state
+  const [revenueBreakdownOpen, setRevenueBreakdownOpen] = useState(false);
+  
   const { toast } = useToast();
 
   // Format currency helper
@@ -270,6 +273,21 @@ export default function MetricsDashboard() {
       if (dateRange?.to) params.append('to', dateRange.to);
       return fetch(`/api/revenue-stats?${params}`).then(res => res.json()).then(res => res.data);
     }
+  });
+
+  // Revenue breakdown query - fetches list of jobs that make up the revenue
+  const { data: revenueBreakdown, isLoading: breakdownLoading } = useQuery<{
+    breakdown: { jobNumber: string; jobId: string; customerName: string; title: string; completedDate: string; invoiceAmount: number }[];
+    total: number;
+  }>({
+    queryKey: ['/api/revenue-breakdown', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('from', dateRange.from);
+      if (dateRange?.to) params.append('to', dateRange.to);
+      return fetch(`/api/revenue-breakdown?${params}`).then(res => res.json()).then(res => res.data);
+    },
+    enabled: revenueBreakdownOpen
   });
 
   const { data: quoteAnalytics, isLoading: quotesLoading } = useQuery<QuoteAnalytics>({
@@ -584,14 +602,19 @@ export default function MetricsDashboard() {
           </div>
           
           <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 ${kpiCollapsed ? 'hidden md:grid' : ''}`}>
-            <MetricCard
-              title="Total Revenue"
-              value={formatCurrency(dashboardStats?.totalRevenue || 0)}
-              subtitle="From completed jobs"
-              icon={DollarSign}
-              testId="card-total-revenue"
-              colorful={true}
-            />
+            <div 
+              onClick={() => setRevenueBreakdownOpen(true)}
+              className="cursor-pointer"
+            >
+              <MetricCard
+                title="Total Revenue"
+                value={formatCurrency(dashboardStats?.totalRevenue || 0)}
+                subtitle="Click to see breakdown"
+                icon={DollarSign}
+                testId="card-total-revenue"
+                colorful={true}
+              />
+            </div>
 
             <MetricCard
               title="Active Leads"
@@ -1123,6 +1146,74 @@ export default function MetricsDashboard() {
               Generate Report
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revenue Breakdown Modal */}
+      <Dialog open={revenueBreakdownOpen} onOpenChange={setRevenueBreakdownOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-green-600" />
+              Revenue Breakdown
+            </DialogTitle>
+            <DialogDescription>
+              Jobs that make up your total revenue for the selected date range
+            </DialogDescription>
+          </DialogHeader>
+          
+          {breakdownLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex justify-between items-center">
+                <span className="font-medium text-green-800">Total Revenue</span>
+                <span className="text-2xl font-bold text-green-700">
+                  {formatCurrency(revenueBreakdown?.total || 0)}
+                </span>
+              </div>
+              
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left py-3 px-4 font-medium text-sm">Job #</th>
+                      <th className="text-left py-3 px-4 font-medium text-sm">Customer</th>
+                      <th className="text-left py-3 px-4 font-medium text-sm hidden md:table-cell">Completed</th>
+                      <th className="text-right py-3 px-4 font-medium text-sm">Invoice Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {revenueBreakdown?.breakdown?.map((job) => (
+                      <tr key={job.jobId} className="border-t hover:bg-muted/30">
+                        <td className="py-3 px-4 text-sm font-medium">{job.jobNumber}</td>
+                        <td className="py-3 px-4 text-sm">{job.customerName}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground hidden md:table-cell">
+                          {job.completedDate ? new Date(job.completedDate).toLocaleDateString('en-NZ') : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-right font-medium text-green-600">
+                          {formatCurrency(job.invoiceAmount)}
+                        </td>
+                      </tr>
+                    ))}
+                    {(!revenueBreakdown?.breakdown || revenueBreakdown.breakdown.length === 0) && (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                          No invoiced jobs in this date range
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="text-sm text-muted-foreground text-center">
+                {revenueBreakdown?.breakdown?.length || 0} jobs · Click a row to open the job card (coming soon)
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
