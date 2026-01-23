@@ -685,7 +685,7 @@ export default function MetricsDashboard() {
               value={quoteAnalytics?.totalQuotes ? 
                 `${((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(1)}%`
                 : "0%"}
-              subtitle="Quotes & proposals accepted"
+              subtitle={`${quoteAnalytics?.acceptedQuotes || 0} of ${quoteAnalytics?.totalQuotes || 0} jobs accepted`}
               icon={CheckCircle}
               testId="card-quote-acceptance"
             />
