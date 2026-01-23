@@ -2449,24 +2449,29 @@ class DatabaseStorage implements IStorage {
     }
     
     // Quote Acceptance based on JOB STATUS:
-    // - Accepted = jobs with status: completed, scheduled, in_progress (customer said yes)
-    // - Not Accepted = jobs with status: quote (still pending), unsuccessful (customer said no)
+    // - Accepted = jobs with status: completed, scheduled, in_progress, invoiced, work_order (customer said yes)
     // - Pending = jobs with status: quote (waiting for response)
+    // - Exclude: archived, unsuccessful, lead (these are old/lost or not yet quoted)
     
-    const acceptedStatuses = ['completed', 'scheduled', 'in_progress'];
-    const rejectedStatuses = ['unsuccessful'];
+    const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
     const pendingStatuses = ['quote'];
     
-    // Only count jobs that were quoted (had a quote/proposal stage)
-    const quotedJobs = filteredJobs.filter(j => 
+    // Only count active jobs that are quoted or accepted - exclude archived and unsuccessful
+    const activeJobs = filteredJobs.filter(j => 
+      j.status !== 'archived' && 
+      j.status !== 'unsuccessful' && 
+      j.status !== 'lead'
+    );
+    
+    // Jobs that have been quoted = accepted + pending
+    const quotedJobs = activeJobs.filter(j => 
       acceptedStatuses.includes(j.status || '') || 
-      rejectedStatuses.includes(j.status || '') ||
       pendingStatuses.includes(j.status || '')
     );
     
     const totalQuotes = quotedJobs.length;
     const totalAccepted = quotedJobs.filter(j => acceptedStatuses.includes(j.status || '')).length;
-    const totalRejected = quotedJobs.filter(j => rejectedStatuses.includes(j.status || '')).length;
+    const totalRejected = 0; // We don't track rejections separately from unsuccessful
     const totalPending = quotedJobs.filter(j => pendingStatuses.includes(j.status || '')).length;
     
     return {
