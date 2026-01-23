@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign, MessageSquare, FileDown } from 'lucide-react';
+import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign, MessageSquare, FileDown, Package } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
 import { EmailComposerModal } from '@/components/EmailComposerModal';
@@ -96,6 +97,17 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     },
     enabled: isOpen && !!job.id
   });
+
+  // Fetch materials/services for line item selection
+  const { data: materialsData } = useQuery({
+    queryKey: ['/api/materials'],
+    enabled: isOpen,
+  });
+  const materials = (materialsData as any)?.data || [];
+
+  // Materials dropdown state
+  const [materialsDropdownItemId, setMaterialsDropdownItemId] = useState<string | null>(null);
+  const [materialSearchQuery, setMaterialSearchQuery] = useState('');
 
   // Reset initialization when modal closes so it reloads when reopened
   useEffect(() => {
@@ -972,16 +984,107 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                           </Button>
                         </div>
                         
-                        {/* Description field - full width */}
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1 block">Description</Label>
-                          <Textarea
-                            value={item.description}
-                            onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                            placeholder="Enter item description..."
-                            className="text-sm min-h-[60px] resize-none"
-                            data-testid={`input-item-description-${index}`}
-                          />
+                        {/* Description field with materials dropdown */}
+                        <div className="relative">
+                          <Label className="text-xs text-muted-foreground mb-1 block">Description (type to search materials)</Label>
+                          <div className="relative">
+                            <Input
+                              value={item.description}
+                              onChange={(e) => {
+                                updateLineItem(item.id, 'description', e.target.value);
+                                setMaterialSearchQuery(e.target.value);
+                                setMaterialsDropdownItemId(item.id);
+                              }}
+                              onFocus={() => {
+                                setMaterialsDropdownItemId(item.id);
+                                setMaterialSearchQuery(item.description);
+                              }}
+                              onBlur={(e) => {
+                                setTimeout(() => {
+                                  if (!e.relatedTarget?.closest('[data-materials-dropdown]')) {
+                                    setMaterialsDropdownItemId(null);
+                                    setMaterialSearchQuery('');
+                                  }
+                                }, 150);
+                              }}
+                              placeholder="Type to search materials or enter custom description..."
+                              className="text-sm pr-8"
+                              data-testid={`input-item-description-${index}`}
+                            />
+                            <Package className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          </div>
+                          
+                          {/* Materials dropdown */}
+                          {materialsDropdownItemId === item.id && (
+                            <div 
+                              data-materials-dropdown
+                              className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto"
+                            >
+                              {materials.length === 0 ? (
+                                <div className="p-3 text-sm text-muted-foreground text-center">
+                                  No materials found. Add items in Settings &gt; Materials.
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="p-2 border-b bg-muted/30">
+                                    <span className="text-xs font-medium text-muted-foreground">Select from Materials & Services</span>
+                                  </div>
+                                  {materials
+                                    .filter((m: any) => 
+                                      !materialSearchQuery || 
+                                      m.name?.toLowerCase().includes(materialSearchQuery.toLowerCase()) ||
+                                      m.itemNumber?.toString().includes(materialSearchQuery)
+                                    )
+                                    .slice(0, 10)
+                                    .map((material: any) => (
+                                      <div
+                                        key={material.id}
+                                        className="flex items-center justify-between p-2 hover:bg-accent cursor-pointer border-b last:border-b-0"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          const price = typeof material.price === 'string' ? parseFloat(material.price) : material.price || 0;
+                                          // Update this line item with material data
+                                          setLineItems(prev => prev.map(li => 
+                                            li.id === item.id 
+                                              ? { 
+                                                  ...li, 
+                                                  description: material.name || `Item #${material.itemNumber}`,
+                                                  unitPrice: price,
+                                                  quantity: li.quantity || 1,
+                                                  total: (li.quantity || 1) * price,
+                                                  category: material.category === 'Labour' ? 'labor_chargeout' : 
+                                                           material.category === 'Equipment' ? 'equipment' : 
+                                                           material.category === 'Materials' ? 'materials' : li.category
+                                                }
+                                              : li
+                                          ));
+                                          setMaterialsDropdownItemId(null);
+                                          setMaterialSearchQuery('');
+                                        }}
+                                        data-testid={`material-option-${material.id}`}
+                                      >
+                                        <div className="flex flex-col">
+                                          <span className="text-sm font-medium">{material.name}</span>
+                                          <span className="text-xs text-muted-foreground">#{material.itemNumber} · {material.category || 'Uncategorized'}</span>
+                                        </div>
+                                        <Badge variant="secondary" className="ml-2">
+                                          ${typeof material.price === 'string' ? parseFloat(material.price).toFixed(2) : (material.price || 0).toFixed(2)}
+                                        </Badge>
+                                      </div>
+                                    ))}
+                                  {materials.filter((m: any) => 
+                                    !materialSearchQuery || 
+                                    m.name?.toLowerCase().includes(materialSearchQuery.toLowerCase()) ||
+                                    m.itemNumber?.toString().includes(materialSearchQuery)
+                                  ).length === 0 && (
+                                    <div className="p-3 text-sm text-muted-foreground text-center">
+                                      No matching materials. You can still type a custom description.
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                         
                         {/* Quantity, Unit Price, and Total in a row */}
