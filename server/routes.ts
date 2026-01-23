@@ -6674,6 +6674,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         if (isNaN(toDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid toDate format' });
         }
+        // Set to end of day to include all activity that day
+        toDateObj.setHours(23, 59, 59, 999);
       }
       
       const stats = await storage.getDashboardStats(fromDateObj, toDateObj);
@@ -6703,6 +6705,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         if (isNaN(toDate.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid to date format' });
         }
+        // Set to end of day to include jobs completed any time that day
+        toDate.setHours(23, 59, 59, 999);
       }
       
       const stats = await storage.getRevenueStats(fromDate, toDate);
@@ -6732,6 +6736,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         if (isNaN(toDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid toDate format' });
         }
+        // Set to end of day to include all activity that day
+        toDateObj.setHours(23, 59, 59, 999);
       }
       
       const analytics = await storage.getQuoteAnalytics(fromDateObj, toDateObj);
@@ -6762,6 +6768,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         if (isNaN(toDate.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid to date format' });
         }
+        // Set to end of day to include all activity that day
+        toDate.setHours(23, 59, 59, 999);
       }
       
       const metrics = await manHoursService.getOverallEstimationMetrics(fromDate, toDate);
@@ -6829,6 +6837,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         if (isNaN(toDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid toDate format' });
         }
+        // Set to end of day to include all activity that day
+        toDateObj.setHours(23, 59, 59, 999);
       }
       
       const sourceAnalysis = await storage.getLeadSourceAnalysis(fromDateObj, toDateObj);
