@@ -2592,7 +2592,10 @@ class DatabaseStorage implements IStorage {
           totalCosts: 0,
           totalProfit: 0,
           jobIds: new Set(),
-          quotedJobIds: new Set()
+          quotedJobIds: new Set(),
+          jobsWithCostData: 0,
+          revenueWithCostData: 0,
+          profitWithCostData: 0
         });
       });
 
@@ -2610,7 +2613,10 @@ class DatabaseStorage implements IStorage {
           totalCosts: 0,
           totalProfit: 0,
           jobIds: new Set(),
-          quotedJobIds: new Set()
+          quotedJobIds: new Set(),
+          jobsWithCostData: 0,
+          revenueWithCostData: 0,
+          profitWithCostData: 0
         };
 
         // Get revenue from invoice amount (only invoices within date range are in the map)
@@ -2646,6 +2652,13 @@ class DatabaseStorage implements IStorage {
             
             existing.totalCosts += totalCosts;
             existing.totalProfit += (invoiceRevenue - totalCosts);
+            
+            // Only track jobs with actual cost data for margin calculation
+            if (totalCosts > 0) {
+              existing.jobsWithCostData++;
+              existing.revenueWithCostData += invoiceRevenue;
+              existing.profitWithCostData += (invoiceRevenue - totalCosts);
+            }
           }
         } else if (!fromDate && !toDate) {
           // No date filter - count all non-archived jobs
@@ -2683,7 +2696,10 @@ class DatabaseStorage implements IStorage {
 
         // Average values
         const averageValue = wonCount > 0 ? totalRevenue / wonCount : 0;
-        const averageProfitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+        // Only calculate margin from jobs with actual cost data (excludes jobs with $0 costs)
+        const revenueWithCostData = data.revenueWithCostData || 0;
+        const profitWithCostData = data.profitWithCostData || 0;
+        const averageProfitMargin = revenueWithCostData > 0 ? (profitWithCostData / revenueWithCostData) * 100 : 0;
 
         // ROI calculation (assuming some marketing cost - this can be made configurable)
         const estimatedMarketingCost = count * 10; // $10 per lead as placeholder
