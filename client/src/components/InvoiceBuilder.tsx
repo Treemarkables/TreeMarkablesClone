@@ -932,26 +932,27 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span>Equipment</span>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {lineItems.map((item, index) => (
-                      <div key={item.id} className={`bg-white p-3 rounded border space-y-2 border-l-4 ${
-                        item.category === 'labor_fixed' ? 'border-l-blue-500' :
-                        item.category === 'labor_chargeout' ? 'border-l-green-500' :
-                        item.category === 'materials' ? 'border-l-orange-500' :
-                        item.category === 'equipment' ? 'border-l-purple-500' :
-                        'border-l-gray-300'
-                      }`}>
-                        {/* Category row */}
-                        <div className="flex items-center gap-2 mb-2">
+                      <div key={item.id} className="bg-muted/30 rounded-lg border p-3 space-y-3">
+                        {/* Header row with category badge and delete button */}
+                        <div className="flex items-center justify-between gap-2">
                           <Select
                             value={item.category || 'other'}
                             onValueChange={(value) => updateLineItem(item.id, 'category', value)}
                           >
-                            <SelectTrigger className="w-40 h-8 text-xs">
+                            <SelectTrigger className={`w-auto h-7 text-xs px-2 border-0 ${
+                              item.category === 'labor_fixed' ? 'bg-blue-100 text-blue-700' :
+                              item.category === 'labor_chargeout' ? 'bg-green-100 text-green-700' :
+                              item.category === 'materials' ? 'bg-orange-100 text-orange-700' :
+                              item.category === 'equipment' ? 'bg-purple-100 text-purple-700' :
+                              item.category === 'disposal' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
                               <SelectValue placeholder="Category" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="labor_fixed">Labour (Fixed Price)</SelectItem>
+                              <SelectItem value="labor_fixed">Labour (Fixed)</SelectItem>
                               <SelectItem value="labor_chargeout">Labour (Charge-out)</SelectItem>
                               <SelectItem value="materials">Materials</SelectItem>
                               <SelectItem value="equipment">Equipment</SelectItem>
@@ -959,57 +960,63 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                               <SelectItem value="other">Other</SelectItem>
                             </SelectContent>
                           </Select>
-                          <div className="flex-1" />
-                          {lineItems.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeLineItem(item.id)}
-                              className="h-8 w-8"
-                              data-testid={`button-remove-item-${index}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
-                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeLineItem(item.id)}
+                            className="h-7 w-7 p-0"
+                            data-testid={`button-remove-item-${index}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-red-600" />
+                          </Button>
                         </div>
-                        {/* Mobile: Stack vertically, Desktop: Grid layout */}
-                        <div className="flex flex-col sm:grid sm:grid-cols-12 gap-2 sm:items-center">
-                          <div className="sm:col-span-6">
+                        
+                        {/* Description field - full width */}
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-1 block">Description</Label>
+                          <Textarea
+                            value={item.description}
+                            onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                            placeholder="Enter item description..."
+                            className="text-sm min-h-[60px] resize-none"
+                            data-testid={`input-item-description-${index}`}
+                          />
+                        </div>
+                        
+                        {/* Quantity, Unit Price, and Total in a row */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">
+                              {item.category?.startsWith('labor') ? 'Hours' : 'Qty'}
+                            </Label>
                             <Input
-                              value={item.description}
-                              onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                              placeholder="Description"
-                              className="text-sm w-full"
-                              data-testid={`input-item-description-${index}`}
+                              type="number"
+                              value={item.quantity || ''}
+                              onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                              placeholder="0"
+                              className="text-sm"
+                              data-testid={`input-item-quantity-${index}`}
                             />
                           </div>
-                          <div className="flex gap-2 sm:contents">
-                            <div className="flex-1 sm:col-span-2">
-                              <Input
-                                type="number"
-                                value={item.quantity}
-                                onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                placeholder={item.category?.startsWith('labor') ? 'Hours' : 'Qty'}
-                                className="text-sm w-full"
-                                data-testid={`input-item-quantity-${index}`}
-                              />
-                            </div>
-                            <div className="flex-1 sm:col-span-2">
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={item.unitPrice}
-                                onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                placeholder={item.category?.startsWith('labor') ? 'Rate/hr' : 'Price'}
-                                className="text-sm w-full"
-                                data-testid={`input-item-price-${index}`}
-                              />
-                            </div>
-                            <div className="flex-1 sm:col-span-2 flex items-center justify-end">
-                              <div className="text-sm font-medium text-gray-700">
-                                ${item.total.toFixed(2)}
-                              </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">
+                              {item.category?.startsWith('labor') ? 'Rate/hr' : 'Unit Price'}
+                            </Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={item.unitPrice || ''}
+                              onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                              placeholder="0.00"
+                              className="text-sm"
+                              data-testid={`input-item-price-${index}`}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Total</Label>
+                            <div className="h-9 flex items-center px-3 bg-muted rounded-md text-sm font-semibold">
+                              ${item.total.toFixed(2)}
                             </div>
                           </div>
                         </div>
