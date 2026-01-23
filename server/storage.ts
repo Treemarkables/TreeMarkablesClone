@@ -2431,57 +2431,42 @@ class DatabaseStorage implements IStorage {
   }
 
   async getQuoteAnalytics(fromDate?: Date, toDate?: Date): Promise<any> {
-    // Get all quotes and proposals (excluding drafts)
-    const allQuotes = await this.getAllQuotes();
-    const allProposals = await this.getAllProposals();
+    // Get all jobs to calculate acceptance based on job status
+    const allJobs = await this.getAllJobs();
     
-    // Filter by date if provided
-    let filteredQuotes = allQuotes;
-    let filteredProposals = allProposals;
+    // Filter by date if provided (using job creation date)
+    let filteredJobs = allJobs.filter(j => !j.archived);
     
     if (fromDate || toDate) {
-      filteredQuotes = allQuotes.filter(q => {
-        if (!q.createdAt) return false;
-        const quoteDate = new Date(q.createdAt);
-        if (fromDate && quoteDate < fromDate) return false;
-        if (toDate && quoteDate > toDate) return false;
-        return true;
-      });
-      
-      filteredProposals = allProposals.filter(p => {
-        if (!p.createdAt) return false;
-        const proposalDate = new Date(p.createdAt);
-        if (fromDate && proposalDate < fromDate) return false;
-        if (toDate && proposalDate > toDate) return false;
+      filteredJobs = filteredJobs.filter(j => {
+        if (!j.createdAt) return false;
+        const jobDate = new Date(j.createdAt);
+        if (fromDate && jobDate < fromDate) return false;
+        if (toDate && jobDate > toDate) return false;
         return true;
       });
     }
     
-    // Filter out drafts - only count sent quotes/proposals
-    const sentQuotes = filteredQuotes.filter(q => q.status !== 'draft');
-    const sentProposals = filteredProposals.filter(p => p.status !== 'draft');
+    // Quote Acceptance based on JOB STATUS:
+    // - Accepted = jobs with status: completed, scheduled, in_progress (customer said yes)
+    // - Not Accepted = jobs with status: quote (still pending), unsuccessful (customer said no)
+    // - Pending = jobs with status: quote (waiting for response)
     
-    // Count total sent (quotes + proposals)
-    const totalQuotes = sentQuotes.length + sentProposals.length;
+    const acceptedStatuses = ['completed', 'scheduled', 'in_progress'];
+    const rejectedStatuses = ['unsuccessful'];
+    const pendingStatuses = ['quote'];
     
-    // Count accepted
-    const acceptedQuotes = sentQuotes.filter(q => q.status === 'accepted').length;
-    const acceptedProposals = sentProposals.filter(p => p.status === 'accepted').length;
-    const totalAccepted = acceptedQuotes + acceptedProposals;
+    // Only count jobs that were quoted (had a quote/proposal stage)
+    const quotedJobs = filteredJobs.filter(j => 
+      acceptedStatuses.includes(j.status || '') || 
+      rejectedStatuses.includes(j.status || '') ||
+      pendingStatuses.includes(j.status || '')
+    );
     
-    // Count rejected
-    const rejectedQuotes = sentQuotes.filter(q => q.status === 'rejected').length;
-    const rejectedProposals = sentProposals.filter(p => p.status === 'rejected').length;
-    const totalRejected = rejectedQuotes + rejectedProposals;
-    
-    // Count pending (sent but not accepted/rejected)
-    const pendingQuotes = sentQuotes.filter(q => 
-      q.status !== 'accepted' && q.status !== 'rejected'
-    ).length;
-    const pendingProposals = sentProposals.filter(p => 
-      p.status !== 'accepted' && p.status !== 'rejected'
-    ).length;
-    const totalPending = pendingQuotes + pendingProposals;
+    const totalQuotes = quotedJobs.length;
+    const totalAccepted = quotedJobs.filter(j => acceptedStatuses.includes(j.status || '')).length;
+    const totalRejected = quotedJobs.filter(j => rejectedStatuses.includes(j.status || '')).length;
+    const totalPending = quotedJobs.filter(j => pendingStatuses.includes(j.status || '')).length;
     
     return {
       totalQuotes,
