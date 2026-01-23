@@ -199,30 +199,57 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           </div>
 
           {/* Description */}
-          <div className="mb-4">
-            <h2 className="text-xs font-semibold text-black mb-2">Description</h2>
-            <div className="space-y-2">
-              {/* Invoice-level description (use description prop OR invoice.notes, not both to avoid duplication) */}
-              {(description || invoice.notes) && (
-                <div className="text-xs text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-description">
-                  <LinkifiedText text={description || invoice.notes || ''} />
-                </div>
-              )}
-              
-              {/* Line items */}
-              {hasLineItems && (
-                <div className="space-y-1 mt-2">
-                  {lineItems.map((item, index) => (
-                    <div key={item.id} className="py-1 border-b border-gray-100 last:border-0" data-testid={`row-line-item-${index}`}>
-                      <p className="text-xs text-black">
-                        <LinkifiedText text={item.description} />
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
+          {(description || invoice.notes) && (
+            <div className="mb-4">
+              <h2 className="text-xs font-semibold text-black mb-2">Description</h2>
+              <div className="text-xs text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-description">
+                <LinkifiedText text={description || invoice.notes || ''} />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Line Items Table */}
+          {hasLineItems && (
+            <div className="mb-4">
+              <h2 className="text-xs font-semibold text-black mb-2">Services & Pricing</h2>
+              <div className="w-full overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="border border-gray-200 px-2 py-2 text-left text-xs font-semibold text-gray-900">Service</th>
+                      <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-900 w-16">Qty</th>
+                      <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900 w-20">Rate</th>
+                      <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900 w-20">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lineItems.map((item, index) => {
+                      const qty = item.quantity || 1;
+                      const rate = item.unitPrice || item.rate || 0;
+                      const itemTotal = item.total || item.amount || (qty * rate);
+                      
+                      return (
+                        <tr key={item.id} className="even:bg-gray-50" data-testid={`row-line-item-${index}`}>
+                          <td className="border border-gray-200 px-2 py-2 text-xs text-gray-900">
+                            <LinkifiedText text={item.description} />
+                          </td>
+                          <td className="border border-gray-200 px-2 py-2 text-xs text-center text-gray-900">
+                            {qty}
+                          </td>
+                          <td className="border border-gray-200 px-2 py-2 text-xs text-right text-gray-900">
+                            {formatCurrency(rate)}
+                          </td>
+                          <td className="border border-gray-200 px-2 py-2 text-xs text-right font-medium text-gray-900">
+                            {formatCurrency(typeof itemTotal === 'string' ? parseFloat(itemTotal) : itemTotal)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Totals */}
           <div className="pt-3 border-t border-gray-200">
