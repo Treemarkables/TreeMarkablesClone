@@ -609,4 +609,155 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       });
     }
   });
+
+  // Get Profit & Loss report from Xero
+  app.get('/api/xero/profit-loss', async (req: Request, res: Response) => {
+    try {
+      const { fromDate, toDate } = req.query;
+      
+      // Get active connection
+      const connection = await storage.getActiveXeroConnection();
+      if (!connection) {
+        return res.status(401).json({
+          success: false,
+          message: 'No active Xero connection. Please connect to Xero first.'
+        });
+      }
+
+      // Refresh token if needed
+      const now = new Date();
+      if (connection.expiresAt && new Date(connection.expiresAt) < now) {
+        console.log('🔄 Refreshing Xero access token...');
+        const tokenSet = await xeroClient.getClientCredentialsToken();
+        await xeroClient.setTokenSet(tokenSet);
+        
+        const expiresAt = new Date();
+        expiresAt.setSeconds(expiresAt.getSeconds() + (tokenSet.expires_in || 1800));
+        
+        await storage.updateXeroConnection(connection.tenantId, {
+          accessToken: tokenSet.access_token!,
+          expiresAt,
+        });
+      } else {
+        await xeroClient.setTokenSet({
+          access_token: connection.accessToken,
+          token_type: 'Bearer',
+        });
+      }
+
+      // Get the tenant ID - for Custom Connections, get it from organisations
+      const orgsResponse = await xeroClient.accountingApi.getOrganisations('');
+      const tenantId = orgsResponse.body.organisations?.[0]?.organisationID;
+      
+      if (!tenantId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Could not find Xero organisation'
+        });
+      }
+
+      // Build date params for P&L report
+      const from = fromDate ? String(fromDate) : undefined;
+      const to = toDate ? String(toDate) : undefined;
+
+      // Fetch Profit & Loss report
+      const reportResponse = await xeroClient.accountingApi.getReportProfitAndLoss(
+        tenantId,
+        from,  // fromDate
+        to,    // toDate
+        undefined, // periods
+        undefined, // timeframe
+        undefined, // trackingCategoryID
+        undefined, // trackingCategoryID2
+        undefined, // trackingOptionID
+        undefined, // trackingOptionID2
+        undefined  // standardLayout
+      );
+
+      const report = reportResponse.body.reports?.[0];
+      
+      if (!report) {
+        return res.json({
+          success: true,
+          data: {
+            revenue: 0,
+            expenses: 0,
+            netProfit: 0,
+            sections: []
+          }
+        });
+      }
+
+      // Parse the P&L report rows
+      let totalRevenue = 0;
+      let totalExpenses = 0;
+      let netProfit = 0;
+      const sections: { name: string; amount: number; type: 'revenue' | 'expense' }[] = [];
+
+      // Process report rows
+      for (const row of report.rows || []) {
+        if (row.rowType === 'Section') {
+          const sectionTitle = row.title || '';
+          let sectionTotal = 0;
+
+          // Get section total from rows
+          for (const subRow of row.rows || []) {
+            if (subRow.rowType === 'SummaryRow' || subRow.rowType === 'Row') {
+              const cells = subRow.cells || [];
+              const amountCell = cells[cells.length - 1]; // Last cell is usually the amount
+              const amount = parseFloat(amountCell?.value || '0');
+              
+              if (subRow.rowType === 'SummaryRow') {
+                sectionTotal = amount;
+              }
+            }
+          }
+
+          // Categorize sections
+          if (sectionTitle.toLowerCase().includes('income') || sectionTitle.toLowerCase().includes('revenue')) {
+            totalRevenue += Math.abs(sectionTotal);
+            if (sectionTotal !== 0) {
+              sections.push({ name: sectionTitle, amount: Math.abs(sectionTotal), type: 'revenue' });
+            }
+          } else if (sectionTitle.toLowerCase().includes('expense') || sectionTitle.toLowerCase().includes('cost')) {
+            totalExpenses += Math.abs(sectionTotal);
+            if (sectionTotal !== 0) {
+              sections.push({ name: sectionTitle, amount: Math.abs(sectionTotal), type: 'expense' });
+            }
+          }
+        }
+      }
+
+      netProfit = totalRevenue - totalExpenses;
+
+      res.json({
+        success: true,
+        data: {
+          revenue: totalRevenue,
+          expenses: totalExpenses,
+          netProfit,
+          grossMargin: totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0,
+          sections,
+          reportDate: report.reportDate,
+          fromDate: from,
+          toDate: to
+        }
+      });
+    } catch (error: any) {
+      console.error('Error fetching Xero P&L:', error);
+      
+      // Check for auth errors
+      if (error.response?.statusCode === 401 || error.response?.statusCode === 403) {
+        return res.status(401).json({
+          success: false,
+          message: 'Xero authentication expired. Please reconnect to Xero.'
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch Profit & Loss report from Xero'
+      });
+    }
+  });
 }
