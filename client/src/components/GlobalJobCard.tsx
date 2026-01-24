@@ -2855,6 +2855,55 @@ export function GlobalJobCard({
                                 </FormItem>
                               )}
                             />
+                            
+                            {/* Unsuccessful Reason - Only show when status is unsuccessful */}
+                            {form.watch('status') === 'unsuccessful' && (
+                              <div className="mt-3 space-y-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                                <FormField
+                                  control={form.control}
+                                  name="unsuccessfulReason"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <label className="text-xs font-medium text-orange-700 mb-1 block">Reason for Unsuccessful</label>
+                                      <FormControl>
+                                        <Select value={field.value || ""} onValueChange={field.onChange}>
+                                          <SelectTrigger className="h-9 text-base md:text-sm bg-white">
+                                            <SelectValue placeholder="Select reason" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="price_too_high">Price too high</SelectItem>
+                                            <SelectItem value="went_competitor">Went with competitor</SelectItem>
+                                            <SelectItem value="changed_mind">Customer changed mind</SelectItem>
+                                            <SelectItem value="no_longer_needed">Job no longer needed</SelectItem>
+                                            <SelectItem value="scheduling">Couldn't schedule suitable time</SelectItem>
+                                            <SelectItem value="no_response">No response from customer</SelectItem>
+                                            <SelectItem value="scope_change">Scope changed beyond capabilities</SelectItem>
+                                            <SelectItem value="other">Other</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="unsuccessfulNotes"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <label className="text-xs font-medium text-orange-700 mb-1 block">Additional Notes (optional)</label>
+                                      <FormControl>
+                                        <Textarea 
+                                          {...field} 
+                                          value={field.value || ''}
+                                          className="min-h-[60px] text-sm bg-white" 
+                                          placeholder="Any additional details about why this job didn't proceed..."
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            )}
                           </div>
                           <div>
                             <label className="text-xs font-medium text-gray-600 mb-1 block">Lead Source</label>
