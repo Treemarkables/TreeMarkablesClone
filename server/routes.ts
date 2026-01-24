@@ -12545,6 +12545,133 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Get service-level performance analytics (revenue and margin by service/material)
+  app.get('/api/analytics/service-performance', async (req: Request, res: Response) => {
+    try {
+      // Get all paid invoices and completed jobs for revenue/margin analysis
+      const allInvoices = await storage.getAllInvoices();
+      const paidInvoices = allInvoices.filter(inv => inv.status === 'paid');
+      
+      // Get materials/services for name lookup
+      const materials = await storage.getAllMaterials();
+      const services = await storage.getAllServices();
+      
+      // Create lookup maps for quick reference
+      const materialMap = new Map(materials.map(m => [m.id, m]));
+      const serviceMap = new Map(services.map(s => [s.id, s]));
+      
+      // Aggregate by service/material from invoice line items
+      const servicePerformance: Record<string, {
+        id: string;
+        name: string;
+        type: 'material' | 'service';
+        category: string;
+        totalRevenue: number;
+        totalCost: number;
+        totalQuantity: number;
+        invoiceCount: number;
+        grossMargin: number;
+        marginPercentage: number;
+      }> = {};
+      
+      // Also track performance from all invoices (not just paid)
+      for (const invoice of allInvoices) {
+        const items = invoice.items as any[];
+        if (!items || !Array.isArray(items)) continue;
+        
+        for (const item of items) {
+          // Try to identify the service/material from the item
+          let id = item.serviceId || item.materialId;
+          let name = item.description || 'Unknown';
+          let type: 'material' | 'service' = item.serviceId ? 'service' : 'material';
+          let category = item.category || 'other';
+          
+          // Look up actual name from material/service tables
+          if (item.serviceId && serviceMap.has(item.serviceId)) {
+            const service = serviceMap.get(item.serviceId)!;
+            name = service.name;
+            category = service.category || category;
+            type = 'service';
+          } else if (item.materialId && materialMap.has(item.materialId)) {
+            const material = materialMap.get(item.materialId)!;
+            name = material.name;
+            category = material.category || category;
+            type = 'material';
+          }
+          
+          // Use description as fallback ID if no service/material ID
+          if (!id) {
+            // Normalize description to create a pseudo-ID
+            id = `desc:${(item.description || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '-')}`;
+            type = 'service'; // Assume service for unlinked items
+          }
+          
+          const quantity = parseFloat(item.quantity?.toString() || '1');
+          const revenue = parseFloat(item.amount?.toString() || item.total?.toString() || '0');
+          const unitCost = parseFloat(item.unitCost?.toString() || '0');
+          const totalCost = unitCost * quantity;
+          
+          if (!servicePerformance[id]) {
+            servicePerformance[id] = {
+              id,
+              name,
+              type,
+              category,
+              totalRevenue: 0,
+              totalCost: 0,
+              totalQuantity: 0,
+              invoiceCount: 0,
+              grossMargin: 0,
+              marginPercentage: 0
+            };
+          }
+          
+          // Only count revenue from paid invoices
+          if (invoice.status === 'paid') {
+            servicePerformance[id].totalRevenue += revenue;
+            servicePerformance[id].totalCost += totalCost;
+            servicePerformance[id].totalQuantity += quantity;
+            servicePerformance[id].invoiceCount += 1;
+          }
+        }
+      }
+      
+      // Calculate margins
+      const performanceArray = Object.values(servicePerformance)
+        .filter(item => item.totalRevenue > 0 || item.invoiceCount > 0) // Only include items with data
+        .map(item => {
+          item.grossMargin = item.totalRevenue - item.totalCost;
+          item.marginPercentage = item.totalRevenue > 0 
+            ? ((item.totalRevenue - item.totalCost) / item.totalRevenue) * 100 
+            : 0;
+          return item;
+        })
+        .sort((a, b) => b.totalRevenue - a.totalRevenue); // Sort by revenue descending
+      
+      // Summary stats
+      const totalRevenue = performanceArray.reduce((sum, item) => sum + item.totalRevenue, 0);
+      const totalCost = performanceArray.reduce((sum, item) => sum + item.totalCost, 0);
+      const overallMargin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0;
+      
+      res.json({ 
+        success: true, 
+        data: {
+          services: performanceArray,
+          summary: {
+            totalRevenue,
+            totalCost,
+            grossMargin: totalRevenue - totalCost,
+            marginPercentage: overallMargin,
+            servicesTracked: performanceArray.length
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error generating service performance analytics:', error);
+      res.status(500).json({ success: false, message: 'Error generating service analytics' });
+    }
+  });
+
   // Export analytics data as CSV
   app.get('/api/analytics/export/:type', async (req: Request, res: Response) => {
     try {
