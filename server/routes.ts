@@ -12689,10 +12689,10 @@ Transcription: ${transcriptText}`;
   // Unsuccessful jobs analytics - breakdown by reason
   app.get('/api/analytics/unsuccessful-jobs', async (req: Request, res: Response) => {
     try {
-      const jobs = await storage.getAllJobs();
+      const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
       
       // Filter to only unsuccessful jobs
-      const unsuccessfulJobs = jobs.filter(job => job.status === 'unsuccessful');
+      const unsuccessfulJobs = allJobs.filter(job => job.status === 'unsuccessful');
       
       // Reason labels for display
       const reasonLabels: Record<string, string> = {
