@@ -2166,6 +2166,9 @@ export const invoiceLineItems = pgTable("invoice_line_items", {
   category: text("category"), // labor_fixed, labor_chargeout, materials, equipment, disposal, etc.
   laborType: text("labor_type", { enum: ['fixed', 'chargeout'] }), // For labor items: fixed price or charge-out rate
   employeeId: varchar("employee_id").references(() => employees.id), // Link to employee for labor items
+  serviceId: varchar("service_id"), // Link to service for margin tracking (e.g., "Stump Grinding")
+  materialId: varchar("material_id"), // Link to material for margin tracking
+  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }), // Cost per unit for margin calculation
   notes: text("notes"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
