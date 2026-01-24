@@ -449,6 +449,11 @@ export const jobs = pgTable("jobs", {
   xeroStatus: text("xero_status"), // pending, sent, error
   sentToXeroDate: timestamp("sent_to_xero_date"),
   
+  // Unsuccessful Job Tracking
+  unsuccessfulReason: text("unsuccessful_reason"), // price_too_high, went_competitor, changed_mind, no_longer_needed, scheduling, other
+  unsuccessfulNotes: text("unsuccessful_notes"), // Additional notes explaining why job was unsuccessful
+  unsuccessfulDate: timestamp("unsuccessful_date"), // When the job was marked unsuccessful
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastActivityAt: timestamp("last_activity_at"),
