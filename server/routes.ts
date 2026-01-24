@@ -3258,6 +3258,20 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
 
+      // Set unsuccessfulDate when status changes to 'unsuccessful'
+      if (validation.data.status === 'unsuccessful' && oldJob?.status !== 'unsuccessful') {
+        (validation.data as any).unsuccessfulDate = new Date();
+        console.log(`📉 Job ${req.params.id} marked as unsuccessful with reason: ${validation.data.unsuccessfulReason || 'not specified'}`);
+      }
+      
+      // Clear unsuccessful data if status changes away from 'unsuccessful'
+      if (oldJob?.status === 'unsuccessful' && validation.data.status && validation.data.status !== 'unsuccessful') {
+        (validation.data as any).unsuccessfulReason = null;
+        (validation.data as any).unsuccessfulNotes = null;
+        (validation.data as any).unsuccessfulDate = null;
+        console.log(`🔄 Clearing unsuccessful data for job ${req.params.id} - status changing to ${validation.data.status}`);
+      }
+
       // Debug logging for job update
       console.log('🔍 JOB UPDATE SERVER DEBUG:', {
         jobId: req.params.id,
