@@ -164,7 +164,11 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           quantity: parseFloat(item.quantity || '1'),
           unitPrice: parseFloat(item.rate || item.unitPrice || '0'),
           total: parseFloat(item.amount || item.total || '0'),
-          unit: item.unit || 'each'
+          unit: item.unit || 'each',
+          category: item.category,
+          serviceId: item.serviceId,
+          materialId: item.materialId,
+          unitCost: item.unitCost ? parseFloat(item.unitCost) : undefined
         }));
         setLineItems(convertedItems);
       }

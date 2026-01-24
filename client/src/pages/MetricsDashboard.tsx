@@ -90,6 +90,30 @@ interface LeadSourceData {
   roi: number;
 }
 
+interface ServicePerformance {
+  id: string;
+  name: string;
+  type: 'material' | 'service';
+  category: string;
+  totalRevenue: number;
+  totalCost: number;
+  totalQuantity: number;
+  invoiceCount: number;
+  grossMargin: number;
+  marginPercentage: number;
+}
+
+interface ServicePerformanceData {
+  services: ServicePerformance[];
+  summary: {
+    totalRevenue: number;
+    totalCost: number;
+    grossMargin: number;
+    marginPercentage: number;
+    servicesTracked: number;
+  };
+}
+
 interface ManHoursMetrics {
   totalJobs: number;
   jobsWithEstimates: number;
@@ -109,6 +133,7 @@ interface ManHoursMetrics {
 export default function MetricsDashboard() {
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
   const [manHoursCollapsed, setManHoursCollapsed] = useState(false);
+  const [servicePerformanceCollapsed, setServicePerformanceCollapsed] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [customReportDialog, setCustomReportDialog] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<string>("");
@@ -319,6 +344,12 @@ export default function MetricsDashboard() {
       if (dateRange?.to) params.append('to', dateRange.to);
       return fetch(`/api/man-hours-metrics?${params}`).then(res => res.json()).then(res => res.data);
     }
+  });
+
+  // Service Performance query
+  const { data: servicePerformanceData, isLoading: servicePerformanceLoading } = useQuery<ServicePerformanceData>({
+    queryKey: ['/api/analytics/service-performance'],
+    queryFn: () => fetch('/api/analytics/service-performance').then(res => res.json()).then(res => res.data)
   });
 
   // Xero Profit & Loss query
@@ -1196,6 +1227,115 @@ export default function MetricsDashboard() {
               ) : (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground">No lead source data available for the selected period</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Service Performance Section */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-blue-600" />
+                Service Performance
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setServicePerformanceCollapsed(!servicePerformanceCollapsed)}
+                className="md:hidden"
+              >
+                {servicePerformanceCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              </Button>
+            </CardHeader>
+            <CardContent className={servicePerformanceCollapsed ? 'hidden md:block' : ''}>
+              {servicePerformanceLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">Loading service performance data...</p>
+                </div>
+              ) : servicePerformanceData && servicePerformanceData.services && servicePerformanceData.services.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <p className="text-sm text-muted-foreground">Total Revenue</p>
+                      <p className="text-2xl font-bold text-green-600">{formatCurrency(servicePerformanceData.summary.totalRevenue)}</p>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <p className="text-sm text-muted-foreground">Total Costs</p>
+                      <p className="text-2xl font-bold text-red-600">{formatCurrency(servicePerformanceData.summary.totalCost)}</p>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <p className="text-sm text-muted-foreground">Gross Margin</p>
+                      <p className="text-2xl font-bold text-blue-600">{formatCurrency(servicePerformanceData.summary.grossMargin)}</p>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <p className="text-sm text-muted-foreground">Margin %</p>
+                      <p className={`text-2xl font-bold ${servicePerformanceData.summary.marginPercentage > 40 ? 'text-green-600' : servicePerformanceData.summary.marginPercentage > 20 ? 'text-yellow-600' : 'text-orange-600'}`}>
+                        {servicePerformanceData.summary.marginPercentage.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Services Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-3 px-4 font-medium">Service / Material</th>
+                          <th className="text-right py-3 px-4 font-medium">Revenue</th>
+                          <th className="text-right py-3 px-4 font-medium">Costs</th>
+                          <th className="text-right py-3 px-4 font-medium">Margin</th>
+                          <th className="text-right py-3 px-4 font-medium">Margin %</th>
+                          <th className="text-right py-3 px-4 font-medium">Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {servicePerformanceData.services.slice(0, 15).map((service: ServicePerformance, index: number) => (
+                          <tr key={service.id} className={index % 2 === 0 ? 'bg-muted/20' : ''}>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{service.name}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${service.type === 'service' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                                  {service.type}
+                                </span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">{service.category}</span>
+                            </td>
+                            <td className="text-right py-3 px-4 text-green-600 font-medium">
+                              {formatCurrency(service.totalRevenue)}
+                            </td>
+                            <td className="text-right py-3 px-4 text-red-600">
+                              {formatCurrency(service.totalCost)}
+                            </td>
+                            <td className="text-right py-3 px-4 font-medium">
+                              {formatCurrency(service.grossMargin)}
+                            </td>
+                            <td className="text-right py-3 px-4">
+                              <span className={`font-medium ${service.marginPercentage > 50 ? 'text-green-600' : service.marginPercentage > 25 ? 'text-yellow-600' : 'text-orange-600'}`}>
+                                {service.marginPercentage.toFixed(1)}%
+                              </span>
+                            </td>
+                            <td className="text-right py-3 px-4 text-muted-foreground">
+                              {service.totalQuantity.toFixed(1)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Note about data tracking */}
+                  <div className="mt-4 text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg">
+                    <p><strong>Note:</strong> Margin data is calculated from paid invoices. For accurate margins, ensure costs are entered in Settings → Materials & Services, and link invoice items to their corresponding services.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No service performance data available yet.</p>
+                  <p className="text-sm text-muted-foreground mt-2">Create invoices with linked services/materials to track their performance.</p>
                 </div>
               )}
             </CardContent>
