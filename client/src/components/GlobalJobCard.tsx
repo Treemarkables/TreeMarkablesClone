@@ -2679,7 +2679,7 @@ export function GlobalJobCard({
                                             <CommandItem
                                               key={customer.id}
                                               value={customer.id}
-                                              onSelect={() => {
+                                              onSelect={async () => {
                                                 field.onChange(customer.id);
                                                 form.setValue('isNewCustomer', false);
                                                 setSelectedCustomerName(customer.name);
@@ -2693,6 +2693,17 @@ export function GlobalJobCard({
                                                 form.setValue('jobContactEmail', customer.email || '');
                                                 form.setValue('jobContactPhone', customer.phone || '');
                                                 form.setValue('address', customer.address || '');
+                                                
+                                                // Check if customer has previous jobs - if so, set lead source to "repeat"
+                                                try {
+                                                  const response = await fetch(`/api/jobs?customerId=${customer.id}&limit=1`);
+                                                  const result = await response.json();
+                                                  if (result.success && result.data && result.data.length > 0) {
+                                                    form.setValue('leadSource', 'repeat');
+                                                  }
+                                                } catch (error) {
+                                                  console.warn('Could not check for previous customer jobs:', error);
+                                                }
                                                 
                                                 setCustomerSearchOpen(false);
                                               }}
