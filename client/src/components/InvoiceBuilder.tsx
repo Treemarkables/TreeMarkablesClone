@@ -30,6 +30,9 @@ interface InvoiceLineItem {
   unitPrice: number;
   total: number;
   category?: string; // labor_fixed, labor_chargeout, materials, equipment, disposal, other
+  materialId?: string; // Link to material for margin tracking
+  serviceId?: string; // Link to service for margin tracking
+  unitCost?: number; // Cost per unit for margin calculation
 }
 
 interface CreatedInvoice {
@@ -459,7 +462,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         quantity: item.quantity,
         rate: item.unitPrice,
         amount: item.total,
-        category: item.category || 'other'
+        category: item.category || 'other',
+        materialId: item.materialId,
+        serviceId: item.serviceId,
+        unitCost: item.unitCost
       }));
 
       const res = await apiRequest('POST', `/api/jobs/${job.id}/convert-to-invoice`, {
@@ -1043,6 +1049,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                                         onMouseDown={(e) => {
                                           e.preventDefault();
                                           const price = typeof material.price === 'string' ? parseFloat(material.price) : material.price || 0;
+                                          const cost = typeof material.cost === 'string' ? parseFloat(material.cost) : material.cost || 0;
+                                          // Determine if this is a material or a service based on the category/type
+                                          const isService = material.category === 'Labour' || material.basePrice !== undefined;
                                           // Update this line item with material data
                                           setLineItems(prev => prev.map(li => 
                                             li.id === item.id 
@@ -1054,7 +1063,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                                                   total: (li.quantity || 1) * price,
                                                   category: material.category === 'Labour' ? 'labor_chargeout' : 
                                                            material.category === 'Equipment' ? 'equipment' : 
-                                                           material.category === 'Materials' ? 'materials' : li.category
+                                                           material.category === 'Materials' ? 'materials' : li.category,
+                                                  materialId: !isService ? material.id : undefined,
+                                                  serviceId: isService ? material.id : undefined,
+                                                  unitCost: cost
                                                 }
                                               : li
                                           ));
