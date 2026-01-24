@@ -12686,6 +12686,115 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Unsuccessful jobs analytics - breakdown by reason
+  app.get('/api/analytics/unsuccessful-jobs', async (req: Request, res: Response) => {
+    try {
+      const jobs = await storage.getAllJobs();
+      
+      // Filter to only unsuccessful jobs
+      const unsuccessfulJobs = jobs.filter(job => job.status === 'unsuccessful');
+      
+      // Reason labels for display
+      const reasonLabels: Record<string, string> = {
+        'price_too_high': 'Price too high',
+        'went_competitor': 'Went with competitor',
+        'changed_mind': 'Customer changed mind',
+        'no_longer_needed': 'Job no longer needed',
+        'scheduling': 'Scheduling issues',
+        'no_response': 'No response from customer',
+        'scope_change': 'Scope changed',
+        'other': 'Other',
+        'unspecified': 'Not specified'
+      };
+      
+      // Group by reason
+      const reasonCounts: Record<string, number> = {};
+      const reasonValues: Record<string, number> = {}; // Potential revenue lost
+      const recentUnsuccessful: any[] = [];
+      
+      unsuccessfulJobs.forEach(job => {
+        const reason = job.unsuccessfulReason || 'unspecified';
+        reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+        
+        // Add up potential revenue lost (from quotes/line items)
+        const jobValue = parseFloat(job.totalAmount || '0') || parseFloat(job.totalIncludingGst || '0') || 0;
+        reasonValues[reason] = (reasonValues[reason] || 0) + jobValue;
+        
+        // Track recent unsuccessful jobs (last 30 days)
+        if (job.unsuccessfulDate) {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          if (new Date(job.unsuccessfulDate) > thirtyDaysAgo) {
+            recentUnsuccessful.push({
+              id: job.id,
+              jobNumber: job.jobNumber,
+              title: job.title,
+              reason: job.unsuccessfulReason,
+              reasonLabel: reasonLabels[job.unsuccessfulReason || 'unspecified'] || job.unsuccessfulReason,
+              notes: job.unsuccessfulNotes,
+              date: job.unsuccessfulDate,
+              potentialValue: jobValue
+            });
+          }
+        }
+      });
+      
+      // Calculate monthly trends (last 6 months)
+      const monthlyTrends: { month: string; count: number; value: number }[] = [];
+      const now = new Date();
+      
+      for (let i = 5; i >= 0; i--) {
+        const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+        const monthName = monthStart.toLocaleString('en-NZ', { month: 'short', year: '2-digit' });
+        
+        const monthJobs = unsuccessfulJobs.filter(job => {
+          if (!job.unsuccessfulDate) return false;
+          const date = new Date(job.unsuccessfulDate);
+          return date >= monthStart && date <= monthEnd;
+        });
+        
+        const totalValue = monthJobs.reduce((sum, job) => {
+          return sum + (parseFloat(job.totalAmount || '0') || parseFloat(job.totalIncludingGst || '0') || 0);
+        }, 0);
+        
+        monthlyTrends.push({
+          month: monthName,
+          count: monthJobs.length,
+          value: totalValue
+        });
+      }
+      
+      // Build response with breakdown by reason
+      const byReason = Object.keys(reasonLabels).filter(key => reasonCounts[key] > 0).map(reason => ({
+        reason,
+        label: reasonLabels[reason] || reason,
+        count: reasonCounts[reason] || 0,
+        potentialRevenueLost: reasonValues[reason] || 0,
+        percentage: unsuccessfulJobs.length > 0 
+          ? Math.round((reasonCounts[reason] || 0) / unsuccessfulJobs.length * 100) 
+          : 0
+      })).sort((a, b) => b.count - a.count);
+      
+      // Calculate totals
+      const totalPotentialRevenueLost = Object.values(reasonValues).reduce((sum, val) => sum + val, 0);
+      
+      res.json({
+        success: true,
+        data: {
+          totalUnsuccessful: unsuccessfulJobs.length,
+          totalPotentialRevenueLost,
+          byReason,
+          monthlyTrends,
+          recentUnsuccessful: recentUnsuccessful.slice(0, 10) // Last 10 recent ones
+        }
+      });
+    } catch (error) {
+      console.error('Error generating unsuccessful jobs analytics:', error);
+      res.status(500).json({ success: false, message: 'Error generating unsuccessful jobs analytics' });
+    }
+  });
+
   // Export analytics data as CSV
   app.get('/api/analytics/export/:type', async (req: Request, res: Response) => {
     try {
