@@ -11,6 +11,7 @@ import {
   CheckCircle,
   Users,
   TrendingUp,
+  TrendingDown,
   FileText,
   Download,
   ChevronDown,
@@ -18,7 +19,8 @@ import {
   BarChart3,
   Send,
   Calendar,
-  Calculator
+  Calculator,
+  Loader2
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +38,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip
+} from 'recharts';
 
 interface DashboardStats {
   totalLeads: number;
@@ -350,6 +359,39 @@ export default function MetricsDashboard() {
   const { data: servicePerformanceData, isLoading: servicePerformanceLoading } = useQuery<ServicePerformanceData>({
     queryKey: ['/api/analytics/service-performance'],
     queryFn: () => fetch('/api/analytics/service-performance').then(res => res.json()).then(res => res.data)
+  });
+
+  // Unsuccessful Jobs Analytics query
+  interface UnsuccessfulJobsData {
+    totalUnsuccessful: number;
+    totalPotentialRevenueLost: number;
+    byReason: {
+      reason: string;
+      label: string;
+      count: number;
+      potentialRevenueLost: number;
+      percentage: number;
+    }[];
+    monthlyTrends: {
+      month: string;
+      count: number;
+      value: number;
+    }[];
+    recentUnsuccessful: {
+      id: string;
+      jobNumber: string;
+      title: string;
+      reason: string;
+      reasonLabel: string;
+      notes: string;
+      date: string;
+      potentialValue: number;
+    }[];
+  }
+  
+  const { data: unsuccessfulJobsData, isLoading: unsuccessfulJobsLoading } = useQuery<UnsuccessfulJobsData>({
+    queryKey: ['/api/analytics/unsuccessful-jobs'],
+    queryFn: () => fetch('/api/analytics/unsuccessful-jobs').then(res => res.json()).then(res => res.data)
   });
 
   // Xero Profit & Loss query
@@ -1336,6 +1378,195 @@ export default function MetricsDashboard() {
                 <div className="text-center py-8">
                   <p className="text-muted-foreground">No service performance data available yet.</p>
                   <p className="text-sm text-muted-foreground mt-2">Create invoices with linked services/materials to track their performance.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Unsuccessful Jobs Analysis Section */}
+        <div className="col-span-full">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                <TrendingDown className="h-5 w-5 text-orange-600" />
+                Unsuccessful Jobs Analysis
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {unsuccessfulJobsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="text-muted-foreground ml-2">Loading unsuccessful jobs data...</p>
+                </div>
+              ) : unsuccessfulJobsData && unsuccessfulJobsData.totalUnsuccessful > 0 ? (
+                <div className="space-y-6">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                      <p className="text-sm text-orange-700">Total Unsuccessful</p>
+                      <p className="text-2xl font-bold text-orange-600">{unsuccessfulJobsData.totalUnsuccessful}</p>
+                    </div>
+                    <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                      <p className="text-sm text-red-700">Potential Revenue Lost</p>
+                      <p className="text-2xl font-bold text-red-600">{formatCurrency(unsuccessfulJobsData.totalPotentialRevenueLost)}</p>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <p className="text-sm text-blue-700">Top Reason</p>
+                      <p className="text-lg font-bold text-blue-600">{unsuccessfulJobsData.byReason[0]?.label || 'N/A'}</p>
+                      <p className="text-sm text-blue-500">{unsuccessfulJobsData.byReason[0]?.percentage || 0}% of cases</p>
+                    </div>
+                  </div>
+
+                  {/* Reasons Breakdown with Pie Chart */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Pie Chart */}
+                    <div>
+                      <h4 className="font-medium mb-3">Reasons Distribution</h4>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <PieChart>
+                          <Pie
+                            data={unsuccessfulJobsData.byReason.map((item, index) => ({
+                              name: item.label,
+                              value: item.count,
+                              color: ['#f97316', '#ef4444', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#6366f1'][index % 8]
+                            }))}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                            outerRadius={80}
+                            fill="#f97316"
+                            dataKey="value"
+                          >
+                            {unsuccessfulJobsData.byReason.map((_, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={['#f97316', '#ef4444', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#6366f1'][index % 8]} 
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(value: number) => [`${value} jobs`, 'Count']}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      {/* Legend */}
+                      <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                        {unsuccessfulJobsData.byReason.slice(0, 6).map((item, index) => (
+                          <div key={item.reason} className="flex items-center gap-1 text-xs">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: ['#f97316', '#ef4444', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#6366f1'][index % 8] }}
+                            />
+                            <span>{item.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Detailed Breakdown */}
+                    <div>
+                      <h4 className="font-medium mb-3">Detailed Breakdown</h4>
+                      <div className="space-y-3">
+                        {unsuccessfulJobsData.byReason.map((item) => (
+                          <div key={item.reason} className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-medium">{item.label}</span>
+                                <span className="text-sm text-muted-foreground">{item.count} jobs ({item.percentage}%)</span>
+                              </div>
+                              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                                  style={{ width: `${item.percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="text-right min-w-[80px]">
+                              <span className="text-xs text-red-600">{formatCurrency(item.potentialRevenueLost)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Monthly Trends */}
+                  <div>
+                    <h4 className="font-medium mb-3">Monthly Trends (Last 6 Months)</h4>
+                    <div className="grid grid-cols-6 gap-2">
+                      {unsuccessfulJobsData.monthlyTrends.map((month) => (
+                        <div key={month.month} className="text-center">
+                          <div className="bg-muted/30 rounded-lg p-3">
+                            <p className="text-xs text-muted-foreground mb-1">{month.month}</p>
+                            <p className="text-lg font-bold text-orange-600">{month.count}</p>
+                            <p className="text-xs text-muted-foreground">{formatCurrency(month.value)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Recent Unsuccessful Jobs */}
+                  {unsuccessfulJobsData.recentUnsuccessful.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-3">Recent Unsuccessful Jobs (Last 30 Days)</h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-2 px-3">Job #</th>
+                              <th className="text-left py-2 px-3">Title</th>
+                              <th className="text-left py-2 px-3">Reason</th>
+                              <th className="text-right py-2 px-3">Value</th>
+                              <th className="text-left py-2 px-3">Notes</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {unsuccessfulJobsData.recentUnsuccessful.slice(0, 5).map((job) => (
+                              <tr key={job.id} className="border-b hover:bg-muted/20">
+                                <td className="py-2 px-3 font-medium">{job.jobNumber}</td>
+                                <td className="py-2 px-3">{job.title || 'Untitled'}</td>
+                                <td className="py-2 px-3">
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-700">
+                                    {job.reasonLabel}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3 text-right text-red-600">{formatCurrency(job.potentialValue)}</td>
+                                <td className="py-2 px-3 text-muted-foreground text-xs max-w-[200px] truncate">{job.notes || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Insights */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <h4 className="font-medium text-amber-800 mb-2">Insights</h4>
+                    <ul className="text-sm text-amber-700 space-y-1">
+                      {unsuccessfulJobsData.byReason[0]?.reason === 'price_too_high' && (
+                        <li>Price is the top reason for lost jobs - consider reviewing your pricing strategy or improving value communication.</li>
+                      )}
+                      {unsuccessfulJobsData.byReason[0]?.reason === 'went_competitor' && (
+                        <li>Customers are going to competitors - analyze what differentiates you and improve competitive positioning.</li>
+                      )}
+                      {unsuccessfulJobsData.byReason[0]?.reason === 'no_response' && (
+                        <li>Many customers aren't responding - consider follow-up improvements or faster quote turnaround.</li>
+                      )}
+                      {unsuccessfulJobsData.byReason[0]?.reason === 'scheduling' && (
+                        <li>Scheduling is a barrier - consider expanding availability or offering more flexible booking options.</li>
+                      )}
+                      <li>Total potential revenue lost: {formatCurrency(unsuccessfulJobsData.totalPotentialRevenueLost)} - focus on converting the top reasons to recover some of this.</li>
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No unsuccessful jobs recorded yet.</p>
+                  <p className="text-sm text-muted-foreground mt-2">When jobs are marked as unsuccessful, their reasons will appear here for analysis.</p>
                 </div>
               )}
             </CardContent>
