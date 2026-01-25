@@ -20,7 +20,8 @@ import {
   Send,
   Calendar,
   Calculator,
-  Loader2
+  Loader2,
+  Briefcase
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -814,6 +815,14 @@ export default function MetricsDashboard() {
               testId="card-gross-margin"
               colorful={true}
               valueColor={revenueStats?.grossMargin !== undefined && revenueStats.grossMargin >= 0 ? "text-green-600" : "text-red-600"}
+            />
+
+            <MetricCard
+              title="Jobs Completed"
+              value={revenueStats?.jobsCompleted || 0}
+              subtitle="Completed in period"
+              icon={Briefcase}
+              testId="card-jobs-completed"
             />
           </div>
         </div>
