@@ -519,6 +519,76 @@ export function JobDiarySection({
     return photos;
   }, [diaryEntries]);
 
+  // Group consecutive photo entries for compact display
+  interface GroupedEntry {
+    type: 'single' | 'photo_group';
+    entries: DiaryEntry[];
+    timestamp: string;
+    author: string;
+  }
+
+  const groupedEntries = React.useMemo(() => {
+    const groups: GroupedEntry[] = [];
+    let currentPhotoGroup: DiaryEntry[] = [];
+    
+    diaryEntries.forEach((entry, index) => {
+      const isPhotoEntry = entry.type === 'photo' || (entry.photoUrl && entry.content.toLowerCase().includes('photo'));
+      
+      if (isPhotoEntry) {
+        currentPhotoGroup.push(entry);
+        
+        // Check if next entry is also a photo (within 5 minutes)
+        const nextEntry = diaryEntries[index + 1];
+        const nextIsPhoto = nextEntry && (nextEntry.type === 'photo' || (nextEntry.photoUrl && nextEntry.content.toLowerCase().includes('photo')));
+        const withinTimeWindow = nextEntry && 
+          Math.abs(new Date(entry.timestamp).getTime() - new Date(nextEntry.timestamp).getTime()) < 5 * 60 * 1000;
+        
+        if (!nextIsPhoto || !withinTimeWindow) {
+          // End of photo group
+          if (currentPhotoGroup.length > 0) {
+            groups.push({
+              type: 'photo_group',
+              entries: [...currentPhotoGroup],
+              timestamp: currentPhotoGroup[0].timestamp,
+              author: currentPhotoGroup[0].author
+            });
+            currentPhotoGroup = [];
+          }
+        }
+      } else {
+        // Flush any pending photo group
+        if (currentPhotoGroup.length > 0) {
+          groups.push({
+            type: 'photo_group',
+            entries: [...currentPhotoGroup],
+            timestamp: currentPhotoGroup[0].timestamp,
+            author: currentPhotoGroup[0].author
+          });
+          currentPhotoGroup = [];
+        }
+        // Add single entry
+        groups.push({
+          type: 'single',
+          entries: [entry],
+          timestamp: entry.timestamp,
+          author: entry.author
+        });
+      }
+    });
+    
+    // Flush any remaining photo group
+    if (currentPhotoGroup.length > 0) {
+      groups.push({
+        type: 'photo_group',
+        entries: [...currentPhotoGroup],
+        timestamp: currentPhotoGroup[0].timestamp,
+        author: currentPhotoGroup[0].author
+      });
+    }
+    
+    return groups;
+  }, [diaryEntries]);
+
   // Function to handle opening proposals from diary entries
   const handleOpenProposal = async (proposalNumber: string) => {
     if (onProposalClick) {
@@ -875,8 +945,89 @@ export function JobDiarySection({
             <div className="text-xs text-muted-foreground">No entries yet</div>
           </div>
         ) : (
-          <div className="space-y-4 p-2 pr-4">
-            {diaryEntries.map((entry) => {
+          <div className="space-y-3 p-2 pr-4">
+            {groupedEntries.map((group, groupIndex) => {
+              // Photo group rendering
+              if (group.type === 'photo_group') {
+                const photos = group.entries.filter(e => e.photoUrl);
+                return (
+                  <div key={`photo-group-${groupIndex}`} className="group" data-testid="diary-photo-group">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center">
+                            <Camera className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">
+                              {photos.length} Photo{photos.length > 1 ? 's' : ''} added
+                            </span>
+                            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400">
+                              <Clock className="w-2.5 h-2.5" />
+                              {formatInTimeZone(new Date(group.timestamp), 'Pacific/Auckland', 'h:mm a dd/MM/yy')}
+                              <span className="mx-0.5">·</span>
+                              <User className="w-2.5 h-2.5" />
+                              {group.author}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete ${photos.length} photo${photos.length > 1 ? 's' : ''}?`)) {
+                              photos.forEach(p => deleteEntryMutation.mutate(p.id));
+                            }
+                          }}
+                          data-testid="button-delete-photo-group"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      {/* Photo Grid */}
+                      <div className={`p-2 grid gap-1.5 ${
+                        photos.length === 1 ? 'grid-cols-1' :
+                        photos.length === 2 ? 'grid-cols-2' :
+                        photos.length <= 4 ? 'grid-cols-2' :
+                        'grid-cols-3'
+                      }`}>
+                        {photos.map((photo, photoIndex) => (
+                          <div 
+                            key={photo.id} 
+                            className={`relative rounded-lg overflow-hidden cursor-pointer hover-elevate ${
+                              photos.length === 1 ? 'aspect-video' :
+                              photos.length === 3 && photoIndex === 0 ? 'row-span-2 aspect-square' :
+                              'aspect-square'
+                            }`}
+                            onClick={() => {
+                              const idx = allPhotos.indexOf(photo.photoUrl || '');
+                              setViewingPhotoIndex(idx >= 0 ? idx : 0);
+                            }}
+                          >
+                            <img 
+                              src={photo.photoUrl} 
+                              alt="Job photo" 
+                              className="w-full h-full object-cover"
+                              onError={(e) => e.currentTarget.style.display = 'none'}
+                            />
+                            {photos.length > 4 && photoIndex === 3 && photos.length > 4 && (
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                <span className="text-white font-semibold text-lg">+{photos.length - 4}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Single entry rendering
+              const entry = group.entries[0];
               const docInfo = extractDocumentInfo(entry);
               const isClickable = docInfo && (
                 (docInfo.type === 'quote' && onQuoteClick) ||
@@ -961,80 +1112,87 @@ export function JobDiarySection({
                   messageText = messageText.trim();
                 }
                 
-                // Check if we need date separator
-                const currentIndex = diaryEntries.findIndex((e) => e.id === entry.id);
-                const previousEntry = currentIndex > 0 ? diaryEntries[currentIndex - 1] : null;
-                const showDateSeparator = !previousEntry || 
-                  formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'yyyy-MM-dd') !== formatInTimeZone(new Date(previousEntry.timestamp), 'Pacific/Auckland', 'yyyy-MM-dd') ||
-                  (previousEntry.type !== 'sms' && previousEntry.type !== 'email');
-                
                 return (
-                  <div key={entry.id}>
-                    {showDateSeparator && (
-                      <div className="flex justify-center my-0.5">
-                        <span className="text-[7px] text-gray-500 bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded-full">
-                          {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'EEEE h:mma').toLowerCase()}
-                        </span>
-                      </div>
-                    )}
-                    
-                    <div className="flex justify-start mb-0.5 group">
-                      <div className="relative max-w-[90%]">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="absolute top-0 -right-4 h-3 w-3 opacity-0 md:group-hover:opacity-100 md:opacity-0 opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('Delete this message?')) {
-                              deleteEntryMutation.mutate(entry.id);
-                            }
-                          }}
-                          data-testid={`button-delete-${entry.type}-${entry.id}`}
-                        >
-                          <Trash2 className="w-1.5 h-1.5 text-gray-400 hover:text-red-600" />
-                        </Button>
-                        
-                        <div className={`rounded-lg px-1.5 py-1 rounded-bl-sm ${
-                          isSent 
-                            ? entry.type === 'email' 
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-green-500 text-white'
-                            : 'bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100'
-                        }`}>
-                          {/* Show recipient for sent messages */}
-                          {isSent && recipientInfo && (
-                            <div className="text-[10px] opacity-80 mb-0.5 border-b border-white/20 pb-0.5">
-                              To: {recipientInfo}
-                            </div>
+                  <div key={entry.id} className="group">
+                    <div className={`rounded-xl overflow-hidden shadow-sm ${
+                      isSent 
+                        ? entry.type === 'email' 
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-green-500 text-white'
+                        : 'bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800'
+                    }`}>
+                      {/* Header */}
+                      <div className={`flex items-center justify-between px-3 py-1.5 ${
+                        isSent 
+                          ? 'border-b border-white/10'
+                          : 'border-b border-purple-200 dark:border-purple-800'
+                      }`}>
+                        <div className="flex items-center gap-1.5">
+                          {entry.type === 'email' ? (
+                            <MdEmail className={`w-3.5 h-3.5 ${isSent ? 'text-white/80' : 'text-purple-600 dark:text-purple-400'}`} />
+                          ) : (
+                            <MessageSquare className={`w-3.5 h-3.5 ${isSent ? 'text-white/80' : 'text-purple-600 dark:text-purple-400'}`} />
                           )}
-                          <p className="text-[11px] leading-tight whitespace-pre-wrap break-words">{messageText}</p>
-                        </div>
-                        
-                        {/* Timestamp for all messages */}
-                        <div className="flex items-center gap-1 mt-0.5 justify-start">
-                          <span className="text-[10px] text-gray-400">
-                            {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'MMM dd, h:mma').toLowerCase()}
+                          <span className={`text-[10px] ${isSent ? 'text-white/80' : 'text-purple-600 dark:text-purple-400'}`}>
+                            {isSent ? (recipientInfo ? `To: ${recipientInfo}` : 'Sent') : 'Received'}
                           </span>
                         </div>
-                        
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] ${isSent ? 'text-white/70' : 'text-purple-500 dark:text-purple-400'}`}>
+                            {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'h:mm a')}
+                          </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className={`h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity ${
+                              isSent ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950'
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm('Delete this message?')) {
+                                deleteEntryMutation.mutate(entry.id);
+                              }
+                            }}
+                            data-testid={`button-delete-${entry.type}-${entry.id}`}
+                          >
+                            <Trash2 className="w-2.5 h-2.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      {/* Content */}
+                      <div className="px-3 py-2">
+                        <p className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${
+                          isSent ? 'text-white' : 'text-purple-900 dark:text-purple-100'
+                        }`}>
+                          {messageText}
+                        </p>
+                      </div>
+                      {/* Footer with tracking and reply */}
+                      <div className={`px-3 py-1.5 flex items-center justify-between gap-2 ${
+                        isSent 
+                          ? 'border-t border-white/10'
+                          : 'border-t border-purple-200 dark:border-purple-800'
+                      }`}>
                         {/* Email tracking for sent emails */}
-                        {isSent && entry.type === 'email' && entry.metadata?.sendgridMessageId && (
+                        {isSent && entry.type === 'email' && entry.metadata?.sendgridMessageId ? (
                           <EmailActivity messageId={entry.metadata.sendgridMessageId} />
+                        ) : (
+                          <div />
                         )}
                         
                         {/* Reply button for received messages */}
                         {!isSent && (
-                          <div className="mt-0.5 flex items-center gap-1">
+                          <div className="flex items-center gap-1">
                             {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-6 text-[11px] px-2"
+                                className={`h-6 text-[10px] px-2 ${
+                                  isSent ? 'text-white/80 hover:text-white hover:bg-white/10' : 'text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800'
+                                }`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
-                                  // Extract subject from email title or content field
                                   const originalSubject = entry.content || entry.title.replace('Email from ', '').replace('Email sent: ', '');
                                   setReplyToEmail(replyEmail);
                                   setReplySubject(originalSubject);
@@ -1050,7 +1208,9 @@ export function JobDiarySection({
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-6 text-[11px] px-2"
+                                className={`h-6 text-[10px] px-2 ${
+                                  isSent ? 'text-white/80 hover:text-white hover:bg-white/10' : 'text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800'
+                                }`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const replyPhone = entry.metadata?.phoneNumber || '';
@@ -1071,65 +1231,87 @@ export function JobDiarySection({
                 );
               }
               
+              // Get entry-specific styling
+              const getEntryStyle = (type: string) => {
+                switch (type) {
+                  case 'note': return { bg: 'bg-yellow-50 dark:bg-yellow-900/20', border: 'border-yellow-200 dark:border-yellow-800', icon: 'bg-yellow-100 dark:bg-yellow-900/50' };
+                  case 'proposal': return { bg: 'bg-indigo-50 dark:bg-indigo-900/20', border: 'border-indigo-200 dark:border-indigo-800', icon: 'bg-indigo-100 dark:bg-indigo-900/50' };
+                  case 'job_event': return { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800', icon: 'bg-green-100 dark:bg-green-900/50' };
+                  case 'call': return { bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-800', icon: 'bg-orange-100 dark:bg-orange-900/50' };
+                  default: return { bg: 'bg-gray-50 dark:bg-gray-800', border: 'border-gray-200 dark:border-gray-700', icon: 'bg-gray-100 dark:bg-gray-900/50' };
+                }
+              };
+              const entryStyle = getEntryStyle(entry.type);
+              
               return (
-                <div key={entry.id} className="flex gap-3" data-testid={`diary-entry-${entry.type}`}>
-                  {/* Icon */}
-                  <div className="flex items-start justify-center pt-1 flex-shrink-0">
-                    {getEntryIcon(entry.type, docInfo)}
-                  </div>
-                  
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div 
-                      className={`bg-white dark:bg-gray-800 rounded-lg p-2 shadow-sm border ${isClickable ? 'cursor-pointer hover-elevate active-elevate-2' : ''}`}
-                      onClick={isClickable ? handleEntryClick : undefined}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-1 ml-auto">
-                          {entry.type === 'note' && editingEntryId !== entry.id && (
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-5 w-5"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingEntryId(entry.id);
-                                setEditingContent(entry.content);
-                              }}
-                              data-testid={`button-edit-entry-${entry.id}`}
-                            >
-                              <Edit className="w-2.5 h-2.5" />
-                            </Button>
-                          )}
-                          {editingEntryId !== entry.id && entry.metadata?.isDeletable !== false && (
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-5 w-5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm('Are you sure you want to delete this entry?')) {
-                                  deleteEntryMutation.mutate(entry.id);
-                                }
-                              }}
-                              data-testid={`button-delete-entry-${entry.id}`}
-                            >
-                              <Trash2 className="w-2.5 h-2.5" />
-                            </Button>
-                          )}
+                <div key={entry.id} className="group" data-testid={`diary-entry-${entry.type}`}>
+                  <div 
+                    className={`rounded-xl overflow-hidden shadow-sm border ${entryStyle.border} ${entryStyle.bg} ${isClickable ? 'cursor-pointer hover-elevate active-elevate-2' : ''}`}
+                    onClick={isClickable ? handleEntryClick : undefined}
+                  >
+                    {/* Header */}
+                    <div className={`flex items-center justify-between px-3 py-2 border-b ${entryStyle.border}`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-6 h-6 rounded-full ${entryStyle.icon} flex items-center justify-center flex-shrink-0`}>
+                          {entry.type === 'note' && <MdStickyNote2 className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />}
+                          {entry.type === 'proposal' && <Presentation className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />}
+                          {entry.type === 'job_event' && <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />}
+                          {entry.type === 'call' && <Phone className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />}
+                          {!['note', 'proposal', 'job_event', 'call'].includes(entry.type) && <FileText className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />}
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-900 dark:text-gray-100">
+                            {entry.type === 'note' ? 'Note' : 
+                             entry.type === 'proposal' ? 'Proposal' : 
+                             entry.type === 'job_event' ? 'Event' : 
+                             entry.type === 'call' ? 'Call' : 'Entry'}
+                          </span>
+                          <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400">
+                            <Clock className="w-2.5 h-2.5" />
+                            {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'h:mm a dd/MM/yy')}
+                            <span className="mx-0.5">·</span>
+                            <User className="w-2.5 h-2.5" />
+                            {entry.author}
+                          </div>
                         </div>
                       </div>
-                      
-                      <div className="text-[10px] text-muted-foreground mb-1 flex items-center gap-2 flex-wrap">
-                        <span className="flex items-center gap-0.5 whitespace-nowrap">
-                          <Clock className="w-2.5 h-2.5 flex-shrink-0" />
-                          {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'h:mm a dd/MM/yy')}
-                        </span>
-                        <span className="flex items-center gap-0.5 truncate min-w-0">
-                          <User className="w-2.5 h-2.5 flex-shrink-0" />
-                          <span className="truncate">{entry.author}</span>
-                        </span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {entry.type === 'note' && editingEntryId !== entry.id && (
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingEntryId(entry.id);
+                              setEditingContent(entry.content);
+                            }}
+                            data-testid={`button-edit-entry-${entry.id}`}
+                          >
+                            <Edit className="w-3 h-3" />
+                          </Button>
+                        )}
+                        {editingEntryId !== entry.id && entry.metadata?.isDeletable !== false && (
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm('Are you sure you want to delete this entry?')) {
+                                deleteEntryMutation.mutate(entry.id);
+                              }
+                            }}
+                            data-testid={`button-delete-entry-${entry.id}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        )}
                       </div>
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="px-3 py-2">
                       
                       {editingEntryId === entry.id ? (
                         <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
