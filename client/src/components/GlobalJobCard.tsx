@@ -139,7 +139,8 @@ export function GlobalJobCard({
   const [customerSearchValue, setCustomerSearchValue] = useState("");
   const [selectedCustomerName, setSelectedCustomerName] = useState("");
   const [hasUserSelectedCustomer, setHasUserSelectedCustomer] = useState(false); // Track if user explicitly selected customer
-  const { toast } = useToast();
+  const { toast: _originalToast } = useToast();
+  const toast = () => {}; // Disabled - user preference: no toast notifications
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { isAdmin } = useAuth();
