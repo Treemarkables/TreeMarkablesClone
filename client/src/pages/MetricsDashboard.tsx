@@ -81,9 +81,9 @@ interface QuoteAnalytics {
   acceptedQuotes: number;
   rejectedQuotes: number;
   pendingQuotes: number;
-  acceptedJobCards?: number[];
-  rejectedJobCards?: number[];
-  pendingJobCards?: number[];
+  acceptedJobCards?: string[];
+  rejectedJobCards?: string[];
+  pendingJobCards?: string[];
   averageResponseTime: number;
   rejectionReasons: { reason: string; count: number }[];
   competitorAnalysis: { competitor: string; averagePrice: number; winRate: number }[];
