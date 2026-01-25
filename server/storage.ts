@@ -2472,15 +2472,18 @@ class DatabaseStorage implements IStorage {
     );
     
     const totalQuotes = quotedJobs.length;
-    const totalAccepted = quotedJobs.filter(j => acceptedStatuses.includes(j.status || '')).length;
-    const totalRejected = quotedJobs.filter(j => rejectedStatuses.includes(j.status || '')).length;
-    const totalPending = quotedJobs.filter(j => pendingStatuses.includes(j.status || '')).length;
+    const acceptedJobs = quotedJobs.filter(j => acceptedStatuses.includes(j.status || ''));
+    const rejectedJobs = quotedJobs.filter(j => rejectedStatuses.includes(j.status || ''));
+    const pendingJobs = quotedJobs.filter(j => pendingStatuses.includes(j.status || ''));
     
     return {
       totalQuotes,
-      acceptedQuotes: totalAccepted,
-      rejectedQuotes: totalRejected,
-      pendingQuotes: totalPending,
+      acceptedQuotes: acceptedJobs.length,
+      rejectedQuotes: rejectedJobs.length,
+      pendingQuotes: pendingJobs.length,
+      acceptedJobCards: acceptedJobs.map(j => j.jobCardNumber).filter(Boolean).sort((a, b) => (a || 0) - (b || 0)),
+      rejectedJobCards: rejectedJobs.map(j => j.jobCardNumber).filter(Boolean).sort((a, b) => (a || 0) - (b || 0)),
+      pendingJobCards: pendingJobs.map(j => j.jobCardNumber).filter(Boolean).sort((a, b) => (a || 0) - (b || 0)),
       averageResponseTime: 0,
       rejectionReasons: [],
       competitorAnalysis: []
