@@ -2517,10 +2517,10 @@ export function GlobalJobCard({
         {/* ServiceM8-style Layout: Left Sidebar + Two Panel Content */}
         <div className="flex-1 flex flex-col md:flex-row min-h-0 max-w-full overflow-x-hidden">
           {/* Horizontal Tabs on Mobile, Left Sidebar on Desktop */}
-          <div className="bg-gray-200 border-b md:border-b-0 md:border-r border-gray-300 flex md:flex-col md:w-16 flex-shrink-0">
+          <div className="bg-orange-100 border-b md:border-b-0 md:border-r border-orange-200 flex md:flex-col md:w-16 flex-shrink-0">
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-gray-300 ${
-                sidebarTab === 'details' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-orange-200 ${
+                sidebarTab === 'details' ? 'bg-orange-500 text-white' : 'text-orange-700 hover:bg-orange-200'
               }`}
               onClick={() => setSidebarTab('details')}
               data-testid="sidebar-details"
@@ -2528,8 +2528,8 @@ export function GlobalJobCard({
               Details
             </button>
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-gray-300 ${
-                sidebarTab === 'billing' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-orange-200 ${
+                sidebarTab === 'billing' ? 'bg-orange-500 text-white' : 'text-orange-700 hover:bg-orange-200'
               }`}
               onClick={() => setSidebarTab('billing')}
               data-testid="sidebar-billing"
@@ -2537,8 +2537,8 @@ export function GlobalJobCard({
               Billing
             </button>
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-gray-300 ${
-                sidebarTab === 'diary' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-orange-200 ${
+                sidebarTab === 'diary' ? 'bg-orange-500 text-white' : 'text-orange-700 hover:bg-orange-200'
               }`}
               onClick={() => setSidebarTab('diary')}
               data-testid="sidebar-diary"
@@ -2546,8 +2546,8 @@ export function GlobalJobCard({
               Diary
             </button>
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b border-gray-300 ${
-                sidebarTab === 'equipment' ? 'bg-white text-gray-800' : 'text-gray-600 hover:bg-gray-100'
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b border-orange-200 ${
+                sidebarTab === 'equipment' ? 'bg-orange-500 text-white' : 'text-orange-700 hover:bg-orange-200'
               }`}
               onClick={() => setSidebarTab('equipment')}
               data-testid="sidebar-equipment"
