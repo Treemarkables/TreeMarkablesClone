@@ -40,6 +40,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertJobSchema, type ChecklistItem, type Job, type Customer } from "@shared/schema";
@@ -134,6 +135,7 @@ export function GlobalJobCard({
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [activeTab, setActiveTab] = useState("details");
   const [sidebarTab, setSidebarTab] = useState("details");
+  const [contactOpen, setContactOpen] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState("");
@@ -3208,72 +3210,79 @@ export function GlobalJobCard({
                           </div>
                         )}
 
-                        {/* Contacts */}
-                        <div>
-                          <div className="flex items-center gap-2 mb-3">
-                            <UserCircle className="w-4 h-4 text-gray-600" />
-                            <label className="text-xs font-medium text-gray-600">Job Contact</label>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <FormField
-                              control={form.control}
-                              name="jobContactFirstName"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="First Name" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactLastName"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Last Name" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <div className="mt-3 space-y-2">
-                            <FormField
-                              control={form.control}
-                              name="jobContactEmail"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Email" type="email" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactPhone"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Phone" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="billingContactMobile"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Mobile" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                        </div>
+                        {/* Contacts - Collapsible */}
+                        <Collapsible open={contactOpen} onOpenChange={setContactOpen}>
+                          <CollapsibleTrigger asChild>
+                            <button type="button" className="flex items-center justify-between w-full p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center gap-2">
+                                <UserCircle className="w-4 h-4 text-gray-600" />
+                                <span className="text-xs font-medium text-gray-600">Job Contact</span>
+                              </div>
+                              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${contactOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="pt-2">
+                            <div className="grid grid-cols-2 gap-3">
+                              <FormField
+                                control={form.control}
+                                name="jobContactFirstName"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input {...field} className="h-9 text-base md:text-sm" placeholder="First Name" />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="jobContactLastName"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input {...field} className="h-9 text-base md:text-sm" placeholder="Last Name" />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="mt-3 space-y-2">
+                              <FormField
+                                control={form.control}
+                                name="jobContactEmail"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input {...field} className="h-9 text-base md:text-sm" placeholder="Email" type="email" />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="jobContactPhone"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input {...field} className="h-9 text-base md:text-sm" placeholder="Phone" />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="billingContactMobile"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input {...field} className="h-9 text-base md:text-sm" placeholder="Mobile" />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
                       </div>
                     </div>
                   )}
