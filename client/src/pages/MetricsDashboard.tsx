@@ -80,6 +80,9 @@ interface QuoteAnalytics {
   acceptedQuotes: number;
   rejectedQuotes: number;
   pendingQuotes: number;
+  acceptedJobCards?: number[];
+  rejectedJobCards?: number[];
+  pendingJobCards?: number[];
   averageResponseTime: number;
   rejectionReasons: { reason: string; count: number }[];
   competitorAnalysis: { competitor: string; averagePrice: number; winRate: number }[];
@@ -1744,6 +1747,46 @@ export default function MetricsDashboard() {
                 </div>
                 <div className="text-xs text-yellow-600 dark:text-yellow-500">Pending</div>
               </div>
+            </div>
+
+            {/* Job card numbers */}
+            <div className="space-y-3">
+              {quoteAnalytics?.acceptedJobCards && quoteAnalytics.acceptedJobCards.length > 0 && (
+                <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                  <div className="text-xs font-medium text-green-600 dark:text-green-500 mb-2">Accepted Job Cards</div>
+                  <div className="flex flex-wrap gap-1">
+                    {quoteAnalytics.acceptedJobCards.map((num) => (
+                      <span key={num} className="bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-0.5 rounded text-xs font-medium">
+                        #{num}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {quoteAnalytics?.rejectedJobCards && quoteAnalytics.rejectedJobCards.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <div className="text-xs font-medium text-red-600 dark:text-red-500 mb-2">Rejected Job Cards</div>
+                  <div className="flex flex-wrap gap-1">
+                    {quoteAnalytics.rejectedJobCards.map((num) => (
+                      <span key={num} className="bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200 px-2 py-0.5 rounded text-xs font-medium">
+                        #{num}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {quoteAnalytics?.pendingJobCards && quoteAnalytics.pendingJobCards.length > 0 && (
+                <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                  <div className="text-xs font-medium text-yellow-600 dark:text-yellow-500 mb-2">Pending Job Cards</div>
+                  <div className="flex flex-wrap gap-1">
+                    {quoteAnalytics.pendingJobCards.map((num) => (
+                      <span key={num} className="bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-2 py-0.5 rounded text-xs font-medium">
+                        #{num}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Acceptance rate */}
