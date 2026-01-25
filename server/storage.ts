@@ -2481,9 +2481,9 @@ class DatabaseStorage implements IStorage {
       acceptedQuotes: acceptedJobs.length,
       rejectedQuotes: rejectedJobs.length,
       pendingQuotes: pendingJobs.length,
-      acceptedJobCards: acceptedJobs.map(j => j.jobCardNumber).filter(Boolean).sort((a, b) => (a || 0) - (b || 0)),
-      rejectedJobCards: rejectedJobs.map(j => j.jobCardNumber).filter(Boolean).sort((a, b) => (a || 0) - (b || 0)),
-      pendingJobCards: pendingJobs.map(j => j.jobCardNumber).filter(Boolean).sort((a, b) => (a || 0) - (b || 0)),
+      acceptedJobCards: acceptedJobs.map(j => j.jobNumber).filter(Boolean).sort((a, b) => parseInt(a || '0') - parseInt(b || '0')),
+      rejectedJobCards: rejectedJobs.map(j => j.jobNumber).filter(Boolean).sort((a, b) => parseInt(a || '0') - parseInt(b || '0')),
+      pendingJobCards: pendingJobs.map(j => j.jobNumber).filter(Boolean).sort((a, b) => parseInt(a || '0') - parseInt(b || '0')),
       averageResponseTime: 0,
       rejectionReasons: [],
       competitorAnalysis: []
