@@ -17709,6 +17709,28 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Get marketing settings
+  app.get("/api/marketing/settings", async (req, res) => {
+    try {
+      const settings = await storage.getMarketingSettings();
+      res.json(settings || { autoPostReviews: false, autoPostDelay: 24, minReviewRating: 4 });
+    } catch (error) {
+      console.error('Error fetching marketing settings:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch settings' });
+    }
+  });
+
+  // Update marketing settings
+  app.patch("/api/marketing/settings", async (req, res) => {
+    try {
+      const settings = await storage.updateMarketingSettings(req.body);
+      res.json(settings);
+    } catch (error) {
+      console.error('Error updating marketing settings:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update settings' });
+    }
+  });
+
   // ========================================
   // DATA SYNC & MAINTENANCE
   // ========================================

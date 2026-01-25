@@ -850,6 +850,10 @@ export interface IStorage {
   getScheduledMarketingCampaigns(): Promise<schema.MarketingCampaign[]>;
   updateMarketingCampaign(id: string, updates: Partial<schema.InsertMarketingCampaign>): Promise<schema.MarketingCampaign>;
   deleteMarketingCampaign(id: string): Promise<void>;
+  
+  // Marketing Settings
+  getMarketingSettings(): Promise<{ autoPostReviews: boolean; autoPostDelay: number; minReviewRating: number } | null>;
+  updateMarketingSettings(updates: Partial<{ autoPostReviews: boolean; autoPostDelay: number; minReviewRating: number }>): Promise<{ autoPostReviews: boolean; autoPostDelay: number; minReviewRating: number }>;
 
   // Push Notifications - FCM Tokens
   createFcmToken(token: schema.InsertFcmToken): Promise<schema.FcmToken>;
@@ -5252,6 +5256,22 @@ class DatabaseStorage implements IStorage {
   async deleteMarketingCampaign(id: string): Promise<void> {
     await db.delete(schema.marketingCampaigns)
       .where(eq(schema.marketingCampaigns.id, id));
+  }
+
+  // Marketing Settings - in-memory storage
+  private marketingSettings: { autoPostReviews: boolean; autoPostDelay: number; minReviewRating: number } = {
+    autoPostReviews: false,
+    autoPostDelay: 24,
+    minReviewRating: 4
+  };
+
+  async getMarketingSettings(): Promise<{ autoPostReviews: boolean; autoPostDelay: number; minReviewRating: number } | null> {
+    return this.marketingSettings;
+  }
+
+  async updateMarketingSettings(updates: Partial<{ autoPostReviews: boolean; autoPostDelay: number; minReviewRating: number }>): Promise<{ autoPostReviews: boolean; autoPostDelay: number; minReviewRating: number }> {
+    this.marketingSettings = { ...this.marketingSettings, ...updates };
+    return this.marketingSettings;
   }
 
   // ========================================
