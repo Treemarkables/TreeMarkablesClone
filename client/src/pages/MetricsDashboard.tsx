@@ -1218,6 +1218,7 @@ export default function MetricsDashboard() {
                         <th className="text-right py-3 px-4 font-medium">Won</th>
                         <th className="text-right py-3 px-4 font-medium">Quote Conv.</th>
                         <th className="text-right py-3 px-4 font-medium">Total Revenue</th>
+                        <th className="text-right py-3 px-4 font-medium">Revenue %</th>
                         <th className="text-right py-3 px-4 font-medium">Gross Margin</th>
                       </tr>
                     </thead>
@@ -1238,6 +1239,13 @@ export default function MetricsDashboard() {
                           </td>
                           <td className="text-right py-3 px-4 font-semibold">{formatCurrency(source.totalRevenue)}</td>
                           <td className="text-right py-3 px-4">
+                            {(() => {
+                              const totalRev = leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0);
+                              const revPercent = totalRev > 0 ? (source.totalRevenue / totalRev) * 100 : 0;
+                              return <span className={revPercent > 30 ? 'text-blue-600 font-semibold' : revPercent > 15 ? 'text-blue-500' : 'text-gray-600'}>{revPercent.toFixed(1)}%</span>;
+                            })()}
+                          </td>
+                          <td className="text-right py-3 px-4">
                             <span className={source.averageProfitMargin > 40 ? 'text-green-600 font-semibold' : source.averageProfitMargin > 20 ? 'text-yellow-600' : source.averageProfitMargin > 0 ? 'text-orange-600' : 'text-gray-500'}>
                               {source.averageProfitMargin?.toFixed(1) || '0.0'}%
                             </span>
@@ -1254,6 +1262,7 @@ export default function MetricsDashboard() {
                           {((leadSourceData.reduce((sum, s) => sum + s.wonCount, 0) / Math.max(leadSourceData.reduce((sum, s) => sum + s.quotedCount, 0), 1)) * 100).toFixed(1)}%
                         </td>
                         <td className="text-right py-3 px-4">{formatCurrency(leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0))}</td>
+                        <td className="text-right py-3 px-4 text-blue-600">100.0%</td>
                         <td className="text-right py-3 px-4">
                           {(() => {
                             const totalRev = leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0);
