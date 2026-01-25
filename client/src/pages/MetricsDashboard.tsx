@@ -824,6 +824,23 @@ export default function MetricsDashboard() {
               icon={Briefcase}
               testId="card-jobs-completed"
             />
+
+            <MetricCard
+              title="Revenue per Lead"
+              value={formatCurrency((dashboardStats?.totalRevenue || 0) / Math.max(dashboardStats?.totalLeads || 1, 1))}
+              subtitle="Avg value per lead"
+              icon={Target}
+              testId="card-revenue-per-lead"
+            />
+
+            <MetricCard
+              title="Accepted Quotes"
+              value={quoteAnalytics?.acceptedQuotes || 0}
+              subtitle={`${quoteAnalytics?.pendingQuotes || 0} pending`}
+              icon={CheckCircle}
+              testId="card-accepted-quotes"
+              valueColor="text-green-600"
+            />
           </div>
         </div>
 
@@ -1142,57 +1159,6 @@ export default function MetricsDashboard() {
             </Card>
           </div>
         )}
-
-        {/* Additional Metrics Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-green-500" />
-                Financial Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Average Job Value</span>
-                <span className="font-bold text-lg">{formatCurrency(revenueStats?.averageJobValue || 0)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Revenue per Lead</span>
-                <span className="font-bold text-lg">
-                  {formatCurrency((dashboardStats?.totalRevenue || 0) / Math.max(dashboardStats?.totalLeads || 1, 1))}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Jobs Completed</span>
-                <span className="font-bold text-lg">{revenueStats?.jobsCompleted || 0}</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-purple-500" />
-                Quote Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Total Quotes</span>
-                <span className="font-bold text-lg">{quoteAnalytics?.totalQuotes || 0}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Accepted Quotes</span>
-                <span className="font-bold text-lg text-green-600">{quoteAnalytics?.acceptedQuotes || 0}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Pending Quotes</span>
-                <span className="font-bold text-lg text-yellow-600">{quoteAnalytics?.pendingQuotes || 0}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Lead Source Analytics Section */}
         <div className="mt-8">
