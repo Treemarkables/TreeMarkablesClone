@@ -2673,7 +2673,7 @@ export function GlobalJobCard({
                 data-form="job-form"
               >
                 <div className="flex flex-col sm:flex-row h-full w-full min-w-0">
-                  <div className={`flex-1 ${sidebarTab === 'diary' ? 'sm:flex-1' : 'sm:flex-[3]'} bg-white ${sidebarTab !== 'diary' ? 'sm:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'sm:rounded-lg' : 'sm:rounded-l-lg'} min-w-0`}>
+                  <div className={`flex-1 bg-white ${sidebarTab !== 'diary' ? 'sm:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'sm:rounded-lg' : 'sm:rounded-l-lg'} min-w-0`}>
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
                       {/* ServiceM8-Style Customer Search or Create */}
@@ -4360,7 +4360,7 @@ export function GlobalJobCard({
                   </div>
 
                   {sidebarTab !== 'diary' && editingJob && (
-                    <div className="hidden sm:block sm:flex-[2] bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
+                    <div className="hidden sm:block sm:flex-1 bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
                       <JobDiarySection 
                         jobId={editingJob.id}
                         onQuoteClick={(quoteNumber) => {
