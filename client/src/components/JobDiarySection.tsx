@@ -1116,36 +1116,34 @@ export function JobDiarySection({
                   <div key={entry.id} className="group">
                     <div className={`rounded-xl overflow-hidden shadow-sm ${
                       isSent 
-                        ? entry.type === 'email' 
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-green-500 text-white'
+                        ? 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
                         : 'bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800'
                     }`}>
                       {/* Header */}
                       <div className={`flex items-center justify-between px-3 py-1.5 ${
                         isSent 
-                          ? 'border-b border-white/10'
+                          ? 'border-b border-gray-200 dark:border-gray-700'
                           : 'border-b border-purple-200 dark:border-purple-800'
                       }`}>
                         <div className="flex items-center gap-1.5">
                           {entry.type === 'email' ? (
-                            <MdEmail className={`w-3.5 h-3.5 ${isSent ? 'text-white/80' : 'text-purple-600 dark:text-purple-400'}`} />
+                            <MdEmail className={`w-3.5 h-3.5 ${isSent ? 'text-gray-500 dark:text-gray-400' : 'text-purple-600 dark:text-purple-400'}`} />
                           ) : (
-                            <MessageSquare className={`w-3.5 h-3.5 ${isSent ? 'text-white/80' : 'text-purple-600 dark:text-purple-400'}`} />
+                            <MessageSquare className={`w-3.5 h-3.5 ${isSent ? 'text-gray-500 dark:text-gray-400' : 'text-purple-600 dark:text-purple-400'}`} />
                           )}
-                          <span className={`text-[10px] ${isSent ? 'text-white/80' : 'text-purple-600 dark:text-purple-400'}`}>
+                          <span className={`text-[10px] ${isSent ? 'text-gray-500 dark:text-gray-400' : 'text-purple-600 dark:text-purple-400'}`}>
                             {isSent ? (recipientInfo ? `To: ${recipientInfo}` : 'Sent') : 'Received'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-[10px] ${isSent ? 'text-white/70' : 'text-purple-500 dark:text-purple-400'}`}>
+                          <span className={`text-[10px] ${isSent ? 'text-gray-400 dark:text-gray-500' : 'text-purple-500 dark:text-purple-400'}`}>
                             {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'h:mm a')}
                           </span>
                           <Button
                             size="icon"
                             variant="ghost"
                             className={`h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity ${
-                              isSent ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950'
+                              isSent ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950' : 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950'
                             }`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1162,7 +1160,7 @@ export function JobDiarySection({
                       {/* Content */}
                       <div className="px-3 py-2">
                         <p className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${
-                          isSent ? 'text-white' : 'text-purple-900 dark:text-purple-100'
+                          isSent ? 'text-gray-700 dark:text-gray-300' : 'text-purple-900 dark:text-purple-100'
                         }`}>
                           {messageText}
                         </p>
@@ -1170,7 +1168,7 @@ export function JobDiarySection({
                       {/* Footer with tracking and reply */}
                       <div className={`px-3 py-1.5 flex items-center justify-between gap-2 ${
                         isSent 
-                          ? 'border-t border-white/10'
+                          ? 'border-t border-gray-200 dark:border-gray-700'
                           : 'border-t border-purple-200 dark:border-purple-800'
                       }`}>
                         {/* Email tracking for sent emails */}
@@ -1187,9 +1185,7 @@ export function JobDiarySection({
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className={`h-6 text-[10px] px-2 ${
-                                  isSent ? 'text-white/80 hover:text-white hover:bg-white/10' : 'text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800'
-                                }`}
+                                className="h-6 text-[10px] px-2 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
