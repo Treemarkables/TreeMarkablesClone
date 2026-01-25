@@ -2591,40 +2591,53 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
-      // Check for duplicate jobs (same customer, address, and description within last 5 minutes)
+      // Check for duplicate jobs - two layers of protection
       if (validation.data.customerId && validation.data.address) {
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
         const recentJobs = await storage.getJobsByCustomer(validation.data.customerId);
+        const now = Date.now();
+        const thirtySecondsAgo = new Date(now - 30 * 1000); // Very strict: 30 seconds for exact duplicates
+        const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000); // 24 hours for same address
         
         const duplicate = recentJobs.find((existingJob: any) => {
           // Skip if createdAt is missing or invalid (legacy/imported jobs)
-          if (!existingJob.createdAt) {
-            console.log(`[DUPLICATE CHECK] Skipping job #${existingJob.jobNumber} - missing createdAt`);
-            return false;
-          }
+          if (!existingJob.createdAt) return false;
           
           const jobCreatedDate = new Date(existingJob.createdAt);
-          // Skip if the date is invalid
-          if (isNaN(jobCreatedDate.getTime())) {
-            console.log(`[DUPLICATE CHECK] Skipping job #${existingJob.jobNumber} - invalid createdAt`);
-            return false;
+          if (isNaN(jobCreatedDate.getTime())) return false;
+          
+          const sameAddress = existingJob.address?.trim().toLowerCase() === validation.data.address?.trim().toLowerCase();
+          
+          // Layer 1: STRICT - Block any duplicate within 30 seconds (same address = duplicate button click)
+          if (jobCreatedDate >= thirtySecondsAgo && sameAddress) {
+            console.log(`[DUPLICATE CHECK] Blocked rapid duplicate - job #${existingJob.jobNumber} created ${Math.round((now - jobCreatedDate.getTime()) / 1000)}s ago`);
+            return true;
           }
           
-          // Skip if the existing job is too old (more than 5 minutes)
-          if (jobCreatedDate < fiveMinutesAgo) return false;
+          // Layer 2: RELAXED - Warn about same customer + address within 24 hours (likely duplicate entry)
+          // Only block if description is also similar
+          if (jobCreatedDate >= twentyFourHoursAgo && sameAddress) {
+            const existingDesc = (existingJob.description || '').trim().toLowerCase();
+            const newDesc = (validation.data.description || '').trim().toLowerCase();
+            
+            // Check for similar descriptions (either same, or one contains the other, or both empty)
+            const sameDescription = existingDesc === newDesc;
+            const similarDescription = existingDesc.includes(newDesc) || newDesc.includes(existingDesc);
+            const bothEmpty = !existingDesc && !newDesc;
+            
+            if (sameDescription || similarDescription || bothEmpty) {
+              console.log(`[DUPLICATE CHECK] Blocked similar job - job #${existingJob.jobNumber} has same address and similar description`);
+              return true;
+            }
+          }
           
-          // Check if address and description are similar
-          const sameAddress = existingJob.address?.trim().toLowerCase() === validation.data.address?.trim().toLowerCase();
-          const sameDescription = existingJob.description?.trim().toLowerCase() === validation.data.description?.trim().toLowerCase();
-          
-          return sameAddress && sameDescription;
+          return false;
         });
         
         if (duplicate) {
           console.log(`[DUPLICATE CHECK] Blocked duplicate job creation - existing job #${duplicate.jobNumber} found`);
           return res.status(409).json({ 
             success: false, 
-            message: `Duplicate job detected. A similar job (#${duplicate.jobNumber}) was just created for this customer.`,
+            message: `Duplicate job detected. A similar job (#${duplicate.jobNumber}) already exists for this customer at the same address.`,
             duplicateJobNumber: duplicate.jobNumber,
             duplicateJobId: duplicate.id
           });
