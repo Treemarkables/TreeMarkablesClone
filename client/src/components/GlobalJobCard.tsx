@@ -2518,10 +2518,42 @@ export function GlobalJobCard({
         {/* ServiceM8-style Layout: Left Sidebar + Two Panel Content */}
         <div className="flex-1 flex flex-col md:flex-row min-h-0 max-w-full overflow-x-hidden">
           {/* Horizontal Tabs on Mobile, Left Sidebar on Desktop */}
-          <div className="bg-orange-100 border-b md:border-b-0 md:border-r border-orange-200 flex md:flex-col md:w-16 flex-shrink-0">
+          <div className={`border-b md:border-b-0 md:border-r flex md:flex-col md:w-16 flex-shrink-0 ${
+            currentStatus === 'completed' ? 'bg-green-100 border-green-200' :
+            currentStatus === 'work_order' ? 'bg-blue-100 border-blue-200' :
+            currentStatus === 'scheduled' ? 'bg-blue-100 border-blue-200' :
+            currentStatus === 'quote' ? 'bg-orange-100 border-orange-200' :
+            currentStatus === 'lead' ? 'bg-cyan-100 border-cyan-200' :
+            currentStatus === 'unsuccessful' ? 'bg-red-100 border-red-200' :
+            'bg-gray-100 border-gray-200'
+          }`}>
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-orange-200 ${
-                sidebarTab === 'details' ? 'bg-orange-500 text-white' : 'text-orange-700 hover:bg-orange-200'
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b ${
+                currentStatus === 'completed' ? 'border-green-200' :
+                currentStatus === 'work_order' ? 'border-blue-200' :
+                currentStatus === 'scheduled' ? 'border-blue-200' :
+                currentStatus === 'quote' ? 'border-orange-200' :
+                currentStatus === 'lead' ? 'border-cyan-200' :
+                currentStatus === 'unsuccessful' ? 'border-red-200' :
+                'border-gray-200'
+              } ${
+                sidebarTab === 'details' ? (
+                  currentStatus === 'completed' ? 'bg-green-500 text-white' :
+                  currentStatus === 'work_order' ? 'bg-blue-500 text-white' :
+                  currentStatus === 'scheduled' ? 'bg-blue-500 text-white' :
+                  currentStatus === 'quote' ? 'bg-orange-500 text-white' :
+                  currentStatus === 'lead' ? 'bg-cyan-500 text-white' :
+                  currentStatus === 'unsuccessful' ? 'bg-red-500 text-white' :
+                  'bg-gray-500 text-white'
+                ) : (
+                  currentStatus === 'completed' ? 'text-green-700 hover:bg-green-200' :
+                  currentStatus === 'work_order' ? 'text-blue-700 hover:bg-blue-200' :
+                  currentStatus === 'scheduled' ? 'text-blue-700 hover:bg-blue-200' :
+                  currentStatus === 'quote' ? 'text-orange-700 hover:bg-orange-200' :
+                  currentStatus === 'lead' ? 'text-cyan-700 hover:bg-cyan-200' :
+                  currentStatus === 'unsuccessful' ? 'text-red-700 hover:bg-red-200' :
+                  'text-gray-700 hover:bg-gray-200'
+                )
               }`}
               onClick={() => setSidebarTab('details')}
               data-testid="sidebar-details"
@@ -2529,8 +2561,32 @@ export function GlobalJobCard({
               Details
             </button>
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-orange-200 ${
-                sidebarTab === 'billing' ? 'bg-orange-500 text-white' : 'text-orange-700 hover:bg-orange-200'
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b ${
+                currentStatus === 'completed' ? 'border-green-200' :
+                currentStatus === 'work_order' ? 'border-blue-200' :
+                currentStatus === 'scheduled' ? 'border-blue-200' :
+                currentStatus === 'quote' ? 'border-orange-200' :
+                currentStatus === 'lead' ? 'border-cyan-200' :
+                currentStatus === 'unsuccessful' ? 'border-red-200' :
+                'border-gray-200'
+              } ${
+                sidebarTab === 'billing' ? (
+                  currentStatus === 'completed' ? 'bg-green-500 text-white' :
+                  currentStatus === 'work_order' ? 'bg-blue-500 text-white' :
+                  currentStatus === 'scheduled' ? 'bg-blue-500 text-white' :
+                  currentStatus === 'quote' ? 'bg-orange-500 text-white' :
+                  currentStatus === 'lead' ? 'bg-cyan-500 text-white' :
+                  currentStatus === 'unsuccessful' ? 'bg-red-500 text-white' :
+                  'bg-gray-500 text-white'
+                ) : (
+                  currentStatus === 'completed' ? 'text-green-700 hover:bg-green-200' :
+                  currentStatus === 'work_order' ? 'text-blue-700 hover:bg-blue-200' :
+                  currentStatus === 'scheduled' ? 'text-blue-700 hover:bg-blue-200' :
+                  currentStatus === 'quote' ? 'text-orange-700 hover:bg-orange-200' :
+                  currentStatus === 'lead' ? 'text-cyan-700 hover:bg-cyan-200' :
+                  currentStatus === 'unsuccessful' ? 'text-red-700 hover:bg-red-200' :
+                  'text-gray-700 hover:bg-gray-200'
+                )
               }`}
               onClick={() => setSidebarTab('billing')}
               data-testid="sidebar-billing"
@@ -2538,8 +2594,32 @@ export function GlobalJobCard({
               Billing
             </button>
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b border-orange-200 ${
-                sidebarTab === 'diary' ? 'bg-orange-500 text-white' : 'text-orange-700 hover:bg-orange-200'
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b ${
+                currentStatus === 'completed' ? 'border-green-200' :
+                currentStatus === 'work_order' ? 'border-blue-200' :
+                currentStatus === 'scheduled' ? 'border-blue-200' :
+                currentStatus === 'quote' ? 'border-orange-200' :
+                currentStatus === 'lead' ? 'border-cyan-200' :
+                currentStatus === 'unsuccessful' ? 'border-red-200' :
+                'border-gray-200'
+              } ${
+                sidebarTab === 'diary' ? (
+                  currentStatus === 'completed' ? 'bg-green-500 text-white' :
+                  currentStatus === 'work_order' ? 'bg-blue-500 text-white' :
+                  currentStatus === 'scheduled' ? 'bg-blue-500 text-white' :
+                  currentStatus === 'quote' ? 'bg-orange-500 text-white' :
+                  currentStatus === 'lead' ? 'bg-cyan-500 text-white' :
+                  currentStatus === 'unsuccessful' ? 'bg-red-500 text-white' :
+                  'bg-gray-500 text-white'
+                ) : (
+                  currentStatus === 'completed' ? 'text-green-700 hover:bg-green-200' :
+                  currentStatus === 'work_order' ? 'text-blue-700 hover:bg-blue-200' :
+                  currentStatus === 'scheduled' ? 'text-blue-700 hover:bg-blue-200' :
+                  currentStatus === 'quote' ? 'text-orange-700 hover:bg-orange-200' :
+                  currentStatus === 'lead' ? 'text-cyan-700 hover:bg-cyan-200' :
+                  currentStatus === 'unsuccessful' ? 'text-red-700 hover:bg-red-200' :
+                  'text-gray-700 hover:bg-gray-200'
+                )
               }`}
               onClick={() => setSidebarTab('diary')}
               data-testid="sidebar-diary"
@@ -2547,8 +2627,32 @@ export function GlobalJobCard({
               Diary
             </button>
             <button
-              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b border-orange-200 ${
-                sidebarTab === 'equipment' ? 'bg-orange-500 text-white' : 'text-orange-700 hover:bg-orange-200'
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium md:border-b ${
+                currentStatus === 'completed' ? 'border-green-200' :
+                currentStatus === 'work_order' ? 'border-blue-200' :
+                currentStatus === 'scheduled' ? 'border-blue-200' :
+                currentStatus === 'quote' ? 'border-orange-200' :
+                currentStatus === 'lead' ? 'border-cyan-200' :
+                currentStatus === 'unsuccessful' ? 'border-red-200' :
+                'border-gray-200'
+              } ${
+                sidebarTab === 'equipment' ? (
+                  currentStatus === 'completed' ? 'bg-green-500 text-white' :
+                  currentStatus === 'work_order' ? 'bg-blue-500 text-white' :
+                  currentStatus === 'scheduled' ? 'bg-blue-500 text-white' :
+                  currentStatus === 'quote' ? 'bg-orange-500 text-white' :
+                  currentStatus === 'lead' ? 'bg-cyan-500 text-white' :
+                  currentStatus === 'unsuccessful' ? 'bg-red-500 text-white' :
+                  'bg-gray-500 text-white'
+                ) : (
+                  currentStatus === 'completed' ? 'text-green-700 hover:bg-green-200' :
+                  currentStatus === 'work_order' ? 'text-blue-700 hover:bg-blue-200' :
+                  currentStatus === 'scheduled' ? 'text-blue-700 hover:bg-blue-200' :
+                  currentStatus === 'quote' ? 'text-orange-700 hover:bg-orange-200' :
+                  currentStatus === 'lead' ? 'text-cyan-700 hover:bg-cyan-200' :
+                  currentStatus === 'unsuccessful' ? 'text-red-700 hover:bg-red-200' :
+                  'text-gray-700 hover:bg-gray-200'
+                )
               }`}
               onClick={() => setSidebarTab('equipment')}
               data-testid="sidebar-equipment"
