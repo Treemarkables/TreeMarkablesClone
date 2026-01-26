@@ -7,11 +7,11 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
-  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle, Mic, MoreVertical
+  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle, Mic, MoreVertical, Check
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1317,90 +1317,106 @@ export function ProposalBuilder({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-full sm:max-w-5xl h-screen sm:h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-2 sm:p-4 md:p-6 w-full min-w-0">
-          <DialogHeader className="flex-shrink-0 pb-2 sm:pb-3 md:pb-4 w-full min-w-0" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
-            <div className="flex items-center justify-between flex-wrap gap-2 w-full min-w-0">
-              <div>
-                <DialogTitle className="text-lg sm:text-2xl font-bold text-primary">
-                  {mode === "edit" ? "Edit Proposal" : "Create Proposal"}
-                </DialogTitle>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-muted-foreground hidden sm:block">
-                    Build your professional proposal with multiple sections
-                  </p>
+        <DialogContent className="max-w-full sm:max-w-5xl h-screen sm:h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-0 w-full min-w-0 gap-0">
+          {/* Modern Header with Gradient Accent */}
+          <div className="flex-shrink-0 border-b bg-gradient-to-r from-primary/5 via-primary/3 to-transparent" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+            <DialogHeader className="px-4 sm:px-6 pb-4">
+              <div className="flex items-start justify-between gap-4 w-full">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <DialogTitle className="text-xl sm:text-2xl font-semibold tracking-tight">
+                        {mode === "edit" ? "Edit Proposal" : "Create Proposal"}
+                      </DialogTitle>
+                      <DialogDescription className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
+                        Build your professional proposal with sections and line items
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {autoSaveStatus === 'saving' && (
-                    <span className="text-xs text-blue-600 flex items-center gap-1">
-                      <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                      Saving...
-                    </span>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50">
+                      <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Saving</span>
+                    </div>
                   )}
                   {autoSaveStatus === 'saved' && lastSavedAt && (
-                    <span className="text-xs text-green-600">
-                      ✓ Saved {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 dark:bg-green-950/50">
+                      <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
+                      <span className="text-xs font-medium text-green-600 dark:text-green-400">Saved</span>
+                    </div>
                   )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onClose}
+                    className="h-9 w-9 rounded-lg hover:bg-muted"
+                    data-testid="button-close-proposal"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={onClose}
-                className="min-h-[44px] min-w-[44px]"
-                data-testid="button-close-proposal"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </DialogHeader>
+            </DialogHeader>
+          </div>
 
-          <div className="flex-1 overflow-x-hidden overflow-y-auto w-full max-w-full min-w-0">
+          <div className="flex-1 overflow-x-hidden overflow-y-auto w-full max-w-full min-w-0 bg-muted/30">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-8 w-full max-w-full min-w-0 pb-20 sm:pb-8">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0 pb-20 sm:pb-8 p-4 sm:p-6">
 
               {/* Sections Management */}
-              <Card className="w-full max-w-full min-w-0">
-                <CardHeader className="w-full max-w-full min-w-0">
-                  <div className="flex items-center justify-between w-full max-w-full min-w-0">
-                    <CardTitle>Proposal Sections</CardTitle>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addNewSection}
-                      className="min-h-[44px]"
-                      data-testid="button-add-section"
-                    >
-                      <FolderPlus className="h-4 w-4 mr-2" />
-                      Add Section
-                    </Button>
+              <div className="w-full max-w-full min-w-0">
+                <div className="flex items-center justify-between w-full mb-4">
+                  <div>
+                    <h2 className="text-base font-semibold">Proposal Sections</h2>
+                    <p className="text-sm text-muted-foreground">Add sections to organize your services</p>
                   </div>
-                </CardHeader>
-                <CardContent className="w-full max-w-full min-w-0">
-                  <div className="space-y-6 w-full max-w-full min-w-0">
-                    {sections.map((section) => (
-                      <Card key={section.id} className="bg-accent/30 w-full max-w-full min-w-0">
-                        <CardHeader className="w-full max-w-full min-w-0">
-                          <div className="flex items-center justify-between w-full max-w-full min-w-0">
-                            <h3 className="font-semibold text-lg">{section.title}</h3>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline">
-                                {section.lineItems.length} items
-                              </Badge>
-                              {sections.length > 1 && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeSection(section.id)}
-                                  className="min-h-[44px] min-w-[44px]"
-                                  data-testid={`button-remove-section-${section.id}`}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addNewSection}
+                    className="gap-2"
+                    data-testid="button-add-section"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Section
+                  </Button>
+                </div>
+                
+                <div className="space-y-4 w-full max-w-full min-w-0">
+                  {sections.map((section, index) => (
+                    <Card key={section.id} className="w-full max-w-full min-w-0 border shadow-sm overflow-hidden">
+                      {/* Section Header */}
+                      <div className="flex items-center justify-between px-4 py-3 bg-muted/50 border-b">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary text-sm font-semibold">
+                            {index + 1}
                           </div>
-                        </CardHeader>
+                          <div>
+                            <h3 className="font-medium text-sm">{section.title}</h3>
+                            <span className="text-xs text-muted-foreground">{section.lineItems.length} line item{section.lineItems.length !== 1 ? 's' : ''}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {sections.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeSection(section.id)}
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              data-testid={`button-remove-section-${section.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                         
                         <CardContent className="space-y-3 p-3 sm:p-4">
                           {/* Section Description */}
@@ -1932,8 +1948,7 @@ export function ProposalBuilder({
                       </Card>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
 
               {/* Summary Section */}
               <Card>
