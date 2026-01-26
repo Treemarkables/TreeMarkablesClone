@@ -23,7 +23,8 @@ class AddressService {
     }
 
     try {
-      const url = `${this.apiUrl}?q=${encodeURIComponent(query)}&limit=${limit}`;
+      // Filter to Gisborne region only using territory parameter
+      const url = `${this.apiUrl}?q=${encodeURIComponent(query)}&limit=${limit}&territory=Gisborne`;
       const headers: Record<string, string> = {
         'Accept': 'application/json',
       };
@@ -50,79 +51,64 @@ class AddressService {
 
   private generateMockSuggestions(query: string): AddySuggestion[] {
     console.log(`[Mock Data Debug] Query: "${query}"`);
+    // Gisborne addresses only (filtered to match territory restriction)
     const mockAddresses = [
-      // Auckland addresses - Maria Street variations
-      "20 Maria Street, Auckland Central, Auckland 1010",
-      "20 Maria Avenue, Ponsonby, Auckland 1011", 
-      "20 Marianna Street, Parnell, Auckland 1052",
-      "21 Maria Street, Grey Lynn, Auckland 1021",
-      "22 Maria Road, Mount Eden, Auckland 1024",
-      "23 Maria Avenue, Newmarket, Auckland 1023",
-      "24 Maria Street, Remuera, Auckland 1050",
-      "25 Maria Place, Epsom, Auckland 1023",
+      // Gisborne Central addresses
+      "1 Gladstone Road, Gisborne Central, Gisborne 4010",
+      "20 Gladstone Road, Gisborne Central, Gisborne 4010",
+      "67 Gladstone Road, Gisborne Central, Gisborne 4010",
+      "123 Gladstone Road, Gisborne Central, Gisborne 4010",
+      "200 Gladstone Road, Gisborne Central, Gisborne 4010",
       
-      // Wellington addresses - Hauro Street variations  
-      "67 Hauro Street, Wellington Central, Wellington 6011",
-      "67 Hauro Avenue, Newtown, Wellington 6021",
-      "67 Hauora Street, Aro Valley, Wellington 6012",
-      "68 Hauro Road, Mount Victoria, Wellington 6011",
-      "69 Hauro Place, Kelburn, Wellington 6012",
-      "70 Hauro Street, Thorndon, Wellington 6011",
+      // Grey Street
+      "1 Grey Street, Gisborne Central, Gisborne 4010",
+      "20 Grey Street, Gisborne Central, Gisborne 4010",
+      "45 Grey Street, Gisborne Central, Gisborne 4010",
+      "67 Grey Street, Gisborne Central, Gisborne 4010",
       
-      // Common Auckland streets
-      "123 Queen Street, Auckland Central, Auckland 1010",
-      "456 Ponsonby Road, Ponsonby, Auckland 1011",
-      "789 Great North Road, Grey Lynn, Auckland 1021",
-      "321 New North Road, Eden Terrace, Auckland 1021",
-      "654 Symonds Street, Auckland Central, Auckland 1010",
-      "987 Dominion Road, Mount Eden, Auckland 1024",
-      "147 Victoria Street, Auckland Central, Auckland 1010",
-      "258 Karangahape Road, Auckland Central, Auckland 1010",
-      "369 Mount Eden Road, Mount Eden, Auckland 1024",
-      "741 Sandringham Road, Sandringham, Auckland 1025",
+      // Peel Street
+      "1 Peel Street, Gisborne Central, Gisborne 4010",
+      "20 Peel Street, Gisborne Central, Gisborne 4010",
+      "45 Peel Street, Gisborne Central, Gisborne 4010",
       
-      // Common Wellington streets
-      "789 Lambton Quay, Wellington Central, Wellington 6011",
-      "741 Cuba Street, Wellington Central, Wellington 6011",
-      "852 Courtenay Place, Wellington Central, Wellington 6011",
-      "963 The Terrace, Wellington Central, Wellington 6011",
-      "147 Willis Street, Wellington Central, Wellington 6011",
-      "258 Manners Street, Wellington Central, Wellington 6011",
+      // Ormond Road
+      "1 Ormond Road, Gisborne, Gisborne 4010",
+      "50 Ormond Road, Gisborne, Gisborne 4010",
+      "100 Ormond Road, Whataupoko, Gisborne 4010",
+      "200 Ormond Road, Whataupoko, Gisborne 4010",
       
-      // Christchurch addresses
-      "321 Manchester Street, Christchurch Central, Christchurch 8011",
-      "258 High Street, Christchurch Central, Christchurch 8011", 
-      "852 Cashel Street, Christchurch Central, Christchurch 8011",
-      "456 Colombo Street, Christchurch Central, Christchurch 8011",
-      "789 Riccarton Road, Riccarton, Christchurch 8041",
+      // Stout Street
+      "1 Stout Street, Gisborne Central, Gisborne 4010",
+      "20 Stout Street, Gisborne Central, Gisborne 4010",
       
-      // Other major cities
-      "456 George Street, Dunedin Central, Dunedin 9016",
-      "987 Princes Street, Dunedin Central, Dunedin 9016", 
-      "654 Devon Street East, New Plymouth Central, New Plymouth 4310",
-      "147 Victoria Street, Hamilton Central, Hamilton 3204",
-      "963 Tauranga Road, Mount Maunganui, Tauranga 3116",
-      "258 Cameron Road, Tauranga Central, Tauranga 3110",
+      // Childers Road
+      "1 Childers Road, Gisborne Central, Gisborne 4010",
+      "50 Childers Road, Gisborne Central, Gisborne 4010",
+      "100 Childers Road, Mangapapa, Gisborne 4010",
       
-      // Number variations for common streets (to match partial queries)
-      "1 Queen Street, Auckland Central, Auckland 1010",
-      "5 Queen Street, Auckland Central, Auckland 1010", 
-      "10 Queen Street, Auckland Central, Auckland 1010",
-      "15 Queen Street, Auckland Central, Auckland 1010",
-      "20 Queen Street, Auckland Central, Auckland 1010",
-      "25 Queen Street, Auckland Central, Auckland 1010",
-      "30 Queen Street, Auckland Central, Auckland 1010",
-      "67 Queen Street, Auckland Central, Auckland 1010",
-      "70 Queen Street, Auckland Central, Auckland 1010",
+      // Lytton Road
+      "1 Lytton Road, Gisborne Central, Gisborne 4010",
+      "50 Lytton Road, Gisborne, Gisborne 4010",
+      "100 Lytton Road, Gisborne, Gisborne 4010",
       
-      // More variations to match common partial searches
-      "1 Main Street, Auckland Central, Auckland 1010",
-      "20 Main Street, Auckland Central, Auckland 1010", 
-      "67 Main Street, Auckland Central, Auckland 1010",
-      "20 High Street, Wellington Central, Wellington 6011",
-      "67 High Street, Wellington Central, Wellington 6011",
-      "20 George Street, Dunedin Central, Dunedin 9016",
-      "67 George Street, Dunedin Central, Dunedin 9016"
+      // Wainui Road
+      "1 Wainui Road, Gisborne, Gisborne 4010",
+      "100 Wainui Road, Okitu, Gisborne 4010",
+      "500 Wainui Road, Wainui, Gisborne 4010",
+      
+      // Rutene Road  
+      "1 Rutene Road, Kaiti, Gisborne 4010",
+      "50 Rutene Road, Kaiti, Gisborne 4010",
+      "100 Rutene Road, Kaiti, Gisborne 4010",
+      
+      // Main Road variations
+      "1 Main Road, Makaraka, Gisborne 4010",
+      "20 Main Road, Makaraka, Gisborne 4010",
+      
+      // Aberdeen Road
+      "1 Aberdeen Road, Gisborne, Gisborne 4010",
+      "20 Aberdeen Road, Gisborne, Gisborne 4010",
+      "50 Aberdeen Road, Gisborne, Gisborne 4010"
     ];
 
     const filtered = mockAddresses.filter(addr => addr.toLowerCase().includes(query.toLowerCase()));
