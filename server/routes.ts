@@ -2721,23 +2721,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       AutomatedTriggers.onJobCreated(job)
         .catch(error => console.error('Error triggering new job notification:', error));
 
-      // Auto-create initial photo diary entry for new jobs
-      try {
-        await storage.createJobDiaryEntry({
-          jobId: job.id,
-          entryType: 'photo',
-          title: 'Job Photos',
-          description: 'Add photos for this job',
-          authorName: 'System',
-          authorRole: 'system',
-          isPrivate: false,
-        });
-        console.log(`📸 Auto-created photo diary entry for job ${job.jobNumber}`);
-      } catch (error) {
-        console.error('Error creating auto photo diary entry:', error);
-        // Don't fail job creation if photo diary entry creation fails
-      }
-
       // Add promotional image to job diary (promo running until end of November 2024)
       try {
         const promoImagePath = path.join(__dirname, '..', 'attached_assets', 'promo-nov-2024.png');
