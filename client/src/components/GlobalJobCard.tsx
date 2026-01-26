@@ -2594,8 +2594,25 @@ export function GlobalJobCard({
               <span className="flex flex-col items-center md:flex-row md:gap-1">
                 <span>Billing</span>
                 {(() => {
-                  const lineItems = form.getValues('lineItems') || [];
-                  const subtotal = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
+                  // First try line items from form
+                  const lineItems = form.watch('lineItems') || [];
+                  let subtotal = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
+                  
+                  // Fall back to job's totalAmount if no line items
+                  if (subtotal === 0 && editingJob?.totalAmount) {
+                    subtotal = parseFloat(editingJob.totalAmount) || 0;
+                  }
+                  
+                  // Fall back to proposal subtotal if available
+                  if (subtotal === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
+                    subtotal = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
+                  }
+                  
+                  // Fall back to quote amount
+                  if (subtotal === 0 && jobQuoteResponse?.data?.[0]?.amount) {
+                    subtotal = parseFloat(jobQuoteResponse.data[0].amount) || 0;
+                  }
+                  
                   if (subtotal > 0) {
                     return (
                       <span className="text-[10px] md:text-xs opacity-80">
