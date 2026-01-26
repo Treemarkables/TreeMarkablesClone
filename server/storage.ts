@@ -599,6 +599,20 @@ export interface IStorage {
     byPriority: { priority: string; count: number }[];
   }>;
 
+  // Email Event Tracking
+  createEmailEvent(event: {
+    messageId: string;
+    eventType: string;
+    recipient?: string;
+    timestamp: Date;
+    userAgent?: string;
+    ipAddress?: string;
+    linkUrl?: string;
+    rawPayload?: any;
+  }): Promise<any>;
+  getEmailEventsByMessageId(messageId: string): Promise<any[]>;
+  getEmailActivitySummary(messageId: string): Promise<{ opens: number; clicks: number; events: any[]; lastEventAt: Date | null }>;
+
   // Conversation Management
   createConversation(conversation: InsertConversation): Promise<Conversation>;
   getConversation(id: string): Promise<Conversation | undefined>;
@@ -3830,6 +3844,51 @@ class DatabaseStorage implements IStorage {
       byPlatform: [],
       byPriority: []
     };
+  }
+
+  // ========================================
+  // EMAIL EVENT TRACKING
+  // ========================================
+
+  async createEmailEvent(event: {
+    messageId: string;
+    eventType: string;
+    recipient?: string;
+    timestamp: Date;
+    userAgent?: string;
+    ipAddress?: string;
+    linkUrl?: string;
+    rawPayload?: any;
+  }): Promise<any> {
+    const [newEvent] = await db.insert(schema.emailEvents).values({
+      messageId: event.messageId,
+      eventType: event.eventType,
+      recipient: event.recipient,
+      timestamp: event.timestamp,
+      userAgent: event.userAgent,
+      ipAddress: event.ipAddress,
+      linkUrl: event.linkUrl,
+      rawPayload: event.rawPayload
+    }).returning();
+    return newEvent;
+  }
+
+  async getEmailEventsByMessageId(messageId: string): Promise<any[]> {
+    const events = await db.select()
+      .from(schema.emailEvents)
+      .where(eq(schema.emailEvents.messageId, messageId))
+      .orderBy(desc(schema.emailEvents.timestamp));
+    return events;
+  }
+
+  async getEmailActivitySummary(messageId: string): Promise<{ opens: number; clicks: number; events: any[]; lastEventAt: Date | null }> {
+    const events = await this.getEmailEventsByMessageId(messageId);
+    
+    const opens = events.filter(e => e.eventType === 'email.opened').length;
+    const clicks = events.filter(e => e.eventType === 'email.clicked').length;
+    const lastEventAt = events.length > 0 ? events[0].timestamp : null;
+    
+    return { opens, clicks, events, lastEventAt };
   }
 
   // ========================================

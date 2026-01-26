@@ -1910,6 +1910,20 @@ export const communications = pgTable("communications", {
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+// Email tracking events (opens, clicks, bounces from Resend webhooks)
+export const emailEvents = pgTable("email_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: text("message_id").notNull(), // Resend message ID
+  eventType: text("event_type").notNull(), // opened, clicked, delivered, bounced, complained, unsubscribed
+  recipient: text("recipient"), // Email recipient
+  timestamp: timestamp("timestamp").notNull(), // When the event occurred
+  userAgent: text("user_agent"), // Browser/client info for opens
+  ipAddress: text("ip_address"), // IP address for opens
+  linkUrl: text("link_url"), // URL clicked (for click events)
+  rawPayload: jsonb("raw_payload"), // Full webhook payload for debugging
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 // Communication templates for responses
 export const communicationTemplates = pgTable("communication_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

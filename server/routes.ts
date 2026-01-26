@@ -10234,19 +10234,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
-  // Get email activity (Resend doesn't support activity tracking - placeholder endpoint)
+  // Get email activity - queries stored events from Resend webhooks
   app.get('/api/email-activity/:messageId', async (req: Request, res: Response) => {
     try {
-      // Resend doesn't provide email open/click tracking via API
-      // Return empty activity data to keep the UI functional
+      const { messageId } = req.params;
+      const activity = await storage.getEmailActivitySummary(messageId);
+      
       return res.json({
         success: true,
-        data: {
-          opens: 0,
-          clicks: 0,
-          events: [],
-          lastEventAt: null
-        }
+        data: activity
       });
     } catch (error) {
       console.error('Error fetching email activity:', error);
@@ -10254,6 +10250,50 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         success: false, 
         message: 'Error fetching email activity' 
       });
+    }
+  });
+
+  // Resend email events webhook - receives open/click/bounce events
+  app.post('/api/webhooks/resend-events', async (req: Request, res: Response) => {
+    try {
+      const event = req.body;
+      console.log('📬 Resend event webhook received:', event.type);
+      
+      // Supported event types: email.sent, email.delivered, email.opened, email.clicked, email.bounced, email.complained
+      const supportedTypes = ['email.sent', 'email.delivered', 'email.opened', 'email.clicked', 'email.bounced', 'email.complained', 'email.unsubscribed'];
+      
+      if (!supportedTypes.includes(event.type)) {
+        console.log(`📬 Ignoring unsupported event type: ${event.type}`);
+        return res.status(200).json({ received: true });
+      }
+      
+      // Extract data from Resend event payload
+      const data = event.data;
+      const messageId = data?.email_id;
+      
+      if (!messageId) {
+        console.error('📬 Missing email_id in Resend event');
+        return res.status(400).json({ error: 'Missing email_id' });
+      }
+      
+      // Store the event
+      await storage.createEmailEvent({
+        messageId: messageId,
+        eventType: event.type,
+        recipient: Array.isArray(data?.to) ? data.to[0] : data?.to,
+        timestamp: data?.created_at ? new Date(data.created_at) : new Date(),
+        userAgent: data?.click?.user_agent || data?.open?.user_agent,
+        ipAddress: data?.click?.ip_address || data?.open?.ip_address,
+        linkUrl: data?.click?.link,
+        rawPayload: event
+      });
+      
+      console.log(`📬 Stored ${event.type} event for message ${messageId}`);
+      
+      return res.status(200).json({ received: true });
+    } catch (error) {
+      console.error('📬 Error processing Resend event webhook:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
