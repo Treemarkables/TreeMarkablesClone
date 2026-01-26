@@ -10150,15 +10150,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
       // Reply-To is handled by emailService default (info@treemarkables.nz)
 
-      console.log('📧 Sending email via diary:', { to, subject });
+      console.log('📧 Sending email via diary:', { to, subject, jobId });
       
-      // Send email using the service
+      // Send email using the service - don't override from, let Resend config handle it
       const emailResult = await emailService.sendEmail({
         to,
-        from: 'noreply@treemarkables.co.nz',
         subject,
         text: message,
-        html: `<p>${message.replace(/\n/g, '<br>')}</p>`
+        html: `<p>${message.replace(/\n/g, '<br>')}</p>`,
+        jobNumber: jobId ? String(jobId) : undefined
       });
       
       if (emailResult.success) {
