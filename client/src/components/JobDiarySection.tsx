@@ -1131,8 +1131,11 @@ export function JobDiarySection({
                           ) : (
                             <MessageSquare className={`w-3.5 h-3.5 ${isSent ? 'text-gray-500 dark:text-gray-400' : 'text-purple-600 dark:text-purple-400'}`} />
                           )}
+                          <span className={`text-[10px] font-medium ${isSent ? 'text-gray-600 dark:text-gray-300' : 'text-purple-600 dark:text-purple-400'}`}>
+                            {entry.type === 'sms' ? 'SMS' : 'Email'}
+                          </span>
                           <span className={`text-[10px] ${isSent ? 'text-gray-500 dark:text-gray-400' : 'text-purple-600 dark:text-purple-400'}`}>
-                            {isSent ? (recipientInfo ? `To: ${recipientInfo}` : 'Sent') : 'Received'}
+                            {isSent ? (recipientInfo ? `to ${recipientInfo}` : '') : 'received'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
