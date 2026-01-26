@@ -771,10 +771,10 @@ export function EmailComposerModal({
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="bg-purple-500 hover:bg-purple-600 text-white border-purple-500 h-8 text-xs px-2 sm:px-4"
+                    className="h-8 text-xs px-2 sm:px-4"
                     data-testid="button-smart-attachments"
                   >
-                    <FileText className="w-3.5 h-3.5 sm:mr-1" />
+                    <FileText className="w-3.5 h-3.5 sm:mr-1.5" />
                     <span className="hidden sm:inline">Smart Attachments</span>
                     <span className="sm:hidden ml-1">Attachments</span>
                   </Button>
@@ -950,22 +950,29 @@ export function EmailComposerModal({
                 </PopoverContent>
               </Popover>
               
-              <label 
-                htmlFor="email-file-attachment"
-                className="inline-flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white border-blue-500 h-8 text-xs px-2 sm:px-4 rounded-md cursor-pointer transition-colors"
-                data-testid="button-attach-file"
+              <Button 
+                asChild
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs px-2 sm:px-4"
               >
-                <Paperclip className="w-3.5 h-3.5 sm:mr-1" />
-                <span className="hidden sm:inline">Attach</span>
-              </label>
+                <label 
+                  htmlFor="email-file-attachment"
+                  className="cursor-pointer"
+                  data-testid="button-attach-file"
+                >
+                  <Paperclip className="w-3.5 h-3.5 sm:mr-1.5" />
+                  <span className="hidden sm:inline">Attach</span>
+                </label>
+              </Button>
               <Button 
                 onClick={handleSendEmail}
                 disabled={sendEmailMutation.isPending}
                 size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs px-3 sm:px-4"
+                className="h-8 text-xs px-3 sm:px-4"
                 data-testid="button-send-email"
               >
-                <Send className="w-3.5 h-3.5 sm:mr-1" />
+                <Send className="w-3.5 h-3.5 sm:mr-1.5" />
                 <span>{sendEmailMutation.isPending ? 'Sending...' : 'Send'}</span>
               </Button>
             </div>
