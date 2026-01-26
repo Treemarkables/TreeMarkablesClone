@@ -79,14 +79,23 @@ const globalJobCardSchema = insertJobSchema.extend({
   taxMode: z.string().optional(),
   
 }).refine((data) => {
-  if (data.isNewCustomer) {
-    // For new customers, accept either newCustomerName OR job contact names
-    const hasNewCustomerName = !!data.newCustomerName;
-    const hasJobContactName = !!(data.jobContactFirstName || data.jobContactLastName);
-    return hasNewCustomerName || hasJobContactName;
-  } else {
-    return !!data.customerId;
+  // Check if we have a valid customer identifier
+  const hasCustomerId = !!data.customerId;
+  const hasNewCustomerName = !!data.newCustomerName;
+  const hasJobContactName = !!(data.jobContactFirstName || data.jobContactLastName);
+  
+  // If we have a customerId, that's valid
+  if (hasCustomerId) {
+    return true;
   }
+  
+  // If isNewCustomer is true OR we don't have a customerId, 
+  // we need either newCustomerName OR job contact names
+  if (data.isNewCustomer === true || !hasCustomerId) {
+    return hasNewCustomerName || hasJobContactName;
+  }
+  
+  return false;
 }, {
   message: "Customer name or job contact name is required",
   path: ["newCustomerName"]
