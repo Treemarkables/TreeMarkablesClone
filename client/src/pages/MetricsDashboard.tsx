@@ -732,7 +732,7 @@ export default function MetricsDashboard() {
             />
 
             <MetricCard
-              title="Avg Quote Value"
+              title="Avg Job Value"
               value={formatCurrency(dashboardStats?.averageQuoteValue || 0)}
               subtitle={`${((quoteAnalytics?.acceptedQuotes || 0) / Math.max(quoteAnalytics?.totalQuotes || 1, 1) * 100).toFixed(0)}% acceptance rate`}
               icon={FileText}
