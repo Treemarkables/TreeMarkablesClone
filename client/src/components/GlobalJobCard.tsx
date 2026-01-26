@@ -119,6 +119,7 @@ interface GlobalJobCardProps {
     address?: string;
     description?: string;
     leadSource?: string;
+    conversationId?: string;
   };
   onJobCreated?: (job: any) => void;
   onJobUpdated?: (job: any) => void;
@@ -860,7 +861,7 @@ export function GlobalJobCard({
       const response = await apiRequest('POST', '/api/jobs', jobData);
       return response.json();
     },
-    onSuccess: (newJob) => {
+    onSuccess: async (newJob) => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       toast({
@@ -868,6 +869,22 @@ export function GlobalJobCard({
         description: "New job has been created successfully.",
         duration: 1000,
       });
+      
+      // Mark the source conversation as converted (prevent duplicate job creation)
+      if (initialData?.conversationId) {
+        try {
+          await apiRequest('PATCH', `/api/conversations/${initialData.conversationId}`, {
+            status: 'converted'
+          });
+          // Force refetch of conversation data
+          queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/conversations', initialData.conversationId] });
+          await queryClient.refetchQueries({ queryKey: ['/api/conversations', initialData.conversationId] });
+          console.log('✅ Conversation marked as converted:', initialData.conversationId);
+        } catch (error) {
+          console.error('Failed to update conversation status:', error);
+        }
+      }
       
       // Switch to edit mode after creating the job - stay in modal
       if (newJob?.data?.id) {
