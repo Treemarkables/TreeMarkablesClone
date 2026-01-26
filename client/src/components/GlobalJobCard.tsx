@@ -2591,38 +2591,7 @@ export function GlobalJobCard({
               onClick={() => setSidebarTab('billing')}
               data-testid="sidebar-billing"
             >
-              <span className="flex flex-col items-center md:flex-row md:gap-1">
-                <span>Billing</span>
-                {(() => {
-                  // First try line items from form
-                  const lineItems = form.watch('lineItems') || [];
-                  let subtotal = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
-                  
-                  // Fall back to job's totalAmount if no line items
-                  if (subtotal === 0 && editingJob?.totalAmount) {
-                    subtotal = parseFloat(editingJob.totalAmount) || 0;
-                  }
-                  
-                  // Fall back to proposal subtotal if available
-                  if (subtotal === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
-                    subtotal = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
-                  }
-                  
-                  // Fall back to quote amount
-                  if (subtotal === 0 && jobQuoteResponse?.data?.[0]?.amount) {
-                    subtotal = parseFloat(jobQuoteResponse.data[0].amount) || 0;
-                  }
-                  
-                  if (subtotal > 0) {
-                    return (
-                      <span className="text-[10px] md:text-xs opacity-80">
-                        ${subtotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })} ex GST
-                      </span>
-                    );
-                  }
-                  return null;
-                })()}
-              </span>
+              Billing
             </button>
             <button
               className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b ${
@@ -3188,6 +3157,49 @@ export function GlobalJobCard({
                             </label>
                           </div>
                         </div>
+
+                        {/* Billing Amount - ServiceM8 Style */}
+                        {(() => {
+                          // First try line items from form
+                          const lineItems = form.watch('lineItems') || [];
+                          let subtotal = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
+                          
+                          // Fall back to job's totalAmount if no line items
+                          if (subtotal === 0 && editingJob?.totalAmount) {
+                            subtotal = parseFloat(editingJob.totalAmount) || 0;
+                          }
+                          
+                          // Fall back to proposal subtotal if available
+                          if (subtotal === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
+                            subtotal = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
+                          }
+                          
+                          // Fall back to quote amount
+                          if (subtotal === 0 && jobQuoteResponse?.data?.[0]?.amount) {
+                            subtotal = parseFloat(jobQuoteResponse.data[0].amount) || 0;
+                          }
+                          
+                          if (subtotal > 0) {
+                            return (
+                              <div 
+                                className="flex items-center justify-between p-3 bg-gray-50 border rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                                onClick={() => setSidebarTab('billing')}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <DollarSign className="w-4 h-4 text-gray-500" />
+                                  <span className="text-sm font-medium text-gray-700">Billing</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    ${subtotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                                  </span>
+                                  <span className="text-xs text-gray-500">ex GST</span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
 
                         {/* Checklist */}
                         <div>
