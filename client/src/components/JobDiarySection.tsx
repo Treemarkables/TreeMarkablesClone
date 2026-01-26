@@ -45,7 +45,9 @@ import {
   Receipt,
   Trash2,
   Eye,
-  MousePointerClick
+  EyeOff,
+  MousePointerClick,
+  Reply
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -87,12 +89,18 @@ function EmailActivity({ messageId }: { messageId: string }) {
     );
   }
 
+  // Show "Not seen" if no opens/clicks yet
   if (!activity || (activity.opens === 0 && activity.clicks === 0)) {
-    return null;
+    return (
+      <div className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+        <EyeOff className="h-2.5 w-2.5" />
+        <span>Not seen yet</span>
+      </div>
+    );
   }
 
   return (
-    <div className="flex items-center gap-2 mt-1 text-[10px]">
+    <div className="flex items-center gap-2 text-[10px]">
       {activity.opens > 0 && (
         <div className="flex items-center gap-0.5 text-green-600">
           <Eye className="h-2.5 w-2.5" />
@@ -1181,49 +1189,53 @@ export function JobDiarySection({
                           <div />
                         )}
                         
-                        {/* Reply button for received messages */}
-                        {!isSent && (
-                          <div className="flex items-center gap-1">
-                            {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 text-[10px] px-2 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
-                                  const originalSubject = entry.content || entry.title.replace('Email from ', '').replace('Email sent: ', '');
-                                  setReplyToEmail(replyEmail);
-                                  setReplySubject(originalSubject);
-                                  setActiveComposer('email');
-                                }}
-                                data-testid={`button-reply-email-${entry.id}`}
-                              >
-                                <Mail className="w-3 h-3 mr-0.5" />
-                                Reply
-                              </Button>
-                            )}
-                            {entry.type === 'sms' && entry.metadata?.phoneNumber && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className={`h-6 text-[10px] px-2 ${
-                                  isSent ? 'text-white/80 hover:text-white hover:bg-white/10' : 'text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const replyPhone = entry.metadata?.phoneNumber || '';
-                                  setReplyToPhone(replyPhone);
-                                  setActiveComposer('sms');
-                                }}
-                                data-testid={`button-reply-sms-${entry.id}`}
-                              >
-                                <MessageSquare className="w-3 h-3 mr-0.5" />
-                                Reply
-                              </Button>
-                            )}
-                          </div>
-                        )}
+                        {/* Reply/Follow-up button for all messages */}
+                        <div className="flex items-center gap-1">
+                          {entry.type === 'email' && (entry.metadata?.emailAddress || entry.metadata?.recipient) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className={`h-6 text-[10px] px-2 ${
+                                isSent 
+                                  ? 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800' 
+                                  : 'text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800'
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
+                                const originalSubject = entry.content || entry.title.replace('Email from ', '').replace('Email sent: ', '');
+                                setReplyToEmail(replyEmail);
+                                setReplySubject(originalSubject);
+                                setActiveComposer('email');
+                              }}
+                              data-testid={`button-reply-email-${entry.id}`}
+                            >
+                              <Reply className="w-3 h-3 mr-0.5" />
+                              {isSent ? 'Follow up' : 'Reply'}
+                            </Button>
+                          )}
+                          {entry.type === 'sms' && entry.metadata?.phoneNumber && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className={`h-6 text-[10px] px-2 ${
+                                isSent 
+                                  ? 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800' 
+                                  : 'text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800'
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const replyPhone = entry.metadata?.phoneNumber || '';
+                                setReplyToPhone(replyPhone);
+                                setActiveComposer('sms');
+                              }}
+                              data-testid={`button-reply-sms-${entry.id}`}
+                            >
+                              <Reply className="w-3 h-3 mr-0.5" />
+                              {isSent ? 'Follow up' : 'Reply'}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
