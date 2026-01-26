@@ -639,34 +639,46 @@ export default function ConversationDetail() {
               <span className="text-base font-medium text-gray-900">Create Opportunity</span>
             </button>
 
-            {/* Create Job from Lead */}
-            <button
-              onClick={() => {
-                setShowManageMenu(false);
-                setShowCreateJob(true);
-                
-                // Extract all contact details from conversation and messages
-                const extracted = extractContactDetails();
-                
-                setLeadForm({
-                  name: extracted.name || '',
-                  email: extracted.email || '',
-                  phone: extracted.phone || '',
-                  address: extracted.address || '',
-                  serviceRequested: extracted.description || '',
-                  urgency: 'medium',
-                  status: 'new',
-                  notes: `Lead from conversation${extracted.firstName ? ` with ${extracted.firstName} ${extracted.lastName}`.trim() : ''}`
-                });
-              }}
-              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
-              data-testid="button-create-job"
-            >
-              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                <Briefcase className="h-5 w-5 text-white" />
+            {/* Create Job from Lead - disabled if already converted */}
+            {conversation?.status === 'converted' || conversation?.conversionDate ? (
+              <div
+                className="w-full flex items-center gap-4 px-4 py-4 rounded-lg opacity-50 cursor-not-allowed"
+                data-testid="button-create-job-disabled"
+              >
+                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-400 flex items-center justify-center">
+                  <Briefcase className="h-5 w-5 text-white" />
+                </div>
+                <span className="text-base font-medium text-gray-500">Already Converted to Job</span>
               </div>
-              <span className="text-base font-medium text-gray-900">Create Job from Lead</span>
-            </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setShowManageMenu(false);
+                  setShowCreateJob(true);
+                  
+                  // Extract all contact details from conversation and messages
+                  const extracted = extractContactDetails();
+                  
+                  setLeadForm({
+                    name: extracted.name || '',
+                    email: extracted.email || '',
+                    phone: extracted.phone || '',
+                    address: extracted.address || '',
+                    serviceRequested: extracted.description || '',
+                    urgency: 'medium',
+                    status: 'new',
+                    notes: `Lead from conversation${extracted.firstName ? ` with ${extracted.firstName} ${extracted.lastName}`.trim() : ''}`
+                  });
+                }}
+                className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
+                data-testid="button-create-job"
+              >
+                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                  <Briefcase className="h-5 w-5 text-white" />
+                </div>
+                <span className="text-base font-medium text-gray-900">Create Job from Lead</span>
+              </button>
+            )}
 
             {/* Send Review Request */}
             <button
