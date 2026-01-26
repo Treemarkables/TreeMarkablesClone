@@ -164,8 +164,36 @@ export default function ConversationDetail() {
       address = (conversation as any).customerAddress;
     }
 
-    // Use conversation title as description (it's usually the first message)
-    if (conversation?.title) {
+    // Extract contact details from messages (using parseContactForm patterns)
+    messages.forEach(msg => {
+      const content = msg.content || '';
+      
+      // Extract "Message:" field for full description (priority)
+      if (!description) {
+        const messageMatch = content.match(/Message:\s*([\s\S]*?)(?=(?:Name:|Email:|Phone:|How they heard|$))/i);
+        if (messageMatch && messageMatch[1]) {
+          description = messageMatch[1].trim();
+        }
+      }
+    });
+    
+    // Fallback: Use full first customer message as description if no Message: field found
+    if (!description && messages.length > 0) {
+      const firstCustomerMessage = messages.find(m => m.sender === 'customer');
+      if (firstCustomerMessage?.content) {
+        // Get content after stripping form fields
+        let content = firstCustomerMessage.content;
+        // Remove form field patterns to get the actual message
+        content = content.replace(/Name:\s*[^\n]+\n?/gi, '');
+        content = content.replace(/Email:\s*[^\n]+\n?/gi, '');
+        content = content.replace(/Phone:\s*[^\n]+\n?/gi, '');
+        content = content.replace(/How they heard about us:\s*[^\n]+\n?/gi, '');
+        description = content.trim();
+      }
+    }
+    
+    // Final fallback: Use conversation title (may be truncated)
+    if (!description && conversation?.title) {
       description = conversation.title;
     }
 
